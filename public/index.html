@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Worktree Monitor</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="dot" id="health"></span>
+      <h1>Worktree Monitor</h1>
+      <span class="sub" id="config-line">connecting…</span>
+    </div>
+    <div class="controls">
+      <span class="meta" id="stream-state">—</span>
+      <span class="meta" id="stream-rate"></span>
+      <button id="btn-refresh" type="button">Refresh now</button>
+      <button id="btn-fetch" type="button">Fetch remotes</button>
+      <button id="btn-pause" type="button">Pause</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+
+  <main>
+    <section class="project" id="newagent">
+      <div class="project-head">
+        <h2>New agent</h2>
+        <span class="path" id="spawn-note">hermes chat -w — runs in its own new worktree under .worktrees/</span>
+        <span class="spacer"></span>
+        <div class="chips"><span class="chip" id="chip-key">key: —</span><span class="chip" id="chip-bin">—</span></div>
+      </div>
+      <div class="form">
+        <textarea id="job-prompt" rows="3" placeholder="What should the agent do? (this becomes the first turn)"></textarea>
+        <div class="row">
+          <label class="cwd">start in <input id="job-cwd" list="project-paths" spellcheck="false" placeholder="(project path — the green + on a project fills this in)" /></label>
+        </div>
+        <datalist id="project-paths"></datalist>
+        <div class="row">
+          <label class="proj">project <select id="job-project" title="which project the agent starts in"></select></label>
+          <label>model <input id="job-model" placeholder="(default)" /></label>
+          <label>budget s <input id="job-budget" type="number" value="1800" min="30" /></label>
+          <label>max turns <input id="job-maxTurns" type="number" placeholder="(default)" /></label>
+          <label>skills <input id="job-skills" placeholder="(none)" /></label>
+          <label class="chk" title="Without --yolo a spawned agent cannot answer a dangerous-command approval prompt (no TTY), so it will stall.">
+            <input id="job-yolo" type="checkbox" /> <code>--yolo</code> (unattended, no approvals)
+          </label>
+          <span class="spacer"></span>
+          <button id="btn-preview" type="button">Preview command</button>
+          <button id="btn-spawn" type="button" class="primary">Spawn agent</button>
+        </div>
+        <div class="cmd mono" id="job-cmd">preview a command to see exactly what would run…</div>
+        <div id="spawn-warn" class="warnline"></div>
+        <div id="spawn-msg" class="dimmer mono"></div>
+      </div>
+    </section>
+
+    <section class="project" id="agents">
+      <div class="project-head">
+        <h2>Agents</h2>
+        <span class="path">one card per agent — reply to it any time to continue the same Hermes thread</span>
+        <span class="spacer"></span>
+        <div class="chips" id="agents-chips"></div>
+        <button id="btn-fold-jobs" type="button">Minimize all</button>
+        <button id="btn-clear-jobs" type="button">Clear finished</button>
+      </div>
+      <div id="jobs"><p class="empty">No agents started from here yet.</p></div>
+    </section>
+
+    <div id="projects">
+      <p class="empty">Scanning worktrees…</p>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <span>Live over SSE: each worktree refreshes on its own cadence — cheap fields every <span id="f-worktree">5</span>s, merge verdict / PR / commit detail every <span id="f-slow">60</span>s. Rows flash when something changed.</span>
+    <span>Read-only for git: every scan is an inspect (rev-parse / rev-list / merge-base / cherry / diff / status / log). Only <code>fetch</code> touches refs.</span>
+    <span>Spawning writes: a new worktree + branch under <code>.worktrees/</code>, created by <code>hermes chat -w</code>. The panel reads the OpenRouter key from your User environment and passes it to the child, because spawned CLIs don't inherit it.</span>
+    <span>Projects: every git repo under <code>scanRoots</code> in <code>config.json</code>, ordered by most recent activity. The green <b>+</b> beside a project name aims the spawn card at that project.</span>
+    <span id="skipped-note" class="dimmer"></span>
+    <span>Config: <code>config.json</code> — scanRoots, projects, cadences, <code>dormantSeconds</code>, <code>host</code> (loopback by default).</span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>

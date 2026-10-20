@@ -1,0 +1,16 @@
+{
+  "name": "agent-wroktree-gui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local GUI panel that monitors git worktrees across one or more projects (branches, merge status vs remote main, PR state, dirty work, live activity).",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {}
+}

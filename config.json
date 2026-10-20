@@ -1,0 +1,33 @@
+{
+  "port": 7331,
+
+  "worktreeSeconds": 5,
+  "slowSeconds": 60,
+  "fetchSeconds": 600,
+  "refreshSeconds": 30,
+
+  "prCacheSeconds": 300,
+  "remoteCacheSeconds": 300,
+  "liveMinutes": 5,
+  "threads": 4,
+
+  "scanRoots": ["C:/ProjectDevelopment"],
+  "liveSeconds": 5,
+  "dormantSeconds": 30,
+
+  "host": "127.0.0.1",
+  "defaultCwd": "C:/ProjectDevelopment/heroes-js",
+  "jobMaxRuntimeSeconds": 3600,
+  "hermesBin": null,
+
+  "projects": [
+    {
+      "name": "heroes-js",
+      "path": "C:/ProjectDevelopment/heroes-js",
+      "remote": "github",
+      "mainBranch": "main",
+      "prRepo": "JLRoper/vigilant-palm-tree",
+      "worktrees": null
+    }
+  ]
+}
