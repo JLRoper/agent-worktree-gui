@@ -919,10 +919,18 @@ function renderProjectRows(name) {
   }
 }
 
+// Header summary. The project count is the live one — what the table is actually showing — not
+// the configured fallback list the server reports before discovery has run.
+function paintConfigLine() {
+  const cfg = state.settings || {};
+  if (cfg.host === undefined) return;
+  const n = state.projects.size || (Array.isArray(cfg.projects) ? cfg.projects.length : 0);
+  $("config-line").textContent = `${n} project(s) · cheap fields every ${cfg.worktreeSeconds}s · verdict/PR every ${cfg.slowSeconds}s · ${cfg.threads} scan threads · ${cfg.host}`;
+}
+
 function renderAll() {
   const projects = sortedProjects();
   for (const id of [...state.expandedProjects]) if (!state.projects.has(id)) state.expandedProjects.delete(id);
-
   // Wrap every project in its folder accordion: one group per scan root, and a sibling group
   // for any project that lives outside all of them (so nothing is filed under a folder it is
   // not actually in). Groups are ordered by their most recently active project.
@@ -946,6 +954,7 @@ function renderAll() {
     renderProjectRows(p.name);
     refreshChips(p.name);
   }
+  paintConfigLine();
 }
 
 function applySnapshot(data) {
@@ -981,6 +990,10 @@ function applySnapshot(data) {
     for (const [k, r] of [...state.rows]) if (r.project === p.name) state.rows.delete(k);
     for (const w of wts) state.rows.set(keyOf(p.name, w.path), { ...w, project: p.name });
   }
+  // A snapshot is authoritative about WHICH projects exist: the server drops a project when it
+  // disappears from the roots (or was only ever a config fallback before discovery ran), and the
+  // client must drop it too instead of keeping a section nothing will ever repaint.
+  for (const name of [...state.projects.keys()]) if (!seen.has(name)) state.projects.delete(name);
   for (const [k, r] of [...state.rows]) {
     if (!seen.has(r.project)) {
       state.rows.delete(k);
@@ -1246,10 +1259,14 @@ setInterval(() => {
   try {
     const cfg = await fetch("/api/config").then((r) => r.json());
     state.settings = cfg;
+    state.scanRoots = Array.isArray(cfg.scanRoots) ? cfg.scanRoots : [];
     $("f-worktree").textContent = cfg.worktreeSeconds;
     $("f-slow").textContent = cfg.slowSeconds;
-    $("config-line").textContent = `${cfg.projects.length} project(s) · cheap fields every ${cfg.worktreeSeconds}s · verdict/PR every ${cfg.slowSeconds}s · ${cfg.threads} scan threads · ${cfg.host}`;
-    for (const p of cfg.projects || []) state.projects.set(p.name, p);
+    paintConfigLine();
+    // Deliberately no seeding of state.projects from cfg.projects here: before discovery has
+    // run that list is only the config fallback, and a project seeded that way can never be
+    // removed by a later snapshot (heroes-js showed up forever this way on a machine that does
+    // not have it). The first snapshot paints the real set.
     await resync();
     connect();
     state.eventsAt = Date.now();
