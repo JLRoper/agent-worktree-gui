@@ -35,7 +35,8 @@ async function loadConfig() {
     cfg = JSON.parse(await readFile(CONFIG_PATH, "utf8"));
   } catch (e) {
     log(`no readable config.json (${String((e && e.message) || e)}) — using defaults`);
-    cfg = { scanRoots: ["C:/ProjectDevelopment"] };
+    // Default to the folder the panel itself sits in, so a bare clone is immediately useful.
+    cfg = { scanRoots: [path.dirname(HERE)] };
   }
   cfg.port = Number(cfg.port) || 7331;
   // Loopback by default. This panel can now spawn agents, so binding it to the LAN

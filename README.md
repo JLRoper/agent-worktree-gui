@@ -14,10 +14,22 @@ Then open **http://127.0.0.1:7331**.
 
 ## Running it on another machine
 
-Node 18+ and nothing else — no dependencies, no build step:
+**Point an agent at it.** `SETUP.md` is written to be *executed* rather than read: exact commands, a
+verification section, and what each failure mode means. The repo is private, so hand an agent on the
+other machine this:
+
+> Clone `JLRoper/agent-worktree-gui` with `gh` (it is private), follow `SETUP.md`, set `scanRoots` to
+> where my repos live, verify it, and give me the URL to open.
+
+Make the repo public and the raw URL works by itself:
+https://raw.githubusercontent.com/JLRoper/agent-worktree-gui/main/SETUP.md
+
+By hand — Node 18+ and nothing else, no dependencies, no build step:
 
     gh repo clone JLRoper/agent-worktree-gui
     cd agent-worktree-gui
+    setup.cmd            # Windows: first-run checks (node / git / hermes)
+    ./setup.sh           # macOS/Linux: same checks
     start.cmd            # or: node server.js
 
 Edit `config.json` first: `scanRoots` is where your repos live (every git repo under it is
