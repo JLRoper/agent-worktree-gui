@@ -13,6 +13,7 @@ import { ProjectRegistry } from "./lib/projects.js";
 import { Jobs, keyStatus, makeThreadName } from "./lib/jobs.js";
 import { gitIn } from "./lib/scan.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
+import { Approvals } from "./lib/approvals.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(HERE, "public");
@@ -132,6 +133,9 @@ function broadcast(evt) {
 store.onEvent(broadcast);
 
 const jobs = new Jobs({ config, onEvent: broadcast, onLog: log });
+// Human side of the Hermes approval-transport contract: the plugin presents, the panel answers,
+// the host decides. Nothing here can approve anything by itself.
+const approvals = new Approvals({ onEvent: broadcast });
 
 const settingsOut = () => ({
   refreshSeconds: config.refreshSeconds,
@@ -150,6 +154,7 @@ function snapshot() {
   return {
     ...store.snapshot({ settings: settingsOut() }),
     jobs: jobs.list(),
+    approvals: approvals.list(),
     skipped: registry.skipped,
     scanRoots: config.scanRoots || [],
     spawn: {
@@ -242,6 +247,38 @@ const server = createServer(async (req, res) => {
 
     if (route === "/api/jobs" && req.method === "GET") {
       return sendJson(res, 200, { jobs: jobs.list(), binary: jobs.binary, key: keyStatus(), defaultCwd: config.defaultCwd });
+    }
+
+    // ---- approvals: the human side of the Hermes approval-transport contract ---------------
+    // The plugin (~/.hermes/plugins/worktree-panel) presents a redacted request here and polls
+    // GET /api/approvals/<id>; the panel only records the human's choice. Policy, timeout and
+    // fail-closed enforcement stay in Hermes.
+    if (route === "/api/approvals" && req.method === "GET") {
+      return sendJson(res, 200, { pending: approvals.list() });
+    }
+
+    if (route === "/api/approvals" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const request = approvals.present(body || {});
+        log(`approval requested (${request.id}): ${request.command.slice(0, 90)}`);
+        return sendJson(res, 202, { ok: true, id: request.id, allowed: request.allowed, timeoutSeconds: request.timeoutSeconds });
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
+    }
+
+    if (route === "/api/approvals/answer" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const r = approvals.answer(body.id, body.choice, body.by || "ui");
+      return sendJson(res, r.ok ? 200 : 409, r);
+    }
+
+    if (route.startsWith("/api/approvals/") && req.method === "GET") {
+      const id = decodeURIComponent(route.slice("/api/approvals/".length));
+      return sendJson(res, 200, approvals.status(id));
     }
 
     // Preview the exact command that would run — the confirm affordance.

@@ -167,6 +167,30 @@ button.btn-root-clone:hover { background: #1f4a2a; color: #d6ffe0; border-color:
 .root-group.collapsed .root-head { border-bottom: 0; }
 .root-group.collapsed .root-body { display: none; }
 .root-body { padding: 14px 14px 0; }
+
+/* ---- approvals ---- */
+#approvals { border-color: #6b4d16; }
+#approvals .project-head { background: var(--amber-bg); border-bottom-color: #4a3a17; }
+.approval { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.approval:last-child { border-bottom: 0; }
+.ap-head { display: flex; align-items: center; gap: 10px; font-size: 11px; }
+.ap-head .spacer { flex: 1; }
+.ap-cmd {
+  margin: 6px 0 4px;
+  padding: 8px 10px;
+  background: #12161d;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow: auto;
+}
+.ap-desc { font-size: 12px; margin-bottom: 4px; }
+.ap-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.ap-actions .ap-err { color: var(--red); font-size: 11.5px; }
+.ap-head .warn { color: var(--amber); }
 button.btn-plus {
   width: 28px;
   height: 28px;

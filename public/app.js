@@ -24,6 +24,7 @@ const state = {
   expandedProjects: loadExpandedProjects(),
   collapsedRoots: loadCollapsedRoots(),
   cloneStatus: {},
+  approvals: new Map(),
   scanRoots: [],
 };
 
@@ -445,6 +446,74 @@ async function sendReply(thread) {
 
 function jobHtml(j) {
   return conversationHtml({ thread: j.thread || j.id, turns: [j], first: j, latest: j });
+}
+
+// ---- approvals ------------------------------------------------------------------
+// Requests arrive from the Hermes approval-transport plugin (~/.hermes/plugins/worktree-panel).
+// This only records the human's choice: Hermes owns the policy, the timeout and the fail-closed
+// behaviour, and a request that expires here is denied there.
+const APPROVAL_LABEL = { once: "Allow once", session: "Allow for session", always: "Always allow", deny: "Deny" };
+
+function approvalCard(r) {
+  const left = Math.max(0, Math.round(((r.deadline || 0) - Date.now()) / 1000));
+  const buttons = (r.allowed || ["once", "deny"])
+    .map((c) => {
+      const cls = c === "deny" ? "" : c === "once" ? ' class="primary"' : "";
+      return `<button type="button"${cls} data-approval-id="${esc(r.id)}" data-approval-choice="${esc(c)}">${esc(APPROVAL_LABEL[c] || c)}</button>`;
+    })
+    .join("");
+  return `<div class="approval" data-approval="${esc(r.id)}">
+    <div class="ap-head"><span class="mono dim">${esc(r.surface || "agent")}</span><span class="spacer"></span><span class="mono ${left < 20 ? "warn" : "dimmer"}" data-approval-left="${esc(r.id)}">expires in ${left}s</span></div>
+    <pre class="ap-cmd mono">${esc(r.command || "(no command text)")}</pre>
+    ${r.description ? `<div class="ap-desc dim">${esc(r.description)}</div>` : ""}
+    <div class="ap-actions">${buttons}<span class="ap-err mono"></span></div>
+  </div>`;
+}
+
+function renderApprovals() {
+  const sec = $("approvals");
+  if (!sec) return;
+  const list = [...state.approvals.values()].sort((a, b) => (a.deadline || 0) - (b.deadline || 0));
+  sec.hidden = list.length === 0;
+  if (!list.length) {
+    $("approval-list").innerHTML = "";
+    return;
+  }
+  $("approval-chips").innerHTML = `<span class="chip bad">${list.length} waiting</span>`;
+  $("approval-list").innerHTML = list.map(approvalCard).join("");
+}
+
+function tickApprovals() {
+  for (const r of state.approvals.values()) {
+    const el = document.querySelector(`[data-approval-left="${CSS.escape(r.id)}"]`);
+    if (!el) continue;
+    const left = Math.max(0, Math.round(((r.deadline || 0) - Date.now()) / 1000));
+    el.textContent = left ? `expires in ${left}s` : "expired";
+    el.classList.toggle("warn", left < 20);
+  }
+}
+setInterval(tickApprovals, 1000);
+
+async function answerApproval(id, choice, btn) {
+  const card = btn?.closest(".approval");
+  const err = card?.querySelector(".ap-err");
+  card?.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  if (err) err.textContent = "";
+  try {
+    const res = await fetch("/api/approvals/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, choice }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (err) err.textContent = j.error || `HTTP ${res.status}`;
+      card?.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    }
+  } catch (e) {
+    if (err) err.textContent = e.message;
+    card?.querySelectorAll("button").forEach((b) => (b.disabled = false));
+  }
 }
 
 function renderJobs() {
@@ -1080,6 +1149,11 @@ function applySnapshot(data) {
     }
     renderJobs();
   }
+  if (Array.isArray(data.approvals)) {
+    state.approvals.clear();
+    for (const r of data.approvals) if (r && r.id) state.approvals.set(r.id, r);
+    renderApprovals();
+  }
   // A snapshot refreshes what it carries; it does not retract rows. Only an explicit "drop"
   // event retires a worktree, so a snapshot arriving mid-scan can never blank the table.
   const seen = new Set();
@@ -1163,6 +1237,17 @@ function connect() {
   });
   es.addEventListener("job", (e) => updateJob(JSON.parse(e.data).job));
   es.addEventListener("jobline", (e) => appendJobLine(JSON.parse(e.data)));
+  es.addEventListener("approval", (e) => {
+    const r = JSON.parse(e.data).request;
+    if (!r || !r.id) return;
+    state.approvals.set(r.id, r);
+    renderApprovals();
+  });
+  es.addEventListener("approval-answered", (e) => {
+    const evt = JSON.parse(e.data);
+    state.approvals.delete(evt.id);
+    renderApprovals();
+  });
   es.addEventListener("jobs", (e) => {
     state.jobs.clear();
     for (const j of JSON.parse(e.data).jobs) state.jobs.set(j.id, j);
@@ -1234,6 +1319,13 @@ $("btn-pause").addEventListener("click", () => {
 });
 
 document.addEventListener("click", async (e) => {
+  const apBtn = e.target.closest("[data-approval-choice]");
+  if (apBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    void answerApproval(apBtn.dataset.approvalId, apBtn.dataset.approvalChoice, apBtn);
+    return;
+  }
   const plus = e.target.closest(".btn-plus");
   if (plus) {
     e.stopPropagation();
