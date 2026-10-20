@@ -1,4 +1,4 @@
-# agent-wroktree-gui
+# agent-worktree-gui
 
 A local panel that watches every git worktree across one or more projects, and — Stage 1 —
 can spawn Hermes agents into fresh worktrees from the browser.
@@ -16,8 +16,8 @@ Then open **http://127.0.0.1:7331**.
 
 Node 18+ and nothing else — no dependencies, no build step:
 
-    gh repo clone JLRoper/agent-wroktree-gui
-    cd agent-wroktree-gui
+    gh repo clone JLRoper/agent-worktree-gui
+    cd agent-worktree-gui
     start.cmd            # or: node server.js
 
 Edit `config.json` first: `scanRoots` is where your repos live (every git repo under it is

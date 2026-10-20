@@ -332,7 +332,7 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(config.port, config.host, () => {
-  log(`agent-wroktree-gui on http://${config.host}:${config.port}`);
+  log(`agent-worktree-gui on http://${config.host}:${config.port}`);
   log(`projects: ${config.projects.map((p) => p.name).join(", ") || "(none)"} | threads: ${config.threads} | fast ${config.worktreeSeconds}s / full ${config.slowSeconds}s`);
   log(`agent spawn: ${jobs.binary} (cwd ${config.defaultCwd}) | key: ${keyStatus().fromEnv ? "env" : keyCacheHint()}`);
 });
