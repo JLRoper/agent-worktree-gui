@@ -1,30 +1,26 @@
 {
   "port": 7331,
-
   "worktreeSeconds": 5,
-  "midSeconds": 30,
-  "dormantSeconds": 60,
+  "midSeconds": 45,
+  "dormantSeconds": 90,
   "slowSeconds": 60,
   "fetchSeconds": 600,
   "refreshSeconds": 30,
-
   "prCacheSeconds": 300,
   "remoteCacheSeconds": 300,
   "liveMinutes": 5,
   "threads": 8,
-
-  "scanRoots": ["C:/ProjectDevelopment"],
+  "scanRoots": [
+    "C:/ProjectDevelopment"
+  ],
   "liveSeconds": 5,
-
   "discovery": {
     "worktreeSource": "git"
   },
-
   "host": "127.0.0.1",
   "defaultCwd": "C:/ProjectDevelopment/heroes-js",
   "jobMaxRuntimeSeconds": 3600,
   "hermesBin": null,
-
   "projects": [
     {
       "name": "heroes-js",
