@@ -479,6 +479,45 @@ function formValues() {
 }
 
 // ---------------- worktrees ----------------
+// The panel's own agents, mapped to the worktree they work in. Rendered straight from the job
+// list so a just-started agent shows up immediately, without waiting for the next scan.
+function panelAgentsByPath() {
+  const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  const map = new Map();
+  const add = (p, j) => {
+    if (!p) return;
+    const k = norm(p);
+    const cur = map.get(k) || { running: 0, total: 0, threads: [] };
+    cur.total += 1;
+    if (j.status === "running" || j.status === "starting") cur.running += 1;
+    if (!cur.threads.includes(j.thread)) cur.threads.push(j.thread);
+    map.set(k, cur);
+  };
+  for (const j of state.jobs.values()) {
+    if (j.existing || j.reply) add(j.cwd, j);
+    if (j.worktreePath) add(j.worktreePath, j);
+  }
+  return map;
+}
+
+// Jump from a worktree row to the agent card it belongs to.
+function jumpToAgent(thread) {
+  if (!thread) return;
+  if (state.collapsedJobs.has(thread)) {
+    state.collapsedJobs.delete(thread);
+    saveCollapsedJobs();
+    renderConversation(thread);
+  }
+  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+  if (!card) {
+    $("jobs").scrollIntoView({ block: "start", behavior: "smooth" });
+    return;
+  }
+  card.scrollIntoView({ block: "center", behavior: "smooth" });
+  card.classList.add("jump");
+  setTimeout(() => card.classList.remove("jump"), 1700);
+}
+
 function sigChips(row) {
   const s = row.signals || {};
   const out = [];
@@ -486,6 +525,15 @@ function sigChips(row) {
   if (s.board?.on) out.push(`<span class="sig sig-board" title="board entry, PID alive now: ${esc((s.board.entries || []).map((e) => e.pid).join(', '))}">● board</span>`);
   if (s.ports?.on) out.push(`<span class="sig sig-port" title="dev server listening: ${esc((s.ports.listening || []).join(', '))}">:${esc((s.ports.listening || []).join(' :'))}</span>`);
   if (s.files?.on) out.push(`<span class="sig sig-files" title="files edited ${relTime(s.files.at)} ago">✎ files</span>`);
+  const panel = panelAgentsByPath().get(String(row.path || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase());
+  if (panel) {
+    const t = panel.threads[0];
+    out.push(
+      `<button class="sig ${panel.running ? "sig-panel" : "sig-panel-done"}" data-agent-thread="${esc(t)}" ` +
+        `title="${panel.running ? `a Hermes agent you started here is running in this worktree` : `the agent you started here has finished`} · ${esc(t)} — click to jump to it">` +
+        `⧉ panel${panel.running ? "" : " (done)"}</button>`,
+    );
+  }
   if (!out.length && row.idle) out.push(`<span class="sig sig-idle" title="a Hermes session is open here but idle — not counted as live">⧉ ${s.hermes?.idle ?? 1} idle</span>`);
   return out.join("");
 }
@@ -585,6 +633,7 @@ function chipsHtml(name) {
   const open = rows.filter((r) => !r.live && r.idle).length;
   const serving = rows.filter((r) => r.signals?.ports?.on).length;
   const removable = rows.filter((r) => r.mergeable).length;
+  const panelRunning = rows.filter((r) => panelAgentsByPath().get(String(r.path || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase())?.running).length;
   const stale = rows.filter((r) => r.verdictStale).length;
   const out = [`<span class="chip">${rows.length} worktrees</span>`];
   if (merged) out.push(`<span class="chip good">${merged} merged</span>`);
@@ -594,6 +643,7 @@ function chipsHtml(name) {
   if (live) out.push(`<span class="chip warn">${live} live</span>`);
   if (open) out.push(`<span class="chip">${open} open idle</span>`);
   if (serving) out.push(`<span class="chip info">${serving} serving</span>`);
+  if (panelRunning) out.push(`<span class="chip warn">${panelRunning} panel agent${panelRunning === 1 ? "" : "s"}</span>`);
   if (removable) out.push(`<span class="chip info">${removable} safe to remove</span>`);
   if (stale) out.push(`<span class="chip">${stale} reclassifying</span>`);
   return out.join("");
@@ -995,6 +1045,14 @@ document.addEventListener("input", (e) => {
 });
 
 $("projects").addEventListener("click", (e) => {
+  // A row's agent chip jumps up to that conversation instead of expanding the row.
+  const jump = e.target.closest("[data-agent-thread]");
+  if (jump) {
+    e.preventDefault();
+    e.stopPropagation();
+    jumpToAgent(jump.dataset.agentThread);
+    return;
+  }
   const tr = e.target.closest("tr.row");
   if (!tr) return;
   const key = tr.dataset.key;

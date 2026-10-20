@@ -166,6 +166,18 @@ what you want when a worktree already exists and you just need a session inside 
 going to that same directory. Unticked (or started from the green **+** by a project name), the
 behaviour is unchanged: a fresh worktree under `.worktrees/`.
 
+#### Which agent is working in which worktree
+
+A row whose worktree has an agent you started from this panel shows a green `⧉ panel` chip — click
+it to jump straight to that conversation in the Agents section (it expands first if you minimized
+it). While the agent runs, the row counts as live and is polled at the active cadence.
+
+This mapping is the panel's own, because Hermes records **no cwd** for the `-c` named-thread sessions
+the panel starts (not in `sessions.cwd`, and `git_branch` / `git_repo_root` are empty too), and a
+finished one-shot is marked closed — so the `⧉ hermes` signal, which matches on a session's cwd,
+can never place a panel-started agent. `⧉ panel (done)` means the agent that ran there has finished
+but is still in the panel's list.
+
 #### Replying to an agent
 
 Each card is a conversation, and you can keep talking to it. Every agent is started on a **named

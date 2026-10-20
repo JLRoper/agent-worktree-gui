@@ -52,6 +52,8 @@ async function loadConfig() {
   cfg.threads = Number(cfg.threads) || Math.max(1, Math.min(4, cpus().length - 1));
   cfg.projects = Array.isArray(cfg.projects) ? cfg.projects : [];
   if (!cfg.defaultCwd) cfg.defaultCwd = cfg.projects[0]?.path || process.cwd();
+  // Keyed off the config's own directory, so a PANEL_CONFIG sandbox keeps its own registry.
+  if (!cfg.jobsFile) cfg.jobsFile = path.join(path.dirname(CONFIG_PATH), "logs", "jobs.json");
   return cfg;
 }
 
@@ -104,7 +106,14 @@ let config = await loadConfig();
 let pool = new Pool(config.threads);
 const store = new Store();
 const registry = new ProjectRegistry({ getConfig: () => config, store, onLog: log });
-let scheduler = new Scheduler({ config, store, pool, registry, getProjects: () => registry.projects });
+let scheduler = new Scheduler({
+  config,
+  store,
+  pool,
+  registry,
+  getProjects: () => registry.projects,
+  panelAgents: () => jobs.agentPaths(),
+});
 
 const clients = new Set();
 
@@ -318,7 +327,7 @@ const server = createServer(async (req, res) => {
       scheduler.stop();
       pool.close();
       pool = new Pool(config.threads);
-      scheduler = new Scheduler({ config, store, pool, registry, getProjects: () => registry.projects });
+      scheduler = new Scheduler({ config, store, pool, registry, getProjects: () => registry.projects, panelAgents: () => jobs.agentPaths() });
       await registry.refresh();
       await scheduler.start();
       broadcast({ type: "snapshot", data: snapshot() });
