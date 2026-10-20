@@ -217,6 +217,7 @@ function conversationHtml(conv) {
     latest.cwd ? `cwd ${latest.cwd}` : null,
     latest.model ? `model ${latest.model}` : "(default model)",
     latest.worktree ? `worktree ${latest.worktree}` : null,
+    latest.existing ? "in existing worktree" : null,
     turns.length > 1 ? `${turns.length} turns` : null,
   ].filter(Boolean).join(" · ");
   const foot = latest.status === "running" || latest.status === "starting"
@@ -414,9 +415,11 @@ function updateSpawnNote() {
   const cwd = $("job-cwd").value.trim();
   const where = cwd || p?.path || state.spawn.defaultCwd || "?";
   const custom = Boolean(cwd) && Boolean(p) && cwd !== p.path;
-  $("spawn-note").textContent =
-    `hermes chat -w — worktree under ${where}\\.worktrees\\` +
-    (custom ? " · custom location (differs from the selected project)" : ` · project ${p ? p.name : "(none)"}`);
+  const existing = $("job-existing").checked;
+  $("spawn-note").textContent = existing
+    ? `hermes chat — runs IN ${where} (no new worktree${state.spawnTarget ? ` · ${state.spawnTarget}` : ""}); edits land in that tree`
+    : `hermes chat -w — worktree under ${where}\\.worktrees\\` +
+      (custom ? " · custom location (differs from the selected project)" : ` · project ${p ? p.name : "(none)"}`);
   // A repo with no commits has no HEAD to branch from, so -w cannot create a worktree in it.
   const emptyRepo = Boolean(p) && Boolean(p.empty) && (!cwd || cwd === p.path);
   const warn = $("spawn-warn");
@@ -427,6 +430,19 @@ function updateSpawnNote() {
   $("btn-spawn").disabled = emptyRepo;
 }
 
+// The per-worktree "\u25b6": run an agent INSIDE that existing worktree (no new tree at all).
+function focusSpawnForWorktree(path, name) {
+  $("job-cwd").value = path;
+  $("job-existing").checked = true;
+  state.spawnTarget = name || null;
+  updateSpawnNote();
+  const card = $("newagent");
+  card.classList.add("armed");
+  setTimeout(() => card.classList.remove("armed"), 1400);
+  card.scrollIntoView({ block: "start", behavior: "smooth" });
+  $("job-prompt").focus();
+}
+
 // The green "+": aim the spawn card at that project and put the cursor in the prompt.
 function focusSpawn(projectName) {
   if (projectName) {
@@ -434,6 +450,9 @@ function focusSpawn(projectName) {
     $("job-project").value = projectName;
     // The green "+" is the "start work here" gesture: point the location field at that project.
     if (p) $("job-cwd").value = p.path;
+    // ...and that means a NEW worktree in that project, not the project folder itself.
+    $("job-existing").checked = false;
+    state.spawnTarget = null;
     updateSpawnNote();
   }
   const card = $("newagent");
@@ -448,6 +467,8 @@ function formValues() {
     prompt: $("job-prompt").value,
     // An explicitly edited location wins over the project picker (the server prefers `cwd`).
     cwd: $("job-cwd").value.trim() || undefined,
+    // true = run in that directory as-is (an existing worktree), no new worktree created.
+    existing: $("job-existing").checked,
     project: $("job-project").value || undefined,
     model: $("job-model").value.trim() || undefined,
     budget: Number($("job-budget").value) || undefined,
@@ -496,7 +517,8 @@ function rowHtml(row) {
       : `<span class="dimmer">none</span>`;
   const badge = `<span class="badge ${verdictClass(row.verdict)}${row.verdictStale ? " stale" : ""}">${esc(row.verdict)}</span>`;
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
-    <td class="name">${esc(row.name)}</td>
+    <td class="name"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}"
+      title="start a Hermes agent in this worktree — it runs here (no new worktree)">\u25b6</button> <span>${esc(row.name)}</span></td>
     <td class="mono branch">${esc(row.branch || "—")}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
@@ -882,11 +904,18 @@ $("btn-fetch").addEventListener("click", () => post("/api/fetch"));
 $("job-project").addEventListener("change", () => {
   const p = selectedProject();
   if (p) $("job-cwd").value = p.path;
+  $("job-existing").checked = false;
+  state.spawnTarget = null;
   updateSpawnNote();
   $("job-cmd").textContent = "preview a command to see exactly what would run…";
   $("job-cmd").classList.add("dimmer");
 });
 $("job-cwd").addEventListener("input", updateSpawnNote);
+$("job-existing").addEventListener("change", () => {
+  updateSpawnNote();
+  $("job-cmd").textContent = "preview a command to see exactly what would run…";
+  $("job-cmd").classList.add("dimmer");
+});
 $("btn-preview").addEventListener("click", preview);
 $("btn-spawn").addEventListener("click", spawnAgent);
 $("btn-clear-jobs").addEventListener("click", () => post("/api/jobs/clear"));
@@ -922,6 +951,13 @@ document.addEventListener("click", async (e) => {
   const phead = e.target.closest(".project-head[data-toggle-project]");
   if (phead) {
     toggleProject(phead.dataset.toggleProject);
+    return;
+  }
+  const rowAgent = e.target.closest(".btn-row-agent");
+  if (rowAgent) {
+    e.stopPropagation();
+    e.preventDefault();
+    focusSpawnForWorktree(rowAgent.dataset.agentPath, rowAgent.dataset.agentName);
     return;
   }
   const replyBtn = e.target.closest(".btn-reply");

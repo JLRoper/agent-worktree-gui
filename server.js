@@ -15,7 +15,10 @@ import { gitIn } from "./lib/scan.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(HERE, "public");
-const CONFIG_PATH = path.join(HERE, "config.json");
+// PANEL_CONFIG lets a second instance run from the same code with its own config and port —
+// a sandbox or a demo you can click around in without touching the real one:
+//   set PANEL_CONFIG=C:\path\to\panel-config.json && node server.js
+const CONFIG_PATH = process.env.PANEL_CONFIG ? path.resolve(process.env.PANEL_CONFIG) : path.join(HERE, "config.json");
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -237,9 +240,19 @@ const server = createServer(async (req, res) => {
       const target = body.project ? registry.projects.find((p) => p.name === body.project) : null;
       if (body.project && !target) return sendJson(res, 400, { error: `unknown project: ${body.project}` });
       const cwd = body.cwd || target?.path || config.defaultCwd;
-      const blocked = await spawnBlocker(cwd, target);
+      // "existing": run in a directory that is already there (a worktree you picked), so no
+      // worktree is created and the agent's edits land directly in that tree.
+      const existing = Boolean(body.existing);
+      if (existing) {
+        try {
+          if (!(await stat(cwd)).isDirectory()) return sendJson(res, 400, { error: `${cwd} is not a directory` });
+        } catch {
+          return sendJson(res, 400, { error: `${cwd} does not exist` });
+        }
+      }
+      const blocked = await spawnBlocker(cwd, existing ? null : target);
       if (blocked) return sendJson(res, 400, { error: blocked, blocked });
-      const job = await jobs.create({ ...body, cwd });
+      const job = await jobs.create({ ...body, cwd, existing });
       return sendJson(res, 202, { job });
     }
 

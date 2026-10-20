@@ -309,6 +309,19 @@ tbody tr.row.flash { animation: flashrow .9s ease-out; }
 
 .mono { font-family: var(--mono); font-size: 12px; }
 .name { font-weight: 600; }
+button.btn-row-agent {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin-right: 2px;
+  font: 700 10px/18px system-ui, sans-serif;
+  color: #7ee787;
+  background: var(--green-bg);
+  border: 1px solid #1f4a2a;
+  border-radius: 5px;
+  vertical-align: middle;
+}
+button.btn-row-agent:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb950; }
 .branch { color: #c8d1dc; }
 .dim { color: var(--dim); }
 .dimmer { color: var(--dimmer); }

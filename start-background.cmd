@@ -13,7 +13,7 @@ if errorlevel 1 (
 if exist logs\server.pid (
   set /p OLDPID=<logs\server.pid
   call :alive %OLDPID%
-  if errorlevel 1 (
+  if not errorlevel 1 (
     echo Already running as PID %OLDPID% -- use stop-background.cmd first.
     exit /b 1
   )

@@ -157,6 +157,15 @@ Semantics, all verified against real runs:
 - **Jobs are in-memory.** Restarting the server clears the list (the worktrees and commits are
   unaffected). Persisting them is Stage 2 work.
 
+#### Starting an agent in an existing worktree
+
+Every worktree row carries a small green **▶**. It aims the spawn card at that worktree and ticks
+*run in that folder as-is*, so the agent works **there**: no new worktree, no new branch — which is
+what you want when a worktree already exists and you just need a session inside it. The card says so
+("runs IN … (no new worktree)"), the agent card is tagged `in existing worktree`, and replies keep
+going to that same directory. Unticked (or started from the green **+** by a project name), the
+behaviour is unchanged: a fresh worktree under `.worktrees/`.
+
 #### Replying to an agent
 
 Each card is a conversation, and you can keep talking to it. Every agent is started on a **named

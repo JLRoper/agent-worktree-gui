@@ -53,6 +53,18 @@ Edit `config.json`. Only `scanRoots` normally matters:
 No `config.json`? The panel starts on defaults and logs that it did, so a bare `node server.js`
 still comes up.
 
+### A sandbox to click around in
+
+A second instance can run from the same code with its own config and port, so you can try spawning
+agents into throwaway worktrees without touching real projects:
+
+    set PANEL_CONFIG=C:\path\to\panel-config.json
+    node server.js
+
+Point that config's `scanRoots` at a scratch directory containing a dummy repo (plus a worktree or
+two) and `port` at something free; `start.cmd` / `stop-background.cmd` in the repo still work, they
+just read whatever `PANEL_CONFIG` names.
+
 ## 4. Run
 
     start.cmd          # Windows: detached, logs to logs\server.out.log, stop with stop-background.cmd
