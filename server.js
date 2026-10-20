@@ -335,6 +335,46 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    // Clone a GitHub repo over SSH into ONE of the configured scan roots — what the folder
+    // accordion's "+" uses: the root is the folder you clicked, the name is the repo
+    // (`name` or `owner/name`). The destination is inside that root and must not exist yet.
+    // Responds as soon as git finishes; discovery picks the new repo up on the next pass (the
+    // refresh below is deliberately not awaited — probing 94 repos would stall the response).
+    if (route === "/api/clone" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "");
+      const rootNorm = norm(body.root);
+      const roots = (config.scanRoots || []).map(norm).filter(Boolean);
+      if (!rootNorm || !roots.some((r) => r.toLowerCase() === rootNorm.toLowerCase())) {
+        return sendJson(res, 400, { error: `root must be one of scanRoots: ${rootNorm || "(none)"}` });
+      }
+      // Only a plain repo name, optionally prefixed by an owner: no paths, no `..`, no URLs.
+      const m = /^(?:([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)\/)?([A-Za-z0-9._-]+?)(?:\.git)?$/.exec(String(body.name || "").trim());
+      if (!m) return sendJson(res, 400, { error: `not a repo name: ${String(body.name || "").trim()}` });
+      const owner = m[1] || String(config.cloneOwner || "JLRoper");
+      const repo = m[2];
+      const url = `git@github.com:${owner}/${repo}.git`;
+      const dest = path.join(rootNorm, repo);
+      try {
+        await stat(dest);
+        return sendJson(res, 409, { error: `${dest} already exists`, dest });
+      } catch {
+        /* good: nothing there yet */
+      }
+      const t0 = Date.now();
+      const r = await gitIn(rootNorm, ["clone", "--no-single-branch", url, dest], 300000);
+      if (!r.ok) {
+        return sendJson(res, 502, { error: String(r.err || r.out || "git clone failed").split("\n").slice(-4).join(" "), url, dest, tookMs: Date.now() - t0 });
+      }
+      log(`cloned ${url} -> ${dest} (${Date.now() - t0}ms)`);
+      void registry
+        .refresh()
+        .then(() => broadcast({ type: "snapshot", data: snapshot() }))
+        .catch(() => {});
+      return sendJson(res, 200, { ok: true, url, dest, tookMs: Date.now() - t0 });
+    }
+
     if (route === "/api/fetch" && req.method === "POST") {
       for (const p of registry.projects) await scheduler.maybeFetch(p, true);
       await scheduler.fullPass({ discover: true });

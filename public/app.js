@@ -23,6 +23,7 @@ const state = {
   collapsedJobs: loadCollapsedJobs(),
   expandedProjects: loadExpandedProjects(),
   collapsedRoots: loadCollapsedRoots(),
+  cloneStatus: {},
   scanRoots: [],
 };
 
@@ -117,6 +118,10 @@ function toggleProject(name) {
   else state.expandedProjects.add(name);
   saveExpandedProjects();
   applyProjectCollapse(name);
+  // Keep the folder's collapse-all button honest when projects are opened one by one.
+  const sec = document.querySelector(`section.project[data-project="${CSS.escape(name)}"]`);
+  const root = sec?.closest("section.root-group")?.dataset.root;
+  if (root) paintRootButton(root);
 }
 
 // ---- folder layer ------------------------------------------------------------
@@ -182,6 +187,93 @@ function applyRootCollapse(root) {
     head.title = `${open ? "collapse" : "expand"} ${labelRoot(root)}`;
     const chev = head.querySelector(".chev");
     if (chev) chev.textContent = open ? "\u25be" : "\u25b8";
+  }
+}
+
+// ---- collapse-all inside one folder -------------------------------------------
+// One button per folder that opens or closes every project section it holds, without touching
+// the folder itself. The label follows what is actually on screen: "Collapse all" while any
+// project in the folder is open, "Expand all" once none are.
+function paintRootButton(root) {
+  const sec = document.querySelector(`section.root-group[data-root="${CSS.escape(root)}"]`);
+  const btn = sec?.querySelector("[data-root-collapse]");
+  if (!btn) return;
+  const names = [...sec.querySelectorAll("section.project")].map((s) => s.dataset.project);
+  const anyOpen = names.some((n) => state.expandedProjects.has(n));
+  btn.textContent = anyOpen ? "Collapse all" : "Expand all";
+  btn.title = `${anyOpen ? "collapse" : "expand"} every project in ${labelRoot(root)} (${names.length})`;
+}
+
+function toggleAllInRoot(root) {
+  if (!root) return;
+  const sec = document.querySelector(`section.root-group[data-root="${CSS.escape(root)}"]`);
+  if (!sec) return;
+  const names = [...sec.querySelectorAll("section.project")].map((s) => s.dataset.project);
+  if (!names.length) return;
+  const collapse = names.some((n) => state.expandedProjects.has(n));
+  for (const n of names) {
+    if (collapse) state.expandedProjects.delete(n);
+    else state.expandedProjects.add(n);
+  }
+  saveExpandedProjects();
+  for (const n of names) applyProjectCollapse(n);
+  paintRootButton(root);
+}
+
+// ---- clone a repo into a folder ------------------------------------------------
+// The "+" in a folder header opens this row. The root is fixed to the folder you clicked, so a
+// clone can only ever land inside a configured scan root, and the server re-checks that.
+function showCloneForm(root, show = true) {
+  const form = document.querySelector(`[data-clone-form="${CSS.escape(root)}"]`);
+  if (!form) return;
+  form.hidden = !show;
+  if (show) form.querySelector("[data-clone-input]")?.focus();
+}
+
+async function cloneIntoRoot(root) {
+  const form = document.querySelector(`[data-clone-form="${CSS.escape(root)}"]`);
+  if (!form) return;
+  const input = form.querySelector("[data-clone-input]");
+  const btn = form.querySelector("[data-clone-go]");
+  const name = String(input?.value || "").trim();
+
+  // Status lives in state, not only in the DOM: a snapshot re-renders every folder section, and
+  // an inline-only message was wiped a couple of seconds after the clone finished.
+  const setStatus = (text, kind = "busy") => {
+    state.cloneStatus[root] = { text, kind };
+    const span = document.querySelector(`[data-clone-form="${CSS.escape(root)}"] [data-clone-msg]`);
+    if (span) {
+      span.textContent = text;
+      span.classList.toggle("clone-err", kind === "err");
+    }
+  };
+
+  if (!name) {
+    input?.focus();
+    return;
+  }
+  btn.disabled = true;
+  setStatus("cloning over ssh…");
+  try {
+    const res = await fetch("/api/clone", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ root, name }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setStatus(j.error || `HTTP ${res.status}`, "err");
+      return;
+    }
+    setStatus(`cloned → ${j.dest} (${Math.round((j.tookMs || 0) / 1000)}s, ${j.url})`, "ok");
+    if (input) input.value = "";
+    // Discovery re-runs server-side and broadcasts a snapshot when it is done; this second
+    // resync covers a missed event so the new project appears without waiting for the timer.
+    setTimeout(() => void resync(), 2000);
+  } catch (e) {
+    setStatus(`failed: ${e.message}`, "err");
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -779,11 +871,20 @@ function rootChips(projects) {
 
 function rootSection(root, projects) {
   const open = !state.collapsedRoots.has(root);
+  const anyOpen = projects.some((p) => state.expandedProjects.has(p.name));
   return `<section class="root-group${open ? "" : " collapsed"}" data-root="${esc(root)}">
     <div class="root-head" data-toggle-root="${esc(root)}" title="${open ? "collapse" : "expand"} ${esc(labelRoot(root))}">
       <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
       <h2>${esc(labelRoot(root))}</h2>
       <div class="chips">${rootChips(projects)}</div>
+      <span class="spacer"></span>
+      <button type="button" class="btn-root-collapse" data-root-collapse="${esc(root)}" title="${anyOpen ? "collapse" : "expand"} every project in ${esc(labelRoot(root))} (${projects.length})">${anyOpen ? "Collapse all" : "Expand all"}</button>
+      <button type="button" class="btn-root-clone" data-root-clone="${esc(root)}" title="clone a GitHub repo over ssh into ${esc(labelRoot(root))}">+</button>
+    </div>
+    <div class="root-clone" data-clone-form="${esc(root)}"${state.cloneStatus[root] ? "" : " hidden"}>
+      <input type="text" data-clone-input="${esc(root)}" placeholder="repo name — e.g. agent-worktree-gui, or owner/repo" spellcheck="false" autocomplete="off">
+      <button type="button" data-clone-go="${esc(root)}">Clone via ssh</button>
+      <span class="mono dim${state.cloneStatus[root]?.kind === "err" ? " clone-err" : ""}" data-clone-msg="${esc(root)}">${esc(state.cloneStatus[root]?.text || "")}</span>
     </div>
     <div class="root-body">
 ${projects.map((p) => projectSection(p.name)).join("\n")}
@@ -1140,6 +1241,29 @@ document.addEventListener("click", async (e) => {
     focusSpawn(plus.dataset.spawnProject);
     return;
   }
+  const rcollapse = e.target.closest("[data-root-collapse]");
+  if (rcollapse) {
+    e.stopPropagation();
+    e.preventDefault();
+    toggleAllInRoot(rcollapse.dataset.rootCollapse);
+    return;
+  }
+  const rclone = e.target.closest("[data-root-clone]");
+  if (rclone) {
+    e.stopPropagation();
+    e.preventDefault();
+    const root = rclone.dataset.rootClone;
+    const form = document.querySelector(`[data-clone-form="${CSS.escape(root)}"]`);
+    showCloneForm(root, form ? form.hidden : true); // the "+" toggles the row
+    return;
+  }
+  const rgo = e.target.closest("[data-clone-go]");
+  if (rgo) {
+    e.stopPropagation();
+    e.preventDefault();
+    void cloneIntoRoot(rgo.dataset.cloneGo);
+    return;
+  }
   const rhead = e.target.closest(".root-head[data-toggle-root]");
   if (rhead) {
     toggleRoot(rhead.dataset.toggleRoot);
@@ -1179,6 +1303,18 @@ document.addEventListener("click", async (e) => {
 
 // Reply affordances are re-created on every render, so they are handled at document level.
 document.addEventListener("keydown", (e) => {
+  // The folder clone input: Enter clones, Escape closes the row.
+  const cloneInput = e.target.closest && e.target.closest("[data-clone-input]");
+  if (cloneInput) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void cloneIntoRoot(cloneInput.dataset.cloneInput);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      showCloneForm(cloneInput.dataset.cloneInput, false);
+    }
+    return;
+  }
   const box = e.target.closest && e.target.closest(".reply-box");
   if (!box) return;
   if (e.key === "Enter" && !e.shiftKey) {

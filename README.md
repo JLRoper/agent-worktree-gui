@@ -62,7 +62,10 @@ discovery finds for that name (heroes-js carries a `prRepo`).
 that lives outside every configured root — an explicit `projects[]` entry can point anywhere —
 gets its own sibling accordion for its parent folder, so nothing is ever filed under a folder it
 is not in. The folder header carries the aggregate chips (projects, worktrees, unmerged, dirty,
-live) and collapses/expands on click; the collapsed set is remembered in localStorage.
+live), a **Collapse all / Expand all** button for the projects inside it, and a green **+** that
+opens a clone row: type a repo name (`name`, or `owner/name`) and press Enter to clone it over SSH
+into that folder (`git@github.com:<owner>/<name>.git`). The folder itself collapses from its
+title line; the collapsed set is remembered in localStorage.
 
 **Every project starts minimized** to its title line — click the line (or its chevron) to open it,
 and the projects you opened are remembered in `localStorage`, so a reload or a resync keeps your
@@ -237,6 +240,7 @@ this process's own environment; `key: from registry` means it was looked up in `
 | `liveMinutes` | 5 | how recent activity counts as live |
 | `threads` | 4 (capped) | scan worker threads |
 | `discovery.worktreeSource` | `git` | `git` probes each repo (6-7 calls, ~0.8s, the default) or `hermes` runs `hermes worktree list --json` (5.5-7.2s per repo, measured on Windows). `hermes` additionally reports per-tree `locked`/`missing` and a per-branch keep/reap verdict; it is opt-in because discovery sweeps every repo on `slowSeconds`. Either way `/api/cleanup?project=NAME` gives the full audit for one repo on demand |
+| `cloneOwner` | `JLRoper` | GitHub owner used by `/api/clone` (and the folder **+** box) when the typed name has no `owner/` prefix |
 | `projects[]` | — | `name`, `path`, `remote`, `mainBranch`, `prRepo` |
 
 ## Endpoints
@@ -246,6 +250,7 @@ this process's own environment; `key: from registry` means it was looked up in `
 | GET | `/api/health`, `/api/config`, `/api/stats` | settings / scheduler / pool |
 | GET | `/api/state` | full snapshot (projects, worktrees, jobs, spawn info) |
 | GET | `/api/cleanup?project=NAME[&fresh=1]` | on-demand `hermes worktree list --json` audit for one repo: trees, external trees (`locked`/`missing`), per-branch keep/reap verdict + reason. ~6s, cached 10 min |
+| POST | `/api/clone` | clone a GitHub repo over ssh into one configured scan root: `{root, name}` where `root` must equal a `scanRoots` entry and `name` is `repo` or `owner/repo`. Refuses anything else (no paths, no URLs), and a destination that already exists. Responds when git finishes; discovery picks the repo up on the next pass |
 | GET | `/api/jobs` | job list with streamed output tails |
 | GET | `/api/stream` | SSE: `snapshot`, `row`, `project`, `drop`, `job`, `jobline`, `jobs`, `heartbeat` |
 | POST | `/api/agents/preview` | returns the exact argv without spawning |
