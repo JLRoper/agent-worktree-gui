@@ -46,6 +46,19 @@ function relTime(iso) {
   return `${Math.round(h / 24)}d`;
 }
 
+// Precise duration for the life column: 1h24m12s, not "1h". Seconds matter there because the
+// number is the whole point of the column.
+function fmtDur(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rs = s % 60;
+  if (m < 60) return `${m}m${String(rs).padStart(2, "0")}s`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h${String(m % 60).padStart(2, "0")}m${String(rs).padStart(2, "0")}s`;
+  return `${Math.floor(h / 24)}d${String(h % 24).padStart(2, "0")}h`;
+}
+
 function elapsed(j) {
   if (!j.startedAt) return "—";
   const end = j.endedAt ? Date.parse(j.endedAt) : Date.now();
@@ -802,9 +815,53 @@ function rowHtml(row) {
     <td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>
     <td>${pr}</td>
     <td class="mono nowrap">${dirty}</td>
-    <td class="age nowrap" data-key="${esc(keyOf(row.project, row.path))}"><span class="age-num">${relTime(row.scannedAt)}</span>${sigChips(row)}</td>
+    ${ageCellHtml(row)}
     <td>${badge}</td>
   </tr>`;
+}
+
+// ---- the age column: last life seen, plus a ring that drains to the next read ----------------
+// The number is NOT "time since last poll" (that is the ring): it is the last moment any liveness
+// evidence fired for this worktree. The ring empties exactly when the row is due for its next read
+// (`row.pollSeconds`, which the scheduler stamps with the cadence it will actually apply).
+const RING_C = 2 * Math.PI * 6;
+
+function ageCellHtml(row) {
+  const alive = Date.parse(row.lastAliveAt || "");
+  const label = Number.isFinite(alive) ? fmtDur(Date.now() - alive) : "never live";
+  return `<td class="age nowrap" data-key="${esc(keyOf(row.project, row.path))}">
+      <svg class="poll-ring" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+        <circle class="poll-track" cx="8" cy="8" r="6" fill="none" stroke-width="2"></circle>
+        <circle class="poll-arc" cx="8" cy="8" r="6" fill="none" stroke-width="2" transform="rotate(-90 8 8)" stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="0"></circle>
+      </svg><span class="age-num${Number.isFinite(alive) ? "" : " dimmer"}">${esc(label)}</span>${sigChips(row)}</td>`;
+}
+
+function paintAgeCell(cell, row) {
+  const now = Date.now();
+  const scanned = Date.parse(row.scannedAt || "");
+  const every = Math.max(1, Number(row.pollSeconds || state.settings.worktreeSeconds || 5));
+  const total = every * 1000;
+  const remain = Number.isFinite(scanned) ? Math.max(0, scanned + total - now) : 0;
+  const frac = Math.min(1, remain / total);
+  const overdue = Math.max(0, now - (Number.isFinite(scanned) ? scanned + total : 0));
+  const arc = cell.querySelector(".poll-arc");
+  if (arc) {
+    // Green while there is time left, amber as it runs out and while it is merely due, red only
+    // when the row has been due for longer than a whole extra cadence (a backlog, not a tick).
+    const stroke = remain <= 0 ? (overdue > total ? "var(--red)" : "var(--amber)") : frac < 0.25 ? "var(--amber)" : "var(--green)";
+    arc.setAttribute("stroke-dashoffset", (RING_C * (1 - frac)).toFixed(2));
+    arc.setAttribute("stroke", stroke);
+  }
+  const alive = Date.parse(row.lastAliveAt || "");
+  const live = Number.isFinite(alive);
+  const num = cell.querySelector(".age-num");
+  if (num) {
+    num.textContent = live ? fmtDur(now - alive) : "never live";
+    num.classList.toggle("dimmer", !live);
+  }
+  cell.title =
+    `last life ${live ? `${fmtDur(now - alive)} ago` : "never seen"} · polled ${relTime(row.scannedAt)} ago · ` +
+    `next read ${remain <= 0 ? `due now${overdue > total ? ` (overdue ${fmtDur(overdue)})` : ""}` : `in ${Math.ceil(remain / 1000)}s`} (every ${every}s)`;
 }
 
 function detailHtml(row) {
@@ -987,9 +1044,9 @@ function projectSection(name) {
     </div>
     <table><thead><tr>
       <th>Worktree</th><th>Branch</th><th>Tip</th><th>Ahead / Behind</th><th>Cherry</th>
-      <th>PR</th><th>Dirty</th><th title="row age, plus liveness evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited">Age / evidence</th><th>Verdict</th>
+      <th>PR</th><th>Dirty</th><th title="time since this worktree was last seen alive (any evidence firing) · the ring drains to empty when the row is due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited">Life / next read</th><th>Verdict</th>
     </tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
-    <div class="legend">liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired</div>
+    <div class="legend">liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring drains to empty when the row is due for its next read</div>
   </section>`;
 }
 
@@ -1453,7 +1510,7 @@ setInterval(() => {
   for (const cell of document.querySelectorAll("td.age")) {
     const row = state.rows.get(cell.dataset.key);
     if (!row) continue;
-    cell.innerHTML = `<span class="age-num">${relTime(row.scannedAt)}</span>${sigChips(row)}`;
+    paintAgeCell(cell, row);
   }
   for (const j of state.jobs.values()) {
     if (j.status !== "running" && j.status !== "starting") continue;

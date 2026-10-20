@@ -168,6 +168,13 @@ button.btn-root-clone:hover { background: #1f4a2a; color: #d6ffe0; border-color:
 .root-group.collapsed .root-body { display: none; }
 .root-body { padding: 14px 14px 0; }
 
+/* ---- the age column: a ring that drains to the next read + last-life text ---- */
+.poll-ring { vertical-align: -2px; margin-right: 6px; }
+.poll-track { stroke: var(--line); }
+.poll-arc { stroke: var(--green); }
+td.age .age-num { font-family: var(--mono); font-size: 12px; }
+td.age .age-num.dimmer { color: var(--dimmer); }
+
 /* ---- approvals ---- */
 #approvals { border-color: #6b4d16; }
 #approvals .project-head { background: var(--amber-bg); border-bottom-color: #4a3a17; }

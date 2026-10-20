@@ -140,6 +140,8 @@ const approvals = new Approvals({ onEvent: broadcast });
 const settingsOut = () => ({
   refreshSeconds: config.refreshSeconds,
   worktreeSeconds: config.worktreeSeconds,
+  dormantSeconds: config.dormantSeconds,
+  liveSeconds: config.liveSeconds,
   slowSeconds: config.slowSeconds,
   fetchSeconds: config.fetchSeconds,
   liveMinutes: config.liveMinutes ?? 5,
