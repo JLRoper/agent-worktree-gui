@@ -1,0 +1,44 @@
+# Front door for the Worktree Monitor panel.
+#
+# The panel itself stays on the Windows host (it needs Windows-absolute worktree
+# gitdirs, tasklist/netstat liveness and hermes.exe spawning — see PLAN.md), and
+# listens on 127.0.0.1:7331. Caddy gives it a stable name and TLS.
+#
+# Inside the container the host's loopback is reachable as host.docker.internal
+# (Docker Desktop proxies it; verified against the live panel).
+
+{
+	# No automatic http->https bounce: 8088 is meant to stay usable as plain HTTP.
+	auto_https disable_redirects
+	admin off
+}
+
+# http://worktree.localhost:8088 (and http://localhost:8088)
+http://:80 {
+	encode zstd gzip
+	reverse_proxy host.docker.internal:7331 {
+		# Server-sent events: do not buffer the stream.
+		flush_interval -1
+		header_up X-Forwarded-Host {host}
+	}
+	log {
+		output stdout
+		format console
+	}
+}
+
+# https://worktree.localhost:8443 — Caddy's local CA (run `caddy trust` inside the
+# container once, or import the root cert, to lose the browser warning).
+# A catch-all :443 cannot get a certificate, so the names are listed explicitly.
+https://worktree.localhost:443, https://localhost:443 {
+	tls internal
+	encode zstd gzip
+	reverse_proxy host.docker.internal:7331 {
+		flush_interval -1
+		header_up X-Forwarded-Host {host}
+	}
+	log {
+		output stdout
+		format console
+	}
+}

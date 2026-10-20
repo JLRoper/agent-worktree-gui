@@ -1,0 +1,32 @@
+# Worktree Monitor — local front door.
+#
+# Track A of docker/PLAN.md: the panel runs on the host (it has to — see the plan),
+# this container gives it https://worktree.localhost with TLS and a stable name.
+#
+#   docker compose up -d
+#   open http://worktree.localhost:8088        (plain HTTP, no cert warning)
+#   open https://worktree.localhost:8443       (Caddy internal CA)
+#
+# Both ports are published on 127.0.0.1 only, so the panel is never exposed to the
+# LAN. Do not change those to 0.0.0.0: the panel can spawn agents, which would be
+# unauthenticated remote code execution. If you ever must, set "token" in
+# config.json and have the proxy add x-panel-token.
+
+services:
+  frontdoor:
+    image: caddy:2-alpine
+    container_name: worktree-frontdoor
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8088:80"
+      - "127.0.0.1:8443:443"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
