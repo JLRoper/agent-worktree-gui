@@ -48,6 +48,17 @@ service bound to `127.0.0.1:7331`, so the panel never has to bind a LAN interfac
 cd C:/ProjectDevelopment/agent-worktree-gui/docker && docker compose up -d
 ```
 
+Or redeploy both halves in one command — restarts the panel from the working tree, recreates
+the container, and waits until the proxy answers (`docker\redeploy.cmd`):
+
+```
+C:\ProjectDevelopment\agent-worktree-gui\docker\redeploy.cmd
+```
+
+The script probes `http://127.0.0.1:8088/api/health`, not the FQDN: browsers special-case
+`*.localhost` to loopback but the Windows resolver does not, so a script that dials the name
+fails on DNS while the proxy is perfectly healthy.
+
 ### Check it
 
 ```
