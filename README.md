@@ -229,6 +229,7 @@ this process's own environment; `key: from registry` means it was looked up in `
 | `refreshSeconds` | 30 | client resync interval |
 | `liveMinutes` | 5 | how recent activity counts as live |
 | `threads` | 4 (capped) | scan worker threads |
+| `discovery.worktreeSource` | `git` | `git` probes each repo (6-7 calls, ~0.8s, the default) or `hermes` runs `hermes worktree list --json` (5.5-7.2s per repo, measured on Windows). `hermes` additionally reports per-tree `locked`/`missing` and a per-branch keep/reap verdict; it is opt-in because discovery sweeps every repo on `slowSeconds`. Either way `/api/cleanup?project=NAME` gives the full audit for one repo on demand |
 | `projects[]` | — | `name`, `path`, `remote`, `mainBranch`, `prRepo` |
 
 ## Endpoints
@@ -237,6 +238,7 @@ this process's own environment; `key: from registry` means it was looked up in `
 | --- | --- | --- |
 | GET | `/api/health`, `/api/config`, `/api/stats` | settings / scheduler / pool |
 | GET | `/api/state` | full snapshot (projects, worktrees, jobs, spawn info) |
+| GET | `/api/cleanup?project=NAME[&fresh=1]` | on-demand `hermes worktree list --json` audit for one repo: trees, external trees (`locked`/`missing`), per-branch keep/reap verdict + reason. ~6s, cached 10 min |
 | GET | `/api/jobs` | job list with streamed output tails |
 | GET | `/api/stream` | SSE: `snapshot`, `row`, `project`, `drop`, `job`, `jobline`, `jobs`, `heartbeat` |
 | POST | `/api/agents/preview` | returns the exact argv without spawning |

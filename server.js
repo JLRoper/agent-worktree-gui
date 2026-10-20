@@ -12,6 +12,7 @@ import { Scheduler } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
 import { Jobs, keyStatus, makeThreadName } from "./lib/jobs.js";
 import { gitIn } from "./lib/scan.js";
+import { auditRepo } from "./lib/hermes-worktrees.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(HERE, "public");
@@ -141,6 +142,7 @@ const settingsOut = () => ({
   threads: config.threads,
   host: config.host,
   defaultCwd: config.defaultCwd,
+  worktreeSource: String(config.discovery?.worktreeSource || "git").toLowerCase(),
   spawnEnabled: true,
 });
 
@@ -209,6 +211,23 @@ const server = createServer(async (req, res) => {
 
     if (route === "/api/state" || route === "/api/audit") {
       return sendJson(res, 200, snapshot());
+    }
+
+    // On-demand cleanup audit for ONE project, straight from `hermes worktree list --json`:
+    // linked trees, externally-registered trees (with locked/missing), and a keep/reap verdict
+    // with a reason for every local branch. ~6s per repo, so it is never polled — the UI (or a
+    // script) asks for one project when it wants the detail /api/state deliberately omits.
+    if (route === "/api/cleanup" && req.method === "GET") {
+      const name = url.searchParams.get("project");
+      const target = registry.projects.find((p) => p.name === name) || null;
+      if (!target) return sendJson(res, 404, { error: `unknown project: ${name || "(none)"}` });
+      const t0 = Date.now();
+      try {
+        const audit = await auditRepo(target.path, { config, force: url.searchParams.get("fresh") === "1" });
+        return sendJson(res, 200, { project: target.name, path: target.path, tookMs: Date.now() - t0, ...audit });
+      } catch (e) {
+        return sendJson(res, 502, { project: target.name, path: target.path, tookMs: Date.now() - t0, error: String((e && e.message) || e) });
+      }
     }
 
     if (route === "/api/stats") {

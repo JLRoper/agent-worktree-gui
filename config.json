@@ -15,6 +15,10 @@
   "liveSeconds": 5,
   "dormantSeconds": 30,
 
+  "discovery": {
+    "worktreeSource": "git"
+  },
+
   "host": "127.0.0.1",
   "defaultCwd": "C:/ProjectDevelopment/heroes-js",
   "jobMaxRuntimeSeconds": 3600,
