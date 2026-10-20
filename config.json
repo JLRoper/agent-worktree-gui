@@ -2,6 +2,8 @@
   "port": 7331,
 
   "worktreeSeconds": 5,
+  "midSeconds": 30,
+  "dormantSeconds": 60,
   "slowSeconds": 60,
   "fetchSeconds": 600,
   "refreshSeconds": 30,
@@ -9,11 +11,10 @@
   "prCacheSeconds": 300,
   "remoteCacheSeconds": 300,
   "liveMinutes": 5,
-  "threads": 4,
+  "threads": 8,
 
   "scanRoots": ["C:/ProjectDevelopment"],
   "liveSeconds": 5,
-  "dormantSeconds": 30,
 
   "discovery": {
     "worktreeSource": "git"

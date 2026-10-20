@@ -26,6 +26,8 @@ const state = {
   cloneStatus: {},
   approvals: new Map(),
   scanRoots: [],
+  pollGap: new Map(), // key -> observed seconds between that row's scans, smoothed
+  lastScanAt: new Map(), // key -> ms of the previous scan we rendered
 };
 
 const $ = (id) => document.getElementById(id);
@@ -822,46 +824,83 @@ function rowHtml(row) {
 
 // ---- the age column: last life seen, plus a ring that drains to the next read ----------------
 // The number is NOT "time since last poll" (that is the ring): it is the last moment any liveness
-// evidence fired for this worktree. The ring empties exactly when the row is due for its next read
-// (`row.pollSeconds`, which the scheduler stamps with the cadence it will actually apply).
+// evidence fired for this worktree. The ring empties when the row is due for its next read.
+//
+// The cadence the server sends is what the scheduler WOULD apply; when the panel is behind (a big
+// fleet, a slow repo) the real gap is longer, so the ring is sized to the observed gap once we
+// have one -- otherwise it empties 30s in and then sits empty for a minute, which reads as broken.
 const RING_C = 2 * Math.PI * 6;
+
+function noteScan(row) {
+  const key = keyOf(row.project, row.path);
+  const t = Date.parse(row.scannedAt || "");
+  if (!Number.isFinite(t)) return;
+  const configured = Math.max(1, Number(row.pollSeconds || state.settings.worktreeSeconds || 5));
+  const prev = state.lastScanAt.get(key);
+  if (Number.isFinite(prev) && t > prev) {
+    const gap = (t - prev) / 1000;
+    // A 30s resync can be the first time we see two scans of a 5s row; that gap (30s) says nothing
+    // about how often the row is really read, so only gaps inside a sane multiple are believed.
+    if (gap > 0 && gap <= configured * 4) {
+      const smoothed = state.pollGap.has(key) ? state.pollGap.get(key) * 0.6 + gap * 0.4 : gap;
+      state.pollGap.set(key, smoothed);
+    }
+  }
+  state.lastScanAt.set(key, t);
+}
+
+function ringState(row) {
+  const now = Date.now();
+  const scanned = Date.parse(row.scannedAt || "");
+  const configured = Math.max(1, Number(row.pollSeconds || state.settings.worktreeSeconds || 5));
+  const observed = state.pollGap.get(keyOf(row.project, row.path)) || 0;
+  // Never shorter than the configured cadence, never more than 10x it (a stuck row must not turn
+  // into a 10-minute ring that looks frozen).
+  const every = Math.max(configured, Math.min(Math.round(observed), configured * 10));
+  const total = every * 1000;
+  const remain = Number.isFinite(scanned) ? Math.max(0, scanned + total - now) : 0;
+  const overdue = Number.isFinite(scanned) ? Math.max(0, now - (scanned + total)) : 0;
+  return { now, scanned, configured, every, total, remain, overdue, frac: Math.min(1, remain / total) };
+}
+
+function ringOffset(st) {
+  return (RING_C * (1 - st.frac)).toFixed(2);
+}
+
+function ringStroke(st) {
+  if (st.remain > 0) return st.frac < 0.25 ? "var(--amber)" : "var(--green)";
+  return st.overdue > st.total * 0.5 ? "var(--red)" : "var(--amber)";
+}
 
 function ageCellHtml(row) {
   const alive = Date.parse(row.lastAliveAt || "");
   const label = Number.isFinite(alive) ? fmtDur(Date.now() - alive) : "never live";
+  const st = ringState(row);
   return `<td class="age nowrap" data-key="${esc(keyOf(row.project, row.path))}">
       <svg class="poll-ring" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
         <circle class="poll-track" cx="8" cy="8" r="6" fill="none" stroke-width="2"></circle>
-        <circle class="poll-arc" cx="8" cy="8" r="6" fill="none" stroke-width="2" transform="rotate(-90 8 8)" stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="0"></circle>
+        <circle class="poll-arc" cx="8" cy="8" r="6" fill="none" stroke-width="2" transform="rotate(-90 8 8)" stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="${ringOffset(st)}" stroke="${ringStroke(st)}"></circle>
       </svg><span class="age-num${Number.isFinite(alive) ? "" : " dimmer"}">${esc(label)}</span>${sigChips(row)}</td>`;
 }
 
 function paintAgeCell(cell, row) {
-  const now = Date.now();
-  const scanned = Date.parse(row.scannedAt || "");
-  const every = Math.max(1, Number(row.pollSeconds || state.settings.worktreeSeconds || 5));
-  const total = every * 1000;
-  const remain = Number.isFinite(scanned) ? Math.max(0, scanned + total - now) : 0;
-  const frac = Math.min(1, remain / total);
-  const overdue = Math.max(0, now - (Number.isFinite(scanned) ? scanned + total : 0));
+  const st = ringState(row);
   const arc = cell.querySelector(".poll-arc");
   if (arc) {
-    // Green while there is time left, amber as it runs out and while it is merely due, red only
-    // when the row has been due for longer than a whole extra cadence (a backlog, not a tick).
-    const stroke = remain <= 0 ? (overdue > total ? "var(--red)" : "var(--amber)") : frac < 0.25 ? "var(--amber)" : "var(--green)";
-    arc.setAttribute("stroke-dashoffset", (RING_C * (1 - frac)).toFixed(2));
-    arc.setAttribute("stroke", stroke);
+    arc.setAttribute("stroke-dashoffset", ringOffset(st));
+    arc.setAttribute("stroke", ringStroke(st));
   }
   const alive = Date.parse(row.lastAliveAt || "");
   const live = Number.isFinite(alive);
   const num = cell.querySelector(".age-num");
   if (num) {
-    num.textContent = live ? fmtDur(now - alive) : "never live";
+    num.textContent = live ? fmtDur(st.now - alive) : "never live";
     num.classList.toggle("dimmer", !live);
   }
+  const cadence = st.every === st.configured ? `every ${st.every}s` : `every ${st.every}s, observed (configured ${st.configured}s)`;
   cell.title =
-    `last life ${live ? `${fmtDur(now - alive)} ago` : "never seen"} · polled ${relTime(row.scannedAt)} ago · ` +
-    `next read ${remain <= 0 ? `due now${overdue > total ? ` (overdue ${fmtDur(overdue)})` : ""}` : `in ${Math.ceil(remain / 1000)}s`} (every ${every}s)`;
+    `last life ${live ? `${fmtDur(st.now - alive)} ago` : "never seen"} · polled ${relTime(row.scannedAt)} ago · ` +
+    `next read ${st.remain > 0 ? `in ${Math.ceil(st.remain / 1000)}s` : `due now${st.overdue > st.total ? ` (overdue ${fmtDur(st.overdue)})` : ""}`} (${cadence})`;
 }
 
 function detailHtml(row) {
@@ -1071,6 +1110,7 @@ function reorder(name) {
 function placeRow(project, row, { flash = false } = {}) {
   row.project = project;
   const key = keyOf(project, row.path);
+  noteScan(row);
   state.rows.set(key, row);
   const tbody = state.tbodyEls.get(project);
   // If the section was rebuilt (project event), the cached tbody is detached. Repaint this
@@ -1220,7 +1260,11 @@ function applySnapshot(data) {
     const wts = Array.isArray(p.worktrees) ? p.worktrees : [];
     if (!wts.length) continue;
     for (const [k, r] of [...state.rows]) if (r.project === p.name) state.rows.delete(k);
-    for (const w of wts) state.rows.set(keyOf(p.name, w.path), { ...w, project: p.name });
+    for (const w of wts) {
+      const row = { ...w, project: p.name };
+      state.rows.set(keyOf(p.name, w.path), row);
+      noteScan(row);
+    }
   }
   // A snapshot is authoritative about WHICH projects exist: the server drops a project when it
   // disappears from the roots (or was only ever a config fallback before discovery ran), and the

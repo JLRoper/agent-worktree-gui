@@ -49,6 +49,8 @@ async function loadConfig() {
   cfg.host = cfg.host || "127.0.0.1";
   cfg.refreshSeconds = Number(cfg.refreshSeconds ?? 30);
   cfg.worktreeSeconds = Number(cfg.worktreeSeconds ?? 5);
+  cfg.midSeconds = Number(cfg.midSeconds ?? 30);
+  cfg.dormantSeconds = Number(cfg.dormantSeconds ?? 60);
   cfg.slowSeconds = Number(cfg.slowSeconds ?? 60);
   cfg.fetchSeconds = Number(cfg.fetchSeconds ?? 600);
   cfg.threads = Number(cfg.threads) || Math.max(1, Math.min(4, cpus().length - 1));
@@ -140,6 +142,7 @@ const approvals = new Approvals({ onEvent: broadcast });
 const settingsOut = () => ({
   refreshSeconds: config.refreshSeconds,
   worktreeSeconds: config.worktreeSeconds,
+  midSeconds: config.midSeconds,
   dormantSeconds: config.dormantSeconds,
   liveSeconds: config.liveSeconds,
   slowSeconds: config.slowSeconds,
