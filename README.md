@@ -57,6 +57,13 @@ repo's last commit and the newest file edit inside any of its worktrees. Non-git
 listed in the footer as skipped rather than silently ignored. An entry in `projects` overrides what
 discovery finds for that name (heroes-js carries a `prRepo`).
 
+**Projects are grouped under their folder.** Each scan root is an accordion
+(`C:\ProjectDevelopment\` by default) holding every project that is actually inside it; a project
+that lives outside every configured root — an explicit `projects[]` entry can point anywhere —
+gets its own sibling accordion for its parent folder, so nothing is ever filed under a folder it
+is not in. The folder header carries the aggregate chips (projects, worktrees, unmerged, dirty,
+live) and collapses/expands on click; the collapsed set is remembered in localStorage.
+
 **Every project starts minimized** to its title line — click the line (or its chevron) to open it,
 and the projects you opened are remembered in `localStorage`, so a reload or a resync keeps your
 layout. The title line keeps the per-project chips (merged / unmerged / no commits / dirty / live /

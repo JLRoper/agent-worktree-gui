@@ -22,6 +22,8 @@ const state = {
   replyDrafts: {},
   collapsedJobs: loadCollapsedJobs(),
   expandedProjects: loadExpandedProjects(),
+  collapsedRoots: loadCollapsedRoots(),
+  scanRoots: [],
 };
 
 const $ = (id) => document.getElementById(id);
@@ -115,6 +117,72 @@ function toggleProject(name) {
   else state.expandedProjects.add(name);
   saveExpandedProjects();
   applyProjectCollapse(name);
+}
+
+// ---- folder layer ------------------------------------------------------------
+// Projects are wrapped in one accordion per folder: `scanRoots` entries, plus a sibling folder
+// group for any project that is NOT actually inside a root (an explicit `projects[]` entry can
+// point anywhere, and a repo outside every root must not be shown under one).
+function loadCollapsedRoots() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem("wm.collapsedRoots") || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCollapsedRoots() {
+  try {
+    localStorage.setItem("wm.collapsedRoots", JSON.stringify([...state.collapsedRoots]));
+  } catch {
+    /* no storage: the choice simply will not persist */
+  }
+}
+
+const normPath = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "");
+
+// Longest matching scan root wins, so a nested root groups under the more specific folder.
+// No match means the project lives outside every root: group it under its own parent folder.
+function rootOf(project) {
+  const raw = normPath(project.path);
+  const lower = raw.toLowerCase();
+  if (!lower) return "(unknown folder)";
+  const roots = (state.scanRoots || []).map(normPath).filter(Boolean);
+  const match = roots
+    .filter((r) => lower === r.toLowerCase() || lower.startsWith(`${r.toLowerCase()}/`))
+    .sort((a, b) => b.length - a.length)[0];
+  if (match) return match;
+  const cut = raw.lastIndexOf("/");
+  return cut > 0 ? raw.slice(0, cut) : raw;
+}
+
+// `C:/ProjectDevelopment` reads as `C:\ProjectDevelopment\` in the header — that is the folder
+// the user recognises — while a posix path keeps its slashes.
+function labelRoot(root) {
+  const r = String(root || "");
+  if (/^[A-Za-z]:\//.test(r)) return `${r.replace(/\//g, "\\")}\\`;
+  return r.endsWith("/") ? r : `${r}/`;
+}
+
+function toggleRoot(root) {
+  if (!root) return;
+  if (state.collapsedRoots.has(root)) state.collapsedRoots.delete(root);
+  else state.collapsedRoots.add(root);
+  saveCollapsedRoots();
+  applyRootCollapse(root);
+}
+
+function applyRootCollapse(root) {
+  const sec = document.querySelector(`section.root-group[data-root="${CSS.escape(root)}"]`);
+  if (!sec) return;
+  const open = !state.collapsedRoots.has(root);
+  sec.classList.toggle("collapsed", !open);
+  const head = sec.querySelector(".root-head[data-toggle-root]");
+  if (head) {
+    head.title = `${open ? "collapse" : "expand"} ${labelRoot(root)}`;
+    const chev = head.querySelector(".chev");
+    if (chev) chev.textContent = open ? "\u25be" : "\u25b8";
+  }
 }
 
 // Toggle the class in place rather than re-rendering: the rows stay painted underneath, so
@@ -669,10 +737,58 @@ function sortedProjects() {
 
 function reorderProjects() {
   const host = $("projects");
+  // A project only ever moves inside its own folder — never into a folder it is not in.
   for (const p of sortedProjects()) {
     const sec = host.querySelector(`section.project[data-project="${CSS.escape(p.name)}"]`);
-    if (sec) host.appendChild(sec);
+    const body = sec?.closest(".root-body");
+    if (body) body.appendChild(sec);
   }
+  // Then the folders themselves, by their most recently active project.
+  const groups = [...host.querySelectorAll("section.root-group")];
+  const activity = (g) => {
+    let best = 0;
+    for (const s of g.querySelectorAll("section.project")) {
+      best = Math.max(best, projectActivity(state.projects.get(s.dataset.project) || {}));
+    }
+    return best;
+  };
+  groups.sort((a, b) => activity(b) - activity(a) || String(a.dataset.root || "").localeCompare(String(b.dataset.root || "")));
+  for (const g of groups) host.appendChild(g);
+}
+
+// One accordion per folder. The header carries the folder path and the aggregate state of
+// everything inside it, so a collapsed folder still says what it holds.
+function rootChips(projects) {
+  const names = new Set(projects.map((p) => p.name));
+  const rows = [...state.rows.values()].filter((r) => names.has(r.project));
+  const unmerged = rows.filter((r) => {
+    const v = String(r.verdict || "");
+    return v && !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN";
+  }).length;
+  const dirty = rows.filter((r) => r.dirty || r.untracked).length;
+  const live = rows.filter((r) => r.live).length;
+  const out = [
+    `<span class="chip">${projects.length} project${projects.length === 1 ? "" : "s"}</span>`,
+    `<span class="chip">${rows.length} worktrees</span>`,
+  ];
+  if (unmerged) out.push(`<span class="chip bad">${unmerged} unmerged</span>`);
+  if (dirty) out.push(`<span class="chip warn">${dirty} dirty</span>`);
+  if (live) out.push(`<span class="chip warn">${live} live</span>`);
+  return out.join("");
+}
+
+function rootSection(root, projects) {
+  const open = !state.collapsedRoots.has(root);
+  return `<section class="root-group${open ? "" : " collapsed"}" data-root="${esc(root)}">
+    <div class="root-head" data-toggle-root="${esc(root)}" title="${open ? "collapse" : "expand"} ${esc(labelRoot(root))}">
+      <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
+      <h2>${esc(labelRoot(root))}</h2>
+      <div class="chips">${rootChips(projects)}</div>
+    </div>
+    <div class="root-body">
+${projects.map((p) => projectSection(p.name)).join("\n")}
+    </div>
+  </section>`;
 }
 
 function projectSection(name) {
@@ -806,9 +922,21 @@ function renderProjectRows(name) {
 function renderAll() {
   const projects = sortedProjects();
   for (const id of [...state.expandedProjects]) if (!state.projects.has(id)) state.expandedProjects.delete(id);
+
+  // Wrap every project in its folder accordion: one group per scan root, and a sibling group
+  // for any project that lives outside all of them (so nothing is filed under a folder it is
+  // not actually in). Groups are ordered by their most recently active project.
+  const groups = new Map();
+  for (const p of projects) {
+    const root = rootOf(p);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root).push(p);
+  }
   $("projects").innerHTML =
-    projects.map((p) => projectSection(p.name)).join("") ||
-    '<p class="empty">No git repos found under scanRoots.</p>';
+    [...groups.entries()]
+      .sort((a, b) => projectActivity(b[1][0]) - projectActivity(a[1][0]) || a[0].localeCompare(b[0]))
+      .map(([root, list]) => rootSection(root, list))
+      .join("") || '<p class="empty">No git repos found under scanRoots.</p>';
   state.tbodyEls.clear();
   state.rowEls.clear();
   state.detailEls.clear();
@@ -822,6 +950,7 @@ function renderAll() {
 
 function applySnapshot(data) {
   state.settings = data.settings || state.settings;
+  if (Array.isArray(data.scanRoots)) state.scanRoots = data.scanRoots;
   if (data.spawn) {
     state.spawn = data.spawn;
     $("chip-key").textContent = `key: ${data.spawn.key?.fromEnv ? "env" : "from registry"}`;
@@ -996,6 +1125,11 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     e.preventDefault();
     focusSpawn(plus.dataset.spawnProject);
+    return;
+  }
+  const rhead = e.target.closest(".root-head[data-toggle-root]");
+  if (rhead) {
+    toggleRoot(rhead.dataset.toggleRoot);
     return;
   }
   const phead = e.target.closest(".project-head[data-toggle-project]");

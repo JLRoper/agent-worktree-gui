@@ -101,6 +101,35 @@ main { padding: 14px 16px 40px; }
 section.project.collapsed .project-head.meta-line,
 section.project.collapsed > table,
 section.project.collapsed .legend { display: none; }
+
+/* ---- folder layer ------------------------------------------------------------
+   Projects are nested in one accordion per folder (a scan root, or the parent folder of a
+   project that lives outside every root). The folder header stays readable when collapsed. */
+.root-group {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 120px);
+  overflow: hidden;
+}
+.root-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+  user-select: none;
+}
+.root-head h2 { margin: 0; font-size: 13px; font-family: var(--mono); letter-spacing: 0.01em; }
+.root-head .chev { color: var(--dimmer); font-size: 10px; width: 9px; display: inline-block; }
+.root-head:hover .chev { color: var(--text); }
+.root-head .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.root-group.collapsed .root-head { border-bottom: 0; }
+.root-group.collapsed .root-body { display: none; }
+.root-body { padding: 14px 14px 0; }
 button.btn-plus {
   width: 28px;
   height: 28px;
