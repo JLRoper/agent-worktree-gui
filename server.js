@@ -2,6 +2,7 @@
 // The HTTP layer never runs git: the scheduler scans in worker threads and the
 // store holds the results. Spawned agents go through lib/jobs.js.
 import { createServer } from "node:http";
+import { execFile } from "node:child_process";
 import { gzipSync as zlibGzipSync } from "node:zlib";
 import { readFile, stat } from "node:fs/promises";
 import { cpus } from "node:os";
@@ -521,6 +522,35 @@ const server = createServer(async (req, res) => {
     if (route === "/api/refresh" && req.method === "POST") {
       await scheduler.fastPass();
       return sendJson(res, 200, { ok: true });
+    }
+
+    // Open a link from an agent's console in the OS default browser. Only http(s) gets through: this
+    // hands a string to the operating system, so nothing else may pass. execFile (no shell) means the
+    // URL can never become part of a command line.
+    if (route === "/api/open-url" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      let parsed;
+      try {
+        parsed = new URL(String(body.url || "").trim());
+      } catch {
+        return sendJson(res, 400, { error: "not a URL" });
+      }
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return sendJson(res, 400, { error: "only http(s) links can be opened" });
+      }
+      const url = parsed.toString();
+      const [bin, args] =
+        process.platform === "win32"
+          ? ["cmd.exe", ["/c", "start", "", url]]
+          : process.platform === "darwin"
+            ? ["open", [url]]
+            : ["xdg-open", [url]];
+      execFile(bin, args, (err) => {
+        if (err) sendJson(res, 500, { error: err.message });
+        else sendJson(res, 200, { ok: true, url });
+      });
+      return;
     }
 
     // One worktree, read now — the next-read ring on a row is a button. Refused while that row is

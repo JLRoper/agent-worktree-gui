@@ -624,10 +624,32 @@ function conversations() {
   return out;
 }
 
+// URLs in agent output become links. They are opened by the panel (POST /api/open-url) rather than by
+// navigating, so a webview host cannot swallow the click and the link lands in the OS default browser.
+const OUT_URL_RE = /https?:\/\/[^\s<>"'`\u001b]+/g;
+
+function linkifyText(text) {
+  return esc(text ?? "").replace(OUT_URL_RE, (raw) => {
+    let url = raw;
+    let tail = "";
+    // Sentence punctuation after a URL belongs to the sentence, not to the link.
+    while (url && /[.,;:!?)\]]$/.test(url)) {
+      tail = url.slice(-1) + tail;
+      url = url.slice(0, -1);
+    }
+    // Looks like a real host: a dotted name, an IP, or localhost — a dev agent prints
+    // http://localhost:5173/ constantly, and that is exactly the link worth clicking.
+    const host = url.replace(/^https?:\/\//, "").split(/[/:?#]/)[0].toLowerCase();
+    const plausible = host === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(".");
+    if (!plausible) return raw;
+    return `<a class="out-link" href="${url}" target="_blank" rel="noreferrer noopener" data-open-url="${url}" title="open in your browser">${url}</a>${tail}`;
+  });
+}
+
 function turnBody(turn, copy = "") {
   const body = jobLines(turn.id)
     .slice(-300)
-    .map((l) => `<div class="jl jl-${esc(l.kind || "raw")}" data-lid="${esc(l.lid ?? "")}">${esc(l.text ?? "")}</div>`)
+    .map((l) => `<div class="jl jl-${esc(l.kind || "raw")}" data-lid="${esc(l.lid ?? "")}">${linkifyText(l.text)}</div>`)
     .join("") || '<div class="jl jl-dim">waiting for output…</div>';
   return `<pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>`;
 }
@@ -932,6 +954,23 @@ function insertNewlineAtCaret(el) {
   const pos = start + 1;
   el.setSelectionRange(pos, pos);
   el.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+// Open a console URL with the OS default browser. Doing it through the panel means it works even when
+// the page is hosted in something that blocks target=_blank.
+async function openInBrowser(url) {
+  if (!url) return;
+  try {
+    const r = await fetch("/api/open-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+  } catch (err) {
+    showBanner(`open ${url}: ${err.message}`);
+  }
 }
 
 async function sendReply(thread) {
@@ -1372,12 +1411,12 @@ function appendJobLine(evt) {
     if (out.firstElementChild?.classList.contains("jl-dim")) out.innerHTML = "";
     const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
     if (line.mode === "set" && existing) {
-      existing.textContent = line.text ?? "";
+      existing.innerHTML = linkifyText(line.text);
     } else {
       const div = document.createElement("div");
       div.className = `jl jl-${line.kind || "raw"}`;
       if (line.lid) div.dataset.lid = line.lid;
-      div.textContent = line.text ?? "";
+      div.innerHTML = linkifyText(line.text);
       out.appendChild(div);
     }
     if (stick) out.scrollTop = out.scrollHeight;
@@ -3105,6 +3144,20 @@ document.addEventListener("input", (e) => {
   const box = e.target.closest && e.target.closest(".reply-box");
   if (box) state.replyDrafts[box.dataset.reply] = box.value;
 });
+
+// A link in agent output is opened by the panel, not by navigating: capture phase, so the row and agent
+// fold handlers never see the click.
+document.addEventListener(
+  "click",
+  (e) => {
+    const link = e.target.closest && e.target.closest("a.out-link");
+    if (!link) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void openInBrowser(link.dataset.openUrl || link.getAttribute("href") || "");
+  },
+  true,
+);
 
 // Pressing Send must not steal focus from the box it is sending: without this the mousedown moves the
 // caret to the button and the next keystroke goes nowhere.

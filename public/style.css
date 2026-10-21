@@ -421,6 +421,9 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
   opacity: .82;
 }
 .turn-prompt:hover { opacity: 1; color: #e6e9ef; }
+/* a URL in an agent's console: click (or ctrl-click) opens it in the OS default browser */
+a.out-link { color: #7fb3ff; text-decoration: underline dotted; cursor: pointer; }
+a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
 .thread-name { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The name is the only thing allowed to give up width: without min-width:0 its nowrap text refuses to
    shrink and pushes the buttons that follow it onto a second row. */
