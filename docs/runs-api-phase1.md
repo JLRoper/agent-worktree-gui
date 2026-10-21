@@ -84,28 +84,48 @@ output it is about. Once answered, the box collapses to a single line under the 
 (`✓ approved once: rm -rf build`, red `✕` for a denial), which is also persisted as
 `approvalDone` so a reload keeps the record.
 
-Both states were verified in a sandbox instance on `:7332` with seeded job records (the gateway would
-not emit a real `approval.request` — see below): the parked card rendered the amber box with
-`Allow once / Allow for this session / Deny` under the console, and the answered card rendered the
-collapsed line. Clicking a choice round-trips to `/api/jobs/approve` and surfaces the gateway's error
-verbatim when the run is unknown.
+Both states were verified twice: first in a sandbox on `:7332` with seeded records (parked card
+renders the amber box with the host's choices under the console; answered card renders the collapsed
+line), then live once the three causes below were fixed — a real run parked, the card raised the
+question, the answer resumed it, and the line replaced the box.
 
-**What has not been demonstrated:** a live card. Three probes against this gateway all ran without
-an `approval.request`:
+Also fixed while closing this: the collapsed line used to lose the command when the panel was the
+surface that answered (the prompt is cleared on acceptance), and a steer that arrived after the
+agent's last tool boundary was dropped instead of becoming the next turn — it is now replayed as the
+next turn on the same thread, in the same directory.
 
-| probe | rule it should match | what happened |
-|---|---|---|
-| `git reset --hard` | `DANGEROUS_PATTERNS` → "git reset --hard (destroys uncommitted changes)" | ran, exit 128 (not a repo in that shell), no approval |
-| `rm -rf /nonexistent-hermes-approval-probe` | "delete in root path" | ran, exit 0, no approval |
-| `bash -c "echo hi"` | "script execution via -c flag" (per `security` notes) | ran, exit 0, no approval |
-| `mkfs -t ext4 /dev/sda1` | hardline | the model refused to call the tool, so nothing to gate |
+## Why the prompt did not appear at first (and what fixed it)
 
-So either the api_server turn resolves as "no surface can answer" and takes an allow path, or this
-gateway process is not in `HERMES_EXEC_ASK`. Next step is to confirm which, inside a run:
-`_presence()` in `tools/approval.py` returns `(callback, is_cli, is_gateway, is_ask)`, and
-`is_ask` is what keeps the gate from resolving unattended. If `is_ask` is false, nothing in the
-panel can fix it — the gateway has to be started by a path that sets it (`start_gateway()` does;
-`hermes gateway restart` should reach it).
+Three separate causes, each measured:
 
-Until that is answered, panel-spawned agents behave like unattended agents and run flagged commands
-without asking. That is the one remaining correctness gap in this phase.
+1. **`run_in_executor` does not inherit contextvars.** A `/v1/runs` turn executes on a worker
+   thread, so the approval gate's `_presence()` looked up the notify callback under the fallback
+   session key ("default"), found nothing registered under the run's key, decided the run was
+   unattended, and the guard took its bare `return _approved()`. The fix is in the gateway patch:
+   `contextvars.copy_context()` around the worker submission. Instrumented before/after —
+   `key='default', notify=False, is_ask=False` became
+   `key='run_…', notify=True, is_ask=True`. The same propagation is what keeps the tool layer's
+   per-task cwd key stable (see below), so the two bugs shared one root.
+2. **The selected approval transport was `worktree-panel`.** That plugin posts a request to the
+   panel's legacy `/api/approvals` and polls it — fine for the old `hermes chat -q` spawns, but for
+   a run it means the question goes to a separate page instead of the run's stream. Measured: the
+   pending request for `git reset --hard` sat on the *other* panel instance while the run's own job
+   showed `approval: null`. `security.approval.transport: builtin` is what routes it to the run.
+3. **`approvals.mode: smart`** judges these commands safe and waves them through. With
+   `mode: manual` the same command parks and asks.
+
+With all three addressed, verified end to end on a live run: `approval.request` reached the card
+(`{requestId, command: "cd … && git reset --hard; echo \"EXIT=$?\"", choices: [once, session,
+always, deny]}`), `POST /api/jobs/approve {"choice":"once"}` returned `{"ok":true,"resolved":1}`, the
+parked run resumed and completed, and the card collapsed to the one-line record.
+
+## The run's directory
+
+`cwd` binds twice — the agent's own scope (`AIAgent(cwd=…)`, which drives the prompt and
+context-file discovery) and the *tool* layer, via `register_task_env_overrides(task_id, {"cwd": …})`,
+because the terminal tool resolves a directory per task, not per agent. The tool-layer key is only
+stable if the worker thread sees the turn's context; without the contextvars fix, a run could start
+in the gateway's own directory and stay there. Verified after the fix with three concurrent runs:
+each one's `pwd` returned its own worktree.
+
+`--yolo` is still not a Runs API field.
