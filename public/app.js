@@ -740,6 +740,9 @@ function conversationHtml(conv) {
   const runningNow = running;
   // A pending approval for this conversation means the agent is not thinking, it is waiting on you.
   const waitingApproval = [...state.approvals.values()].find((a) => a && a.thread && a.thread === thread) || null;
+  // A run parks its own approval inside the turn (the Runs API path): same message, different
+  // carrier, so the card can answer it without the CLI approval plugin.
+  const runApproval = runningTurn?.approval || latest.approval || null;
   const meta = [
     // A run is addressed by its id now; there is no child process to point at.
     latest.runId ? `run ${String(latest.runId).replace(/^run_/, "").slice(0, 8)}` : null,
@@ -783,6 +786,7 @@ function conversationHtml(conv) {
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
       <span class="pill ${runningNow ? "pill-running" : `pill-notrunning${latest.status === "failed" ? " is-failed" : ""}`}" title="${esc(runningNow ? `running ${elapsed(latest)}` : `${latest.status} · exit ${latest.exitCode ?? "?"} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""}`)}">${runningNow ? "running" : "not-running"}</span>
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
+      ${runApproval && !waitingApproval ? `<span class="sig sig-approval" title="this run is parked on a flagged command — answer it in the card below">waiting on approval</span>` : ""}
       <span class="mono dim">${esc(meta)}</span>
       ${pager}
       <span class="spacer"></span>
@@ -806,6 +810,13 @@ function conversationHtml(conv) {
         .map((q) => `<div class="ghost-turn"><div class="ghost-head mono"><span class="ghost-badge">queued</span><span class="queue-ago" data-queued-at="${q.at}">${fmtDur(Date.now() - q.at)}</span><span class="dimmer">sends when the current turn finishes</span></div><div class="ghost-prompt">${linkifyText(q.text)}</div></div>`)
         .join("")}</div>` : ""}
       <div class="job-foot">${foot}</div>
+      ${runApproval ? `<div class="run-approval">
+        <div class="ra-head mono">⚠ this agent is waiting on you<span class="dimmer"> — the turn is parked until you answer</span></div>
+        <pre class="ra-cmd mono">${esc(runApproval.command || "(no command text)")}</pre>
+        <div class="ra-actions">
+          ${(runApproval.choices || ["once", "deny"]).map((c) => `<button class="btn-approve${c === "deny" ? " btn-deny" : ""}" data-approve="${esc(runningTurn?.id || latest.id)}" data-choice="${esc(c)}" data-request="${esc(runApproval.requestId || "")}" type="button" title="${c === "deny" ? "refuse this command — the agent is told no and carries on without it" : `allow this command (${c === "once" ? "just this time" : c === "session" ? "for this session" : "always"})`}">${esc(c)}</button>`).join("")}
+        </div>
+      </div>` : ""}
       <div class="reply">
         <div class="reply-wrap">
           <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"
@@ -3209,6 +3220,31 @@ document.addEventListener("click", async (e) => {
     if (box) box.value = "";
     queueReply(thread, text);
     document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.focus();
+    return;
+  }
+  // Answer an approval a run is parked on. The buttons come from the host's own choice list.
+  const approveBtn = e.target.closest("[data-approve]");
+  if (approveBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const card = approveBtn.closest(".job");
+    const warn = card ? card.querySelector("[data-reply-warn]") : null;
+    approveBtn.disabled = true;
+    try {
+      const res = await fetch("/api/jobs/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: approveBtn.dataset.approve, choice: approveBtn.dataset.choice, requestId: approveBtn.dataset.request || null }),
+      });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok || !out.ok) {
+        if (warn) warn.textContent = out.error || `approval failed (HTTP ${res.status})`;
+        approveBtn.disabled = false;
+      }
+    } catch (err) {
+      if (warn) warn.textContent = `approval failed: ${err.message}`;
+      approveBtn.disabled = false;
+    }
     return;
   }
   // Steer the turn that is running: the text goes into the live run, not into a queued next one.

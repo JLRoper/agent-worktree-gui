@@ -68,5 +68,31 @@ Re-apply after `hermes update` (it replaces `gateway/platforms/api_server.py` an
   still be live in the gateway — the panel just no longer has a stream to steer through.
 - Tool output is now the gateway's redacted, 500-character `tool.completed` preview rather than the
   full JSONL payload. The first 40 lines are still rendered per call.
-- `--yolo` is not a Runs API field. Approval prompts are surfaced as a console line for now; wiring
-  them to the panel's Approvals card is the next phase.
+- `--yolo` is not a Runs API field. Approvals are wired below.
+
+## Approvals — wired, not yet observed
+
+The panel side is built against the documented contract: `approval.request` carries a redacted
+`command`, the host's `choices` and the run parks at `waiting_for_approval`; the card renders those
+buttons and `POST /api/jobs/approve` → `POST /v1/runs/{id}/approval` answers it. The choice list is
+never widened by the panel — it renders exactly what the host offered.
+
+**What has not been demonstrated:** a live card. Three probes against this gateway all ran without
+an `approval.request`:
+
+| probe | rule it should match | what happened |
+|---|---|---|
+| `git reset --hard` | `DANGEROUS_PATTERNS` → "git reset --hard (destroys uncommitted changes)" | ran, exit 128 (not a repo in that shell), no approval |
+| `rm -rf /nonexistent-hermes-approval-probe` | "delete in root path" | ran, exit 0, no approval |
+| `bash -c "echo hi"` | "script execution via -c flag" (per `security` notes) | ran, exit 0, no approval |
+| `mkfs -t ext4 /dev/sda1` | hardline | the model refused to call the tool, so nothing to gate |
+
+So either the api_server turn resolves as "no surface can answer" and takes an allow path, or this
+gateway process is not in `HERMES_EXEC_ASK`. Next step is to confirm which, inside a run:
+`_presence()` in `tools/approval.py` returns `(callback, is_cli, is_gateway, is_ask)`, and
+`is_ask` is what keeps the gate from resolving unattended. If `is_ask` is false, nothing in the
+panel can fix it — the gateway has to be started by a path that sets it (`start_gateway()` does;
+`hermes gateway restart` should reach it).
+
+Until that is answered, panel-spawned agents behave like unattended agents and run flagged commands
+without asking. That is the one remaining correctness gap in this phase.

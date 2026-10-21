@@ -464,6 +464,15 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
    "this changes what is happening right now" affordances. */
 .reply-actions button.btn-steer { padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #3a3320; border-color: #6b4d16; color: #ffd479; }
 .reply-actions button.btn-steer:hover { background: #463c24; }
+/* A run parked on a flagged command: the panel is the place that answers it. */
+.run-approval { margin: 8px 0 4px; border: 1px solid #6b4d16; border-radius: 8px; background: rgba(58, 51, 32, .35); padding: 9px 11px; }
+.ra-head { font-size: 11.5px; color: #ffd479; }
+.ra-cmd { margin: 6px 0 8px; padding: 6px 8px; background: rgba(0,0,0,.35); border-radius: 5px; color: var(--text); font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+.ra-actions { display: flex; gap: 6px; }
+.ra-actions button { padding: 2px 12px; font-size: 11.5px; background: #3a3320; border-color: #6b4d16; color: #ffd479; }
+.ra-actions button:hover { background: #463c24; }
+.ra-actions button.btn-deny { background: #3a2222; border-color: #6b2a2a; color: #ff9c9c; }
+.ra-actions button.btn-deny:hover { background: #46292a; }
 .queue-note { font-size: 11px; color: #ffd479; }
 /* A reply waiting to be sent, drawn where it will land but visibly not sent yet: dashed, dimmed, italic. */
 .ghost-turns { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 8px; }

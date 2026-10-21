@@ -479,6 +479,15 @@ const server = createServer(async (req, res) => {
       return sendJson(res, r.ok ? 200 : r.code === "run_not_accepting_steer" ? 409 : 400, r);
     }
 
+    // Answer a parked run's approval. The gateway validates the choice a second time, so a stale
+    // card cannot widen what the host allows.
+    if (route === "/api/jobs/approve" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const r = await jobs.approve(String(body.id || ""), body.choice, body.requestId ?? body.request_id);
+      return sendJson(res, r.ok ? 200 : r.code === "approval_not_pending" ? 409 : 400, r);
+    }
+
     if (route === "/api/jobs/attach" && req.method === "POST") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
