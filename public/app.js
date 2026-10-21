@@ -942,7 +942,7 @@ function isRowLive(row) {
 function sigChips(row) {
   const s = row.signals || {};
   const out = [];
-  if (s.hermes?.on) out.push(`<span class="sig sig-hermes" title="Hermes session active in this worktree: ${esc((s.hermes.titles || []).join(' · '))}">⧉ hermes</span>`);
+  if (s.hermes?.on) out.push(`<span class="sig sig-hermes" title="Hermes session ${s.hermes.running ? "running a turn RIGHT NOW" : "open here"}${s.hermes.matched === "work" ? " — placed by its newest tool calls, not its start directory" : ""}: ${esc((s.hermes.titles || []).join(' · '))}">⧉ hermes${s.hermes.running ? " running" : ""}</span>`);
   if (s.board?.on) out.push(`<span class="sig sig-board" title="board entry, PID alive now: ${esc((s.board.entries || []).map((e) => e.pid).join(', '))}">● board</span>`);
   if (s.ports?.on) out.push(`<span class="sig sig-port" title="dev server listening: ${esc((s.ports.listening || []).join(', '))}">:${esc((s.ports.listening || []).join(' :'))}</span>`);
   if (s.files?.on) out.push(`<span class="sig sig-files" title="files edited ${relTime(s.files.at)} ago">✎ files</span>`);
@@ -978,7 +978,11 @@ function repaintAgentState() {
 function livenessLines(row) {
   const s = row.signals || {};
   const lines = [];
-  if (s.hermes?.on) lines.push(`Hermes session active here: ${(s.hermes.titles || []).map((t) => `"${t}"`).join(" · ")}`);
+  if (s.hermes?.on)
+    lines.push(
+      `Hermes session active here${s.hermes.running ? " (a turn is executing right now)" : ""}: ${(s.hermes.titles || []).map((t) => `"${t}"`).join(" · ")}` +
+        (s.hermes.matched === "work" ? " — placed by its newest tool calls, not its start directory" : ""),
+    );
   else if (s.hermes?.idle) lines.push(`Hermes session open here but idle (${s.hermes.idle})`);
   if (s.board?.on) lines.push(`Board: PID ${(s.board.entries || []).map((e) => e.pid).join(", ")} — alive now`);
   else if (s.board?.dead) lines.push(`Board: ${s.board.dead} entr${s.board.dead === 1 ? "y" : "ies"}, none with a live PID`);
