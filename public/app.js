@@ -910,6 +910,18 @@ function restoreScrolls(root, map) {
   }
 }
 
+// Rebuilding the unattached list is cheap but not free; anything that makes several rows appear at
+// once (a boot pass, a discovery sweep) should coalesce into one repaint.
+let jobsRefreshQueued = false;
+function queueJobsRefresh() {
+  if (jobsRefreshQueued) return;
+  jobsRefreshQueued = true;
+  requestAnimationFrame(() => {
+    jobsRefreshQueued = false;
+    renderJobs();
+  });
+}
+
 function renderJobs() {
   // Only unattached agents live here now: anything created in a worktree is listed under that
   // worktree's row, so this panel is the "homeless" workspace (project-root runs, pending spawns,
@@ -969,11 +981,28 @@ function paintAgentBadges() {
 function updateJob(j, { scroll = false } = {}) {
   const prev = state.jobs.get(j.id);
   const statusChanged = !prev || prev.status !== j.status;
+  const prevOwner = prev ? prev.ownerPath || null : null;
+  const ownerChanged = (j.ownerPath || null) !== prevOwner;
   state.jobs.set(j.id, { ...prev, ...j });
   if (!state.jobLines.has(j.id) && j.lines?.length) state.jobLines.set(j.id, j.lines.slice());
   renderConversation(j.thread || j.id, { scroll });
   // Starting or finishing a turn changes what the worktree rows should say about themselves.
   if (statusChanged) repaintAgentState();
+  // Ownership decides which container the card belongs to — the unattached list or a worktree's
+  // agents block. Repaint both sides the moment it changes (a spawn that starts out owned, a `-w`
+  // tree appearing, an attach), instead of leaving the card where it was until the next snapshot.
+  if (ownerChanged) {
+    invalidatePanelMap();
+    renderJobs();
+    for (const from of new Set([prevOwner, j.ownerPath || null].filter(Boolean))) {
+      const want = normPath(from).toLowerCase();
+      const row = [...state.rows.values()].find((r) => normPath(r.path).toLowerCase() === want);
+      if (!row) continue;
+      renderProjectRows(row.project);
+      refreshChips(row.project);
+    }
+    reorderProjects();
+  }
 }
 
 // What the card actually draws. If none of this changed, the DOM does not need rebuilding — and
@@ -1839,8 +1868,15 @@ function queueRow(project, row, opts) {
 function placeRow(project, row, { flash = false } = {}) {
   row.project = project;
   const key = keyOf(project, row.path);
+  const isNew = !state.rows.has(key);
   noteScan(row);
   state.rows.set(key, row);
+  // A worktree that has just appeared can adopt the agents that were waiting in the unattached panel:
+  // their owner path now resolves to a row. (A `-w` spawn is owned seconds before its row exists.)
+  if (isNew) {
+    invalidatePanelMap();
+    queueJobsRefresh();
+  }
   const tbody = state.tbodyEls.get(project);
   // If the section was rebuilt (project event), the cached tbody is detached. Repaint this
   // project's rows instead of quietly appending into a node nobody can see.

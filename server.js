@@ -376,7 +376,15 @@ const server = createServer(async (req, res) => {
       }
       const blocked = await spawnBlocker(cwd, existing ? null : target);
       if (blocked) return sendJson(res, 400, { error: blocked, blocked });
-      const job = await jobs.create({ ...body, cwd, existing, ownerPath: existing ? cwd : null, ownerPending: !existing });
+      // Attach to the worktree the spawn actually runs in, not to the directory that was typed: a cwd
+      // inside `…/lib` is still the same worktree, and an owner path matching no row would show up as
+      // unattached even though it is sitting in a tree we know.
+      let ownerPath = null;
+      if (existing) {
+        const top = await gitIn(cwd, ["rev-parse", "--show-toplevel"]);
+        ownerPath = top.ok && top.out ? top.out : cwd;
+      }
+      const job = await jobs.create({ ...body, cwd, existing, ownerPath, ownerPending: !existing });
       return sendJson(res, 202, { job });
     }
 
