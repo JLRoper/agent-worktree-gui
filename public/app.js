@@ -634,22 +634,34 @@ function turnBody(turn, copy = "") {
 
 // A turn is open when the reader opened it, otherwise only the newest turn is: opening an agent
 // shows its current turn in full and lists the earlier ones as the single request line each.
-function turnIsOpen(conv, turn) {
-  const forced = state.turnOpen.get(turn.id);
+// The pinned copy of a turn keeps its own open state (`pin:<id>`), so unfolding it never unfolds the
+// original in the page — and a pinned turn starts folded.
+function turnKey(turn, copy = "") {
+  return copy === "@pin" ? `pin:${turn.id}` : turn.id;
+}
+
+function turnIsOpen(conv, turn, copy = "") {
+  const forced = state.turnOpen.get(turnKey(turn, copy));
   if (forced !== undefined) return forced;
+  if (copy === "@pin") return false;
   return turn.id === conv.latest.id;
 }
 
-function toggleTurn(id) {
+function toggleTurn(key) {
+  // The pinned duplicate toggles under its own key, so it opens and closes independently of the turn
+  // it was cloned from.
+  const pinnedCopy = key.startsWith("pin:");
+  const id = pinnedCopy ? key.slice(4) : key;
   const turn = state.jobs.get(id);
   if (!turn) return;
   const conv = conversations().find((c) => c.thread === (turn.thread || turn.id));
   if (!conv) return;
-  state.turnOpen.set(id, !turnIsOpen(conv, turn));
+  const copy = pinnedCopy ? "@pin" : "";
+  state.turnOpen.set(key, !turnIsOpen(conv, turn, copy));
   renderConversation(conv.thread);
   // A turn that was just opened should show its newest lines, not its first line.
-  if (turnIsOpen(conv, turn)) {
-    const pre = document.querySelector(`pre[data-out="${CSS.escape(id)}"]`);
+  if (turnIsOpen(conv, turn, copy)) {
+    const pre = document.querySelector(`pre[data-out="${CSS.escape(id)}${copy}"]`);
     if (pre) pre.scrollTop = pre.scrollHeight;
   }
 }
@@ -670,17 +682,18 @@ function turnHead(turn, index, open, copy = "") {
     turn.status === "running" || turn.status === "starting"
       ? `running ${elapsed(turn)}`
       : `${turn.status} · ${elapsed(turn)}${turn.tokens?.total ? ` · ${turn.tokens.total} tok` : ""}`;
-  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turn.id)}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> ${esc(label)} · ${esc(state_)}</div>`;
+  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> ${esc(label)} · ${esc(state_)}</div>`;
 }
 
 // One turn: its head, then either the full prompt + output, or a single line carrying the request
 // that turn was about. The one-line form is what makes a long conversation readable.
 // `copy` marks the pinned duplicate's transcript so it cannot collide with the paged one.
 function turnBlock(conv, turn, index, copy = "") {
-  const open = turnIsOpen(conv, turn);
+  const open = turnIsOpen(conv, turn, copy);
+  const tkey = turnKey(turn, copy);
   if (!open) {
     return `<div class="turn folded" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy)}` +
-      `<div class="turn-prompt" data-toggle-turn="${esc(turn.id)}" title="${esc(turn.prompt || "")}">${esc(turn.prompt || "(no prompt recorded)")}</div></div>`;
+      `<div class="turn-prompt" data-toggle-turn="${esc(tkey)}" title="${esc(turn.prompt || "")}">${esc(turn.prompt || "(no prompt recorded)")}</div></div>`;
   }
   return `<div class="turn" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy)}` +
     `<div class="job-prompt">${esc(turn.prompt || "")}</div>${turnBody(turn, copy)}</div>`;
@@ -1177,7 +1190,10 @@ function renderJobs() {
   for (const id of [...state.collapsedJobs]) if (!conversations().some((c) => c.thread === id)) state.collapsedJobs.delete(id);
   // Forgetting a cleared job's explicit turn state keeps the map from growing forever.
   const live = new Set([...state.jobs.keys()]);
-  for (const id of [...state.turnOpen.keys()]) if (!live.has(id)) state.turnOpen.delete(id);
+  for (const id of [...state.turnOpen.keys()]) {
+    // Pinned copies share the turn id with a `pin:` prefix; prune on the turn they belong to.
+    if (!live.has(id.startsWith("pin:") ? id.slice(4) : id)) state.turnOpen.delete(id);
+  }
   // Same for a cleared thread's remembered page.
   const threads = new Set([...state.jobs.values()].map((j) => j.thread || j.id));
   for (const t of [...state.turnPage.keys()]) if (!threads.has(t)) state.turnPage.delete(t);
