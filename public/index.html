@@ -25,7 +25,7 @@
       <button id="btn-refresh" type="button">Refresh now</button>
       <button id="btn-fetch" type="button">Fetch remotes</button>
       <button id="btn-pause" type="button">Pause</button>
-      <button id="btn-settings" type="button" title="appearance settings — interface font">⚙ Settings</button>
+      <button id="btn-settings" type="button" title="appearance settings — panel and terminal fonts (Ctrl+,)">⚙ Settings</button>
     </div>
   </header>
 
@@ -36,11 +36,16 @@
       <button id="btn-settings-close" type="button" title="close (Esc)">✕</button>
     </div>
     <label class="settings-row">
-      <span>Font</span>
+      <span>Panel font</span>
       <select id="font-select"></select>
     </label>
     <div class="settings-preview" id="font-preview">The quick brown fox · 0123456789 · UNMERGED (3 commits)</div>
-    <p class="settings-note">Applies to the panel's own labels and text; code, diffs and agent transcripts stay monospace. Saved in this browser.</p>
+    <label class="settings-row settings-gap">
+      <span>Terminal font</span>
+      <select id="term-select"></select>
+    </label>
+    <div class="settings-preview" id="term-preview">tool · read_file · exit 0 · +169 −265</div>
+    <p class="settings-note">Panel font covers headings, labels and buttons. Terminal font covers the text inside an agent's card: its transcript, prompt, reply box and command preview. Both are saved in this browser.</p>
   </div>
 
   <div id="banner" class="banner hidden"></div>

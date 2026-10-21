@@ -2670,6 +2670,12 @@ document.addEventListener(
 
 document.addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  // Ctrl+, opens Settings even if the button is out of reach (a host shell can eat pointer events).
+  if (e.key === "," || e.key === "<") {
+    e.preventDefault();
+    toggleSettings();
+    return;
+  }
   if (e.key === "+" || e.key === "=") {
     e.preventDefault();
     zoomBy(10);
@@ -2688,10 +2694,13 @@ try {
   applyZoom(100, { save: false });
 }
 
-// ---- interface font ------------------------------------------------------------
-const FONT_KEY = "wtgui.font";
-// Stacks, not families: the first one the machine actually has wins, so listing an uninstalled
-// face is harmless. The monospace entries change the panel's voice, not just its letterforms.
+// ---- fonts: two settings, not one ----------------------------------------------
+// Panel font: the page's own labels, headings and buttons (--ui).
+// Terminal font: the text inside an agent card — transcript, prompt, reply box, command preview
+// (--term). They are separate on purpose: a readable serif UI with a monospace transcript is a
+// normal preference, and so is the other way round.
+// Stacks, not families: the first face the machine actually has wins, so listing one that is not
+// installed is harmless.
 const UI_FONTS = [
   { id: "default", label: "Default (system UI)", stack: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' },
   { id: "segoe", label: "Segoe UI", stack: '"Segoe UI", system-ui, sans-serif' },
@@ -2705,26 +2714,45 @@ const UI_FONTS = [
   { id: "jetbrains", label: "JetBrains Mono (monospace UI)", stack: '"JetBrains Mono", Consolas, monospace' },
 ];
 
-function currentFontId() {
+const TERM_FONTS = [
+  { id: "default", label: "Default (monospace)", stack: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace' },
+  { id: "consolas", label: "Consolas", stack: 'Consolas, "Cascadia Mono", monospace' },
+  { id: "cascadia", label: "Cascadia Code", stack: '"Cascadia Code", Consolas, monospace' },
+  { id: "cascadia-mono", label: "Cascadia Mono", stack: '"Cascadia Mono", Consolas, monospace' },
+  { id: "jetbrains", label: "JetBrains Mono", stack: '"JetBrains Mono", Consolas, monospace' },
+  { id: "fira", label: "Fira Code", stack: '"Fira Code", Consolas, monospace' },
+  { id: "lucida", label: "Lucida Console", stack: '"Lucida Console", Consolas, monospace' },
+  { id: "courier", label: "Courier New", stack: '"Courier New", monospace' },
+  { id: "panel", label: "Same as the panel font", stack: "var(--ui)" },
+];
+
+const FONT_SETS = {
+  ui: { key: "wtgui.font", varName: "--ui", select: "font-select", preview: "font-preview", list: UI_FONTS },
+  term: { key: "wtgui.termFont", varName: "--term", select: "term-select", preview: "term-preview", list: TERM_FONTS },
+};
+
+function currentFontId(kind) {
+  const set = FONT_SETS[kind] || FONT_SETS.ui;
   let id = "default";
   try {
-    id = localStorage.getItem(FONT_KEY) || "default";
+    id = localStorage.getItem(set.key) || "default";
   } catch {
     /* private mode: the default is fine */
   }
-  return UI_FONTS.some((f) => f.id === id) ? id : "default";
+  return set.list.some((f) => f.id === id) ? id : "default";
 }
 
-function applyUiFont(id, { save = true } = {}) {
-  const font = UI_FONTS.find((f) => f.id === id) || UI_FONTS[0];
-  document.documentElement.style.setProperty("--ui", font.stack);
-  const sel = $("font-select");
+function applyFont(kind, id, { save = true } = {}) {
+  const set = FONT_SETS[kind] || FONT_SETS.ui;
+  const font = set.list.find((f) => f.id === id) || set.list[0];
+  document.documentElement.style.setProperty(set.varName, font.stack);
+  const sel = $(set.select);
   if (sel && sel.value !== font.id) sel.value = font.id;
-  const preview = $("font-preview");
+  const preview = $(set.preview);
   if (preview) preview.style.fontFamily = font.stack;
   if (save) {
     try {
-      localStorage.setItem(FONT_KEY, font.id);
+      localStorage.setItem(set.key, font.id);
     } catch {
       /* private mode: the choice just will not persist */
     }
@@ -2739,19 +2767,22 @@ function toggleSettings(open = null) {
   if (!show) return;
   const sel = $("font-select");
   if (sel) {
-    sel.value = currentFontId();
+    sel.value = currentFontId("ui");
     sel.focus();
   }
 }
 
-// The picker is filled once, at start-up: the saved choice then has a real option to sit on before
+// The pickers are filled once, at start-up: a saved choice then has a real option to sit on before
 // the panel is ever opened.
 function initFonts() {
-  const sel = $("font-select");
-  if (sel && !sel.options.length) {
-    sel.innerHTML = UI_FONTS.map((f) => `<option value="${esc(f.id)}">${esc(f.label)}</option>`).join("");
+  for (const kind of Object.keys(FONT_SETS)) {
+    const set = FONT_SETS[kind];
+    const sel = $(set.select);
+    if (sel && !sel.options.length) {
+      sel.innerHTML = set.list.map((f) => `<option value="${esc(f.id)}">${esc(f.label)}</option>`).join("");
+    }
+    applyFont(kind, currentFontId(kind), { save: false });
   }
-  applyUiFont(currentFontId(), { save: false });
 }
 
 $("btn-settings")?.addEventListener("click", (e) => {
@@ -2759,7 +2790,8 @@ $("btn-settings")?.addEventListener("click", (e) => {
   toggleSettings();
 });
 $("btn-settings-close")?.addEventListener("click", () => toggleSettings(false));
-$("font-select")?.addEventListener("change", (e) => applyUiFont(e.target.value));
+$("font-select")?.addEventListener("change", (e) => applyFont("ui", e.target.value));
+$("term-select")?.addEventListener("change", (e) => applyFont("term", e.target.value));
 document.addEventListener("click", (e) => {
   const panel = $("settings");
   if (!panel || panel.classList.contains("hidden")) return;
@@ -2767,7 +2799,6 @@ document.addEventListener("click", (e) => {
   toggleSettings(false);
 });
 
-applyUiFont(currentFontId(), { save: false });
 initFonts();
 
 // Reflect the remembered collapse state of the two fixed cards before the first paint of them.
