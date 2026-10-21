@@ -461,6 +461,12 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
 .reply-actions button.btn-queue { padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #2a2f3a; border-color: #3b4757; color: #cfd8e6; }
 .reply-actions button.btn-queue:hover { background: #333a47; }
 .queue-note { font-size: 11px; color: #ffd479; }
+/* A reply waiting to be sent, drawn where it will land but visibly not sent yet: dashed, dimmed, italic. */
+.ghost-turns { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 8px; }
+.ghost-turn { border: 1px dashed #3a4353; border-radius: 8px; padding: 7px 10px; background: rgba(18, 22, 29, .5); opacity: .62; }
+.ghost-head { display: flex; gap: 8px; align-items: baseline; font-size: 10.5px; color: var(--dim); }
+.ghost-badge { color: #ffd479; border: 1px dashed #6b4d16; border-radius: 4px; padding: 0 5px; font-size: 10px; letter-spacing: .04em; }
+.ghost-prompt { font: italic 12.5px/1.45 var(--term); color: var(--text); margin-top: 4px; white-space: pre-wrap; }
 /* what is waiting to go out, with how long it has been waiting */
 .queue-list { margin: 6px 0 0 18px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .queue-item { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px; color: var(--dim); min-width: 0; }

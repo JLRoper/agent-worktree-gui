@@ -801,6 +801,9 @@ function conversationHtml(conv) {
     <div class="job-body">
       ${pinnedHtml}
       ${blocks.html}
+      ${queued ? `<div class="ghost-turns">${queue
+        .map((q) => `<div class="ghost-turn"><div class="ghost-head mono"><span class="ghost-badge">queued</span><span class="queue-ago" data-queued-at="${q.at}">${fmtDur(Date.now() - q.at)}</span><span class="dimmer">sends when the current turn finishes</span></div><div class="ghost-prompt">${linkifyText(q.text)}</div></div>`)
+        .join("")}</div>` : ""}
       <div class="job-foot">${foot}</div>
       <div class="reply">
         <div class="reply-wrap">
@@ -812,9 +815,6 @@ function conversationHtml(conv) {
             ${queued ? `<span class="queue-note mono" title="${esc(queuedTitle)}">${queued} queued</span>` : ""}
             ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button" title="cancel the run this agent is in the middle of">Cancel turn</button>` : ""}
           </div>
-          ${queued ? `<div class="queue-list mono">${queue
-            .map((q) => `<div class="queue-item"><span class="queue-ago" data-queued-at="${q.at}" title="how long this reply has been waiting">${fmtDur(Date.now() - q.at)}</span><span class="queue-text">${linkifyText(q.text)}</span></div>`)
-            .join("")}</div>` : ""}
         </div>
         <div class="reply-row">
           <span class="warnline" data-reply-warn="${esc(thread)}"></span>
@@ -2555,7 +2555,7 @@ function paintConfigLine() {
   const cfg = state.settings || {};
   if (cfg.host === undefined) return;
   const n = state.projects.size || (Array.isArray(cfg.projects) ? cfg.projects.length : 0);
-  $("config-line").textContent = `${n} project(s) · cheap fields every ${cfg.worktreeSeconds}s · verdict/PR every ${cfg.slowSeconds}s · ${cfg.threads} scan threads · ${cfg.host}`;
+  $("config-line").textContent = `${cfg.version ? `v${cfg.version} · ` : ""}${n} project(s) · cheap fields every ${cfg.worktreeSeconds}s · verdict/PR every ${cfg.slowSeconds}s · ${cfg.threads} scan threads · ${cfg.host}`;
 }
 
 function renderAll() {

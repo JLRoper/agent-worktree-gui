@@ -19,6 +19,11 @@ import { Approvals } from "./lib/approvals.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(HERE, "public");
+// The panel's version is declared once, in package.json: read it here so the page can say which
+// build is running without a second copy to keep in step.
+const VERSION = await readFile(path.join(HERE, "package.json"), "utf8")
+  .then((t) => JSON.parse(t).version || null)
+  .catch(() => null);
 // PANEL_CONFIG lets a second instance run from the same code with its own config and port —
 // a sandbox or a demo you can click around in without touching the real one:
 //   set PANEL_CONFIG=C:\path\to\panel-config.json && node server.js
@@ -183,6 +188,7 @@ const jobs = new Jobs({
 const approvals = new Approvals({ onEvent: broadcast });
 
 const settingsOut = () => ({
+  version: VERSION,
   refreshSeconds: config.refreshSeconds,
   worktreeSeconds: config.worktreeSeconds,
   midSeconds: config.midSeconds,
