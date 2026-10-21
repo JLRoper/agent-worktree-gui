@@ -734,6 +734,33 @@ function restoreReplyDraft(thread) {
   if (box && state.replyDrafts[thread]) box.value = state.replyDrafts[thread];
 }
 
+// Typing state inside a card, so a rebuild can put it back. Row events arrive every few seconds for a
+// fast-polling row, and the detail row is rebuilt on each one — without this, a half-typed reply was
+// thrown away mid-sentence and the cursor went with it.
+function captureTyping(root) {
+  const el = document.activeElement;
+  if (!el || !root.contains(el) || !el.classList?.contains("reply-box")) return null;
+  return { thread: el.dataset.reply, value: el.value, start: el.selectionStart, end: el.selectionEnd };
+}
+
+function restoreTyping(root, typing) {
+  for (const box of root.querySelectorAll(".reply-box[data-reply]")) {
+    const draft = state.replyDrafts[box.dataset.reply];
+    if (draft) box.value = draft;
+  }
+  if (!typing) return;
+  const box = root.querySelector(`.reply-box[data-reply="${CSS.escape(typing.thread)}"]`);
+  if (!box) return;
+  box.value = typing.value;
+  state.replyDrafts[typing.thread] = typing.value;
+  box.focus();
+  try {
+    box.setSelectionRange(typing.start, typing.end);
+  } catch {
+    /* a box that is no longer a text field: nothing to restore */
+  }
+}
+
 // Renaming a session is a panel-side display name only: the Hermes thread id is identity (it is what
 // resumes the conversation), so the label is kept beside the job store and never rewrites the id.
 function beginRename(thread) {
@@ -1161,12 +1188,13 @@ function renderConversation(thread, { scroll = false } = {}) {
   const bodyTop = prevBody ? prevBody.scrollTop : 0;
   const bodyAtBottom = prevBody ? prevBody.scrollHeight - prevBody.scrollTop - prevBody.clientHeight < 32 : true;
   const pageY = window.scrollY;
+  const typing = captureTyping(el);
   const holder = document.createElement("div");
   holder.innerHTML = conversationHtml(conv);
   const fresh = holder.firstElementChild;
   fresh.dataset.sig = sig;
   el.replaceWith(fresh);
-  restoreReplyDraft(thread);
+  restoreTyping(fresh, typing);
   if (window.scrollY !== pageY) {
     const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
     window.scrollTo({ top: Math.min(pageY, maxY) });
@@ -2144,6 +2172,14 @@ function placeRow(project, row, { flash = false } = {}) {
     return;
   }
   const oldDetail = state.detailEls.get(key);
+  const typing = oldDetail ? captureTyping(oldDetail) : null;
+  const outs = oldDetail
+    ? [...oldDetail.querySelectorAll("pre.job-out")].map((o) => ({
+        id: o.dataset.out,
+        top: o.scrollTop,
+        atBottom: o.scrollHeight - o.scrollTop - o.clientHeight < 32,
+      }))
+    : [];
   if (oldDetail) oldDetail.remove();
   state.detailEls.delete(key);
   if (old) old.replaceWith(newTr);
@@ -2155,6 +2191,11 @@ function placeRow(project, row, { flash = false } = {}) {
     const dEl = h2.firstElementChild;
     newTr.after(dEl);
     state.detailEls.set(key, dEl);
+    // Put the reader back: the reply they were typing, where the caret was, and how far each
+    // transcript had been scrolled.
+    restoreTyping(dEl, typing);
+    const scrollMap = new Map(outs.map((o) => [o.id, { top: o.top, atBottom: o.atBottom }]));
+    restoreScrolls(dEl, scrollMap);
   }
   if (flash && old) {
     newTr.classList.add("flash");
