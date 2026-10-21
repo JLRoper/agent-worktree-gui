@@ -551,7 +551,7 @@ function conversationHtml(conv) {
     ? `<span class="dimmer mono">running ${esc(elapsed(latest))}</span>`
     : `<span class="mono dim">exit ${latest.exitCode ?? "?"} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${latest.tokens.total}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>`;
   const blocks = turns.map((t, i) => turnBlock(conv, t, i)).join("");
-  return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}">
+  return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}">
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
       <span class="agent-glyph" title="a Hermes agent session — ⧉ marks an agent row">\u29c9</span>
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
@@ -787,6 +787,29 @@ async function answerApproval(id, choice, btn) {
   }
 }
 
+// Every output pane's position, so a rebuild can put the reader back where they were instead of
+// dropping them at the first line of an hour-old transcript.
+function captureScrolls(root) {
+  const map = new Map();
+  if (!root) return map;
+  for (const o of root.querySelectorAll("pre.job-out")) {
+    map.set(o.dataset.out, {
+      top: o.scrollTop,
+      atBottom: o.scrollHeight - o.scrollTop - o.clientHeight < 32,
+    });
+  }
+  return map;
+}
+
+function restoreScrolls(root, map) {
+  if (!root || !map.size) return;
+  for (const o of root.querySelectorAll("pre.job-out")) {
+    const was = map.get(o.dataset.out);
+    if (!was) continue;
+    o.scrollTop = was.atBottom ? o.scrollHeight : Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight));
+  }
+}
+
 function renderJobs() {
   // Only unattached agents live here now: anything created in a worktree is listed under that
   // worktree's row, so this panel is the "homeless" workspace (project-root runs, pending spawns,
@@ -797,6 +820,9 @@ function renderJobs() {
   // Forgetting a cleared job's explicit turn state keeps the map from growing forever.
   const live = new Set([...state.jobs.keys()]);
   for (const id of [...state.turnOpen.keys()]) if (!live.has(id)) state.turnOpen.delete(id);
+  // The list is rebuilt wholesale, so remember where every open transcript was and put it back:
+  // a `jobs` event must not cost the reader their place in an agent they are reading.
+  const prevScrolls = captureScrolls($("jobs"));
   $("jobs").innerHTML = convs.length
     ? convs.map(conversationHtml).join("")
     : `<p class="empty">No unattached agents${nested ? ` — ${nested} agent${nested === 1 ? "" : "s"} listed under their worktree rows` : ""}.</p>`;
@@ -812,9 +838,13 @@ function renderJobs() {
     (folded ? `<span class="chip">${folded} minimized</span>` : "");
   const fold = $("btn-fold-jobs");
   if (fold) fold.textContent = convs.length && folded === convs.length ? "Expand all" : "Minimize all";
-  // The cards were just rebuilt, so every scrollback is back at its first line. Opening the page
-  // (or a snapshot rebuilding the list) should land on the newest output, not an hour-old first line.
-  for (const c of convs) if (!state.collapsedJobs.has(c.thread)) scrollThreadToBottom(c.thread);
+  // The cards were just rebuilt. Readers at the bottom stay at the bottom, readers scrolled up keep
+  // their line, and only genuinely new cards jump to the newest output.
+  restoreScrolls($("jobs"), prevScrolls);
+  for (const c of convs) {
+    if (state.collapsedJobs.has(c.thread)) continue;
+    if (!prevScrolls.has(c.latest.id)) scrollThreadToBottom(c.thread);
+  }
   paintAgentBadges();
 }
 
@@ -846,23 +876,73 @@ function updateJob(j, { scroll = false } = {}) {
   if (statusChanged) repaintAgentState();
 }
 
+// What the card actually draws. If none of this changed, the DOM does not need rebuilding — and
+// rebuilding is what used to throw the reader back to the top of a chat mid-read.
+function conversationSignature(conv) {
+  const turns = conv.turns.map((t) => `${t.id}:${t.status}:${t.exitCode ?? ""}:${t.error ? 1 : 0}`).join(",");
+  const open = [...state.turnOpen].map(([k, v]) => `${k}${v ? 1 : 0}`).join(",");
+  const approvals = [...state.approvals.values()]
+    .filter((a) => a && a.thread === conv.thread)
+    .map((a) => a.id)
+    .join("|");
+  const l = conv.latest;
+  return [
+    conv.thread,
+    turns,
+    open,
+    state.collapsedJobs.has(conv.thread) ? "c" : "o",
+    state.maximized === conv.thread ? "m" : "-",
+    isHomelessConv(conv) ? "h" : "-",
+    approvals,
+    l.pid || "",
+    l.cwd || "",
+    l.model || "",
+    l.yolo ? "y" : "",
+    l.worktree || "",
+    l.existing ? "e" : "",
+    l.tokens?.total || "",
+  ].join("~");
+}
+
 function renderConversation(thread, { scroll = false } = {}) {
   const conv = conversations().find((c) => c.thread === thread);
   const el = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
   if (!conv) return renderJobs();
-  // Was the reader looking at the newest output? If so keep them there across the re-render; if
-  // they had scrolled up to read something, do not yank the view out from under them.
-  const prevOuts = el ? [...el.querySelectorAll("pre.job-out")] : [];
-  const prevOut = prevOuts[prevOuts.length - 1];
-  const wasAtBottom = prevOut ? prevOut.scrollHeight - prevOut.scrollTop - prevOut.clientHeight < 32 : true;
+  if (!el) return renderJobs();
+  const sig = conversationSignature(conv);
+  if (el.dataset.sig === sig) return;
+  // Rebuild, then put the reader back exactly where they were: every output pane, the maximized
+  // body, and the page itself. Following the newest output only happens when they were already at
+  // the bottom (or when the caller explicitly asks for it, e.g. a freshly spawned turn).
+  const prev = [...el.querySelectorAll("pre.job-out")].map((o) => ({
+    id: o.dataset.out,
+    top: o.scrollTop,
+    atBottom: o.scrollHeight - o.scrollTop - o.clientHeight < 32,
+  }));
+  const prevBody = el.querySelector(".job-body");
+  const bodyTop = prevBody ? prevBody.scrollTop : 0;
+  const bodyAtBottom = prevBody ? prevBody.scrollHeight - prevBody.scrollTop - prevBody.clientHeight < 32 : true;
+  const pageY = window.scrollY;
   const holder = document.createElement("div");
   holder.innerHTML = conversationHtml(conv);
   const fresh = holder.firstElementChild;
-  if (!el) return renderJobs();
+  fresh.dataset.sig = sig;
   el.replaceWith(fresh);
   restoreReplyDraft(thread);
-  const out = fresh.querySelector(`pre[data-out="${CSS.escape(conv.latest.id)}"]`);
-  if (out && (scroll || wasAtBottom || conv.latest.status === "running")) out.scrollTop = out.scrollHeight;
+  if (window.scrollY !== pageY) {
+    const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    window.scrollTo({ top: Math.min(pageY, maxY) });
+  }
+  for (const o of fresh.querySelectorAll("pre.job-out")) {
+    const was = prev.find((p) => p.id === o.dataset.out);
+    const follow = scroll || (was ? was.atBottom : conv.latest.status === "running");
+    if (follow) o.scrollTop = o.scrollHeight;
+    else if (was) o.scrollTop = Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight));
+  }
+  const body = fresh.querySelector(".job-body");
+  if (body) {
+    body.scrollTop = bodyAtBottom ? body.scrollHeight : Math.min(bodyTop, Math.max(0, body.scrollHeight - body.clientHeight));
+  }
 }
 
 function appendJobLine(evt) {
@@ -877,12 +957,15 @@ function appendJobLine(evt) {
   state.jobLines.set(evt.id, buf);
   const out = document.querySelector(`pre[data-out="${CSS.escape(evt.id)}"]`);
   if (!out) return;
+  // Streamed lines follow the newest output only for a reader who is already at the bottom; someone
+  // scrolled up to read stays where they are.
+  const stick = out.scrollHeight - out.scrollTop - out.clientHeight < 40;
   if (out.firstElementChild?.classList.contains("jl-dim")) out.innerHTML = "";
   if (line.mode === "set") {
     const el = out.querySelector(`[data-lid="${line.lid}"]`);
     if (el) {
       el.textContent = line.text ?? "";
-      out.scrollTop = out.scrollHeight;
+      if (stick) out.scrollTop = out.scrollHeight;
       refreshJobPreview(evt.id);
       return;
     }
@@ -892,7 +975,7 @@ function appendJobLine(evt) {
   if (line.lid) div.dataset.lid = line.lid;
   div.textContent = line.text ?? "";
   out.appendChild(div);
-  out.scrollTop = out.scrollHeight;
+  if (stick) out.scrollTop = out.scrollHeight;
   refreshJobPreview(evt.id);
 }
 
@@ -1629,6 +1712,8 @@ function removeRow(project, p) {
 function renderProjectRows(name) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
+  // Open rows carry agent transcripts; a rebuild must not throw the reader to the top of one.
+  const prevScrolls = captureScrolls(tbody);
   tbody.innerHTML = "";
   // A collapsed project shows nothing, so building its rows would be pure waste — with 94
   // projects that was ~110 invisible rows and most of the render cost of a snapshot.
@@ -1653,6 +1738,7 @@ function renderProjectRows(name) {
       state.detailEls.set(key, dEl);
     }
   }
+  restoreScrolls(tbody, prevScrolls);
 }
 
 // Header summary. The project count is the live one — what the table is actually showing — not
