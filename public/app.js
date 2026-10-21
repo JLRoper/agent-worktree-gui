@@ -2483,6 +2483,13 @@ function connect() {
     const holder = document.createElement("div");
     holder.innerHTML = projectSection(evt.project.name);
     const freshHolder = holder.firstElementChild;
+    // A project event replaces the whole section. If it was mid-flash (it had just moved because an
+    // agent started in it), the replacement would silently drop the highlight.
+    if (sec.classList.contains("flash")) {
+      freshHolder.classList.add("flash");
+      clearTimeout(freshHolder._flashT);
+      freshHolder._flashT = setTimeout(() => freshHolder.classList.remove("flash"), 1150);
+    }
     sec.replaceWith(freshHolder);
     state.tbodyEls.set(evt.project.name, freshHolder.querySelector(`[data-tbody="${CSS.escape(evt.project.name)}"]`));
     renderProjectRows(evt.project.name);

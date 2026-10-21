@@ -569,13 +569,19 @@ tbody tr.row.expanded { background: #1a2029; }
   to { background: transparent; }
 }
 tbody tr.row.flash { animation: flashrow .9s ease-out; }
-/* A section has its own panel background, so flashing it to transparent would punch a hole. Land the
-   animation on the colour it always had and add a green ring for the length of the flash. */
+/* A section's own background is mostly covered by its children, so the flash has to reach the title
+   row as well: a tinted section alone was too quiet to notice. The head flashes solid green and the
+   section carries the ring. */
 @keyframes flashsection {
-  from { background: #1f3a2a; box-shadow: 0 0 0 2px #2f6a45 inset; }
-  to { background: var(--panel); box-shadow: 0 0 0 2px transparent inset; }
+  from { background: #1d3f2b; box-shadow: 0 0 0 2px #3d8f5c inset, 0 0 14px rgba(61, 143, 92, .45); }
+  to { background: var(--panel); box-shadow: 0 0 0 2px transparent inset, 0 0 0 rgba(61, 143, 92, 0); }
 }
-section.project.flash { animation: flashsection .9s ease-out; }
+@keyframes flashhead {
+  from { background: #245038; }
+  to { background: transparent; }
+}
+section.project.flash { animation: flashsection 1.1s ease-out; }
+section.project.flash .project-head { animation: flashhead 1.1s ease-out; }
 
 .mono { font-family: var(--mono); font-size: 12px; }
 .name { font-weight: 600; }
