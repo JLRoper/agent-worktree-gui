@@ -480,10 +480,13 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
 .turn-pager .pager-n { font-size: 10.5px; color: var(--dimmer); }
 /* git / commit / diff detail: one summary line, body only when unfolded */
 .git-block { margin-bottom: 6px; }
-.git-head { display: flex; align-items: center; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; }
+.git-head { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0; }
 .git-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
-.git-head:hover .chev, .git-head:hover .git-summary { color: var(--text); }
-.git-summary { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Same heading treatment as LIVENESS EVIDENCE below it: tr.detail h4 already supplies the small caps
+   size, tracking and colour, so this only stops the flex row from squashing it. */
+.git-head h4 { margin: 0; flex: none; }
+.git-head:hover .chev, .git-head:hover h4, .git-head:hover .git-summary { color: var(--text); }
+.git-summary { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .git-block.collapsed .git-body { display: none; }
 .git-body { padding: 4px 0 0 28px; }
 /* the agent mark at the head of every agent row (parent row only, turns keep their own chevron) */

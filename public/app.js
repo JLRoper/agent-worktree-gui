@@ -1770,8 +1770,9 @@ function detailHtml(row) {
     : "";
   return `<tr class="detail" data-detail="${esc(key)}"><td colspan="9">
     <div class="git-block${gitOpen ? "" : " collapsed"}" data-git-block="${esc(key)}">
-      <div class="git-head" data-toggle-git="${esc(key)}" title="${gitOpen ? "fold" : "unfold"} the git, commit and diff detail">
+      <div class="git-head" data-toggle-git="${esc(key)}" title="${gitOpen ? "fold" : "unfold"} the merge state, commit and diff detail">
         <span class="chev">${gitOpen ? "\u25be" : "\u25b8"}</span>
+        <h4>Merge state</h4>
         <span class="git-summary mono">${esc(gitSummary)}</span>
       </div>
       <div class="git-body">
