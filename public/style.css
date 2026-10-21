@@ -438,10 +438,12 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 /* Send sits inside the input, bottom left: the reply is one gesture, so the control lives in the box
    it submits. The box keeps a bottom pad so typed text never runs under it. */
 .reply-wrap { position: relative; display: block; }
-.reply-wrap .reply-box { padding-bottom: 32px; }
+/* display:block, or the inline-block baseline leaves ~5px of the wrap under the textarea and the
+   button's bottom offset is measured from there — which is why it sat on the border. */
+.reply-wrap .reply-box { display: block; padding-bottom: 34px; vertical-align: top; }
 .reply-row { display: flex; align-items: center; gap: 10px; }
 .reply-row .spacer { flex: 1; }
-button.btn-reply { position: absolute; left: 7px; bottom: 6px; z-index: 1; padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #1d3a57; border-color: #2b5480; color: #cfe6ff; }
+button.btn-reply { position: absolute; left: 7px; bottom: 8px; z-index: 1; padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #1d3a57; border-color: #2b5480; color: #cfe6ff; }
 button.btn-reply:hover { background: #24466a; }
 
 /* minimize / expand one job card (click its header) */
