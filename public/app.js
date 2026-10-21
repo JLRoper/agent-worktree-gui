@@ -841,12 +841,13 @@ function conversationHtml(conv) {
       <div class="reply">
         <div class="reply-wrap">
           <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"
-            placeholder="${running ? "a turn is still running — a reply queues another one" : "Reply to this agent — continues the same Hermes thread, Enter to send"}"></textarea>
+            placeholder="${running ? "a turn is running — Enter steers it; Queue reply holds yours for the next turn" : "Reply to this agent — continues the same Hermes thread, Enter to send"}"></textarea>
           <div class="reply-actions">
-            <button class="btn-reply" data-thread="${esc(thread)}" type="button" title="${running ? "a turn is still running — queue it instead" : "send this as the next turn (Enter)"}"${running ? " disabled" : ""}>Send reply</button>
+            ${running
+              ? `<button class="btn-reply btn-steer-primary" data-steer="${esc(runningTurn.id)}" type="button" title="send this into the running turn — the agent reads it at its next tool boundary and the turn carries on">Steer turn</button>`
+              : `<button class="btn-reply" data-thread="${esc(thread)}" type="button" title="send this as the next turn (Enter)">Send reply</button>`}
             ${running ? `<button class="btn-queue" data-queue-reply="${esc(thread)}" type="button" title="hold this reply and send it the moment the current turn finishes">Queue reply</button>` : ""}
             ${queued ? `<span class="queue-note mono" title="${esc(queuedTitle)}">${queued} queued</span>` : ""}
-            ${running ? `<button class="btn-steer" data-steer="${esc(runningTurn.id)}" type="button" title="send this into the running turn — it is read at the agent's next tool boundary, and the turn carries on">Steer turn</button>` : ""}
             ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button" title="cancel the run this agent is in the middle of">Cancel turn</button>` : ""}
           </div>
         </div>
@@ -1121,6 +1122,42 @@ async function sendReply(thread, preset = null) {
     if (warn) warn.textContent = `reply failed: ${err.message}`;
   } finally {
     if (btn) btn.disabled = false;
+  }
+}
+
+async function steerTurn(thread, id, text, btn = null) {
+  const warn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
+  const body = String(text ?? "").trim();
+  if (!body) {
+    focusReplyBox(thread);
+    if (warn) warn.textContent = "type what the agent should do instead";
+    return false;
+  }
+  if (btn) btn.disabled = true;
+  try {
+    const res = await fetch("/api/jobs/steer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, text: body }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) {
+      if (warn) warn.textContent = out.error || `steer refused (HTTP ${res.status})`;
+      if (btn) btn.disabled = false;
+      return false;
+    }
+    // The text went into the LIVE turn, so clear the draft: leaving it would invite sending the same
+    // instruction twice, once as a steer and once as the next turn.
+    state.replyDrafts[thread] = "";
+    const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+    if (box) box.value = "";
+    if (warn) warn.textContent = "steered — the agent reads this at its next tool boundary";
+    focusReplyBox(thread);
+    return true;
+  } catch (err) {
+    if (warn) warn.textContent = `steer failed: ${err.message}`;
+    if (btn) btn.disabled = false;
+    return false;
   }
 }
 
@@ -3268,7 +3305,7 @@ document.addEventListener("click", async (e) => {
     }
     return;
   }
-  // Steer the turn that is running: the text goes into the live run, not into a queued next one.
+  // Steer the turn that is running: the primary action while the agent is busy.
   const steerBtn = e.target.closest("[data-steer]");
   if (steerBtn) {
     e.preventDefault();
@@ -3276,35 +3313,7 @@ document.addEventListener("click", async (e) => {
     const card = steerBtn.closest(".job");
     const thread = card?.dataset.thread || "";
     const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-    const warn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
-    const text = (box?.value || "").trim();
-    if (!text) {
-      box?.focus();
-      if (warn) warn.textContent = "type what the agent should do instead";
-      return;
-    }
-    steerBtn.disabled = true;
-    try {
-      const res = await fetch("/api/jobs/steer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: steerBtn.dataset.steer, text }),
-      });
-      const out = await res.json().catch(() => ({}));
-      if (!res.ok || !out.ok) {
-        if (warn) warn.textContent = out.error || `steer refused (HTTP ${res.status})`;
-        steerBtn.disabled = false;
-        return;
-      }
-      // The text was handed to the live turn, so clear the draft: leaving it would invite sending the
-      // same instruction twice, once as a steer and once as the next turn.
-      state.replyDrafts[thread] = "";
-      if (box) box.value = "";
-      if (warn) warn.textContent = "steered — the agent reads this at its next tool boundary";
-    } catch (err) {
-      if (warn) warn.textContent = `steer failed: ${err.message}`;
-      steerBtn.disabled = false;
-    }
+    await steerTurn(thread, steerBtn.dataset.steer, box?.value || "", steerBtn);
     return;
   }
   const btn = e.target.closest(".btn-cancel");
@@ -3318,7 +3327,7 @@ document.addEventListener("click", async (e) => {
 });
 
 // Reply affordances are re-created on every render, so they are handled at document level.
-document.addEventListener("keydown", (e) => {
+document.addEventListener("keydown", async (e) => {
   // Esc puts a pulled-out chat back; nothing else in the page holds that key.
   if (e.key === "Escape" && !$("settings").classList.contains("hidden")) {
     e.preventDefault();
@@ -3365,15 +3374,17 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     const thread = box.dataset.reply;
     const text = (box.value || "").trim();
-    // While a turn is running the queue is the only way in, so Enter queues instead of bouncing off
-    // Hermes' "busy".
+    // While a turn is running, the primary action IS steering: the text goes into the live turn
+    // rather than bouncing off a busy agent. Queue reply is the explicit "next turn" button.
     if (threadBusy(thread)) {
       if (!text) return;
-      state.replyDrafts[thread] = "";
-      box.value = "";
-      queueReply(thread, text);
-      document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.focus();
-      return;
+      const running = [...state.jobs.values()].find(
+        (j) => (j.thread || j.id) === thread && (j.status === "running" || j.status === "starting"),
+      );
+      if (running) {
+        await steerTurn(thread, running.id, text);
+        return;
+      }
     }
     void sendReply(thread);
   }

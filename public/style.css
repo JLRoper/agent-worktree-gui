@@ -463,7 +463,10 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
 /* Steer: the one action that reaches into a turn that is already running. Amber, like other
    "this changes what is happening right now" affordances. */
 .reply-actions button.btn-steer { padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #3a3320; border-color: #6b4d16; color: #ffd479; }
-.reply-actions button.btn-steer:hover { background: #463c24; }
+/* Steer is the PRIMARY action while a turn runs: it takes the Send button's place and its look,
+   because that is what typing mid-turn now does. */
+.reply-actions button.btn-steer-primary { background: #3a3320; border-color: #6b4d16; color: #ffd479; font-weight: 600; }
+.reply-actions button.btn-steer-primary:hover { background: #463c24; }
 /* A run parked on a flagged command: the prompt sits under the output it belongs to, raised like a
    popup but in the flow, so it never covers what it is asking about. */
 .turn-approval { margin: 8px 2px 6px; border: 1px solid #6b4d16; border-radius: 8px; background: linear-gradient(180deg, rgba(58,51,32,.55), rgba(38,34,24,.55)); box-shadow: 0 6px 18px rgba(0,0,0,.35); padding: 10px 12px; }
