@@ -105,6 +105,12 @@ main { padding: 14px 16px 40px; }
 .project-head[data-toggle-project] { cursor: pointer; user-select: none; }
 .project-head[data-toggle-project] .chev { color: var(--dimmer); font-size: 10px; width: 9px; display: inline-block; }
 .project-head[data-toggle-project]:hover .chev { color: var(--text); }
+/* The two fixed cards (New agent / Agents) collapse the same way — their head rows are the handle. */
+.project-head[data-toggle-fixed] { cursor: pointer; user-select: none; }
+.project-head[data-toggle-fixed] .chev { color: var(--dimmer); font-size: 10px; width: 9px; display: inline-block; }
+.project-head[data-toggle-fixed]:hover .chev { color: var(--text); }
+section.project.fixed-collapsed > *:not(.project-head) { display: none; }
+section.project.fixed-collapsed > .project-head { border-bottom: 0; }
 section.project.collapsed .project-head.meta-line,
 section.project.collapsed > table,
 section.project.collapsed .legend { display: none; }

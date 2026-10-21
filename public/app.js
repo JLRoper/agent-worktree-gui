@@ -22,6 +22,7 @@ const state = {
   replyDrafts: {},
   collapsedJobs: loadCollapsedJobs(),
   expandedProjects: loadExpandedProjects(),
+  collapsedFixed: loadCollapsedFixed(),
   collapsedRoots: loadCollapsedRoots(),
   cloneStatus: {},
   approvals: new Map(),
@@ -139,6 +140,48 @@ function saveExpandedProjects() {
   } catch {
     /* no storage: the choice simply will not persist */
   }
+}
+
+// The two fixed cards at the top ("New agent", "Agents") collapse from their title row too. They
+// are not projects — they always exist — so they get their own remembered set instead of pretending
+// to be discovered worktrees.
+function loadCollapsedFixed() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem("wm.collapsedFixed") || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCollapsedFixed() {
+  try {
+    localStorage.setItem("wm.collapsedFixed", JSON.stringify([...state.collapsedFixed]));
+  } catch {
+    /* no storage: the choice simply will not persist */
+  }
+}
+
+function applyFixedCollapse(name) {
+  const sec = document.getElementById(name);
+  if (!sec) return;
+  const open = !state.collapsedFixed.has(name);
+  sec.classList.toggle("fixed-collapsed", !open);
+  const head = sec.querySelector(".project-head[data-toggle-fixed]");
+  if (head) {
+    head.title = `${open ? "minimize" : "expand"} this card`;
+    const chev = head.querySelector(".chev");
+    if (chev) chev.textContent = open ? "\u25be" : "\u25b8";
+  }
+}
+
+function toggleFixed(name) {
+  if (!name) return;
+  if (state.collapsedFixed.has(name)) state.collapsedFixed.delete(name);
+  else state.collapsedFixed.add(name);
+  saveCollapsedFixed();
+  applyFixedCollapse(name);
+  // Collapsing the Agents card and expanding it again must not lose the reply drafts or the
+  // scroll position of a running turn: nothing is destroyed, the body is only hidden.
 }
 
 function toggleProject(name) {
@@ -1619,6 +1662,15 @@ document.addEventListener("click", async (e) => {
     toggleProject(phead.dataset.toggleProject);
     return;
   }
+  // The fixed cards (New agent / Agents): the title row collapses them, but their own controls
+  // (Minimize all, Clear finished, the chips) must keep working.
+  const fixedHead = e.target.closest("[data-toggle-fixed]");
+  if (fixedHead) {
+    if (e.target.closest("button, input, select, textarea, a, label")) return;
+    e.preventDefault();
+    toggleFixed(fixedHead.dataset.toggleFixed);
+    return;
+  }
   const rowAgent = e.target.closest(".btn-row-agent");
   if (rowAgent) {
     e.stopPropagation();
@@ -1816,6 +1868,9 @@ try {
 } catch {
   applyZoom(100, { save: false });
 }
+
+// Reflect the remembered collapse state of the two fixed cards before the first paint of them.
+for (const id of ["newagent", "agents"]) applyFixedCollapse(id);
 
 (async function boot() {
   try {
