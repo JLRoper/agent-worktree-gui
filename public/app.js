@@ -736,7 +736,7 @@ function conversationHtml(conv) {
   const running = Boolean(runningTurn);
   const queue = state.replyQueue.get(thread) || [];
   const queued = queue.length;
-  const queuedTitle = queue.map((t, i) => `${i + 1}. ${t}`).join("\n");
+  const queuedTitle = queue.map((q, i) => `${i + 1}. ${q.text}`).join("\n");
   const runningNow = running;
   // A pending approval for this conversation means the agent is not thinking, it is waiting on you.
   const waitingApproval = [...state.approvals.values()].find((a) => a && a.thread && a.thread === thread) || null;
@@ -812,6 +812,9 @@ function conversationHtml(conv) {
             ${queued ? `<span class="queue-note mono" title="${esc(queuedTitle)}">${queued} queued</span>` : ""}
             ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button" title="cancel the run this agent is in the middle of">Cancel turn</button>` : ""}
           </div>
+          ${queued ? `<div class="queue-list mono">${queue
+            .map((q) => `<div class="queue-item"><span class="queue-ago" data-queued-at="${q.at}" title="how long this reply has been waiting">${fmtDur(Date.now() - q.at)}</span><span class="queue-text">${linkifyText(q.text)}</span></div>`)
+            .join("")}</div>` : ""}
         </div>
         <div class="reply-row">
           <span class="warnline" data-reply-warn="${esc(thread)}"></span>
@@ -1000,7 +1003,7 @@ function turnPrompts(thread) {
 // Hermes never sees a second session on the same thread at once (which it answers with "busy").
 function queueReply(thread, text) {
   const q = state.replyQueue.get(thread) || [];
-  q.push(text);
+  q.push({ text, at: Date.now() });
   state.replyQueue.set(thread, q);
   renderConversation(thread);
 }
@@ -1018,7 +1021,7 @@ function threadBusy(thread) {
 async function drainReplyQueue(thread) {
   const q = replyQueued(thread);
   if (!q.length || threadBusy(thread)) return;
-  const text = q.shift();
+  const text = q.shift().text;
   if (!q.length) state.replyQueue.delete(thread);
   else state.replyQueue.set(thread, q);
   renderConversation(thread);
@@ -3256,7 +3259,19 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
-    void sendReply(box.dataset.reply);
+    const thread = box.dataset.reply;
+    const text = (box.value || "").trim();
+    // While a turn is running the queue is the only way in, so Enter queues instead of bouncing off
+    // Hermes' "busy".
+    if (threadBusy(thread)) {
+      if (!text) return;
+      state.replyDrafts[thread] = "";
+      box.value = "";
+      queueReply(thread, text);
+      document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.focus();
+      return;
+    }
+    void sendReply(thread);
   }
 });
 document.addEventListener("input", (e) => {
@@ -3355,6 +3370,12 @@ setInterval(() => {
   // A hidden tab has nothing to repaint: timers keep firing there, and the work (plus the layout
   // each repaint forces) is what made coming back to the tab feel like a freeze.
   if (document.hidden) return;
+  for (const el of document.querySelectorAll(".queue-ago[data-queued-at]")) {
+    const at = Number(el.dataset.queuedAt) || 0;
+    if (!at) continue;
+    const next = fmtDur(Date.now() - at);
+    if (el.textContent !== next) el.textContent = next;
+  }
   for (const cell of document.querySelectorAll("td.age")) {
     const row = state.rows.get(cell.dataset.key);
     if (!row) continue;
