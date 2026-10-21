@@ -147,6 +147,9 @@ function toggleProject(name) {
   else state.expandedProjects.add(name);
   saveExpandedProjects();
   applyProjectCollapse(name);
+  // Rows are only built for projects that are open, so opening one has to build them now — and
+  // closing one should drop them again instead of leaving hidden markup behind.
+  renderProjectRows(name);
   // Keep the folder's collapse-all button honest when projects are opened one by one.
   const sec = document.querySelector(`section.project[data-project="${CSS.escape(name)}"]`);
   const root = sec?.closest("section.root-group")?.dataset.root;
@@ -971,8 +974,12 @@ function paintAgeCell(cell, row) {
   const st = ringState(row);
   const arc = cell.querySelector(".poll-arc");
   if (arc) {
-    arc.setAttribute("stroke-dashoffset", ringOffset(st));
-    arc.setAttribute("stroke", ringStroke(st));
+    // Only write the attributes that actually moved: this runs for every visible row every second,
+    // and an unnecessary attribute write on an SVG node still costs style invalidation.
+    const off = ringOffset(st);
+    const stroke = ringStroke(st);
+    if (arc.getAttribute("stroke-dashoffset") !== off) arc.setAttribute("stroke-dashoffset", off);
+    if (arc.getAttribute("stroke") !== stroke) arc.setAttribute("stroke", stroke);
   }
   // A running panel agent IS life, observed by us, whatever the last scan said.
   const running = panelFor(row)?.running;
@@ -984,9 +991,10 @@ function paintAgeCell(cell, row) {
     num.classList.toggle("dimmer", !live);
   }
   const cadence = st.every === st.configured ? `every ${st.every}s` : `every ${st.every}s, observed (configured ${st.configured}s)`;
-  cell.title =
+  const title =
     `last life ${live ? `${fmtDur(st.now - alive)} ago${running ? " (a panel agent is running here now)" : ""}` : "never seen"} · polled ${relTime(row.scannedAt)} ago · ` +
     `next read ${st.remain > 0 ? `in ${Math.ceil(st.remain / 1000)}s` : `due now${st.overdue > st.total ? ` (overdue ${fmtDur(st.overdue)})` : ""}`} (${cadence})`;
+  if (cell.title !== title) cell.title = title;
 }
 
 function detailHtml(row) {
@@ -1044,7 +1052,7 @@ function chipsHtml(name) {
   const open = rows.filter((r) => !isRowLive(r) && r.idle).length;
   const serving = rows.filter((r) => r.signals?.ports?.on).length;
   const removable = rows.filter((r) => r.mergeable).length;
-  const panelRunning = rows.filter((r) => panelAgentsByPath().get(String(r.path || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase())?.running).length;
+  const panelRunning = rows.filter((r) => panelMap().get(normPath(r.path).toLowerCase())?.running).length;
   const stale = rows.filter((r) => r.verdictStale).length;
   const out = [`<span class="chip">${rows.length} worktrees</span>`];
   if (merged) out.push(`<span class="chip good">${merged} merged</span>`);
@@ -1199,6 +1207,23 @@ function reorder(name) {
   for (const el of want) tbody.appendChild(el);
 }
 
+// SSE row events arrive in bursts (a scan batch finishes several rows at once). Painting each one
+// as it lands forces a layout per event; coalescing them into one animation frame keeps a burst to
+// a single style pass, which is what made the table stutter when the scanner was busy.
+const pendingRows = new Map();
+let rowFrame = 0;
+
+function queueRow(project, row, opts) {
+  pendingRows.set(keyOf(project, row.path), { project, row, opts });
+  if (rowFrame) return;
+  rowFrame = requestAnimationFrame(() => {
+    rowFrame = 0;
+    const batch = [...pendingRows.values()];
+    pendingRows.clear();
+    for (const b of batch) placeRow(b.project, b.row, b.opts);
+  });
+}
+
 function placeRow(project, row, { flash = false } = {}) {
   row.project = project;
   const key = keyOf(project, row.path);
@@ -1222,6 +1247,12 @@ function placeRow(project, row, { flash = false } = {}) {
   holder.innerHTML = rowHtml(row);
   const newTr = holder.firstElementChild;
   const old = state.rowEls.get(key);
+  // A collapsed section is not on screen: keep the row in state (the chips and counters need it)
+  // but spend nothing on its markup. Expanding the project renders it from state.
+  if (!state.expandedProjects.has(project)) {
+    refreshChips(project);
+    return;
+  }
   const oldDetail = state.detailEls.get(key);
   if (oldDetail) oldDetail.remove();
   state.detailEls.delete(key);
@@ -1258,6 +1289,13 @@ function renderProjectRows(name) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
   tbody.innerHTML = "";
+  // A collapsed project shows nothing, so building its rows would be pure waste — with 94
+  // projects that was ~110 invisible rows and most of the render cost of a snapshot.
+  if (!state.expandedProjects.has(name)) {
+    for (const k of [...state.rowEls.keys()]) if (state.rows.get(k)?.project === name) state.rowEls.delete(k);
+    for (const k of [...state.detailEls.keys()]) if (state.rows.get(k)?.project === name) state.detailEls.delete(k);
+    return;
+  }
   const rows = orderRows([...state.rows.values()].filter((r) => r.project === name));
   for (const row of rows) {
     const key = keyOf(name, row.path);
@@ -1317,6 +1355,9 @@ function renderAll() {
 }
 
 function applySnapshot(data) {
+  // Captured before anything is mutated: if the set of projects is the same afterwards, the
+  // sections on screen are still valid and a full re-render would be pure cost.
+  const beforeSig = [...state.projects.keys()].sort().join("|");
   state.settings = data.settings || state.settings;
   if (Array.isArray(data.scanRoots)) state.scanRoots = data.scanRoots;
   if (data.spawn) {
@@ -1370,7 +1411,19 @@ function applySnapshot(data) {
       state.detailEls.delete(k);
     }
   }
-  renderAll();
+  const afterSig = [...state.projects.keys()].sort().join("|");
+  if (beforeSig !== afterSig || !document.querySelector("section.project[data-project]")) {
+    // The set of projects changed: sections have to be built (or removed) wholesale.
+    renderAll();
+  } else {
+    // Same projects: repaint what is actually on screen. A full re-render here rebuilt 94
+    // sections and every row twice a minute for no structural reason, which is exactly the
+    // periodic hitch the panel had.
+    for (const p of state.projects.values()) {
+      refreshChips(p.name);
+      renderProjectRows(p.name); // no-ops for a collapsed project
+    }
+  }
   $("health").className = "dot ok";
   $("banner").classList.add("hidden");
 }
@@ -1394,6 +1447,7 @@ function connect() {
   es.addEventListener("open", () => setStream("● live"));
   es.addEventListener("snapshot", (e) => {
     const d = JSON.parse(e.data);
+    state.lastEventAt = Date.now();
     applySnapshot(d.data ? d.data : d);
   });
   es.addEventListener("row", (e) => {
@@ -1402,7 +1456,7 @@ function connect() {
     state.lastEventAt = Date.now();
     // Liveness-only updates repaint the row but do not flash it: evidence blinks on and off
     // far more often than git state moves, and flashing for that is just noise.
-    placeRow(evt.project, evt.row, { flash: evt.changed !== false && !evt.livenessOnly });
+    queueRow(evt.project, evt.row, { flash: evt.changed !== false && !evt.livenessOnly });
   });
   es.addEventListener("project", (e) => {
     const evt = JSON.parse(e.data);
@@ -1429,7 +1483,10 @@ function connect() {
     const evt = JSON.parse(e.data);
     removeRow(evt.project, evt.path);
   });
-  es.addEventListener("job", (e) => updateJob(JSON.parse(e.data).job));
+  es.addEventListener("job", (e) => {
+    state.lastEventAt = Date.now();
+    updateJob(JSON.parse(e.data).job);
+  });
   es.addEventListener("jobline", (e) => appendJobLine(JSON.parse(e.data)));
   es.addEventListener("approval", (e) => {
     const r = JSON.parse(e.data).request;
@@ -1443,6 +1500,7 @@ function connect() {
     renderApprovals();
   });
   es.addEventListener("jobs", (e) => {
+    state.lastEventAt = Date.now();
     state.jobs.clear();
     for (const j of JSON.parse(e.data).jobs) state.jobs.set(j.id, j);
     renderJobs();
@@ -1653,6 +1711,9 @@ $("projects").addEventListener("click", (e) => {
 });
 
 setInterval(() => {
+  // A hidden tab has nothing to repaint: timers keep firing there, and the work (plus the layout
+  // each repaint forces) is what made coming back to the tab feel like a freeze.
+  if (document.hidden) return;
   for (const cell of document.querySelectorAll("td.age")) {
     const row = state.rows.get(cell.dataset.key);
     if (!row) continue;
@@ -1683,8 +1744,16 @@ setInterval(() => {
 }, 1000);
 
 setInterval(() => {
-  if (!state.paused) resync();
+  if (state.paused) return;
+  // SSE is the live path; this is only a safety net for a stream that has gone quiet or died.
+  const quiet = !state.lastEventAt || Date.now() - state.lastEventAt > 20000 || state.es?.readyState !== 1;
+  if (quiet) void resync();
 }, 30000);
+
+document.addEventListener("visibilitychange", () => {
+  // Coming back to the tab: one catch-up, then the stream and the 1s tick take over again.
+  if (!document.hidden) void resync();
+});
 
 // ---- page zoom -------------------------------------------------------------------------------
 // Nothing in this page blocks the browser's own zoom, but when it is opened inside a shell that

@@ -3,13 +3,13 @@
   "worktreeSeconds": 5,
   "midSeconds": 45,
   "dormantSeconds": 90,
-  "slowSeconds": 60,
-  "fetchSeconds": 600,
+  "slowSeconds": 300,
+  "fetchSeconds": 1800,
   "refreshSeconds": 30,
-  "prCacheSeconds": 300,
-  "remoteCacheSeconds": 300,
+  "prCacheSeconds": 1800,
+  "remoteCacheSeconds": 1800,
   "liveMinutes": 5,
-  "threads": 8,
+  "threads": 5,
   "scanRoots": [
     "C:/ProjectDevelopment"
   ],

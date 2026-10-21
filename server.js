@@ -2,6 +2,7 @@
 // The HTTP layer never runs git: the scheduler scans in worker threads and the
 // store holds the results. Spawned agents go through lib/jobs.js.
 import { createServer } from "node:http";
+import { gzipSync as zlibGzipSync } from "node:zlib";
 import { readFile, stat } from "node:fs/promises";
 import { cpus } from "node:os";
 import path from "node:path";
@@ -61,10 +62,26 @@ async function loadConfig() {
   return cfg;
 }
 
+const gzip = (buf) => zlibGzipSync(buf, { level: 6 });
+
+function acceptsGzip(req) {
+  return /\bgzip\b/.test(String((req && req.headers["accept-encoding"]) || ""));
+}
+
 function sendJson(res, code, body) {
+  const req = res.req;
   const text = JSON.stringify(body);
-  res.writeHead(code, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "Content-Length": Buffer.byteLength(text) });
-  res.end(text);
+  const raw = Buffer.from(text);
+  const head = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", Vary: "Accept-Encoding" };
+  // /api/state is half a megabyte of JSON and the page asks for it periodically; gzip costs a few
+  // ms of CPU and removes ~90% of the bytes and most of the client's parse time.
+  if (raw.length > 2048 && acceptsGzip(req)) {
+    const gz = gzip(raw);
+    res.writeHead(code, { ...head, "Content-Encoding": "gzip", "Content-Length": gz.length });
+    return res.end(gz);
+  }
+  res.writeHead(code, { ...head, "Content-Length": raw.length });
+  res.end(raw);
 }
 
 function readBody(req, limit = 256 * 1024) {
@@ -482,7 +499,15 @@ const server = createServer(async (req, res) => {
     }
     try {
       const body = await readFile(filePath);
-      res.writeHead(200, { "Content-Type": TYPES[path.extname(filePath)] || "application/octet-stream", "Cache-Control": "no-store" });
+      const type = TYPES[path.extname(filePath)] || "application/octet-stream";
+      const head = { "Content-Type": type, "Cache-Control": "no-store", Vary: "Accept-Encoding" };
+      // app.js is ~80KB of text the client parses on every load; gzip is free at this size.
+      if (body.length > 2048 && /^(text\/|application\/(javascript|json))/.test(type) && acceptsGzip(req)) {
+        const gz = gzip(body);
+        res.writeHead(200, { ...head, "Content-Encoding": "gzip", "Content-Length": gz.length });
+        return res.end(gz);
+      }
+      res.writeHead(200, { ...head, "Content-Length": body.length });
       res.end(body);
     } catch {
       res.writeHead(404, { "Content-Type": "text/plain" }).end("not found");
