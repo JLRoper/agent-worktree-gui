@@ -452,6 +452,11 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
 /* Send sits inside the input, bottom left: the reply is one gesture, so the control lives in the box
    it submits. The box keeps a bottom pad so typed text never runs under it. */
 .reply-wrap { position: relative; display: block; }
+/* Send and Cancel sit side by side inside the box, bottom left: both act on the reply you are writing. */
+.reply-actions { position: absolute; left: 7px; bottom: 8px; display: flex; align-items: center; gap: 6px; z-index: 1; }
+.reply-actions button.btn-reply { position: static; left: auto; bottom: auto; }
+.reply-actions button.btn-cancel { padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #3a1f22; border-color: #5c2a2e; color: #ffb3b3; }
+.reply-actions button.btn-cancel:hover { background: #4a262a; }
 /* display:block, or the inline-block baseline leaves ~5px of the wrap under the textarea and the
    button's bottom offset is measured from there — which is why it sat on the border. */
 .reply-wrap .reply-box { display: block; padding-bottom: 34px; vertical-align: top; }

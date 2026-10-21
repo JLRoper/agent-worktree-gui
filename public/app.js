@@ -785,7 +785,6 @@ function conversationHtml(conv) {
       <button class="btn-rename" data-rename-thread="${esc(thread)}" type="button" title="rename this session — a label for the panel only; the Hermes thread id never changes">\u270e</button>
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
       <button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>
-      ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button">Cancel</button>` : ""}
     </div>
     ${collapsed ? `<div class="job-preview mono" data-preview="${esc(thread)}">${esc(jobPreview(latest))}</div>` : ""}
     ${homeless ? `<div class="attach-row" data-attach-row="${esc(thread)}" hidden>
@@ -801,7 +800,10 @@ function conversationHtml(conv) {
         <div class="reply-wrap">
           <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"
             placeholder="${running ? "a turn is still running — a reply queues another one" : "Reply to this agent — continues the same Hermes thread, Enter to send"}"></textarea>
-          <button class="btn-reply" data-thread="${esc(thread)}" type="button" title="send this as the next turn (Enter)">Send reply</button>
+          <div class="reply-actions">
+            <button class="btn-reply" data-thread="${esc(thread)}" type="button" title="send this as the next turn (Enter)">Send reply</button>
+            ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button" title="cancel the run this agent is in the middle of">Cancel turn</button>` : ""}
+          </div>
         </div>
         <div class="reply-row">
           <span class="warnline" data-reply-warn="${esc(thread)}"></span>
