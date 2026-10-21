@@ -2122,9 +2122,9 @@ function reorder(name) {
   flashMoved(current, want, tbody);
 }
 
-// Green flash on the things that actually changed place: same element, different index. Matching is
-// by identity first and by data-key second, because a project's table is often rebuilt wholesale
-// (renderProjectRows empties the tbody), and then the old nodes are gone but the keys are not.
+// Green flash on the things that moved UP the order. A project pushed to the top shifts everything
+// below it down by one, and flashing those too turned a single mover into a wall of green; an element
+// that only slid downwards is not news.
 function flashMovedByKey(beforeKeys, afterEls, reflowHost) {
   const was = new Map();
   beforeKeys.forEach((k, i) => {
@@ -2134,7 +2134,7 @@ function flashMovedByKey(beforeKeys, afterEls, reflowHost) {
   afterEls.forEach((el, i) => {
     const k = el.dataset.key || el.dataset.project || el.dataset.root;
     const from = k ? was.get(k) : undefined;
-    if (from !== undefined && from !== i) moved.push(el);
+    if (from !== undefined && i < from) moved.push(el);
   });
   if (!moved.length) return;
   // Remove then re-add in one pass with a single reflow between, so an element that moves twice in
