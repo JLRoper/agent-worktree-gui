@@ -34,6 +34,7 @@ const state = {
   turnPage: new Map(), // thread -> how many pages of turns back from the newest (0 = newest page)
   gitOpen: new Set(), // row key -> the git/commit/diff accordion is unfolded
   pinnedTurns: new Set(), // turn id -> starred, so it also shows above the paged turns
+  liveOpen: new Set(), // row key -> the liveness-evidence block is unfolded
   maximized: null, // thread id of the conversation pulled out to fill the window
   zoom: 100, // page zoom percent (the browser's own Ctrl +/- is not always delivered)
 };
@@ -1655,10 +1656,21 @@ function detailHtml(row) {
         .join("")}</ul></div>`,
     );
   }
-  const livePart = `<div class="col"><h4>Liveness evidence</h4><ul>${livenessLines(row).map((l) => `<li>${esc(l)}</li>`).join("")}</ul></div>`;
   // The git side of the row (state, commit list, dirty files, diff summary) folds into one line:
   // opening a worktree is about seeing its agents and what is unmerged, not a wall of file names.
   const key = keyOf(row.project, row.path);
+  // Liveness evidence folds too; collapsed, its strongest line stays visible to the right of the
+  // header, because "why is this row live" is the one thing worth seeing without unfolding.
+  const liveLines = livenessLines(row);
+  const liveOpen = state.liveOpen.has(key);
+  const liveBlock = `<div class="live-block${liveOpen ? "" : " collapsed"}" data-live-block="${esc(key)}">
+      <div class="live-head" data-toggle-live="${esc(key)}" title="${liveOpen ? "fold" : "unfold"} the liveness evidence">
+        <span class="chev">${liveOpen ? "\u25be" : "\u25b8"}</span>
+        <h4>Liveness evidence</h4>
+        ${liveOpen ? "" : `<span class="live-first mono" title="${esc(liveLines[0] || "no evidence")}">${esc(liveLines[0] || "no evidence")}</span>`}
+      </div>
+      <ul>${liveLines.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
+    </div>`;
   const gitOpen = state.gitOpen.has(key);
   const gitSummary = [
     row.verdict || "…",
@@ -1700,7 +1712,7 @@ function detailHtml(row) {
         ${parts.length ? `<div class="cols">${parts.join("")}</div>` : ""}
       </div>
     </div>
-    <div class="cols">${livePart}</div>
+    ${liveBlock}
     ${agentsHtml}
   </td></tr>`;
 }
@@ -2573,6 +2585,37 @@ document.addEventListener("click", async (e) => {
     else state.pinnedTurns.add(id);
     const thread = job ? job.thread || job.id : null;
     if (thread) renderConversation(thread);
+    return;
+  }
+  // Liveness evidence folds in place; collapsed, the strongest line rides to the right of the header.
+  const liveToggle = e.target.closest("[data-toggle-live]");
+  if (liveToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    const key = liveToggle.dataset.toggleLive;
+    const block = document.querySelector(`[data-live-block="${CSS.escape(key)}"]`);
+    if (block) {
+      const open = state.liveOpen.has(key);
+      if (open) state.liveOpen.delete(key);
+      else state.liveOpen.add(key);
+      block.classList.toggle("collapsed", open);
+      const chev = liveToggle.querySelector(".chev");
+      if (chev) chev.textContent = open ? "\u25b8" : "\u25be";
+      let first = liveToggle.querySelector(".live-first");
+      const firstLine = block.querySelector("ul li");
+      if (open) {
+        if (!first && firstLine) {
+          first = document.createElement("span");
+          first.className = "live-first mono";
+          first.textContent = firstLine.textContent;
+          first.title = firstLine.textContent;
+          liveToggle.appendChild(first);
+        }
+      } else if (first) {
+        first.remove();
+      }
+      liveToggle.title = `${open ? "unfold" : "fold"} the liveness evidence`;
+    }
     return;
   }
   // The git / commit / diff accordion inside a worktree's detail row: fold and unfold in place, so
