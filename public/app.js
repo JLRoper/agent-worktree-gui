@@ -198,6 +198,7 @@ function toggleProject(name) {
   const sec = document.querySelector(`section.project[data-project="${CSS.escape(name)}"]`);
   const root = sec?.closest("section.root-group")?.dataset.root;
   if (root) paintRootButton(root);
+  paintCollapseAll();
 }
 
 // ---- folder layer ------------------------------------------------------------
@@ -294,6 +295,35 @@ function toggleAllInRoot(root) {
   saveExpandedProjects();
   for (const n of names) applyProjectCollapse(n);
   paintRootButton(root);
+}
+
+// One gesture for the whole board: fold every project section, or unfold them all again. Folder
+// headers stay put — collapsing a folder hides a whole scan root, which is a different question.
+function paintCollapseAll() {
+  const btn = $("btn-collapse-all");
+  if (!btn) return;
+  const names = [...state.projects.keys()];
+  const anyOpen = names.some((n) => state.expandedProjects.has(n));
+  btn.textContent = anyOpen ? "Collapse all" : "Expand all";
+  btn.title = `${anyOpen ? "collapse" : "expand"} every project section (${names.length})`;
+}
+
+function toggleAllProjects() {
+  const names = [...state.projects.keys()];
+  if (!names.length) return;
+  const anyOpen = names.some((n) => state.expandedProjects.has(n));
+  for (const n of names) {
+    if (anyOpen) state.expandedProjects.delete(n);
+    else state.expandedProjects.add(n);
+  }
+  if (anyOpen) state.expanded.clear();
+  saveExpandedProjects();
+  for (const n of names) {
+    applyProjectCollapse(n);
+    renderProjectRows(n); // opening builds the rows, closing drops them
+  }
+  for (const root of [...document.querySelectorAll("section.root-group")].map((s) => s.dataset.root)) paintRootButton(root);
+  paintCollapseAll();
 }
 
 // ---- clone a repo into a folder ------------------------------------------------
@@ -1794,6 +1824,7 @@ function renderAll() {
     refreshChips(p.name);
   }
   paintConfigLine();
+  paintCollapseAll();
 }
 
 function applySnapshot(data) {
@@ -1994,6 +2025,7 @@ async function post(route) {
 }
 
 $("btn-refresh").addEventListener("click", () => post("/api/refresh"));
+$("btn-collapse-all").addEventListener("click", () => toggleAllProjects());
 $("btn-fetch").addEventListener("click", () => post("/api/fetch"));
 $("job-project").addEventListener("change", () => {
   const p = selectedProject();
