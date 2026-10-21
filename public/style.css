@@ -446,7 +446,7 @@ button.btn-clear-thread { padding: 1px 6px; font-size: 11px; line-height: 1.2; b
 button.btn-clear-thread:hover, button.btn-clear-thread.armed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 button.btn-clear-thread.armed { font-weight: 700; }
 /* attach an unattached agent to a worktree */
-button.btn-attach { padding: 1px 6px; font-size: 11px; line-height: 1.2; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
+button.btn-attach { padding: 2px 8px; font-size: 11px; line-height: 1.3; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
 button.btn-attach:hover { color: var(--text); background: #232936; }
 .attach-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px 18px; font-size: 11.5px; }
 .attach-row[hidden] { display: none; }

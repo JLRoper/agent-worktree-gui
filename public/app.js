@@ -2479,8 +2479,10 @@ document.addEventListener("click", async (e) => {
     toggleTurn(turnToggle.dataset.toggleTurn);
     return;
   }
+  // A click on anything interactive inside the head belongs to that control, never to the fold:
+  // attach, clear, maximize, cancel, the attach picker and its select all live in the head row.
   const head = e.target.closest(".job-head");
-  if (head && !e.target.closest(".btn-cancel") && !e.target.closest(".reply")) {
+  if (head && !e.target.closest("button, a, input, select, textarea, label, [data-attach-row], [data-toggle-turn]")) {
     toggleJob(head.dataset.toggle);
     return;
   }
