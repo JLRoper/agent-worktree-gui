@@ -31,6 +31,7 @@ const state = {
   pollGap: new Map(), // key -> observed seconds between that row's scans, smoothed
   lastScanAt: new Map(), // key -> ms of the previous scan we rendered
   turnOpen: new Map(), // job id -> whether that turn's body is expanded (default: only the newest)
+  gitOpen: new Set(), // row key -> the git/commit/diff accordion is unfolded
   maximized: null, // thread id of the conversation pulled out to fill the window
   zoom: 100, // page zoom percent (the browser's own Ctrl +/- is not always delivered)
 };
@@ -1561,7 +1562,20 @@ function detailHtml(row) {
         .join("")}</ul></div>`,
     );
   }
-  parts.push(`<div class="col"><h4>Liveness evidence</h4><ul>${livenessLines(row).map((l) => `<li>${esc(l)}</li>`).join("")}</ul></div>`);
+  const livePart = `<div class="col"><h4>Liveness evidence</h4><ul>${livenessLines(row).map((l) => `<li>${esc(l)}</li>`).join("")}</ul></div>`;
+  // The git side of the row (state, commit list, dirty files, diff summary) folds into one line:
+  // opening a worktree is about seeing its agents and what is unmerged, not a wall of file names.
+  const key = keyOf(row.project, row.path);
+  const gitOpen = state.gitOpen.has(key);
+  const gitSummary = [
+    row.verdict || "…",
+    row.branch ? `branch ${row.branch}` : null,
+    dirty.length ? `${dirty.length} modified` : null,
+    untr.length ? `${untr.length} untracked` : null,
+    commits.length ? `${commits.length} not on ${pm.remoteRef || "remote main"}` : null,
+    row.diffSummary || null,
+    row.lastCommit ? `last commit ${relTime(row.lastCommit)} ago` : null,
+  ].filter(Boolean).join(" · ");
   const meta = [
     row.isAncestor === true ? "ancestor of remote main" : row.isAncestor === false ? "not an ancestor" : null,
     `cherry +${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}`,
@@ -1582,9 +1596,18 @@ function detailHtml(row) {
         ${agents.map((c) => conversationHtml(c)).join("")}
       </div>`
     : "";
-  return `<tr class="detail" data-detail="${esc(keyOf(row.project, row.path))}"><td colspan="9">
-    <div class="codelist" style="margin-bottom:8px">${meta}</div>
-    <div class="cols">${parts.join("")}</div>
+  return `<tr class="detail" data-detail="${esc(key)}"><td colspan="9">
+    <div class="git-block${gitOpen ? "" : " collapsed"}" data-git-block="${esc(key)}">
+      <div class="git-head" data-toggle-git="${esc(key)}" title="${gitOpen ? "fold" : "unfold"} the git, commit and diff detail">
+        <span class="chev">${gitOpen ? "\u25be" : "\u25b8"}</span>
+        <span class="git-summary mono">${esc(gitSummary)}</span>
+      </div>
+      <div class="git-body">
+        ${meta ? `<div class="codelist">${meta}</div>` : ""}
+        ${parts.length ? `<div class="cols">${parts.join("")}</div>` : ""}
+      </div>
+    </div>
+    <div class="cols">${livePart}</div>
     ${agentsHtml}
   </td></tr>`;
 }
@@ -2423,6 +2446,25 @@ document.addEventListener("click", async (e) => {
   }
   // A turn folds on its own: the head row or the one-line request opens/closes that turn,
   // independently of the conversation card it sits in.
+  // The git / commit / diff accordion inside a worktree's detail row: fold and unfold in place, so
+  // nothing else in the row (agent cards, scroll positions) is rebuilt.
+  const gitToggle = e.target.closest("[data-toggle-git]");
+  if (gitToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    const key = gitToggle.dataset.toggleGit;
+    const block = document.querySelector(`[data-git-block="${CSS.escape(key)}"]`);
+    if (block) {
+      const open = state.gitOpen.has(key);
+      if (open) state.gitOpen.delete(key);
+      else state.gitOpen.add(key);
+      block.classList.toggle("collapsed", open);
+      const chev = gitToggle.querySelector(".chev");
+      if (chev) chev.textContent = open ? "\u25b8" : "\u25be";
+      gitToggle.title = `${open ? "unfold" : "fold"} the git, commit and diff detail`;
+    }
+    return;
+  }
   const turnToggle = e.target.closest("[data-toggle-turn]");
   if (turnToggle) {
     e.preventDefault();
