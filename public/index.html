@@ -60,17 +60,17 @@
         <div class="chips"><span class="chip" id="chip-key">key: —</span><span class="chip" id="chip-bin">—</span></div>
       </div>
       <div class="form">
-        <textarea id="job-prompt" rows="3" placeholder="What should the agent do? (this becomes the first turn)"></textarea>
+        <textarea id="job-prompt" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" rows="3" placeholder="What should the agent do? (this becomes the first turn)"></textarea>
         <div class="row">
-          <label class="cwd">start in <input id="job-cwd" list="project-paths" spellcheck="false" placeholder="(project path — the green + on a project fills this in)" /></label>
+          <label class="cwd">start in <input id="job-cwd" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" list="project-paths" spellcheck="false" placeholder="(project path — the green + on a project fills this in)" /></label>
         </div>
         <datalist id="project-paths"></datalist>
         <div class="row">
           <label class="proj">project <select id="job-project" title="which project the agent starts in"></select></label>
-          <label>model <input id="job-model" placeholder="(default)" /></label>
-          <label>budget s <input id="job-budget" type="number" value="1800" min="30" /></label>
-          <label>max turns <input id="job-maxTurns" type="number" placeholder="(default)" /></label>
-          <label>skills <input id="job-skills" placeholder="(none)" /></label>
+          <label>model <input id="job-model" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" placeholder="(default)" /></label>
+          <label>budget s <input id="job-budget" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" value="1800" min="30" /></label>
+          <label>max turns <input id="job-maxTurns" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" placeholder="(default)" /></label>
+          <label>skills <input id="job-skills" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" placeholder="(none)" /></label>
           <label class="chk" title="Without --yolo a spawned agent cannot answer a dangerous-command approval prompt (no TTY), so it will stall.">
             <input id="job-yolo" type="checkbox" /> <code>--yolo</code> (unattended, no approvals)
           </label>

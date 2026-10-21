@@ -725,7 +725,7 @@ function conversationHtml(conv) {
       <div class="job-foot">${foot}</div>
       <div class="reply">
         <div class="reply-wrap">
-          <textarea class="reply-box" data-reply="${esc(thread)}" rows="2" spellcheck="false"
+          <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"
             placeholder="${running ? "a turn is still running — a reply queues another one" : "Reply to this agent — continues the same Hermes thread, Enter to send"}"></textarea>
           <button class="btn-reply" data-thread="${esc(thread)}" type="button" title="send this as the next turn (Enter)">Send reply</button>
         </div>
@@ -781,6 +781,13 @@ function beginRename(thread) {
   input.className = "rename-input mono";
   input.maxLength = 80;
   input.spellcheck = false;
+  // Keep password managers out: this is a session label, not a login. 1Password honours
+  // data-1p-ignore; the rest are the same opt-out for Bitwarden, LastPass and Dashlane.
+  input.setAttribute("data-1p-ignore", "");
+  input.setAttribute("data-bwignore", "");
+  input.setAttribute("data-lpignore", "true");
+  input.setAttribute("data-form-type", "other");
+  input.setAttribute("autocomplete", "off");
   input.value = span.dataset.label || "";
   input.placeholder = thread;
   span.replaceWith(input);
@@ -2082,7 +2089,7 @@ function rootSection(root, allProjects) {
       <button type="button" class="btn-root-clone" data-root-clone="${esc(root)}" title="clone a GitHub repo over ssh into ${esc(labelRoot(root))}">+</button>
     </div>
     <div class="root-clone" data-clone-form="${esc(root)}"${state.cloneStatus[root] ? "" : " hidden"}>
-      <input type="text" data-clone-input="${esc(root)}" placeholder="repo name — e.g. agent-worktree-gui, or owner/repo" spellcheck="false" autocomplete="off">
+      <input type="text" data-clone-input="${esc(root)}" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" placeholder="repo name — e.g. agent-worktree-gui, or owner/repo" spellcheck="false">
       <button type="button" data-clone-go="${esc(root)}">Clone via ssh</button>
       <span class="mono dim${state.cloneStatus[root]?.kind === "err" ? " clone-err" : ""}" data-clone-msg="${esc(root)}">${esc(state.cloneStatus[root]?.text || "")}</span>
     </div>
