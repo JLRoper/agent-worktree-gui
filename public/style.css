@@ -388,6 +388,8 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 .jl-init { color: #9ecbff; }
 .jl-result { color: #7ee787; }
 .jl-tool { color: #c8a6ff; }
+/* a tool's own output, shown under its call so the console says what actually happened */
+.jl-tool-out { color: var(--dim); padding-left: 14px; white-space: pre-wrap; }
 .jl-cmd { color: var(--dimmer); }
 .jl-dim { color: var(--dimmer); font-style: italic; }
 .jl-raw { color: var(--dim); }
