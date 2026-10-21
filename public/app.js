@@ -31,6 +31,7 @@ const state = {
   pollGap: new Map(), // key -> observed seconds between that row's scans, smoothed
   lastScanAt: new Map(), // key -> ms of the previous scan we rendered
   turnOpen: new Map(), // job id -> whether that turn's body is expanded (default: only the newest)
+  turnPage: new Map(), // thread -> how many pages of turns back from the newest (0 = newest page)
   gitOpen: new Set(), // row key -> the git/commit/diff accordion is unfolded
   maximized: null, // thread id of the conversation pulled out to fill the window
   zoom: 100, // page zoom percent (the browser's own Ctrl +/- is not always delivered)
@@ -607,6 +608,15 @@ function toggleTurn(id) {
   }
 }
 
+// Long conversations page their turns: five at a time, newest page first, because a thread with
+// thirty turns is thirty transcript panes the reader almost never needs at once.
+const TURNS_PER_PAGE = 5;
+
+function turnPageOffset(thread, turnCount) {
+  const pages = Math.max(1, Math.ceil(turnCount / TURNS_PER_PAGE));
+  return Math.min(pages - 1, Math.max(0, state.turnPage.get(thread) || 0));
+}
+
 function turnHead(turn, index, open) {
   const label = `turn ${turn.turn || index + 1}`;
   const state_ =
@@ -651,7 +661,20 @@ function conversationHtml(conv) {
   const foot = latest.status === "running" || latest.status === "starting"
     ? `<span class="dimmer mono">running ${esc(elapsed(latest))}</span>`
     : `<span class="mono dim">exit ${latest.exitCode ?? "?"} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${latest.tokens.total}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>`;
-  const blocks = turns.map((t, i) => turnBlock(conv, t, i)).join("");
+  const blocks = (() => {
+    const offset = turnPageOffset(thread, turns.length);
+    const end = turns.length - offset * TURNS_PER_PAGE;
+    const start = Math.max(0, end - TURNS_PER_PAGE);
+    return { offset, start, end, html: turns.slice(start, end).map((t, i) => turnBlock(conv, t, start + i)).join("") };
+  })();
+  const pages = Math.max(1, Math.ceil(turns.length / TURNS_PER_PAGE));
+  const pager = pages > 1
+    ? `<span class="turn-pager" title="turns ${blocks.start + 1}–${blocks.end} of ${turns.length} — page through them here">` +
+      `<button type="button" class="pager-btn" data-turn-page="older" data-thread-page="${esc(thread)}"${blocks.offset >= pages - 1 ? " disabled" : ""} title="older turns">\u25b2</button>` +
+      `<button type="button" class="pager-btn" data-turn-page="newer" data-thread-page="${esc(thread)}"${blocks.offset === 0 ? " disabled" : ""} title="newer turns">\u25bc</button>` +
+      `<span class="pager-n mono">${blocks.start + 1}–${blocks.end} / ${turns.length}</span>` +
+      `</span>`
+    : "";
   return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}">
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
       <span class="agent-glyph" title="a Hermes agent session — ⧉ marks an agent row">\u29c9</span>
@@ -659,6 +682,7 @@ function conversationHtml(conv) {
       <span class="pill ${runningNow ? "pill-running" : `pill-notrunning${latest.status === "failed" ? " is-failed" : ""}`}" title="${esc(runningNow ? `running ${elapsed(latest)}` : `${latest.status} · exit ${latest.exitCode ?? "?"} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""}`)}">${runningNow ? "running" : "not-running"}</span>
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       <span class="mono dim">${esc(meta)}</span>
+      ${pager}
       <span class="spacer"></span>
       <span class="mono dimmer thread-name" title="Hermes session thread — continue it any time">${esc(thread)}</span>
       ${latest.yolo ? '<span class="pill yolo">--yolo</span>' : ""}
@@ -674,7 +698,7 @@ function conversationHtml(conv) {
       <button class="btn-attach-go" data-attach-go="${esc(thread)}" type="button">Attach</button>
     </div>` : ""}
     <div class="job-body">
-      ${blocks}
+      ${blocks.html}
       <div class="job-foot">${foot}</div>
       <div class="reply">
         <textarea class="reply-box" data-reply="${esc(thread)}" rows="2" spellcheck="false"
@@ -731,6 +755,8 @@ function jobHtml(j) {
 // older turns (their default is "folded" once they are no longer the newest) and the new turn is
 // pinned open, so a reply lands with the previous turn collapsed to its request line.
 function focusNewTurn(thread, turnId) {
+  // A new turn means the reader is back at the newest page.
+  state.turnPage.delete(thread);
   for (const j of state.jobs.values()) {
     if ((j.thread || j.id) !== thread) continue;
     if (j.id === turnId) state.turnOpen.set(j.id, true);
@@ -933,6 +959,9 @@ function renderJobs() {
   // Forgetting a cleared job's explicit turn state keeps the map from growing forever.
   const live = new Set([...state.jobs.keys()]);
   for (const id of [...state.turnOpen.keys()]) if (!live.has(id)) state.turnOpen.delete(id);
+  // Same for a cleared thread's remembered page.
+  const threads = new Set([...state.jobs.values()].map((j) => j.thread || j.id));
+  for (const t of [...state.turnPage.keys()]) if (!threads.has(t)) state.turnPage.delete(t);
   // The list is rebuilt wholesale, so remember where every open transcript was and put it back:
   // a `jobs` event must not cost the reader their place in an agent they are reading.
   const prevScrolls = captureScrolls($("jobs"));
@@ -1016,9 +1045,13 @@ function conversationSignature(conv) {
     .map((a) => a.id)
     .join("|");
   const l = conv.latest;
+  // Which page of turns this card is showing: paging back must survive a repaint, and paging is a
+  // structural change (different turn blocks), so it belongs in the signature.
+  const pageOffset = state.turnPage.get(conv.thread) || 0;
   return [
     conv.thread,
     turns,
+    pageOffset,
     open,
     state.collapsedJobs.has(conv.thread) ? "c" : "o",
     state.maximized === conv.thread ? "m" : "-",
@@ -2535,6 +2568,23 @@ document.addEventListener("click", async (e) => {
   if (turnToggle) {
     e.preventDefault();
     toggleTurn(turnToggle.dataset.toggleTurn);
+    return;
+  }
+  // Turn pagination: the arrows sit in the card head, next to the turn count.
+  const pageBtn = e.target.closest("[data-turn-page]");
+  if (pageBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const thread = pageBtn.dataset.threadPage;
+    const conv = conversations().find((c) => c.thread === thread);
+    if (conv) {
+      const pages = Math.max(1, Math.ceil(conv.turns.length / TURNS_PER_PAGE));
+      const cur = turnPageOffset(thread, conv.turns.length);
+      const next = pageBtn.dataset.turnPage === "older" ? Math.min(pages - 1, cur + 1) : Math.max(0, cur - 1);
+      if (next === 0) state.turnPage.delete(thread);
+      else state.turnPage.set(thread, next);
+      renderConversation(thread);
+    }
     return;
   }
   // A click on anything interactive inside the head belongs to that control, never to the fold:
