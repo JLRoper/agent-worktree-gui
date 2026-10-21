@@ -54,6 +54,13 @@ body {
 .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .meta { color: var(--dim); font-size: 12px; font-family: var(--mono); }
 
+/* zoom control: the page owns a scale factor so Ctrl +/- keeps working inside a host that
+   swallows the browser's own zoom shortcuts */
+.zoom { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 6px; padding: 1px; }
+.zoom button { padding: 2px 7px; font-size: 13px; line-height: 1.15; border: none; background: transparent; color: var(--dim); }
+.zoom button:hover { background: var(--panel-2); color: var(--text); }
+.zoom #zoom-pct { min-width: 42px; text-align: center; font-size: 11px; color: var(--dim); }
+
 button {
   background: var(--panel-2);
   color: var(--text);
@@ -242,6 +249,8 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 .chip.bad { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .chip.warn { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
 .chip.info { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+/* "live" is a Hermes-session fact, so it wears the same violet as the ⧉ hermes chip. */
+.chip.live { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
 
 /* ---- new-agent form ---- */
 .form { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
@@ -481,7 +490,7 @@ button.btn-row-agent:hover { background: #1f4a2a; color: #d6ffe0; border-color: 
 .sig-hermes { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
 button.sig { cursor: pointer; font-family: var(--mono); }
 button.sig:hover { filter: brightness(1.25); }
-.sig-panel { color: #7ee787; border-color: #2ea043; background: var(--green-bg); font-weight: 700; }
+.sig-panel { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); font-weight: 700; }
 .sig-panel-done { color: var(--dim); border-color: var(--line); background: #20242c; }
 @keyframes jumpflash {
   from { box-shadow: 0 0 0 3px #2ea043cc; }

@@ -29,6 +29,7 @@ const state = {
   pollGap: new Map(), // key -> observed seconds between that row's scans, smoothed
   lastScanAt: new Map(), // key -> ms of the previous scan we rendered
   turnOpen: new Map(), // job id -> whether that turn's body is expanded (default: only the newest)
+  zoom: 100, // page zoom percent (the browser's own Ctrl +/- is not always delivered)
 };
 
 const $ = (id) => document.getElementById(id);
@@ -69,13 +70,24 @@ function elapsed(j) {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`;
 }
 
-function rank(w) {
-  const v = String(w.verdict || "");
-  if (v.startsWith("UNMERGED")) return 0;
-  if (w.dirty || w.untracked) return 1;
-  if (v.startsWith("MERGED") || v.startsWith("NO COMMITS") || v.startsWith("EMPTY REPO")) return 2;
-  if (v === "ON MAIN") return 3;
-  return 4;
+// Row order inside a project: work that is happening right now comes first. Our own running agents
+// lead (that is the panel driving a process), then any other live session, then everything else
+// newest-life-first — the worktree that showed signs of life most recently sits at the top.
+function rowTier(row) {
+  if (panelFor(row)?.running) return 0;
+  if (isRowLive(row)) return 1;
+  return 2;
+}
+
+function lifeAt(row) {
+  const alive = Date.parse(row.lastAliveAt || "");
+  return Number.isFinite(alive) ? alive : Number.NEGATIVE_INFINITY; // never alive sorts last
+}
+
+function orderRows(rows) {
+  return rows.sort(
+    (a, b) => rowTier(a) - rowTier(b) || lifeAt(b) - lifeAt(a) || String(a.name).localeCompare(String(b.name)),
+  );
 }
 
 function verdictClass(v) {
@@ -1039,7 +1051,7 @@ function chipsHtml(name) {
   if (noCommits) out.push(`<span class="chip">${noCommits} no commits</span>`);
   if (unmerged) out.push(`<span class="chip bad">${unmerged} unmerged</span>`);
   if (dirty) out.push(`<span class="chip warn">${dirty} dirty</span>`);
-  if (live) out.push(`<span class="chip warn">${live} live</span>`);
+  if (live) out.push(`<span class="chip live">${live} live</span>`);
   if (open) out.push(`<span class="chip">${open} open idle</span>`);
   if (serving) out.push(`<span class="chip info">${serving} serving</span>`);
   if (panelRunning) out.push(`<span class="chip warn">${panelRunning} panel agent${panelRunning === 1 ? "" : "s"}</span>`);
@@ -1104,7 +1116,7 @@ function rootChips(projects) {
   ];
   if (unmerged) out.push(`<span class="chip bad">${unmerged} unmerged</span>`);
   if (dirty) out.push(`<span class="chip warn">${dirty} dirty</span>`);
-  if (live) out.push(`<span class="chip warn">${live} live</span>`);
+  if (live) out.push(`<span class="chip live">${live} live</span>`);
   return out.join("");
 }
 
@@ -1171,14 +1183,20 @@ function refreshChips(name) {
 function reorder(name) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
-  const rows = [...state.rows.values()].filter((r) => r.project === name).sort((a, b) => rank(a) - rank(b) || String(a.name).localeCompare(String(b.name)));
+  const rows = orderRows([...state.rows.values()].filter((r) => r.project === name));
+  const want = [];
   for (const r of rows) {
     const k = keyOf(name, r.path);
     const tr = state.rowEls.get(k);
-    if (tr) tbody.appendChild(tr);
+    if (tr) want.push(tr);
     const d = state.detailEls.get(k);
-    if (d) tbody.appendChild(d);
+    if (d) want.push(d);
   }
+  // Only touch the DOM when the order really changed: this runs on every row event, and re-appending
+  // identical nodes would fight the scroll position while someone is reading.
+  const current = [...tbody.children];
+  if (current.length === want.length && current.every((el, i) => el === want[i])) return;
+  for (const el of want) tbody.appendChild(el);
 }
 
 function placeRow(project, row, { flash = false } = {}) {
@@ -1240,9 +1258,7 @@ function renderProjectRows(name) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
   tbody.innerHTML = "";
-  const rows = [...state.rows.values()]
-    .filter((r) => r.project === name)
-    .sort((a, b) => rank(a) - rank(b) || String(a.name).localeCompare(String(b.name)));
+  const rows = orderRows([...state.rows.values()].filter((r) => r.project === name));
   for (const row of rows) {
     const key = keyOf(name, row.path);
     const holder = document.createElement("tbody");
@@ -1669,6 +1685,68 @@ setInterval(() => {
 setInterval(() => {
   if (!state.paused) resync();
 }, 30000);
+
+// ---- page zoom -------------------------------------------------------------------------------
+// Nothing in this page blocks the browser's own zoom, but when it is opened inside a shell that
+// swallows Ctrl +/- (an embedded pane, a kiosk window) there is no way to make the table bigger.
+// So the page owns a scale factor as well: Ctrl+wheel, Ctrl +/- and the − 100% + control above.
+const ZOOM_KEY = "wtgui.zoom";
+const ZOOM_MIN = 50;
+const ZOOM_MAX = 250;
+
+function applyZoom(pct, { save = true } = {}) {
+  const n = Number(pct);
+  const z = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, Number.isFinite(n) ? Math.round(n / 10) * 10 : 100));
+  state.zoom = z;
+  // `zoom` scales layout, not just paint, so the sticky header and the table stay coherent.
+  document.documentElement.style.zoom = z === 100 ? "" : String(z / 100);
+  const label = $("zoom-pct");
+  if (label) label.textContent = `${z}%`;
+  if (save) {
+    try {
+      localStorage.setItem(ZOOM_KEY, String(z));
+    } catch {
+      /* private mode: the zoom just will not persist */
+    }
+  }
+}
+
+function zoomBy(delta) {
+  applyZoom((state.zoom || 100) + delta);
+}
+
+$("btn-zoom-in")?.addEventListener("click", () => zoomBy(10));
+$("btn-zoom-out")?.addEventListener("click", () => zoomBy(-10));
+
+document.addEventListener(
+  "wheel",
+  (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    zoomBy(e.deltaY < 0 ? 10 : -10);
+  },
+  { passive: false },
+);
+
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  if (e.key === "+" || e.key === "=") {
+    e.preventDefault();
+    zoomBy(10);
+  } else if (e.key === "-" || e.key === "_") {
+    e.preventDefault();
+    zoomBy(-10);
+  } else if (e.key === "0") {
+    e.preventDefault();
+    applyZoom(100);
+  }
+});
+
+try {
+  applyZoom(Number(localStorage.getItem(ZOOM_KEY) || 100), { save: false });
+} catch {
+  applyZoom(100, { save: false });
+}
 
 (async function boot() {
   try {

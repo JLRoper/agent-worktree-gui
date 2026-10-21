@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes" />
   <title>Worktree Monitor</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
@@ -16,6 +16,11 @@
     <div class="controls">
       <span class="meta" id="stream-state">—</span>
       <span class="meta" id="stream-rate"></span>
+      <span class="zoom" title="page zoom — Ctrl+wheel, Ctrl + / Ctrl − , Ctrl 0 resets">
+        <button id="btn-zoom-out" type="button" title="zoom out (Ctrl −)">−</button>
+        <span class="mono" id="zoom-pct">100%</span>
+        <button id="btn-zoom-in" type="button" title="zoom in (Ctrl +)">+</button>
+      </span>
       <button id="btn-refresh" type="button">Refresh now</button>
       <button id="btn-fetch" type="button">Fetch remotes</button>
       <button id="btn-pause" type="button">Pause</button>
