@@ -715,12 +715,13 @@ function conversationHtml(conv) {
       ${blocks.html}
       <div class="job-foot">${foot}</div>
       <div class="reply">
-        <textarea class="reply-box" data-reply="${esc(thread)}" rows="2" spellcheck="false"
-          placeholder="${running ? "a turn is still running — a reply queues another one" : "Reply to this agent — continues the same Hermes thread, Enter to send"}"></textarea>
+        <div class="reply-wrap">
+          <textarea class="reply-box" data-reply="${esc(thread)}" rows="2" spellcheck="false"
+            placeholder="${running ? "a turn is still running — a reply queues another one" : "Reply to this agent — continues the same Hermes thread, Enter to send"}"></textarea>
+          <button class="btn-reply" data-thread="${esc(thread)}" type="button" title="send this as the next turn (Enter)">Send reply</button>
+        </div>
         <div class="reply-row">
           <span class="warnline" data-reply-warn="${esc(thread)}"></span>
-          <span class="spacer"></span>
-          <button class="btn-reply" data-thread="${esc(thread)}" type="button">Send reply</button>
         </div>
       </div>
     </div>
