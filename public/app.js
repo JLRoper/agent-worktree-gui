@@ -895,7 +895,17 @@ function updateSpawnNote() {
 }
 
 // The per-worktree "\u25b6": run an agent INSIDE that existing worktree (no new tree at all).
+// Any click that aims one of the fixed cards must also show it: filling in a form the reader cannot
+// see is worse than not aiming it at all.
+function revealCard(id) {
+  if (!state.collapsedFixed.has(id)) return;
+  state.collapsedFixed.delete(id);
+  saveCollapsedFixed();
+  applyFixedCollapse(id);
+}
+
 function focusSpawnForWorktree(path, name) {
+  revealCard("newagent");
   $("job-cwd").value = path;
   $("job-existing").checked = true;
   state.spawnTarget = name || null;
@@ -909,6 +919,7 @@ function focusSpawnForWorktree(path, name) {
 
 // The green "+": aim the spawn card at that project and put the cursor in the prompt.
 function focusSpawn(projectName) {
+  revealCard("newagent");
   if (projectName) {
     const p = (state.spawn.projects || []).find((x) => x.name === projectName);
     $("job-project").value = projectName;
@@ -967,6 +978,7 @@ function panelAgentsByPath() {
 // Jump from a worktree row to the agent card it belongs to.
 function jumpToAgent(thread) {
   if (!thread) return;
+  revealCard("agents");
   if (state.collapsedJobs.has(thread)) {
     state.collapsedJobs.delete(thread);
     saveCollapsedJobs();
