@@ -273,6 +273,7 @@ function toggleRoot(root) {
   else state.collapsedRoots.add(root);
   saveCollapsedRoots();
   applyRootCollapse(root);
+  paintCollapseAll();
 }
 
 function applyRootCollapse(root) {
@@ -353,32 +354,45 @@ function toggleRootRecent(root) {
   renderRoot(root);
 }
 
-// One gesture for the whole board: fold every project section, or unfold them all again. Folder
-// headers stay put — collapsing a folder hides a whole scan root, which is a different question.
+// One gesture for the whole board: fold every folder AND every project section, or unfold them all
+// again. Collapsing has to include the folders — with 95 projects across a few roots, folding only
+// the projects still leaves a long list of folder headers that each need their own click.
+function boardRoots() {
+  return [...document.querySelectorAll("section.root-group")].map((s) => s.dataset.root).filter(Boolean);
+}
+
+function anythingOpen() {
+  const names = [...state.projects.keys()];
+  return names.some((n) => state.expandedProjects.has(n)) || boardRoots().some((r) => !state.collapsedRoots.has(r));
+}
+
 function paintCollapseAll() {
   const btn = $("btn-collapse-all");
   if (!btn) return;
+  const open = anythingOpen();
   const names = [...state.projects.keys()];
-  const anyOpen = names.some((n) => state.expandedProjects.has(n));
-  btn.textContent = anyOpen ? "Collapse all" : "Expand all";
-  btn.title = `${anyOpen ? "collapse" : "expand"} every project section (${names.length})`;
+  btn.textContent = open ? "Collapse all" : "Expand all";
+  btn.title = open
+    ? `collapse every folder and project section (${boardRoots().length} folders, ${names.length} projects)`
+    : `expand every folder and project section (${boardRoots().length} folders, ${names.length} projects)`;
 }
 
-function toggleAllProjects() {
+function toggleEverything() {
   const names = [...state.projects.keys()];
-  if (!names.length) return;
-  const anyOpen = names.some((n) => state.expandedProjects.has(n));
-  for (const n of names) {
-    if (anyOpen) state.expandedProjects.delete(n);
-    else state.expandedProjects.add(n);
+  const roots = boardRoots();
+  if (!names.length && !roots.length) return;
+  const collapse = anythingOpen();
+  if (collapse) {
+    state.expandedProjects.clear();
+    state.expanded.clear(); // an open row would otherwise come back when a project is reopened
+    for (const r of roots) state.collapsedRoots.add(r);
+  } else {
+    for (const n of names) state.expandedProjects.add(n);
+    for (const r of roots) state.collapsedRoots.delete(r);
   }
-  if (anyOpen) state.expanded.clear();
   saveExpandedProjects();
-  for (const n of names) {
-    applyProjectCollapse(n);
-    renderProjectRows(n); // opening builds the rows, closing drops them
-  }
-  for (const root of [...document.querySelectorAll("section.root-group")].map((s) => s.dataset.root)) paintRootButton(root);
+  saveCollapsedRoots();
+  renderAll(); // folders and projects both changed shape: one rebuild is cheaper than patching two layers
   paintCollapseAll();
 }
 
@@ -2108,7 +2122,7 @@ async function post(route) {
 }
 
 $("btn-refresh").addEventListener("click", () => post("/api/refresh"));
-$("btn-collapse-all").addEventListener("click", () => toggleAllProjects());
+$("btn-collapse-all").addEventListener("click", () => toggleEverything());
 $("btn-fetch").addEventListener("click", () => post("/api/fetch"));
 $("job-project").addEventListener("change", () => {
   const p = selectedProject();
