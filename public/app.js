@@ -707,7 +707,7 @@ function turnHead(turn, index, open, copy = "") {
     turn.status === "running" || turn.status === "starting"
       ? `running ${elapsed(turn)}`
       : `${turn.status} · ${elapsed(turn)}${turn.tokens?.total ? ` · ${turn.tokens.total} tok` : ""}`;
-  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> ${esc(label)} · ${esc(state_)}</div>`;
+  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> <span class="turn-text">${esc(label)} · ${esc(state_)}</span></div>`;
 }
 
 // One turn: its head, then either the full prompt + output, or a single line carrying the request
@@ -3296,8 +3296,17 @@ setInterval(() => {
     const card = document.querySelector(`.job[data-thread="${CSS.escape(j.thread || j.id)}"]`);
     const foot = card?.querySelector(".job-foot");
     if (foot) foot.innerHTML = `<span class="dimmer mono">running ${esc(elapsed(j))}</span>`;
-    const head = card?.querySelector(`[data-turn-head="${CSS.escape(j.id)}"]`);
-    if (head) head.textContent = `turn ${j.turn || "?"} · running ${elapsed(j)}`;
+    // Only the status text is repainted. Writing head.textContent here deleted the pin star and the
+    // chevron every second and put them back on the next render — the star visibly popped in and out
+    // while a turn ran, and the row reflowed with it.
+    // Both copies (page and pinned block) carry the same id, so update every head, not just the first.
+    const heads = card?.querySelectorAll(`[data-turn-head="${CSS.escape(j.id)}"]`) || [];
+    for (const head of heads) {
+      const txt = head.querySelector(".turn-text");
+      if (!txt) continue;
+      const next = `turn ${j.turn || "?"} · running ${elapsed(j)}`;
+      if (txt.textContent !== next) txt.textContent = next;
+    }
   }
   const bits = [];
   if (state.pool) bits.push(`pool ${state.pool.inFlight}/${state.settings.threads || "?"}`);
