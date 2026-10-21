@@ -377,6 +377,28 @@ function boardRoots() {
 // "Collapse all" has to include them.
 const FIXED_CARDS = ["newagent", "agents"];
 
+// Keep the row you clicked exactly where it was under the pointer while its accordion opens or closes.
+// The inserted content shifts everything around it (and the browser's scroll anchoring picks an element
+// above), so without this the row slides out from under the cursor. `findEl` is a function because a
+// rebuild can replace the node; it is re-queried after the mutation.
+function keepInPlace(findEl, mutate) {
+  const el = findEl();
+  if (!el) return mutate();
+  const before = el.getBoundingClientRect().top;
+  mutate();
+  const settle = () => {
+    const after = findEl();
+    if (!after) return;
+    const delta = after.getBoundingClientRect().top - before;
+    // A small correction only: a huge delta means the board really did rearrange, and yanking the page
+    // to chase it would be worse than letting it move.
+    if (Math.abs(delta) >= 1 && Math.abs(delta) < 600) window.scrollBy(0, delta);
+  };
+  settle();
+  setTimeout(settle, 0);
+  setTimeout(settle, 80);
+}
+
 function anythingOpen() {
   const names = [...state.projects.keys()];
   return (
@@ -2749,12 +2771,14 @@ document.addEventListener("click", async (e) => {
   }
   const rhead = e.target.closest(".root-head[data-toggle-root]");
   if (rhead) {
-    toggleRoot(rhead.dataset.toggleRoot);
+    const root = rhead.dataset.toggleRoot;
+    keepInPlace(() => document.querySelector(`.root-head[data-toggle-root="${CSS.escape(root)}"]`), () => toggleRoot(root));
     return;
   }
   const phead = e.target.closest(".project-head[data-toggle-project]");
   if (phead) {
-    toggleProject(phead.dataset.toggleProject);
+    const name = phead.dataset.toggleProject;
+    keepInPlace(() => document.querySelector(`.project-head[data-toggle-project="${CSS.escape(name)}"]`), () => toggleProject(name));
     return;
   }
   // The fixed cards (New agent / Agents): the title row collapses them, but their own controls
@@ -2763,7 +2787,8 @@ document.addEventListener("click", async (e) => {
   if (fixedHead) {
     if (e.target.closest("button, input, select, textarea, a, label")) return;
     e.preventDefault();
-    toggleFixed(fixedHead.dataset.toggleFixed);
+    const id = fixedHead.dataset.toggleFixed;
+    keepInPlace(() => document.querySelector(`[data-toggle-fixed="${CSS.escape(id)}"]`), () => toggleFixed(id));
     return;
   }
   const rowAgent = e.target.closest(".btn-row-agent");
@@ -2984,7 +3009,8 @@ document.addEventListener("click", async (e) => {
   const turnToggle = e.target.closest("[data-toggle-turn]");
   if (turnToggle) {
     e.preventDefault();
-    toggleTurn(turnToggle.dataset.toggleTurn);
+    const id = turnToggle.dataset.toggleTurn;
+    keepInPlace(() => document.querySelector(`[data-turn-head="${CSS.escape(id)}"]`), () => toggleTurn(id));
     return;
   }
   // Turn pagination: the arrows sit in the card head, next to the turn count.
@@ -3008,7 +3034,8 @@ document.addEventListener("click", async (e) => {
   // attach, clear, maximize, cancel, the attach picker and its select all live in the head row.
   const head = e.target.closest(".job-head");
   if (head && !e.target.closest("button, a, input, select, textarea, label, [data-attach-row], [data-toggle-turn]")) {
-    toggleJob(head.dataset.toggle);
+    const id = head.dataset.toggle;
+    keepInPlace(() => document.querySelector(`.job[data-thread="${CSS.escape(id)}"] .job-head`), () => toggleJob(id));
     return;
   }
   const btn = e.target.closest(".btn-cancel");
@@ -3115,20 +3142,25 @@ $("projects").addEventListener("click", (e) => {
   const key = tr.dataset.key;
   const row = state.rows.get(key);
   if (!row) return;
-  if (state.expanded.has(key)) {
-    state.expanded.delete(key);
-    state.detailEls.get(key)?.remove();
-    state.detailEls.delete(key);
-    tr.classList.remove("expanded");
-  } else {
-    state.expanded.add(key);
-    const holder = document.createElement("tbody");
-    holder.innerHTML = detailHtml(row);
-    const dEl = holder.firstElementChild;
-    tr.after(dEl);
-    state.detailEls.set(key, dEl);
-    tr.classList.add("expanded");
-  }
+  keepInPlace(
+    () => document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`),
+    () => {
+      if (state.expanded.has(key)) {
+        state.expanded.delete(key);
+        state.detailEls.get(key)?.remove();
+        state.detailEls.delete(key);
+        tr.classList.remove("expanded");
+      } else {
+        state.expanded.add(key);
+        const holder = document.createElement("tbody");
+        holder.innerHTML = detailHtml(row);
+        const dEl = holder.firstElementChild;
+        tr.after(dEl);
+        state.detailEls.set(key, dEl);
+        tr.classList.add("expanded");
+      }
+    },
+  );
 });
 
 setInterval(() => {
