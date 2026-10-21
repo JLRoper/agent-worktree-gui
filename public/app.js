@@ -30,6 +30,7 @@ const state = {
   pollGap: new Map(), // key -> observed seconds between that row's scans, smoothed
   lastScanAt: new Map(), // key -> ms of the previous scan we rendered
   turnOpen: new Map(), // job id -> whether that turn's body is expanded (default: only the newest)
+  maximized: null, // thread id of the conversation pulled out to fill the window
   zoom: 100, // page zoom percent (the browser's own Ctrl +/- is not always delivered)
 };
 
@@ -373,6 +374,53 @@ function toggleJob(id) {
   else state.collapsedJobs.add(id);
   saveCollapsedJobs();
   renderConversation(id);
+  // Opening a conversation should land on the newest output, not on the first line of a turn from
+  // an hour ago — the whole point of opening it is usually to see where the agent got to.
+  if (!state.collapsedJobs.has(id)) scrollThreadToBottom(id);
+}
+
+// A chat pulled out to fill the window. One at a time: opening another closes the first, and Esc
+// puts it back, so there is always a way out that does not depend on finding a small button.
+function setMaximized(thread) {
+  const next = thread && state.maximized !== thread ? thread : null;
+  state.maximized = next;
+  document.body.classList.toggle("modal-open", Boolean(next));
+  for (const el of document.querySelectorAll(".job.maximized")) el.classList.remove("maximized");
+  for (const btn of document.querySelectorAll(".btn-max")) {
+    btn.textContent = "\u2922";
+    btn.title = "expand this chat to fill the window (Esc to close)";
+  }
+  if (next) {
+    // A minimized card cannot be maximized: open it first.
+    if (state.collapsedJobs.has(next)) {
+      state.collapsedJobs.delete(next);
+      saveCollapsedJobs();
+      renderConversation(next);
+    }
+    const card = document.querySelector(`.job[data-thread="${CSS.escape(next)}"]`);
+    if (card) {
+      card.classList.add("maximized");
+      const btn = card.querySelector(".btn-max");
+      if (btn) {
+        btn.textContent = "\u2921";
+        btn.title = "shrink this chat back into the list (Esc)";
+      }
+      card.scrollIntoView({ block: "start" });
+    }
+    scrollThreadToBottom(next);
+  }
+}
+
+// Put the newest output in view: the last turn's scrollback goes to its bottom, and so does the
+// maximized card's body when the whole chat is pulled out.
+function scrollThreadToBottom(thread) {
+  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+  if (!card) return;
+  const outs = [...card.querySelectorAll("pre.job-out")];
+  const out = outs[outs.length - 1];
+  if (out) out.scrollTop = out.scrollHeight;
+  const body = card.querySelector(".job-body");
+  if (card.classList.contains("maximized") && body) body.scrollTop = body.scrollHeight;
 }
 
 function foldAll(collapsed) {
@@ -451,6 +499,11 @@ function toggleTurn(id) {
   if (!conv) return;
   state.turnOpen.set(id, !turnIsOpen(conv, turn));
   renderConversation(conv.thread);
+  // A turn that was just opened should show its newest lines, not its first line.
+  if (turnIsOpen(conv, turn)) {
+    const pre = document.querySelector(`pre[data-out="${CSS.escape(id)}"]`);
+    if (pre) pre.scrollTop = pre.scrollHeight;
+  }
 }
 
 function turnHead(turn, index, open) {
@@ -477,6 +530,7 @@ function turnBlock(conv, turn, index) {
 function conversationHtml(conv) {
   const { thread, turns, latest } = conv;
   const collapsed = state.collapsedJobs.has(thread);
+  const maximized = state.maximized === thread;
   const runningTurn = turns.find((t) => t.status === "running" || t.status === "starting");
   const running = Boolean(runningTurn);
   const meta = [
@@ -491,7 +545,7 @@ function conversationHtml(conv) {
     ? `<span class="dimmer mono">running ${esc(elapsed(latest))}</span>`
     : `<span class="mono dim">exit ${latest.exitCode ?? "?"} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${latest.tokens.total}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>`;
   const blocks = turns.map((t, i) => turnBlock(conv, t, i)).join("");
-  return `<div class="job${collapsed ? " collapsed" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}">
+  return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}">
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
       <span class="pill ${esc(latest.status)}">${esc(latest.status)}</span>
@@ -499,6 +553,7 @@ function conversationHtml(conv) {
       <span class="spacer"></span>
       <span class="mono dimmer thread-name" title="Hermes session thread — continue it any time">${esc(thread)}</span>
       ${latest.yolo ? '<span class="pill yolo">--yolo</span>' : ""}
+      <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
       ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button">Cancel</button>` : ""}
     </div>
     ${collapsed ? `<div class="job-preview mono" data-preview="${esc(thread)}">${esc(jobPreview(latest))}</div>` : ""}
@@ -638,6 +693,9 @@ function renderJobs() {
     (folded ? `<span class="chip">${folded} minimized</span>` : "");
   const fold = $("btn-fold-jobs");
   if (fold) fold.textContent = convs.length && folded === convs.length ? "Expand all" : "Minimize all";
+  // The cards were just rebuilt, so every scrollback is back at its first line. Opening the page
+  // (or a snapshot rebuilding the list) should land on the newest output, not an hour-old first line.
+  for (const c of convs) if (!state.collapsedJobs.has(c.thread)) scrollThreadToBottom(c.thread);
 }
 
 function updateJob(j, { scroll = false } = {}) {
@@ -654,6 +712,11 @@ function renderConversation(thread, { scroll = false } = {}) {
   const conv = conversations().find((c) => c.thread === thread);
   const el = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
   if (!conv) return renderJobs();
+  // Was the reader looking at the newest output? If so keep them there across the re-render; if
+  // they had scrolled up to read something, do not yank the view out from under them.
+  const prevOuts = el ? [...el.querySelectorAll("pre.job-out")] : [];
+  const prevOut = prevOuts[prevOuts.length - 1];
+  const wasAtBottom = prevOut ? prevOut.scrollHeight - prevOut.scrollTop - prevOut.clientHeight < 32 : true;
   const holder = document.createElement("div");
   holder.innerHTML = conversationHtml(conv);
   const fresh = holder.firstElementChild;
@@ -661,7 +724,7 @@ function renderConversation(thread, { scroll = false } = {}) {
   el.replaceWith(fresh);
   restoreReplyDraft(thread);
   const out = fresh.querySelector(`pre[data-out="${CSS.escape(conv.latest.id)}"]`);
-  if (out && (scroll || conv.latest.status === "running")) out.scrollTop = out.scrollHeight;
+  if (out && (scroll || wasAtBottom || conv.latest.status === "running")) out.scrollTop = out.scrollHeight;
 }
 
 function appendJobLine(evt) {
@@ -1683,6 +1746,15 @@ document.addEventListener("click", async (e) => {
     await sendReply(replyBtn.dataset.thread);
     return;
   }
+  // "Pull this chat out": the maximise button sits inside the head, so it must not also toggle
+  // the card's collapse state.
+  const maxBtn = e.target.closest("[data-max-thread]");
+  if (maxBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    setMaximized(maxBtn.dataset.maxThread);
+    return;
+  }
   // A turn folds on its own: the head row or the one-line request opens/closes that turn,
   // independently of the conversation card it sits in.
   const turnToggle = e.target.closest("[data-toggle-turn]");
@@ -1708,6 +1780,12 @@ document.addEventListener("click", async (e) => {
 
 // Reply affordances are re-created on every render, so they are handled at document level.
 document.addEventListener("keydown", (e) => {
+  // Esc puts a pulled-out chat back; nothing else in the page holds that key.
+  if (e.key === "Escape" && state.maximized) {
+    e.preventDefault();
+    setMaximized(null);
+    return;
+  }
   // The folder clone input: Enter clones, Escape closes the row.
   const cloneInput = e.target.closest && e.target.closest("[data-clone-input]");
   if (cloneInput) {

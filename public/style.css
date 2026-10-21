@@ -399,6 +399,32 @@ button.btn-reply:hover { background: #24466a; }
 .job-head { cursor: pointer; user-select: none; }
 .job-head .chev { color: var(--dimmer); font-size: 10px; width: 9px; display: inline-block; }
 .job-head:hover .chev { color: var(--text); }
+
+/* Pull one chat out to fill the window: same card, fixed to the viewport, output stretches. */
+button.btn-max { padding: 1px 6px; font-size: 12px; line-height: 1.2; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
+button.btn-max:hover { color: var(--text); background: #232936; }
+body.modal-open { overflow: hidden; }
+.job.maximized {
+  position: fixed;
+  inset: 10px;
+  z-index: 90;
+  margin: 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .65);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 10px 14px 12px;
+}
+.job.maximized .job-head, .job.maximized .job-foot, .job.maximized .reply { flex: none; }
+.job.maximized .job-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
+.job.maximized .turn { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.job.maximized .turn.folded { display: block; flex: 0 0 auto; }
+.job.maximized .job-prompt { flex: none; }
+.job.maximized .job-out { max-height: none; flex: 1; min-height: 0; }
+.job.maximized .reply-box { min-height: 46px; }
 .job-prompt, .job-cmd, .job-out, .job-foot { margin-left: 18px; }
 .job-preview { display: none; }
 .job.collapsed { padding-bottom: 9px; }
