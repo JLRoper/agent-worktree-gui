@@ -20,6 +20,9 @@ const state = {
   jobs: new Map(),
   jobLines: new Map(),
   replyDrafts: {},
+  // Up/Down in a reply box walks this thread's previous prompts; this remembers how far back you are
+  // and the draft you started from.
+  replyNav: new Map(),
   // Transcript scroll per console (pre[data-out]). Folding a project throws the console markup away,
   // so the position has to live outside the DOM or it comes back at the top.
   outScrolls: {},
@@ -973,6 +976,37 @@ async function openInBrowser(url) {
   }
 }
 
+// Reply history: the prompts of this thread's earlier turns, oldest first. Up walks back through them,
+// Down walks forward and finally back to whatever you were typing.
+function turnPrompts(thread) {
+  return [...state.jobs.values()]
+    .filter((j) => (j.thread || j.id) === thread)
+    .sort((a, b) => (a.turn || 0) - (b.turn || 0))
+    .map((j) => String(j.prompt || "").trim())
+    .filter(Boolean);
+}
+
+function recallReply(box, step) {
+  const thread = box.dataset.reply;
+  if (!thread) return;
+  const prompts = turnPrompts(thread);
+  if (!prompts.length) return;
+  const nav = state.replyNav.get(thread) || { back: 0, stash: box.value };
+  // `back` counts steps behind the draft: 0 = what you were typing, 1 = newest prompt, 2 = the one
+  // before it, and so on.
+  const back = Math.max(0, Math.min(prompts.length, nav.back + step));
+  const value = back === 0 ? nav.stash : prompts[prompts.length - back];
+  state.replyNav.set(thread, { back, stash: nav.stash });
+  box.value = value;
+  const end = value.length;
+  try {
+    box.setSelectionRange(end, end);
+  } catch {
+    /* not a text field */
+  }
+  state.replyDrafts[thread] = value;
+}
+
 async function sendReply(thread) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   const text = (box?.value || "").trim();
@@ -988,6 +1022,8 @@ async function sendReply(thread) {
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     state.replyDrafts[thread] = "";
+    // A sent reply ends the history walk: the next Up starts from the newest prompt again.
+    state.replyNav.delete(thread);
     if (box) box.value = "";
     updateJob(d.job, { scroll: true });
     // Sending a reply is you switching to the new turn: fold everything before it, including turns
@@ -3130,6 +3166,18 @@ document.addEventListener("keydown", (e) => {
   }
   const box = e.target.closest && e.target.closest(".reply-box");
   if (!box) return;
+  // Up/Down walk the thread's previous prompts, shell style: only from the very start (Up) or the very
+  // end (Down) of the text, so the arrows still move the caret inside a multi-line reply.
+  if (e.key === "ArrowUp" && !e.shiftKey && box.selectionStart === 0 && box.selectionEnd === 0) {
+    e.preventDefault();
+    recallReply(box, 1);
+    return;
+  }
+  if (e.key === "ArrowDown" && !e.shiftKey && box.selectionStart === box.value.length && box.selectionEnd === box.value.length) {
+    e.preventDefault();
+    recallReply(box, -1);
+    return;
+  }
   if (e.key === "Enter" && e.shiftKey) {
     e.preventDefault();
     insertNewlineAtCaret(box);
