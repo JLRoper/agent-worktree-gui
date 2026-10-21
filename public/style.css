@@ -459,7 +459,7 @@ button.btn-max:hover { color: var(--text); background: #232936; }
 .live-block ul { margin: 4px 0 0 16px; padding: 0; }
 .live-block li { font-size: 11.5px; color: var(--dim); }
 /* star a turn to keep it above the paged turns (still accordionable, still in its page) */
-button.btn-star { background: transparent; border: none; padding: 0 5px 0 0; margin: 0; font-size: 11px; line-height: 1; color: var(--dimmer); cursor: pointer; }
+button.btn-star { background: transparent; border: none; padding: 0 6px 0 0; margin: 0; font-size: 16.5px; line-height: 1; color: var(--dimmer); cursor: pointer; vertical-align: -2px; }
 button.btn-star:hover { color: var(--text); }
 button.btn-star.on { color: #ffd479; }
 .pinned-turns { margin: 6px 0 8px; padding: 3px 0 3px 10px; border-left: 2px solid #6b4d16; }
