@@ -2428,10 +2428,20 @@ document.addEventListener("click", async (e) => {
     }
     const row = document.querySelector(`[data-attach-row="${CSS.escape(thread)}"]`);
     if (row) {
-      row.hidden = !row.hidden;
-      if (!row.hidden) {
+      // A minimized card would show a dropdown hanging off a one-liner; unfold it first so the
+      // picker has context, then reveal it on the rebuilt card.
+      const card = attachToggle.closest(".job");
+      const minimized = Boolean(card && card.classList.contains("collapsed"));
+      if (minimized) {
+        state.collapsedJobs.delete(thread);
+        saveCollapsedJobs();
+        renderConversation(thread);
+      }
+      const fresh = document.querySelector(`[data-attach-row="${CSS.escape(thread)}"]`);
+      if (fresh) fresh.hidden = false;
+      if (fresh) {
         // Built on demand: the card may be rendered before any worktree row exists.
-        const sel = row.querySelector("select");
+        const sel = fresh.querySelector("select");
         if (sel && !sel.options.length) sel.innerHTML = worktreeOptionsHtml();
         // Start from the agent's current owner when the scan does not show it, so "attach" is a
         // deliberate re-point rather than a silent move to whatever the list happens to start with.
