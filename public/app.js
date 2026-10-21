@@ -373,9 +373,18 @@ function boardRoots() {
   return [...document.querySelectorAll("section.root-group")].map((s) => s.dataset.root).filter(Boolean);
 }
 
+// The two cards above the board — New agent and Unattached agents — fold like project sections, and
+// "Collapse all" has to include them.
+const FIXED_CARDS = ["newagent", "agents"];
+
 function anythingOpen() {
   const names = [...state.projects.keys()];
-  return names.some((n) => state.expandedProjects.has(n)) || boardRoots().some((r) => !state.collapsedRoots.has(r));
+  return (
+    names.some((n) => state.expandedProjects.has(n)) ||
+    boardRoots().some((r) => !state.collapsedRoots.has(r)) ||
+    // The two fixed cards fold too, and "Collapse all" means all of it.
+    FIXED_CARDS.some((id) => !state.collapsedFixed.has(id))
+  );
 }
 
 function paintCollapseAll() {
@@ -398,13 +407,18 @@ function toggleEverything() {
     state.expandedProjects.clear();
     state.expanded.clear(); // an open row would otherwise come back when a project is reopened
     for (const r of roots) state.collapsedRoots.add(r);
+    for (const id of FIXED_CARDS) state.collapsedFixed.add(id);
   } else {
     for (const n of names) state.expandedProjects.add(n);
     for (const r of roots) state.collapsedRoots.delete(r);
+    for (const id of FIXED_CARDS) state.collapsedFixed.delete(id);
   }
   saveExpandedProjects();
   saveCollapsedRoots();
+  saveCollapsedFixed();
   renderAll(); // folders and projects both changed shape: one rebuild is cheaper than patching two layers
+  // The fixed cards live in the static markup, so renderAll does not touch them.
+  for (const id of FIXED_CARDS) applyFixedCollapse(id);
   paintCollapseAll();
 }
 
