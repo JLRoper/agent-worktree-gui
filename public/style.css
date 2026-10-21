@@ -457,6 +457,10 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
 .reply-actions button.btn-reply { position: static; left: auto; bottom: auto; }
 .reply-actions button.btn-cancel { padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #3a1f22; border-color: #5c2a2e; color: #ffb3b3; }
 .reply-actions button.btn-cancel:hover { background: #4a262a; }
+.reply-actions button.btn-reply:disabled { opacity: .45; cursor: default; }
+.reply-actions button.btn-queue { padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #2a2f3a; border-color: #3b4757; color: #cfd8e6; }
+.reply-actions button.btn-queue:hover { background: #333a47; }
+.queue-note { font-size: 11px; color: #ffd479; }
 /* display:block, or the inline-block baseline leaves ~5px of the wrap under the textarea and the
    button's bottom offset is measured from there — which is why it sat on the border. */
 .reply-wrap .reply-box { display: block; padding-bottom: 34px; vertical-align: top; }

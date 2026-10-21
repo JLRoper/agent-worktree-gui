@@ -23,6 +23,9 @@ const state = {
   // Up/Down in a reply box walks this thread's previous prompts; this remembers how far back you are
   // and the draft you started from.
   replyNav: new Map(),
+  // Replies typed while the agent is still working, in the order they were written. They go out one
+  // at a time as each turn finishes: Hermes refuses a second session on a thread already running.
+  replyQueue: new Map(),
   // Transcript scroll per console (pre[data-out]). Folding a project throws the console markup away,
   // so the position has to live outside the DOM or it comes back at the top.
   outScrolls: {},
@@ -731,6 +734,9 @@ function conversationHtml(conv) {
   const homeless = isHomelessConv(conv);
   const runningTurn = turns.find((t) => t.status === "running" || t.status === "starting");
   const running = Boolean(runningTurn);
+  const queue = state.replyQueue.get(thread) || [];
+  const queued = queue.length;
+  const queuedTitle = queue.map((t, i) => `${i + 1}. ${t}`).join("\n");
   const runningNow = running;
   // A pending approval for this conversation means the agent is not thinking, it is waiting on you.
   const waitingApproval = [...state.approvals.values()].find((a) => a && a.thread && a.thread === thread) || null;
@@ -801,7 +807,9 @@ function conversationHtml(conv) {
           <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"
             placeholder="${running ? "a turn is still running — a reply queues another one" : "Reply to this agent — continues the same Hermes thread, Enter to send"}"></textarea>
           <div class="reply-actions">
-            <button class="btn-reply" data-thread="${esc(thread)}" type="button" title="send this as the next turn (Enter)">Send reply</button>
+            <button class="btn-reply" data-thread="${esc(thread)}" type="button" title="${running ? "a turn is still running — queue it instead" : "send this as the next turn (Enter)"}"${running ? " disabled" : ""}>Send reply</button>
+            ${running ? `<button class="btn-queue" data-queue-reply="${esc(thread)}" type="button" title="hold this reply and send it the moment the current turn finishes">Queue reply</button>` : ""}
+            ${queued ? `<span class="queue-note mono" title="${esc(queuedTitle)}">${queued} queued</span>` : ""}
             ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button" title="cancel the run this agent is in the middle of">Cancel turn</button>` : ""}
           </div>
         </div>
@@ -988,6 +996,39 @@ function turnPrompts(thread) {
     .filter(Boolean);
 }
 
+// A reply typed while the agent is still working: hold it and start it the moment that turn ends, so
+// Hermes never sees a second session on the same thread at once (which it answers with "busy").
+function queueReply(thread, text) {
+  const q = state.replyQueue.get(thread) || [];
+  q.push(text);
+  state.replyQueue.set(thread, q);
+  renderConversation(thread);
+}
+
+function replyQueued(thread) {
+  return state.replyQueue.get(thread) || [];
+}
+
+function threadBusy(thread) {
+  return [...state.jobs.values()].some(
+    (j) => (j.thread || j.id) === thread && (j.status === "running" || j.status === "starting"),
+  );
+}
+
+async function drainReplyQueue(thread) {
+  const q = replyQueued(thread);
+  if (!q.length || threadBusy(thread)) return;
+  const text = q.shift();
+  if (!q.length) state.replyQueue.delete(thread);
+  else state.replyQueue.set(thread, q);
+  renderConversation(thread);
+  try {
+    await sendReply(thread, text);
+  } catch {
+    /* sendReply reports its own errors */
+  }
+}
+
 function recallReply(box, step) {
   const thread = box.dataset.reply;
   if (!thread) return;
@@ -1009,9 +1050,9 @@ function recallReply(box, step) {
   state.replyDrafts[thread] = value;
 }
 
-async function sendReply(thread) {
+async function sendReply(thread, preset = null) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-  const text = (box?.value || "").trim();
+  const text = String(preset ?? box?.value ?? "").trim();
   if (!text) return;
   const btn = document.querySelector(`.btn-reply[data-thread="${CSS.escape(thread)}"]`);
   if (btn) btn.disabled = true;
@@ -1026,7 +1067,8 @@ async function sendReply(thread) {
     state.replyDrafts[thread] = "";
     // A sent reply ends the history walk: the next Up starts from the newest prompt again.
     state.replyNav.delete(thread);
-    if (box) box.value = "";
+    // A queued reply must not wipe something the reader has since typed into the box.
+    if (box && (preset == null || !box.value.trim())) box.value = "";
     updateJob(d.job, { scroll: true });
     // Sending a reply is you switching to the new turn: fold everything before it, including turns
     // you had opened by hand, so the card shows one full chat — the one you are now in — instead of
@@ -1331,7 +1373,12 @@ function updateJob(j, { scroll = false } = {}) {
   if (!state.jobLines.has(j.id) && j.lines?.length) state.jobLines.set(j.id, j.lines.slice());
   renderConversation(j.thread || j.id, { scroll });
   // Starting or finishing a turn changes what the worktree rows should say about themselves.
-  if (statusChanged) repaintAgentState();
+  if (statusChanged) {
+    repaintAgentState();
+    // A queued reply goes out as soon as this thread has nothing running any more.
+    const t = j.thread || j.id;
+    if (!threadBusy(t)) void drainReplyQueue(t);
+  }
   // Ownership decides which container the card belongs to — the unattached list or a worktree's
   // agents block. Repaint both sides the moment it changes (a spawn that starts out owned, a `-w`
   // tree appearing, an attach), instead of leaving the card where it was until the next snapshot.
@@ -1370,6 +1417,8 @@ function conversationSignature(conv) {
     pinned,
     open,
     l.label || "",
+    // Queued replies show as a note next to the buttons; a change must repaint the card.
+    (state.replyQueue.get(conv.thread) || []).length,
     state.collapsedJobs.has(conv.thread) ? "c" : "o",
     state.maximized === conv.thread ? "m" : "-",
     isHomelessConv(conv) ? "h" : "-",
@@ -3129,6 +3178,26 @@ document.addEventListener("click", async (e) => {
   if (head && !e.target.closest("button, a, input, select, textarea, label, [data-attach-row], [data-toggle-turn]")) {
     const id = head.dataset.toggle;
     keepInPlace(() => document.querySelector(`.job[data-thread="${CSS.escape(id)}"] .job-head`), () => toggleJob(id));
+    return;
+  }
+  // Queue reply: hold the text (do not send) because a turn is running on this thread.
+  const queueBtn = e.target.closest("[data-queue-reply]");
+  if (queueBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const thread = queueBtn.dataset.queueReply;
+    const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+    const text = (box?.value || "").trim();
+    if (!text) {
+      if (box) box.focus();
+      return;
+    }
+    // Clear the draft first: queueReply rebuilds the card, and the rebuild would put the text back
+    // into the new box from the saved draft.
+    state.replyDrafts[thread] = "";
+    if (box) box.value = "";
+    queueReply(thread, text);
+    document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.focus();
     return;
   }
   const btn = e.target.closest(".btn-cancel");
