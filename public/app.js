@@ -2652,6 +2652,14 @@ $("job-prompt").addEventListener("input", () => {
   $("job-cmd").textContent = "preview a command to see exactly what would run…";
   $("job-cmd").classList.add("dimmer");
 });
+// Enter in the prompt spawns, the way it does in every other box here. Shift+Enter is a newline, so a
+// multi-line prompt is still possible.
+$("job-prompt").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || e.shiftKey) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (!$("btn-spawn").disabled) spawnAgent();
+});
 $("btn-pause").addEventListener("click", () => {
   state.paused = !state.paused;
   $("btn-pause").textContent = state.paused ? "Resume" : "Pause";
