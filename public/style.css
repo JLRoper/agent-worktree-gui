@@ -422,6 +422,9 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 }
 .turn-prompt:hover { opacity: 1; color: #e6e9ef; }
 .thread-name { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The name is the only thing allowed to give up width: without min-width:0 its nowrap text refuses to
+   shrink and pushes the buttons that follow it onto a second row. */
+.job-head .thread-name { min-width: 0; flex: 0 1 auto; }
 .reply {
   margin: 8px 0 2px 18px;
   padding-top: 8px;
