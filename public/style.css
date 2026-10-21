@@ -427,6 +427,8 @@ button.btn-reply:hover { background: #24466a; }
 /* Pull one chat out to fill the window: same card, fixed to the viewport, output stretches. */
 button.btn-max { padding: 1px 6px; font-size: 12px; line-height: 1.2; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
 button.btn-max:hover { color: var(--text); background: #232936; }
+/* the agent mark at the head of every agent row (parent row only, turns keep their own chevron) */
+.job-head .agent-glyph { flex: 0 0 auto; color: #c8a6ff; font-size: 13px; line-height: 1; }
 /* forget one agent session (two-step: first click arms it) */
 button.btn-clear-thread { padding: 1px 6px; font-size: 11px; line-height: 1.2; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
 button.btn-clear-thread:hover, button.btn-clear-thread.armed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }

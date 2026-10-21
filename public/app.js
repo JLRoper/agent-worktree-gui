@@ -553,6 +553,7 @@ function conversationHtml(conv) {
   const blocks = turns.map((t, i) => turnBlock(conv, t, i)).join("");
   return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}">
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
+      <span class="agent-glyph" title="a Hermes agent session — ⧉ marks an agent row">\u29c9</span>
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
       <span class="pill ${runningNow ? "pill-running" : `pill-notrunning${latest.status === "failed" ? " is-failed" : ""}`}" title="${esc(runningNow ? `running ${elapsed(latest)}` : `${latest.status} · exit ${latest.exitCode ?? "?"} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""}`)}">${runningNow ? "running" : "not-running"}</span>
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
