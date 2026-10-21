@@ -448,6 +448,12 @@ button.btn-reply:hover { background: #24466a; }
 /* Pull one chat out to fill the window: same card, fixed to the viewport, output stretches. */
 button.btn-max { padding: 1px 6px; font-size: 12px; line-height: 1.2; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
 button.btn-max:hover { color: var(--text); background: #232936; }
+/* star a turn to keep it above the paged turns (still accordionable, still in its page) */
+button.btn-star { background: transparent; border: none; padding: 0 5px 0 0; margin: 0; font-size: 11px; line-height: 1; color: var(--dimmer); cursor: pointer; }
+button.btn-star:hover { color: var(--text); }
+button.btn-star.on { color: #ffd479; }
+.pinned-turns { margin: 6px 0 8px; padding: 3px 0 3px 10px; border-left: 2px solid #6b4d16; }
+.pinned-head { display: flex; gap: 8px; align-items: center; font-size: 10.5px; letter-spacing: .04em; color: #ffd479; margin-bottom: 2px; }
 /* turns page five at a time: arrows sit next to the turn count in the card head */
 .turn-pager { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; }
 button.pager-btn { padding: 0 5px; font-size: 10px; line-height: 1.6; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 4px; }

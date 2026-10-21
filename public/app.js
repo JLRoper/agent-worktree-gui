@@ -33,6 +33,7 @@ const state = {
   turnOpen: new Map(), // job id -> whether that turn's body is expanded (default: only the newest)
   turnPage: new Map(), // thread -> how many pages of turns back from the newest (0 = newest page)
   gitOpen: new Set(), // row key -> the git/commit/diff accordion is unfolded
+  pinnedTurns: new Set(), // turn id -> starred, so it also shows above the paged turns
   maximized: null, // thread id of the conversation pulled out to fill the window
   zoom: 100, // page zoom percent (the browser's own Ctrl +/- is not always delivered)
 };
@@ -578,12 +579,12 @@ function conversations() {
   return out;
 }
 
-function turnBody(turn) {
+function turnBody(turn, copy = "") {
   const body = jobLines(turn.id)
     .slice(-300)
     .map((l) => `<div class="jl jl-${esc(l.kind || "raw")}" data-lid="${esc(l.lid ?? "")}">${esc(l.text ?? "")}</div>`)
     .join("") || '<div class="jl jl-dim">waiting for output…</div>';
-  return `<pre class="job-out" data-out="${esc(turn.id)}">${body}</pre>`;
+  return `<pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>`;
 }
 
 // A turn is open when the reader opened it, otherwise only the newest turn is: opening an agent
@@ -617,25 +618,27 @@ function turnPageOffset(thread, turnCount) {
   return Math.min(pages - 1, Math.max(0, state.turnPage.get(thread) || 0));
 }
 
-function turnHead(turn, index, open) {
+function turnHead(turn, index, open, copy = "") {
   const label = `turn ${turn.turn || index + 1}`;
+  const pinned = state.pinnedTurns.has(turn.id);
   const state_ =
     turn.status === "running" || turn.status === "starting"
       ? `running ${elapsed(turn)}`
       : `${turn.status} · ${elapsed(turn)}${turn.tokens?.total ? ` · ${turn.tokens.total} tok` : ""}`;
-  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turn.id)}" title="${open ? "collapse" : "expand"} this turn"><span class="chev">${open ? "\u25be" : "\u25b8"}</span> ${esc(label)} · ${esc(state_)}</div>`;
+  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turn.id)}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> ${esc(label)} · ${esc(state_)}</div>`;
 }
 
 // One turn: its head, then either the full prompt + output, or a single line carrying the request
 // that turn was about. The one-line form is what makes a long conversation readable.
-function turnBlock(conv, turn, index) {
+// `copy` marks the pinned duplicate's transcript so it cannot collide with the paged one.
+function turnBlock(conv, turn, index, copy = "") {
   const open = turnIsOpen(conv, turn);
   if (!open) {
-    return `<div class="turn folded" data-turn="${esc(turn.id)}">${turnHead(turn, index, false)}` +
+    return `<div class="turn folded" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy)}` +
       `<div class="turn-prompt" data-toggle-turn="${esc(turn.id)}" title="${esc(turn.prompt || "")}">${esc(turn.prompt || "(no prompt recorded)")}</div></div>`;
   }
-  return `<div class="turn" data-turn="${esc(turn.id)}">${turnHead(turn, index, true)}` +
-    `<div class="job-prompt">${esc(turn.prompt || "")}</div>${turnBody(turn)}</div>`;
+  return `<div class="turn" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy)}` +
+    `<div class="job-prompt">${esc(turn.prompt || "")}</div>${turnBody(turn, copy)}</div>`;
 }
 
 function conversationHtml(conv) {
@@ -668,6 +671,15 @@ function conversationHtml(conv) {
     return { offset, start, end, html: turns.slice(start, end).map((t, i) => turnBlock(conv, t, start + i)).join("") };
   })();
   const pages = Math.max(1, Math.ceil(turns.length / TURNS_PER_PAGE));
+  // Starred turns are repeated above the page — still accordions, and still present in their own
+  // page, so pinning never moves a turn out from under its history.
+  const pinned = turns.filter((t) => state.pinnedTurns.has(t.id));
+  const pinnedHtml = pinned.length
+    ? `<div class="pinned-turns">
+        <div class="pinned-head mono"><span>\u2605 pinned</span><span class="dimmer">${pinned.length} of ${turns.length}</span></div>
+        ${pinned.map((t) => turnBlock(conv, t, turns.indexOf(t), "@pin")).join("")}
+      </div>`
+    : "";
   const pager = pages > 1
     ? `<span class="turn-pager" title="turns ${blocks.start + 1}–${blocks.end} of ${turns.length} — page through them here">` +
       `<button type="button" class="pager-btn" data-turn-page="older" data-thread-page="${esc(thread)}"${blocks.offset >= pages - 1 ? " disabled" : ""} title="older turns">\u25b2</button>` +
@@ -698,6 +710,7 @@ function conversationHtml(conv) {
       <button class="btn-attach-go" data-attach-go="${esc(thread)}" type="button">Attach</button>
     </div>` : ""}
     <div class="job-body">
+      ${pinnedHtml}
       ${blocks.html}
       <div class="job-foot">${foot}</div>
       <div class="reply">
@@ -1048,10 +1061,12 @@ function conversationSignature(conv) {
   // Which page of turns this card is showing: paging back must survive a repaint, and paging is a
   // structural change (different turn blocks), so it belongs in the signature.
   const pageOffset = state.turnPage.get(conv.thread) || 0;
+  const pinned = conv.turns.filter((t) => state.pinnedTurns.has(t.id)).map((t) => t.id).join(",");
   return [
     conv.thread,
     turns,
     pageOffset,
+    pinned,
     open,
     state.collapsedJobs.has(conv.thread) ? "c" : "o",
     state.maximized === conv.thread ? "m" : "-",
@@ -1118,27 +1133,29 @@ function appendJobLine(evt) {
   else buf.push(line);
   if (buf.length > 1000) buf.splice(0, buf.length - 1000);
   state.jobLines.set(evt.id, buf);
-  const out = document.querySelector(`pre[data-out="${CSS.escape(evt.id)}"]`);
-  if (!out) return;
-  // Streamed lines follow the newest output only for a reader who is already at the bottom; someone
-  // scrolled up to read stays where they are.
-  const stick = out.scrollHeight - out.scrollTop - out.clientHeight < 40;
-  if (out.firstElementChild?.classList.contains("jl-dim")) out.innerHTML = "";
-  if (line.mode === "set") {
-    const el = out.querySelector(`[data-lid="${line.lid}"]`);
-    if (el) {
-      el.textContent = line.text ?? "";
-      if (stick) out.scrollTop = out.scrollHeight;
-      refreshJobPreview(evt.id);
-      return;
+  // A pinned turn renders twice — in its page and in the pinned block above — so every pane carrying
+  // this id (or its "@pin" copy) gets the line.
+  const outs = [...document.querySelectorAll("pre.job-out")].filter(
+    (el) => el.dataset.out === evt.id || el.dataset.out === `${evt.id}@pin`,
+  );
+  if (!outs.length) return;
+  for (const out of outs) {
+    // Streamed lines follow the newest output only for a reader who is already at the bottom; someone
+    // scrolled up to read stays where they are.
+    const stick = out.scrollHeight - out.scrollTop - out.clientHeight < 40;
+    if (out.firstElementChild?.classList.contains("jl-dim")) out.innerHTML = "";
+    const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
+    if (line.mode === "set" && existing) {
+      existing.textContent = line.text ?? "";
+    } else {
+      const div = document.createElement("div");
+      div.className = `jl jl-${line.kind || "raw"}`;
+      if (line.lid) div.dataset.lid = line.lid;
+      div.textContent = line.text ?? "";
+      out.appendChild(div);
     }
+    if (stick) out.scrollTop = out.scrollHeight;
   }
-  const div = document.createElement("div");
-  div.className = `jl jl-${line.kind || "raw"}`;
-  if (line.lid) div.dataset.lid = line.lid;
-  div.textContent = line.text ?? "";
-  out.appendChild(div);
-  if (stick) out.scrollTop = out.scrollHeight;
   refreshJobPreview(evt.id);
 }
 
@@ -2545,6 +2562,19 @@ document.addEventListener("click", async (e) => {
   }
   // A turn folds on its own: the head row or the one-line request opens/closes that turn,
   // independently of the conversation card it sits in.
+  // Star a turn: it also shows, still accordionable, in the pinned block above the paged turns.
+  const starBtn = e.target.closest("[data-star-turn]");
+  if (starBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = starBtn.dataset.starTurn;
+    const job = state.jobs.get(id);
+    if (state.pinnedTurns.has(id)) state.pinnedTurns.delete(id);
+    else state.pinnedTurns.add(id);
+    const thread = job ? job.thread || job.id : null;
+    if (thread) renderConversation(thread);
+    return;
+  }
   // The git / commit / diff accordion inside a worktree's detail row: fold and unfold in place, so
   // nothing else in the row (agent cards, scroll positions) is rebuilt.
   const gitToggle = e.target.closest("[data-toggle-git]");
