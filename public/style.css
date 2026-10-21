@@ -330,6 +330,12 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
   color: var(--dim);
 }
 .pill.running, .pill.starting { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+/* Status words the panel actually shows: green while the agent is working, amber when it is not.
+   Amber is deliberately "attention may be needed" rather than "finished happily" — a failure gets
+   the red variant so it does not disappear into the same yellow. */
+.pill.pill-running { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
+.pill.pill-notrunning { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+.pill.pill-notrunning.is-failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .pill.done { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
 .pill.failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .pill.cancelled, .pill.interrupted { color: var(--dim); background: #20242c; }
@@ -424,6 +430,14 @@ button.btn-max:hover { color: var(--text); background: #232936; }
 button.btn-clear-thread { padding: 1px 6px; font-size: 11px; line-height: 1.2; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
 button.btn-clear-thread:hover, button.btn-clear-thread.armed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 button.btn-clear-thread.armed { font-weight: 700; }
+/* attach an unattached agent to a worktree */
+button.btn-attach { padding: 1px 6px; font-size: 11px; line-height: 1.2; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
+button.btn-attach:hover { color: var(--text); background: #232936; }
+.attach-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px 18px; font-size: 11.5px; }
+.attach-row[hidden] { display: none; }
+.attach-row select { max-width: 560px; background: #12161d; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: 11.5px var(--mono); }
+button.btn-attach-go { padding: 2px 8px; font-size: 11px; }
+button.btn-attach-go:hover { background: #24466a; }
 body.modal-open { overflow: hidden; }
 .job.maximized {
   position: fixed;

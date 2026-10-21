@@ -421,6 +421,38 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: jobs.cancel(String(body.id || "")) });
     }
 
+    if (route === "/api/jobs/attach" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const thread = String(body.thread || "").trim();
+      const target = String(body.path || "").trim();
+      if (!thread) return sendJson(res, 400, { error: "thread is required" });
+      if (!jobs.firstOfThread(thread)) return sendJson(res, 404, { error: `unknown thread: ${thread}` });
+      // detach: the agent goes back to the unattached workspace.
+      if (body.detach === true || !target) {
+        const r = jobs.setOwner(thread, null);
+        broadcast({ type: "jobs", jobs: jobs.list() });
+        return sendJson(res, 200, { ok: true, ownerPath: null, turns: r.turns, jobs: jobs.list() });
+      }
+      try {
+        if (!(await stat(target)).isDirectory()) return sendJson(res, 400, { error: `${target} is not a directory` });
+      } catch {
+        return sendJson(res, 400, { error: `${target} does not exist` });
+      }
+      // Only a real worktree can own an agent, and only at its root — a subdirectory or a plain
+      // folder would file the agent somewhere no row can ever show.
+      const isWt = await gitIn(target, ["rev-parse", "--is-inside-work-tree"]);
+      const top = await gitIn(target, ["rev-parse", "--show-toplevel"]);
+      const normTarget = path.resolve(target).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+      const normTop = String(top.out || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+      if (!isWt.ok || isWt.out !== "true" || normTop !== normTarget) {
+        return sendJson(res, 400, { error: `${target} is not the root of a git worktree` });
+      }
+      const r = jobs.setOwner(thread, target);
+      broadcast({ type: "jobs", jobs: jobs.list() });
+      return sendJson(res, 200, { ok: true, ownerPath: r.ownerPath, turns: r.turns, jobs: jobs.list() });
+    }
+
     if (route === "/api/jobs/clear" && req.method === "POST") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));

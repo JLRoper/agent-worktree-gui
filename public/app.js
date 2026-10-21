@@ -531,13 +531,17 @@ function conversationHtml(conv) {
   const { thread, turns, latest } = conv;
   const collapsed = state.collapsedJobs.has(thread);
   const maximized = state.maximized === thread;
+  const homeless = isHomelessConv(conv);
   const runningTurn = turns.find((t) => t.status === "running" || t.status === "starting");
   const running = Boolean(runningTurn);
+  const runningNow = running;
   // A pending approval for this conversation means the agent is not thinking, it is waiting on you.
   const waitingApproval = [...state.approvals.values()].find((a) => a && a.thread && a.thread === thread) || null;
   const meta = [
     latest.pid ? `pid ${latest.pid}` : null,
     latest.cwd ? `cwd ${latest.cwd}` : null,
+    // Why this card is in the unattached panel: it has no worktree, or one that is not in the scan.
+    homeless ? (latest.ownerPath ? `owner ${latest.ownerPath} (not in the scan)` : "no worktree") : null,
     latest.model ? `model ${latest.model}` : "(default model)",
     latest.worktree ? `worktree ${latest.worktree}` : null,
     latest.existing ? "in existing worktree" : null,
@@ -550,17 +554,23 @@ function conversationHtml(conv) {
   return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}">
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
-      <span class="pill ${esc(latest.status)}" title="${esc(latest.status === "running" || latest.status === "starting" ? `running ${elapsed(latest)}` : `${latest.status} · exit ${latest.exitCode ?? "?"} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""}`)}">${latest.status === "running" || latest.status === "starting" ? "running" : "not-running"}</span>
+      <span class="pill ${runningNow ? "pill-running" : `pill-notrunning${latest.status === "failed" ? " is-failed" : ""}`}" title="${esc(runningNow ? `running ${elapsed(latest)}` : `${latest.status} · exit ${latest.exitCode ?? "?"} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""}`)}">${runningNow ? "running" : "not-running"}</span>
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       <span class="mono dim">${esc(meta)}</span>
       <span class="spacer"></span>
       <span class="mono dimmer thread-name" title="Hermes session thread — continue it any time">${esc(thread)}</span>
       ${latest.yolo ? '<span class="pill yolo">--yolo</span>' : ""}
+      ${homeless ? `<button class="btn-attach" data-attach-toggle="${esc(thread)}" type="button" title="attach this agent to a worktree — it then lives under that row">\u2935 attach</button>` : ""}
       <button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
       ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button">Cancel</button>` : ""}
     </div>
     ${collapsed ? `<div class="job-preview mono" data-preview="${esc(thread)}">${esc(jobPreview(latest))}</div>` : ""}
+    ${homeless ? `<div class="attach-row" data-attach-row="${esc(thread)}" hidden>
+      <span class="dimmer mono">attach to</span>
+      <select data-attach-path="${esc(thread)}"></select>
+      <button class="btn-attach-go" data-attach-go="${esc(thread)}" type="button">Attach</button>
+    </div>` : ""}
     <div class="job-body">
       ${blocks}
       <div class="job-foot">${foot}</div>
@@ -626,6 +636,26 @@ function focusNewTurn(thread, turnId) {
   }
   renderConversation(thread);
   scrollThreadToBottom(thread);
+}
+
+// Attach an unattached agent to a worktree: it then lives under that row, owned like any other.
+async function attachAgent(thread) {
+  const sel = document.querySelector(`[data-attach-path="${CSS.escape(thread)}"]`);
+  const path = sel?.value;
+  if (!path) return;
+  try {
+    const r = await fetch("/api/jobs/attach", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thread, path }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    invalidatePanelMap();
+    await resync();
+  } catch (err) {
+    showBanner(`attach ${thread}: ${err.message}`);
+  }
 }
 
 // One agent's "forget this": two clicks, no modal. The first arms it (a stray click must not delete
@@ -1074,14 +1104,27 @@ function isAgentRunning(conv) {
   return conv.latest.status === "running" || conv.latest.status === "starting";
 }
 
+function isHomelessConv(conv) {
+  const owner = conv.latest.ownerPath || conv.first.ownerPath || null;
+  if (!owner) return true;
+  const k = normPath(owner).toLowerCase();
+  return ![...state.rows.values()].some((r) => normPath(r.path).toLowerCase() === k);
+}
+
 function homelessConversations() {
   // Unattached = no owner, or an owner that is not a row we can show (project root runs, or a
   // worktree that has since been removed). Without this such an agent would fall off the screen.
-  const rowPaths = new Set([...state.rows.values()].map((r) => normPath(r.path).toLowerCase()));
-  return conversations().filter((c) => {
-    const owner = c.latest.ownerPath || c.first.ownerPath || null;
-    return !owner || !rowPaths.has(normPath(owner).toLowerCase());
-  });
+  return conversations().filter(isHomelessConv);
+}
+
+// The worktrees an agent can be attached to, grouped project-first for a readable picker.
+function worktreeOptionsHtml() {
+  const rows = [...state.rows.values()].sort(
+    (a, b) => String(a.project).localeCompare(String(b.project)) || String(a.name).localeCompare(String(b.name)),
+  );
+  return rows
+    .map((r) => `<option value="${esc(r.path)}">${esc(r.project)} · ${esc(r.name)}${r.branch ? ` (${esc(r.branch)})` : ""}</option>`)
+    .join("");
 }
 function panelFor(row) {
   return panelMap().get(normPath(row.path).toLowerCase()) || null;
@@ -1981,6 +2024,38 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     await clearThread(clearBtn);
+    return;
+  }
+  // "attach" opens the worktree picker without collapsing the card.
+  const attachToggle = e.target.closest("[data-attach-toggle]");
+  if (attachToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    const row = document.querySelector(`[data-attach-row="${CSS.escape(attachToggle.dataset.attachToggle)}"]`);
+    if (row) {
+      row.hidden = !row.hidden;
+      if (!row.hidden) {
+        // Built on demand: the card may be rendered before any worktree row exists.
+        const sel = row.querySelector("select");
+        if (sel && !sel.options.length) sel.innerHTML = worktreeOptionsHtml();
+        // Start from the agent's current owner when the scan does not show it, so "attach" is a
+        // deliberate re-point rather than a silent move to whatever the list happens to start with.
+        const conv = conversations().find((c) => c.thread === attachToggle.dataset.attachToggle);
+        const owner = conv && (conv.latest.ownerPath || conv.first.ownerPath);
+        if (sel && owner) {
+          const hit = [...sel.options].find((o) => o.value.toLowerCase() === String(owner).toLowerCase());
+          if (hit) sel.value = hit.value;
+        }
+        sel?.focus();
+      }
+    }
+    return;
+  }
+  const attachGo = e.target.closest("[data-attach-go]");
+  if (attachGo) {
+    e.preventDefault();
+    e.stopPropagation();
+    await attachAgent(attachGo.dataset.attachGo);
     return;
   }
   // A turn folds on its own: the head row or the one-line request opens/closes that turn,
