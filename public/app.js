@@ -1119,10 +1119,10 @@ function ageCellHtml(row) {
   const label = Number.isFinite(alive) ? fmtDur(Date.now() - alive) : "never live";
   const st = ringState(row);
   return `<td class="age nowrap" data-key="${esc(keyOf(row.project, row.path))}">
-      <svg class="poll-ring" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <span class="age-line"><span class="age-num${Number.isFinite(alive) ? "" : " dimmer"}">${esc(label)}</span><svg class="poll-ring" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
         <circle class="poll-track" cx="8" cy="8" r="6" fill="none" stroke-width="2"></circle>
         <circle class="poll-arc" cx="8" cy="8" r="6" fill="none" stroke-width="2" transform="rotate(-90 8 8)" stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="${ringOffset(st)}" stroke="${ringStroke(st)}"></circle>
-      </svg><span class="age-num${Number.isFinite(alive) ? "" : " dimmer"}">${esc(label)}</span><span class="sigs">${sigChips(row)}</span></td>`;
+      </svg></span><span class="sigs">${sigChips(row)}</span></td>`;
 }
 
 function paintAgeCell(cell, row) {

@@ -185,7 +185,14 @@ button.btn-root-clone:hover { background: #1f4a2a; color: #d6ffe0; border-color:
 .poll-ring { vertical-align: -2px; margin-right: 6px; }
 .poll-track { stroke: var(--line); }
 .poll-arc { stroke: var(--green); }
-td.age .age-num { font-family: var(--mono); font-size: 12px; }
+/* Life on the left, the next-read ring immediately to its right, both on one line; the evidence
+   chips wrap underneath. The old `.age-num { display: block }` is what pushed the ring onto a line
+   of its own — the number lives in a flex row now. */
+td.age { white-space: nowrap; }
+td.age .age-line { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
+td.age .poll-ring { display: block; margin-right: 0; flex: none; }
+td.age .sigs { display: inline-flex; align-items: center; flex-wrap: wrap; margin-left: 7px; vertical-align: middle; }
+td.age .age-num { font-family: var(--mono); font-size: 12px; display: inline-block; }
 td.age .age-num.dimmer { color: var(--dimmer); }
 
 /* ---- approvals ---- */
@@ -510,7 +517,7 @@ button.btn-row-agent:hover { background: #1f4a2a; color: #d6ffe0; border-color: 
 .pr-open { color: #f0c674; }
 .pr-merged { color: var(--dim); }
 
-.age-num { color: var(--dimmer); font-family: var(--mono); font-size: 11px; display: block; }
+.age-num { color: var(--dimmer); font-family: var(--mono); font-size: 11px; display: inline-block; }
 
 .sig {
   display: inline-block;
