@@ -121,11 +121,11 @@ main { padding: 14px 16px 40px; }
 .project-head .spacer { flex: 1; }
 /* a project starts minimized to its title line; click the line (or its chevron) to open it */
 .project-head[data-toggle-project] { cursor: pointer; user-select: none; }
-.project-head[data-toggle-project] .chev { color: var(--dimmer); font-size: 10px; width: 9px; display: inline-block; }
+.project-head[data-toggle-project] .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; display: inline-block; }
 .project-head[data-toggle-project]:hover .chev { color: var(--text); }
 /* The two fixed cards (New agent / Agents) collapse the same way — their head rows are the handle. */
 .project-head[data-toggle-fixed] { cursor: pointer; user-select: none; }
-.project-head[data-toggle-fixed] .chev { color: var(--dimmer); font-size: 10px; width: 9px; display: inline-block; }
+.project-head[data-toggle-fixed] .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; display: inline-block; }
 .project-head[data-toggle-fixed]:hover .chev { color: var(--text); }
 section.project.fixed-collapsed > *:not(.project-head) { display: none; }
 section.project.fixed-collapsed > .project-head { border-bottom: 0; }
@@ -155,7 +155,7 @@ section.project.collapsed .legend { display: none; }
   user-select: none;
 }
 .root-head h2 { margin: 0; font-size: 13px; font-family: var(--mono); letter-spacing: 0.01em; }
-.root-head .chev { color: var(--dimmer); font-size: 10px; width: 9px; display: inline-block; }
+.root-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; display: inline-block; }
 .root-head:hover .chev { color: var(--text); }
 .root-head .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .root-head .spacer { flex: 1; }
@@ -398,7 +398,7 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
   cursor: pointer;
   user-select: none;
 }
-.turn-head .chev { color: var(--dimmer); font-size: 9px; display: inline-block; width: 8px; }
+.turn-head .chev { color: var(--dimmer); font-size: 18px; line-height: 1; display: inline-block; width: 16px; vertical-align: -3px; }
 .turn-head:hover { color: var(--text); }
 .turn-head:hover .chev { color: var(--text); }
 .job-body > .turn:first-child > .turn-head { margin-top: 4px; border-top: none; }
@@ -448,7 +448,7 @@ button.btn-reply:hover { background: #24466a; }
 
 /* minimize / expand one job card (click its header) */
 .job-head { cursor: pointer; user-select: none; }
-.job-head .chev { color: var(--dimmer); font-size: 10px; width: 9px; display: inline-block; }
+.job-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; display: inline-block; }
 .job-head:hover .chev { color: var(--text); }
 
 /* Pull one chat out to fill the window: same card, fixed to the viewport, output stretches. */
@@ -457,7 +457,7 @@ button.btn-max:hover { color: var(--text); background: #232936; }
 /* liveness evidence: folds to its header, with the strongest line kept visible to the right */
 .live-block { margin-bottom: 6px; }
 .live-head { display: flex; align-items: baseline; gap: 7px; cursor: pointer; user-select: none; min-width: 0; }
-.live-head .chev { color: var(--dimmer); font-size: 10px; width: 9px; flex: none; }
+.live-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
 .live-head h4 { margin: 0; font-size: 11.5px; letter-spacing: .02em; color: var(--dim); flex: none; }
 .live-head:hover h4, .live-head:hover .chev { color: var(--text); }
 .live-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
@@ -481,7 +481,7 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
 /* git / commit / diff detail: one summary line, body only when unfolded */
 .git-block { margin-bottom: 6px; }
 .git-head { display: flex; align-items: center; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; }
-.git-head .chev { color: var(--dimmer); font-size: 10px; width: 9px; flex: none; }
+.git-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
 .git-head:hover .chev, .git-head:hover .git-summary { color: var(--text); }
 .git-summary { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .git-block.collapsed .git-body { display: none; }
