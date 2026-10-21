@@ -825,6 +825,33 @@ async function saveLabel(thread, label) {
   }
 }
 
+// Ask the server to read one worktree now, from the ring on its row. The reply is only a receipt:
+// the refreshed row arrives through the normal row event, so the row paints itself.
+async function forceRowRead(btn) {
+  const key = btn.dataset.refreshRow;
+  const row = state.rows.get(key);
+  if (!row || btn.dataset.busy === "1") return;
+  btn.dataset.busy = "1";
+  btn.classList.add("busy");
+  try {
+    const r = await fetch("/api/refresh/row", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: row.project, path: row.path }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    // Apply the returned row directly: if nothing about the worktree changed, the server has no row
+    // event to broadcast and the click would look like it did nothing (the ring would not reset).
+    if (d.row) placeRow(row.project, d.row, {});
+  } catch (err) {
+    showBanner(`refresh ${row.name || row.path}: ${err.message}`);
+  } finally {
+    delete btn.dataset.busy;
+    btn.classList.remove("busy");
+  }
+}
+
 async function sendReply(thread) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   const text = (box?.value || "").trim();
@@ -1665,9 +1692,9 @@ function rowHtml(row) {
   </tr>`;
 }
 
-// ---- the age column: last life seen, plus a ring that drains to the next read ----------------
+// ---- the age column: last life seen, plus a ring that fills toward the next read --------------
 // The number is NOT "time since last poll" (that is the ring): it is the last moment any liveness
-// evidence fired for this worktree. The ring empties when the row is due for its next read.
+// evidence fired for this worktree. The ring fills up to the moment the row is due to be read again,
 //
 // The cadence the server sends is what the scheduler WOULD apply; when the panel is behind (a big
 // fleet, a slow repo) the real gap is longer, so the ring is sized to the observed gap once we
@@ -1703,16 +1730,22 @@ function ringState(row) {
   const total = every * 1000;
   const remain = Number.isFinite(scanned) ? Math.max(0, scanned + total - now) : 0;
   const overdue = Number.isFinite(scanned) ? Math.max(0, now - (scanned + total)) : 0;
-  return { now, scanned, configured, every, total, remain, overdue, frac: Math.min(1, remain / total) };
+  const frac = Math.min(1, remain / total);
+  // The ring counts UP to the next read: empty the moment a row is scanned, full and green when it is
+  // due again. `frac` is what is left, `fill` is what has elapsed.
+  return { now, scanned, configured, every, total, remain, overdue, frac, fill: 1 - frac };
 }
 
 function ringOffset(st) {
-  return (RING_C * (1 - st.frac)).toFixed(2);
+  // The drawn length is circumference minus offset, so leaving `frac` undrawn means the arc grows as
+  // the row approaches its next read: empty just after a scan, full when the row is due.
+  return (RING_C * st.frac).toFixed(2);
 }
 
 function ringStroke(st) {
-  if (st.remain > 0) return st.frac < 0.25 ? "var(--amber)" : "var(--green)";
-  return st.overdue > st.total * 0.5 ? "var(--red)" : "var(--amber)";
+  if (st.overdue > st.total * 0.5) return "var(--red)";
+  if (st.overdue > 0) return "var(--amber)";
+  return st.fill >= 0.9 ? "var(--green)" : "var(--dim)";
 }
 
 function ageCellHtml(row) {
@@ -1720,10 +1753,10 @@ function ageCellHtml(row) {
   const label = Number.isFinite(alive) ? fmtDur(Date.now() - alive) : "never live";
   const st = ringState(row);
   return `<td class="age nowrap" data-key="${esc(keyOf(row.project, row.path))}">
-      <span class="age-line"><span class="age-num${Number.isFinite(alive) ? "" : " dimmer"}">${esc(label)}</span><svg class="poll-ring" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <span class="age-line"><span class="age-num${Number.isFinite(alive) ? "" : " dimmer"}">${esc(label)}</span><button class="poll-btn" data-refresh-row="${esc(keyOf(row.project, row.path))}" type="button" title="read this worktree now"><svg class="poll-ring" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
         <circle class="poll-track" cx="8" cy="8" r="6" fill="none" stroke-width="2"></circle>
         <circle class="poll-arc" cx="8" cy="8" r="6" fill="none" stroke-width="2" transform="rotate(-90 8 8)" stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="${ringOffset(st)}" stroke="${ringStroke(st)}"></circle>
-      </svg></span><span class="sigs">${sigChips(row)}</span></td>`;
+      </svg></button></span><span class="sigs">${sigChips(row)}</span></td>`;
 }
 
 function paintAgeCell(cell, row) {
@@ -2085,9 +2118,9 @@ function projectSection(name) {
     </div>
     <table><thead><tr>
       <th>Worktree</th><th>Branch</th><th>Tip</th><th>Ahead / Behind</th><th>Cherry</th>
-      <th>PR</th><th>Dirty</th><th title="time since this worktree was last seen alive (any evidence firing) · the ring drains to empty when the row is due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited">Life / next read</th><th>Verdict</th>
+      <th>PR</th><th>Dirty</th><th title="time since this worktree was last seen alive (any evidence firing) · the ring fills up to green as the row becomes due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited">Life / next read</th><th>Verdict</th>
     </tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
-    <div class="legend">liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring drains to empty when the row is due for its next read</div>
+    <div class="legend">liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read</div>
   </section>`;
 }
 
@@ -2990,6 +3023,14 @@ $("projects").addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
     jumpToAgent(jump.dataset.agentThread);
+    return;
+  }
+  // The next-read ring is also a button: it forces one fresh read of just this worktree.
+  const refreshBtn = e.target.closest("[data-refresh-row]");
+  if (refreshBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    void forceRowRead(refreshBtn);
     return;
   }
   const tr = e.target.closest("tr.row");

@@ -203,8 +203,14 @@ button.btn-root-clone:hover { background: #1f4a2a; color: #d6ffe0; border-color:
 .root-group.collapsed .root-body { display: none; }
 .root-body { padding: 14px 14px 0; }
 
-/* ---- the age column: a ring that drains to the next read + last-life text ---- */
+/* ---- the age column: a ring that fills toward the next read + last-life text ---- */
 .poll-ring { vertical-align: -2px; margin-right: 6px; }
+/* The ring is a button: one click reads just this worktree now. */
+button.poll-btn { background: none; border: 0; padding: 0; margin: 0 6px 0 0; cursor: pointer; display: inline-flex; align-items: center; vertical-align: -2px; }
+button.poll-btn .poll-ring { margin-right: 0; }
+button.poll-btn:hover .poll-arc { stroke: var(--green); }
+button.poll-btn:hover .poll-track { stroke: var(--dim); }
+button.poll-btn.busy { opacity: .55; cursor: progress; }
 .poll-track { stroke: var(--line); }
 .poll-arc { stroke: var(--green); }
 /* Life on the left, the next-read ring immediately to its right, both on one line; the evidence

@@ -523,6 +523,24 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    // One worktree, read now — the next-read ring on a row is a button. Refused while that row is
+    // already being read: two scans of one worktree at once is exactly what the pool prevents.
+    if (route === "/api/refresh/row" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const projectName = String(body.project || "").trim();
+      const rowPath = String(body.path || "").trim();
+      const project = scheduler.getProjects().find((p) => p.name === projectName);
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${projectName}` });
+      const row = scheduler.store.rowsFor(projectName).find((r) => r.path === rowPath);
+      if (!row) return sendJson(res, 404, { error: `unknown row: ${rowPath}` });
+      if (scheduler.pool.isBusy(rowPath)) return sendJson(res, 409, { error: "that row is already being read" });
+      // Claim the slot, or the timer will scan it again the moment this finishes.
+      scheduler.lastFast.set(`${projectName}::${rowPath}`, Date.now());
+      const merged = await scheduler.scanOne(project, rowPath, "full");
+      return sendJson(res, 200, { ok: true, row: merged });
+    }
+
     // Clone a GitHub repo over SSH into ONE of the configured scan roots — what the folder
     // accordion's "+" uses: the root is the folder you clicked, the name is the repo
     // (`name` or `owner/name`). The destination is inside that root and must not exist yet.
