@@ -657,7 +657,35 @@ function turnBody(turn, copy = "") {
     .slice(-300)
     .map((l) => `<div class="jl jl-${esc(l.kind || "raw")}" data-lid="${esc(l.lid ?? "")}">${linkifyText(l.text)}</div>`)
     .join("") || '<div class="jl jl-dim">waiting for output…</div>';
-  return `<pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>`;
+  return `<pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>` +
+    approvalPrompt(turn, copy) + approvalDecided(turn);
+}
+
+// The approval question belongs where the reading stopped: directly under the console output of the
+// turn that is parked on it, not in a separate panel at the bottom of the card. It is a box that
+// behaves like a popup (raised, bordered, the only thing asking for a decision) but it lives in the
+// flow, so it never covers the output it is about.
+function approvalPrompt(turn, copy = "") {
+  const approval = turn.approval;
+  if (!approval) return "";
+  const choices = Array.isArray(approval.choices) && approval.choices.length ? approval.choices : ["once", "deny"];
+  const label = { once: "Allow once", session: "Allow for this session", always: "Always allow", deny: "Deny" };
+  return `<div class="turn-approval" data-approval-for="${esc(turn.id)}${esc(copy)}">
+    <div class="ta-head mono">⚠ waiting on you — this turn is parked until you answer</div>
+    <pre class="ta-cmd mono">${esc(approval.command || "(no command text)")}</pre>
+    <div class="ta-actions">
+      ${choices.map((c) => `<button class="btn-approve${c === "deny" ? " btn-deny" : ""}" data-approve="${esc(turn.id)}" data-choice="${esc(c)}" data-request="${esc(approval.requestId || "")}" type="button" title="${esc(c === "deny" ? "refuse this command — the agent is told no and carries on without it" : `allow this command (${c})`)}">${esc(label[c] || c)}</button>`).join("")}
+    </div>
+  </div>`;
+}
+
+// Once answered the box collapses to one line: what was decided, about what.
+function approvalDecided(turn) {
+  const done = turn.approvalDone;
+  if (!done || turn.approval) return "";
+  const denied = String(done.choice || "").toLowerCase() === "deny";
+  const verb = denied ? "denied" : `approved ${done.choice || ""}`.trim();
+  return `<div class="turn-approval-done mono${denied ? " is-deny" : ""}" title="${esc(done.command || "")}">${denied ? "✕" : "✓"} ${esc(verb)}${done.command ? `: ${esc(String(done.command).slice(0, 140))}` : ""}</div>`;
 }
 
 // A turn is open when the reader opened it, otherwise only the newest turn is: opening an agent
@@ -810,13 +838,6 @@ function conversationHtml(conv) {
         .map((q) => `<div class="ghost-turn"><div class="ghost-head mono"><span class="ghost-badge">queued</span><span class="queue-ago" data-queued-at="${q.at}">${fmtDur(Date.now() - q.at)}</span><span class="dimmer">sends when the current turn finishes</span></div><div class="ghost-prompt">${linkifyText(q.text)}</div></div>`)
         .join("")}</div>` : ""}
       <div class="job-foot">${foot}</div>
-      ${runApproval ? `<div class="run-approval">
-        <div class="ra-head mono">⚠ this agent is waiting on you<span class="dimmer"> — the turn is parked until you answer</span></div>
-        <pre class="ra-cmd mono">${esc(runApproval.command || "(no command text)")}</pre>
-        <div class="ra-actions">
-          ${(runApproval.choices || ["once", "deny"]).map((c) => `<button class="btn-approve${c === "deny" ? " btn-deny" : ""}" data-approve="${esc(runningTurn?.id || latest.id)}" data-choice="${esc(c)}" data-request="${esc(runApproval.requestId || "")}" type="button" title="${c === "deny" ? "refuse this command — the agent is told no and carries on without it" : `allow this command (${c === "once" ? "just this time" : c === "session" ? "for this session" : "always"})`}">${esc(c)}</button>`).join("")}
-        </div>
-      </div>` : ""}
       <div class="reply">
         <div class="reply-wrap">
           <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"

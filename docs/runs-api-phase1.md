@@ -77,6 +77,19 @@ The panel side is built against the documented contract: `approval.request` carr
 buttons and `POST /api/jobs/approve` → `POST /v1/runs/{id}/approval` answers it. The choice list is
 never widened by the panel — it renders exactly what the host offered.
 
+Placement is deliberate: the prompt is rendered **inside the parked turn, directly under that turn's
+console output** (`approvalPrompt()` in `public/app.js`), not in a panel at the bottom of the card
+or a floating modal — the question belongs where the reading stopped, and a modal would cover the
+output it is about. Once answered, the box collapses to a single line under the same turn
+(`✓ approved once: rm -rf build`, red `✕` for a denial), which is also persisted as
+`approvalDone` so a reload keeps the record.
+
+Both states were verified in a sandbox instance on `:7332` with seeded job records (the gateway would
+not emit a real `approval.request` — see below): the parked card rendered the amber box with
+`Allow once / Allow for this session / Deny` under the console, and the answered card rendered the
+collapsed line. Clicking a choice round-trips to `/api/jobs/approve` and surfaces the gateway's error
+verbatim when the run is unknown.
+
 **What has not been demonstrated:** a live card. Three probes against this gateway all ran without
 an `approval.request`:
 
