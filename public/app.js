@@ -1135,6 +1135,8 @@ async function spawnAgent() {
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     $("spawn-msg").textContent = `spawned ${d.job.id} (pid ${d.job.pid})${d.job.yolo ? " with --yolo" : ""}`;
     updateJob(d.job, { scroll: true });
+    // Take the reader to the new agent: unfold folder/project/worktree and scroll to its card.
+    revealSpawnedAgent(d.job);
   } catch (e) {
     $("spawn-msg").textContent = `spawn failed: ${e.message}`;
   } finally {
@@ -1289,6 +1291,47 @@ function jumpToAgent(thread) {
   card.scrollIntoView({ block: "center", behavior: "smooth" });
   card.classList.add("jump");
   setTimeout(() => card.classList.remove("jump"), 1700);
+}
+
+// After a spawn, follow the agent home: unfold its folder, its project and its worktree row, then
+// bring the card into view and flash it. A `-w` spawn has no owner for a few seconds and its row is
+// only discovered once the tree exists, so this watches for up to ~30s and then gives up quietly.
+function revealSpawnedAgent(job, deadlineMs = 30_000) {
+  const started = Date.now();
+  const attempt = () => {
+    const thread = job?.thread;
+    if (!thread) return;
+    const live = state.jobs.get(job.id) || job;
+    const owner = live.ownerPath;
+    const row = owner
+      ? [...state.rows.values()].find((r) => normPath(r.path).toLowerCase() === normPath(owner).toLowerCase())
+      : null;
+    if (!row) {
+      if (Date.now() - started > deadlineMs) {
+        const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+        if (card) jumpToAgent(thread); // nowhere better to go: show it where it is
+        return;
+      }
+      setTimeout(attempt, 700);
+      return;
+    }
+    const project = state.projects.get(row.project);
+    const root = project ? rootOf(project) : "";
+    if (root && state.collapsedRoots.has(root)) {
+      state.collapsedRoots.delete(root);
+      saveCollapsedRoots();
+      applyRootCollapse(root);
+    }
+    if (!state.expandedProjects.has(row.project)) toggleProject(row.project);
+    const key = keyOf(row.project, row.path);
+    if (!state.expanded.has(key)) {
+      document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
+    }
+    // Sections and rows are built synchronously by the two calls above; wait one frame so layout is
+    // settled before scrolling, then land on the card itself.
+    requestAnimationFrame(() => jumpToAgent(thread));
+  };
+  attempt();
 }
 
 // The panel's own agents are the freshest evidence there is — we are literally driving the process
@@ -1880,12 +1923,17 @@ let rowFrame = 0;
 function queueRow(project, row, opts) {
   pendingRows.set(keyOf(project, row.path), { project, row, opts });
   if (rowFrame) return;
-  rowFrame = requestAnimationFrame(() => {
+  // rAF does not run at all in a hidden tab, so batching there would freeze the board's state until
+  // the tab is looked at again (and a spawn's new row would never arrive). Apply immediately when
+  // hidden; batch only while the tab is actually painting.
+  const flush = () => {
     rowFrame = 0;
     const batch = [...pendingRows.values()];
     pendingRows.clear();
     for (const b of batch) placeRow(b.project, b.row, b.opts);
-  });
+  };
+  if (document.hidden) return flush();
+  rowFrame = requestAnimationFrame(flush);
 }
 
 function placeRow(project, row, { flash = false } = {}) {

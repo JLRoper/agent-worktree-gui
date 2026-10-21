@@ -157,7 +157,26 @@ function broadcast(evt) {
 
 store.onEvent(broadcast);
 
-const jobs = new Jobs({ config, onEvent: broadcast, onLog: log });
+// A `-w` agent's worktree exists a few seconds after spawn; adopt it into the board right then so the
+// card can be opened under a row instead of waiting for a discovery pass.
+const adoptedTrees = new Set();
+function adoptFromJob(evt) {
+  if (evt?.type !== "job") return;
+  const j = evt.job;
+  if (!j || !j.worktreePath || adoptedTrees.has(j.worktreePath)) return;
+  adoptedTrees.add(j.worktreePath);
+  const project = registry.projects.find((p) => normPathKey(p.path) === normPathKey(j.cwd));
+  if (!project) return;
+  void scheduler.adoptWorktree(project.name, j.worktreePath).catch(() => {});
+}
+const jobs = new Jobs({
+  config,
+  onEvent: (evt) => {
+    broadcast(evt);
+    adoptFromJob(evt);
+  },
+  onLog: log,
+});
 // Human side of the Hermes approval-transport contract: the plugin presents, the panel answers,
 // the host decides. Nothing here can approve anything by itself.
 const approvals = new Approvals({ onEvent: broadcast });
