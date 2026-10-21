@@ -421,6 +421,18 @@ const server = createServer(async (req, res) => {
 
     if (route === "/api/jobs/clear" && req.method === "POST") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const thread = String(body.thread || "").trim();
+      if (thread) {
+        // Forget one conversation only. Refused while it is working: cancelling is a deliberate,
+        // separate action, and a "clear" that silently killed a turn would be a trap.
+        const r = jobs.clearThread(thread);
+        if (!r.ok) {
+          return sendJson(res, 409, { error: `a turn is still running in this agent — cancel it first`, running: r.running });
+        }
+        broadcast({ type: "jobs", jobs: jobs.list() });
+        return sendJson(res, 200, { ok: true, removed: r.removed, jobs: jobs.list() });
+      }
       jobs.clearFinished();
       broadcast({ type: "jobs", jobs: jobs.list() });
       return sendJson(res, 200, { ok: true, jobs: jobs.list() });

@@ -553,6 +553,7 @@ function conversationHtml(conv) {
       <span class="spacer"></span>
       <span class="mono dimmer thread-name" title="Hermes session thread — continue it any time">${esc(thread)}</span>
       ${latest.yolo ? '<span class="pill yolo">--yolo</span>' : ""}
+      <button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
       ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button">Cancel</button>` : ""}
     </div>
@@ -605,6 +606,50 @@ async function sendReply(thread) {
 
 function jobHtml(j) {
   return conversationHtml({ thread: j.thread || j.id, turns: [j], first: j, latest: j });
+}
+
+// One agent's "forget this": two clicks, no modal. The first arms it (a stray click must not delete
+// a transcript), the second within four seconds removes the conversation.
+async function clearThread(btn) {
+  const thread = btn.dataset.clearThread;
+  if (btn.dataset.armed !== "1") {
+    btn.dataset.armed = "1";
+    btn.textContent = "✕ sure?";
+    btn.classList.add("armed");
+    clearTimeout(btn._disarm);
+    btn._disarm = setTimeout(() => {
+      btn.dataset.armed = "";
+      btn.textContent = "\u2715";
+      btn.classList.remove("armed");
+    }, 4000);
+    return;
+  }
+  clearTimeout(btn._disarm);
+  btn.disabled = true;
+  try {
+    const r = await fetch("/api/jobs/clear", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thread }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    for (const [id, j] of [...state.jobs]) {
+      if ((j.thread || j.id) !== thread) continue;
+      state.jobs.delete(id);
+      state.jobLines.delete(id);
+    }
+    state.collapsedJobs.delete(thread);
+    if (state.maximized === thread) setMaximized(null);
+    renderJobs();
+    repaintAgentState();
+  } catch (err) {
+    showBanner(`clear ${thread}: ${err.message}`);
+    btn.disabled = false;
+    btn.dataset.armed = "";
+    btn.textContent = "\u2715";
+    btn.classList.remove("armed");
+  }
 }
 
 // ---- approvals ------------------------------------------------------------------
@@ -1757,6 +1802,13 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     setMaximized(maxBtn.dataset.maxThread);
+    return;
+  }
+  const clearBtn = e.target.closest("[data-clear-thread]");
+  if (clearBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    await clearThread(clearBtn);
     return;
   }
   // A turn folds on its own: the head row or the one-line request opens/closes that turn,
