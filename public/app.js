@@ -874,6 +874,17 @@ function focusReplyBox(thread) {
   return document.activeElement === box;
 }
 
+// A real newline at the caret, for Shift+Enter. Doing it by hand rather than leaving it to the default
+// action keeps the caret and the saved draft in step, and works the same in both message boxes.
+function insertNewlineAtCaret(el) {
+  const start = el.selectionStart ?? el.value.length;
+  const end = el.selectionEnd ?? start;
+  el.value = `${el.value.slice(0, start)}\n${el.value.slice(end)}`;
+  const pos = start + 1;
+  el.setSelectionRange(pos, pos);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 async function sendReply(thread) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   const text = (box?.value || "").trim();
@@ -2655,9 +2666,14 @@ $("job-prompt").addEventListener("input", () => {
 // Enter in the prompt spawns, the way it does in every other box here. Shift+Enter is a newline, so a
 // multi-line prompt is still possible.
 $("job-prompt").addEventListener("keydown", (e) => {
-  if (e.key !== "Enter" || e.shiftKey) return;
+  if (e.key !== "Enter") return;
   e.preventDefault();
   e.stopPropagation();
+  // Shift+Enter is a newline: a prompt is often more than one line.
+  if (e.shiftKey) {
+    insertNewlineAtCaret(e.target);
+    return;
+  }
   if (!$("btn-spawn").disabled) spawnAgent();
 });
 $("btn-pause").addEventListener("click", () => {
@@ -3018,6 +3034,11 @@ document.addEventListener("keydown", (e) => {
   }
   const box = e.target.closest && e.target.closest(".reply-box");
   if (!box) return;
+  if (e.key === "Enter" && e.shiftKey) {
+    e.preventDefault();
+    insertNewlineAtCaret(box);
+    return;
+  }
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     void sendReply(box.dataset.reply);
