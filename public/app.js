@@ -1909,6 +1909,7 @@ function reorderProjects() {
     const want = order(sections);
     if (want.every((el, i) => el === sections[i])) continue;
     for (const el of want) body.appendChild(el);
+    flashMoved(sections, want, body);
   }
   // Then the folders themselves, on the same ranking: a folder holding the project an agent is busy
   // in leads, then the one worked in most recently.
@@ -2042,6 +2043,30 @@ function reorder(name) {
   const current = [...tbody.children];
   if (current.length === want.length && current.every((el, i) => el === want[i])) return;
   for (const el of want) tbody.appendChild(el);
+  // Say which rows moved: the order is the panel's judgement about what to look at first, and a
+  // silent shuffle leaves you guessing whether the row under the cursor is still the same row.
+  flashMoved(current, want, tbody);
+}
+
+// Green flash on the things that actually changed place: same row, different index. Elements that
+// kept their index are left alone, so a single mover does not light up the whole board.
+function flashMoved(before, after, reflowHost) {
+  const was = new Map(before.map((el, i) => [el, i]));
+  const moved = [];
+  for (const [i, el] of after.entries()) {
+    const from = was.get(el);
+    if (from !== undefined && from !== i) moved.push(el);
+  }
+  if (!moved.length) return;
+  // Remove then re-add in one pass with a single reflow between, so a row that moves twice in quick
+  // succession restarts the animation instead of silently keeping the dying one.
+  for (const el of moved) el.classList.remove("flash");
+  if (reflowHost) void reflowHost.offsetWidth;
+  for (const el of moved) {
+    el.classList.add("flash");
+    clearTimeout(el._flashT);
+    el._flashT = setTimeout(() => el.classList.remove("flash"), 950);
+  }
 }
 
 // SSE row events arrive in bursts (a scan batch finishes several rows at once). Painting each one

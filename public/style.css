@@ -569,6 +569,13 @@ tbody tr.row.expanded { background: #1a2029; }
   to { background: transparent; }
 }
 tbody tr.row.flash { animation: flashrow .9s ease-out; }
+/* A section has its own panel background, so flashing it to transparent would punch a hole. Land the
+   animation on the colour it always had and add a green ring for the length of the flash. */
+@keyframes flashsection {
+  from { background: #1f3a2a; box-shadow: 0 0 0 2px #2f6a45 inset; }
+  to { background: var(--panel); box-shadow: 0 0 0 2px transparent inset; }
+}
+section.project.flash { animation: flashsection .9s ease-out; }
 
 .mono { font-family: var(--mono); font-size: 12px; }
 .name { font-weight: 600; }
