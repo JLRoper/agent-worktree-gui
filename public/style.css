@@ -337,7 +337,7 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 .warnline { color: #ff9c94; font: 11.5px/1.4 var(--mono); min-height: 14px; }
 
 /* ---- jobs ---- */
-.job { border-bottom: 1px solid #1d222b; padding: 9px 14px 12px; }
+.job { border-bottom: 1px solid #1d222b; padding: 9px 14px 12px; overflow-anchor: none; }
 .job:last-child { border-bottom: none; }
 .job-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .job-head .spacer { flex: 1; }

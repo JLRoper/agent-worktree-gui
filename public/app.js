@@ -1344,6 +1344,14 @@ function jumpToAgent(thread) {
   setTimeout(() => card.classList.remove("jump"), 1700);
 }
 
+// The star of a turn as it appears in the page (not the pinned copy), so a pin/unpin can anchor on it.
+function findTurnStar(thread, turnId) {
+  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+  if (!card) return null;
+  const stars = [...card.querySelectorAll(`[data-star-turn="${CSS.escape(turnId)}"]`)];
+  return stars.find((b) => !b.closest(".pinned-turns")) || stars[0] || null;
+}
+
 // After a spawn, follow the agent home: unfold its folder, its project and its worktree row, then
 // bring the card into view and flash it. A `-w` spawn has no owner for a few seconds and its row is
 // only discovered once the tree exists, so this watches for up to ~30s and then gives up quietly.
@@ -2584,7 +2592,29 @@ document.addEventListener("click", async (e) => {
     if (state.pinnedTurns.has(id)) state.pinnedTurns.delete(id);
     else state.pinnedTurns.add(id);
     const thread = job ? job.thread || job.id : null;
-    if (thread) renderConversation(thread);
+    if (thread) {
+      // Pinning inserts a block above the page, so the star just clicked would slide down out from
+      // under the pointer (and a second click to undo would land somewhere else). Anchor on the PAGE
+      // copy of that star (the pinned one is a different element at a different place), then scroll
+      // by however far it moved so it stays where the cursor is.
+      const pageStar = findTurnStar(thread, id);
+      const beforeTop = pageStar ? pageStar.getBoundingClientRect().top : null;
+      renderConversation(thread);
+      // Correct, then correct again once the browser has settled layout: inserting the pinned block
+      // changes the page height in two passes (the card now, its line boxes at the next layout), so a
+      // single correction leaves the star short of where it started.
+      const keepStarPut = () => {
+        const anchor = findTurnStar(thread, id);
+        if (beforeTop == null || !anchor) return;
+        const delta = anchor.getBoundingClientRect().top - beforeTop;
+        if (Math.abs(delta) > 1) window.scrollBy(0, delta);
+      };
+      // Now, then once layout has definitely settled: inserting the pinned block can change the page
+      // height again on the next layout pass (line boxes, images), which would leave the star adrift.
+      keepStarPut();
+      setTimeout(keepStarPut, 0);
+      setTimeout(keepStarPut, 80);
+    }
     return;
   }
   // Liveness evidence folds in place; collapsed, the strongest line rides to the right of the header.
