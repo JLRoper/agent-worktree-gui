@@ -859,6 +859,21 @@ async function forceRowRead(btn) {
   }
 }
 
+// Put the caret back in an agent's reply box — after sending, so a follow-up can be typed straight
+// away. Re-applied on the next tick because sending rebuilds the card (and so the textarea).
+function focusReplyBox(thread) {
+  const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+  if (!box) return false;
+  box.focus();
+  const end = box.value.length;
+  try {
+    box.setSelectionRange(end, end);
+  } catch {
+    /* not a text field any more */
+  }
+  return document.activeElement === box;
+}
+
 async function sendReply(thread) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   const text = (box?.value || "").trim();
@@ -880,6 +895,11 @@ async function sendReply(thread) {
     // you had opened by hand, so the card shows one full chat — the one you are now in — instead of
     // that one plus the scrollback you were reading a moment ago.
     focusNewTurn(thread, d.job.id);
+    // Sending is one keystroke away from the follow-up: keep the caret in the box instead of dropping
+    // it (the click on Send used to move focus to the button, and the rebuild replaces the textarea).
+    focusReplyBox(thread);
+    setTimeout(() => focusReplyBox(thread), 0);
+    setTimeout(() => focusReplyBox(thread), 80);
   } catch (err) {
     const warn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
     if (warn) warn.textContent = `reply failed: ${err.message}`;
@@ -2998,6 +3018,13 @@ document.addEventListener("keydown", (e) => {
 document.addEventListener("input", (e) => {
   const box = e.target.closest && e.target.closest(".reply-box");
   if (box) state.replyDrafts[box.dataset.reply] = box.value;
+});
+
+// Pressing Send must not steal focus from the box it is sending: without this the mousedown moves the
+// caret to the button and the next keystroke goes nowhere.
+document.addEventListener("mousedown", (e) => {
+  const btn = e.target.closest && e.target.closest(".btn-reply");
+  if (btn) e.preventDefault();
 });
 
 // Folding a project throws its console markup away, so where you had scrolled has to be remembered by
