@@ -697,11 +697,12 @@ function conversationHtml(conv) {
       <span class="mono dim">${esc(meta)}</span>
       ${pager}
       <span class="spacer"></span>
-      <span class="mono dimmer thread-name" title="Hermes session thread — continue it any time">${esc(thread)}</span>
       ${latest.yolo ? '<span class="pill yolo">--yolo</span>' : ""}
       ${homeless ? `<button class="btn-attach" data-attach-toggle="${esc(thread)}" type="button" title="attach this agent to a worktree — it then lives under that row">\u2935 attach</button>` : ""}
       <button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
+      <span class="mono dimmer thread-name" data-thread-name="${esc(thread)}" data-label="${esc(latest.label || "")}" title="${latest.label ? esc(`${latest.label} — Hermes thread ${thread}`) : "Hermes session thread — continue it any time"}">${esc(latest.label || thread)}</span>
+      <button class="btn-rename" data-rename-thread="${esc(thread)}" type="button" title="rename this session — a label for the panel only; the Hermes thread id never changes">\u270e</button>
       ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button">Cancel</button>` : ""}
     </div>
     ${collapsed ? `<div class="job-preview mono" data-preview="${esc(thread)}">${esc(jobPreview(latest))}</div>` : ""}
@@ -731,6 +732,62 @@ function conversationHtml(conv) {
 function restoreReplyDraft(thread) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   if (box && state.replyDrafts[thread]) box.value = state.replyDrafts[thread];
+}
+
+// Renaming a session is a panel-side display name only: the Hermes thread id is identity (it is what
+// resumes the conversation), so the label is kept beside the job store and never rewrites the id.
+function beginRename(thread) {
+  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+  if (!card || card.querySelector(".rename-input")) return;
+  const span = card.querySelector(`[data-thread-name="${CSS.escape(thread)}"]`);
+  if (!span) return;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "rename-input mono";
+  input.maxLength = 80;
+  input.spellcheck = false;
+  input.value = span.dataset.label || "";
+  input.placeholder = thread;
+  span.replaceWith(input);
+  input.focus();
+  input.select();
+  let settled = false;
+  const finish = (save) => {
+    if (settled) return;
+    settled = true;
+    const value = input.value;
+    input.replaceWith(span);
+    if (save) void saveLabel(thread, value);
+  };
+  // The input sits inside a head that folds the card on click and a card that reacts to Enter, so
+  // its keys stay here: Enter saves, Escape cancels, clicking away saves.
+  input.addEventListener("keydown", (ev) => {
+    ev.stopPropagation();
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      finish(true);
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener("blur", () => finish(true));
+}
+
+async function saveLabel(thread, label) {
+  try {
+    const r = await fetch("/api/jobs/label", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thread, label }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    for (const j of d.jobs || []) state.jobs.set(j.id, j);
+    renderConversation(thread);
+  } catch (err) {
+    showBanner(`rename ${thread}: ${err.message}`);
+  }
 }
 
 async function sendReply(thread) {
@@ -1070,6 +1127,7 @@ function conversationSignature(conv) {
     pageOffset,
     pinned,
     open,
+    l.label || "",
     state.collapsedJobs.has(conv.thread) ? "c" : "o",
     state.maximized === conv.thread ? "m" : "-",
     isHomelessConv(conv) ? "h" : "-",
@@ -2528,6 +2586,13 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     await clearThread(clearBtn);
+    return;
+  }
+  const renameBtn = e.target.closest("[data-rename-thread]");
+  if (renameBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    beginRename(renameBtn.dataset.renameThread);
     return;
   }
   // "attach": if the agent's own directory is a worktree we know, attach it there straight away;

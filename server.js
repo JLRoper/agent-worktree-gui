@@ -486,6 +486,19 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, ownerPath: r.ownerPath, turns: r.turns, jobs: jobs.list() });
     }
 
+    if (route === "/api/jobs/label" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const thread = String(body.thread || "").trim();
+      if (!thread) return sendJson(res, 400, { error: "thread is required" });
+      if (!jobs.firstOfThread(thread)) return sendJson(res, 404, { error: `unknown thread: ${thread}` });
+      // A panel-side display name only. The Hermes thread id stays the identity (it is what resumes
+      // the session), so renaming can never orphan a conversation.
+      const label = jobs.setLabel(thread, body.label);
+      if (!label.ok) return sendJson(res, 400, { error: label.error });
+      return sendJson(res, 200, { ok: true, thread, label: label.label, jobs: jobs.list() });
+    }
+
     if (route === "/api/jobs/clear" && req.method === "POST") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
