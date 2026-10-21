@@ -24,6 +24,7 @@ const state = {
   expandedProjects: loadExpandedProjects(),
   collapsedFixed: loadCollapsedFixed(),
   collapsedRoots: loadCollapsedRoots(),
+  recentRoots: loadRecentRoots(),
   cloneStatus: {},
   approvals: new Map(),
   scanRoots: [],
@@ -221,6 +222,26 @@ function saveCollapsedRoots() {
   }
 }
 
+// Folders can be shown as "every project" or "only projects touched in the last week". The choice is
+// per folder and remembered, like the collapsed state.
+function loadRecentRoots() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem("wm.recentRoots") || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveRecentRoots() {
+  try {
+    localStorage.setItem("wm.recentRoots", JSON.stringify([...state.recentRoots]));
+  } catch {
+    /* no storage: the choice simply will not persist */
+  }
+}
+
+const RECENT_DAYS = 7;
+
 const normPath = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "");
 
 // Longest matching scan root wins, so a nested root groups under the more specific folder.
@@ -295,6 +316,41 @@ function toggleAllInRoot(root) {
   saveExpandedProjects();
   for (const n of names) applyProjectCollapse(n);
   paintRootButton(root);
+}
+
+// Rebuild one folder in place — used by the all/recent toggle so the rest of the board keeps its
+// scroll and its own expansion state.
+function renderRoot(root) {
+  const sec = document.querySelector(`section.root-group[data-root="${CSS.escape(root)}"]`);
+  if (!sec) return;
+  const all = sortedProjects().filter((p) => rootOf(p) === root);
+  const shown = new Set(shownInRoot(root, all).map((p) => p.name));
+  const holder = document.createElement("div");
+  holder.innerHTML = rootSection(root, all);
+  const fresh = holder.firstElementChild;
+  sec.replaceWith(fresh);
+  for (const p of all) {
+    if (!shown.has(p.name)) {
+      state.tbodyEls.delete(p.name);
+      continue;
+    }
+    const tbody = fresh.querySelector(`[data-tbody="${CSS.escape(p.name)}"]`);
+    if (!tbody) continue;
+    state.tbodyEls.set(p.name, tbody);
+    for (const map of [state.rowEls, state.detailEls]) {
+      for (const k of [...map.keys()]) if (state.rows.get(k)?.project === p.name) map.delete(k);
+    }
+    renderProjectRows(p.name);
+    refreshChips(p.name);
+  }
+}
+
+function toggleRootRecent(root) {
+  if (!root) return;
+  if (state.recentRoots.has(root)) state.recentRoots.delete(root);
+  else state.recentRoots.add(root);
+  saveRecentRoots();
+  renderRoot(root);
 }
 
 // One gesture for the whole board: fold every project section, or unfold them all again. Folder
@@ -1546,6 +1602,24 @@ function projectActivity(p) {
   return best;
 }
 
+// "Touched" is deliberately wider than sort order: a commit, a file edit, or any life evidence
+// observed in one of its worktrees. A month-old checkout that an agent is working in right now is
+// touched; a merged tree nobody has opened since spring is not.
+function projectTouchedAt(p) {
+  let best = projectActivity(p);
+  for (const r of state.rows.values()) {
+    if (r.project !== p.name) continue;
+    best = Math.max(best, Date.parse(r.lastAliveAt || "") || 0);
+  }
+  return best;
+}
+
+function shownInRoot(root, projects) {
+  if (!state.recentRoots.has(root)) return projects;
+  const cutoff = Date.now() - RECENT_DAYS * 864e5;
+  return projects.filter((p) => projectTouchedAt(p) >= cutoff);
+}
+
 function sortedProjects() {
   return [...state.projects.values()].sort(
     (a, b) => projectActivity(b) - projectActivity(a) || String(a.name).localeCompare(String(b.name)),
@@ -1575,7 +1649,7 @@ function reorderProjects() {
 
 // One accordion per folder. The header carries the folder path and the aggregate state of
 // everything inside it, so a collapsed folder still says what it holds.
-function rootChips(projects) {
+function rootChips(projects, hidden = 0) {
   const names = new Set(projects.map((p) => p.name));
   const rows = [...state.rows.values()].filter((r) => names.has(r.project));
   const unmerged = rows.filter((r) => {
@@ -1591,18 +1665,27 @@ function rootChips(projects) {
   if (unmerged) out.push(`<span class="chip bad">${unmerged} unmerged</span>`);
   if (dirty) out.push(`<span class="chip warn">${dirty} dirty</span>`);
   if (live) out.push(`<span class="chip live">${live} live</span>`);
+  // In "last 7 days" mode the folder is a filtered view, and saying so beats an unexplained short list.
+  if (hidden) out.push(`<span class="chip" title="projects with no commit, edit or life evidence in the last ${RECENT_DAYS} days">${hidden} hidden</span>`);
   return out.join("");
 }
 
-function rootSection(root, projects) {
+function rootSection(root, allProjects) {
   const open = !state.collapsedRoots.has(root);
+  const recentOnly = state.recentRoots.has(root);
+  const projects = shownInRoot(root, allProjects);
+  const hidden = allProjects.length - projects.length;
   const anyOpen = projects.some((p) => state.expandedProjects.has(p.name));
+  const recentTitle = recentOnly
+    ? `showing ${projects.length} of ${allProjects.length} projects — only those touched in the last ${RECENT_DAYS} days; click to show every project`
+    : `showing all ${allProjects.length} projects; click to show only those touched in the last ${RECENT_DAYS} days`;
   return `<section class="root-group${open ? "" : " collapsed"}" data-root="${esc(root)}">
     <div class="root-head" data-toggle-root="${esc(root)}" title="${open ? "collapse" : "expand"} ${esc(labelRoot(root))}">
       <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
       <h2>${esc(labelRoot(root))}</h2>
-      <div class="chips">${rootChips(projects)}</div>
+      <div class="chips">${rootChips(projects, hidden)}</div>
       <span class="spacer"></span>
+      <button type="button" class="btn-root-recent${recentOnly ? " on" : ""}" data-root-recent="${esc(root)}" title="${esc(recentTitle)}">${recentOnly ? `${RECENT_DAYS}d` : "All"}</button>
       <button type="button" class="btn-root-collapse" data-root-collapse="${esc(root)}" title="${anyOpen ? "collapse" : "expand"} every project in ${esc(labelRoot(root))} (${projects.length})">${anyOpen ? "Collapse all" : "Expand all"}</button>
       <button type="button" class="btn-root-clone" data-root-clone="${esc(root)}" title="clone a GitHub repo over ssh into ${esc(labelRoot(root))}">+</button>
     </div>
@@ -2079,6 +2162,13 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     e.preventDefault();
     focusSpawn(plus.dataset.spawnProject);
+    return;
+  }
+  const rrecent = e.target.closest("[data-root-recent]");
+  if (rrecent) {
+    e.stopPropagation();
+    e.preventDefault();
+    toggleRootRecent(rrecent.dataset.rootRecent);
     return;
   }
   const rcollapse = e.target.closest("[data-root-collapse]");

@@ -144,6 +144,10 @@ section.project.collapsed .legend { display: none; }
 .root-head .spacer { flex: 1; }
 button.btn-root-collapse { padding: 3px 9px; font-size: 11px; }
 button.btn-root-collapse:hover { background: #232936; }
+/* all projects / last 7 days — a view toggle, so it uses a neutral accent, not a category colour */
+button.btn-root-recent { padding: 3px 9px; font-size: 11px; min-width: 38px; }
+button.btn-root-recent:hover { background: #232936; }
+button.btn-root-recent.on { color: var(--text); border-color: #4a5a72; background: #263041; font-weight: 700; }
 button.btn-root-clone {
   width: 28px;
   height: 28px;
