@@ -20,6 +20,9 @@ const state = {
   jobs: new Map(),
   jobLines: new Map(),
   replyDrafts: {},
+  // Transcript scroll per console (pre[data-out]). Folding a project throws the console markup away,
+  // so the position has to live outside the DOM or it comes back at the top.
+  outScrolls: {},
   collapsedJobs: loadCollapsedJobs(),
   expandedProjects: loadExpandedProjects(),
   collapsedFixed: loadCollapsedFixed(),
@@ -1041,6 +1044,17 @@ function restoreScrolls(root, map) {
   }
 }
 
+// Put every console in this subtree back where the reader left it, from the remembered positions.
+// Used after a subtree was rebuilt from scratch, where there is no old node to measure.
+function applyStoredScrolls(root) {
+  if (!root) return;
+  for (const o of root.querySelectorAll("pre.job-out")) {
+    const was = state.outScrolls[o.dataset.out];
+    if (!was) continue;
+    o.scrollTop = was.atBottom ? o.scrollHeight : Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight));
+  }
+}
+
 // Rebuilding the unattached list is cheap but not free; anything that makes several rows appear at
 // once (a boot pass, a discovery sweep) should coalesce into one repaint.
 let jobsRefreshQueued = false;
@@ -1072,6 +1086,8 @@ function renderJobs() {
   $("jobs").innerHTML = convs.length
     ? convs.map(conversationHtml).join("")
     : `<p class="empty">No unattached agents${nested ? ` — ${nested} agent${nested === 1 ? "" : "s"} listed under their worktree rows` : ""}.</p>`;
+  restoreScrolls($("jobs"), prevScrolls);
+  applyStoredScrolls($("jobs"));
   for (const c of convs) restoreReplyDraft(c.thread);
   const running = convs.filter((c) => c.turns.some((t) => t.status === "running" || t.status === "starting")).length;
   const folded = convs.filter((c) => state.collapsedJobs.has(c.thread)).length;
@@ -2210,6 +2226,7 @@ function placeRow(project, row, { flash = false } = {}) {
     restoreTyping(dEl, typing);
     const scrollMap = new Map(outs.map((o) => [o.id, { top: o.top, atBottom: o.atBottom }]));
     restoreScrolls(dEl, scrollMap);
+    applyStoredScrolls(dEl);
   }
   if (flash && old) {
     newTr.classList.add("flash");
@@ -2261,6 +2278,7 @@ function renderProjectRows(name) {
     }
   }
   restoreScrolls(tbody, prevScrolls);
+  applyStoredScrolls(tbody);
   // This path rebuilds the table in ranked order, which is how a row most often changes place (a
   // project event or a snapshot). Without this the move was silent — the node was new, so nothing
   // remembered where it used to be.
@@ -2922,6 +2940,21 @@ document.addEventListener("input", (e) => {
   const box = e.target.closest && e.target.closest(".reply-box");
   if (box) state.replyDrafts[box.dataset.reply] = box.value;
 });
+
+// Folding a project throws its console markup away, so where you had scrolled has to be remembered by
+// turn rather than by node — otherwise it comes back at the top. Capture phase: scroll does not bubble.
+document.addEventListener(
+  "scroll",
+  (e) => {
+    const pre = e.target;
+    if (!pre || pre.tagName !== "PRE" || !pre.classList || !pre.classList.contains("job-out") || !pre.dataset.out) return;
+    state.outScrolls[pre.dataset.out] = {
+      top: pre.scrollTop,
+      atBottom: pre.scrollHeight - pre.scrollTop - pre.clientHeight < 32,
+    };
+  },
+  true,
+);
 
 $("projects").addEventListener("click", (e) => {
   // The agent badge inside a row opens the row (and its agents block) instead of toggling blindly.
