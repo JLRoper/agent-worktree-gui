@@ -1891,6 +1891,19 @@ function sortedProjects() {
 // Re-order the board live, one folder at a time. A folder keeps its order while one of ITS projects
 // is open (moving sections under a reader mid-scroll is worse than a stale order); every other folder
 // follows the ranking immediately, which is what brings a busy project to the top of its folder.
+// Project reordering is a full sort of every folder, and row events arrive in bursts, so coalesce it
+// into one frame. Hidden tabs never paint: apply at once there rather than leave the order stale.
+let reorderFrame = 0;
+function queueReorderProjects() {
+  if (reorderFrame) return;
+  const flush = () => {
+    reorderFrame = 0;
+    reorderProjects();
+  };
+  if (document.hidden) return flush();
+  reorderFrame = requestAnimationFrame(flush);
+}
+
 function reorderProjects() {
   const host = $("projects");
   if (!host) return;
@@ -2086,6 +2099,9 @@ function queueRow(project, row, opts) {
     const batch = [...pendingRows.values()];
     pendingRows.clear();
     for (const b of batch) placeRow(b.project, b.row, b.opts);
+    // A row that starts or stops being alive changes where its project belongs, and liveness evidence
+    // moves far more often than a job status does — so let every row batch also re-rank the folders.
+    if (batch.length) queueReorderProjects();
   };
   if (document.hidden) return flush();
   rowFrame = requestAnimationFrame(flush);
@@ -2913,6 +2929,14 @@ setInterval(() => {
   const quiet = !state.lastEventAt || Date.now() - state.lastEventAt > 20000 || state.es?.readyState !== 1;
   if (quiet) void resync();
 }, 30000);
+
+setInterval(() => {
+  // A folder whose projects are all closed shows nothing but their titles, so a reorder there is easy
+  // to miss and no row event is arriving to trigger one — check it on a short clock instead. Folders
+  // holding an open project are skipped inside reorderProjects(), so this never moves a card being read.
+  if (document.hidden) return;
+  reorderProjects();
+}, 5000);
 
 document.addEventListener("visibilitychange", () => {
   // Coming back to the tab: one catch-up, then the stream and the 1s tick take over again.
