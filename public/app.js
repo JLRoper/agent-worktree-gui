@@ -2509,6 +2509,11 @@ document.addEventListener("click", async (e) => {
 // Reply affordances are re-created on every render, so they are handled at document level.
 document.addEventListener("keydown", (e) => {
   // Esc puts a pulled-out chat back; nothing else in the page holds that key.
+  if (e.key === "Escape" && !$("settings").classList.contains("hidden")) {
+    e.preventDefault();
+    toggleSettings(false);
+    return;
+  }
   if (e.key === "Escape" && state.maximized) {
     e.preventDefault();
     setMaximized(null);
@@ -2682,6 +2687,88 @@ try {
 } catch {
   applyZoom(100, { save: false });
 }
+
+// ---- interface font ------------------------------------------------------------
+const FONT_KEY = "wtgui.font";
+// Stacks, not families: the first one the machine actually has wins, so listing an uninstalled
+// face is harmless. The monospace entries change the panel's voice, not just its letterforms.
+const UI_FONTS = [
+  { id: "default", label: "Default (system UI)", stack: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' },
+  { id: "segoe", label: "Segoe UI", stack: '"Segoe UI", system-ui, sans-serif' },
+  { id: "calibri", label: "Calibri", stack: 'Calibri, "Segoe UI", sans-serif' },
+  { id: "tahoma", label: "Tahoma", stack: 'Tahoma, Verdana, sans-serif' },
+  { id: "verdana", label: "Verdana", stack: 'Verdana, Geneva, sans-serif' },
+  { id: "trebuchet", label: "Trebuchet MS", stack: '"Trebuchet MS", "Segoe UI", sans-serif' },
+  { id: "georgia", label: "Georgia (serif)", stack: 'Georgia, "Times New Roman", serif' },
+  { id: "consolas", label: "Consolas (monospace UI)", stack: 'Consolas, "Cascadia Mono", monospace' },
+  { id: "cascadia", label: "Cascadia Code (monospace UI)", stack: '"Cascadia Code", Consolas, monospace' },
+  { id: "jetbrains", label: "JetBrains Mono (monospace UI)", stack: '"JetBrains Mono", Consolas, monospace' },
+];
+
+function currentFontId() {
+  let id = "default";
+  try {
+    id = localStorage.getItem(FONT_KEY) || "default";
+  } catch {
+    /* private mode: the default is fine */
+  }
+  return UI_FONTS.some((f) => f.id === id) ? id : "default";
+}
+
+function applyUiFont(id, { save = true } = {}) {
+  const font = UI_FONTS.find((f) => f.id === id) || UI_FONTS[0];
+  document.documentElement.style.setProperty("--ui", font.stack);
+  const sel = $("font-select");
+  if (sel && sel.value !== font.id) sel.value = font.id;
+  const preview = $("font-preview");
+  if (preview) preview.style.fontFamily = font.stack;
+  if (save) {
+    try {
+      localStorage.setItem(FONT_KEY, font.id);
+    } catch {
+      /* private mode: the choice just will not persist */
+    }
+  }
+}
+
+function toggleSettings(open = null) {
+  const panel = $("settings");
+  if (!panel) return;
+  const show = open === null ? panel.classList.contains("hidden") : open;
+  panel.classList.toggle("hidden", !show);
+  if (!show) return;
+  const sel = $("font-select");
+  if (sel) {
+    sel.value = currentFontId();
+    sel.focus();
+  }
+}
+
+// The picker is filled once, at start-up: the saved choice then has a real option to sit on before
+// the panel is ever opened.
+function initFonts() {
+  const sel = $("font-select");
+  if (sel && !sel.options.length) {
+    sel.innerHTML = UI_FONTS.map((f) => `<option value="${esc(f.id)}">${esc(f.label)}</option>`).join("");
+  }
+  applyUiFont(currentFontId(), { save: false });
+}
+
+$("btn-settings")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleSettings();
+});
+$("btn-settings-close")?.addEventListener("click", () => toggleSettings(false));
+$("font-select")?.addEventListener("change", (e) => applyUiFont(e.target.value));
+document.addEventListener("click", (e) => {
+  const panel = $("settings");
+  if (!panel || panel.classList.contains("hidden")) return;
+  if (panel.contains(e.target) || (e.target.closest && e.target.closest("#btn-settings"))) return;
+  toggleSettings(false);
+});
+
+applyUiFont(currentFontId(), { save: false });
+initFonts();
 
 // Reflect the remembered collapse state of the two fixed cards before the first paint of them.
 for (const id of ["newagent", "agents"]) applyFixedCollapse(id);
