@@ -1937,9 +1937,9 @@ function sortedProjects() {
   });
 }
 
-// Re-order the board live, one folder at a time. A folder keeps its order while one of ITS projects
-// is open (moving sections under a reader mid-scroll is worse than a stale order); every other folder
-// follows the ranking immediately, which is what brings a busy project to the top of its folder.
+// Re-order the board live, one folder at a time. Only the projects the reader has OPEN hold their
+// place (moving one under a cursor mid-read is worse than a stale order); every other project sorts
+// into the gaps around them, which is what brings a busy project to the top while you read another.
 // Project reordering is a full sort of every folder, and row events arrive in bursts, so coalesce it
 // into one frame. Hidden tabs never paint: apply at once there rather than leave the order stale.
 let reorderFrame = 0;
@@ -1958,16 +1958,28 @@ function reorderProjects() {
   if (!host) return;
   const rank = projectRanks();
   const at = (n) => rank.get(n) || { tier: 2, activity: 0 };
-  const order = (els) =>
-    els.slice().sort((x, y) => {
-      const a = at(x.dataset.project);
-      const b = at(y.dataset.project);
-      return a.tier - b.tier || b.activity - a.activity || String(x.dataset.project).localeCompare(String(y.dataset.project));
+  const cmp = (x, y) => {
+    const a = at(x.dataset.project);
+    const b = at(y.dataset.project);
+    return a.tier - b.tier || b.activity - a.activity || String(x.dataset.project).localeCompare(String(y.dataset.project));
+  };
+  // An open project keeps its exact slot — opening one is you saying "this is the one I am reading",
+  // so it must not slide out from under the cursor. Everything closed sorts into the gaps around it:
+  // one open project is no reason to hold the rest of the folder still.
+  const order = (els) => {
+    const open = new Map();
+    els.forEach((el, i) => {
+      if (state.expandedProjects.has(el.dataset.project)) open.set(i, el);
     });
+    const free = els.filter((el) => !state.expandedProjects.has(el.dataset.project)).sort(cmp);
+    const out = [];
+    let f = 0;
+    els.forEach((_, i) => out.push(open.has(i) ? open.get(i) : free[f++]));
+    return out;
+  };
   for (const body of host.querySelectorAll(".root-body")) {
     const sections = [...body.querySelectorAll("section.project")];
     if (!sections.length) continue;
-    if (sections.some((s) => state.expandedProjects.has(s.dataset.project))) continue;
     const want = order(sections);
     if (want.every((el, i) => el === sections[i])) continue;
     for (const el of want) body.appendChild(el);
