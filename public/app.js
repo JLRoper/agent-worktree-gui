@@ -1483,7 +1483,9 @@ function chipsHtml(name) {
   if (live) out.push(`<span class="chip live">${live} live</span>`);
   if (open) out.push(`<span class="chip">${open} open idle</span>`);
   if (serving) out.push(`<span class="chip info">${serving} serving</span>`);
-  if (panelRunning) out.push(`<span class="chip warn">${panelRunning} panel agent${panelRunning === 1 ? "" : "s"}</span>`);
+  // A running panel agent is a live Hermes session, so it wears the same violet as the live count
+  // and carries the panel's ⧉ mark — amber is for "needs attention", not for "working right now".
+  if (panelRunning) out.push(`<span class="chip live">⧉ ${panelRunning} panel agent${panelRunning === 1 ? "" : "s"}</span>`);
   if (removable) out.push(`<span class="chip info">${removable} safe to remove</span>`);
   if (stale) out.push(`<span class="chip">${stale} reclassifying</span>`);
   return out.join("");
