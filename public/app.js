@@ -28,6 +28,7 @@ const state = {
   scanRoots: [],
   pollGap: new Map(), // key -> observed seconds between that row's scans, smoothed
   lastScanAt: new Map(), // key -> ms of the previous scan we rendered
+  turnOpen: new Map(), // job id -> whether that turn's body is expanded (default: only the newest)
 };
 
 const $ = (id) => document.getElementById(id);
@@ -377,10 +378,42 @@ function turnBody(turn) {
   return `<pre class="job-out" data-out="${esc(turn.id)}">${body}</pre>`;
 }
 
-function turnHead(turn, index, total) {
+// A turn is open when the reader opened it, otherwise only the newest turn is: opening an agent
+// shows its current turn in full and lists the earlier ones as the single request line each.
+function turnIsOpen(conv, turn) {
+  const forced = state.turnOpen.get(turn.id);
+  if (forced !== undefined) return forced;
+  return turn.id === conv.latest.id;
+}
+
+function toggleTurn(id) {
+  const turn = state.jobs.get(id);
+  if (!turn) return;
+  const conv = conversations().find((c) => c.thread === (turn.thread || turn.id));
+  if (!conv) return;
+  state.turnOpen.set(id, !turnIsOpen(conv, turn));
+  renderConversation(conv.thread);
+}
+
+function turnHead(turn, index, open) {
   const label = `turn ${turn.turn || index + 1}`;
-  const state_ = turn.status === "running" || turn.status === "starting" ? `running ${elapsed(turn)}` : `${turn.status} · ${elapsed(turn)}${turn.tokens?.total ? ` · ${turn.tokens.total} tok` : ""}`;
-  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}">${esc(label)} · ${esc(state_)}${total > 1 ? "" : ""}</div>`;
+  const state_ =
+    turn.status === "running" || turn.status === "starting"
+      ? `running ${elapsed(turn)}`
+      : `${turn.status} · ${elapsed(turn)}${turn.tokens?.total ? ` · ${turn.tokens.total} tok` : ""}`;
+  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turn.id)}" title="${open ? "collapse" : "expand"} this turn"><span class="chev">${open ? "\u25be" : "\u25b8"}</span> ${esc(label)} · ${esc(state_)}</div>`;
+}
+
+// One turn: its head, then either the full prompt + output, or a single line carrying the request
+// that turn was about. The one-line form is what makes a long conversation readable.
+function turnBlock(conv, turn, index) {
+  const open = turnIsOpen(conv, turn);
+  if (!open) {
+    return `<div class="turn folded" data-turn="${esc(turn.id)}">${turnHead(turn, index, false)}` +
+      `<div class="turn-prompt" data-toggle-turn="${esc(turn.id)}" title="${esc(turn.prompt || "")}">${esc(turn.prompt || "(no prompt recorded)")}</div></div>`;
+  }
+  return `<div class="turn" data-turn="${esc(turn.id)}">${turnHead(turn, index, true)}` +
+    `<div class="job-prompt">${esc(turn.prompt || "")}</div>${turnBody(turn)}</div>`;
 }
 
 function conversationHtml(conv) {
@@ -399,9 +432,7 @@ function conversationHtml(conv) {
   const foot = latest.status === "running" || latest.status === "starting"
     ? `<span class="dimmer mono">running ${esc(elapsed(latest))}</span>`
     : `<span class="mono dim">exit ${latest.exitCode ?? "?"} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${latest.tokens.total}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>`;
-  const blocks = turns
-    .map((t, i) => `${turnHead(t, i, turns.length)}<div class="job-prompt">${esc(t.prompt)}</div>${turnBody(t)}`)
-    .join("");
+  const blocks = turns.map((t, i) => turnBlock(conv, t, i)).join("");
   return `<div class="job${collapsed ? " collapsed" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}">
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
@@ -534,6 +565,9 @@ async function answerApproval(id, choice, btn) {
 function renderJobs() {
   const convs = conversations();
   for (const id of [...state.collapsedJobs]) if (!convs.some((c) => c.thread === id)) state.collapsedJobs.delete(id);
+  // Forgetting a cleared job's explicit turn state keeps the map from growing forever.
+  const live = new Set([...state.jobs.keys()]);
+  for (const id of [...state.turnOpen.keys()]) if (!live.has(id)) state.turnOpen.delete(id);
   $("jobs").innerHTML = convs.length ? convs.map(conversationHtml).join("") : '<p class="empty">No agents started from here yet.</p>';
   for (const c of convs) restoreReplyDraft(c.thread);
   const running = convs.filter((c) => c.turns.some((t) => t.status === "running" || t.status === "starting")).length;
@@ -550,9 +584,12 @@ function renderJobs() {
 
 function updateJob(j, { scroll = false } = {}) {
   const prev = state.jobs.get(j.id);
+  const statusChanged = !prev || prev.status !== j.status;
   state.jobs.set(j.id, { ...prev, ...j });
   if (!state.jobLines.has(j.id) && j.lines?.length) state.jobLines.set(j.id, j.lines.slice());
   renderConversation(j.thread || j.id, { scroll });
+  // Starting or finishing a turn changes what the worktree rows should say about themselves.
+  if (statusChanged) repaintAgentState();
 }
 
 function renderConversation(thread, { scroll = false } = {}) {
@@ -762,6 +799,25 @@ function jumpToAgent(thread) {
   setTimeout(() => card.classList.remove("jump"), 1700);
 }
 
+// The panel's own agents are the freshest evidence there is — we are literally driving the process
+// — so the chip and the row's liveness must follow the job list, not the last git scan. The map is
+// memoized per job change because sigChips runs once per row.
+let panelMapCache = null;
+function panelMap() {
+  if (!panelMapCache) panelMapCache = panelAgentsByPath();
+  return panelMapCache;
+}
+function invalidatePanelMap() {
+  panelMapCache = null;
+}
+function panelFor(row) {
+  return panelMap().get(normPath(row.path).toLowerCase()) || null;
+}
+// A row is live if a signal fired OR one of our agents is running in it right now.
+function isRowLive(row) {
+  return Boolean(row.live) || Boolean(panelFor(row)?.running);
+}
+
 function sigChips(row) {
   const s = row.signals || {};
   const out = [];
@@ -769,17 +825,33 @@ function sigChips(row) {
   if (s.board?.on) out.push(`<span class="sig sig-board" title="board entry, PID alive now: ${esc((s.board.entries || []).map((e) => e.pid).join(', '))}">● board</span>`);
   if (s.ports?.on) out.push(`<span class="sig sig-port" title="dev server listening: ${esc((s.ports.listening || []).join(', '))}">:${esc((s.ports.listening || []).join(' :'))}</span>`);
   if (s.files?.on) out.push(`<span class="sig sig-files" title="files edited ${relTime(s.files.at)} ago">✎ files</span>`);
-  const panel = panelAgentsByPath().get(String(row.path || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase());
+  const panel = panelFor(row);
   if (panel) {
     const t = panel.threads[0];
     out.push(
       `<button class="sig ${panel.running ? "sig-panel" : "sig-panel-done"}" data-agent-thread="${esc(t)}" ` +
-        `title="${panel.running ? `a Hermes agent you started here is running in this worktree` : `the agent you started here has finished`} · ${esc(t)} — click to jump to it">` +
-        `⧉ panel${panel.running ? "" : " (done)"}</button>`,
+        `title="${panel.running ? `a Hermes agent you started here is running in this worktree right now` : `the agent you started here is between turns (nothing running)`} · ${esc(t)} — click to jump to it">` +
+        `⧉ panel${panel.running ? " running" : " (done)"}</button>`,
     );
   }
   if (!out.length && row.idle) out.push(`<span class="sig sig-idle" title="a Hermes session is open here but idle — not counted as live">⧉ ${s.hermes?.idle ?? 1} idle</span>`);
   return out.join("");
+}
+
+// Repaint only the chip strip of one row, so a turn starting/finishing lands instantly instead of
+// waiting for that row's next scan (which can be 45-90s away).
+function paintRowChips(row) {
+  const cell = document.querySelector(`td.age[data-key="${CSS.escape(keyOf(row.project, row.path))}"]`);
+  const holder = cell?.querySelector(".sigs");
+  if (!holder) return;
+  const html = sigChips(row);
+  if (holder.innerHTML !== html) holder.innerHTML = html;
+}
+
+function repaintAgentState() {
+  invalidatePanelMap();
+  for (const row of state.rows.values()) paintRowChips(row);
+  for (const name of state.projects.keys()) refreshChips(name);
 }
 
 function livenessLines(row) {
@@ -880,7 +952,7 @@ function ageCellHtml(row) {
       <svg class="poll-ring" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
         <circle class="poll-track" cx="8" cy="8" r="6" fill="none" stroke-width="2"></circle>
         <circle class="poll-arc" cx="8" cy="8" r="6" fill="none" stroke-width="2" transform="rotate(-90 8 8)" stroke-dasharray="${RING_C.toFixed(2)}" stroke-dashoffset="${ringOffset(st)}" stroke="${ringStroke(st)}"></circle>
-      </svg><span class="age-num${Number.isFinite(alive) ? "" : " dimmer"}">${esc(label)}</span>${sigChips(row)}</td>`;
+      </svg><span class="age-num${Number.isFinite(alive) ? "" : " dimmer"}">${esc(label)}</span><span class="sigs">${sigChips(row)}</span></td>`;
 }
 
 function paintAgeCell(cell, row) {
@@ -890,7 +962,9 @@ function paintAgeCell(cell, row) {
     arc.setAttribute("stroke-dashoffset", ringOffset(st));
     arc.setAttribute("stroke", ringStroke(st));
   }
-  const alive = Date.parse(row.lastAliveAt || "");
+  // A running panel agent IS life, observed by us, whatever the last scan said.
+  const running = panelFor(row)?.running;
+  const alive = running ? st.now : Date.parse(row.lastAliveAt || "");
   const live = Number.isFinite(alive);
   const num = cell.querySelector(".age-num");
   if (num) {
@@ -899,7 +973,7 @@ function paintAgeCell(cell, row) {
   }
   const cadence = st.every === st.configured ? `every ${st.every}s` : `every ${st.every}s, observed (configured ${st.configured}s)`;
   cell.title =
-    `last life ${live ? `${fmtDur(st.now - alive)} ago` : "never seen"} · polled ${relTime(row.scannedAt)} ago · ` +
+    `last life ${live ? `${fmtDur(st.now - alive)} ago${running ? " (a panel agent is running here now)" : ""}` : "never seen"} · polled ${relTime(row.scannedAt)} ago · ` +
     `next read ${st.remain > 0 ? `in ${Math.ceil(st.remain / 1000)}s` : `due now${st.overdue > st.total ? ` (overdue ${fmtDur(st.overdue)})` : ""}`} (${cadence})`;
 }
 
@@ -954,8 +1028,8 @@ function chipsHtml(name) {
     return !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN";
   }).length;
   const dirty = rows.filter((r) => r.dirty || r.untracked).length;
-  const live = rows.filter((r) => r.live).length;
-  const open = rows.filter((r) => !r.live && r.idle).length;
+  const live = rows.filter(isRowLive).length;
+  const open = rows.filter((r) => !isRowLive(r) && r.idle).length;
   const serving = rows.filter((r) => r.signals?.ports?.on).length;
   const removable = rows.filter((r) => r.mergeable).length;
   const panelRunning = rows.filter((r) => panelAgentsByPath().get(String(r.path || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase())?.running).length;
@@ -1023,7 +1097,7 @@ function rootChips(projects) {
     return v && !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN";
   }).length;
   const dirty = rows.filter((r) => r.dirty || r.untracked).length;
-  const live = rows.filter((r) => r.live).length;
+  const live = rows.filter(isRowLive).length;
   const out = [
     `<span class="chip">${projects.length} project${projects.length === 1 ? "" : "s"}</span>`,
     `<span class="chip">${rows.length} worktrees</span>`,
@@ -1196,6 +1270,8 @@ function paintConfigLine() {
 }
 
 function renderAll() {
+  // A full re-render rebuilds the chips from scratch; the job list is the freshest input.
+  invalidatePanelMap();
   const projects = sortedProjects();
   for (const id of [...state.expandedProjects]) if (!state.projects.has(id)) state.expandedProjects.delete(id);
   // Wrap every project in its folder accordion: one group per scan root, and a sibling group
@@ -1245,6 +1321,7 @@ function applySnapshot(data) {
       if (!state.jobLines.has(j.id) && j.lines?.length) state.jobLines.set(j.id, j.lines.slice());
     }
     renderJobs();
+    invalidatePanelMap();
   }
   if (Array.isArray(data.approvals)) {
     state.approvals.clear();
@@ -1353,6 +1430,7 @@ function connect() {
     state.jobs.clear();
     for (const j of JSON.parse(e.data).jobs) state.jobs.set(j.id, j);
     renderJobs();
+    repaintAgentState();
   });
   es.addEventListener("heartbeat", (e) => {
     state.pool = JSON.parse(e.data).pool;
@@ -1477,6 +1555,14 @@ document.addEventListener("click", async (e) => {
   const replyBtn = e.target.closest(".btn-reply");
   if (replyBtn) {
     await sendReply(replyBtn.dataset.thread);
+    return;
+  }
+  // A turn folds on its own: the head row or the one-line request opens/closes that turn,
+  // independently of the conversation card it sits in.
+  const turnToggle = e.target.closest("[data-toggle-turn]");
+  if (turnToggle) {
+    e.preventDefault();
+    toggleTurn(turnToggle.dataset.toggleTurn);
     return;
   }
   const head = e.target.closest(".job-head");

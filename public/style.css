@@ -328,14 +328,33 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 .job-foot { margin-top: 6px; font-size: 11.5px; }
 
 /* a conversation: turns stacked top to bottom, reply box at the bottom */
+.turn { margin: 0; }
 .turn-head {
   margin: 8px 0 2px 18px;
   padding-top: 6px;
   border-top: 1px solid #1d222b;
   font-size: 11px;
   letter-spacing: .04em;
+  cursor: pointer;
+  user-select: none;
 }
-.job-body > .turn-head:first-child { margin-top: 4px; border-top: none; }
+.turn-head .chev { color: var(--dimmer); font-size: 9px; display: inline-block; width: 8px; }
+.turn-head:hover { color: var(--text); }
+.turn-head:hover .chev { color: var(--text); }
+.job-body > .turn:first-child > .turn-head { margin-top: 4px; border-top: none; }
+/* A folded turn is one line: the request that turn was about, ellipsized, full text on hover. */
+.turn.folded .turn-head { margin-bottom: 0; }
+.turn-prompt {
+  margin: 1px 0 1px 27px;
+  font: 12.5px/1.5 var(--mono);
+  color: #c7d0db;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  opacity: .82;
+}
+.turn-prompt:hover { opacity: 1; color: #e6e9ef; }
 .thread-name { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reply {
   margin: 8px 0 2px 18px;

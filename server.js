@@ -155,8 +155,45 @@ const settingsOut = () => ({
   spawnEnabled: true,
 });
 
+const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+
+// Rows are written by the scheduler, so their copy of the panel-agent state is as old as that
+// row's last scan (45-90s on a big fleet). Overlay it at snapshot time: a turn starting or
+// finishing is known here immediately, and the row must not keep claiming "done" meanwhile.
+function withLiveAgents(snap) {
+  const agents = jobs.agentPaths();
+  if (!agents.size) return snap;
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const mine = agents.get(normPathKey(row.path));
+      if (!mine) continue;
+      row.panelAgent = mine;
+      row.signals = { ...(row.signals || {}), panel: { on: mine.running > 0, running: mine.running, total: mine.total, threads: mine.threads } };
+      // The stored row may already name this reason from its last scan; replace it, never stack it.
+      const base = String(row.liveWhy || "").replace(/panel-agent\(\d+\)/g, "").trim();
+      if (mine.running > 0) {
+        row.live = true;
+        row.lastAliveAt = new Date().toISOString();
+        row.liveWhy = `${base ? `${base} ` : ""}panel-agent(${mine.running})`;
+      } else {
+        // A turn just finished. The row the scan wrote may still say live because the agent WAS
+        // running then; drop that reason now and let the other signals decide.
+        const s = row.signals || {};
+        const other = Boolean(s.hermes?.on || s.board?.on || s.ports?.on || s.files?.on);
+        if (!other) {
+          row.live = false;
+          row.liveWhy = base || "no session, board entry, port or file edit";
+        } else {
+          row.liveWhy = base;
+        }
+      }
+    }
+  }
+  return snap;
+}
+
 function snapshot() {
-  return {
+  return withLiveAgents({
     ...store.snapshot({ settings: settingsOut() }),
     jobs: jobs.list(),
     approvals: approvals.list(),
@@ -169,7 +206,7 @@ function snapshot() {
       maxRuntimeSeconds: jobs.maxRuntimeSeconds,
       projects: registry.projects.map((p) => ({ name: p.name, path: p.path, activityAt: p.activityAt || null, empty: Boolean(p.empty) })),
     },
-  };
+  });
 }
 
 const heartbeat = setInterval(() => {
