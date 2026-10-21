@@ -596,6 +596,10 @@ async function sendReply(thread) {
     state.replyDrafts[thread] = "";
     if (box) box.value = "";
     updateJob(d.job, { scroll: true });
+    // Sending a reply is you switching to the new turn: fold everything before it, including turns
+    // you had opened by hand, so the card shows one full chat — the one you are now in — instead of
+    // that one plus the scrollback you were reading a moment ago.
+    focusNewTurn(thread, d.job.id);
   } catch (err) {
     const warn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
     if (warn) warn.textContent = `reply failed: ${err.message}`;
@@ -606,6 +610,19 @@ async function sendReply(thread) {
 
 function jobHtml(j) {
   return conversationHtml({ thread: j.thread || j.id, turns: [j], first: j, latest: j });
+}
+
+// Make one turn the only open one in its conversation. Explicit per-turn state is dropped for the
+// older turns (their default is "folded" once they are no longer the newest) and the new turn is
+// pinned open, so a reply lands with the previous turn collapsed to its request line.
+function focusNewTurn(thread, turnId) {
+  for (const j of state.jobs.values()) {
+    if ((j.thread || j.id) !== thread) continue;
+    if (j.id === turnId) state.turnOpen.set(j.id, true);
+    else state.turnOpen.delete(j.id);
+  }
+  renderConversation(thread);
+  scrollThreadToBottom(thread);
 }
 
 // One agent's "forget this": two clicks, no modal. The first arms it (a stray click must not delete
