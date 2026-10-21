@@ -1368,6 +1368,9 @@ function repaintAgentState() {
   invalidatePanelMap();
   for (const row of state.rows.values()) paintRowChips(row);
   for (const name of state.projects.keys()) refreshChips(name);
+  // An agent starting or finishing changes where its project belongs: bring it up (or let it settle)
+  // without waiting for the next 30s snapshot, in every folder the reader is not working in.
+  reorderProjects();
 }
 
 function livenessLines(row) {
@@ -1634,31 +1637,73 @@ function shownInRoot(root, projects) {
   return projects.filter((p) => projectTouchedAt(p) >= cutoff);
 }
 
-function sortedProjects() {
-  return [...state.projects.values()].sort(
-    (a, b) => projectActivity(b) - projectActivity(a) || String(a.name).localeCompare(String(b.name)),
-  );
+// Where a project belongs in its folder: a panel agent working there leads, then any live worktree,
+// then the rest by newest activity. Activity alone never moved a project that agents were working in
+// — a turn leaves no commit or file edit behind, so "several agents busy here" ranked like "untouched".
+function projectRanks() {
+  const rank = new Map();
+  for (const p of state.projects.values()) rank.set(p.name, { tier: 2, activity: Date.parse(p.activityAt || "") || 0 });
+  for (const r of state.rows.values()) {
+    const cur = rank.get(r.project);
+    if (!cur) continue;
+    if (panelFor(r)?.running) cur.tier = 0;
+    else if (cur.tier > 1 && isRowLive(r)) cur.tier = 1;
+    cur.activity = Math.max(cur.activity, Date.parse(r.lastEdit || "") || 0, Date.parse(r.lastCommit || "") || 0);
+  }
+  return rank;
 }
 
+function sortedProjects() {
+  const rank = projectRanks();
+  const at = (p) => rank.get(p.name) || { tier: 2, activity: 0 };
+  return [...state.projects.values()].sort((a, b) => {
+    const ra = at(a);
+    const rb = at(b);
+    return ra.tier - rb.tier || rb.activity - ra.activity || String(a.name).localeCompare(String(b.name));
+  });
+}
+
+// Re-order the board live, one folder at a time. A folder keeps its order while one of ITS projects
+// is open (moving sections under a reader mid-scroll is worse than a stale order); every other folder
+// follows the ranking immediately, which is what brings a busy project to the top of its folder.
 function reorderProjects() {
   const host = $("projects");
-  // A project only ever moves inside its own folder — never into a folder it is not in.
-  for (const p of sortedProjects()) {
-    const sec = host.querySelector(`section.project[data-project="${CSS.escape(p.name)}"]`);
-    const body = sec?.closest(".root-body");
-    if (body) body.appendChild(sec);
+  if (!host) return;
+  const rank = projectRanks();
+  const at = (n) => rank.get(n) || { tier: 2, activity: 0 };
+  const order = (els) =>
+    els.slice().sort((x, y) => {
+      const a = at(x.dataset.project);
+      const b = at(y.dataset.project);
+      return a.tier - b.tier || b.activity - a.activity || String(x.dataset.project).localeCompare(String(y.dataset.project));
+    });
+  for (const body of host.querySelectorAll(".root-body")) {
+    const sections = [...body.querySelectorAll("section.project")];
+    if (!sections.length) continue;
+    if (sections.some((s) => state.expandedProjects.has(s.dataset.project))) continue;
+    const want = order(sections);
+    if (want.every((el, i) => el === sections[i])) continue;
+    for (const el of want) body.appendChild(el);
   }
-  // Then the folders themselves, by their most recently active project.
+  // Then the folders themselves, on the same ranking: a folder holding the project an agent is busy
+  // in leads, then the one worked in most recently.
   const groups = [...host.querySelectorAll("section.root-group")];
-  const activity = (g) => {
-    let best = 0;
+  const folderRank = (g) => {
+    let tier = 2;
+    let act = 0;
     for (const s of g.querySelectorAll("section.project")) {
-      best = Math.max(best, projectActivity(state.projects.get(s.dataset.project) || {}));
+      const r = at(s.dataset.project);
+      tier = Math.min(tier, r.tier);
+      act = Math.max(act, r.activity);
     }
-    return best;
+    return { tier, act };
   };
-  groups.sort((a, b) => activity(b) - activity(a) || String(a.dataset.root || "").localeCompare(String(b.dataset.root || "")));
-  for (const g of groups) host.appendChild(g);
+  const wantGroups = groups.slice().sort((a, b) => {
+    const ra = folderRank(a);
+    const rb = folderRank(b);
+    return ra.tier - rb.tier || rb.act - ra.act || String(a.dataset.root || "").localeCompare(String(b.dataset.root || ""));
+  });
+  if (!wantGroups.every((g, i) => g === groups[i])) for (const g of wantGroups) host.appendChild(g);
 }
 
 // One accordion per folder. The header carries the folder path and the aggregate state of
@@ -1754,9 +1799,10 @@ function refreshChips(name) {
 function reorder(name) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
-  // Freeze the order while a row is open: an agent starting or finishing would otherwise move the
-  // row out from under the reader mid-sentence.
-  if (state.expanded.size > 0) return;
+  // Freeze these rows only while a row in THIS project is open: an agent starting or finishing must
+  // not move the row being read, but it has no business holding every other project's order still.
+  const openHere = [...state.expanded].some((k) => state.rows.get(k)?.project === name);
+  if (openHere) return;
   const rows = orderRows([...state.rows.values()].filter((r) => r.project === name));
   const want = [];
   for (const r of rows) {
@@ -1994,6 +2040,7 @@ function applySnapshot(data) {
       renderProjectRows(p.name); // no-ops for a collapsed project
     }
   }
+  reorderProjects();
   $("health").className = "dot ok";
   $("banner").classList.add("hidden");
 }
