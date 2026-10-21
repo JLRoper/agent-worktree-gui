@@ -12,7 +12,7 @@ import { Pool } from "./lib/pool.js";
 import { Store } from "./lib/store.js";
 import { Scheduler } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
-import { Jobs, keyStatus, makeThreadName } from "./lib/jobs.js";
+import { Jobs, makeThreadName, previewRequest } from "./lib/jobs.js";
 import { gitIn } from "./lib/scan.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
 import { Approvals } from "./lib/approvals.js";
@@ -116,17 +116,17 @@ function readBody(req, limit = 256 * 1024) {
   });
 }
 
-// `hermes -w` branches from HEAD, so a repo with no commits cannot host a worktree. Refuse
-// with a reason up front instead of letting the spawn die inside the CLI.
+// A worktree branches from HEAD, so a repo with no commits cannot host one. Refuse with a reason up
+// front instead of letting the run start in a tree that cannot exist.
 async function spawnBlocker(cwd, target) {
   if (target?.empty) {
-    return `${target.name} has no commits yet (unborn HEAD), so hermes -w cannot create a worktree there — make an initial commit first.`;
+    return `${target.name} has no commits yet (unborn HEAD), so a worktree cannot be created there — make an initial commit first.`;
   }
   const head = await gitIn(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"], 15000);
   if (head.ok) return null;
   const err = String(head.err || head.out || "");
-  if (/not a git repository/i.test(err)) return `${cwd} is not a git repository — hermes -w needs one.`;
-  return `${cwd} has no commits yet (unborn HEAD), so hermes -w cannot create a worktree there — make an initial commit first.`;
+  if (/not a git repository/i.test(err)) return `${cwd} is not a git repository — an agent works in a worktree, which needs one.`;
+  return `${cwd} has no commits yet (unborn HEAD), so a worktree cannot be created there — make an initial commit first.`;
 }
 
 let config = await loadConfig();
@@ -171,7 +171,10 @@ function adoptFromJob(evt) {
   const j = evt.job;
   if (!j || !j.worktreePath || adoptedTrees.has(j.worktreePath)) return;
   adoptedTrees.add(j.worktreePath);
-  const project = registry.projects.find((p) => normPathKey(p.path) === normPathKey(j.cwd));
+  // The tree is created by THIS panel now, so the job knows its project directly — the worktree
+  // path alone would not match any project row and the card would sit "unattached" until the next
+  // discovery pass.
+  const project = registry.projects.find((p) => normPathKey(p.path) === normPathKey(j.projectPath || j.cwd));
   if (!project) return;
   void scheduler.adoptWorktree(project.name, j.worktreePath).catch(() => {});
 }
@@ -249,8 +252,9 @@ function snapshot() {
     skipped: registry.skipped,
     scanRoots: config.scanRoots || [],
     spawn: {
-      binary: jobs.binary,
-      key: keyStatus(),
+      // Spawning is no longer "is there a hermes.exe on this box": it is "is the gateway's api_server
+      // reachable and keyed". The panel probes and reports, instead of assuming.
+      transport: jobs.transportInfo(),
       defaultCwd: config.defaultCwd,
       maxRuntimeSeconds: jobs.maxRuntimeSeconds,
       projects: registry.projects.map((p) => ({ name: p.name, path: p.path, activityAt: p.activityAt || null, empty: Boolean(p.empty) })),
@@ -337,7 +341,8 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/jobs" && req.method === "GET") {
-      return sendJson(res, 200, { jobs: jobs.list(), binary: jobs.binary, key: keyStatus(), defaultCwd: config.defaultCwd });
+      await jobs.probe();
+      return sendJson(res, 200, { jobs: jobs.list(), transport: jobs.transportInfo(), defaultCwd: config.defaultCwd });
     }
 
     // ---- approvals: the human side of the Hermes approval-transport contract ---------------
@@ -372,26 +377,30 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, approvals.status(id));
     }
 
-    // Preview the exact command that would run — the confirm affordance.
+    // Preview the exact request that would be sent — the confirm affordance.
     if (route === "/api/agents/preview" && req.method === "POST") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
-      const { buildArgv } = await import("./lib/jobs.js");
       const target = body?.project ? registry.projects.find((p) => p.name === body.project) : null;
       const cwd = body?.cwd || target?.path || config.defaultCwd;
       const blocked = await spawnBlocker(cwd, target);
       // The thread name carries a random suffix, so the preview shows its shape.
-      const argv = buildArgv({ ...(body || {}), thread: makeThreadName(body?.prompt || "") });
-      return sendJson(res, 200, { binary: jobs.binary, argv, cwd, project: target?.name || null, blocked, command: `${jobs.binary} ${argv.join(" ")}` });
+      const req0 = previewRequest({ ...(body || {}), thread: makeThreadName(body?.prompt || "") });
+      return sendJson(res, 200, { transport: jobs.transportInfo(), request: req0, cwd, project: target?.name || null, blocked, command: `POST ${jobs.api.url}${req0.path}\n${JSON.stringify(req0.body, null, 1)}` });
     }
 
     if (route === "/api/agents" && req.method === "POST") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       if (body.dryRun) {
-        const { buildArgv } = await import("./lib/jobs.js");
-        const argv = buildArgv(body);
-        return sendJson(res, 200, { dryRun: true, binary: jobs.binary, argv, cwd: body.cwd || config.defaultCwd, command: `${jobs.binary} ${argv.join(" ")}` });
+        const req0 = previewRequest(body);
+        return sendJson(res, 200, { dryRun: true, transport: jobs.transportInfo(), request: req0, cwd: body.cwd || config.defaultCwd, command: `POST ${jobs.api.url}${req0.path}\n${JSON.stringify(req0.body, null, 1)}` });
+      }
+      // Refuse before promising a job: a stopped gateway or a missing key is the answer to "why did
+      // nothing happen", not a card that says "starting" forever.
+      const transport = await jobs.probe();
+      if (!transport.reachable || !transport.capabilities?.runs) {
+        return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}` });
       }
       const target = body.project ? registry.projects.find((p) => p.name === body.project) : null;
       if (body.project && !target) return sendJson(res, 400, { error: `unknown project: ${body.project}` });
@@ -459,6 +468,15 @@ const server = createServer(async (req, res) => {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       return sendJson(res, 200, { ok: jobs.cancel(String(body.id || "")) });
+    }
+
+    // Steer a turn that is already running: the text is injected at the agent's next tool boundary,
+    // so it can change course without ending the turn. 409 means it crossed the last boundary.
+    if (route === "/api/jobs/steer" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const r = await jobs.steer(String(body.id || ""), body.text ?? body.input);
+      return sendJson(res, r.ok ? 200 : r.code === "run_not_accepting_steer" ? 409 : 400, r);
     }
 
     if (route === "/api/jobs/attach" && req.method === "POST") {
@@ -666,14 +684,14 @@ const server = createServer(async (req, res) => {
 server.listen(config.port, config.host, () => {
   log(`agent-worktree-gui on http://${config.host}:${config.port}`);
   log(`projects: ${config.projects.map((p) => p.name).join(", ") || "(none)"} | threads: ${config.threads} | fast ${config.worktreeSeconds}s / full ${config.slowSeconds}s`);
-  log(`agent spawn: ${jobs.binary} (cwd ${config.defaultCwd}) | key: ${keyStatus().fromEnv ? "env" : keyCacheHint()}`);
+  log(`agent transport: ${jobs.api.url} (key ${jobs.api.key ? "loaded" : "MISSING"}) | default cwd ${config.defaultCwd}`);
+  void jobs.probe({ fresh: true }).then((t) => {
+    if (!t.reachable) log(`agent transport UNREACHABLE: ${t.error} — spawns will be refused until the gateway is back`);
+    else log(`agent transport ready: hermes ${t.capabilities?.version || "?"} · runs ${t.capabilities?.runs ? "yes" : "no"} · steer ${t.capabilities?.steer ? "yes" : "no"} · per-run cwd ${t.capabilities?.runCwd ? "yes (patched gateway)" : "NO (stock gateway — agents run in the gateway's directory)"}`);
+  });
 });
 
-function keyCacheHint() {
-  return "registry lookup on first spawn";
-}
-
-// Seed the store from the last known project list BEFORE anything slow. A restart used to answer
+// Seed the store from the last known project list BEFORE anything slow.
 // `/api/state` with zero projects for the ~25s its first sweep takes, which the page renders as
 // "No git repos found under scanRoots" — the board vanished and came back a minute later.
 for (const p of registry.projects) store.ensureProject(p);

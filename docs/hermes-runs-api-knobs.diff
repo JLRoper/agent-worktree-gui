@@ -1,0 +1,127 @@
+diff --git a/gateway/platforms/api_server.py b/gateway/platforms/api_server.py
+index 8045b00317..c85e0f8874 100644
+--- a/gateway/platforms/api_server.py
++++ b/gateway/platforms/api_server.py
+@@ -68,6 +68,10 @@ _BROWSER_CONTROL_PROTOCOL_VERSION = 1
+ _STATIC_FEATURE_FLAGS = {
+     "run_status": True, "run_events_sse": True, "run_stop": True, "run_steer": True,
+     "run_approval_response": True, "tool_progress_events": True, "approval_events": True,
++    # Local patch (docs/hermes-runs-api-knobs.md): a run body may carry cwd / max_turns /
++    # run_budget. Advertised so a host can tell a patched gateway from a stock one instead of
++    # sending fields that are silently ignored.
++    "run_cwd": True, "max_turns": True, "run_budget": True,
+     "session_resources": True, "model_options": True, "session_chat": True,
+     "session_chat_streaming": True, "session_fork": True, "session_model_lock": True,
+     "reasoning_streaming": True,
+@@ -2343,7 +2347,9 @@ class APIServerAdapter(OpenAICompatRoutesMixin, BasePlatformAdapter):
+         model_options: Optional[dict[str, Any]] = None, route: Optional[dict[str, Any]] = None,
+         session_model: Optional[str] = None, confirmed_runtime_lock: bool = False,
+         room_dispatch: Optional[dict[str, Any]] = None,
+-        room_execution_policy: Optional[dict[str, Any]] = None) -> Any:
++        room_execution_policy: Optional[dict[str, Any]] = None,
++        cwd: Optional[str] = None, max_turns: Optional[int] = None,
++        run_budget: Optional[float] = None) -> Any:
+         """Create an AIAgent from the gateway runtime config + platform toolsets.
+         ``gateway_session_key`` persists across transcripts (memory scope), unlike ``session_id``;
+         ``route`` / ``session_model`` are mutually exclusive; ``confirmed_runtime_lock`` beats the
+@@ -2409,6 +2415,15 @@ class APIServerAdapter(OpenAICompatRoutesMixin, BasePlatformAdapter):
+             "memory_manager": self._memory_sessions.checkout(session_id)}
+         if request_service_tier is not _REQUEST_OPTION_MISSING:
+             agent_kwargs["service_tier"] = request_service_tier
++        # Per-run knobs (local patch). ``cwd`` sets the agent's own terminal scope — the same field
++        # ``hermes --in`` writes — so a run works in the worktree it was given instead of wherever
++        # the gateway happens to be running, and it is per-agent, not a process-wide chdir.
++        if cwd:
++            agent_kwargs["cwd"] = cwd
++        if max_turns:
++            agent_kwargs["max_iterations"] = max(1, int(max_turns))
++        if run_budget:
++            agent_kwargs["run_budget_seconds"] = float(run_budget)
+         agent = AIAgent(**agent_kwargs)
+         route_source = (
+             "session_model_lock" if confirmed_runtime_lock
+diff --git a/gateway/platforms/api_server_runs.py b/gateway/platforms/api_server_runs.py
+index bfb5b4dbee..4a9ccb89b8 100644
+--- a/gateway/platforms/api_server_runs.py
++++ b/gateway/platforms/api_server_runs.py
+@@ -617,6 +617,44 @@ async def run_internal_session_turn(self, *, session_id: str, text: str, profile
+             _api_server._api_request_profile.reset(token)
+ 
+ 
++def _resolve_run_knobs(body: Any, _openai_error) -> Tuple[Optional[str], Optional[int], Optional[float], Any]:
++    """Per-run ``cwd`` / ``max_turns`` / ``run_budget`` from a run body (local patch).
++
++    ``cwd`` must be an existing directory: a run told to work in a tree that is not there would
++    otherwise write somewhere else entirely, which is worse than refusing it. The two caps are
++    plain numbers; an unparseable value is a 400 rather than a silent default.
++    """
++    if not isinstance(body, dict):
++        return None, None, None, None
++    cwd: Optional[str] = None
++    raw_cwd = body.get("cwd")
++    if raw_cwd not in (None, ""):
++        if not isinstance(raw_cwd, str):
++            return None, None, None, _json_error(_openai_error, "cwd must be a string path", status=400, code="invalid_cwd")
++        candidate = os.path.abspath(os.path.expanduser(raw_cwd))
++        if not os.path.isdir(candidate):
++            return None, None, None, _json_error(
++                _openai_error, f"cwd is not an existing directory: {raw_cwd}", status=400, code="invalid_cwd")
++        cwd = candidate
++    max_turns: Optional[int] = None
++    raw_turns = body.get("max_turns")
++    if raw_turns not in (None, ""):
++        try:
++            max_turns = max(1, int(raw_turns))
++        except (TypeError, ValueError):
++            return None, None, None, _json_error(_openai_error, "max_turns must be an integer", status=400, code="invalid_max_turns")
++    run_budget: Optional[float] = None
++    raw_budget = body.get("run_budget")
++    if raw_budget not in (None, ""):
++        try:
++            run_budget = float(raw_budget)
++        except (TypeError, ValueError):
++            return None, None, None, _json_error(_openai_error, "run_budget must be a number of seconds", status=400, code="invalid_run_budget")
++        if run_budget <= 0:
++            return None, None, None, _json_error(_openai_error, "run_budget must be positive", status=400, code="invalid_run_budget")
++    return cwd, max_turns, run_budget, None
++
++
+ async def _handle_runs(self, request: web.Request, *, _api_server) -> web.Response:
+     """POST /v1/runs — start an agent run, return run_id immediately."""
+     _openai_error = _api_server._openai_error
+@@ -635,6 +673,11 @@ async def _handle_runs(self, request: web.Request, *, _api_server) -> web.Respon
+         v if isinstance(v, dict) else None for v in (
+             (body.get("hosted_room_dispatch"), body.get("_room_execution_policy"))
+             if isinstance(body, dict) else (None, None)))
++    # Per-run knobs (local patch): the working directory a host wants the agent to run in, plus the
++    # two caps the CLI already exposed. A request without them behaves exactly as before.
++    run_cwd, run_max_turns, run_budget, knobs_err = _resolve_run_knobs(body, _openai_error)
++    if knobs_err is not None:
++        return knobs_err
+     idempotency_key = request.headers.get("Idempotency-Key", "").strip()
+     if len(idempotency_key) > 255 or any(ord(ch) < 33 or ord(ch) > 126 for ch in idempotency_key):
+         return _json_error(
+@@ -734,6 +777,7 @@ async def _handle_runs(self, request: web.Request, *, _api_server) -> web.Respon
+         agent_kwargs=dict(
+             ephemeral_system_prompt=instructions, session_id=session_id, gateway_session_key=gateway_session_key,
+             route=route, room_dispatch=room_dispatch, room_execution_policy=room_execution_policy,
++            cwd=run_cwd, max_turns=run_max_turns, run_budget=run_budget,
+             **{k: agent_overrides.get(k) for k in ("requested_model", "requested_provider", "model_options")}),
+         request_profile=_api_server._api_request_profile.get(),
+         browser_control_principal=_api_server._api_request_browser_control_principal.get(),
+@@ -825,6 +869,15 @@ def _run_agent_sync(self, run: _RunLaunch, agent, approval_notify, *, _api_serve
+             # /v1/runs owns its agent lifecycle (no TurnRunner): record process ownership
+             # so stop/cancel reaps only the background processes this run created.
+             _api_server._publish_turn_process_ownership(agent, effective_task_id)
++            # Per-run cwd (local patch). The agent's ``cwd`` kwarg feeds the prompt/context-file
++            # side only; the tool layer resolves a directory per TASK, through the same hook ACP
++            # and the TUI gateway use to move a session's workspace. Bound here, released in the
++            # finally block, so one run's directory can never leak into the next.
++            run_cwd = run.agent_kwargs.get("cwd")
++            if run_cwd:
++                from tools.terminal_tool import clear_session_cwd, register_task_env_overrides
++                register_task_env_overrides(effective_task_id, {"cwd": run_cwd})
++                resets.append((effective_task_id, clear_session_cwd))
+             # Passed only when set: a human turn keeps today's call shape.
+             author_kwargs = {"turn_author": run.turn_author} if run.turn_author is not None else {}
+             r = agent.run_conversation(

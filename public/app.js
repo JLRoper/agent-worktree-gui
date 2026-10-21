@@ -741,7 +741,8 @@ function conversationHtml(conv) {
   // A pending approval for this conversation means the agent is not thinking, it is waiting on you.
   const waitingApproval = [...state.approvals.values()].find((a) => a && a.thread && a.thread === thread) || null;
   const meta = [
-    latest.pid ? `pid ${latest.pid}` : null,
+    // A run is addressed by its id now; there is no child process to point at.
+    latest.runId ? `run ${String(latest.runId).replace(/^run_/, "").slice(0, 8)}` : null,
     latest.cwd ? `cwd ${latest.cwd}` : null,
     // Why this card is in the unattached panel: it has no worktree, or one that is not in the scan.
     homeless ? (latest.ownerPath ? `owner ${latest.ownerPath} (not in the scan)` : "no worktree") : null,
@@ -813,6 +814,7 @@ function conversationHtml(conv) {
             <button class="btn-reply" data-thread="${esc(thread)}" type="button" title="${running ? "a turn is still running — queue it instead" : "send this as the next turn (Enter)"}"${running ? " disabled" : ""}>Send reply</button>
             ${running ? `<button class="btn-queue" data-queue-reply="${esc(thread)}" type="button" title="hold this reply and send it the moment the current turn finishes">Queue reply</button>` : ""}
             ${queued ? `<span class="queue-note mono" title="${esc(queuedTitle)}">${queued} queued</span>` : ""}
+            ${running ? `<button class="btn-steer" data-steer="${esc(runningTurn.id)}" type="button" title="send this into the running turn — it is read at the agent's next tool boundary, and the turn carries on">Steer turn</button>` : ""}
             ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button" title="cancel the run this agent is in the middle of">Cancel turn</button>` : ""}
           </div>
         </div>
@@ -1426,7 +1428,7 @@ function conversationSignature(conv) {
     state.maximized === conv.thread ? "m" : "-",
     isHomelessConv(conv) ? "h" : "-",
     approvals,
-    l.pid || "",
+    l.runId || "",
     l.cwd || "",
     l.model || "",
     l.yolo ? "y" : "",
@@ -1538,7 +1540,7 @@ async function spawnAgent() {
     const r = await fetch("/api/agents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    $("spawn-msg").textContent = `spawned ${d.job.id} (pid ${d.job.pid})${d.job.yolo ? " with --yolo" : ""}`;
+    $("spawn-msg").textContent = `spawned ${d.job.id}${d.job.runId ? ` · run ${String(d.job.runId).replace(/^run_/, "").slice(0, 8)}` : ""}${d.job.worktreePath ? ` · ${d.job.worktreePath}` : ""}`;
     updateJob(d.job, { scroll: true });
     // Take the reader to the new agent: unfold folder/project/worktree and scroll to its card.
     revealSpawnedAgent(d.job);
@@ -2609,8 +2611,14 @@ function applySnapshot(data) {
   if (Array.isArray(data.scanRoots)) state.scanRoots = data.scanRoots;
   if (data.spawn) {
     state.spawn = data.spawn;
-    $("chip-key").textContent = `key: ${data.spawn.key?.fromEnv ? "env" : "from registry"}`;
-    $("chip-bin").textContent = String(data.spawn.binary || "").split(/[\\/]/).pop() || "hermes";
+    const t = data.spawn.transport || {};
+    const caps = t.capabilities || {};
+    $("chip-key").textContent = t.reachable ? `api: up${caps.steer ? " · steer" : ""}` : "api: down";
+    $("chip-key").title = t.error || `${t.url || ""}${caps.version ? ` · hermes ${caps.version}` : ""}`;
+    $("chip-bin").textContent = String(t.url || "").replace(/^https?:\/\//, "") || "no gateway";
+    $("chip-bin").title = caps.runCwd
+      ? "the gateway honours per-run cwd, so agents work in their own worktree"
+      : "the gateway ignores per-run cwd (hermes-runs-api-knobs.diff not applied) — agents run in the gateway's directory";
     syncProjectPicker(data.spawn.projects || []);
   }
   if (data.skipped) {
@@ -3201,6 +3209,45 @@ document.addEventListener("click", async (e) => {
     if (box) box.value = "";
     queueReply(thread, text);
     document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.focus();
+    return;
+  }
+  // Steer the turn that is running: the text goes into the live run, not into a queued next one.
+  const steerBtn = e.target.closest("[data-steer]");
+  if (steerBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const card = steerBtn.closest(".job");
+    const thread = card?.dataset.thread || "";
+    const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+    const warn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
+    const text = (box?.value || "").trim();
+    if (!text) {
+      box?.focus();
+      if (warn) warn.textContent = "type what the agent should do instead";
+      return;
+    }
+    steerBtn.disabled = true;
+    try {
+      const res = await fetch("/api/jobs/steer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: steerBtn.dataset.steer, text }),
+      });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok || !out.ok) {
+        if (warn) warn.textContent = out.error || `steer refused (HTTP ${res.status})`;
+        steerBtn.disabled = false;
+        return;
+      }
+      // The text was handed to the live turn, so clear the draft: leaving it would invite sending the
+      // same instruction twice, once as a steer and once as the next turn.
+      state.replyDrafts[thread] = "";
+      if (box) box.value = "";
+      if (warn) warn.textContent = "steered — the agent reads this at its next tool boundary";
+    } catch (err) {
+      if (warn) warn.textContent = `steer failed: ${err.message}`;
+      steerBtn.disabled = false;
+    }
     return;
   }
   const btn = e.target.closest(".btn-cancel");
