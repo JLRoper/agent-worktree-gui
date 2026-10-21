@@ -330,6 +330,7 @@ function renderRoot(root) {
   if (!sec) return;
   const all = sortedProjects().filter((p) => rootOf(p) === root);
   const shown = new Set(shownInRoot(root, all).map((p) => p.name));
+  const prevKeys = [...sec.querySelectorAll(".root-body section.project")].map((s) => s.dataset.project);
   const holder = document.createElement("div");
   holder.innerHTML = rootSection(root, all);
   const fresh = holder.firstElementChild;
@@ -348,6 +349,10 @@ function renderRoot(root) {
     renderProjectRows(p.name);
     refreshChips(p.name);
   }
+  // Same count means this was a re-rank, not a filter change: say which projects moved. Flipping All
+  // / 7d changes the set, and flashing every survivor of that would be noise.
+  const nextSections = [...fresh.querySelectorAll(".root-body section.project")];
+  if (prevKeys.length === nextSections.length) flashMovedByKey(prevKeys, nextSections, fresh);
 }
 
 function toggleRootRecent(root) {
@@ -2089,18 +2094,23 @@ function reorder(name) {
   flashMoved(current, want, tbody);
 }
 
-// Green flash on the things that actually changed place: same row, different index. Elements that
-// kept their index are left alone, so a single mover does not light up the whole board.
-function flashMoved(before, after, reflowHost) {
-  const was = new Map(before.map((el, i) => [el, i]));
+// Green flash on the things that actually changed place: same element, different index. Matching is
+// by identity first and by data-key second, because a project's table is often rebuilt wholesale
+// (renderProjectRows empties the tbody), and then the old nodes are gone but the keys are not.
+function flashMovedByKey(beforeKeys, afterEls, reflowHost) {
+  const was = new Map();
+  beforeKeys.forEach((k, i) => {
+    if (k) was.set(k, i);
+  });
   const moved = [];
-  for (const [i, el] of after.entries()) {
-    const from = was.get(el);
+  afterEls.forEach((el, i) => {
+    const k = el.dataset.key || el.dataset.project || el.dataset.root;
+    const from = k ? was.get(k) : undefined;
     if (from !== undefined && from !== i) moved.push(el);
-  }
+  });
   if (!moved.length) return;
-  // Remove then re-add in one pass with a single reflow between, so a row that moves twice in quick
-  // succession restarts the animation instead of silently keeping the dying one.
+  // Remove then re-add in one pass with a single reflow between, so an element that moves twice in
+  // quick succession restarts the animation instead of silently keeping the dying one.
   for (const el of moved) el.classList.remove("flash");
   if (reflowHost) void reflowHost.offsetWidth;
   for (const el of moved) {
@@ -2108,6 +2118,10 @@ function flashMoved(before, after, reflowHost) {
     clearTimeout(el._flashT);
     el._flashT = setTimeout(() => el.classList.remove("flash"), 950);
   }
+}
+
+function flashMoved(before, after, reflowHost) {
+  flashMovedByKey(before.map((el) => el.dataset.key || el.dataset.project || el.dataset.root), after, reflowHost);
 }
 
 // SSE row events arrive in bursts (a scan batch finishes several rows at once). Painting each one
@@ -2221,6 +2235,7 @@ function renderProjectRows(name) {
   if (!tbody) return;
   // Open rows carry agent transcripts; a rebuild must not throw the reader to the top of one.
   const prevScrolls = captureScrolls(tbody);
+  const prevRowKeys = [...tbody.children].filter((el) => el.classList.contains("row")).map((el) => el.dataset.key);
   tbody.innerHTML = "";
   // A collapsed project shows nothing, so building its rows would be pure waste — with 94
   // projects that was ~110 invisible rows and most of the render cost of a snapshot.
@@ -2246,6 +2261,10 @@ function renderProjectRows(name) {
     }
   }
   restoreScrolls(tbody, prevScrolls);
+  // This path rebuilds the table in ranked order, which is how a row most often changes place (a
+  // project event or a snapshot). Without this the move was silent — the node was new, so nothing
+  // remembered where it used to be.
+  flashMovedByKey(prevRowKeys, [...tbody.children].filter((el) => el.classList.contains("row")), tbody);
 }
 
 // Header summary. The project count is the live one — what the table is actually showing — not
@@ -2271,6 +2290,10 @@ function renderAll() {
     if (!groups.has(root)) groups.set(root, []);
     groups.get(root).push(p);
   }
+  const prevRoots = new Map();
+  for (const g of $("projects").querySelectorAll("section.root-group")) {
+    prevRoots.set(g.dataset.root, [...g.querySelectorAll(".root-body section.project")].map((s) => s.dataset.project));
+  }
   $("projects").innerHTML =
     [...groups.entries()]
       .sort((a, b) => projectActivity(b[1][0]) - projectActivity(a[1][0]) || a[0].localeCompare(b[0]))
@@ -2287,6 +2310,13 @@ function renderAll() {
   }
   paintConfigLine();
   paintCollapseAll();
+  // A full rebuild reorders the sections too: same test as renderRoot — a re-rank flashes, a filter
+  // change (different set) does not.
+  for (const g of $("projects").querySelectorAll("section.root-group")) {
+    const was = prevRoots.get(g.dataset.root);
+    const now = [...g.querySelectorAll(".root-body section.project")];
+    if (was && was.length === now.length) flashMovedByKey(was, now, g);
+  }
 }
 
 function applySnapshot(data) {
