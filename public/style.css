@@ -456,7 +456,9 @@ button.btn-max:hover { color: var(--text); background: #232936; }
 .live-head:hover h4, .live-head:hover .chev { color: var(--text); }
 .live-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .live-block.collapsed ul { display: none; }
-.live-block ul { margin: 4px 0 0 16px; padding: 0; }
+/* tr.detail ul sets a plain 18px padding with a zero margin; this needs the same left tab the git
+   body gets, so it has to out-specify that rule rather than sit before it. */
+tr.detail .live-block ul { margin: 4px 0 10px 28px; }
 .live-block li { font-size: 11.5px; color: var(--dim); }
 /* star a turn to keep it above the paged turns (still accordionable, still in its page) */
 button.btn-star { background: transparent; border: none; padding: 0 6px 0 0; margin: 0; font-size: 16.5px; line-height: 1; color: var(--dimmer); cursor: pointer; vertical-align: -2px; }
@@ -477,7 +479,7 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
 .git-head:hover .chev, .git-head:hover .git-summary { color: var(--text); }
 .git-summary { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .git-block.collapsed .git-body { display: none; }
-.git-body { padding-top: 4px; }
+.git-body { padding: 4px 0 0 28px; }
 /* the agent mark at the head of every agent row (parent row only, turns keep their own chevron) */
 .job-head .agent-glyph { flex: 0 0 auto; color: #c8a6ff; font-size: 13px; line-height: 1; }
 /* forget one agent session (two-step: first click arms it) */
