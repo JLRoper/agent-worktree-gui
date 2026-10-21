@@ -1473,7 +1473,13 @@ function chipsHtml(name) {
   const open = rows.filter((r) => !isRowLive(r) && r.idle).length;
   const serving = rows.filter((r) => r.signals?.ports?.on).length;
   const removable = rows.filter((r) => r.mergeable).length;
-  const panelRunning = rows.filter((r) => panelMap().get(normPath(r.path).toLowerCase())?.running).length;
+  // Every agent whose home is a row in this project. Violet while any of them is working; amber as
+  // soon as they are all idle, because "a live panel" is only true when something is actually running.
+  const panelAgents = rows.flatMap((r) => agentsFor(r));
+  const panelAgentCount = panelAgents.length;
+  const panelRunningCount = panelAgents.filter((c) =>
+    c.turns.some((t) => t.status === "running" || t.status === "starting"),
+  ).length;
   const stale = rows.filter((r) => r.verdictStale).length;
   const out = [`<span class="chip">${rows.length} worktrees</span>`];
   if (merged) out.push(`<span class="chip good">${merged} merged</span>`);
@@ -1484,8 +1490,15 @@ function chipsHtml(name) {
   if (open) out.push(`<span class="chip">${open} open idle</span>`);
   if (serving) out.push(`<span class="chip info">${serving} serving</span>`);
   // A running panel agent is a live Hermes session, so it wears the same violet as the live count
-  // and carries the panel's ⧉ mark — amber is for "needs attention", not for "working right now".
-  if (panelRunning) out.push(`<span class="chip live">⧉ ${panelRunning} panel agent${panelRunning === 1 ? "" : "s"}</span>`);
+  // and carries the panel's ⧉ mark. All of them not-running turns the chip amber: that is the
+  // "attention may be needed" state, and it still means this project has agents to look at.
+  if (panelAgentCount) {
+    const cls = panelRunningCount ? "live" : "warn";
+    const title = panelRunningCount
+      ? `${panelRunningCount} of ${panelAgentCount} panel agent${panelAgentCount === 1 ? "" : "s"} in this project running right now`
+      : `all ${panelAgentCount} panel agent${panelAgentCount === 1 ? "" : "s"} in this project are not running — attention may be needed`;
+    out.push(`<span class="chip ${cls}" title="${esc(title)}">⧉ ${panelAgentCount} panel agent${panelAgentCount === 1 ? "" : "s"}</span>`);
+  }
   if (removable) out.push(`<span class="chip info">${removable} safe to remove</span>`);
   if (stale) out.push(`<span class="chip">${stale} reclassifying</span>`);
   return out.join("");
