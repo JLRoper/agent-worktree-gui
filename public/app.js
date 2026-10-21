@@ -2062,8 +2062,16 @@ function applySnapshot(data) {
   }
   // A snapshot refreshes what it carries; it does not retract rows. Only an explicit "drop"
   // event retires a worktree, so a snapshot arriving mid-scan can never blank the table.
+  const incomingProjects = data.projects || [];
+  // ...and a snapshot that knows of NO projects is not evidence that there are none: it is what the
+  // server reports while its first discovery sweep is still running (a restart, or a sweep that
+  // failed). Keeping the board and saying so beats flashing "No git repos found under scanRoots".
+  if (!incomingProjects.length && state.projects.size) {
+    $("health").className = "dot warn";
+    return;
+  }
   const seen = new Set();
-  for (const p of data.projects || []) {
+  for (const p of incomingProjects) {
     seen.add(p.name);
     state.projects.set(p.name, p);
     const wts = Array.isArray(p.worktrees) ? p.worktrees : [];

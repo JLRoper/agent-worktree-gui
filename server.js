@@ -126,7 +126,13 @@ async function spawnBlocker(cwd, target) {
 let config = await loadConfig();
 let pool = new Pool(config.threads);
 const store = new Store();
-const registry = new ProjectRegistry({ getConfig: () => config, store, onLog: log });
+const registry = new ProjectRegistry({
+  getConfig: () => config,
+  store,
+  onLog: log,
+  // Last successful sweep, so a restart opens on the board it had instead of "no git repos found".
+  cacheFile: config.projectsCacheFile || path.join("logs", "projects.json"),
+});
 let scheduler = new Scheduler({
   config,
   store,
@@ -581,9 +587,15 @@ function keyCacheHint() {
   return "registry lookup on first spawn";
 }
 
-await registry.refresh();
+// Seed the store from the last known project list BEFORE anything slow. A restart used to answer
+// `/api/state` with zero projects for the ~25s its first sweep takes, which the page renders as
+// "No git repos found under scanRoots" — the board vanished and came back a minute later.
+for (const p of registry.projects) store.ensureProject(p);
 if (!config.defaultCwd) config.defaultCwd = registry.projects[0]?.path || process.cwd();
 await scheduler.start();
+// The sweep that finds repos created since the last run is not a boot dependency: it runs behind the
+// first scan pass, and new projects simply appear when it lands.
+void registry.refresh().catch((e) => log(`project discovery failed: ${String((e && e.message) || e)}`));
 
 for (const sig of ["SIGINT", "SIGTERM"]) {
   process.on(sig, () => {
