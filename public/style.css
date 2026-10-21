@@ -195,6 +195,16 @@ td.age .sigs { display: inline-flex; align-items: center; flex-wrap: wrap; margi
 td.age .age-num { font-family: var(--mono); font-size: 12px; display: inline-block; }
 td.age .age-num.dimmer { color: var(--dimmer); }
 
+/* agents owned by a worktree, listed inside that row's detail */
+.agents-block { margin-top: 14px; padding-top: 10px; border-top: 1px solid #1d222b; }
+.agents-block h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .03em; color: var(--dim); font-weight: 600; }
+.agents-block .job { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: rgba(255, 255, 255, .012); }
+.agents-block .job:last-child { margin-bottom: 0; }
+.agents-block .job-out { max-height: 320px; }
+/* "waiting on you" — an agent blocked on an approval */
+.sig-approval { color: #ffd479; border-color: #6b4d16; background: var(--amber-bg); font-weight: 700; }
+.approval.jump { box-shadow: 0 0 0 3px #d2992288; }
+
 /* ---- approvals ---- */
 #approvals { border-color: #6b4d16; }
 #approvals .project-head { background: var(--amber-bg); border-bottom-color: #4a3a17; }

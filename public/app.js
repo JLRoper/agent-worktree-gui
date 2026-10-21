@@ -533,6 +533,8 @@ function conversationHtml(conv) {
   const maximized = state.maximized === thread;
   const runningTurn = turns.find((t) => t.status === "running" || t.status === "starting");
   const running = Boolean(runningTurn);
+  // A pending approval for this conversation means the agent is not thinking, it is waiting on you.
+  const waitingApproval = [...state.approvals.values()].find((a) => a && a.thread && a.thread === thread) || null;
   const meta = [
     latest.pid ? `pid ${latest.pid}` : null,
     latest.cwd ? `cwd ${latest.cwd}` : null,
@@ -548,7 +550,8 @@ function conversationHtml(conv) {
   return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}">
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
-      <span class="pill ${esc(latest.status)}">${esc(latest.status)}</span>
+      <span class="pill ${esc(latest.status)}" title="${esc(latest.status === "running" || latest.status === "starting" ? `running ${elapsed(latest)}` : `${latest.status} · exit ${latest.exitCode ?? "?"} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""}`)}">${latest.status === "running" || latest.status === "starting" ? "running" : "not-running"}</span>
+      ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       <span class="mono dim">${esc(meta)}</span>
       <span class="spacer"></span>
       <span class="mono dimmer thread-name" title="Hermes session thread — continue it any time">${esc(thread)}</span>
@@ -684,7 +687,7 @@ function approvalCard(r) {
     })
     .join("");
   return `<div class="approval" data-approval="${esc(r.id)}">
-    <div class="ap-head"><span class="mono dim">${esc(r.surface || "agent")}</span><span class="spacer"></span><span class="mono ${left < 20 ? "warn" : "dimmer"}" data-approval-left="${esc(r.id)}">expires in ${left}s</span></div>
+    <div class="ap-head"><span class="mono dim">${esc(r.surface || "agent")}</span>${r.thread ? `<button class="sig sig-panel" data-agent-thread="${esc(r.thread)}" title="jump to the agent blocked on this approval">⧉ agent</button>` : ""}<span class="spacer"></span><span class="mono ${left < 20 ? "warn" : "dimmer"}" data-approval-left="${esc(r.id)}">expires in ${left}s</span></div>
     <pre class="ap-cmd mono">${esc(r.command || "(no command text)")}</pre>
     ${r.description ? `<div class="ap-desc dim">${esc(r.description)}</div>` : ""}
     <div class="ap-actions">${buttons}<span class="ap-err mono"></span></div>
@@ -738,18 +741,25 @@ async function answerApproval(id, choice, btn) {
 }
 
 function renderJobs() {
-  const convs = conversations();
-  for (const id of [...state.collapsedJobs]) if (!convs.some((c) => c.thread === id)) state.collapsedJobs.delete(id);
+  // Only unattached agents live here now: anything created in a worktree is listed under that
+  // worktree's row, so this panel is the "homeless" workspace (project-root runs, pending spawns,
+  // agents whose worktree was removed).
+  const convs = homelessConversations();
+  const nested = conversations().length - convs.length;
+  for (const id of [...state.collapsedJobs]) if (!conversations().some((c) => c.thread === id)) state.collapsedJobs.delete(id);
   // Forgetting a cleared job's explicit turn state keeps the map from growing forever.
   const live = new Set([...state.jobs.keys()]);
   for (const id of [...state.turnOpen.keys()]) if (!live.has(id)) state.turnOpen.delete(id);
-  $("jobs").innerHTML = convs.length ? convs.map(conversationHtml).join("") : '<p class="empty">No agents started from here yet.</p>';
+  $("jobs").innerHTML = convs.length
+    ? convs.map(conversationHtml).join("")
+    : `<p class="empty">No unattached agents${nested ? ` — ${nested} agent${nested === 1 ? "" : "s"} listed under their worktree rows` : ""}.</p>`;
   for (const c of convs) restoreReplyDraft(c.thread);
   const running = convs.filter((c) => c.turns.some((t) => t.status === "running" || t.status === "starting")).length;
   const folded = convs.filter((c) => state.collapsedJobs.has(c.thread)).length;
   const turns = [...state.jobs.values()].length;
   $("agents-chips").innerHTML =
-    `<span class="chip">${convs.length} conversation${convs.length === 1 ? "" : "s"}</span>` +
+    `<span class="chip">${convs.length} unattached</span>` +
+    (nested ? `<span class="chip">${nested} in worktrees</span>` : "") +
     (turns > convs.length ? `<span class="chip">${turns} turns</span>` : "") +
     (running ? `<span class="chip warn">${running} running</span>` : "") +
     (folded ? `<span class="chip">${folded} minimized</span>` : "");
@@ -758,6 +768,25 @@ function renderJobs() {
   // The cards were just rebuilt, so every scrollback is back at its first line. Opening the page
   // (or a snapshot rebuilding the list) should land on the newest output, not an hour-old first line.
   for (const c of convs) if (!state.collapsedJobs.has(c.thread)) scrollThreadToBottom(c.thread);
+  paintAgentBadges();
+}
+
+// Row badges ("⧉ 2 · 1 running") follow job events without rebuilding the table.
+function paintAgentBadges() {
+  for (const row of state.rows.values()) {
+    const tr = document.querySelector(`tr.row[data-key="${CSS.escape(keyOf(row.project, row.path))}"]`);
+    if (!tr) continue;
+    const cell = tr.querySelector("td.name");
+    const existing = cell?.querySelector("[data-open-row]");
+    const html = agentBadgeHtml(row);
+    if (existing && !html) {
+      existing.remove();
+      continue;
+    }
+    if (!html) continue;
+    if (existing) existing.outerHTML = html;
+    else cell?.insertAdjacentHTML("beforeend", ` ${html}`);
+  }
 }
 
 function updateJob(j, { scroll = false } = {}) {
@@ -894,6 +923,14 @@ function updateSpawnNote() {
   $("btn-spawn").disabled = emptyRepo;
 }
 
+// Open a row and bring its agents block into view (used by the row's ⧉ badge).
+function openAgentsBlock(key) {
+  if (!state.expanded.has(key)) document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
+  const block = document.querySelector(`tr.detail[data-detail="${CSS.escape(key)}"] .agents-block`);
+  if (block) block.scrollIntoView({ block: "nearest" });
+  else document.querySelector(`tr.detail[data-detail="${CSS.escape(key)}"]`)?.scrollIntoView({ block: "nearest" });
+}
+
 // The per-worktree "\u25b6": run an agent INSIDE that existing worktree (no new tree at all).
 // Any click that aims one of the fixed cards must also show it: filling in a form the reader cannot
 // see is worse than not aiming it at all.
@@ -1004,6 +1041,47 @@ function panelMap() {
 }
 function invalidatePanelMap() {
   panelMapCache = null;
+  agentsByPathCache = null;
+}
+
+// Agents grouped by the worktree that OWNS them (set when the agent was created), so a row can
+// list its own agents. Conversations with no owner are "homeless" and stay in the Agents panel.
+let agentsByPathCache = null;
+function agentsByPath() {
+  if (agentsByPathCache) return agentsByPathCache;
+  const map = new Map();
+  for (const c of conversations()) {
+    const owner = c.latest.ownerPath || c.first.ownerPath || null;
+    if (!owner) continue;
+    const k = normPath(owner).toLowerCase();
+    const list = map.get(k) || [];
+    list.push(c);
+    map.set(k, list);
+  }
+  agentsByPathCache = map;
+  return map;
+}
+
+function agentsFor(row) {
+  return agentsByPath().get(normPath(row.path).toLowerCase()) || [];
+}
+
+function agentsRunning(list) {
+  return list.filter((c) => c.latest.status === "running" || c.latest.status === "starting").length;
+}
+
+function isAgentRunning(conv) {
+  return conv.latest.status === "running" || conv.latest.status === "starting";
+}
+
+function homelessConversations() {
+  // Unattached = no owner, or an owner that is not a row we can show (project root runs, or a
+  // worktree that has since been removed). Without this such an agent would fall off the screen.
+  const rowPaths = new Set([...state.rows.values()].map((r) => normPath(r.path).toLowerCase()));
+  return conversations().filter((c) => {
+    const owner = c.latest.ownerPath || c.first.ownerPath || null;
+    return !owner || !rowPaths.has(normPath(owner).toLowerCase());
+  });
 }
 function panelFor(row) {
   return panelMap().get(normPath(row.path).toLowerCase()) || null;
@@ -1067,6 +1145,14 @@ function livenessLines(row) {
   return lines;
 }
 
+// One badge per row saying how many agents this worktree owns, and how many are running.
+function agentBadgeHtml(row) {
+  const mine = agentsFor(row);
+  if (!mine.length) return "";
+  const running = agentsRunning(mine);
+  return `<button class="sig ${running ? "sig-panel" : "sig-panel-done"}" data-open-row="${esc(keyOf(row.project, row.path))}" title="${mine.length} agent${mine.length === 1 ? "" : "s"} owned by this worktree${running ? `, ${running} running` : ""} — click to open the row and its agents">⧉ ${mine.length}${running ? ` · ${running} running` : ""}</button>`;
+}
+
 function rowHtml(row) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   const dirty =
@@ -1081,7 +1167,7 @@ function rowHtml(row) {
   const badge = `<span class="badge ${verdictClass(row.verdict)}${row.verdictStale ? " stale" : ""}">${esc(row.verdict)}</span>`;
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     <td class="name"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}"
-      title="start a Hermes agent in this worktree — it runs here (no new worktree)">\u25b6</button> <span>${esc(row.name)}</span></td>
+      title="start a Hermes agent in this worktree — it runs here (no new worktree)">\u25b6</button> <span>${esc(row.name)}</span> ${agentBadgeHtml(row)}</td>
     <td class="mono branch">${esc(row.branch || "—")}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
@@ -1214,9 +1300,17 @@ function detailHtml(row) {
     row.lastCommit ? `last commit ${relTime(row.lastCommit)} ago` : null,
     row.error ? `error: ${esc(row.error)}` : null,
   ].filter(Boolean).join(" · ");
+  const agents = agentsFor(row);
+  const agentsHtml = agents.length
+    ? `<div class="agents-block">
+        <h4>Agents <span class="dimmer mono">${agents.length}${agentsRunning(agents) ? ` · ${agentsRunning(agents)} running` : ""}</span></h4>
+        ${agents.map((c) => conversationHtml(c)).join("")}
+      </div>`
+    : "";
   return `<tr class="detail" data-detail="${esc(keyOf(row.project, row.path))}"><td colspan="9">
     <div class="codelist" style="margin-bottom:8px">${meta}</div>
     <div class="cols">${parts.join("")}</div>
+    ${agentsHtml}
   </td></tr>`;
 }
 
@@ -1375,6 +1469,9 @@ function refreshChips(name) {
 function reorder(name) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
+  // Freeze the order while a row is open: an agent starting or finishing would otherwise move the
+  // row out from under the reader mid-sentence.
+  if (state.expanded.size > 0) return;
   const rows = orderRows([...state.rows.values()].filter((r) => r.project === name));
   const want = [];
   for (const r of rows) {
@@ -1677,11 +1774,15 @@ function connect() {
     if (!r || !r.id) return;
     state.approvals.set(r.id, r);
     renderApprovals();
+    // The agent that is blocked now says "waiting on you" instead of just "running".
+    if (r.thread) renderConversation(r.thread);
   });
   es.addEventListener("approval-answered", (e) => {
     const evt = JSON.parse(e.data);
+    const r = state.approvals.get(evt.id);
     state.approvals.delete(evt.id);
     renderApprovals();
+    if (r && r.thread) renderConversation(r.thread);
   });
   es.addEventListener("jobs", (e) => {
     state.lastEventAt = Date.now();
@@ -1816,7 +1917,49 @@ document.addEventListener("click", async (e) => {
   if (rowAgent) {
     e.stopPropagation();
     e.preventDefault();
-    focusSpawnForWorktree(rowAgent.dataset.agentPath, rowAgent.dataset.agentName);
+    // Another agent in the same tree is allowed, but it is a shared working tree: say so once.
+    const path = rowAgent.dataset.agentPath;
+    const name = rowAgent.dataset.agentName;
+    const mine = agentsByPath().get(normPath(path).toLowerCase()) || [];
+    if (mine.length) {
+      const running = agentsRunning(mine);
+      const ok = window.confirm(
+        `${mine.length} agent${mine.length === 1 ? " already works" : "s already work"} in ${name}` +
+          `${running ? ` (${running} running now)` : ""}.\n\n` +
+          `They share the same working tree: commits can collide (index.lock), and each sees the other's edits as its own dirty files.\n\n` +
+          `Start another agent here anyway?`,
+      );
+      if (!ok) return;
+    }
+    focusSpawnForWorktree(path, name);
+    return;
+  }
+  // The row's agent badge: open the row so the agents block is visible.
+  const openRowBtn = e.target.closest("[data-open-row]");
+  if (openRowBtn) {
+    e.stopPropagation();
+    e.preventDefault();
+    openAgentsBlock(openRowBtn.dataset.openRow);
+    return;
+  }
+  // "waiting on you →" on an agent card: take the reader to the approval that is blocking it.
+  const apJump = e.target.closest("[data-approval-jump]");
+  if (apJump) {
+    e.preventDefault();
+    e.stopPropagation();
+    const card = document.querySelector(`.approval[data-approval="${CSS.escape(apJump.dataset.approvalJump)}"]`);
+    if (card) {
+      card.scrollIntoView({ block: "center", behavior: "smooth" });
+      card.classList.add("jump");
+      setTimeout(() => card.classList.remove("jump"), 1600);
+    }
+    return;
+  }
+  // The approval card's "⧉ agent": jump to the agent that is blocked (works outside #projects too).
+  const apAgent = e.target.closest(".approval [data-agent-thread]");
+  if (apAgent) {
+    e.preventDefault();
+    jumpToAgent(apAgent.dataset.agentThread);
     return;
   }
   const replyBtn = e.target.closest(".btn-reply");
@@ -1896,6 +2039,14 @@ document.addEventListener("input", (e) => {
 });
 
 $("projects").addEventListener("click", (e) => {
+  // The agent badge inside a row opens the row (and its agents block) instead of toggling blindly.
+  const badgeBtn = e.target.closest("[data-open-row]");
+  if (badgeBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    openAgentsBlock(badgeBtn.dataset.openRow);
+    return;
+  }
   // A row's agent chip jumps up to that conversation instead of expanding the row.
   const jump = e.target.closest("[data-agent-thread]");
   if (jump) {

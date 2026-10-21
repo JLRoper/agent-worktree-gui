@@ -376,7 +376,7 @@ const server = createServer(async (req, res) => {
       }
       const blocked = await spawnBlocker(cwd, existing ? null : target);
       if (blocked) return sendJson(res, 400, { error: blocked, blocked });
-      const job = await jobs.create({ ...body, cwd, existing });
+      const job = await jobs.create({ ...body, cwd, existing, ownerPath: existing ? cwd : null, ownerPending: !existing });
       return sendJson(res, 202, { job });
     }
 
@@ -409,6 +409,8 @@ const server = createServer(async (req, res) => {
         budget: body.budget ?? first.budget ?? 1800,
         maxTurns: body.maxTurns ?? first.maxTurns,
         yolo: body.yolo ?? first.yolo,
+        // A reply continues the SAME agent, so it keeps the tree that agent was created for.
+        ownerPath: first.ownerPath || null,
       });
       return sendJson(res, 202, { job });
     }
