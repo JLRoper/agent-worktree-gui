@@ -2790,6 +2790,11 @@ $("btn-settings")?.addEventListener("click", (e) => {
   toggleSettings();
 });
 $("btn-settings-close")?.addEventListener("click", () => toggleSettings(false));
+// A second way in that is always on screen at the top left: the title opens Settings.
+$("title-settings")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleSettings();
+});
 $("font-select")?.addEventListener("change", (e) => applyFont("ui", e.target.value));
 $("term-select")?.addEventListener("change", (e) => applyFont("term", e.target.value));
 document.addEventListener("click", (e) => {
