@@ -638,11 +638,25 @@ function focusNewTurn(thread, turnId) {
   scrollThreadToBottom(thread);
 }
 
+// The worktree an agent's directory belongs to: an exact match on the row path, or the deepest row
+// containing it (an agent started in a subdirectory still belongs to that worktree).
+function matchWorktree(dir) {
+  const d = normPath(dir).toLowerCase();
+  if (!d) return null;
+  let best = null;
+  for (const r of state.rows.values()) {
+    const p = normPath(r.path).toLowerCase();
+    if (d !== p && !d.startsWith(`${p}/`)) continue;
+    if (!best || p.length > best.path.length) best = r;
+  }
+  return best;
+}
+
 // Attach an unattached agent to a worktree: it then lives under that row, owned like any other.
-async function attachAgent(thread) {
+async function attachAgent(thread, pathOverride = null) {
   const sel = document.querySelector(`[data-attach-path="${CSS.escape(thread)}"]`);
-  const path = sel?.value;
-  if (!path) return;
+  const path = pathOverride || sel?.value;
+  if (!path) return false;
   try {
     const r = await fetch("/api/jobs/attach", {
       method: "POST",
@@ -653,8 +667,10 @@ async function attachAgent(thread) {
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     invalidatePanelMap();
     await resync();
+    return true;
   } catch (err) {
     showBanner(`attach ${thread}: ${err.message}`);
+    return false;
   }
 }
 
@@ -1755,8 +1771,25 @@ function applySnapshot(data) {
 function showBanner(msg) {
   const b = $("banner");
   if (!msg) return b.classList.add("hidden");
+  b.classList.remove("ok");
   b.textContent = msg;
   b.classList.remove("hidden");
+}
+
+// A short green confirmation (the red banner is for failures): used when a gesture did what it said
+// without opening a dialog, e.g. an agent attaching itself to the worktree it was already sitting in.
+let noteTimer = 0;
+function showNote(msg) {
+  const b = $("banner");
+  if (!b) return;
+  b.textContent = msg;
+  b.classList.add("ok");
+  b.classList.remove("hidden");
+  clearTimeout(noteTimer);
+  noteTimer = setTimeout(() => {
+    b.classList.add("hidden");
+    b.classList.remove("ok");
+  }, 4000);
 }
 
 function setStream(label, cls = "ok") {
@@ -2026,12 +2059,22 @@ document.addEventListener("click", async (e) => {
     await clearThread(clearBtn);
     return;
   }
-  // "attach" opens the worktree picker without collapsing the card.
+  // "attach": if the agent's own directory is a worktree we know, attach it there straight away;
+  // only ask which one when there is no obvious answer.
   const attachToggle = e.target.closest("[data-attach-toggle]");
   if (attachToggle) {
     e.preventDefault();
     e.stopPropagation();
-    const row = document.querySelector(`[data-attach-row="${CSS.escape(attachToggle.dataset.attachToggle)}"]`);
+    const thread = attachToggle.dataset.attachToggle;
+    const conv = conversations().find((c) => c.thread === thread);
+    const cwd = conv ? conv.latest.cwd || conv.first.cwd || "" : "";
+    const match = matchWorktree(cwd);
+    if (match) {
+      const ok = await attachAgent(thread, match.path);
+      if (ok) showNote(`attached to ${match.project} · ${match.name}`);
+      return;
+    }
+    const row = document.querySelector(`[data-attach-row="${CSS.escape(thread)}"]`);
     if (row) {
       row.hidden = !row.hidden;
       if (!row.hidden) {
@@ -2040,7 +2083,6 @@ document.addEventListener("click", async (e) => {
         if (sel && !sel.options.length) sel.innerHTML = worktreeOptionsHtml();
         // Start from the agent's current owner when the scan does not show it, so "attach" is a
         // deliberate re-point rather than a silent move to whatever the list happens to start with.
-        const conv = conversations().find((c) => c.thread === attachToggle.dataset.attachToggle);
         const owner = conv && (conv.latest.ownerPath || conv.first.ownerPath);
         if (sel && owner) {
           const hit = [...sel.options].find((o) => o.value.toLowerCase() === String(owner).toLowerCase());

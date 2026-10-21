@@ -76,6 +76,7 @@ button.primary { background: #1d3a57; border-color: #2b5480; color: #cfe6ff; }
 button.primary:hover { background: #24466a; }
 
 .banner { margin: 10px 16px 0; padding: 8px 12px; border-radius: 6px; background: var(--red-bg); border: 1px solid #57262a; color: #ffb4ae; font-size: 13px; }
+.banner.ok { background: var(--green-bg); border-color: #1f4a2a; color: #b7f7c1; }
 .hidden { display: none; }
 
 main { padding: 14px 16px 40px; }
