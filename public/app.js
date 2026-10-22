@@ -1170,7 +1170,7 @@ function conversationHtml(conv) {
     ? `${latest.status}${latest.exitCode && latest.exitCode !== 0 ? ` · exit ${latest.exitCode}` : ""}`
     : `exit ${latest.exitCode ?? "?"}`;
   const foot = latest.status === "running" || latest.status === "starting"
-    ? `<span class="dimmer mono">running ${esc(elapsed(latest))}</span>`
+    ? `<span class="dimmer mono" data-run-clock="1">running ${esc(elapsed(latest))}</span>`
     : latest.revived
       // Rebuilt from the gateway's session store, so there was never a process here: "exit ?" and
       // "0s" would both describe a run that did not happen in this panel. Say when it was last used.
@@ -4810,8 +4810,14 @@ setInterval(() => {
   for (const j of state.jobs.values()) {
     if (j.status !== "running" && j.status !== "starting") continue;
     const card = document.querySelector(`.job[data-thread="${CSS.escape(j.thread || j.id)}"]`);
-    const foot = card?.querySelector(".job-foot");
-    if (foot) foot.innerHTML = `<span class="dimmer mono">running ${esc(elapsed(j))}</span>`;
+    // The clock is its own span. Replacing the whole foot here deleted the stats strip one second
+    // after the card rendered it: a running card showed "running 42s" and nothing else, while every
+    // settled sibling had its numbers.
+    const clock = card?.querySelector(".job-foot [data-run-clock]");
+    if (clock) {
+      const next = `running ${elapsed(j)}`;
+      if (clock.textContent !== next) clock.textContent = next;
+    }
     // Only the status text is repainted. Writing head.textContent here deleted the pin star and the
     // chevron every second and put them back on the next render — the star visibly popped in and out
     // while a turn ran, and the row reflowed with it.
