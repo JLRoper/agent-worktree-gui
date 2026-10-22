@@ -243,7 +243,12 @@ td.age .age-num { font-family: var(--mono); font-size: 12px; display: inline-blo
 td.age .age-num.dimmer { color: var(--dimmer); }
 
 /* agents owned by a worktree, listed inside that row's detail */
-.agents-block { margin-top: 14px; padding-top: 10px; border-top: 1px solid #1d222b; }
+/* The rule closes the agent list rather than opening it: it sits BELOW the cards, so the detail reads
+   "what this tree is doing", then a line, then the reference material. */
+.agents-block { margin-top: 14px; padding-top: 10px; padding-bottom: 10px; border-bottom: 1px solid #1d222b; }
+/* With revivable sessions underneath, those belong to the same list: the line moves below them instead of
+   cutting between the cards and the sessions. */
+.agents-block:has(+ .sessions-block) { border-bottom: 0; padding-bottom: 2px; }
 .agents-block h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .03em; color: var(--dim); font-weight: 600; }
 .agents-block .job { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: rgba(255, 255, 255, .012); }
 .agents-block .job:last-child { margin-bottom: 0; }
@@ -251,7 +256,7 @@ td.age .age-num.dimmer { color: var(--dimmer); }
 /* Sessions the row knows about but the board has no card for. The gateway still has the
    conversation, so these are offered back one at a time rather than auto-attached. No heading and no
    rule: the revive button says what the row is, and a label above three buttons was furniture. */
-.sessions-block { margin-top: 6px; }
+.sessions-block { margin-top: 6px; padding-bottom: 6px; border-bottom: 1px solid #1d222b; }
 /* A card head spends 14px of padding plus 47px on its glyph and chevron before the status pill; the
    revive button starts in that same column, so "revive" and "EXITED" read down one edge of the row. */
 /* A session row is an agent head without a card: same glyph, same chevron, and the revive button in the
