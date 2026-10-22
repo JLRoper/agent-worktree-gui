@@ -406,7 +406,11 @@ button.chip:active { transform: translateY(1px); }
 
 /* ---- jobs ---- */
 .job { border-bottom: 1px solid #1d222b; padding: 9px 14px 12px; overflow-anchor: none; }
+/* A card that draws its own box ends the list with a line: the last card in a worktree's agents block and
+   a maximized card both lost their bottom edge here and faded into the background. Slightly stronger than
+   the hairlines between cards, so the group reads as closed rather than cut off. */
 .job:last-child { border-bottom: none; }
+.agents-block .job:last-child { border-bottom: 1px solid #2f3947; }
 .job-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .job-head .spacer { flex: 1; }
 .pill {
@@ -816,6 +820,9 @@ body.modal-open { overflow: hidden; }
   margin: 0;
   background: var(--panel);
   border: 1px solid var(--line);
+  /* The bottom edge of a maximized card is the one line against the page background, so it gets the same
+     slightly stronger hairline as the last card in a list. */
+  border-bottom-color: #2f3947;
   border-radius: 12px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, .65);
   display: flex;
