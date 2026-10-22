@@ -853,9 +853,15 @@ function conversationHtml(conv) {
     latest.existing ? "in existing worktree" : null,
     turns.length > 1 ? `${turns.length} turns` : null,
   ].filter(Boolean).join(" · ");
+  // A run has no process to exit. The pool maps run status onto 0/1 so the old CLI card keeps
+  // rendering, but printing "exit 0" for it reads as if a child process came and went — answer
+  // "what happened" instead. A legacy CLI turn still has a real exit code worth showing.
+  const outcome = latest.runId
+    ? `${latest.status}${latest.exitCode && latest.exitCode !== 0 ? ` · exit ${latest.exitCode}` : ""}`
+    : `exit ${latest.exitCode ?? "?"}`;
   const foot = latest.status === "running" || latest.status === "starting"
     ? `<span class="dimmer mono">running ${esc(elapsed(latest))}</span>`
-    : `<span class="mono dim">exit ${latest.exitCode ?? "?"} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${latest.tokens.total}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>`;
+    : `<span class="mono dim">${esc(outcome)} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${latest.tokens.total}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>`;
   const blocks = (() => {
     const offset = turnPageOffset(thread, turns.length);
     const end = turns.length - offset * TURNS_PER_PAGE;
@@ -883,7 +889,7 @@ function conversationHtml(conv) {
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
       <span class="agent-glyph" title="a Hermes agent session — ⧉ marks an agent row">\u29c9</span>
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
-      <span class="pill ${runningNow ? "pill-running" : `pill-notrunning${latest.status === "failed" ? " is-failed" : ""}`}" title="${esc(runningNow ? `running ${elapsed(latest)}` : `${latest.status} · exit ${latest.exitCode ?? "?"} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""}`)}">${runningNow ? "running" : "not-running"}</span>
+      <span class="pill ${runningNow ? "pill-running" : `pill-notrunning${latest.status === "failed" ? " is-failed" : ""}`}" title="${esc(runningNow ? `running ${elapsed(latest)}` : `${latest.status} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""}`)}">${runningNow ? "running" : "not-running"}</span>
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       ${runApproval && !waitingApproval ? `<span class="sig sig-approval" title="this run is parked on a flagged command — answer it in the card below">waiting on approval</span>` : ""}
       <span class="mono dim">${esc(meta)}</span>
