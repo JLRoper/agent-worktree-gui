@@ -1608,6 +1608,19 @@ function queueJobsRefresh() {
   });
 }
 
+// Rebuilding every card is the most expensive thing this page does, and a burst of job events (a spawn
+// fanning out, several agents finishing at once) used to trigger it several times per frame. Coalesce
+// to one rebuild per animation frame — the work is identical, only the count changes.
+let renderJobsQueued = false;
+function scheduleRenderJobs() {
+  if (renderJobsQueued) return;
+  renderJobsQueued = true;
+  requestAnimationFrame(() => {
+    renderJobsQueued = false;
+    renderJobs();
+  });
+}
+
 function renderJobs() {
   // Only unattached agents live here now: anything created in a worktree is listed under that
   // worktree's row, so this panel is the "homeless" workspace (project-root runs, pending spawns,
@@ -1695,7 +1708,7 @@ function updateJob(j, { scroll = false } = {}) {
   // tree appearing, an attach), instead of leaving the card where it was until the next snapshot.
   if (ownerChanged) {
     invalidatePanelMap();
-    renderJobs();
+    scheduleRenderJobs();
     for (const from of new Set([prevOwner, j.ownerPath || null].filter(Boolean))) {
       const want = normPath(from).toLowerCase();
       const row = [...state.rows.values()].find((r) => normPath(r.path).toLowerCase() === want);
@@ -3170,7 +3183,7 @@ function connect() {
     state.lastEventAt = Date.now();
     state.jobs.clear();
     for (const j of JSON.parse(e.data).jobs) state.jobs.set(j.id, j);
-    renderJobs();
+    scheduleRenderJobs();
     repaintAgentState();
   });
   es.addEventListener("heartbeat", (e) => {

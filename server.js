@@ -694,9 +694,13 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/fetch" && req.method === "POST") {
-      for (const p of registry.projects) await scheduler.maybeFetch(p, true);
-      await scheduler.fullPass({ discover: true });
-      return sendJson(res, 200, { ok: true });
+      // Fire and forget: a sweep across every project is minutes of git work, and the button must not
+      // hold the request open for it. Rows update over SSE as each fetch lands.
+      void scheduler
+        .fetchPass({ force: true })
+        .then(() => scheduler.fullPass({ discover: true }))
+        .catch(() => {});
+      return sendJson(res, 200, { ok: true, started: true });
     }
 
     if (route === "/api/reload" && req.method === "POST") {
