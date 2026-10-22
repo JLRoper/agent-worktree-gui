@@ -2,6 +2,13 @@
 //   - worktree rows are patched individually from the SSE stream
 //   - liveness is shown as labelled evidence chips (files / hermes / board / port)
 //   - agents spawned from the "New agent" card stream their stdout live
+
+// Declared BEFORE `state`: it is read while the state literal below is built, and a `const` further
+// down the file would still be in its temporal dead zone at that moment (the read would throw and get
+// swallowed, leaving an empty history).
+const SPAWN_HISTORY_KEY = "wm.spawnHistory";
+const SPAWN_HISTORY_MAX = 50;
+
 const state = {
   projects: new Map(),
   rows: new Map(),
@@ -23,6 +30,10 @@ const state = {
   // Up/Down in a reply box walks this thread's previous prompts; this remembers how far back you are
   // and the draft you started from.
   replyNav: new Map(),
+  // The New-agent box has the same Up/Down walk, over everything spawned from it (persisted, because
+  // a prompt you typed yesterday is exactly what you want back after a reload).
+  spawnHistory: loadSpawnHistory(),
+  spawnNav: null,
   // Replies typed while the agent is still working, in the order they were written. They go out one
   // at a time as each turn finishes: Hermes refuses a second session on a thread already running.
   replyQueue: new Map(),
@@ -1067,6 +1078,69 @@ async function drainReplyQueue(thread) {
   }
 }
 
+// ---- New-agent prompt history ---------------------------------------------------------
+// Shell-style recall for the spawn box: Up walks back through what you have spawned, Down walks
+// forward, and whatever you were part-way through typing is kept as the "draft" at the end (back 0).
+// Persisted, because the prompt worth reusing is usually from a previous session, not this one.
+// (SPAWN_HISTORY_KEY / SPAWN_HISTORY_MAX live at the top of the file, above `state`.)
+
+function loadSpawnHistory() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SPAWN_HISTORY_KEY) || "[]");
+    return Array.isArray(raw)
+      ? raw.filter((x) => typeof x === "string" && x.trim()).slice(-SPAWN_HISTORY_MAX)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSpawnHistory() {
+  try {
+    localStorage.setItem(SPAWN_HISTORY_KEY, JSON.stringify(state.spawnHistory.slice(-SPAWN_HISTORY_MAX)));
+  } catch {
+    /* private mode / quota: history is a convenience, not state the panel needs */
+  }
+}
+
+// Remember a prompt that actually spawned. Consecutive duplicates are noise — pressing Spawn twice
+// with the same text should not make Up walk the same line twice.
+function rememberSpawnPrompt(text) {
+  const clean = String(text || "").trim();
+  if (!clean) return;
+  if (state.spawnHistory[state.spawnHistory.length - 1] !== clean) {
+    state.spawnHistory.push(clean);
+    if (state.spawnHistory.length > SPAWN_HISTORY_MAX) {
+      state.spawnHistory.splice(0, state.spawnHistory.length - SPAWN_HISTORY_MAX);
+    }
+    saveSpawnHistory();
+  }
+  state.spawnNav = null;
+}
+
+// step +1 = older, -1 = newer. Returns false when there is nothing to recall, so the caller can let
+// the arrow key move the caret instead.
+function recallSpawnPrompt(step) {
+  const box = $("job-prompt");
+  const prompts = state.spawnHistory || [];
+  if (!prompts.length) return false;
+  // Going forward with no walk in progress would just rewrite the same text and swallow the key.
+  if (step < 0 && !(state.spawnNav && state.spawnNav.back > 0)) return false;
+  // First Up captures what is in the box as the draft; later steps keep that original draft.
+  const nav = state.spawnNav && state.spawnNav.back > 0 ? state.spawnNav : { back: 0, stash: box.value };
+  const back = Math.max(0, Math.min(prompts.length, nav.back + step));
+  const value = back === 0 ? nav.stash : prompts[prompts.length - back];
+  state.spawnNav = { back, stash: nav.stash };
+  box.value = value;
+  const end = value.length;
+  try {
+    box.setSelectionRange(end, end);
+  } catch {
+    /* not a text field */
+  }
+  return true;
+}
+
 function recallReply(box, step) {
   const thread = box.dataset.reply;
   if (!thread) return;
@@ -1610,6 +1684,11 @@ async function spawnAgent() {
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     $("spawn-msg").textContent = `spawned ${d.job.id}${d.job.runId ? ` · run ${String(d.job.runId).replace(/^run_/, "").slice(0, 8)}` : ""}${d.job.worktreePath ? ` · ${d.job.worktreePath}` : ""}`;
+    // The prompt now belongs to an agent: clear the box so the next one starts blank, and keep it in
+    // history so a single Up brings it straight back. A REFUSED spawn keeps the text for editing.
+    rememberSpawnPrompt(body.prompt);
+    $("job-prompt").value = "";
+    $("job-prompt").focus();
     updateJob(d.job, { scroll: true });
     // Take the reader to the new agent: unfold folder/project/worktree and scroll to its card.
     revealSpawnedAgent(d.job);
@@ -2924,6 +3003,33 @@ $("job-prompt").addEventListener("input", () => {
 // Enter in the prompt spawns, the way it does in every other box here. Shift+Enter is a newline, so a
 // multi-line prompt is still possible.
 $("job-prompt").addEventListener("keydown", (e) => {
+  // Up/Down walk what you have already spawned, shell style. Only from the very start (Up) or the very
+  // end (Down) of the text, so the arrows still move the caret inside a multi-line prompt.
+  if (e.key === "ArrowUp" && !e.shiftKey) {
+    const box = e.target;
+    // A single-line prompt walks history from anywhere (that is shell behaviour, and the caret sits at
+    // the END after typing). A multi-line prompt only walks when the caret is already at the start, so
+    // Up still moves between its lines first.
+    const singleLine = !String(box.value).includes("\n");
+    const atStart = box.selectionStart === 0 && box.selectionEnd === 0;
+    if ((singleLine && box.selectionStart === box.selectionEnd) || atStart || !box.value) {
+      if (recallSpawnPrompt(1)) {
+        e.preventDefault();
+        return;
+      }
+    }
+  }
+  if (e.key === "ArrowDown" && !e.shiftKey) {
+    const box = e.target;
+    const singleLine = !String(box.value).includes("\n");
+    const atEnd = box.selectionStart === box.value.length && box.selectionEnd === box.value.length;
+    if ((singleLine && box.selectionStart === box.selectionEnd) || atEnd) {
+      if (recallSpawnPrompt(-1)) {
+        e.preventDefault();
+        return;
+      }
+    }
+  }
   if (e.key !== "Enter") return;
   e.preventDefault();
   e.stopPropagation();
@@ -2933,6 +3039,11 @@ $("job-prompt").addEventListener("keydown", (e) => {
     return;
   }
   if (!$("btn-spawn").disabled) spawnAgent();
+});
+
+// Typing ends the history walk, so the next Up starts from whatever is in the box now.
+$("job-prompt").addEventListener("input", () => {
+  if (state.spawnNav) state.spawnNav = { back: 0, stash: $("job-prompt").value };
 });
 $("btn-pause").addEventListener("click", () => {
   state.paused = !state.paused;
