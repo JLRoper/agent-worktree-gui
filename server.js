@@ -603,6 +603,15 @@ const server = createServer(async (req, res) => {
       if (!made.ok) return sendJson(res, 400, { error: String(made.err || made.out || "git commit failed").slice(0, 400) });
       const sha = await gitIn(target, ["rev-parse", "--short", "HEAD"], 10000);
       log(`first commit made in ${target} (${String(sha.out || "").trim()}) — local only, nothing pushed`);
+      // The registry still has this repo down as empty, and a full rediscovery takes a sweep. The reader
+      // is looking at a disabled spawn button and the very warning this fixed, so flip the one fact that
+      // changed right here; the background refresh fills in the rest (head, branch) when it lands.
+      const proj = registry.projects.find((x) => normPathKey(x.path) === normPathKey(target));
+      if (proj) {
+        proj.empty = false;
+        registry.saveCache();
+      }
+      void registry.refresh();
       return sendJson(res, 201, { ok: true, path: target, sha: String(sha.out || "").trim(), message });
     }
 

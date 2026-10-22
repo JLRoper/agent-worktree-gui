@@ -2201,7 +2201,7 @@ async function spawnAgent() {
     // worktree to branch from. Offer the commit here rather than making the reader open a terminal.
     if (/unborn HEAD|has no commits yet/i.test(why)) {
       const dir = body.cwd || $("job-cwd").value.trim() || "";
-      $("spawn-msg").innerHTML = `${esc(`spawn failed: ${why}`)} <button type="button" class="btn-fix-first" data-first-commit="${esc(dir)}" title="create an empty initial commit in that repository — local only, nothing is pushed">make the first commit</button>`;
+      $("spawn-msg").innerHTML = `${esc(`spawn failed: ${why}`)} <button type="button" class="btn-fix-first" data-first-commit="${esc(dir)}" data-first-commit-run="1" title="create an empty initial commit in that repository — local only, nothing is pushed">make the first commit</button>`;
     } else {
       $("spawn-msg").textContent = `spawn failed: ${why}`;
     }
@@ -2267,6 +2267,13 @@ function syncProjectPicker(projects) {
   if (dl) dl.innerHTML = projects.map((p) => `<option value="${esc(p.path)}">${esc(p.name)}</option>`).join("");
   const cur = selectedProject();
   if (cur && !$("job-cwd").value.trim()) $("job-cwd").value = cur.path;
+  // The spawn list is where `empty` is authoritative (it is recomputed on every discovery), and the board
+  // keeps its own copy of each project. Mirror it, so a repo that just got its first commit stops looking
+  // empty everywhere rather than in the warning only.
+  for (const p of projects) {
+    const known = state.projects.get(p.name);
+    if (known && typeof p.empty === "boolean") known.empty = p.empty;
+  }
   updateSpawnNote();
 }
 
@@ -2288,9 +2295,12 @@ function updateSpawnNote() {
   // A repo with no commits has no HEAD to branch from, so the panel cannot create a worktree in it.
   const emptyRepo = Boolean(p) && Boolean(p.empty) && (!cwd || cwd === p.path);
   const warn = $("spawn-warn");
-  warn.textContent = emptyRepo
-    ? `${p.name} has no commits yet (unborn HEAD), so hermes -w cannot create a worktree there. ` +
-      `Make an initial commit first, e.g. in ${p.path}: git add -A && git commit -m "initial commit"`
+  // The one-click fix lives HERE, not only in the message a failed spawn leaves behind: the button is
+  // disabled before the spawn is ever attempted, so the refusal never happens and the reader was left
+  // with a command to retype by hand.
+  warn.innerHTML = emptyRepo
+    ? `${esc(`${p.name} has no commits yet (unborn HEAD), so no worktree can be cut from it. `)}` +
+      `<button type="button" class="btn-fix-first" data-first-commit="${esc(p.path)}" title="create an empty initial commit in that repository — local only, nothing is pushed">make the first commit</button>`
     : "";
   $("btn-spawn").disabled = emptyRepo;
 }
@@ -4048,8 +4058,15 @@ document.addEventListener("click", async (e) => {
     );
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    $("spawn-msg").textContent = `first commit ${d.sha} made in ${d.path} — nothing pushed. Spawning again…`;
-    void spawnAgent();
+    // Two entry points, two continuations: from a refused spawn the reader had already asked to run, so
+    // it runs again; from the warning above the spawn button they have not, so it just clears the block.
+    if (btn.dataset.firstCommitRun === "1") {
+      $("spawn-msg").textContent = `first commit ${d.sha} made in ${d.path} — nothing pushed. Spawning again…`;
+      void spawnAgent();
+    } else {
+      $("spawn-msg").textContent = `first commit ${d.sha} made in ${d.path} — nothing pushed.`;
+      void resync().then(() => updateSpawnNote());
+    }
   } catch (err) {
     $("spawn-msg").textContent = `could not make the first commit: ${err.message}`;
     btn.disabled = false;
