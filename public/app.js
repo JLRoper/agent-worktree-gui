@@ -34,6 +34,9 @@ const state = {
   // a prompt you typed yesterday is exactly what you want back after a reload).
   spawnHistory: loadSpawnHistory(),
   spawnNav: null,
+  // Popups that are open, by thread, with the position they were opened at — so a repaint (which
+  // replaces the card) does not silently close the list the reader is working in.
+  openArtifacts: new Map(),
   // The reply box that should take the caret once its card exists (set by a spawn or a jump, cleared
   // by itself the moment focus lands or the reader types somewhere else).
   pendingFocus: null,
@@ -835,31 +838,24 @@ function turnBlock(conv, turn, index, copy = "") {
     `<div class="job-prompt" data-toggle-turn="${esc(tkey)}" title="collapse this turn${turn.prompt ? ` — ${esc(turn.prompt.slice(0, 120))}` : ""}">${esc(turn.prompt || "")}</div>${turnBody(turn, copy)}</div>`;
 }
 
-// Every file this conversation produced, oldest first, one entry per path — the card's "N files"
-// button is built from this. A turn carries what its own run wrote and, after it settles, whatever
-// git found untracked in its directory.
+// Every deliverable this conversation produced — files and URLs — in the order they were delivered.
 function artifactsFor(conv) {
   const seen = new Map();
   for (const t of conv.turns) {
     for (const a of t.artifacts || []) {
-      const key = String(a.path || "").toLowerCase();
+      const key = String(a.path || a.url || "").toLowerCase();
       if (key && !seen.has(key)) seen.set(key, a);
     }
   }
-  return [...seen.values()];
+  return [...seen.values()].sort((a, b) => (a.at || 0) - (b.at || 0));
 }
 
 function baseNameOf(p) {
   return String(p || "").split(/[\\/]/).pop();
 }
 
-function dirOf(p) {
-  const s = String(p || "");
-  const i = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
-  return i > 0 ? s.slice(0, i) : "";
-}
-
 function closeArtifactPops() {
+  state.openArtifacts.clear();
   for (const pop of document.querySelectorAll("[data-artifacts-pop]")) pop.hidden = true;
 }
 
@@ -874,6 +870,35 @@ async function openArtifact(path) {
     if (!r.ok) showBanner(`open ${baseNameOf(path)}: ${d.error || `HTTP ${r.status}`}`);
   } catch (e) {
     showBanner(`open ${baseNameOf(path)}: ${e.message}`);
+  }
+}
+
+async function openArtifactUrl(url) {
+  try {
+    const r = await fetch("/api/open-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) showBanner(`open ${url}: ${d.error || `HTTP ${r.status}`}`);
+  } catch (e) {
+    showBanner(`open ${url}: ${e.message}`);
+  }
+}
+
+async function deleteArtifact(thread, key) {
+  try {
+    const r = await fetch("/api/jobs/artifact/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) showBanner(`delete: ${d.error || `HTTP ${r.status}`}`);
+    renderArtifactsPop(thread);
+  } catch (e) {
+    showBanner(`delete: ${e.message}`);
   }
 }
 
@@ -902,18 +927,46 @@ async function copyText(text) {
   return ok;
 }
 
-const artifactsPopHtml = (thread, list) => `<div class="artifacts-pop" data-artifacts-pop="${esc(thread)}" hidden>
-      <div class="ap-head mono dimmer">${list.length} file${list.length === 1 ? "" : "s"} this agent produced</div>
-      ${list
-        .map(
-          (a) => `<div class="ap-row">
-        <button type="button" class="ap-name" data-open-path="${esc(a.path)}" title="open in an editor: ${esc(a.path)}">${esc(baseNameOf(a.path))}</button>
-        <span class="ap-dir mono dimmer" title="${esc(a.path)}">${esc(dirOf(a.path))}</span>
-        <button type="button" class="ap-copy mono" data-copy-path="${esc(a.path)}" title="copy the full path">copy</button>
-      </div>`
-        )
-        .join("")}
+// One row per deliverable: the name (or the URL) opens it, `copy` takes the full location, `✕` asks
+// before removing it. The path itself is not a column — it is on hover, which is where you look for it.
+function artifactRowsHtml(list) {
+  return list
+    .map((a) => {
+      const isUrl = a.kind === "url";
+      const key = isUrl ? a.url : a.path;
+      const name = isUrl ? String(a.url).replace(/^https?:\/\//, "") : baseNameOf(a.path);
+      const openAttr = isUrl ? `data-open-url="${esc(a.url)}"` : `data-open-path="${esc(a.path)}"`;
+      return `<div class="ap-row" data-artifact-key="${esc(key)}">
+        <span class="ap-kind" title="${isUrl ? "URL" : "file"}">${isUrl ? "\u{1F517}" : "\u{1F4C4}"}</span>
+        <button type="button" class="ap-name${isUrl ? " is-url" : ""}" ${openAttr} title="${esc(key)}">${esc(name)}</button>
+        <button type="button" class="ap-copy mono" data-copy-path="${esc(key)}" title="copy the full ${isUrl ? "URL" : "path"}">copy</button>
+        <button type="button" class="ap-del" data-del-artifact="${esc(key)}" title="${isUrl ? "remove from this list" : "delete this file from disk"}">✕</button>
+      </div>`;
+    })
+    .join("");
+}
+
+function artifactsPopHtml(thread, list, openAt) {
+  const position = openAt ? ` style="left:${openAt.left}px; top:${openAt.top}px"` : "";
+  const hidden = openAt ? "" : " hidden";
+  return `<div class="artifacts-pop" data-artifacts-pop="${esc(thread)}"${hidden}${position}>
+      <div class="ap-head mono dimmer">${list.length} deliverable${list.length === 1 ? "" : "s"} — newest last</div>
+      ${artifactRowsHtml(list)}
     </div>`;
+}
+
+// Rebuild one popup in place (after a delete, or a confirmation was cancelled) without touching the card.
+function renderArtifactsPop(thread) {
+  const pop = document.querySelector(`[data-artifacts-pop="${CSS.escape(thread)}"]`);
+  const conv = conversations().find((c) => c.thread === thread);
+  if (!pop || !conv) return;
+  const list = artifactsFor(conv);
+  if (!list.length) {
+    closeArtifactPops();
+    return;
+  }
+  pop.innerHTML = `<div class="ap-head mono dimmer">${list.length} deliverable${list.length === 1 ? "" : "s"} — newest last</div>${artifactRowsHtml(list)}`;
+}
 
 function conversationHtml(conv) {
   const { thread, turns, latest } = conv;
@@ -983,7 +1036,7 @@ function conversationHtml(conv) {
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       ${runApproval && !waitingApproval ? `<span class="sig sig-approval" title="this run is parked on a flagged command — answer it in the card below">waiting on approval</span>` : ""}
       <span class="mono dim">${esc(meta)}</span>
-      ${artifacts.length ? `<button type="button" class="btn-artifacts" data-artifacts="${esc(thread)}" title="${artifacts.length} file(s) this agent produced — click to list them (open in an editor, copy the path)">\u{1F4C4} ${artifacts.length}</button>` : ""}
+      ${artifacts.length ? `<button type="button" class="btn-artifacts" data-artifacts="${esc(thread)}" title="${artifacts.length} deliverable(s) from this agent — click to open, copy or delete them">\u{1F4C4} ${artifacts.length}</button>` : ""}
       ${pager}
       <span class="spacer"></span>
       ${latest.yolo ? '<span class="pill yolo">--yolo</span>' : ""}
@@ -999,7 +1052,7 @@ function conversationHtml(conv) {
       <select data-attach-path="${esc(thread)}"></select>
       <button class="btn-attach-go" data-attach-go="${esc(thread)}" type="button">Attach</button>
     </div>` : ""}
-    ${artifacts.length ? artifactsPopHtml(thread, artifacts) : ""}
+    ${artifacts.length ? artifactsPopHtml(thread, artifacts, state.openArtifacts.get(thread)) : ""}
     <div class="job-body">
       ${pinnedHtml}
       ${blocks.html}
@@ -3319,12 +3372,52 @@ document.addEventListener("click", async (e) => {
       pop.hidden = !wasHidden;
       if (!pop.hidden) {
         // Fixed positioning in viewport space: the head is sticky-ish and the list must not be
-        // clipped by the card, so it hangs off the button itself.
+        // clipped by the card, so it hangs off the button itself. The position is remembered so a
+        // repaint can put the list back where the reader left it.
         const r = artBtn.getBoundingClientRect();
-        pop.style.left = `${Math.max(8, Math.min(window.innerWidth - 400, r.left))}px`;
-        pop.style.top = `${r.bottom + 6}px`;
+        const left = Math.max(8, Math.min(window.innerWidth - 420, r.left));
+        const top = r.bottom + 6;
+        pop.style.left = `${left}px`;
+        pop.style.top = `${top}px`;
+        state.openArtifacts.set(thread, { left, top });
       }
     }
+    return;
+  }
+  const delBtn = e.target.closest("[data-del-artifact]");
+  if (delBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const key = delBtn.dataset.delArtifact;
+    const pop = delBtn.closest("[data-artifacts-pop]");
+    const row = delBtn.closest(".ap-row");
+    const isUrl = /^https?:\/\//i.test(key);
+    if (row) {
+      row.innerHTML = `<span class="ap-confirm mono" title="${esc(key)}">Delete ${esc(isUrl ? "this URL from the list" : baseNameOf(key))}?</span>
+        <button type="button" class="ap-del-yes" data-del-yes="${esc(key)}" data-pop="${esc(pop?.dataset.artifactsPop || "")}">yes, delete</button>
+        <button type="button" class="ap-del-no" data-del-no="${esc(key)}" data-pop="${esc(pop?.dataset.artifactsPop || "")}">cancel</button>`;
+    }
+    return;
+  }
+  const delYes = e.target.closest("[data-del-yes]");
+  if (delYes) {
+    e.preventDefault();
+    e.stopPropagation();
+    void deleteArtifact(delYes.dataset.pop, delYes.dataset.delYes);
+    return;
+  }
+  const delNo = e.target.closest("[data-del-no]");
+  if (delNo) {
+    e.preventDefault();
+    e.stopPropagation();
+    renderArtifactsPop(delNo.dataset.pop);
+    return;
+  }
+  const openUrlBtn = e.target.closest("[data-open-url]");
+  if (openUrlBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    void openArtifactUrl(openUrlBtn.dataset.openUrl);
     return;
   }
   const openBtn = e.target.closest("[data-open-path]");

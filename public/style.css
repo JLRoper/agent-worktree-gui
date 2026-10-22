@@ -449,8 +449,14 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
   position: fixed;
   z-index: 60;
   width: 380px;
-  max-height: 260px;
+  min-width: 300px;
+  max-width: 90vw;
+  height: 260px;
+  min-height: 120px;
+  max-height: 70vh;
   overflow: auto;
+  /* Drag the corner to grow it: the list is where you work, not a tooltip. */
+  resize: both;
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -458,11 +464,12 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
   box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
 }
 .artifacts-pop .ap-head { padding: 3px 6px 6px; font-size: 11px; }
-.artifacts-pop .ap-row { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; }
+.artifacts-pop .ap-row { display: flex; align-items: center; gap: 7px; padding: 3px 6px; border-radius: 6px; }
 .artifacts-pop .ap-row:hover { background: #171d27; }
+.artifacts-pop .ap-kind { flex: none; font-size: 11px; opacity: .75; }
 .artifacts-pop .ap-name {
-  flex: 0 1 auto;
-  max-width: 46%;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -475,17 +482,12 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
   text-align: left;
 }
 .artifacts-pop .ap-name:hover { text-decoration: underline; }
-.artifacts-pop .ap-dir {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-}
-.artifacts-pop .ap-copy {
+.artifacts-pop .ap-name.is-url { color: #8ee08a; }
+.artifacts-pop .ap-copy,
+.artifacts-pop .ap-del,
+.artifacts-pop .ap-del-yes,
+.artifacts-pop .ap-del-no {
   flex: none;
-  margin-left: auto;
   padding: 0 6px;
   border-radius: 4px;
   border: 1px solid var(--line);
@@ -496,6 +498,10 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 }
 .artifacts-pop .ap-copy:hover { color: var(--text); border-color: #3b4757; }
 .artifacts-pop .ap-copy.is-copied { color: #8ee08a; border-color: #2f5a33; }
+.artifacts-pop .ap-del:hover { color: #ff9c94; border-color: #57262a; }
+.artifacts-pop .ap-confirm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #ffd08a; }
+.artifacts-pop .ap-del-yes { color: #ff9c94; border-color: #57262a; }
+.artifacts-pop .ap-del-no { color: var(--text); }
 /* a URL in an agent's console: click (or ctrl-click) opens it in the OS default browser */
 a.out-link { color: #7fb3ff; text-decoration: underline dotted; cursor: pointer; }
 a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }

@@ -4,7 +4,7 @@
 import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { gzipSync as zlibGzipSync } from "node:zlib";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, unlink } from "node:fs/promises";
 import { cpus } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -613,6 +613,28 @@ const server = createServer(async (req, res) => {
         else sendJson(res, 200, { ok: true, url });
       });
       return;
+    }
+
+    // Delete a deliverable. The confirmation lives in the UI; this only acts on a path or URL the panel
+    // itself recorded, so a stray string from the page can never delete an arbitrary file.
+    if (route === "/api/jobs/artifact/delete" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const key = String(body.key || body.path || body.url || "").trim();
+      const hit = jobs.findArtifact(key);
+      if (!hit) return sendJson(res, 404, { error: `not a recorded deliverable: ${key}` });
+      let removedFile = false;
+      if (hit.artifact.kind !== "url" && hit.artifact.path) {
+        try {
+          await unlink(hit.artifact.path);
+          removedFile = true;
+        } catch (e) {
+          // Already gone is the same outcome for the reader; anything else is worth reporting.
+          if (e.code !== "ENOENT") return sendJson(res, 500, { error: String((e && e.message) || e) });
+        }
+      }
+      jobs.removeArtifact(hit.job, key);
+      return sendJson(res, 200, { ok: true, removedFile, kind: hit.artifact.kind || "file" });
     }
 
     // Open a file an agent produced for the reader. Not a URL: a real path, opened in an editor.
