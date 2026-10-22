@@ -179,6 +179,25 @@ waiting for a scan. The `⧉ hermes` signal (which matches on a session's record
 place a panel-started agent on its own, because those sessions record no usable cwd. `⧉ panel (done)`
 means the agent that ran there has finished but is still in the panel's list.
 
+#### Reviving a session the board lost
+
+A conversation outlives the panel's job store. The run lives in the gateway, so clearing a card, a
+fresh clone or a reset `logs/jobs.json` leaves the row still saying *Hermes session open here but
+idle (1)* with nothing to click — the count came from the session store, the card came from the
+panel. The row detail now lists those sessions by name under **Sessions N here, no card on the
+board**, each with a `revive` button.
+
+Reviving writes one job record whose `thread` is the session id, so nothing is copied: the
+conversation is already in the gateway, the card shows the last exchange so you recognise it, and the
+reply box runs another turn on the same session — as if the card had never gone. It is deliberately
+not automatic: a worktree collects every session ever run in it, so auto-attaching would refill the
+board with months of finished conversations. One click, one session.
+
+The list uses the same attribution as the row's own liveness claim, so a session appears only under
+the row it is already being credited to (a `wtgui-*` session records no usable `cwd` and is placed by
+its newest tool calls). `GET /api/sessions?path=` answers the same question for a script, and a
+revive is refused (409) when that session already has a card.
+
 #### Files an agent produced
 
 An agent that writes something a person will *open* — a markdown doc, a SQL script, a key — gets a
@@ -286,6 +305,8 @@ for the approval window — agent processes are not spawned from here any more.
 | POST | `/api/jobs/steer` | `{id, text}` → `POST /v1/runs/{id}/steer`; read at the agent's next tool boundary. 409 when the turn already crossed it |
 | POST | `/api/jobs/approve` | `{id, choice, requestId?}` → `POST /v1/runs/{id}/approval`; `choice` must be one the host offered |
 | GET/POST | `/api/settings/approvals` | the gateway's `approvals.timeout`. GET reports the value, whether `config.yaml` sets it, the file's path, and whether this panel may change it. POST `{timeoutSeconds}` rewrites only that line under `approvals:` in `<HERMES_HOME>/config.yaml` — comments, indentation and line endings untouched — and re-reads the file before writing, refusing if it does not say what was asked. **400** outside 15–86400, **409** when the gateway is not on this machine |
+| GET | `/api/sessions?path=` | the Hermes sessions the scheduler attributes to one worktree row: `{id, title, matched, lastActivityAt, onBoard}`. The same answer the row's "idle session" claim comes from |
+| POST | `/api/sessions/revive` | `{sessionId, path}` → a job record for a session the board has no card for (the run itself lives in the gateway; a reply continues it). **404** when the store does not attribute that session to that row, **409** when it already has a card |
 | POST | `/api/jobs/cancel` | `{id}` → `POST /v1/runs/{id}/stop` (cooperative interrupt) |
 | POST | `/api/jobs/clear` | drop finished jobs from the list |
 | POST | `/api/refresh` `/api/fetch` `/api/reload` | force a fast pass / fetch remotes / re-read config |

@@ -18,6 +18,7 @@ import { gitIn } from "./lib/scan.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
 import { Approvals } from "./lib/approvals.js";
 import { approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX } from "./lib/hermes-config.js";
+import { hermesSessionTail } from "./lib/activity.js";
 
 // A file an agent produced is meant to be OPENED, and the shell association may hand a .md to a
 // browser. Prefer a text editor: Notepad++ when installed, else Windows' notepad (always present),
@@ -325,6 +326,16 @@ function authorised(req) {
   return req.headers["x-panel-token"] === config.token;
 }
 
+const cleanPath = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "");
+
+// The Hermes sessions the scheduler attributes to one worktree row — the same attribution the row's
+// own "Hermes session open here but idle" claim is built from, so this list can never offer a session
+// the row does not already say it has.
+async function sessionsForRow(target) {
+  const roots = await scheduler.sessionRoots();
+  return roots.get(cleanPath(target).toLowerCase()) || [];
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   const route = url.pathname;
@@ -554,6 +565,67 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const r = await jobs.approve(String(body.id || ""), body.choice, body.requestId ?? body.request_id);
       return sendJson(res, r.ok ? 200 : r.code === "approval_not_pending" ? 409 : 400, r);
+    }
+
+    // ---- reviving a conversation the panel no longer has a card for -------------------------
+    // A session outlives the panel's job store: the conversation lives in the gateway, so a reset
+    // store (or a ✕) leaves the row still saying "Hermes session open here but idle" with nothing to
+    // click. These turn that claim into a list, and put ONE back on the board when the reader picks
+    // it — never automatically, because a tree accumulates every session ever run in it and the
+    // board must not refill with all of them at once.
+    if (route === "/api/sessions" && req.method === "GET") {
+      const target = cleanPath(url.searchParams.get("path"));
+      if (!target) return sendJson(res, 400, { error: "path is required" });
+      const mine = await sessionsForRow(target);
+      const onBoard = new Set(jobs.list().map((j) => j.thread));
+      return sendJson(res, 200, {
+        path: target,
+        sessions: mine.map((s) => ({
+          id: s.id,
+          title: s.title || null,
+          matched: s.matched || null,
+          lastActivityAt: s.lastActivityAt || null,
+          onBoard: onBoard.has(s.id),
+        })),
+      });
+    }
+
+    if (route === "/api/sessions/revive" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const sessionId = String(body.sessionId || "").trim();
+      const target = cleanPath(body.path);
+      if (!sessionId) return sendJson(res, 400, { error: "sessionId is required" });
+      if (!target) return sendJson(res, 400, { error: "path is required" });
+      // Never take the pair on trust: the session must be one the store attributes to THIS row, or a
+      // stale tab could file any conversation anywhere on the board.
+      const mine = await sessionsForRow(target);
+      const session = mine.find((s) => s.id === sessionId);
+      if (!session) return sendJson(res, 404, { error: `no open session ${sessionId} in ${target}` });
+      if (jobs.firstOfThread(sessionId)) return sendJson(res, 409, { error: "that session already has a card on the board" });
+      // The last exchange, so the revived card reads as the conversation it brings back.
+      const tail = await hermesSessionTail(sessionId, 2).catch(() => []);
+      const owner = registry.projects
+        .filter((p) => {
+          const b = normPathKey(p.path);
+          const t = normPathKey(target);
+          return t === b || t.startsWith(`${b}/`);
+        })
+        .sort((a, b) => normPathKey(b.path).length - normPathKey(a.path).length)[0] || null;
+      const out = jobs.revive({
+        thread: sessionId,
+        ownerPath: target,
+        projectPath: owner ? owner.path : null,
+        cwd: target,
+        title: session.title || null,
+        // The card is dated by the conversation, not by the click: "last active 40m ago" is the
+        // useful fact about a session that was idle before the reader revived it.
+        at: session.lastActivityAt || null,
+        tail,
+      });
+      if (!out.ok) return sendJson(res, 409, out);
+      log(`revived session ${sessionId} under ${target}`);
+      return sendJson(res, 200, out);
     }
 
     if (route === "/api/jobs/attach" && req.method === "POST") {

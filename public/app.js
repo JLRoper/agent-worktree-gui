@@ -815,8 +815,11 @@ function turnPageOffset(thread, turnCount) {
 function turnHead(turn, index, open, copy = "") {
   const label = `turn ${turn.turn || index + 1}`;
   const pinned = state.pinnedTurns.has(turn.id);
-  const state_ =
-    turn.status === "running" || turn.status === "starting"
+  const state_ = turn.revived
+    // Rebuilt from the gateway's store: there is no duration to report, and "done · 0s" claims a run
+    // of zero seconds that never happened here.
+    ? "revived"
+    : turn.status === "running" || turn.status === "starting"
       ? `running ${elapsed(turn)}`
       : `${turn.status} · ${elapsed(turn)}${turn.tokens?.total ? ` · ${turn.tokens.total} tok` : ""}`;
   return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> <span class="turn-text">${esc(label)} · ${esc(state_)}</span></div>`;
@@ -1003,7 +1006,11 @@ function conversationHtml(conv) {
     : `exit ${latest.exitCode ?? "?"}`;
   const foot = latest.status === "running" || latest.status === "starting"
     ? `<span class="dimmer mono">running ${esc(elapsed(latest))}</span>`
-    : `<span class="mono dim">${esc(outcome)} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${latest.tokens.total}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>`;
+    : latest.revived
+      // Rebuilt from the gateway's session store, so there was never a process here: "exit ?" and
+      // "0s" would both describe a run that did not happen in this panel. Say when it was last used.
+      ? `<span class="mono dim">revived · last active ${esc(relTime(latest.startedAt))} ago</span>`
+      : `<span class="mono dim">${esc(outcome)} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${latest.tokens.total}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>`;
   const artifacts = artifactsFor(conv);
   const blocks = (() => {
     const offset = turnPageOffset(thread, turns.length);
@@ -2231,6 +2238,40 @@ function agentsFor(row) {
   return agentsByPath().get(normPath(row.path).toLowerCase()) || [];
 }
 
+// Threads that already have a card somewhere on the board, so a session the row reports is never
+// offered for revival when it is already there.
+function knownThreads() {
+  return new Set([...state.jobs.values()].map((j) => j.thread || j.id));
+}
+
+// Rebuild the card for a session the gateway still has. The conversation never went anywhere — what
+// was lost was the panel's record pointing at it — so this asks the server for one, after which a
+// reply runs as another turn on the same session id, exactly like any other agent on the board.
+async function reviveSession(btn) {
+  const sessionId = btn.dataset.reviveSession;
+  const path = btn.dataset.revivePath;
+  const was = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "reviving…";
+  try {
+    const r = await fetch("/api/sessions/revive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId, path }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    // The server already emitted a job event; applying it here too makes the card appear even if
+    // this tab's stream happens to be between reconnects.
+    if (d.job) updateJob(d.job, { scroll: true });
+    await resync();
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = was;
+    showBanner(`revive ${sessionId}: ${e.message}`);
+  }
+}
+
 function agentsRunning(list) {
   return list.filter((c) => c.latest.status === "running" || c.latest.status === "starting").length;
 }
@@ -2578,6 +2619,26 @@ function detailHtml(row) {
         ${agents.map((c) => conversationHtml(c)).join("")}
       </div>`
     : "";
+  // Sessions the row says are here but that have no card: the conversation lives in the gateway, and
+  // the panel's job store is what held the card. Reviving one puts a card back you can reply to —
+  // offered one at a time, because a tree collects every session ever run in it.
+  const known = knownThreads();
+  const idleSessions = (row.signals?.hermes?.idleList || []).filter((s) => s && s.id && !known.has(s.id));
+  const sessionsHtml = idleSessions.length
+    ? `<div class="sessions-block">
+        <h4>Sessions <span class="dimmer mono">${idleSessions.length} here, no card on the board</span></h4>
+        ${idleSessions
+          .map(
+            (s) => `<div class="session-row">
+            <span class="session-name">${esc(s.title || "(untitled session)")}</span>
+            <span class="session-id mono" title="${esc(s.id)}">${esc(String(s.id).slice(0, 16))}…</span>
+            <span class="spacer"></span>
+            <button type="button" class="btn-revive" data-revive-session="${esc(s.id)}" data-revive-path="${esc(row.path)}" title="put this session back on the board as a card — the conversation is in the gateway, so a reply continues it where it stopped">revive</button>
+          </div>`,
+          )
+          .join("")}
+      </div>`
+    : "";
   return `<tr class="detail" data-detail="${esc(key)}"><td colspan="9">
     <div class="git-block${gitOpen ? "" : " collapsed"}" data-git-block="${esc(key)}">
       <div class="git-head" data-toggle-git="${esc(key)}" title="${gitOpen ? "fold" : "unfold"} the merge state, commit and diff detail">
@@ -2592,6 +2653,7 @@ function detailHtml(row) {
     </div>
     ${liveBlock}
     ${agentsHtml}
+    ${sessionsHtml}
   </td></tr>`;
 }
 
@@ -3631,6 +3693,14 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     e.preventDefault();
     openAgentsBlock(openRowBtn.dataset.openRow);
+    return;
+  }
+  // "revive" on a session the row reports but that has no card: ask the server to rebuild one.
+  const reviveBtn = e.target.closest("[data-revive-session]");
+  if (reviveBtn) {
+    e.stopPropagation();
+    e.preventDefault();
+    void reviveSession(reviveBtn);
     return;
   }
   // "waiting on you →" on an agent card: take the reader to the approval that is blocking it.
