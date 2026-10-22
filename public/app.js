@@ -3180,7 +3180,11 @@ function detailHtml(row) {
           .join("")}
       </div>`
     : "";
+  // What this tree is WORKING ON comes first: the agents and the sessions you can revive. The git and
+  // liveness detail is reference material, folded underneath where it no longer pushes the agents down.
   return `<tr class="detail" data-detail="${esc(key)}"><td colspan="9">
+    ${agentsHtml}
+    ${sessionsHtml}
     <div class="git-block${gitOpen ? "" : " collapsed"}" data-git-block="${esc(key)}">
       <div class="git-head" data-toggle-git="${esc(key)}" title="${gitOpen ? "fold" : "unfold"} the merge state, commit and diff detail">
         <span class="chev">${gitOpen ? "\u25be" : "\u25b8"}</span>
@@ -3193,8 +3197,6 @@ function detailHtml(row) {
       </div>
     </div>
     ${liveBlock}
-    ${agentsHtml}
-    ${sessionsHtml}
   </td></tr>`;
 }
 
