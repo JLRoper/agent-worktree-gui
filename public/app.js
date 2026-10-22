@@ -2520,18 +2520,42 @@ function panelAgentsByPath() {
 // that hold the first live agent, then land on that card with the caret in its reply box. Every step is a
 // different accordion, and the card does not exist in the DOM until the row is open, so the scroll is
 // re-asserted on the next frames rather than measured once too early.
-function jumpToLiveAgent(projectName) {
+// Order the project's rows the way the board draws them, so "the top agent" is the one the reader would
+// hit first scrolling down: an open row keeps its slot, the rest are ranked.
+function rowsInBoardOrder(projectName) {
   const rows = [...state.rows.values()].filter((r) => r.project === projectName);
+  const dom = [...document.querySelectorAll("tr.row")]
+    .filter((el) => String(el.dataset.key || "").startsWith(`${projectName}::`))
+    .map((el) => el.dataset.key);
+  const pos = new Map(dom.map((k, i) => [k, i]));
+  return rows.sort((a, b) => {
+    const ka = keyOf(projectName, a.path);
+    const kb = keyOf(projectName, b.path);
+    const pa = pos.has(ka) ? pos.get(ka) : Number.MAX_SAFE_INTEGER;
+    const pb = pos.has(kb) ? pos.get(kb) : Number.MAX_SAFE_INTEGER;
+    return pa - pb;
+  });
+}
+
+// The first card of one row, newest first — the card that sits at the top of that row's agents block.
+function topAgentOf(row) {
+  const agents = agentsFor(row);
+  if (!agents.length) return null;
+  const latest = (c) => Number(Date.parse((c.turns || []).at(-1)?.startedAt || 0)) || 0;
+  return [...agents].sort((a, b) => latest(b) - latest(a))[0];
+}
+
+function jumpToPanelAgent(projectName, { running = false } = {}) {
   let found = null;
-  for (const r of rows) {
-    const live = agentsFor(r).find((c) =>
-      (c.turns || []).some((x) => x.status === "running" || x.status === "starting"),
-    );
-    if (live) {
-      const turn = (live.turns || []).find((x) => x.status === "running" || x.status === "starting");
-      found = { row: r, thread: live.thread, turnId: turn ? turn.id : null };
-      break;
-    }
+  for (const r of rowsInBoardOrder(projectName)) {
+    const agents = agentsFor(r);
+    const pick = running
+      ? agents.find((c) => (c.turns || []).some((x) => x.status === "running" || x.status === "starting"))
+      : topAgentOf(r);
+    if (!pick) continue;
+    const turn = (pick.turns || []).find((x) => x.status === "running" || x.status === "starting") || (pick.turns || []).at(-1);
+    found = { row: r, thread: pick.thread, turnId: turn ? turn.id : null };
+    break;
   }
   if (!found) return;
   const project = state.projects.get(projectName);
@@ -2541,7 +2565,7 @@ function jumpToLiveAgent(projectName) {
   const key = keyOf(projectName, found.row.path);
   if (!state.expanded.has(key)) document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
   // The live turn shows its console only while it is open; a reader who folded it would land on a header.
-  if (found.turnId && state.turnOpen.get(found.turnId) === false) {
+  if (running && found.turnId && state.turnOpen.get(found.turnId) === false) {
     state.turnOpen.set(found.turnId, true);
     renderConversation(found.thread);
   }
@@ -3228,15 +3252,12 @@ function chipsHtml(name) {
     const title = `${panelAgentCount} agent card${panelAgentCount === 1 ? "" : "s"} across ${trees} worktree${trees === 1 ? "" : "s"} in this project${busy ? ` · ${panelRunningCount} running right now` : " · none running"}`;
     const tag = busy ? ` · ${panelRunningCount} running` : "";
     const body = `⧉ ${panelAgentCount} panel${panelAgentCount === 1 ? "" : "s"}${tag}`;
-    if (busy) {
-      // A live panel is the one thing worth jumping to: click opens the folder, project and row that hold
-      // the first running agent and puts the caret in its reply box.
-      out.push(
-        `<button type="button" class="chip agents chip-jump" data-jump-live="${esc(name)}" title="${esc(title)} — click to jump to the running agent">${body}</button>`,
-      );
-    } else {
-      out.push(`<span class="chip" title="${esc(title)}">${body}</span>`);
-    }
+    // Always a button: busy it jumps to the agent that is working, quiet it jumps to the top agent card.
+    const cls = `chip${busy ? " agents" : ""} chip-jump`;
+    const hint = busy ? "click to jump to the running agent" : "click to jump to the top agent";
+    out.push(
+      `<button type="button" class="${cls}" data-jump-panel="${esc(name)}" data-jump-running="${busy ? "1" : "0"}" title="${esc(title)} — ${hint}">${body}</button>`,
+    );
   }
   // Amber and loud: an agent parked on a permission request is the one thing here that is waiting for
   // a human, and it must be visible with the project collapsed.
@@ -4479,11 +4500,11 @@ document.addEventListener("click", async (e) => {
   }
   // The project's panel chip is a button only while something is running: jump to that agent instead of
   // toggling the project the chip sits in.
-  const liveJump = e.target.closest("[data-jump-live]");
-  if (liveJump) {
+  const panelJump = e.target.closest("[data-jump-panel]");
+  if (panelJump) {
     e.preventDefault();
     e.stopPropagation();
-    jumpToLiveAgent(liveJump.dataset.jumpLive);
+    jumpToPanelAgent(panelJump.dataset.jumpPanel, { running: panelJump.dataset.jumpRunning === "1" });
     return;
   }
   const phead = e.target.closest(".project-head[data-toggle-project]");
