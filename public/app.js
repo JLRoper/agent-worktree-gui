@@ -2756,16 +2756,25 @@ function isRowLive(row) {
   return Boolean(row.live) || Boolean(panelFor(row)?.running);
 }
 
+// The chip's tooltip: what the evidence is, then which sessions it is — numbered, one per line. A native
+// tooltip honors the newlines, so the list reads as a list instead of one long run-on line.
+function hermesTitle(head, titles) {
+  const list = (titles || []).map((x) => String(x || "").trim()).filter(Boolean);
+  if (!list.length) return head;
+  const numbered = list.map((x, i) => `${i + 1}. ${x}`).join("\n");
+  return `${head}\n\n${numbered}`;
+}
+
 function sigChips(row) {
   const s = row.signals || {};
   const out = [];
   // The label says only WHO the evidence is (a Hermes session external to this panel). Whether it is
   // working right now lives in the tooltip: "hermes running" read as a second kind of chip.
   if (s.hermes?.on) {
-    const title = s.hermes.running
+    const head = s.hermes.running
       ? "A Hermes agent external to this application is actively taking turns in this worktree."
-      : `Hermes session open here${s.hermes.matched === "work" ? " — placed by its newest tool calls, not its start directory" : ""}: ${(s.hermes.titles || []).join(" · ")}`;
-    out.push(`<span class="sig sig-hermes" title="${esc(title)}">⧉ hermes</span>`);
+      : `Hermes session open here${s.hermes.matched === "work" ? " — placed by its newest tool calls, not its start directory" : ""}.`;
+    out.push(`<span class="sig sig-hermes" title="${esc(hermesTitle(head, s.hermes.titles))}">⧉ hermes</span>`);
   }
   if (s.board?.on) out.push(`<span class="sig sig-board" title="board entry, PID alive now: ${esc((s.board.entries || []).map((e) => e.pid).join(', '))}">● board</span>`);
   if (s.ports?.on) out.push(`<span class="sig sig-port" title="dev server listening: ${esc((s.ports.listening || []).join(', '))}">:${esc((s.ports.listening || []).join(' :'))}</span>`);
@@ -3206,8 +3215,9 @@ function chipsHtml(name) {
   // project's worktrees. Counted only while it is executing — a closed or idle CLI session has nothing
   // to report at project level.
   if (outsideRunning) {
-    const title = `${outsideRunning} Hermes agent${outsideRunning === 1 ? "" : "s"} from outside this panel ${outsideRunning === 1 ? "is" : "are"} executing a turn in this project right now`;
-    out.push(`<span class="chip hermes" title="${esc(title)}">${outsideRunning} hermes</span>`);
+    const head = `${outsideRunning} Hermes agent${outsideRunning === 1 ? "" : "s"} from outside this panel ${outsideRunning === 1 ? "is" : "are"} executing a turn in this project right now`;
+    const titles = rows.filter((r) => Number(r.signals?.hermes?.running) > 0).flatMap((r) => r.signals?.hermes?.titles || []);
+    out.push(`<span class="chip hermes" title="${esc(hermesTitle(head, titles))}">${outsideRunning} hermes</span>`);
   }
   // The panel's own agents: how many cards, and how many of them are executing. The colour IS the state —
   // violet while something runs, grey while the panel is quiet — so a reader does not have to parse the
