@@ -46,6 +46,8 @@ const state = {
   // Documents pasted or dropped into a reply box, per thread: the reply area is rebuilt on every job
   // event, so these cannot live in the DOM the way the New-agent box's list can.
   replyAttachments: new Map(),
+  // Row keys whose own agent evidence moved on the last paint; the reorder pass colours only these green.
+  movedRows: new Set(),
   // Transcript scroll per console (pre[data-out]). Folding a project throws the console markup away,
   // so the position has to live outside the DOM or it comes back at the top.
   outScrolls: {},
@@ -156,7 +158,16 @@ function lifeAt(row) {
 // What counts as an agent moving in a row. The cheap scan fields (verdict, age, git tip) are the
 // scanner working, not the agent: a verdict flipping is not movement, and flashing green for it made
 // every poll look like progress.
-function movementKey(row) {
+// The project's own checkout, on its main branch. Merges land here and a fast-forward rewrites file
+// mtimes, which read exactly like an agent working in the main tree — it is how main kept flashing
+// while the real work happened one directory down. Main rows therefore move on agent evidence
+// (sessions, board entries, ports, cards) and on nothing else.
+function isMainWorktree(project, row) {
+  const main = state.projects.get(project)?.mainBranch;
+  return Boolean(main && row.branch && row.branch === main);
+}
+
+function movementKey(row, { onMain = false } = {}) {
   const s = row.signals || {};
   const h = s.hermes || {};
   const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -168,7 +179,7 @@ function movementKey(row) {
   // omitted from some row events, so `0/0` flipping to `0/10` read as movement on every refresh and
   // every row pulsed green. A start is still movement; a bookkeeping total is not.
   const cards = num(s.panel?.running);
-  const files = s.files?.at || "";
+  const files = onMain ? "" : s.files?.at || "";
   return `${sessions}#${idle}#${board}#${ports}#${cards}#${files}`;
 }
 
@@ -3294,13 +3305,22 @@ function reorder(name) {
   for (const el of want) tbody.appendChild(el);
   // Say which rows moved: the order is the panel's judgement about what to look at first, and a
   // silent shuffle leaves you guessing whether the row under the cursor is still the same row.
-  flashMoved(current, want, tbody);
+  // Green only where an agent actually moved in that row; a row that merely slid a slot because its
+  // neighbour came alive gets the quiet grey. This is what stopped the MAIN row pulsing every time an
+  // agent one level down did something.
+  flashMovedByKey(
+    current.map((el) => el.dataset.key),
+    want,
+    tbody,
+    (el) => (state.movedRows.has(el.dataset.key) ? "flash" : "flash-idle"),
+  );
+  state.movedRows.clear();
 }
 
 // Green flash on the things that moved UP the order. A project pushed to the top shifts everything
 // below it down by one, and flashing those too turned a single mover into a wall of green; an element
 // that only slid downwards is not news.
-function flashMovedByKey(beforeKeys, afterEls, reflowHost) {
+function flashMovedByKey(beforeKeys, afterEls, reflowHost, colorFor = null) {
   const was = new Map();
   beforeKeys.forEach((k, i) => {
     if (k) was.set(k, i);
@@ -3314,12 +3334,16 @@ function flashMovedByKey(beforeKeys, afterEls, reflowHost) {
   if (!moved.length) return;
   // Remove then re-add in one pass with a single reflow between, so an element that moves twice in
   // quick succession restarts the animation instead of silently keeping the dying one.
-  for (const el of moved) el.classList.remove("flash");
+  const kinds = new Map(moved.map((el) => [el, colorFor ? colorFor(el) : "flash"]));
+  for (const el of moved) {
+    el.classList.remove("flash", "flash-idle");
+  }
   if (reflowHost) void reflowHost.offsetWidth;
   for (const el of moved) {
-    el.classList.add("flash");
+    const kind = kinds.get(el);
+    el.classList.add(kind);
     clearTimeout(el._flashT);
-    el._flashT = setTimeout(() => el.classList.remove("flash"), 950);
+    el._flashT = setTimeout(() => el.classList.remove(kind), 950);
   }
 }
 
@@ -3358,7 +3382,12 @@ function placeRow(project, row, { flash = false } = {}) {
   const prevRow = state.rows.get(key) || null;
   // Decided before the new row overwrites the old one, and outside the flash branch: it also decides
   // whether a refresh that found nothing gets the quiet grey pulse.
-  const moved = !prevRow || movementKey(prevRow) !== movementKey(row);
+  const onMain = isMainWorktree(project, row);
+  const moved = !prevRow || movementKey(prevRow, { onMain }) !== movementKey(row, { onMain });
+  // Remembered for the reorder pass that follows this paint: a row that swaps slots because a NEIGHBOUR
+  // moved must not flash green for it. Cleared by reorder() once it has coloured the moved rows.
+  if (moved) state.movedRows.add(key);
+  else state.movedRows.delete(key);
   const isNew = !state.rows.has(key);
   noteScan(row);
   state.rows.set(key, row);
