@@ -2323,6 +2323,17 @@ function scrollCardUnderBar(card) {
   // repaint (the page height changes under it) and stops wherever it happened to be — which is how the
   // card kept ending up half-visible.
   window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+  // Re-assert after the paint has settled. The board repaints on its own clock and a trait like `.armed`
+  // changing the card's border can shift the document under us; one follow-up scroll is cheaper than a
+  // card the reader cannot see. Re-computed from the card's CURRENT rect, not the stale one.
+  const again = () => {
+    const bar2 = document.querySelector(".topbar");
+    const off2 = (bar2?.getBoundingClientRect().height || 0) + 12;
+    const want = Math.max(0, window.scrollY + card.getBoundingClientRect().top - off2);
+    if (Math.abs(want - window.scrollY) > 2) window.scrollTo({ top: want, behavior: "auto" });
+  };
+  requestAnimationFrame(again);
+  setTimeout(again, 120);
 }
 
 function focusPromptWithoutScrolling() {
@@ -4695,6 +4706,11 @@ $("projects").addEventListener("click", (e) => {
   }
   const tr = e.target.closest("tr.row");
   if (!tr) return;
+  // A row's own controls (play, delete, revive, refresh ring) have their own handlers. If the toggle
+  // ALSO fires, `keepInPlace` corrects the page for the accordion that just opened and yanks it back —
+  // which is exactly how clicking the green play button moved the caret into the prompt while leaving
+  // the card off-screen.
+  if (e.target.closest("button, a, input, select, textarea, label")) return;
   const key = tr.dataset.key;
   const row = state.rows.get(key);
   if (!row) return;
