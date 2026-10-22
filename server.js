@@ -203,6 +203,7 @@ let scheduler = new Scheduler({
   registry,
   getProjects: () => registry.projects,
   panelAgents: () => jobs.agentPaths(),
+  panelThreads: () => jobs.panelRunThreads(),
 });
 
 const clients = new Set();
@@ -1065,7 +1066,7 @@ const server = createServer(async (req, res) => {
       scheduler.stop();
       pool.close();
       pool = new Pool(config.threads);
-      scheduler = new Scheduler({ config, store, pool, registry, getProjects: () => registry.projects, panelAgents: () => jobs.agentPaths() });
+      scheduler = new Scheduler({ config, store, pool, registry, getProjects: () => registry.projects, panelAgents: () => jobs.agentPaths(), panelThreads: () => jobs.panelRunThreads() });
       await registry.refresh();
       await scheduler.start();
       broadcast({ type: "snapshot", data: snapshot() });
