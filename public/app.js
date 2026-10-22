@@ -4786,8 +4786,15 @@ document.addEventListener("click", async (e) => {
   // A click on anything interactive inside the head belongs to that control, never to the fold:
   // attach, clear, maximize, cancel, the attach picker and its select all live in the head row.
   const head = e.target.closest(".job-head");
-  if (head && !e.target.closest("button, a, input, select, textarea, label, [data-attach-row], [data-toggle-turn]")) {
-    const id = head.dataset.toggle;
+  // A minimized card is one row plus its preview line, and both are the handle: clicking the preview (or
+  // any empty part of the row) expands it. Buttons inside the head keep their own behaviour, and an open
+  // card is only folded by its head — its body is full of things to click.
+  const foldedCard = e.target.closest(".job.collapsed");
+  if (
+    (head || foldedCard) &&
+    !e.target.closest("button, a, input, select, textarea, label, [data-attach-row], [data-toggle-turn]")
+  ) {
+    const id = head ? head.dataset.toggle : foldedCard.dataset.thread;
     keepInPlace(() => document.querySelector(`.job[data-thread="${CSS.escape(id)}"] .job-head`), () => toggleJob(id));
     return;
   }

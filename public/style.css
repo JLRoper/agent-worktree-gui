@@ -832,6 +832,9 @@ body.modal-open { overflow: hidden; }
 .job.maximized .reply-box { min-height: 46px; }
 .job-prompt, .job-cmd, .job-out, .job-foot { margin-left: 18px; }
 .job-preview { display: none; }
+
+/* A minimized card is a handle: the head, the preview line and the gaps between them all expand it. */
+.job.collapsed, .job.collapsed .job-preview { cursor: pointer; }
 .job.collapsed { padding-bottom: 9px; }
 .job.collapsed .job-body { display: none; }
 .job.collapsed .job-preview {
