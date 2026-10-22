@@ -65,6 +65,25 @@ const state = {
   zoom: 100, // page zoom percent (the browser's own Ctrl +/- is not always delivered)
 };
 
+// Every call to the panel's own server goes through here. A plain fetch has no deadline, so when the
+// server is restarting — a gateway bounce refuses or hangs connections for a while — the promise never
+// settles: the button stays disabled, no message appears, and the card is indistinguishable from a
+// frozen page. A timeout turns that into a sentence on screen.
+async function apiFetch(url, opts = {}, { timeoutMs = 20000 } = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } catch (e) {
+    if (e && e.name === "AbortError") {
+      throw new Error(`the panel server did not answer within ${Math.round(timeoutMs / 1000)}s — it may be restarting; try again`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const $ = (id) => document.getElementById(id);
 const keyOf = (project, p) => `${project}::${p}`;
 const esc = (s) =>
@@ -502,7 +521,7 @@ async function cloneIntoRoot(root) {
   btn.disabled = true;
   setStatus("cloning over ssh…");
   try {
-    const res = await fetch("/api/clone", {
+    const res = await apiFetch("/api/clone", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ root, name }),
@@ -866,7 +885,7 @@ function closeArtifactPops() {
 
 async function openArtifact(path) {
   try {
-    const r = await fetch("/api/open-path", {
+    const r = await apiFetch("/api/open-path", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path }),
@@ -880,7 +899,7 @@ async function openArtifact(path) {
 
 async function openArtifactUrl(url) {
   try {
-    const r = await fetch("/api/open-url", {
+    const r = await apiFetch("/api/open-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),
@@ -894,7 +913,7 @@ async function openArtifactUrl(url) {
 
 async function deleteArtifact(thread, key) {
   try {
-    const r = await fetch("/api/jobs/artifact/delete", {
+    const r = await apiFetch("/api/jobs/artifact/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key }),
@@ -1217,7 +1236,7 @@ function beginRename(thread) {
 
 async function saveLabel(thread, label) {
   try {
-    const r = await fetch("/api/jobs/label", {
+    const r = await apiFetch("/api/jobs/label", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ thread, label }),
@@ -1240,7 +1259,7 @@ async function forceRowRead(btn) {
   btn.dataset.busy = "1";
   btn.classList.add("busy");
   try {
-    const r = await fetch("/api/refresh/row", {
+    const r = await apiFetch("/api/refresh/row", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ project: row.project, path: row.path }),
@@ -1291,7 +1310,7 @@ function insertNewlineAtCaret(el) {
 async function openInBrowser(url) {
   if (!url) return;
   try {
-    const r = await fetch("/api/open-url", {
+    const r = await apiFetch("/api/open-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url }),
@@ -1437,7 +1456,7 @@ async function sendReply(thread, preset = null) {
   const btn = document.querySelector(`.btn-reply[data-thread="${CSS.escape(thread)}"]`);
   if (btn) btn.disabled = true;
   try {
-    const r = await fetch("/api/agents/reply", {
+    const r = await apiFetch("/api/agents/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ thread, text }),
@@ -1477,7 +1496,7 @@ async function steerTurn(thread, id, text, btn = null) {
   }
   if (btn) btn.disabled = true;
   try {
-    const res = await fetch("/api/jobs/steer", {
+    const res = await apiFetch("/api/jobs/steer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, text: body }),
@@ -1542,7 +1561,7 @@ async function attachAgent(thread, pathOverride = null) {
   const path = pathOverride || sel?.value;
   if (!path) return false;
   try {
-    const r = await fetch("/api/jobs/attach", {
+    const r = await apiFetch("/api/jobs/attach", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ thread, path }),
@@ -1577,7 +1596,7 @@ async function clearThread(btn) {
   clearTimeout(btn._disarm);
   btn.disabled = true;
   try {
-    const r = await fetch("/api/jobs/clear", {
+    const r = await apiFetch("/api/jobs/clear", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ thread }),
@@ -1654,7 +1673,7 @@ async function answerApproval(id, choice, btn) {
   card?.querySelectorAll("button").forEach((b) => (b.disabled = true));
   if (err) err.textContent = "";
   try {
-    const res = await fetch("/api/approvals/answer", {
+    const res = await apiFetch("/api/approvals/answer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, choice }),
@@ -2008,13 +2027,36 @@ function appendJobLine(evt) {
 async function preview() {
   const body = formValues();
   try {
-    const r = await fetch("/api/agents/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const r = await apiFetch("/api/agents/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     $("job-cmd").textContent = `cwd ${d.cwd}\n${d.command}`;
     $("job-cmd").classList.remove("dimmer");
   } catch (e) {
     $("job-cmd").textContent = `preview failed: ${e.message}`;
+  }
+}
+
+// The companion to the timeout above: a spawn whose answer never arrived still owns a card. Re-read the
+// board once and, if a turn exists with this prompt from the last three minutes, treat the spawn as
+// done — clear the box, say it started, and walk the reader to the card exactly as a normal spawn does.
+async function recoverSpawnAfterTimeout(body) {
+  try {
+    await resync();
+    const wanted = String(body.prompt || "").trim();
+    const cutoff = Date.now() - 180_000;
+    const hit = [...state.jobs.values()].find(
+      (j) => String(j.prompt || "").trim() === wanted && Date.parse(j.startedAt || 0) >= cutoff,
+    );
+    if (!hit) return false;
+    $("job-prompt").value = "";
+    rememberSpawnPrompt(wanted);
+    $("spawn-msg").textContent = `spawned ${hit.id} — the reply was lost, but the turn did start`;
+    updateJob(hit, { scroll: true });
+    revealSpawnedAgent(hit);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -2026,7 +2068,7 @@ async function spawnAgent() {
   }
   $("btn-spawn").disabled = true;
   try {
-    const r = await fetch("/api/agents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const r = await apiFetch("/api/agents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, { timeoutMs: 60000 });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     $("spawn-msg").textContent = `spawned ${d.job.id}${d.job.runId ? ` · run ${String(d.job.runId).replace(/^run_/, "").slice(0, 8)}` : ""}${d.job.worktreePath ? ` · ${d.job.worktreePath}` : ""}`;
@@ -2040,6 +2082,10 @@ async function spawnAgent() {
     revealSpawnedAgent(d.job);
   } catch (e) {
     $("spawn-msg").textContent = `spawn failed: ${e.message}`;
+    // A lost reply does not mean a lost turn: the gateway can die after the run was created, and the
+    // card then arrives on its own while the form still holds the text — which reads exactly like a
+    // spawn that never happened. Look for it before asking the reader to type it again.
+    if (/did not answer within/.test(String(e.message))) void recoverSpawnAfterTimeout(body);
   } finally {
     $("btn-spawn").disabled = false;
   }
@@ -2077,7 +2123,7 @@ function renderModelPicker(keep = "") {
 async function loadModels() {
   const keep = $("job-model")?.value || "";
   try {
-    const r = await fetch("/api/models");
+    const r = await apiFetch("/api/models");
     modelsState = r.ok ? await r.json() : null;
   } catch {
     modelsState = null;
@@ -2370,7 +2416,7 @@ async function reviveSession(btn) {
   btn.disabled = true;
   btn.textContent = "reviving…";
   try {
-    const r = await fetch("/api/sessions/revive", {
+    const r = await apiFetch("/api/sessions/revive", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId, path }),
@@ -2526,7 +2572,7 @@ async function confirmDeleteWorktree(key) {
     yes.textContent = "deleting…";
   }
   try {
-    const r = await fetch("/api/worktree/delete", {
+    const r = await apiFetch("/api/worktree/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ project, path: target }),
@@ -3501,7 +3547,7 @@ function connect() {
 
 async function resync() {
   try {
-    applySnapshot(await fetch("/api/state").then((r) => r.json()));
+    applySnapshot(await apiFetch("/api/state").then((r) => r.json()));
   } catch (e) {
     showBanner(`Cannot reach the server: ${e.message}`);
     setStream("offline", "bad");
@@ -4066,7 +4112,7 @@ document.addEventListener("click", async (e) => {
     const warn = card ? card.querySelector("[data-reply-warn]") : null;
     approveBtn.disabled = true;
     try {
-      const res = await fetch("/api/jobs/approve", {
+      const res = await apiFetch("/api/jobs/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: approveBtn.dataset.approve, choice: approveBtn.dataset.choice, requestId: approveBtn.dataset.request || null }),
@@ -4097,7 +4143,7 @@ document.addEventListener("click", async (e) => {
   if (!btn) return;
   btn.disabled = true;
   try {
-    await fetch("/api/jobs/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: btn.dataset.id }) });
+    await apiFetch("/api/jobs/cancel", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: btn.dataset.id }) });
   } catch {
     btn.disabled = false;
   }
@@ -4552,7 +4598,7 @@ function paintApprovalSetting(note = "", bad = false) {
 
 async function loadApprovalSetting() {
   try {
-    const r = await fetch("/api/settings/approvals");
+    const r = await apiFetch("/api/settings/approvals");
     approvalState = await r.json();
     paintApprovalSetting();
   } catch (e) {
@@ -4573,7 +4619,7 @@ async function saveApprovalSetting() {
     preview.classList.remove("bad");
   }
   try {
-    const r = await fetch("/api/settings/approvals", {
+    const r = await apiFetch("/api/settings/approvals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ timeoutSeconds: Number(input.value) }),
@@ -4643,7 +4689,7 @@ function paintSessionSetting(note = "", bad = false) {
 
 async function loadSessionSetting() {
   try {
-    const r = await fetch("/api/settings/sessions");
+    const r = await apiFetch("/api/settings/sessions");
     sessionsState = await r.json();
     paintSessionSetting();
   } catch (e) {
@@ -4664,7 +4710,7 @@ async function saveSessionSetting() {
     preview.classList.remove("bad");
   }
   try {
-    const r = await fetch("/api/settings/sessions", {
+    const r = await apiFetch("/api/settings/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ listLimit: Number(input.value) }),
@@ -4755,7 +4801,7 @@ for (const id of ["newagent", "agents"]) applyFixedCollapse(id);
 
 (async function boot() {
   try {
-    const cfg = await fetch("/api/config").then((r) => r.json());
+    const cfg = await apiFetch("/api/config").then((r) => r.json());
     state.settings = cfg;
     state.scanRoots = Array.isArray(cfg.scanRoots) ? cfg.scanRoots : [];
     $("f-worktree").textContent = cfg.worktreeSeconds;
