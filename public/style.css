@@ -626,6 +626,9 @@ tr.row-confirm .btn-del-no {
   cursor: pointer;
 }
 tr.row-confirm .btn-del-no { border-color: var(--line); background: #151a22; color: var(--text); }
+/* Two buttons in one cell. The plain actions column is 26px wide, which stacked them on top of each other;
+   this pair has to read Cancel then Delete, left to right, so the cell gives them one line. */
+tr.row-confirm td.row-actions { width: auto; white-space: nowrap; text-align: right; }
 tr.row-confirm .btn-del-yes:hover { background: #3a1d22; }
 .artifacts-pop {
   position: fixed;

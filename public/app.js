@@ -2896,7 +2896,7 @@ function showWorktreeConfirm(key) {
   const confirm = document.createElement("tr");
   confirm.className = "row-confirm";
   confirm.dataset.confirmRow = key;
-  confirm.innerHTML = `<td colspan="9"><span class="dimmer">Remove worktree</span> <b>${esc(row.name)}</b> <span class="dimmer">on</span> <span class="mono">${esc(row.branch || "—")}</span><span class="dimmer">? Its files go to the Recycle Bin (recoverable there) and git's record of it is pruned.</span></td><td class="row-actions"><button class="btn-del-yes" type="button" data-del-tree-yes="${esc(key)}">Delete</button><button class="btn-del-no" type="button" data-del-tree-no="${esc(key)}">Cancel</button></td>`;
+  confirm.innerHTML = `<td colspan="9"><span class="dimmer">Remove worktree</span> <b>${esc(row.name)}</b> <span class="dimmer">on</span> <span class="mono">${esc(row.branch || "—")}</span><span class="dimmer">? Its files go to the Recycle Bin (recoverable there) and git's record of it is pruned.</span></td><td class="row-actions"><button class="btn-del-no" type="button" data-del-tree-no="${esc(key)}">Cancel</button><button class="btn-del-yes" type="button" data-del-tree-yes="${esc(key)}">Delete</button></td>`;
   rowEl.after(confirm);
 }
 
@@ -4416,8 +4416,8 @@ document.addEventListener("click", async (e) => {
     const isUrl = /^https?:\/\//i.test(key);
     if (row) {
       row.innerHTML = `<span class="ap-confirm mono" title="${esc(key)}">Delete ${esc(isUrl ? "this URL from the list" : baseNameOf(key))}?</span>
-        <button type="button" class="ap-del-yes" data-del-yes="${esc(key)}" data-pop="${esc(pop?.dataset.artifactsPop || "")}">yes, delete</button>
-        <button type="button" class="ap-del-no" data-del-no="${esc(key)}" data-pop="${esc(pop?.dataset.artifactsPop || "")}">cancel</button>`;
+        <button type="button" class="ap-del-no" data-del-no="${esc(key)}" data-pop="${esc(pop?.dataset.artifactsPop || "")}">cancel</button>
+        <button type="button" class="ap-del-yes" data-del-yes="${esc(key)}" data-pop="${esc(pop?.dataset.artifactsPop || "")}">yes, delete</button>`;
     }
     return;
   }
