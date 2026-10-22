@@ -3,6 +3,7 @@
 // store holds the results. Spawned agents go through lib/jobs.js.
 import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
+import { promisify } from "node:util";
 import { gzipSync as zlibGzipSync } from "node:zlib";
 import { readFile, stat, unlink } from "node:fs/promises";
 import { cpus } from "node:os";
@@ -47,6 +48,7 @@ async function editorFor(target) {
 }
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const execP = promisify(execFile);
 const PUBLIC_DIR = path.join(HERE, "public");
 // The panel's version is declared once, in package.json: read it here so the page can say which
 // build is running without a second copy to keep in step.
@@ -635,6 +637,57 @@ const server = createServer(async (req, res) => {
       }
       jobs.removeArtifact(hit.job, key);
       return sendJson(res, 200, { ok: true, removedFile, kind: hit.artifact.kind || "file" });
+    }
+
+    // Remove a worktree from the board: the directory goes to the Windows Recycle Bin (recoverable), then
+    // git's own bookkeeping is pruned. Never the project's own checkout, never a tree with a live agent.
+    if (route === "/api/worktree/delete" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const projectName = String(body.project || "").trim();
+      const target = path.resolve(String(body.path || "").trim());
+      const project = scheduler.getProjects().find((p) => p.name === projectName);
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${projectName}` });
+      if (path.resolve(project.path) === target) {
+        return sendJson(res, 400, { error: "that is the project's own checkout, not a worktree" });
+      }
+      const row = scheduler.store.rowsFor(projectName).find((r) => path.resolve(r.path) === target);
+      if (!row) return sendJson(res, 404, { error: `not a worktree row of ${projectName}: ${target}` });
+      const busy = jobs
+        .list()
+        .find(
+          (j) =>
+            (j.status === "running" || j.status === "starting") &&
+            [j.cwd, j.ownerPath].filter(Boolean).some((p) => path.resolve(p) === target),
+        );
+      if (busy) return sendJson(res, 409, { error: `an agent is running in that worktree (${busy.id})` });
+
+      // Recycle first: a mistaken click is recoverable from the Recycle Bin for as long as Windows keeps
+      // it. `git worktree remove --force` is the fallback when the shell cannot reach the Recycle Bin.
+      const psCommand =
+        "Add-Type -AssemblyName Microsoft.VisualBasic; " +
+        `[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory('${target.replace(/'/g, "''")}','OnlyErrorDialogs','SendToRecycleBin')`;
+      let recycled = false;
+      let removeError = null;
+      if (process.platform === "win32") {
+        try {
+          await execP("powershell", ["-NoProfile", "-NonInteractive", "-Command", psCommand], { timeout: 90_000 });
+          recycled = true;
+        } catch (e) {
+          removeError = String((e && e.message) || e);
+        }
+      }
+      if (!recycled) {
+        try {
+          await execP("git", ["-C", project.path, "worktree", "remove", "--force", target], { timeout: 90_000 });
+        } catch (e) {
+          return sendJson(res, 500, { error: `could not remove the worktree: ${String((e && e.message) || e) || removeError}` });
+        }
+      }
+      await execP("git", ["-C", project.path, "worktree", "prune"], { timeout: 30_000 }).catch(() => {});
+      scheduler.store.dropRow(projectName, target);
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, { ok: true, recycled, path: target, name: row.name, branch: row.branch || null });
     }
 
     // Open a file an agent produced for the reader. Not a URL: a real path, opened in an editor.

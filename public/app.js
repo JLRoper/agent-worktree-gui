@@ -2328,6 +2328,52 @@ function agentBadgeHtml(row) {
   return `<button class="sig ${running ? "sig-panel" : "sig-panel-done"}" data-open-row="${esc(keyOf(row.project, row.path))}" title="${mine.length} agent${mine.length === 1 ? "" : "s"} owned by this worktree${running ? `, ${running} running` : ""} — click to open the row and its agents">⧉ ${mine.length}${running ? ` · ${running} running` : ""}</button>`;
 }
 
+// ---- removing a worktree ---------------------------------------------------------------------
+// The red ✕ opens an inline confirmation row under the tree: the question says where the files go
+// (Recycle Bin) rather than just "delete?", and nothing happens until the second click.
+function showWorktreeConfirm(key) {
+  document.querySelectorAll("tr.row-confirm").forEach((el) => el.remove());
+  const rowEl = document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
+  const row = state.rows.get(key);
+  if (!rowEl || !row) return;
+  const confirm = document.createElement("tr");
+  confirm.className = "row-confirm";
+  confirm.dataset.confirmRow = key;
+  confirm.innerHTML = `<td colspan="9"><span class="dimmer">Remove worktree</span> <b>${esc(row.name)}</b> <span class="dimmer">on</span> <span class="mono">${esc(row.branch || "—")}</span><span class="dimmer">? Its files go to the Recycle Bin (recoverable there) and git's record of it is pruned.</span></td><td class="row-actions"><button class="btn-del-yes" type="button" data-del-tree-yes="${esc(key)}">Delete</button><button class="btn-del-no" type="button" data-del-tree-no="${esc(key)}">Cancel</button></td>`;
+  rowEl.after(confirm);
+}
+
+async function confirmDeleteWorktree(key) {
+  const [project, ...rest] = key.split("::");
+  const target = rest.join("::");
+  const confirmEl = document.querySelector(`tr.row-confirm[data-confirm-row="${CSS.escape(key)}"]`);
+  const yes = confirmEl?.querySelector("[data-del-tree-yes]");
+  if (yes) {
+    yes.disabled = true;
+    yes.textContent = "deleting…";
+  }
+  try {
+    const r = await fetch("/api/worktree/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project, path: target }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showBanner(`delete worktree: ${d.error || `HTTP ${r.status}`}`);
+      if (yes) {
+        yes.disabled = false;
+        yes.textContent = "Delete";
+      }
+      return;
+    }
+    confirmEl?.remove();
+    // The server drops the row and broadcasts a snapshot; the table follows on its own.
+  } catch (e) {
+    showBanner(`delete worktree: ${e.message}`);
+  }
+}
+
 function rowHtml(row) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   const dirty =
@@ -2340,6 +2386,9 @@ function rowHtml(row) {
       ? `<span class="dimmer">none · branch gone</span>`
       : `<span class="dimmer">none</span>`;
   const badge = `<span class="badge ${verdictClass(row.verdict)}${row.verdictStale ? " stale" : ""}">${esc(row.verdict)}</span>`;
+  // The project's own checkout is not a worktree anyone may delete from here.
+  const projectRoot = state.projects.get(row.project)?.path;
+  const isProjectRoot = projectRoot && normPath(projectRoot).toLowerCase() === normPath(row.path).toLowerCase();
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     <td class="name"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}"
       title="start a Hermes agent in this worktree — it runs here (no new worktree)">\u25b6</button> <span>${esc(row.name)}</span> ${agentBadgeHtml(row)}</td>
@@ -2351,6 +2400,7 @@ function rowHtml(row) {
     <td class="mono nowrap">${dirty}</td>
     ${ageCellHtml(row)}
     <td>${badge}</td>
+    <td class="row-actions">${isProjectRoot ? "" : `<button class="btn-del-tree" data-del-tree="${esc(keyOf(row.project, row.path))}" title="remove this worktree — its files go to the Recycle Bin and git's record of it is pruned">✕</button>`}</td>
   </tr>`;
 }
 
@@ -2780,7 +2830,7 @@ function projectSection(name) {
     </div>
     <table><thead><tr>
       <th>Worktree</th><th>Branch</th><th>Tip</th><th>Ahead / Behind</th><th>Cherry</th>
-      <th>PR</th><th>Dirty</th><th title="time since this worktree was last seen alive (any evidence firing) · the ring fills up to green as the row becomes due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited">Life / next read</th><th>Verdict</th>
+      <th>PR</th><th>Dirty</th><th title="time since this worktree was last seen alive (any evidence firing) · the ring fills up to green as the row becomes due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited">Life / next read</th><th>Verdict</th><th title="remove a worktree (sent to the Recycle Bin)"></th>
     </tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
     <div class="legend">liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read</div>
   </section>`;
@@ -3382,6 +3432,27 @@ document.addEventListener("click", async (e) => {
         state.openArtifacts.set(thread, { left, top });
       }
     }
+    return;
+  }
+  const delTree = e.target.closest("[data-del-tree]");
+  if (delTree) {
+    e.preventDefault();
+    e.stopPropagation();
+    showWorktreeConfirm(delTree.dataset.delTree);
+    return;
+  }
+  const delTreeYes = e.target.closest("[data-del-tree-yes]");
+  if (delTreeYes) {
+    e.preventDefault();
+    e.stopPropagation();
+    void confirmDeleteWorktree(delTreeYes.dataset.delTreeYes);
+    return;
+  }
+  const delTreeNo = e.target.closest("[data-del-tree-no]");
+  if (delTreeNo) {
+    e.preventDefault();
+    e.stopPropagation();
+    document.querySelector(`tr.row-confirm[data-confirm-row="${CSS.escape(delTreeNo.dataset.delTreeNo)}"]`)?.remove();
     return;
   }
   const delBtn = e.target.closest("[data-del-artifact]");

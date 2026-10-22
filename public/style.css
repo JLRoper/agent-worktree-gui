@@ -445,6 +445,41 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
   cursor: pointer;
 }
 .btn-artifacts:hover { border-color: #3b4757; background: #1b2230; }
+.row-actions { width: 26px; text-align: center; }
+.btn-del-tree {
+  border: 1px solid #3a2226;
+  background: #1a1216;
+  color: #ff7d72;
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 5px;
+  cursor: pointer;
+  opacity: .55;
+}
+tr.row:hover .btn-del-tree { opacity: 1; }
+.btn-del-tree:hover { background: #2a1418; border-color: #57262a; color: #ff9c94; }
+/* The confirmation is its own row under the tree, so the question has room to say what will happen. */
+tr.row-confirm td {
+  padding: 6px 10px;
+  background: #17100f;
+  border-top: 1px solid #3a2226;
+  border-bottom: 1px solid #3a2226;
+  font-size: 12px;
+  color: #e8d7d5;
+}
+tr.row-confirm .btn-del-yes,
+tr.row-confirm .btn-del-no {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 4px;
+  border: 1px solid #57262a;
+  background: #24161a;
+  color: #ff9c94;
+  font: 11px/1.6 var(--term);
+  cursor: pointer;
+}
+tr.row-confirm .btn-del-no { border-color: var(--line); background: #151a22; color: var(--text); }
+tr.row-confirm .btn-del-yes:hover { background: #3a1d22; }
 .artifacts-pop {
   position: fixed;
   z-index: 60;
