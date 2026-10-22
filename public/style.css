@@ -407,6 +407,9 @@ button.chip:active { transform: translateY(1px); }
   color: #c8d1dc;
 }
 #spawn-msg { font-size: 11.5px; min-height: 15px; }
+/* An empty message line is not a placeholder: with nothing to report the New agent card should end at its
+   last field, not carry 29px of reserved height and two flex gaps for text that may never come. */
+#spawn-warn:empty, #spawn-msg:empty { display: none; }
 .warnline { color: #ff9c94; font: 11.5px/1.4 var(--mono); min-height: 14px; }
 
 /* ---- jobs ---- */
