@@ -128,7 +128,14 @@ is a **run on the Hermes gateway's `api_server`**, not a spawned CLI:
     POST /v1/runs/<id>/stop              cooperative interrupt
     POST /v1/runs/<id>/approval          answer the flagged command a run is parked on
 
-`Preview request` shows the exact body before anything is sent. The gateway has to be up and keyed:
+`Preview request` shows the exact body before anything is sent. The **model** field is a menu built
+from the provider list Hermes itself fetched (`provider_models_cache.json`, refreshed by
+`hermes model --refresh`), grouped by provider, with `(default: <the configured model>)` first — that
+entry sends no `model` field at all, so the run uses the gateway's own model. The menu's tooltip says
+how many models and how old the list is; a provider that was never picked falls back to the catalogue
+that ships with Hermes.
+
+The gateway has to be up and keyed:
 `POST /api/agents` answers **503** with the gateway's own reason rather than creating a card that
 never starts. The New-agent header says which it is — `api: up · steer` plus the gateway address, or
 `api: down`.
@@ -324,6 +331,7 @@ for the approval window — agent processes are not spawned from here any more.
 | GET/POST | `/api/settings/approvals` | the gateway's `approvals.timeout`. GET reports the value, whether `config.yaml` sets it, the file's path, and whether this panel may change it. POST `{timeoutSeconds}` rewrites only that line under `approvals:` in `<HERMES_HOME>/config.yaml` — comments, indentation and line endings untouched — and re-reads the file before writing, refusing if it does not say what was asked. **400** outside 15–86400, **409** when the gateway is not on this machine |
 | GET | `/api/sessions?path=` | the Hermes sessions the scheduler attributes to one worktree row: `{id, title, matched, lastActivityAt, onBoard}`. The same answer the row's "idle session" claim comes from |
 | POST | `/api/sessions/revive` | `{sessionId, path}` → a job record for a session the board has no card for (the run itself lives in the gateway; a reply continues it). **404** when the store does not attribute that session to that row, **409** when it already has a card |
+| GET | `/api/models` | the New-agent model menu: `{defaultModel, provider, count, fetchedAt, staleDays, providers:[{id,label,models}]}` — the provider list Hermes itself fetched, grouped, with the configured default first in its group. Falls back to the shipped catalogue when no provider was ever picked |
 | POST | `/api/jobs/cancel` | `{id}` → `POST /v1/runs/{id}/stop` (cooperative interrupt) |
 | POST | `/api/jobs/clear` | drop finished jobs from the list |
 | POST | `/api/refresh` `/api/fetch` `/api/reload` | force a fast pass / fetch remotes / re-read config |

@@ -311,6 +311,10 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
   font: 12px var(--mono);
   max-width: 240px;
 }
+/* The model picker carries provider-qualified ids ("anthropic/claude-sonnet-5.5"); the shared
+   240px cap cuts them off, and this is the one select in the form whose value is read before
+   spawning. */
+.form select#job-model { min-width: 210px; max-width: 320px; }
 .project.armed { box-shadow: 0 0 0 2px #2ea04380; transition: box-shadow .2s; }
 .project-head.meta-line { padding-top: 6px; padding-bottom: 6px; }
 

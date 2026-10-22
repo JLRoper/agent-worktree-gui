@@ -19,6 +19,7 @@ import { auditRepo } from "./lib/hermes-worktrees.js";
 import { Approvals } from "./lib/approvals.js";
 import { approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX } from "./lib/hermes-config.js";
 import { hermesSessionTail } from "./lib/activity.js";
+import { modelCatalogue } from "./lib/hermes-models.js";
 
 // A file an agent produced is meant to be OPENED, and the shell association may hand a .md to a
 // browser. Prefer a text editor: Notepad++ when installed, else Windows' notepad (always present),
@@ -386,6 +387,13 @@ const server = createServer(async (req, res) => {
         // so the next prompt uses the new window without restarting the gateway.
         note: "saved",
       });
+    }
+
+    // The models the New-agent form offers. Read from the gateway home, not from the run stream: the
+    // provider's live list is what Hermes itself fetched, and a stale one is reported as stale rather
+    // than presented as truth.
+    if (route === "/api/models" && req.method === "GET") {
+      return sendJson(res, 200, modelCatalogue());
     }
 
     if (route === "/api/state" || route === "/api/audit") {

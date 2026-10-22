@@ -2042,6 +2042,46 @@ async function spawnAgent() {
   }
 }
 
+// ---- the model picker -----------------------------------------------------------------------
+// A run may name a model; the panel does not choose the provider, so "(default)" is whatever the
+// gateway is configured with, and a spawn then sends no model at all. The list comes from
+// /api/models, which reads the provider list Hermes itself fetched — not a hardcoded menu.
+let modelsState = null;
+
+function modelOptionHtml(d) {
+  const def = d?.defaultModel || null;
+  const out = [`<option value="">${esc(def ? `(default: ${def})` : "(gateway default)")}</option>`];
+  for (const p of d?.providers || []) {
+    out.push(`<optgroup label="${esc(p.label)}">`);
+    for (const m of p.models) out.push(`<option value="${esc(m)}">${esc(m)}</option>`);
+    out.push("</optgroup>");
+  }
+  return out.join("");
+}
+
+function renderModelPicker(keep = "") {
+  const sel = $("job-model");
+  if (!sel) return;
+  sel.innerHTML = modelOptionHtml(modelsState);
+  if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
+  const d = modelsState;
+  // Say how old the list is: it is a cache of what the provider advertised, not a live call.
+  sel.title = d?.count
+    ? `${d.count} model${d.count === 1 ? "" : "s"} available to ${d.provider || "this account"}, list fetched ${d.fetchedAt ? `${relTime(d.fetchedAt)} ago` : "at an unknown time"}${d.staleDays > 7 ? " — stale, run: hermes model --refresh" : ""}`
+    : "no provider list found in the Hermes home — a run falls back to the gateway's configured model";
+}
+
+async function loadModels() {
+  const keep = $("job-model")?.value || "";
+  try {
+    const r = await fetch("/api/models");
+    modelsState = r.ok ? await r.json() : null;
+  } catch {
+    modelsState = null;
+  }
+  renderModelPicker(keep);
+}
+
 // The spawn target: one entry per discovered project, most recently worked on first.
 function syncProjectPicker(projects) {
   const sel = $("job-project");
@@ -4557,6 +4597,9 @@ document.addEventListener("click", (e) => {
 });
 
 initFonts();
+// The model menu is filled once at start-up from the gateway's own provider list; a failure leaves
+// the "(gateway default)" entry, which is what a spawn sends anyway.
+void loadModels();
 
 // Reflect the remembered collapse state of the two fixed cards before the first paint of them.
 for (const id of ["newagent", "agents"]) applyFixedCollapse(id);
