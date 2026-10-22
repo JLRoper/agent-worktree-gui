@@ -43,6 +43,9 @@ const state = {
   // Replies typed while the agent is still working, in the order they were written. They go out one
   // at a time as each turn finishes: Hermes refuses a second session on a thread already running.
   replyQueue: new Map(),
+  // Documents pasted or dropped into a reply box, per thread: the reply area is rebuilt on every job
+  // event, so these cannot live in the DOM the way the New-agent box's list can.
+  replyAttachments: new Map(),
   // Transcript scroll per console (pre[data-out]). Folding a project throws the console markup away,
   // so the position has to live outside the DOM or it comes back at the top.
   outScrolls: {},
@@ -1152,6 +1155,7 @@ function conversationHtml(conv) {
       <div class="job-foot">${foot} ${statsLine(latest.stats)}</div>
       <div class="reply">
         <div class="reply-wrap">
+          <div class="attach-chips" data-chips="${esc(thread)}">${attachmentChipsHtml(thread)}</div>
           <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"
             placeholder="${running ? "a turn is running — Enter steers it; Queue reply holds yours for the next turn" : "Reply to this agent — continues the same Hermes thread, Enter to send"}"></textarea>
           <div class="reply-actions">
@@ -1467,8 +1471,10 @@ function recallReply(box, step) {
 
 async function sendReply(thread, preset = null) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-  const text = String(preset ?? box?.value ?? "").trim();
-  if (!text) return;
+  const typed = String(preset ?? box?.value ?? "").trim();
+  const attached = attachmentBlock(thread);
+  if (!typed && !attached) return;
+  const text = typed + attached;
   const btn = document.querySelector(`.btn-reply[data-thread="${CSS.escape(thread)}"]`);
   if (btn) btn.disabled = true;
   try {
@@ -1480,6 +1486,7 @@ async function sendReply(thread, preset = null) {
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     state.replyDrafts[thread] = "";
+    clearAttachments(thread);
     // A sent reply ends the history walk: the next Up starts from the newest prompt again.
     state.replyNav.delete(thread);
     // A queued reply must not wipe something the reader has since typed into the box.
@@ -1504,12 +1511,14 @@ async function sendReply(thread, preset = null) {
 
 async function steerTurn(thread, id, text, btn = null) {
   const warn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
-  const body = String(text ?? "").trim();
-  if (!body) {
+  const typed = String(text ?? "").trim();
+  const attached = attachmentBlock(thread);
+  if (!typed && !attached) {
     focusReplyBox(thread);
     if (warn) warn.textContent = "type what the agent should do instead";
     return false;
   }
+  const body = typed + attached;
   if (btn) btn.disabled = true;
   try {
     const res = await apiFetch("/api/jobs/steer", {
@@ -1526,6 +1535,7 @@ async function steerTurn(thread, id, text, btn = null) {
     // The text went into the LIVE turn, so clear the draft: leaving it would invite sending the same
     // instruction twice, once as a steer and once as the next turn.
     state.replyDrafts[thread] = "";
+    clearAttachments(thread);
     const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
     if (box) box.value = "";
     if (warn) warn.textContent = "steered — the agent reads this at its next tool boundary";
@@ -2042,6 +2052,7 @@ function appendJobLine(evt) {
 
 async function preview() {
   const body = formValues();
+  body.prompt = String(body.prompt || "") + attachmentBlock("spawn");
   try {
     const r = await apiFetch("/api/agents/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const d = await r.json();
@@ -2078,10 +2089,13 @@ async function recoverSpawnAfterTimeout(body) {
 
 async function spawnAgent() {
   const body = formValues();
-  if (!body.prompt.trim()) {
+  const typed = String(body.prompt || "").trim();
+  if (!typed) {
     $("spawn-msg").textContent = "a prompt is required";
     return;
   }
+  // The chips stay chips on screen; their paths are appended here, where the request is built.
+  body.prompt = typed + attachmentBlock("spawn");
   $("btn-spawn").disabled = true;
   try {
     const r = await apiFetch("/api/agents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, { timeoutMs: 60000 });
@@ -2090,8 +2104,9 @@ async function spawnAgent() {
     $("spawn-msg").textContent = `spawned ${d.job.id}${d.job.runId ? ` · run ${String(d.job.runId).replace(/^run_/, "").slice(0, 8)}` : ""}${d.job.worktreePath ? ` · ${d.job.worktreePath}` : ""}`;
     // The prompt now belongs to an agent: clear the box so the next one starts blank, and keep it in
     // history so a single Up brings it straight back. A REFUSED spawn keeps the text for editing.
-    rememberSpawnPrompt(body.prompt);
+    rememberSpawnPrompt(typed);
     $("job-prompt").value = "";
+    clearAttachments("spawn");
     $("job-prompt").focus();
     updateJob(d.job, { scroll: true });
     // Take the reader to the new agent: unfold folder/project/worktree and scroll to its card.
@@ -3625,38 +3640,86 @@ $("job-prompt").addEventListener("input", () => {
   $("job-cmd").textContent = "preview the run request the panel would send…";
   $("job-cmd").classList.add("dimmer");
 });
+// The console resizes like the reply box, but its max-height is what stops it eating the card — and a
+// max-height also stops the drag dead. The handle lives in the bottom-right 16px corner, so grabbing
+// there lifts the cap first; the height the drag then writes is an inline style and wins over both.
+document.addEventListener(
+  "pointerdown",
+  (e) => {
+    const out = e.target && e.target.closest ? e.target.closest(".job-out") : null;
+    if (!out) return;
+    const r = out.getBoundingClientRect();
+    if (e.clientX >= r.right - 16 && e.clientY >= r.bottom - 16) out.style.maxHeight = "none";
+  },
+  true,
+);
+
 // ---- documents pasted into a prompt ------------------------------------------------
-// The gateway's runs API has no attachment field, but the agent has file tools and the path is
-// absolute — so a pasted or dropped document is stored by the panel and its path is written into the
-// prompt. Absolute means it also works when the run's cwd is ignored, which this gateway does.
-function attachmentLine(d) {
-  const bytes = Number(d.bytes) || 0;
-  const size = bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  const how = /^image\//.test(String(d.type)) ? "use vision_analyze on it" : "read_file it";
-  return `Attachment: ${d.path} (${d.type || "unknown type"}, ${size}) — ${how} before answering.`;
+// The gateway's runs API has no attachment field, so a document is stored by the panel and its absolute
+// path is appended to the prompt at SEND time. On screen it is a chip above the box — `[name] ×` — so the
+// thing you typed is not buried under a paragraph of machine text.
+const spawnAttachments = []; // the New-agent box's list; it lives in static markup, so no re-render to survive
+
+function attachmentsFor(ctx) {
+  return ctx === "spawn" ? spawnAttachments : state.replyAttachments.get(ctx) || [];
 }
 
-function insertAtCaret(box, text) {
-  const at = typeof box.selectionStart === "number" ? box.selectionStart : box.value.length;
-  const end = typeof box.selectionEnd === "number" ? box.selectionEnd : at;
-  const before = box.value.slice(0, at);
-  const after = box.value.slice(end);
-  // A block of its own, so a pasted document never runs into the sentence being typed.
-  const head = before && !/\n\s*$/.test(before) ? "\n\n" : "";
-  const tail = after && !/^\s*\n/.test(after) ? "\n\n" : "";
-  const inserted = head + text + tail;
-  box.value = before + inserted + after;
-  const pos = (before + head + text).length;
-  box.setSelectionRange(pos, pos);
-  box.dispatchEvent(new Event("input", { bubbles: true }));
-  box.focus();
+function setAttachments(ctx, list) {
+  if (ctx === "spawn") {
+    spawnAttachments.length = 0;
+    spawnAttachments.push(...list);
+  } else if (list.length) {
+    state.replyAttachments.set(ctx, list);
+  } else {
+    state.replyAttachments.delete(ctx);
+  }
+}
+
+function fmtBytes(n) {
+  const bytes = Number(n) || 0;
+  return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function attachmentChipsHtml(ctx) {
+  return attachmentsFor(ctx)
+    .map(
+      (a) =>
+        `<span class="attach-chip mono" title="${esc(a.path)}">[${esc(a.name)}]<button type="button" class="chip-x" data-chip-remove="${esc(a.path)}" data-chip-ctx="${esc(ctx)}" title="remove this attachment">\u00d7</button></span>`,
+    )
+    .join("");
+}
+
+function renderChips(ctx) {
+  const el =
+    ctx === "spawn"
+      ? document.getElementById("spawn-chips")
+      : document.querySelector(`.attach-chips[data-chips="${CSS.escape(ctx)}"]`);
+  if (!el) return;
+  el.innerHTML = attachmentChipsHtml(ctx);
+}
+
+// What the agent actually receives: the chip stays a chip, the path travels with the message.
+function attachmentBlock(ctx) {
+  return attachmentsFor(ctx)
+    .map((a) => {
+      const how = /^image\//.test(String(a.type)) ? "use vision_analyze on it" : "read_file it";
+      return `\n\nAttachment: ${a.path} (${a.type || "unknown type"}, ${fmtBytes(a.bytes)}) — ${how} before answering.`;
+    })
+    .join("");
+}
+
+function clearAttachments(ctx) {
+  setAttachments(ctx, []);
+  renderChips(ctx);
 }
 
 async function attachFiles(files, box) {
+  const ctx = box.id === "job-prompt" ? "spawn" : box.dataset.reply || null;
+  if (!ctx) return;
   for (const file of files) {
     if (!file) continue;
     if (!file.size) {
-      insertAtCaret(box, `[attachment failed] ${file.name || "file"}: it is empty`);
+      if (ctx === "spawn") $("spawn-msg").textContent = `${file.name || "file"} is empty`;
       continue;
     }
     try {
@@ -3674,9 +3737,11 @@ async function attachFiles(files, box) {
       );
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
-      insertAtCaret(box, attachmentLine(d));
+      setAttachments(ctx, [...attachmentsFor(ctx), d]);
+      renderChips(ctx);
     } catch (e) {
-      insertAtCaret(box, `[attachment failed] ${file.name || "file"}: ${e.message}`);
+      const warn = ctx === "spawn" ? $("spawn-msg") : document.querySelector(`[data-reply-warn="${CSS.escape(ctx)}"]`);
+      if (warn) warn.textContent = `attachment failed: ${e.message}`;
     }
   }
 }
@@ -3710,6 +3775,15 @@ document.addEventListener("drop", (e) => {
   e.preventDefault();
   box.classList.remove("drop-target");
   void attachFiles(files, box);
+});
+
+// The x on a chip.
+document.addEventListener("click", (e) => {
+  const x = e.target.closest && e.target.closest("[data-chip-remove]");
+  if (!x) return;
+  const ctx = x.dataset.chipCtx;
+  setAttachments(ctx, attachmentsFor(ctx).filter((a) => a.path !== x.dataset.chipRemove));
+  renderChips(ctx);
 });
 
 // Enter in the prompt spawns, the way it does in every other box here. Shift+Enter is a newline, so a

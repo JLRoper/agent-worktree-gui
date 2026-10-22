@@ -414,7 +414,11 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 .job-cmd { font-size: 11px; word-break: break-all; margin-bottom: 6px; font-family: var(--term); }
 .job-out {
   margin: 0;
+  /* Resizable like the reply box. The max-height is the cap the console always had — the drag lifts it
+     (agent-worktree-gui: liftConsoleCap), because a cap would otherwise stop the handle dead. */
   max-height: 230px;
+  min-height: 34px;
+  resize: vertical;
   overflow: auto;
   background: #0c0f14;
   border: 1px solid var(--line);
@@ -429,6 +433,22 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 .jl-init { color: #9ecbff; }
 .jl-result { color: #7ee787; }
 .jl-tool { color: #c8a6ff; }
+/* Pasted documents, as chips above the box: [name.txt] ×. The path is what the agent gets, so it
+   lives in the tooltip rather than in the sentence being typed. */
+.attach-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
+.attach-chips:empty { display: none; }
+.attach-chip {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 1px 4px 1px 7px; border: 1px solid #3b4757; border-radius: 5px;
+  background: #12161d; color: #9ecbff; font-size: 11px; line-height: 1.5;
+}
+.attach-chip:hover { border-color: #2f5a7a; }
+.chip-x {
+  border: none; background: transparent; color: var(--dimmer);
+  font: 12px/1 var(--mono); padding: 0 3px; cursor: pointer; border-radius: 3px;
+}
+.chip-x:hover { color: var(--red); background: var(--red-bg); }
+
 /* A document is being dragged over the box that will carry its path. */
 textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 
