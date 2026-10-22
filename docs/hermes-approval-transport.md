@@ -1,5 +1,22 @@
 # Approvals from the panel
 
+> **Superseded by the Runs API transport (2026-10-21).** The panel no longer spawns
+> `hermes chat -q`, so panel-spawned agents do not use this plugin at all: their approvals arrive on
+> the run's own SSE stream (`approval.request`) and are answered with
+> `POST /v1/runs/{id}/approval`. See `docs/runs-api-phase1.md`.
+>
+> What is still true of this document: the plugin and the `tools/approval.py` patch remain in place
+> and are **inert** while `security.approval.transport: builtin` — the patch's branch only runs when
+> a non-builtin transport is selected. To retire them entirely:
+>
+> ```
+> hermes plugins disable worktree-panel
+> cp tools/approval.py.orig-worktree-panel tools/approval.py   # in the hermes-agent checkout
+> hermes gateway restart
+> ```
+>
+> Keep this file for the CLI `-q` case and for the transport contract itself, which is unchanged.
+
 The panel can be the place where a flagged command gets approved or denied, instead of a
 terminal prompt. Two halves:
 
