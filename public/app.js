@@ -900,7 +900,9 @@ function turnPageOffset(thread, turnCount) {
   return Math.min(pages - 1, Math.max(0, state.turnPage.get(thread) || 0));
 }
 
-function turnHead(turn, index, open, copy = "") {
+// `inline` puts the turn's request on the head line itself — the folded form is two rows: the head with
+// the request, then one line saying what the turn is doing (or, once done, what it concluded).
+function turnHead(turn, index, open, copy = "", inline = false) {
   const label = `turn ${turn.turn || index + 1}`;
   const pinned = state.pinnedTurns.has(turn.id);
   const state_ = turn.revived
@@ -910,7 +912,13 @@ function turnHead(turn, index, open, copy = "") {
     : turn.status === "running" || turn.status === "starting"
       ? `running ${elapsed(turn)}`
       : `${turn.status} · ${elapsed(turn)}${turn.tokens?.total ? ` · ${turn.tokens.total} tok` : ""}`;
-  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> <span class="turn-text">${esc(label)} · ${esc(state_)}</span></div>`;
+  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> <span class="turn-text">${esc(label)} · ${esc(state_)}</span>${inlinePrompt(turn, inline)}</div>`;
+}
+
+function inlinePrompt(turn, inline) {
+  const text = inline ? displayPrompt(turn.prompt) : "";
+  if (!text) return "";
+  return `<span class="turn-prompt-inline" title="${esc(text)}">${esc(text)}</span>`;
 }
 
 // One turn: its head, then either the full prompt + output, or a single line carrying the request
@@ -937,12 +945,83 @@ function turnAttachmentsHtml(turn) {
     .join("")}</div>`;
 }
 
+// The answer a turn ended on: the first sentence of what the agent said AFTER its last tool call. Not the
+// console, not the tool output, not the thinking — the line a reader would have kept.
+function firstSentence(text) {
+  const s = String(text || "").replace(/\s+/g, " ").trim();
+  if (!s) return "";
+  const m = /^(.{12,}?[.!?])(\s|$)/.exec(s);
+  const out = m ? m[1] : s;
+  return out.length > 220 ? `${out.slice(0, 217)}…` : out;
+}
+
+function turnPeekLine(turn) {
+  const lines = state.jobLines.get(turn.id) || turn.lines || [];
+  if (!lines.length) return null;
+  const running = turn.status === "running" || turn.status === "starting";
+  if (running) {
+    // What it is doing right now: the newest tool CALL, drawn exactly as the console draws it. The
+    // completion line ("↳ terminal") is skipped while a call exists — swapping to it for two seconds
+    // read as the peek going backwards.
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const l = lines[i];
+      if (l && l.kind === "tool" && String(l.text || "").trim()) return { kind: "tool", text: String(l.text).trim() };
+    }
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const l = lines[i];
+      if (l && l.kind === "tool-out" && String(l.text || "").trim()) return { kind: "tool", text: String(l.text).trim() };
+    }
+    return null;
+  }
+  // Finished: the first sentence it said after its last tool call.
+  let last = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const k = lines[i] && lines[i].kind;
+    if (k === "tool" || k === "tool-out") { last = i; break; }
+  }
+  const after = lines
+    .slice(last + 1)
+    .filter((l) => l && l.kind === "text" && String(l.text || "").trim())
+    .map((l) => String(l.text).trim())
+    .join(" ");
+  const said = firstSentence(after);
+  if (said) return { kind: "answer", text: said };
+  // A turn that ended on a tool still has an answer somewhere: fall back to its last words.
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const l = lines[i];
+    if (l && l.kind === "text" && String(l.text || "").trim()) {
+      return { kind: "answer", text: firstSentence(l.text) };
+    }
+  }
+  return null;
+}
+
+function peekHtml(turn) {
+  const peek = turnPeekLine(turn);
+  if (!peek) return `<div class="turn-peek" data-peek-turn="${esc(turn.id)}" hidden></div>`;
+  return `<div class="turn-peek${peek.kind === "tool" ? " is-tool" : ""}" data-peek-turn="${esc(turn.id)}" title="${esc(peek.text)}">${esc(peek.text)}</div>`;
+}
+
+// A folded turn has no console on the page, so the peek is repainted by hand as its lines arrive.
+function refreshTurnPeek(turn) {
+  if (!turn || !turn.id) return;
+  for (const el of document.querySelectorAll(`.turn-peek[data-peek-turn="${CSS.escape(turn.id)}"]`)) {
+    const peek = turnPeekLine(turn);
+    el.hidden = !peek;
+    el.classList.toggle("is-tool", Boolean(peek && peek.kind === "tool"));
+    const text = peek ? peek.text : "";
+    if (el.textContent !== text) el.textContent = text;
+    el.title = text;
+  }
+}
+
 function turnBlock(conv, turn, index, copy = "") {
   const open = turnIsOpen(conv, turn, copy);
   const tkey = turnKey(turn, copy);
   if (!open) {
-    return `<div class="turn folded" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy)}` +
-      `<div class="turn-prompt" data-toggle-turn="${esc(tkey)}" title="${esc(turn.prompt || "")}">${esc(displayPrompt(turn.prompt) || "(no prompt recorded)")}</div>${turnAttachmentsHtml(turn)}</div>`;
+    // Two rows: the head carries the request, the peek carries what the turn is doing or concluded.
+    return `<div class="turn folded" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy, true)}` +
+      `${peekHtml(turn)}${turnAttachmentsHtml(turn)}</div>`;
   }
   return `<div class="turn" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy)}` +
     // The prompt line toggles too, so the whole header area behaves the same whether the turn is open
@@ -2105,6 +2184,8 @@ function appendJobLine(evt) {
   else buf.push(line);
   if (buf.length > 1000) buf.splice(0, buf.length - 1000);
   state.jobLines.set(evt.id, buf);
+  // A folded turn shows only the peek, and it is not part of the console the lines are appended to.
+  refreshTurnPeek(state.jobs.get(evt.id));
   // A pinned turn renders twice — in its page and in the pinned block above — so every pane carrying
   // this id (or its "@pin" copy) gets the line.
   const outs = [...document.querySelectorAll("pre.job-out")].filter(

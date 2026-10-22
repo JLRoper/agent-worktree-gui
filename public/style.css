@@ -517,8 +517,24 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 .turn-head:hover { color: var(--text); }
 .turn-head:hover .chev { color: var(--text); }
 .job-body > .turn:first-child > .turn-head { margin-top: 4px; border-top: none; }
-/* A folded turn is one line: the request that turn was about, ellipsized, full text on hover. */
+/* A folded turn is TWO lines: the head carries the request inline (ellipsized, full text on hover), and
+   the peek underneath says what the turn is doing — or, once it is done, what it concluded. */
 .turn.folded .turn-head { margin-bottom: 0; }
+.turn-head { display: flex; align-items: baseline; gap: 0; }
+.turn-head .turn-text { flex: none; }
+.turn-prompt-inline {
+  flex: 1 1 auto; min-width: 0; margin-left: 10px;
+  font: 12.5px/1.5 var(--term); color: #c7d0db;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.turn-head:hover .turn-prompt-inline { color: #e6e9ef; }
+.turn-peek {
+  margin: 1px 0 3px 27px; font: 11.5px/1.5 var(--mono); color: var(--dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* A running turn's peek is a tool call in flight: quieter than an answer, which is worth reading. */
+.turn-peek.is-tool { color: #7f8b9b; font-style: italic; }
+.turn-peek[hidden] { display: none; }
 .turn-prompt {
   margin: 1px 0 1px 27px;
   font: 12.5px/1.5 var(--term);
