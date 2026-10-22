@@ -971,6 +971,50 @@ function renderArtifactsPop(thread) {
   pop.innerHTML = `<div class="ap-head mono dimmer">${list.length} deliverable${list.length === 1 ? "" : "s"} — newest last</div>${artifactRowsHtml(list)}`;
 }
 
+// --- the stats row above an agent's reply box ------------------------------------------------
+// The CLI prints `~357K/1M │ [███░░░░░░░] ~34% │ ◎ 99.0% │ ◷ 4.2s │ ↑ 231 t/s` above its prompt;
+// this is the same readout for the card. Each segment is independently optional because the gateway
+// omits a figure it has no data for (no cache reads, no provider latency), and with no segments at
+// all the row is not rendered — zeros there would claim knowledge we do not have.
+function fmtTokens(n) {
+  if (!Number.isFinite(n)) return "";
+  const abs = Math.abs(n);
+  const unit = abs >= 1e9 ? [1e9, "B"] : abs >= 1e6 ? [1e6, "M"] : abs >= 1e3 ? [1e3, "K"] : [1, ""];
+  if (unit[0] === 1) return String(Math.round(n));
+  const scaled = abs / unit[0];
+  const text = (scaled < 10 ? scaled.toFixed(2) : scaled < 100 ? scaled.toFixed(1) : scaled.toFixed(0))
+    .replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+  return `${n < 0 ? "-" : ""}${text}${unit[1]}`;
+}
+
+function contextBar(pct, width = 10) {
+  const safe = Math.max(0, Math.min(100, Number(pct) || 0));
+  const filled = Math.round((safe / 100) * width);
+  return `[${"\u2588".repeat(filled)}${"\u2591".repeat(Math.max(0, width - filled))}]`;
+}
+
+function statsLine(stats) {
+  if (!stats || typeof stats !== "object") return "";
+  const segs = [];
+  const pct = Number.isFinite(stats.context_percent) ? stats.context_percent : null;
+  const mark = stats.context_estimated ? "~" : "";
+  const known = Number.isFinite(stats.context_used) && Number.isFinite(stats.context_max) && stats.context_max > 0;
+  if (known) {
+    segs.push(`${mark}${fmtTokens(stats.context_used)}/${fmtTokens(stats.context_max)}`);
+    if (pct !== null) segs.push(`${contextBar(pct)} ${mark}${Math.round(pct)}%`);
+  } else if (pct !== null) {
+    segs.push(`${mark}${Math.round(pct)}%`);
+  }
+  if (Number.isFinite(stats.cache_hit_pct)) segs.push(`\u25ce ${stats.cache_hit_pct.toFixed(1)}%`);
+  if (Number.isFinite(stats.avg_latency_s)) segs.push(`\u25f7 ${stats.avg_latency_s.toFixed(1)}s`);
+  if (Number.isFinite(stats.avg_tps)) segs.push(`\u2191 ${Math.round(stats.avg_tps)} t/s`);
+  if (Number.isFinite(stats.compressions) && stats.compressions > 0) segs.push(`compressed \u00d7${stats.compressions}`);
+  if (!segs.length) return "";
+  const title = "this turn's usage: context occupancy, prompt-cache hit rate, mean model latency, throughput";
+  const body = segs.map((s) => `<span class="stat">${esc(s)}</span>`).join('<span class="stat-sep">\u2502</span>');
+  return `<div class="job-stats mono" title="${esc(title)}">${body}</div>`;
+}
+
 function conversationHtml(conv) {
   const { thread, turns, latest } = conv;
   const collapsed = state.collapsedJobs.has(thread);
@@ -1067,6 +1111,7 @@ function conversationHtml(conv) {
         .map((q) => `<div class="ghost-turn"><div class="ghost-head mono"><span class="ghost-badge">queued</span><span class="queue-ago" data-queued-at="${q.at}">${fmtDur(Date.now() - q.at)}</span><span class="dimmer">sends when the current turn finishes</span></div><div class="ghost-prompt">${linkifyText(q.text)}</div></div>`)
         .join("")}</div>` : ""}
       <div class="job-foot">${foot}</div>
+      ${statsLine(latest.stats)}
       <div class="reply">
         <div class="reply-wrap">
           <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"
@@ -1827,6 +1872,9 @@ function conversationSignature(conv) {
     l.worktree || "",
     l.existing ? "e" : "",
     l.tokens?.total || "",
+    // The stats row lives in the foot of the card: a new reading must repaint it, or the numbers
+    // stay as they were until some unrelated event rebuilds the conversation.
+    JSON.stringify(l.stats || null),
   ].join("~");
 }
 

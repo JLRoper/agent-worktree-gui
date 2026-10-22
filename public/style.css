@@ -425,6 +425,12 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 .jl-dim { color: var(--dimmer); font-style: italic; }
 .jl-raw { color: var(--dim); }
 .job-foot { margin-top: 6px; font-size: 11.5px; }
+/* the CLI's prompt readout for a card: context occupancy, cache hit, latency, throughput */
+.job-stats {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 7px;
+  margin: 2px 0 0 18px; font-size: 11px; color: var(--dim); white-space: nowrap;
+}
+.job-stats .stat-sep { color: var(--line); }
 
 /* a conversation: turns stacked top to bottom, reply box at the bottom */
 .turn { margin: 0; }
@@ -719,7 +725,7 @@ body.modal-open { overflow: hidden; }
   overflow: hidden;
   padding: 10px 14px 12px;
 }
-.job.maximized .job-head, .job.maximized .job-foot, .job.maximized .reply { flex: none; }
+.job.maximized .job-head, .job.maximized .job-foot, .job.maximized .job-stats, .job.maximized .reply { flex: none; }
 .job.maximized .job-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
 .job.maximized .turn { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .job.maximized .turn.folded { display: block; flex: 0 0 auto; }

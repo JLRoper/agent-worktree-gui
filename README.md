@@ -236,6 +236,23 @@ When nothing is running the button is **Send reply**: it starts the next turn on
 the same directory. Replies inherit the first turn's model; threads are real Hermes sessions, so they
 appear in `hermes sessions list` like any other.
 
+#### The turn's usage
+
+Above the reply box, a turn shows the same readout the CLI prints above its prompt:
+
+    ~357K/1M │ [████░░░░░░] ~36% │ ◎ 99.0% │ ◷ 4.2s │ ↑ 231 t/s │ compressed ×1
+
+Context occupancy with a 10-cell bar, prompt-cache hit rate, mean model latency and throughput. It
+arrives as `run.usage` after each `tool.completed` — so it follows a turn while it is still running —
+and again inside the terminal event's `usage`. Every segment is optional and omitted when the gateway
+has no figure behind it (`~` marks an estimated context, never a fabricated `0%`), and a card from a
+gateway without the local patch shows no row at all instead of zeros. `compressed ×N` appears only
+after a context compression.
+
+These are projections of the gateway's agent object, not fields the run stream carries: the gateway
+half is in `docs/hermes-runs-api-knobs.diff`, which has to be re-applied after `hermes update`
+replaces `gateway/platforms/*.py`.
+
 #### Approvals
 
 A run that hits a flagged command parks at `waiting_for_approval` and emits `approval.request` with
@@ -334,6 +351,12 @@ for the approval window — agent processes are not spawned from here any more.
   with `… result truncated by the gateway` when it was cut.
 - **A flagged command runs without asking** — check `approvals.mode` (`smart` waves many through)
   and `security.approval.transport` (must be `builtin` for runs).
+- **No stats row above a reply box, or an agent writing outside its worktree** — the same cause:
+  `gateway/platforms/*.py` is the stock file again (`hermes update` replaces them). Check the running
+  gateway, not the source: `curl -s -H "Authorization: Bearer $API_SERVER_KEY"
+  http://127.0.0.1:8642/v1/capabilities | grep run_cwd` — absent means the process has no local patch,
+  so `cwd` / `max_turns` / `run_budget` are silently ignored and no `run.usage` is ever emitted.
+  Re-apply `docs/hermes-runs-api-knobs.diff` and restart the gateway.
 - **`fatal: cannot change to ...: No such file or directory`** — native git can't take MSYS
   `/c/...` paths; use `C:/...`.
 - **Port already in use** — `stop-background.cmd`, or `netstat -ano | grep 7331` and kill the PID.

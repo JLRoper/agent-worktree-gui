@@ -1,8 +1,8 @@
 diff --git a/gateway/platforms/api_server.py b/gateway/platforms/api_server.py
-index 8045b00317..c85e0f8874 100644
+index f8160def3d..fbf5b84467 100644
 --- a/gateway/platforms/api_server.py
 +++ b/gateway/platforms/api_server.py
-@@ -68,6 +68,10 @@ _BROWSER_CONTROL_PROTOCOL_VERSION = 1
+@@ -67,6 +67,10 @@ _BROWSER_CONTROL_PROTOCOL_VERSION = 1
  _STATIC_FEATURE_FLAGS = {
      "run_status": True, "run_events_sse": True, "run_stop": True, "run_steer": True,
      "run_approval_response": True, "tool_progress_events": True, "approval_events": True,
@@ -13,7 +13,7 @@ index 8045b00317..c85e0f8874 100644
      "session_resources": True, "model_options": True, "session_chat": True,
      "session_chat_streaming": True, "session_fork": True, "session_model_lock": True,
      "reasoning_streaming": True,
-@@ -2343,7 +2347,9 @@ class APIServerAdapter(OpenAICompatRoutesMixin, BasePlatformAdapter):
+@@ -2285,7 +2289,9 @@ class APIServerAdapter(OpenAICompatRoutesMixin, BasePlatformAdapter):
          model_options: Optional[dict[str, Any]] = None, route: Optional[dict[str, Any]] = None,
          session_model: Optional[str] = None, confirmed_runtime_lock: bool = False,
          room_dispatch: Optional[dict[str, Any]] = None,
@@ -24,7 +24,7 @@ index 8045b00317..c85e0f8874 100644
          """Create an AIAgent from the gateway runtime config + platform toolsets.
          ``gateway_session_key`` persists across transcripts (memory scope), unlike ``session_id``;
          ``route`` / ``session_model`` are mutually exclusive; ``confirmed_runtime_lock`` beats the
-@@ -2409,6 +2415,15 @@ class APIServerAdapter(OpenAICompatRoutesMixin, BasePlatformAdapter):
+@@ -2351,6 +2357,15 @@ class APIServerAdapter(OpenAICompatRoutesMixin, BasePlatformAdapter):
              "memory_manager": self._memory_sessions.checkout(session_id)}
          if request_service_tier is not _REQUEST_OPTION_MISSING:
              agent_kwargs["service_tier"] = request_service_tier
@@ -41,7 +41,7 @@ index 8045b00317..c85e0f8874 100644
          route_source = (
              "session_model_lock" if confirmed_runtime_lock
 diff --git a/gateway/platforms/api_server_runs.py b/gateway/platforms/api_server_runs.py
-index bfb5b4dbee..0883152909 100644
+index c7296d95cc..ef1a6a5ae4 100644
 --- a/gateway/platforms/api_server_runs.py
 +++ b/gateway/platforms/api_server_runs.py
 @@ -1,6 +1,7 @@
@@ -52,8 +52,22 @@ index bfb5b4dbee..0883152909 100644
  import hashlib
  import json
  import logging
-@@ -617,6 +618,44 @@ async def run_internal_session_turn(self, *, session_id: str, text: str, profile
-             _api_server._api_request_profile.reset(token)
+@@ -343,6 +344,13 @@ def _make_run_event_callback(self, run_id: str, loop: asyncio.AbstractEventLoop,
+                 event_fields["preview"] = _tool_completed_preview(
+                     kwargs.get("result"), redact_sensitive_text)
+             _push(_run_event(run_id, event_type, **event_fields))
++            if event_type == "tool.completed":
++                # Mid-turn readout: without it the card shows the previous turn's numbers until the run
++                # ends. This callback is the only place that holds the run id and its agent at once.
++                with suppress(Exception):
++                    live_stats = _run_stats(self._active_run_agents.get(run_id))
++                    if live_stats:
++                        _push(_run_event(run_id, "run.usage", usage=live_stats))
+         elif event_type in {"subagent.start", "subagent.complete"}:
+             event = _run_event(run_id, event_type)
+             if preview is not None:
+@@ -717,6 +725,44 @@ async def _admit_run_to_authority(
+     return None
  
  
 +def _resolve_run_knobs(body: Any, _openai_error) -> Tuple[Optional[str], Optional[int], Optional[float], Any]:
@@ -97,7 +111,7 @@ index bfb5b4dbee..0883152909 100644
  async def _handle_runs(self, request: web.Request, *, _api_server) -> web.Response:
      """POST /v1/runs — start an agent run, return run_id immediately."""
      _openai_error = _api_server._openai_error
-@@ -635,6 +674,11 @@ async def _handle_runs(self, request: web.Request, *, _api_server) -> web.Respon
+@@ -735,6 +781,11 @@ async def _handle_runs(self, request: web.Request, *, _api_server) -> web.Respon
          v if isinstance(v, dict) else None for v in (
              (body.get("hosted_room_dispatch"), body.get("_room_execution_policy"))
              if isinstance(body, dict) else (None, None)))
@@ -109,7 +123,7 @@ index bfb5b4dbee..0883152909 100644
      idempotency_key = request.headers.get("Idempotency-Key", "").strip()
      if len(idempotency_key) > 255 or any(ord(ch) < 33 or ord(ch) > 126 for ch in idempotency_key):
          return _json_error(
-@@ -734,6 +778,7 @@ async def _handle_runs(self, request: web.Request, *, _api_server) -> web.Respon
+@@ -824,6 +875,7 @@ async def _handle_runs(self, request: web.Request, *, _api_server) -> web.Respon
          agent_kwargs=dict(
              ephemeral_system_prompt=instructions, session_id=session_id, gateway_session_key=gateway_session_key,
              route=route, room_dispatch=room_dispatch, room_execution_policy=room_execution_policy,
@@ -117,7 +131,72 @@ index bfb5b4dbee..0883152909 100644
              **{k: agent_overrides.get(k) for k in ("requested_model", "requested_provider", "model_options")}),
          request_profile=_api_server._api_request_profile.get(),
          browser_control_principal=_api_server._api_request_browser_control_principal.get(),
-@@ -825,6 +870,23 @@ def _run_agent_sync(self, run: _RunLaunch, agent, approval_notify, *, _api_serve
+@@ -864,13 +916,61 @@ def _retarget_to_delivered_chat(self, launch: _RunLaunch, admitted) -> None:
+         self._set_run_status(launch.run_id, "queued", session_id=delivered)
+ 
+ 
+-def _run_usage(agent) -> dict[str, int]:
++def _run_stats(agent) -> dict[str, Any]:
++    """The card's readout: context occupancy, prompt-cache hit rate, mean latency, throughput.
++
++    ``_run_usage`` carries only the counters a cost poller books. These four figures are projections
++    read off the agent object, so each is measured inside its own guard and OMITTED when there is
++    nothing behind it: the card skips a segment it has no number for, and a fabricated ``0%`` would
++    read as a measurement. The cache rate is ``session_cache_read_tokens / session_prompt_tokens`` —
++    the prompt counter already includes cache read + write, so the two halves are not disjoint.
++    """
++    stats: dict[str, Any] = {}
++    with suppress(Exception):
++        from agent.context_breakdown import context_usage_fields
++        fields = context_usage_fields(getattr(agent, "context_compressor", None)) or {}
++        for key in ("context_used", "context_max", "context_percent"):
++            value = fields.get(key)
++            if isinstance(value, (int, float)) and not isinstance(value, bool):
++                stats[key] = value
++        if "context_estimated" in fields:
++            stats["context_estimated"] = bool(fields["context_estimated"])
++    with suppress(Exception):
++        read = getattr(agent, "session_cache_read_tokens", 0) or 0
++        prompt = getattr(agent, "session_prompt_tokens", 0) or 0
++        if read > 0 and prompt > 0:
++            stats["cache_hit_pct"] = round(min(100.0, read / prompt * 100.0), 1)
++    with suppress(Exception):
++        latencies = [float(x) for x in (getattr(agent, "_api_latency_history", None) or ())]
++        outputs = [float(x) for x in (getattr(agent, "_api_output_history", None) or ())]
++        window = min(len(latencies), len(outputs))
++        if window > 0:
++            latencies, outputs = latencies[-window:], outputs[-window:]
++            spent = sum(latencies)
++            if spent > 0:
++                stats["avg_latency_s"] = round(spent / window, 1)
++                # sum(output) / sum(latency): a mean of per-call ratios would weigh a 1s call exactly
++                # as heavily as a 20s one and report a throughput nobody experienced.
++                stats["avg_tps"] = round(sum(outputs) / spent, 1)
++    with suppress(Exception):
++        count = getattr(getattr(agent, "context_compressor", None), "compression_count", 0) or 0
++        if isinstance(count, (int, float)) and not isinstance(count, bool) and count > 0:
++            stats["compressions"] = int(count)
++    return stats
++
++
++def _run_usage(agent) -> dict[str, Any]:
+     """Terminal ``usage`` payload from the agent's session counters; a missing or non-numeric
+-    counter (test doubles, agents without cache accounting) reads as ``0``."""
+-    usage = {}
++    counter (test doubles, agents without cache accounting) reads as ``0``.
++
++    The card's readout (``_run_stats``) rides along, so one payload carries everything a client draws
++    and the terminal event does not need a second shape.
++    """
++    usage: dict[str, Any] = {}
+     for key, attr in _USAGE_FIELDS:
+         value = getattr(agent, attr, 0)
+         usage[key] = int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
++    usage.update(_run_stats(agent))
+     return usage
+ 
+ 
+@@ -933,6 +1033,23 @@ def _run_agent_sync(self, run: _RunLaunch, agent, approval_notify, *, _api_serve
              # /v1/runs owns its agent lifecycle (no TurnRunner): record process ownership
              # so stop/cancel reaps only the background processes this run created.
              _api_server._publish_turn_process_ownership(agent, effective_task_id)
@@ -141,24 +220,22 @@ index bfb5b4dbee..0883152909 100644
              # Passed only when set: a human turn keeps today's call shape.
              author_kwargs = {"turn_author": run.turn_author} if run.turn_author is not None else {}
              r = agent.run_conversation(
-@@ -963,8 +1025,19 @@ async def _execute_run(self, run: _RunLaunch, *, _api_server) -> None:
-                 interim_assistant_callback=_interim_cb, **run.agent_kwargs)
-         self._active_run_agents[run_id] = agent
-         approval_notify = _make_approval_notify(self, run, _api_server=_api_server)
+@@ -1099,8 +1216,17 @@ async def _execute_run(self, run: _RunLaunch, *, _api_server) -> None:
+                     interim_assistant_callback=_interim_cb, **run.agent_kwargs)
+             self._active_run_agents[run_id] = agent
+             approval_notify = _make_approval_notify(self, run, _api_server=_api_server)
 +
-+        # The worker is a run_in_executor thread, and run_in_executor does NOT inherit contextvars.
-+        # That loss is not cosmetic: the approval gate resolves "can a human answer this?" by looking
-+        # up the notify callback for the CURRENT session key (tools/approval.py::_presence), so in a
-+        # bare worker it reads the fallback key ("default"), finds no callback registered under the
-+        # run's key, decides the run is unattended, and the dangerous-command guard silently ALLOWS
-+        # the command — measured: `git reset --hard` ran with no approval.request on the stream. The
-+        # tool layer keys its per-task cwd off the same session identity, so binding one variable by
-+        # hand is not enough (it moved the run's shell back to the gateway's home). Propagate the
-+        # task's whole context instead: approval key, session env and cwd resolution all agree again.
-+        run_ctx = contextvars.copy_context()
-         result, usage, served_runtime = await _submit_api_worker(
--            loop, lambda: _run_agent_sync(self, run, agent, approval_notify, _api_server=_api_server))
-+            loop, lambda: run_ctx.run(_run_agent_sync, self, run, agent, approval_notify, _api_server=_api_server))
++            # The worker is a run_in_executor thread, and run_in_executor does NOT inherit contextvars.
++            # That loss is not cosmetic: the approval gate resolves "can a human answer this?" by
++            # looking up the notify callback for the CURRENT session key (tools/approval.py::_presence),
++            # so in a bare worker it reads the fallback key ("default"), finds no callback under the
++            # run's key, decides the run is unattended, and the dangerous-command guard silently ALLOWS
++            # the command. The tool layer keys its per-task cwd off that same identity, so binding one
++            # variable by hand is not enough. Propagate the task's whole context instead.
++            run_ctx = contextvars.copy_context()
+             result, usage, served_runtime = await _submit_api_worker(
+-                loop, lambda: _run_agent_sync(self, run, agent, approval_notify, _api_server=_api_server))
++                loop, lambda: run_ctx.run(_run_agent_sync, self, run, agent, approval_notify, _api_server=_api_server))
          # Publish request metrics (daily counters + latency) with each completed run (#52323).
          self._record_api_metrics(usage, time.perf_counter() - _run_started_at)
          if not isinstance(result, dict):
