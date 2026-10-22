@@ -13,6 +13,9 @@ const state = {
   projects: new Map(),
   // Handle for the board-reorder clock, which the settings row can re-arm at another cadence.
   reorderTimer: null,
+  // The card a jump just landed on, so the highlight survives the repaint a running card gets on every
+  // job event (a class added to the node is gone the moment the node is replaced).
+  jumpThread: null,
   rows: new Map(),
   expanded: new Set(),
   rowEls: new Map(),
@@ -1281,7 +1284,8 @@ function conversationHtml(conv) {
       `<span class="pager-n mono">${blocks.start + 1}–${blocks.end} / ${turns.length}</span>` +
       `</span>`
     : "";
-  return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}">
+  const jumped = state.jumpThread && state.jumpThread.thread === thread && Date.now() < state.jumpThread.until ? " jump" : "";
+  return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}${jumped}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}">
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
       <span class="agent-glyph" title="a Hermes agent session — ⧉ marks an agent row">\u29c9</span>
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
@@ -2512,6 +2516,61 @@ function panelAgentsByPath() {
 }
 
 // Jump from a worktree row to the agent card it belongs to.
+// Clicking a project's panel chip while something is running: open the folder, the project and the row
+// that hold the first live agent, then land on that card with the caret in its reply box. Every step is a
+// different accordion, and the card does not exist in the DOM until the row is open, so the scroll is
+// re-asserted on the next frames rather than measured once too early.
+function jumpToLiveAgent(projectName) {
+  const rows = [...state.rows.values()].filter((r) => r.project === projectName);
+  let found = null;
+  for (const r of rows) {
+    const live = agentsFor(r).find((c) =>
+      (c.turns || []).some((x) => x.status === "running" || x.status === "starting"),
+    );
+    if (live) {
+      const turn = (live.turns || []).find((x) => x.status === "running" || x.status === "starting");
+      found = { row: r, thread: live.thread, turnId: turn ? turn.id : null };
+      break;
+    }
+  }
+  if (!found) return;
+  const project = state.projects.get(projectName);
+  const root = project ? rootOf(project) : null;
+  if (root && state.collapsedRoots.has(root)) toggleRoot(root);
+  if (!state.expandedProjects.has(projectName)) toggleProject(projectName);
+  const key = keyOf(projectName, found.row.path);
+  if (!state.expanded.has(key)) document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
+  // The live turn shows its console only while it is open; a reader who folded it would land on a header.
+  if (found.turnId && state.turnOpen.get(found.turnId) === false) {
+    state.turnOpen.set(found.turnId, true);
+    renderConversation(found.thread);
+  }
+  if (state.collapsedJobs.has(found.thread)) {
+    state.collapsedJobs.delete(found.thread);
+    saveCollapsedJobs();
+    renderConversation(found.thread);
+  }
+  const land = () => {
+    const card = document.querySelector(`.job[data-thread="${CSS.escape(found.thread)}"]`);
+    if (!card) return;
+    // Center it: a card pinned under the sticky bar is "visible" by the numbers and useless to read.
+    card.scrollIntoView({ block: "center", behavior: "auto" });
+    state.jumpThread = { thread: found.thread, until: Date.now() + 1700 };
+    card.classList.add("jump");
+    setTimeout(() => {
+      if (state.jumpThread && state.jumpThread.thread === found.thread) state.jumpThread = null;
+      // Look the node up again: a running card is rebuilt on every job event, so the node captured here
+      // may already be detached, and the class it carries is not part of the render signature.
+      document.querySelector(`.job[data-thread="${CSS.escape(found.thread)}"]`)?.classList.remove("jump");
+    }, 1700);
+    state.pendingFocus = { thread: found.thread, until: Date.now() + 20_000, scrollUntil: Date.now() + 6_000 };
+    applyPendingFocus();
+  };
+  requestAnimationFrame(land);
+  setTimeout(land, 120);
+  setTimeout(land, 400);
+}
+
 function jumpToAgent(thread) {
   if (!thread) return;
   revealCard("agents");
@@ -3157,9 +3216,17 @@ function chipsHtml(name) {
     const trees = rows.filter((r) => agentsFor(r).length).length;
     const busy = panelRunningCount > 0;
     const title = `${panelAgentCount} agent card${panelAgentCount === 1 ? "" : "s"} across ${trees} worktree${trees === 1 ? "" : "s"} in this project${busy ? ` · ${panelRunningCount} running right now` : " · none running"}`;
-    const cls = busy ? "chip agents" : "chip";
     const tag = busy ? ` · ${panelRunningCount} running` : "";
-    out.push(`<span class="${cls}" title="${esc(title)}">⧉ ${panelAgentCount} panel${panelAgentCount === 1 ? "" : "s"}${tag}</span>`);
+    const body = `⧉ ${panelAgentCount} panel${panelAgentCount === 1 ? "" : "s"}${tag}`;
+    if (busy) {
+      // A live panel is the one thing worth jumping to: click opens the folder, project and row that hold
+      // the first running agent and puts the caret in its reply box.
+      out.push(
+        `<button type="button" class="chip agents chip-jump" data-jump-live="${esc(name)}" title="${esc(title)} — click to jump to the running agent">${body}</button>`,
+      );
+    } else {
+      out.push(`<span class="chip" title="${esc(title)}">${body}</span>`);
+    }
   }
   // Amber and loud: an agent parked on a permission request is the one thing here that is waiting for
   // a human, and it must be visible with the project collapsed.
@@ -4398,6 +4465,15 @@ document.addEventListener("click", async (e) => {
   if (rhead) {
     const root = rhead.dataset.toggleRoot;
     keepInPlace(() => document.querySelector(`.root-head[data-toggle-root="${CSS.escape(root)}"]`), () => toggleRoot(root));
+    return;
+  }
+  // The project's panel chip is a button only while something is running: jump to that agent instead of
+  // toggling the project the chip sits in.
+  const liveJump = e.target.closest("[data-jump-live]");
+  if (liveJump) {
+    e.preventDefault();
+    e.stopPropagation();
+    jumpToLiveAgent(liveJump.dataset.jumpLive);
     return;
   }
   const phead = e.target.closest(".project-head[data-toggle-project]");
