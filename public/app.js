@@ -2700,7 +2700,14 @@ function isRowLive(row) {
 function sigChips(row) {
   const s = row.signals || {};
   const out = [];
-  if (s.hermes?.on) out.push(`<span class="sig sig-hermes" title="Hermes session ${s.hermes.running ? "running a turn RIGHT NOW" : "open here"}${s.hermes.matched === "work" ? " — placed by its newest tool calls, not its start directory" : ""}: ${esc((s.hermes.titles || []).join(' · '))}">⧉ hermes${s.hermes.running ? " running" : ""}</span>`);
+  // The label says only WHO the evidence is (a Hermes session external to this panel). Whether it is
+  // working right now lives in the tooltip: "hermes running" read as a second kind of chip.
+  if (s.hermes?.on) {
+    const title = s.hermes.running
+      ? "A Hermes agent external to this application is actively taking turns in this worktree."
+      : `Hermes session open here${s.hermes.matched === "work" ? " — placed by its newest tool calls, not its start directory" : ""}: ${(s.hermes.titles || []).join(" · ")}`;
+    out.push(`<span class="sig sig-hermes" title="${esc(title)}">⧉ hermes</span>`);
+  }
   if (s.board?.on) out.push(`<span class="sig sig-board" title="board entry, PID alive now: ${esc((s.board.entries || []).map((e) => e.pid).join(', '))}">● board</span>`);
   if (s.ports?.on) out.push(`<span class="sig sig-port" title="dev server listening: ${esc((s.ports.listening || []).join(', '))}">:${esc((s.ports.listening || []).join(' :'))}</span>`);
   if (s.files?.on) out.push(`<span class="sig sig-files" title="files edited ${relTime(s.files.at)} ago">✎ files</span>`);
