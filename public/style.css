@@ -852,6 +852,15 @@ body.modal-open { overflow: hidden; }
 /* The card's own title, set like the revive row: the name carries the weight, its age stays quiet. */
 .job-head .job-title { font-weight: 600; color: var(--text); max-width: 52ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-head .job-when { flex: none; font-size: 10.5px; color: var(--dimmer); }
+
+/* Dragging across worktree rows should pick up the names and branches and nothing else. The head hash, the
+   ahead/behind and cherry counts, the PR cell, the dirty counts, the age and the verdict badge are read, never
+   copied, and they used to spill into every selection. Scoped to `tr.row`: a card's console output, prompt and
+   transcript must stay selectable. */
+tr.row td:nth-child(n + 3),
+tr.row td:nth-child(n + 3) * { user-select: none; }
+/* The play glyph and the count chips sit inside those two cells but are controls, not text worth copying. */
+tr.row td.name button, tr.row td.name .chip, tr.row td.branch button { user-select: none; }
 .job-preview { display: none; }
 
 /* A minimized card is a handle: the head, the preview line and the gaps between them all expand it. */
