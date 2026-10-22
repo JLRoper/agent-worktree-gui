@@ -4476,7 +4476,9 @@ function paintApprovalSetting(note = "", bad = false) {
   if (!s) return;
   const input = $("approval-timeout");
   if (input) {
-    if (document.activeElement !== input) input.value = s.timeoutSeconds;
+    // A rejected save must leave what was typed in the box: snapping back to the stored number reads
+    // as "it saved that instead", when the save is exactly what failed.
+    if (!bad && document.activeElement !== input) input.value = s.timeoutSeconds;
     input.disabled = !s.editable;
     input.min = String(s.minSeconds || 15);
     input.max = String(s.maxSeconds || 86400);
@@ -4484,14 +4486,20 @@ function paintApprovalSetting(note = "", bad = false) {
   const save = $("btn-approval-save");
   if (save) {
     save.disabled = !s.editable;
-    save.classList.toggle("dirty", false);
+    // Armed whenever the box differs from the file — including after a rejection, where the typed
+    // value is still sitting there unsaved and the button must not look inert.
+    save.classList.toggle("dirty", Boolean(input) && String(input.value) !== String(s.timeoutSeconds));
   }
   const preview = $("approval-preview");
   if (preview) {
     const bits = [`${humanWindow(s.timeoutSeconds)} · ${s.timeoutSeconds} s`];
     bits.push(s.fromFile ? "set in config.yaml" : "the gateway's built-in default (no timeout in config.yaml)");
     if (s.mode && s.mode !== "manual") bits.push(`approvals.mode ${s.mode} — only the asks that still happen get this window`);
-    preview.textContent = note ? `${note} — ${bits.join(" · ")}` : bits.join(" · ");
+    preview.textContent = bad
+      ? `NOT SAVED — ${note}. config.yaml still says ${s.timeoutSeconds} s.`
+      : note
+        ? `${note} — ${bits.join(" · ")}`
+        : bits.join(" · ");
     preview.classList.toggle("bad", bad);
     preview.title = s.configPath;
   }
@@ -4534,13 +4542,13 @@ async function saveApprovalSetting() {
     const d = await r.json();
     if (!r.ok) {
       // Keep what the file still says in approvalState, so a rejected value can never look saved.
-      paintApprovalSetting(`not saved: ${d.error || `HTTP ${r.status}`}`, true);
+      paintApprovalSetting(d.error || `HTTP ${r.status}`, true);
       return;
     }
     approvalState = d;
     paintApprovalSetting(d.note || "saved");
   } catch (e) {
-    paintApprovalSetting(`not saved: ${e.message}`, true);
+    paintApprovalSetting(e.message, true);
   }
 }
 
@@ -4556,7 +4564,9 @@ function paintSessionSetting(note = "", bad = false) {
   if (!s) return;
   const input = $("session-limit");
   if (input) {
-    if (document.activeElement !== input) input.value = s.listLimit;
+    // Same as the approval window: a rejected value stays visible so it can be corrected, and the
+    // line underneath says what the file actually holds.
+    if (!bad && document.activeElement !== input) input.value = s.listLimit;
     input.disabled = !s.editable;
     input.min = String(s.minLimit || 1);
     input.max = String(s.maxLimit || 500);
@@ -4564,7 +4574,7 @@ function paintSessionSetting(note = "", bad = false) {
   const save = $("btn-session-limit-save");
   if (save) {
     save.disabled = !s.editable;
-    save.classList.remove("dirty");
+    save.classList.toggle("dirty", Boolean(input) && String(input.value) !== String(s.listLimit));
   }
   const preview = $("session-preview");
   if (preview) {
@@ -4572,7 +4582,11 @@ function paintSessionSetting(note = "", bad = false) {
     if (s.store) bits.push(`${s.store.sessions} in the store`);
     bits.push(s.fromFile ? "set in config.yaml" : "the default (config.yaml does not set it)");
     if (s.patched === false) bits.push("CLI patch missing — this number is ignored");
-    preview.textContent = note ? `${note} — ${bits.join(" · ")}` : bits.join(" · ");
+    preview.textContent = bad
+      ? `NOT SAVED — ${note}. config.yaml still says ${s.listLimit}.`
+      : note
+        ? `${note} — ${bits.join(" · ")}`
+        : bits.join(" · ");
     preview.classList.toggle("bad", bad || s.patched === false);
     preview.title = s.configPath;
   }
@@ -4618,13 +4632,13 @@ async function saveSessionSetting() {
     });
     const d = await r.json();
     if (!r.ok) {
-      paintSessionSetting(`not saved: ${d.error || `HTTP ${r.status}`}`, true);
+      paintSessionSetting(d.error || `HTTP ${r.status}`, true);
       return;
     }
     sessionsState = d;
     paintSessionSetting(d.note || "saved");
   } catch (e) {
-    paintSessionSetting(`not saved: ${e.message}`, true);
+    paintSessionSetting(e.message, true);
   }
 }
 
