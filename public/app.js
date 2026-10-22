@@ -3143,23 +3143,23 @@ function chipsHtml(name) {
   // session (CLI or otherwise) whose turn is leased. The split is in the tooltip, so the chip stays the
   // answer to one question — "is anything running".
   const outsideRunning = rows.reduce((n, r) => n + (Number(r.signals?.hermes?.running) || 0), 0);
-  const runningAll = panelRunningCount + outsideRunning;
-  // The panel chip below carries the panel's own running count the way a row's badge does, so this one is
-  // only worth drawing when something OUTSIDE the panel is executing — otherwise it printed the same
-  // number twice, side by side.
+  // Hermes agents that are NOT this panel's: an external CLI session taking a turn in one of this
+  // project's worktrees. Counted only while it is executing — a closed or idle CLI session has nothing
+  // to report at project level.
   if (outsideRunning) {
-    const title = `${runningAll} agent${runningAll === 1 ? "" : "s"} executing right now: ${panelRunningCount} from the panel · ${outsideRunning} from outside it`;
-    out.push(`<span class="chip live" title="${esc(title)}">${runningAll} running</span>`);
+    const title = `${outsideRunning} Hermes agent${outsideRunning === 1 ? "" : "s"} from outside this panel ${outsideRunning === 1 ? "is" : "are"} executing a turn in this project right now`;
+    out.push(`<span class="chip hermes" title="${esc(title)}">${outsideRunning} hermes</span>`);
   }
-  // How many agent cards this project has, and how many of them are working — the project's version of
-  // the row badge's "⧉ 3 · 1 running".
+  // The panel's own agents: how many cards, and how many of them are executing. The colour IS the state —
+  // violet while something runs, grey while the panel is quiet — so a reader does not have to parse the
+  // number to know whether anything is working.
   if (panelAgentCount) {
     const trees = rows.filter((r) => agentsFor(r).length).length;
-    const title = `${panelAgentCount} agent card${panelAgentCount === 1 ? "" : "s"} across ${trees} worktree${trees === 1 ? "" : "s"} in this project${panelRunningCount ? ` · ${panelRunningCount} running right now` : " · none running"}`;
-    const runningTag = panelRunningCount ? ` · ${panelRunningCount} running` : "";
-    out.push(
-      `<span class="chip agents" title="${esc(title)}">⧉ ${panelAgentCount} panel${panelAgentCount === 1 ? "" : "s"}${runningTag}</span>`,
-    );
+    const busy = panelRunningCount > 0;
+    const title = `${panelAgentCount} agent card${panelAgentCount === 1 ? "" : "s"} across ${trees} worktree${trees === 1 ? "" : "s"} in this project${busy ? ` · ${panelRunningCount} running right now` : " · none running"}`;
+    const cls = busy ? "chip agents" : "chip";
+    const tag = busy ? ` · ${panelRunningCount} running` : "";
+    out.push(`<span class="${cls}" title="${esc(title)}">⧉ ${panelAgentCount} panel${panelAgentCount === 1 ? "" : "s"}${tag}</span>`);
   }
   // Amber and loud: an agent parked on a permission request is the one thing here that is waiting for
   // a human, and it must be visible with the project collapsed.

@@ -357,6 +357,9 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
    can sit next to each other and still be told apart. It is a Hermes-agent fact, not a warning, so it
    never turns amber just because those agents are between turns. */
 .chip.agents { color: #ecd9ff; border-color: #55407a; background: #2a2044; }
+/* "n hermes": external CLI sessions executing a turn — the same violet as the row's hermes chip, so the two
+   read as one kind of evidence rather than as another flavour of the panel's own agents. */
+.chip.hermes { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
 
 /* ---- new-agent form ---- */
 .form { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
