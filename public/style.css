@@ -25,6 +25,9 @@
      an agent's terminal (transcript, prompt, reply box, command preview) can be chosen apart. */
   --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --term: var(--mono);
+  /* Console text: the font comes from Settings; size and weight default to what this box always had. */
+  --term-size: 11.5px;
+  --term-weight: 400;
 }
 
 * { box-sizing: border-box; }
@@ -443,7 +446,7 @@ button.chip:active { transform: translateY(1px); }
 .pill.cancelled, .pill.interrupted { color: var(--dim); background: #20242c; }
 .pill.interrupted { border-style: dashed; }
 .pill.yolo { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
-.job-prompt { margin: 7px 0 5px; font-size: 13px; color: #dbe3ec; font-family: var(--term); }
+.job-prompt { margin: 7px 0 5px; font-size: 13px; color: #dbe3ec; font-family: var(--ui); }
 /* A turn's prompt line folds the turn, exactly like the "turn 1 · done" head above it. */
 .turn > .job-prompt { cursor: pointer; }
 .turn > .job-prompt:hover { color: #eef2f8; }
@@ -460,7 +463,7 @@ button.chip:active { transform: translateY(1px); }
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 8px 10px;
-  font: 11.5px/1.5 var(--term);
+  font: var(--term-weight) var(--term-size)/1.5 var(--term);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -543,7 +546,7 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 .turn-head .turn-text { flex: none; }
 .turn-prompt-inline {
   flex: 1 1 auto; min-width: 0; margin-left: 10px;
-  font: 12.5px/1.5 var(--term); color: #c7d0db;
+  font: 12.5px/1.5 var(--ui); color: #c7d0db;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .turn-head:hover .turn-prompt-inline { color: #e6e9ef; }
@@ -556,7 +559,7 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 .turn-peek[hidden] { display: none; }
 .turn-prompt {
   margin: 1px 0 1px 27px;
-  font: 12.5px/1.5 var(--term);
+  font: 12.5px/1.5 var(--ui);
   color: #c7d0db;
   white-space: nowrap;
   overflow: hidden;
@@ -703,7 +706,7 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 7px 9px;
-  font: 12.5px/1.45 var(--term);
+  font: 12.5px/1.45 var(--ui);
   resize: vertical;
 }
 .reply-box:focus { outline: none; border-color: #2b5480; }
@@ -744,7 +747,7 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
 .ghost-turn { border: 1px dashed #3a4353; border-radius: 8px; padding: 7px 10px; background: rgba(18, 22, 29, .5); opacity: .62; }
 .ghost-head { display: flex; gap: 8px; align-items: baseline; font-size: 10.5px; color: var(--dim); }
 .ghost-badge { color: #ffd479; border: 1px dashed #6b4d16; border-radius: 4px; padding: 0 5px; font-size: 10px; letter-spacing: .04em; }
-.ghost-prompt { font: italic 12.5px/1.45 var(--term); color: var(--text); margin-top: 4px; white-space: pre-wrap; }
+.ghost-prompt { font: italic 12.5px/1.45 var(--ui); color: var(--text); margin-top: 4px; white-space: pre-wrap; }
 /* what is waiting to go out, with how long it has been waiting */
 .queue-list { margin: 6px 0 0 18px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .queue-item { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px; color: var(--dim); min-width: 0; }

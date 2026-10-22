@@ -5222,9 +5222,27 @@ const TERM_FONTS = [
   { id: "cascadia-mono", label: "Cascadia Mono", stack: '"Cascadia Mono", Consolas, monospace' },
   { id: "jetbrains", label: "JetBrains Mono", stack: '"JetBrains Mono", Consolas, monospace' },
   { id: "fira", label: "Fira Code", stack: '"Fira Code", Consolas, monospace' },
+  { id: "source-code", label: "Source Code Pro", stack: '"Source Code Pro", Consolas, monospace' },
+  { id: "ibm-plex", label: "IBM Plex Mono", stack: '"IBM Plex Mono", Consolas, monospace' },
+  { id: "inconsolata", label: "Inconsolata", stack: 'Inconsolata, "Inconsolata-g", Consolas, monospace' },
+  { id: "victor", label: "Victor Mono", stack: '"Victor Mono", Consolas, monospace' },
+  { id: "ubuntu-mono", label: "Ubuntu Mono", stack: '"Ubuntu Mono", Consolas, monospace' },
+  { id: "hack", label: "Hack", stack: 'Hack, Consolas, monospace' },
+  { id: "menlo", label: "Menlo", stack: 'Menlo, Consolas, monospace' },
   { id: "lucida", label: "Lucida Console", stack: '"Lucida Console", Consolas, monospace' },
   { id: "courier", label: "Courier New", stack: '"Courier New", monospace' },
   { id: "panel", label: "Same as the panel font", stack: "var(--ui)" },
+];
+
+// Console text size and weight. Sizes are px at the console's default line-height; weights are the four
+// the monospace faces on this box actually resolve to.
+const TERM_SIZES = [10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 15, 16, 18];
+const TERM_WEIGHTS = [
+  { id: "300", label: "Light (300)" },
+  { id: "400", label: "Normal (400)" },
+  { id: "500", label: "Medium (500)" },
+  { id: "600", label: "Semibold (600)" },
+  { id: "700", label: "Bold (700)" },
 ];
 
 // A monospace face has no emoji of its own, and a stack that ends in `monospace` hands the glyph to
@@ -5266,6 +5284,53 @@ function applyFont(kind, id, { save = true } = {}) {
   if (save) {
     try {
       localStorage.setItem(set.key, font.id);
+    } catch {
+      /* private mode: the choice just will not persist */
+    }
+  }
+}
+
+// Console size/weight are not part of the font stacks: they are two vars the console box reads, so the
+// panel can resize its own output without touching anything the reader types.
+function termSize() {
+  let n = 11.5;
+  try {
+    n = Number(localStorage.getItem("wtgui.termSize")) || 11.5;
+  } catch {
+    /* private mode */
+  }
+  return TERM_SIZES.includes(n) ? n : 11.5;
+}
+
+function termWeight() {
+  let w = "400";
+  try {
+    w = localStorage.getItem("wtgui.termWeight") || "400";
+  } catch {
+    /* private mode */
+  }
+  return TERM_WEIGHTS.some((x) => x.id === w) ? w : "400";
+}
+
+function applyTermStyle({ save = false, size = null, weight = null } = {}) {
+  const n = size === null ? termSize() : Number(size) || 11.5;
+  const w = weight === null ? termWeight() : String(weight);
+  document.documentElement.style.setProperty("--term-size", `${n}px`);
+  document.documentElement.style.setProperty("--term-weight", w);
+  const sizeSel = $("term-size-select");
+  if (sizeSel && sizeSel.value !== String(n)) sizeSel.value = String(n);
+  const weightSel = $("term-weight-select");
+  if (weightSel && weightSel.value !== w) weightSel.value = w;
+  // The preview must show what it describes, or it is just decoration.
+  const preview = $("term-preview");
+  if (preview) {
+    preview.style.fontSize = `${n}px`;
+    preview.style.fontWeight = w;
+  }
+  if (save) {
+    try {
+      localStorage.setItem("wtgui.termSize", String(n));
+      localStorage.setItem("wtgui.termWeight", w);
     } catch {
       /* private mode: the choice just will not persist */
     }
@@ -5518,6 +5583,15 @@ function initFonts() {
     }
     applyFont(kind, currentFontId(kind), { save: false });
   }
+  const sizeSel = $("term-size-select");
+  if (sizeSel && !sizeSel.options.length) {
+    sizeSel.innerHTML = TERM_SIZES.map((n) => `<option value="${n}">${n}px</option>`).join("");
+  }
+  const weightSel = $("term-weight-select");
+  if (weightSel && !weightSel.options.length) {
+    weightSel.innerHTML = TERM_WEIGHTS.map((w) => `<option value="${w.id}">${esc(w.label)}</option>`).join("");
+  }
+  applyTermStyle({ save: false });
 }
 
 $("btn-settings")?.addEventListener("click", (e) => {
@@ -5532,6 +5606,8 @@ $("title-settings")?.addEventListener("click", (e) => {
 });
 $("font-select")?.addEventListener("change", (e) => applyFont("ui", e.target.value));
 $("term-select")?.addEventListener("change", (e) => applyFont("term", e.target.value));
+$("term-size-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, size: e.target.value }));
+$("term-weight-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, weight: e.target.value }));
 
 // The approval window. A preset only fills the box and lights Save: one click here rewrites the
 // user's global Hermes config, so it takes a deliberate second one.
