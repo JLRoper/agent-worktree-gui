@@ -2239,21 +2239,6 @@ function appendJobLine(evt) {
   refreshJobPreview(evt.id);
 }
 
-async function preview() {
-  const body = formValues();
-  body.prompt = String(body.prompt || "") + attachmentBlock("spawn");
-  body.attachments = attachmentsFor("spawn");
-  try {
-    const r = await apiFetch("/api/agents/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    $("job-cmd").textContent = `cwd ${d.cwd}\n${d.command}`;
-    $("job-cmd").classList.remove("dimmer");
-  } catch (e) {
-    $("job-cmd").textContent = `preview failed: ${e.message}`;
-  }
-}
-
 // The companion to the timeout above: a spawn whose answer never arrived still owns a card. Re-read the
 // board once and, if a turn exists with this prompt from the last three minutes, treat the spawn as
 // done — clear the box, say it started, and walk the reader to the card exactly as a normal spawn does.
@@ -4098,16 +4083,11 @@ $("job-project").addEventListener("change", () => {
   $("job-existing").checked = false;
   state.spawnTarget = null;
   updateSpawnNote();
-  $("job-cmd").textContent = "preview the run request the panel would send…";
-  $("job-cmd").classList.add("dimmer");
 });
 $("job-cwd").addEventListener("input", updateSpawnNote);
 $("job-existing").addEventListener("change", () => {
   updateSpawnNote();
-  $("job-cmd").textContent = "preview the run request the panel would send…";
-  $("job-cmd").classList.add("dimmer");
 });
-$("btn-preview").addEventListener("click", preview);
 $("btn-spawn").addEventListener("click", spawnAgent);
 $("btn-clear-jobs").addEventListener("click", () => post("/api/jobs/clear"));
 $("btn-fold-jobs").addEventListener("click", () => {
@@ -4115,10 +4095,7 @@ $("btn-fold-jobs").addEventListener("click", () => {
   const allFolded = convs.length > 0 && convs.every((c) => state.collapsedJobs.has(c.thread));
   foldAll(!allFolded);
 });
-$("job-prompt").addEventListener("input", () => {
-  $("job-cmd").textContent = "preview the run request the panel would send…";
-  $("job-cmd").classList.add("dimmer");
-});
+$("job-prompt").addEventListener("input", () => updateSpawnNote());
 // The console resizes like the reply box, but its max-height is what stops it eating the card — and a
 // max-height also stops the drag dead. The handle lives in the bottom-right 16px corner, so grabbing
 // there lifts the cap first; the height the drag then writes is an inline style and wins over both.
