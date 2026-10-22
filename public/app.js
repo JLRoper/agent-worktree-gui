@@ -159,13 +159,17 @@ function lifeAt(row) {
 function movementKey(row) {
   const s = row.signals || {};
   const h = s.hermes || {};
-  const sessions = `${(h.titles || []).join("|")}#${h.running || 0}`;
-  const idle = (h.idleList || []).map((x) => `${x.id}:${x.lastActivityAt || 0}`).join("|");
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const sessions = `${(h.titles || []).join("|")}#${num(h.running)}`;
+  const idle = (h.idleList || []).map((x) => `${x.id}:${num(x.lastActivityAt)}`).join("|");
   const board = (s.board?.entries || []).map((e) => e.pid).join("|");
   const ports = (s.ports?.listening || []).join("|");
-  const panel = `${s.panel?.running || 0}/${s.panel?.total || 0}`;
+  // Only what a card is DOING, never how many cards there are: the count and the thread list are
+  // omitted from some row events, so `0/0` flipping to `0/10` read as movement on every refresh and
+  // every row pulsed green. A start is still movement; a bookkeeping total is not.
+  const cards = num(s.panel?.running);
   const files = s.files?.at || "";
-  return `${sessions}#${idle}#${board}#${ports}#${panel}#${files}`;
+  return `${sessions}#${idle}#${board}#${ports}#${cards}#${files}`;
 }
 
 function orderRows(rows) {
