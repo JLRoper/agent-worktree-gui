@@ -843,6 +843,9 @@ body.modal-open { overflow: hidden; }
 .job.maximized .job-out { max-height: none; flex: 1; min-height: 0; }
 .job.maximized .reply-box { min-height: 46px; }
 .job-prompt, .job-cmd, .job-out, .job-foot { margin-left: 18px; }
+/* The usage readout sits under the reply box, not above it: the box is where the reader is looking, and the
+   numbers belong at the bottom of the card where they close it off. */
+.job-stats-row { margin: 4px 0 0 18px; }
 .job-preview { display: none; }
 
 /* A minimized card is a handle: the head, the preview line and the gaps between them all expand it. */

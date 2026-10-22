@@ -1328,7 +1328,7 @@ function conversationHtml(conv) {
       ${queued ? `<div class="ghost-turns">${queue
         .map((q) => `<div class="ghost-turn"><div class="ghost-head mono"><span class="ghost-badge">queued</span><span class="queue-ago" data-queued-at="${q.at}">${fmtDur(Date.now() - q.at)}</span><span class="dimmer">sends when the current turn finishes</span></div><div class="ghost-prompt">${linkifyText(q.text)}</div></div>`)
         .join("")}</div>` : ""}
-      <div class="job-foot">${foot} ${statsLine(latest.stats)}</div>
+      <div class="job-foot">${foot}</div>
       <div class="reply">
         <div class="reply-wrap">
           <div class="attach-chips" data-chips="${esc(thread)}">${attachmentChipsHtml(thread)}</div>
@@ -1347,6 +1347,7 @@ function conversationHtml(conv) {
           <span class="warnline" data-reply-warn="${esc(thread)}"></span>
         </div>
       </div>
+      ${latest.stats ? `<div class="job-stats-row">${statsLine(latest.stats)}</div>` : ""}
     </div>
   </div>`;
 }
