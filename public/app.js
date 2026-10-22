@@ -2807,11 +2807,12 @@ function detailHtml(row) {
         <h4>Sessions <span class="dimmer mono">${idleSessions.length} here, no card on the board</span></h4>
         ${idleSessions
           .map(
+            // The button leads the row, in the column where a card puts its status pill, so "revive"
+            // and "EXITED" read as the same kind of thing in the same place.
             (s) => `<div class="session-row">
+            <button type="button" class="btn-revive" data-revive-session="${esc(s.id)}" data-revive-path="${esc(row.path)}" title="put this session back on the board as a card — the conversation is in the gateway, so a reply continues it where it stopped">revive</button>
             <span class="session-name">${esc(s.title || "(untitled session)")}</span>
             <span class="session-id mono" title="${esc(s.id)}">${esc(String(s.id).slice(0, 16))}…</span>
-            <span class="spacer"></span>
-            <button type="button" class="btn-revive" data-revive-session="${esc(s.id)}" data-revive-path="${esc(row.path)}" title="put this session back on the board as a card — the conversation is in the gateway, so a reply continues it where it stopped">revive</button>
           </div>`,
           )
           .join("")}
