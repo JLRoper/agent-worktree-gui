@@ -1744,13 +1744,19 @@ function paintAgentBadges() {
 function updateJob(j, { scroll = false } = {}) {
   const prev = state.jobs.get(j.id);
   const statusChanged = !prev || prev.status !== j.status;
+  // A parked approval appearing or being answered changes what the ROW badge and the project chip say,
+  // and neither follows a status change (a run stays "running" through both). Without this the row kept
+  // advertising "awaiting approval" after the question was answered.
+  const approvalChanged =
+    Boolean(prev?.approval) !== Boolean(j.approval) ||
+    String(prev?.approvalDone?.choice || "") !== String(j.approvalDone?.choice || "");
   const prevOwner = prev ? prev.ownerPath || null : null;
   const ownerChanged = (j.ownerPath || null) !== prevOwner;
   state.jobs.set(j.id, { ...prev, ...j });
   if (!state.jobLines.has(j.id) && j.lines?.length) state.jobLines.set(j.id, j.lines.slice());
   renderConversation(j.thread || j.id, { scroll });
   // Starting or finishing a turn changes what the worktree rows should say about themselves.
-  if (statusChanged) {
+  if (statusChanged || approvalChanged) {
     repaintAgentState();
     // A queued reply goes out as soon as this thread has nothing running any more.
     const t = j.thread || j.id;
@@ -2296,6 +2302,9 @@ function paintRowChips(row) {
 function repaintAgentState() {
   invalidatePanelMap();
   for (const row of state.rows.values()) paintRowChips(row);
+  // The ⧉ badge in a row's name cell carries "awaiting approval", so it has to be repainted here too —
+  // it is not part of the chips, and it was the one thing left stale after an answer.
+  paintAgentBadges();
   for (const name of state.projects.keys()) refreshChips(name);
   // An agent starting or finishing changes where its project belongs: bring it up (or let it settle)
   // without waiting for the next 30s snapshot, in every folder the reader is not working in.
@@ -2325,7 +2334,14 @@ function agentBadgeHtml(row) {
   const mine = agentsFor(row);
   if (!mine.length) return "";
   const running = agentsRunning(mine);
-  return `<button class="sig ${running ? "sig-panel" : "sig-panel-done"}" data-open-row="${esc(keyOf(row.project, row.path))}" title="${mine.length} agent${mine.length === 1 ? "" : "s"} owned by this worktree${running ? `, ${running} running` : ""} — click to open the row and its agents">⧉ ${mine.length}${running ? ` · ${running} running` : ""}</button>`;
+  // A parked approval is the one state that needs the reader, and it used to be invisible the moment
+  // the row was collapsed — the badge only ever said "running".
+  const waiting = mine.filter((c) =>
+    (c.turns || []).some((t) => t.approval && (t.status === "running" || t.status === "starting")),
+  ).length;
+  const cls = waiting ? "sig-approval" : running ? "sig-panel" : "sig-panel-done";
+  const bits = [waiting ? `${waiting} awaiting approval` : null, running ? `${running} running` : null].filter(Boolean);
+  return `<button class="sig ${cls}" data-open-row="${esc(keyOf(row.project, row.path))}" title="${mine.length} agent${mine.length === 1 ? "" : "s"} owned by this worktree${waiting ? `, ${waiting} parked on a permission request — click to answer it` : running ? `, ${running} running` : ""} — click to open the row and its agents">⧉ ${mine.length}${bits.length ? ` · ${bits.join(" · ")}` : ""}</button>`;
 }
 
 // ---- removing a worktree ---------------------------------------------------------------------
@@ -2620,6 +2636,16 @@ function chipsHtml(name) {
       ? `${panelRunningCount} of ${panelAgentCount} panel agent${panelAgentCount === 1 ? "" : "s"} in this project running right now`
       : `all ${panelAgentCount} panel agent${panelAgentCount === 1 ? "" : "s"} in this project are not running — attention may be needed`;
     out.push(`<span class="chip ${cls}" title="${esc(title)}">⧉ ${panelAgentCount} panel agent${panelAgentCount === 1 ? "" : "s"}</span>`);
+  }
+  // Amber and loud: an agent parked on a permission request is the one thing here that is waiting for
+  // a human, and it must be visible with the project collapsed.
+  const panelWaiting = panelAgents.filter((c) =>
+    (c.turns || []).some((t) => t.approval && (t.status === "running" || t.status === "starting")),
+  ).length;
+  if (panelWaiting) {
+    out.push(
+      `<span class="chip sig-approval" title="an agent in this project is parked on a permission request — open the row to answer it">\u26a0 ${panelWaiting} awaiting approval</span>`,
+    );
   }
   if (removable) out.push(`<span class="chip info">${removable} safe to remove</span>`);
   if (stale) out.push(`<span class="chip">${stale} reclassifying</span>`);

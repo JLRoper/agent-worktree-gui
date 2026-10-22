@@ -229,8 +229,9 @@ td.age .age-num.dimmer { color: var(--dimmer); }
 .agents-block .job { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: rgba(255, 255, 255, .012); }
 .agents-block .job:last-child { margin-bottom: 0; }
 .agents-block .job-out { max-height: 320px; }
-/* "waiting on you" — an agent blocked on an approval */
-.sig-approval { color: #ffd479; border-color: #6b4d16; background: var(--amber-bg); font-weight: 700; }
+/* "waiting on you" — an agent blocked on an approval. Its colours live with the other .sig modifiers
+   further down the file: .sig and .chip are single-class rules declared after this point, so a rule
+   here loses on source order and the badge renders grey instead of amber. */
 .approval.jump { box-shadow: 0 0 0 3px #d2992288; }
 
 /* ---- approvals ---- */
@@ -810,6 +811,12 @@ button.sig { cursor: pointer; font-family: var(--mono); }
 button.sig:hover { filter: brightness(1.25); }
 .sig-panel { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); font-weight: 700; }
 .sig-panel-done { color: var(--dim); border-color: var(--line); background: #20242c; }
+/* An agent parked on a permission request is the one state on the board that needs a human, so it
+   wears the loudest amber. This has to sit AFTER .sig and .chip: those are single-class rules, so a
+   rule declared above them loses on source order and the badge renders grey instead of amber. The
+   .chip form is the project-level count, which has to read with the whole project folded. */
+.sig-approval,
+.chip.sig-approval { color: #ffd479; border-color: #6b4d16; background: var(--amber-bg); font-weight: 700; }
 @keyframes jumpflash {
   from { box-shadow: 0 0 0 3px #2ea043cc; }
   to { box-shadow: 0 0 0 3px rgba(46, 160, 67, 0); }
