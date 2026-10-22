@@ -153,6 +153,21 @@ function lifeAt(row) {
   return Number.isFinite(alive) ? alive : Number.NEGATIVE_INFINITY; // never alive sorts last
 }
 
+// What counts as an agent moving in a row. The cheap scan fields (verdict, age, git tip) are the
+// scanner working, not the agent: a verdict flipping is not movement, and flashing green for it made
+// every poll look like progress.
+function movementKey(row) {
+  const s = row.signals || {};
+  const h = s.hermes || {};
+  const sessions = `${(h.titles || []).join("|")}#${h.running || 0}`;
+  const idle = (h.idleList || []).map((x) => `${x.id}:${x.lastActivityAt || 0}`).join("|");
+  const board = (s.board?.entries || []).map((e) => e.pid).join("|");
+  const ports = (s.ports?.listening || []).join("|");
+  const panel = `${s.panel?.running || 0}/${s.panel?.total || 0}`;
+  const files = s.files?.at || "";
+  return `${sessions}#${idle}#${board}#${ports}#${panel}#${files}`;
+}
+
 function orderRows(rows) {
   return rows.sort(
     (a, b) => rowTier(a) - rowTier(b) || lifeAt(b) - lifeAt(a) || String(a.name).localeCompare(String(b.name)),
@@ -3140,14 +3155,22 @@ function refreshChips(name) {
 function reorder(name) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
-  // Freeze these rows only while a row in THIS project is open: an agent starting or finishing must
-  // not move the row being read, but it has no business holding every other project's order still.
-  const openHere = [...state.expanded].some((k) => state.rows.get(k)?.project === name);
-  if (openHere) return;
-  const rows = orderRows([...state.rows.values()].filter((r) => r.project === name));
+  const mine = [...state.rows.values()].filter((r) => r.project === name);
+  // The order if nothing were pinned: our running agents first, then everything by how recently it
+  // showed life. This is what "latest movement at the top" means once all the accordions are closed.
+  const ranked = orderRows([...mine]).map((r) => keyOf(name, r.path));
+  // An open row keeps its exact slot — opening it is you saying "I am reading this". Everything closed
+  // sorts into the gaps around it, exactly how closed projects sort around an open one in a folder.
+  const slotKeys = [...tbody.children].filter((el) => el.classList.contains("row")).map((el) => el.dataset.key);
+  const fixed = new Set(slotKeys.filter((k) => state.expanded.has(k)));
+  const free = ranked.filter((k) => !fixed.has(k));
+  const orderedKeys = [];
+  let f = 0;
+  for (const k of slotKeys) orderedKeys.push(fixed.has(k) ? k : free[f++] ?? k);
+  // A row that just arrived has no slot of its own yet: give it one at the end of the free queue.
+  for (const k of free.slice(f)) if (!orderedKeys.includes(k)) orderedKeys.push(k);
   const want = [];
-  for (const r of rows) {
-    const k = keyOf(name, r.path);
+  for (const k of orderedKeys) {
     const tr = state.rowEls.get(k);
     if (tr) want.push(tr);
     const d = state.detailEls.get(k);
@@ -3221,6 +3244,10 @@ function queueRow(project, row, opts) {
 function placeRow(project, row, { flash = false } = {}) {
   row.project = project;
   const key = keyOf(project, row.path);
+  const prevRow = state.rows.get(key) || null;
+  // Decided before the new row overwrites the old one, and outside the flash branch: it also decides
+  // whether a refresh that found nothing gets the quiet grey pulse.
+  const moved = !prevRow || movementKey(prevRow) !== movementKey(row);
   const isNew = !state.rows.has(key);
   noteScan(row);
   state.rows.set(key, row);
@@ -3282,8 +3309,11 @@ function placeRow(project, row, { flash = false } = {}) {
     applyStoredScrolls(dEl);
   }
   if (flash && old) {
-    newTr.classList.add("flash");
-    setTimeout(() => newTr.classList.remove("flash"), 900);
+    // Green when an agent moved in this row; a quiet grey when the refresh ran and found nothing new.
+    // Two outcomes, two colours — one colour for both made every 5s tick look like progress.
+    const kind = moved ? "flash" : "flash-idle";
+    newTr.classList.add(kind);
+    setTimeout(() => newTr.classList.remove(kind), 900);
   }
   reorder(project);
   refreshChips(project);

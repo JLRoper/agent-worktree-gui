@@ -808,6 +808,14 @@ tbody tr.row.expanded { background: #1a2029; }
   to { background: transparent; }
 }
 tbody tr.row.flash { animation: flashrow .9s ease-out; }
+/* The same pulse for a refresh that found nothing: the row is known current, but an agent did not move
+   in it. Deliberately a lift in the panel's own grey, not a tint — this one should be noticed only if
+   you are watching for it. */
+@keyframes flashrow-idle {
+  from { background: #232833; }
+  to { background: transparent; }
+}
+tbody tr.row.flash-idle { animation: flashrow-idle .9s ease-out; }
 /* A section's own background is mostly covered by its children, so the flash has to reach the title
    row as well: a tinted section alone was too quiet to notice. The head flashes solid green and the
    section carries the ring. */
