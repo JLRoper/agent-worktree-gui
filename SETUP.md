@@ -90,19 +90,19 @@ Then open **http://127.0.0.1:7331**.
   directories are named in the footer as "skipped" rather than hidden.
 - **Spawn refused: "has no commits yet (unborn HEAD)"** — `git worktree add` needs a HEAD to branch
   from, so that repo needs an initial commit before it can host worktrees.
-- **Spawn fails with "No API key found for provider 'openrouter'"** — the spawned CLI did not find a
-  key: put it in `$HERMES_HOME/.env` (the CLI loads that itself) or export `OPENROUTER_API_KEY`
-  before starting the panel. On Windows the panel also falls back to `HKCU\Environment`.
+- **Spawn fails with `503 the Hermes gateway API is not usable at …`** — the gateway is not running,
+  or `API_SERVER_KEY` is missing from `$HERMES_HOME/.env`. `hermes gateway restart`, and check the
+  `api: up / api: down` chip in the New-agent header for which one it is.
 - **A row shows `ERROR`** — that worktree could not be read; the row detail names the reason.
-- **Windows-only bits**: cancelling a job uses `taskkill`, and the `:port` / `● board` liveness
-  signals read `netstat` / `tasklist`. Off Windows those two signals stay dark and Cancel is a no-op;
-  scanning, verdicts, spawning and replies all still work.
+- **Windows-only bits**: the `:port` / `● board` liveness signals read `netstat` / `tasklist`. Off
+  Windows those two stay dark; scanning, verdicts, spawning and replies all still work.
 
 ## 7. Using it
 
 - The green **+** beside a project name aims the spawn card at that project and puts the cursor in
   the prompt. **start in** is an editable path field if you want something else.
-- Each agent runs in its own worktree (`hermes chat -w`) and gets a named Hermes thread; **reply to
-  its card any time** to continue the same session. Turn 1's worktree is removed automatically if it
-  made no commits.
+- Each agent runs in its own worktree (the panel creates `wtgui/…` under `.worktrees/`) and gets a
+  named Hermes session. **Reply to its card** to continue that session — while a turn is still
+  running the button reads **Steer turn** and the text reaches the live turn instead of waiting.
+  Worktrees are yours to keep: nothing removes them automatically.
 - Projects are ordered most-recently-worked-on first and start minimized.

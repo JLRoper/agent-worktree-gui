@@ -1723,8 +1723,8 @@ function formValues() {
     model: $("job-model").value.trim() || undefined,
     budget: Number($("job-budget").value) || undefined,
     maxTurns: Number($("job-maxTurns").value) || undefined,
-    skills: $("job-skills").value.trim() || undefined,
-    yolo: $("job-yolo").checked,
+    // No skills / yolo here on purpose: a run carries input, cwd, model, max_turns and run_budget.
+    // The form keeps those two controls visible but disabled rather than pretending they work.
   };
 }
 
@@ -2900,13 +2900,13 @@ $("job-project").addEventListener("change", () => {
   $("job-existing").checked = false;
   state.spawnTarget = null;
   updateSpawnNote();
-  $("job-cmd").textContent = "preview a command to see exactly what would run…";
+  $("job-cmd").textContent = "preview the run request the panel would send…";
   $("job-cmd").classList.add("dimmer");
 });
 $("job-cwd").addEventListener("input", updateSpawnNote);
 $("job-existing").addEventListener("change", () => {
   updateSpawnNote();
-  $("job-cmd").textContent = "preview a command to see exactly what would run…";
+  $("job-cmd").textContent = "preview the run request the panel would send…";
   $("job-cmd").classList.add("dimmer");
 });
 $("btn-preview").addEventListener("click", preview);
@@ -2918,7 +2918,7 @@ $("btn-fold-jobs").addEventListener("click", () => {
   foldAll(!allFolded);
 });
 $("job-prompt").addEventListener("input", () => {
-  $("job-cmd").textContent = "preview a command to see exactly what would run…";
+  $("job-cmd").textContent = "preview the run request the panel would send…";
   $("job-cmd").classList.add("dimmer");
 });
 // Enter in the prompt spawns, the way it does in every other box here. Shift+Enter is a newline, so a

@@ -70,18 +70,18 @@
           <label>model <input id="job-model" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" placeholder="(default)" /></label>
           <label>budget s <input id="job-budget" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" value="1800" min="30" /></label>
           <label>max turns <input id="job-maxTurns" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" placeholder="(default)" /></label>
-          <label>skills <input id="job-skills" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" placeholder="(none)" /></label>
-          <label class="chk" title="Without --yolo a spawned agent cannot answer a dangerous-command approval prompt (no TTY), so it will stall.">
-            <input id="job-yolo" type="checkbox" /> <code>--yolo</code> (unattended, no approvals)
+          <label>skills <input id="job-skills" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" placeholder="(not supported by a run yet)" disabled /></label>
+          <label class="chk" title="Approvals come to the agent's card while the run is live — a run is never blind to a flagged command, so there is nothing to bypass here.">
+            <input id="job-yolo" type="checkbox" disabled /> <code>--yolo</code> <span class="dimmer">(not used: approvals come to the card)</span>
           </label>
           <label class="chk" title="Run in the 'start in' folder as it is — for an existing worktree. Without this, hermes creates a new worktree and branch.">
             <input id="job-existing" type="checkbox" /> run in that folder as-is <span class="dimmer">(existing worktree, no new tree)</span>
           </label>
           <span class="spacer"></span>
-          <button id="btn-preview" type="button">Preview command</button>
+          <button id="btn-preview" type="button">Preview request</button>
           <button id="btn-spawn" type="button" class="primary">Spawn agent</button>
         </div>
-        <div class="cmd mono" id="job-cmd">preview a command to see exactly what would run…</div>
+        <div class="cmd mono" id="job-cmd">preview the run request the panel would send…</div>
         <div id="spawn-warn" class="warnline"></div>
         <div id="spawn-msg" class="dimmer mono"></div>
       </div>

@@ -1,7 +1,7 @@
 # agent-worktree-gui
 
-A local panel that watches every git worktree across one or more projects, and — Stage 1 —
-can spawn Hermes agents into fresh worktrees from the browser.
+A local panel that watches every git worktree across one or more projects, and runs Hermes agents in
+their own worktrees — live output, mid-turn steering and approvals on the agent's card.
 
 Zero dependencies. No `npm install` needed: plain Node (`node >= 18`) + stdlib, plus HTML/CSS/JS
 served straight from `public/`.
@@ -36,10 +36,9 @@ Edit `config.json` first: `scanRoots` is where your repos live (every git repo u
 monitored), plus `host`/`port`. If `config.json` is missing the panel starts on defaults and says so.
 
 The two gateway-connected bits are Windows-flavoured and degrade elsewhere:
-`OPENROUTER_API_KEY` is taken from the process environment first and from `HKCU\Environment` as a
-fallback (if your key lives in `$HERMES_HOME/.env`, the spawned CLI loads it itself, so injection is
-not needed); cancelling a job uses `taskkill`, and the `:port` / `● board` liveness signals read
-`netstat` / `tasklist`, so off Windows those two signals simply stay dark — everything else works.
+`API_SERVER_KEY` is read from the process environment, else `$HERMES_HOME/.env`; the `:port` /
+`● board` liveness signals read `netstat` / `tasklist`, so off Windows those two signals simply stay
+dark — everything else works.
 
 `node tools/verify-verdicts.mjs [project]` re-derives every row's merge verdict straight from git and
 diffs it against the panel (exit 1 on any mismatch) — useful after touching the scan logic.
@@ -100,8 +99,8 @@ Per-worktree verdict:
 | `UNMERGED (N commits)` | carries commits not on remote main |
 
 `MERGED` is only claimed when the branch has commits of its own **and** they are in remote main. A
-worktree whose branch has zero commits (a fresh `-w` tree, or a branch created and never committed
-to) reports `NO COMMITS` instead — and is deliberately *not* counted as safe to remove, so a brand
+worktree whose branch has zero commits (a freshly made `wtgui/…` tree, or a branch created and never
+committed to) reports `NO COMMITS` instead — and is deliberately *not* counted as safe to remove, so a
 new worktree is not swept away. The discriminator is the branch reflog: `git reflog show <branch>`
 has exactly one entry for a branch that never moved, and more for one that did.
 | `?` (grey, dashed) | verdict not yet computed / reclassifying |
@@ -117,55 +116,47 @@ Liveness is **evidence-based**, never a generic "some process is running":
 A row is **live** only if one of those fired. An open-but-idle session shows as grey `⧉ N idle`
 and is counted separately ("open idle" chip). `MERGED` + clean + not live = "safe to remove".
 
-### Agents (Stage 1: spawn)
+### Agents
 
-The **New agent** card runs one Hermes agent in its own worktree and streams its output live.
+The **New agent** card starts one Hermes agent in its own worktree and streams the turn live. An agent
+is a **run on the Hermes gateway's `api_server`**, not a spawned CLI:
 
-**Start in** is an editable path field, pre-filled from the `project` picker (suggestions come from
-one `<datalist>` of every discovered project path). Clicking the green **+** beside a project's name
-sets both the picker and the `start in` field to that project and puts the cursor straight in the
-prompt, so the agent works in the project whose `+` you clicked. Edit the field by hand and that
-explicit path wins over the picker (the server prefers an explicit `cwd`); the line under the box
-tells you where the new worktree will land and flags when the location differs from the picker. A
-directory that is not a git repo cannot host a worktree, so it is not offered.
+    POST http://127.0.0.1:8642/v1/runs   {input, session_id, cwd, model?, max_turns?, run_budget?}
+    GET  /v1/runs/<id>/events            SSE: tool.started / tool.completed / message.delta /
+                                              approval.request / run.completed|failed|cancelled
+    POST /v1/runs/<id>/steer             inject guidance into the live turn
+    POST /v1/runs/<id>/stop              cooperative interrupt
+    POST /v1/runs/<id>/approval          answer the flagged command a run is parked on
 
-It builds exactly this (the `Preview command` button shows it before anything runs):
-
-    <hermes> chat -q "<prompt>" -w -Q --format stream-json [--run-budget N] [--max-turns N] [-m model] [-s skills] [--yolo]
+`Preview request` shows the exact body before anything is sent. The gateway has to be up and keyed:
+`POST /api/agents` answers **503** with the gateway's own reason rather than creating a card that
+never starts. The New-agent header says which it is — `api: up · steer` plus the gateway address, or
+`api: down`.
 
 Semantics, all verified against real runs:
 
 - **Refused up front**: a repo with no commits (unborn HEAD) cannot host a worktree, because
-  `git worktree add` needs a HEAD to branch from. The card warns (with the exact remedy command)
-  and disables Spawn, and the server refuses the request with the reason — rather than letting the
-  run die inside the CLI with `fatal: invalid reference: HEAD`.
-- **A failed worktree is a failed job.** `hermes -w` prints the failure and then exits **0**, so the
-  job registry treats a `Failed to create worktree…` line in the output as fatal and marks the job
-  failed — otherwise the card would report `DONE` for a run that never started a session.
-- **Worktree**: `-w` creates `.worktrees/<name>` on branch `hermes/<name>`, based on
-  `github/main` **fetched fresh at spawn time** (so it starts from the remote tip, not a stale
-  local main). Hermes owns the name and prints the path/branch/base in the output.
-- **Cleanup**: if the run produced **no commits**, Hermes removes the worktree itself when it
-  finishes. If it committed, the tree stays so you can review/push it — and it shows up as a new
-  row in the monitor a few seconds later. `hermes worktree prune` reclaims it later (note: prune
-  also deletes fully-merged local branches, so it sweeps more than just this run).
-- **Output**: `--format stream-json` gives newline-delimited events — `system/init` (model +
-  session id), `text` deltas, then `result` (`exit_code`, `tokens`, `duration_ms`). The panel
-  strips ANSI codes and coalesces text deltas into one line. A failed init (bad credentials)
-  arrives as a `result` with `exit_code: 1` and an `error`.
-- **Cancel** kills the process tree (`taskkill /PID <pid> /T /F`), since the CLI spawns children.
-- **Minimize**: click a card header to fold it, or use `Minimize all` / `Expand all`. Any number of
-  cards can be folded independently, and a folded card keeps its status, pid, model, worktree and one
-  live line showing what the agent is doing or last said. Folding is remembered in `localStorage`, so
-  a reload — or the 30s resync, which rebuilds every card — does not spring everything back open.
-- **Hard cap**: any job still running after `jobMaxRuntimeSeconds` is killed and marked failed.
-- **A running job dies if the panel stops.** `stop-background.cmd` does
-  `taskkill /PID <pid> /T /F`, which kills the panel's whole process tree — spawned agents included.
-  The worktree and any files the agent wrote survive, but the tree stays `locked` by a now-dead pid,
-  so clear it with `git worktree unlock <path>` (plain `hermes worktree prune` will not touch a
-  locked tree). Restarting the panel therefore does not resurrect the job list either.
-- **Jobs are in-memory.** Restarting the server clears the list (the worktrees and commits are
-  unaffected). Persisting them is Stage 2 work.
+  `git worktree add` needs a HEAD to branch from. The server refuses with that reason instead of
+  letting a run start in a tree that cannot exist.
+- **The worktree is the panel's.** A run carries a directory, not a `-w` flag, so the panel runs
+  `git worktree add -b wtgui/<slug>-<tag> <repo>/.worktrees/<slug>-<tag>` and passes that path as the
+  run's `cwd`. Nothing removes it afterwards — the branch and tree are yours to keep, review or
+  reclaim.
+- **`cwd` is set twice, and both matter.** The tools resolve a directory per *task*
+  (`register_task_env_overrides`), while the system prompt and context-file discovery read the
+  *session* cwd (`agent.runtime_cwd.set_session_cwd`). A gateway without the local patch
+  (`docs/hermes-runs-api-knobs.diff`) ignores `cwd` entirely and runs every agent in its own
+  directory — the header chip warns when that is the case.
+- **Output** is the run's event stream: each tool call with its argument preview, the assistant's text
+  as it arrives, approval requests, and a closing line with tokens and exit. Tool results are the
+  gateway's redacted, 500-character preview (the full payload stays in the session transcript).
+- **Cancel** posts `/v1/runs/<id>/stop`; stopping is cooperative, so the card settles as `cancelled`
+  when the turn actually ends.
+- **A run can outlive the panel.** Restarting the panel marks in-flight cards `interrupted` and keeps
+  their run id — the run itself keeps going inside the gateway.
+- **Hard cap**: anything still running after `jobMaxRuntimeSeconds` is stopped and marked failed.
+- **Minimize**: click a card header to fold it, or use `Minimize all` / `Expand all`. Folding is
+  remembered in `localStorage`, so a reload does not spring everything back open.
 
 #### Starting an agent in an existing worktree
 
@@ -182,44 +173,51 @@ A row whose worktree has an agent you started from this panel shows a green `⧉
 it to jump straight to that conversation in the Agents section (it expands first if you minimized
 it). While the agent runs, the row counts as live and is polled at the active cadence.
 
-This mapping is the panel's own, because Hermes records **no cwd** for the `-c` named-thread sessions
-the panel starts (not in `sessions.cwd`, and `git_branch` / `git_repo_root` are empty too), and a
-finished one-shot is marked closed — so the `⧉ hermes` signal, which matches on a session's cwd,
-can never place a panel-started agent. `⧉ panel (done)` means the agent that ran there has finished
-but is still in the panel's list.
+This mapping is the panel's own: each job records the worktree it was created for (`ownerPath`) and the
+project it came from (`projectPath`), so a card is filed under its row the moment it exists instead of
+waiting for a scan. The `⧉ hermes` signal (which matches on a session's recorded cwd) still cannot
+place a panel-started agent on its own, because those sessions record no usable cwd. `⧉ panel (done)`
+means the agent that ran there has finished but is still in the panel's list.
 
-#### Replying to an agent
+#### Replying to an agent, and steering it
 
-Each card is a conversation, and you can keep talking to it. Every agent is started on a **named
-Hermes thread** (`wtgui-<words>-<id>`), so a reply runs as another turn of the same session:
+Each card is a conversation. Every agent runs on a named thread (`wtgui-<words>-<id>`) which is the
+run's `session_id`, so a reply continues the same Hermes session:
 
-    hermes chat -c <thread> --create-if-missing -q "<first prompt>" -w -Q --format stream-json   # turn 1
-    hermes chat -c <thread> -q "<your reply>" --in <dir> --no-restore-cwd -Q --format stream-json  # turn 2+
+    run 1   POST /v1/runs {input: <prompt>, session_id: wtgui-...-abc123, cwd: <worktree>}
+    run 2+  POST /v1/runs {input: <reply>,  session_id: wtgui-...-abc123, cwd: <same tree>}
 
-Verified: the reply reuses the same session id and remembers the earlier turn — even after turn 1's
-worktree has been cleaned up, which is why replies pass an explicit `--in <dir>` and
-`--no-restore-cwd`. That directory is the agent's worktree while it still exists, otherwise the
-project it was started from. Replies inherit the first turn's model, budget and `--yolo` setting, run
-without `-w` (no new worktree), and can be sent while a turn is still running — they queue behind it.
-Threads are real Hermes sessions, so they show up in `hermes sessions list` like any other.
+While a turn is **still running** the reply box's primary button is **Steer turn** — Enter does the
+same. The text goes into the LIVE run and is read at the agent's next tool boundary, so the turn
+changes course instead of queueing behind it. **Queue reply** is the explicit "send this when the
+current turn finishes" path. A steer that arrives after the last tool boundary comes back as
+`pending_steer`, and the panel replays it as the next turn rather than dropping it.
 
-#### The `--yolo` checkbox
+When nothing is running the button is **Send reply**: it starts the next turn on the same session, in
+the same directory. Replies inherit the first turn's model; threads are real Hermes sessions, so they
+appear in `hermes sessions list` like any other.
 
-**Off by default.** A GUI-spawned agent has no TTY, so it cannot answer a dangerous-command
-approval prompt — it would simply stall. `--yolo` runs it unattended with no approvals. Tick it
-only when you mean it, and only with `--run-budget` set.
+#### Approvals
+
+A run that hits a flagged command parks at `waiting_for_approval` and emits `approval.request` with
+the redacted command and the choices the host allows. The question appears **under that turn's console
+output** as a raised box with those exact choices; answer it and the box collapses to one line
+(`✓ approved once: <command>`, red `✕` for a denial). The panel never widens the choice list.
+
+Two gateway settings decide whether anything asks at all:
+
+- `security.approval.transport: builtin` — a selected plugin transport (e.g. `worktree-panel`) sends
+  the question to the panel's legacy `/api/approvals` page instead of the run's stream.
+- `approvals.mode: manual` — `smart` judges many flagged commands safe and waves them through.
 
 #### Credentials
 
-A spawned Hermes CLI does **not** inherit `OPENROUTER_API_KEY` on this box (the key lives in
-`HKCU\Environment`, and this process tree predates it), so an unmodified child dies instantly with
-"No API key found for provider 'openrouter'" (`exit_code: 1`). The server therefore reads the key
-from the User environment at spawn time and passes it in the child's environment only. It is never
-logged and never returned by any endpoint. `key: env` in the card header means the value came from
-this process's own environment; `key: from registry` means it was looked up in `HKCU\Environment`.
+A run executes inside the gateway process, so the provider key is whatever that gateway is configured
+with; this panel never touches it. What the panel needs is the api_server bearer token, read from
+`API_SERVER_KEY` in `$HERMES_HOME/.env` (or `apiServer.key` in `config.json`) and sent as
+`Authorization: Bearer …`. It is never logged and never returned by any endpoint.
 
-`HERMES_HOME` is normalised to native form before spawning — handing a native CLI an MSYS-shaped
-`/c/...` path makes it falsely report a missing dependency environment.
+`HERMES_HOME` is only used to find that file; agent processes are not spawned from here any more.
 
 ## Config (`config.json`)
 
@@ -230,7 +228,8 @@ this process's own environment; `key: from registry` means it was looked up in `
 | `host` | `127.0.0.1` | bind address. **Loopback by default and it should stay that way** — this panel spawns processes, so exposing it on the LAN is unauthenticated remote code execution |
 | `token` | *(unset)* | if set, write endpoints require an `x-panel-token` header |
 | `defaultCwd` | most recently active project | fallback target for a spawned agent when no project is chosen |
-| `hermesBin` | auto | explicit path to the hermes executable; auto-detects `$LOCALAPPDATA/hermes/bin/hermes.exe`, else `hermes` on PATH |
+| `hermesBin` | auto | explicit path to the hermes executable; used by the `hermes worktree` audits behind `/api/cleanup` (agent runs do not spawn it) |
+| `apiServer` | `{"url":"http://127.0.0.1:8642"}` | `url` of the gateway's api_server, and optionally `key` (else `API_SERVER_KEY` from `$HERMES_HOME/.env`) |
 | `jobMaxRuntimeSeconds` | 3600 | hard cap on a spawned job |
 | `liveSeconds` | 5 | how often liveness evidence is re-read for every row (no git) |
 | `worktreeSeconds` / `dormantSeconds` | 5 / 30 | active-row / dormant-row git scan cadence |
@@ -252,27 +251,36 @@ this process's own environment; `key: from registry` means it was looked up in `
 | GET | `/api/cleanup?project=NAME[&fresh=1]` | on-demand `hermes worktree list --json` audit for one repo: trees, external trees (`locked`/`missing`), per-branch keep/reap verdict + reason. ~6s, cached 10 min |
 | GET/POST | `/api/approvals`, `/api/approvals/answer`, `/api/approvals/<id>` | human side of the Hermes approval-transport contract: list pending requests, answer one (`{id, choice}` within the request's `allowed_choices`), poll one request's status. Requests expire to `deny` |
 | POST | `/api/clone` | clone a GitHub repo over ssh into one configured scan root: `{root, name}` where `root` must equal a `scanRoots` entry and `name` is `repo` or `owner/repo`. Refuses anything else (no paths, no URLs), and a destination that already exists. Responds when git finishes; discovery picks the repo up on the next pass |
-| GET | `/api/jobs` | job list with streamed output tails |
+| GET | `/api/jobs` | job list plus `transport` (gateway URL, reachability, `capabilities`: runs/events/steer/stop/approval/runCwd/runBudget/maxTurns) |
 | GET | `/api/stream` | SSE: `snapshot`, `row`, `project`, `drop`, `job`, `jobline`, `jobs`, `heartbeat` |
-| POST | `/api/agents/preview` | returns the exact argv without spawning |
-| POST | `/api/agents` | spawn (`{prompt, model, budget, maxTurns, skills, yolo, cwd}`); `{dryRun:true}` also supported |
-| POST | `/api/jobs/cancel` | `{id}` → kill the tree |
+| POST | `/api/agents/preview` | returns the exact run request that would be sent (`{transport, request, blocked}`), without sending it |
+| POST | `/api/agents` | start a run (`{prompt, cwd?, project?, model?, budget?, maxTurns?, existing?}`); `{dryRun:true}` returns the request instead. **503** when the gateway's api_server is unreachable or unkeyed |
+| POST | `/api/agents/reply` | `{thread, text}` → another turn on the same `session_id` |
+| POST | `/api/jobs/steer` | `{id, text}` → `POST /v1/runs/{id}/steer`; read at the agent's next tool boundary. 409 when the turn already crossed it |
+| POST | `/api/jobs/approve` | `{id, choice, requestId?}` → `POST /v1/runs/{id}/approval`; `choice` must be one the host offered |
+| POST | `/api/jobs/cancel` | `{id}` → `POST /v1/runs/{id}/stop` (cooperative interrupt) |
 | POST | `/api/jobs/clear` | drop finished jobs from the list |
 | POST | `/api/refresh` `/api/fetch` `/api/reload` | force a fast pass / fetch remotes / re-read config |
 
 ## Roadmap
 
-- **Stage 1 (this):** `hermes chat -w` spawn + job registry + live output + cancel + preview. Done.
-- **Stage 2:** first-class "create worktree" with an editable branch name and base ref (instead of
-  letting `-w` name it), plus job persistence across restarts.
-- **Stage 3:** durable queue — `hermes kanban create --workspace worktree` + `dispatch`, with
-  review handoffs (`request-review` / `request-changes`) surfaced in the panel. Requires
-  `hermes project create` first.
+- **Stage 1 (done):** agents as gateway runs — worktree per agent, live event stream, steering,
+  approvals on the card, threads as `session_id`.
+- **Next:** worktree reclamation for `wtgui/*` trees (nothing removes them now), per-run `skills`
+  once the Runs API carries them, and a `worktree` field so the panel can name the branch.
+- **Later:** durable queue — `hermes kanban create --workspace worktree` + `dispatch`, with review
+  handoffs (`request-review` / `request-changes`) surfaced in the panel.
 
 ## Troubleshooting
 
-- **`exit 1 · No API key found for provider 'openrouter'`** — the key wasn't found in
-  `HKCU\Environment`. Set it there, or run the server with it exported.
+- **`503 the Hermes gateway API is not usable at http://127.0.0.1:8642`** — the gateway is down, or
+  `API_SERVER_KEY` is missing from `$HERMES_HOME/.env`. Start it with `hermes gateway restart`; the
+  chip in the New-agent header tells you which of the two it is.
+- **The agent works in the gateway's directory instead of its worktree** — the local gateway patch
+  (`docs/hermes-runs-api-knobs.diff`) is not applied, or was lost to `hermes update`. The chip says
+  `gateway ignores per-run cwd` when this is the case.
+- **A flagged command runs without asking** — check `approvals.mode` (`smart` waves many through)
+  and `security.approval.transport` (must be `builtin` for runs).
 - **`fatal: cannot change to ...: No such file or directory`** — native git can't take MSYS
   `/c/...` paths; use `C:/...`.
 - **Port already in use** — `stop-background.cmd`, or `netstat -ano | grep 7331` and kill the PID.
