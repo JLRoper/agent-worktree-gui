@@ -1008,10 +1008,16 @@ function fmtTokens(n) {
   return `${n < 0 ? "-" : ""}${text}${unit[1]}`;
 }
 
+// A ten-cell meter whose tail cell is a partial block. Rounding to whole cells drew nothing at all
+// below ~5%, so a nearly-empty context read as a bracketed hatch of ░ rather than a gauge; the eighth
+// blocks keep a small value visible and the empty cells are middots, which stay clean at 11px.
 function contextBar(pct, width = 10) {
   const safe = Math.max(0, Math.min(100, Number(pct) || 0));
-  const filled = Math.round((safe / 100) * width);
-  return `[${"\u2588".repeat(filled)}${"\u2591".repeat(Math.max(0, width - filled))}]`;
+  const PARTIAL = ["", "\u258f", "\u258e", "\u258d", "\u258c", "\u258b", "\u258a", "\u2589"];
+  const cells = (safe / 100) * width;
+  const full = Math.min(width, Math.floor(cells));
+  const tail = full < width ? PARTIAL[Math.min(7, Math.round((cells - full) * 8))] : "";
+  return "\u2588".repeat(full) + tail + "\u00b7".repeat(Math.max(0, width - full - (tail ? 1 : 0)));
 }
 
 function statsLine(stats) {
