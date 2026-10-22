@@ -292,6 +292,10 @@ with; this panel never touches it. What the panel needs is the api_server bearer
 - **The agent works in the gateway's directory instead of its worktree** — the local gateway patch
   (`docs/hermes-runs-api-knobs.diff`) is not applied, or was lost to `hermes update`. The chip says
   `gateway ignores per-run cwd` when this is the case.
+- **A tool result in the console is cut short** — the run stream carries a *preview* of each tool
+  result, not all of it. The gateway caps it at 8000 chars by default (`HERMES_RUN_PREVIEW_CHARS` on
+  the gateway process changes it); the console unwraps the JSON envelope, prints the text, and ends
+  with `… result truncated by the gateway` when it was cut.
 - **A flagged command runs without asking** — check `approvals.mode` (`smart` waves many through)
   and `security.approval.transport` (must be `builtin` for runs).
 - **`fatal: cannot change to ...: No such file or directory`** — native git can't take MSYS
