@@ -925,7 +925,9 @@ button.btn-row-agent:hover { background: #1f4a2a; color: #d6ffe0; border-color: 
 .sig-hermes { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
 button.sig { cursor: pointer; font-family: var(--mono); }
 button.sig:hover { filter: brightness(1.25); }
-.sig-panel { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); font-weight: 700; }
+/* The row's panel chip wears the same LIGHT lavender as the project's "⧉ n panels", so the two read as
+   one family and neither is mistaken for the deeper violet of the hermes chip next to it. */
+.sig-panel { color: #ecd9ff; border-color: #55407a; background: #2a2044; font-weight: 700; }
 .sig-panel-done { color: var(--dim); border-color: var(--line); background: #20242c; }
 /* An agent parked on a permission request is the one state on the board that needs a human, so it
    wears the loudest amber. This has to sit AFTER .sig and .chip: those are single-class rules, so a

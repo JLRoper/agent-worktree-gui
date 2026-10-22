@@ -2623,16 +2623,8 @@ function sigChips(row) {
   if (s.board?.on) out.push(`<span class="sig sig-board" title="board entry, PID alive now: ${esc((s.board.entries || []).map((e) => e.pid).join(', '))}">● board</span>`);
   if (s.ports?.on) out.push(`<span class="sig sig-port" title="dev server listening: ${esc((s.ports.listening || []).join(', '))}">:${esc((s.ports.listening || []).join(' :'))}</span>`);
   if (s.files?.on) out.push(`<span class="sig sig-files" title="files edited ${relTime(s.files.at)} ago">✎ files</span>`);
-  const panel = panelFor(row);
-  if (panel) {
-    const t = panel.threads[0];
-    out.push(
-      `<button class="sig ${panel.running ? "sig-panel" : "sig-panel-done"}" data-agent-thread="${esc(t)}" ` +
-        `title="${panel.running ? `a Hermes agent you started here is running in this worktree right now` : `the agent you started here is between turns (nothing running)`} · ${esc(t)} — click to jump to it">` +
-        `⧉ panel${panel.running ? " running" : " (done)"}</button>`,
-    );
-  }
-  if (!out.length && row.idle) out.push(`<span class="sig sig-idle" title="a Hermes session is open here but idle — not counted as live">⧉ ${s.hermes?.idle ?? 1} idle</span>`);
+  // The row's panel agents are already drawn as the ⧉ badge beside its name — same count, same running
+  // state — so a second "⧉ panel" chip here just said it twice. The badge opens the row and its agents.
   return out.join("");
 }
 
@@ -3038,7 +3030,6 @@ function chipsHtml(name) {
     return !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN";
   }).length;
   const dirty = rows.filter((r) => r.dirty || r.untracked).length;
-  const live = rows.filter(isRowLive).length;
   const open = rows.filter((r) => !isRowLive(r) && r.idle).length;
   const serving = rows.filter((r) => r.signals?.ports?.on).length;
   const removable = rows.filter((r) => r.mergeable).length;
@@ -3055,18 +3046,26 @@ function chipsHtml(name) {
   if (noCommits) out.push(`<span class="chip">${noCommits} no commits</span>`);
   if (unmerged) out.push(`<span class="chip bad">${unmerged} unmerged</span>`);
   if (dirty) out.push(`<span class="chip warn">${dirty} dirty</span>`);
-  if (live) out.push(`<span class="chip live">${live} live</span>`);
   if (open) out.push(`<span class="chip">${open} open idle</span>`);
   if (serving) out.push(`<span class="chip info">${serving} serving</span>`);
   // Violet in both states, like the ⧉ hermes chip: this is a Hermes-agent fact, not a warning. Amber
   // made every project with finished agents look like it wanted attention; the tooltip still says how
   // many are running right now.
+  // How many agents are working RIGHT NOW, from every source: the panel's own cards and any Hermes
+  // session (CLI or otherwise) whose turn is leased. The split is in the tooltip, so the chip stays the
+  // answer to one question — "is anything running".
+  const outsideRunning = rows.reduce((n, r) => n + (Number(r.signals?.hermes?.running) || 0), 0);
+  const runningAll = panelRunningCount + outsideRunning;
+  if (runningAll) {
+    out.push(
+      `<span class="chip live" title="${panelRunningCount} from the panel · ${outsideRunning} outside it — a turn is executing right now">${runningAll} running</span>`,
+    );
+  }
+  // How many agent cards this project has, running or not: "how many panels are open".
   if (panelAgentCount) {
-    const cls = "agents";
-    const title = panelRunningCount
-      ? `${panelRunningCount} of ${panelAgentCount} panel agent${panelAgentCount === 1 ? "" : "s"} in this project running right now`
-      : `all ${panelAgentCount} panel agent${panelAgentCount === 1 ? "" : "s"} in this project are not running — attention may be needed`;
-    out.push(`<span class="chip ${cls}" title="${esc(title)}">⧉ ${panelAgentCount} panel agent${panelAgentCount === 1 ? "" : "s"}</span>`);
+    const trees = rows.filter((r) => agentsFor(r).length).length;
+    const title = `${panelAgentCount} agent card${panelAgentCount === 1 ? "" : "s"} across ${trees} worktree${trees === 1 ? "" : "s"} in this project · ${panelRunningCount} running right now`;
+    out.push(`<span class="chip agents" title="${esc(title)}">⧉ ${panelAgentCount} panel${panelAgentCount === 1 ? "" : "s"}</span>`);
   }
   // Amber and loud: an agent parked on a permission request is the one thing here that is waiting for
   // a human, and it must be visible with the project collapsed.
