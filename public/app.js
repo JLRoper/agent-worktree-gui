@@ -1012,7 +1012,9 @@ function statsLine(stats) {
   if (!segs.length) return "";
   const title = "this turn's usage: context occupancy, prompt-cache hit rate, mean model latency, throughput";
   const body = segs.map((s) => `<span class="stat">${esc(s)}</span>`).join('<span class="stat-sep">\u2502</span>');
-  return `<div class="job-stats mono" title="${esc(title)}">${body}</div>`;
+  // A span, not a div: the readout belongs on the footer line with the outcome and the token count,
+  // to their right, and a block element there costs a line of card height for nothing.
+  return `<span class="job-stats mono" title="${esc(title)}">${body}</span>`;
 }
 
 function conversationHtml(conv) {
@@ -1110,8 +1112,7 @@ function conversationHtml(conv) {
       ${queued ? `<div class="ghost-turns">${queue
         .map((q) => `<div class="ghost-turn"><div class="ghost-head mono"><span class="ghost-badge">queued</span><span class="queue-ago" data-queued-at="${q.at}">${fmtDur(Date.now() - q.at)}</span><span class="dimmer">sends when the current turn finishes</span></div><div class="ghost-prompt">${linkifyText(q.text)}</div></div>`)
         .join("")}</div>` : ""}
-      <div class="job-foot">${foot}</div>
-      ${statsLine(latest.stats)}
+      <div class="job-foot">${foot} ${statsLine(latest.stats)}</div>
       <div class="reply">
         <div class="reply-wrap">
           <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"
