@@ -1246,15 +1246,18 @@ function conversationHtml(conv) {
   // carrier, so the card can answer it without the CLI approval plugin.
   const runApproval = runningTurn?.approval || latest.approval || null;
   const meta = [
-    // A run is addressed by its id now; there is no child process to point at.
-    latest.runId ? `run ${String(latest.runId).replace(/^run_/, "").slice(0, 8)}` : null,
-    latest.cwd ? `cwd ${latest.cwd}` : null,
+    // The session's own name, the one Hermes gave it (and the one the revive list offers), in place of its
+    // cwd — a path is long, identical for every card in a tree, and tells the reader nothing about the work.
+    latest.title || (latest.cwd ? `cwd ${latest.cwd}` : null),
     // Why this card is in the unattached panel: it has no worktree, or one that is not in the scan.
     homeless ? (latest.ownerPath ? `owner ${latest.ownerPath} (not in the scan)` : "no worktree") : null,
     latest.model ? `model ${latest.model}` : "(default model)",
     latest.worktree ? `worktree ${latest.worktree}` : null,
     latest.existing ? "in existing worktree" : null,
     turns.length > 1 ? `${turns.length} turns` : null,
+    // The run id is bookkeeping and it now sits at the end of the row, to the right of the turn count,
+    // instead of leading the line.
+    latest.runId ? `run ${String(latest.runId).replace(/^run_/, "").slice(0, 8)}` : null,
   ].filter(Boolean).join(" · ");
   // A run has no process to exit. The pool maps run status onto 0/1 so the old CLI card keeps
   // rendering, but printing "exit 0" for it reads as if a child process came and went — answer
