@@ -34,6 +34,9 @@ const state = {
   // a prompt you typed yesterday is exactly what you want back after a reload).
   spawnHistory: loadSpawnHistory(),
   spawnNav: null,
+  // The reply box that should take the caret once its card exists (set by a spawn or a jump, cleared
+  // by itself the moment focus lands or the reader types somewhere else).
+  pendingFocus: null,
   // Replies typed while the agent is still working, in the order they were written. They go out one
   // at a time as each turn finishes: Hermes refuses a second session on a thread already running.
   replyQueue: new Map(),
@@ -1145,8 +1148,10 @@ async function forceRowRead(btn) {
 // away. Re-applied on the next tick because sending rebuilds the card (and so the textarea).
 function focusReplyBox(thread) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-  if (!box) return false;
-  box.focus();
+  if (!box || box.disabled) return false;
+  // preventScroll: the caller has just positioned the card; the browser's own scroll-to-focus would
+  // yank the page again a frame later.
+  box.focus({ preventScroll: true });
   const end = box.value.length;
   try {
     box.setSelectionRange(end, end);
@@ -1641,6 +1646,9 @@ function renderJobs() {
     if (!prevScrolls.has(c.latest.id)) scrollThreadToBottom(c.thread);
   }
   paintAgentBadges();
+  // The cards were just rebuilt from nothing, so a pending spawn target has to be re-applied here
+  // too — renderConversation bails out to renderJobs() whenever the card did not exist yet.
+  applyPendingFocus();
 }
 
 // Row badges ("⧉ 2 · 1 running") follow job events without rebuilding the table.
@@ -1777,7 +1785,53 @@ function renderConversation(thread, { scroll = false } = {}) {
   if (body) {
     body.scrollTop = bodyAtBottom ? body.scrollHeight : Math.min(bodyTop, Math.max(0, body.scrollHeight - body.clientHeight));
   }
+  // A repaint replaces the card node, and the node that held the caret is gone with it — so a spawn
+  // that asked for the reply box puts the caret back here, once the new card is in the document.
+  applyPendingFocus();
 }
+
+// After a spawn the reader wants to be typing, not hunting: put that agent's card in view and its
+// reply box under the cursor. Both have to survive the repaint that follows a spawn (the first job
+// event rebuilds the card), so the target is remembered and re-applied after every render until it
+// takes — or until the reader starts typing somewhere else, which is never interrupted.
+function applyPendingFocus() {
+  const pending = state.pendingFocus;
+  if (!pending) return;
+  if (Date.now() > pending.until) {
+    state.pendingFocus = null;
+    return;
+  }
+  // No "is something else focused" guard on purpose: right after a spawn the caret is still in the
+  // New-agent box, which is exactly the state we are replacing. The reader taking over is signalled by
+  // a click outside the card, a keypress or a wheel scroll, and each clears the target on its own.
+  focusReplyBox(pending.thread);
+  // The jump needs the same treatment as the caret: a smooth scroll is cancelled when the card is
+  // rebuilt mid-animation, and that is why the page only sometimes followed the new agent. Keep the
+  // card in view for a few seconds, and only until the reader takes over.
+  if (Date.now() < (pending.scrollUntil || 0)) {
+    const card = document.querySelector(`.job[data-thread="${CSS.escape(pending.thread)}"]`);
+    if (card) {
+      const r = card.getBoundingClientRect();
+      const outOfView = r.top < 48 || r.bottom > window.innerHeight - 48;
+      if (outOfView) card.scrollIntoView({ block: "center", behavior: "auto" });
+    }
+  }
+}
+
+// Cards for agents owned by a worktree are painted by the row-detail renderer, not by
+// renderConversation/renderJobs, so a one-shot focus after a render is the wrong shape: a spawn can
+// repaint through any of several paths. A cheap watch re-applies the caret while the target stands.
+setInterval(applyPendingFocus, 250);
+
+// Scrolling with the wheel is the reader taking over just as much as a click is: stop pulling the
+// page back to the spawned agent.
+document.addEventListener(
+  "wheel",
+  () => {
+    if (state.pendingFocus) state.pendingFocus = null;
+  },
+  { passive: true }
+);
 
 function appendJobLine(evt) {
   const line = evt.line || {};
@@ -2002,6 +2056,10 @@ function jumpToAgent(thread) {
   card.scrollIntoView({ block: "center", behavior: "smooth" });
   card.classList.add("jump");
   setTimeout(() => card.classList.remove("jump"), 1700);
+  // Remember the target so a repaint (which replaces this node) lands the caret back in it. The jump
+  // keeps re-asserting itself for a few seconds: smooth scrolling dies when the card is rebuilt.
+  state.pendingFocus = { thread, until: Date.now() + 20_000, scrollUntil: Date.now() + 6_000 };
+  applyPendingFocus();
 }
 
 // The star of a turn as it appears in the page (not the pinned copy), so a pin/unpin can anchor on it.
@@ -2047,8 +2105,15 @@ function revealSpawnedAgent(job, deadlineMs = 30_000) {
       document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
     }
     // Sections and rows are built synchronously by the two calls above; wait one frame so layout is
-    // settled before scrolling, then land on the card itself.
-    requestAnimationFrame(() => jumpToAgent(thread));
+    // settled before scrolling, then land on the card itself. If the card is not painted yet (the run
+    // posted back before its first job event arrived), keep trying instead of giving up on frame one
+    // — that race is why the jump only sometimes happened.
+    requestAnimationFrame(() => {
+      jumpToAgent(thread);
+      if (!document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`) && Date.now() - started < deadlineMs) {
+        setTimeout(attempt, 400);
+      }
+    });
   };
   attempt();
 }
@@ -3214,6 +3279,11 @@ $("btn-pause").addEventListener("click", () => {
 });
 
 document.addEventListener("click", async (e) => {
+  // A click is the reader taking over: stop chasing the box a spawn wanted focused. Clicking inside
+  // that agent's own card keeps the target, so reading its output does not undo it.
+  if (state.pendingFocus && !e.target.closest(`.job[data-thread="${CSS.escape(state.pendingFocus.thread)}"]`)) {
+    state.pendingFocus = null;
+  }
   // Files this agent produced: the button opens the list, a row opens that file in an editor, and
   // the copy button takes the full path. Clicking anywhere else closes the list.
   const artBtn = e.target.closest("[data-artifacts]");
@@ -3640,6 +3710,9 @@ document.addEventListener("click", async (e) => {
 
 // Reply affordances are re-created on every render, so they are handled at document level.
 document.addEventListener("keydown", async (e) => {
+  // Any key means the reader is working: stop chasing a spawn's reply box (Esc is exempt — it closes
+  // things and never means "I am typing").
+  if (state.pendingFocus && e.key !== "Escape") state.pendingFocus = null;
   // Esc closes the produced-files list first; a second Esc does whatever Esc did before.
   if (e.key === "Escape" && document.querySelector("[data-artifacts-pop]:not([hidden])")) {
     closeArtifactPops();
