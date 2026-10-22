@@ -457,17 +457,17 @@ function paintCollapseAll() {
   const open = anythingOpen();
   const names = [...state.projects.keys()];
   btn.textContent = open ? "Collapse all" : "Expand all";
-  btn.title = open
-    ? `collapse every folder and project section (${boardRoots().length} folders, ${names.length} projects)`
-    : `expand every folder and project section (${boardRoots().length} folders, ${names.length} projects)`;
+  btn.title = `${open ? "collapse" : "expand"} every folder and project section (${boardRoots().length} folders, ${names.length} projects) — Ctrl+${open ? "[" : "]"}`;
 }
 
-function toggleEverything() {
+// One direction at a time. The header button must toggle (one button, two words), but a hotkey that
+// only toggled would be a coin flip — the reader asks to collapse and gets whatever the board's state
+// happened to imply. So the action lives here and both callers say which way they mean.
+function setEverythingOpen(open) {
   const names = [...state.projects.keys()];
   const roots = boardRoots();
   if (!names.length && !roots.length) return;
-  const collapse = anythingOpen();
-  if (collapse) {
+  if (!open) {
     state.expandedProjects.clear();
     state.expanded.clear(); // an open row would otherwise come back when a project is reopened
     for (const r of roots) state.collapsedRoots.add(r);
@@ -484,6 +484,10 @@ function toggleEverything() {
   // The fixed cards live in the static markup, so renderAll does not touch them.
   for (const id of FIXED_CARDS) applyFixedCollapse(id);
   paintCollapseAll();
+}
+
+function toggleEverything() {
+  setEverythingOpen(!anythingOpen());
 }
 
 // ---- clone a repo into a folder ------------------------------------------------
@@ -3577,6 +3581,21 @@ async function post(route) {
 
 $("btn-refresh").addEventListener("click", () => post("/api/refresh"));
 $("btn-collapse-all").addEventListener("click", () => toggleEverything());
+
+// Ctrl+[ folds the whole board, Ctrl+] opens it — the square brackets point the way (in, then out).
+// Ignored while a field has focus: a bracket belongs in a prompt or a filter, not on the board.
+window.addEventListener("keydown", (e) => {
+  if (!e.ctrlKey || e.metaKey || e.altKey) return;
+  // e.key is layout-dependent; e.code is not, so either identifies the key.
+  let open = null;
+  if (e.key === "[" || e.code === "BracketLeft") open = false;
+  else if (e.key === "]" || e.code === "BracketRight") open = true;
+  if (open === null) return;
+  const el = e.target;
+  if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+  e.preventDefault();
+  setEverythingOpen(open);
+});
 $("btn-fetch").addEventListener("click", () => post("/api/fetch"));
 $("job-project").addEventListener("change", () => {
   const p = selectedProject();
