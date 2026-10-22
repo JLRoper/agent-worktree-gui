@@ -2696,7 +2696,14 @@ async function confirmDeleteWorktree(key) {
       return;
     }
     confirmEl?.remove();
-    // The server drops the row and broadcasts a snapshot; the table follows on its own.
+    // Drop it here too: the server broadcasts a `drop`, but a tab whose stream hiccuped would keep a
+    // row for a worktree that is gone, and this is the tab that asked for the deletion.
+    removeRow(project, d.rowPath || target);
+    showBanner(
+      d.alreadyGone
+        ? `worktree row removed — the folder was already gone (${d.name || target})`
+        : `worktree removed to the Recycle Bin (${d.name || target})${d.branch ? ` on ${d.branch}` : ""}`,
+    );
   } catch (e) {
     showBanner(`delete worktree: ${e.message}`);
   }

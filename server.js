@@ -910,27 +910,57 @@ const server = createServer(async (req, res) => {
       const psCommand =
         "Add-Type -AssemblyName Microsoft.VisualBasic; " +
         `[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory('${target.replace(/'/g, "''")}','OnlyErrorDialogs','SendToRecycleBin')`;
+      const stillThere = () => stat(target).then((s) => s.isDirectory()).catch(() => false);
+      // Recorded before anything is deleted: the response should say whether this call removed a
+      // directory or merely cleaned up the panel's record of one that was already gone.
+      const hadDirectory = await stillThere();
       let recycled = false;
       let removeError = null;
-      if (process.platform === "win32") {
+      if (process.platform === "win32" && (await stillThere())) {
         try {
           await execP("powershell", ["-NoProfile", "-NonInteractive", "-Command", psCommand], { timeout: 90_000 });
-          recycled = true;
+          recycled = !(await stillThere());
+          if (!recycled) removeError = "the Recycle Bin refused it — the directory is still there";
         } catch (e) {
           removeError = String((e && e.message) || e);
         }
       }
-      if (!recycled) {
+      // What has to be true when this returns: no directory, no git record, no row. A step that finds
+      // its half already done is a SUCCESS, not a failure — the folder being gone (by any route) makes
+      // git say "is not a working tree", and treating that as an error used to abort the cleanup and
+      // leave the row on the board for a worktree that no longer existed.
+      if (await stillThere()) {
         try {
           await execP("git", ["-C", project.path, "worktree", "remove", "--force", target], { timeout: 90_000 });
         } catch (e) {
-          return sendJson(res, 500, { error: `could not remove the worktree: ${String((e && e.message) || e) || removeError}` });
+          const msg = String((e && e.message) || e);
+          const alreadyGone = /not a working tree|is not a valid directory|No such file/i.test(msg);
+          if (!alreadyGone && (await stillThere())) {
+            return sendJson(res, 500, { error: `could not remove the worktree: ${msg || removeError}` });
+          }
+          removeError = removeError || msg;
         }
       }
       await execP("git", ["-C", project.path, "worktree", "prune"], { timeout: 30_000 }).catch(() => {});
-      scheduler.store.dropRow(projectName, target);
+      // Drop by the path the STORE knows, not by `path.resolve(target)`: rows are keyed by the scanned
+      // path with forward slashes, so a resolved Windows path is a different key and the row survived
+      // its own deletion.
+      scheduler.store.dropRow(projectName, row.path);
+      // A snapshot only refreshes the rows it carries — it never retracts one — so the removal needs
+      // its own event or the row sits on every open board for a worktree that no longer exists.
+      broadcast({ type: "drop", project: projectName, path: row.path });
       broadcast({ type: "snapshot", data: snapshot() });
-      return sendJson(res, 200, { ok: true, recycled, path: target, name: row.name, branch: row.branch || null });
+      return sendJson(res, 200, {
+        ok: true,
+        recycled,
+        path: target,
+        name: row.name,
+        branch: row.branch || null,
+        // The key the panel and its rows use, so the browser can remove the right node.
+        rowPath: row.path,
+        // The folder was already gone when this ran: say so rather than pretending we removed it.
+        alreadyGone: !hadDirectory,
+      });
     }
 
     // Open a file an agent produced for the reader. Not a URL: a real path, opened in an editor.
