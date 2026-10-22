@@ -811,8 +811,17 @@ function tickLiveClocks() {
 
 setInterval(tickLiveClocks, 1000);
 
+// The console is what the agent DID, not the run protocol around it. Three lines are bookkeeping: the POST
+// that opened the run, the run id echoed back, and the completion summary with the token total. The card
+// already states all three — the head carries "turn 2 · done · 26s · 186725 tok" and the foot the outcome —
+// so they are stored but not drawn.
+const BOOKKEEPING_LINES = new Set(["cmd", "init", "result"]);
+function isBookkeeping(l) {
+  return Boolean(l && BOOKKEEPING_LINES.has(l.kind));
+}
+
 function turnBody(turn, copy = "") {
-  const lines = jobLines(turn.id).slice(-300);
+  const lines = jobLines(turn.id).filter((l) => !isBookkeeping(l)).slice(-300);
   const running = turn.status === "running" || turn.status === "starting";
   // Which started tool call has no result yet. Parallel calls interleave, so count starts and
   // completions per tool name instead of assuming "the last line is the running one".
@@ -2190,6 +2199,8 @@ function appendJobLine(evt) {
   state.jobLines.set(evt.id, buf);
   // A folded turn shows only the peek, and it is not part of the console the lines are appended to.
   refreshTurnPeek(state.jobs.get(evt.id));
+  // Kept in the buffer, never drawn: see BOOKKEEPING_LINES above.
+  if (isBookkeeping(line)) return;
   // A pinned turn renders twice — in its page and in the pinned block above — so every pane carrying
   // this id (or its "@pin" copy) gets the line.
   const outs = [...document.querySelectorAll("pre.job-out")].filter(
