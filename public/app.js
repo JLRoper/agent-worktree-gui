@@ -1027,11 +1027,17 @@ function statsLine(stats) {
     segs.push(`${mark}${Math.round(pct)}%`);
   }
   if (Number.isFinite(stats.cache_hit_pct)) segs.push(`\u25ce ${stats.cache_hit_pct.toFixed(1)}%`);
-  if (Number.isFinite(stats.avg_latency_s)) segs.push(`\u25f7 ${stats.avg_latency_s.toFixed(1)}s`);
-  if (Number.isFinite(stats.avg_tps)) segs.push(`\u2191 ${Math.round(stats.avg_tps)} t/s`);
-  if (Number.isFinite(stats.compressions) && stats.compressions > 0) segs.push(`compressed \u00d7${stats.compressions}`);
+  // Latency and throughput are the two figures the store does not record: they are computed over the
+  // turn's wall clock minus its tool time, so they are marked as estimates rather than presented as
+  // measurements. Cache, context and compactions are exact.
+  const est = (flag) => (flag ? "~" : "");
+  if (Number.isFinite(stats.avg_latency_s)) segs.push(`\u25f7 ${est(stats.latency_estimated)}${stats.avg_latency_s.toFixed(1)}s`);
+  if (Number.isFinite(stats.avg_tps)) segs.push(`\u2191 ${est(stats.tps_estimated)}${Math.round(stats.avg_tps)} t/s`);
+  // Shown even at 0: a compaction count that only appears after the first compaction reads as a
+  // missing number, and this one is a real measurement.
+  if (Number.isFinite(stats.compressions)) segs.push(`\u29c9 ${stats.compressions}`);
   if (!segs.length) return "";
-  const title = "this turn's usage: context occupancy, prompt-cache hit rate, mean model latency, throughput";
+  const title = "this session's usage: context occupancy, prompt-cache hit rate, compactions (\u29c9); latency and t/s are estimated from the turn's wall clock (~)";
   const body = segs.map((s) => `<span class="stat">${esc(s)}</span>`).join('<span class="stat-sep">\u2502</span>');
   // A span, not a div: the readout belongs on the footer line with the outcome and the token count,
   // to their right, and a block element there costs a line of card height for nothing.
