@@ -353,6 +353,9 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 .chip.info { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
 /* "live" is a Hermes-session fact, so it wears the same violet as the ⧉ hermes chip. */
 .chip.live { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
+/* The project's "n panel agents" chip: violet in both states. It is a Hermes-agent fact, not a warning,
+   so it should not turn amber just because those agents are between turns. */
+.chip.agents { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
 
 /* ---- new-agent form ---- */
 .form { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }

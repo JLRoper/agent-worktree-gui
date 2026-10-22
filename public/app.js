@@ -3058,11 +3058,11 @@ function chipsHtml(name) {
   if (live) out.push(`<span class="chip live">${live} live</span>`);
   if (open) out.push(`<span class="chip">${open} open idle</span>`);
   if (serving) out.push(`<span class="chip info">${serving} serving</span>`);
-  // A running panel agent is a live Hermes session, so it wears the same violet as the live count
-  // and carries the panel's ⧉ mark. All of them not-running turns the chip amber: that is the
-  // "attention may be needed" state, and it still means this project has agents to look at.
+  // Violet in both states, like the ⧉ hermes chip: this is a Hermes-agent fact, not a warning. Amber
+  // made every project with finished agents look like it wanted attention; the tooltip still says how
+  // many are running right now.
   if (panelAgentCount) {
-    const cls = panelRunningCount ? "live" : "warn";
+    const cls = "agents";
     const title = panelRunningCount
       ? `${panelRunningCount} of ${panelAgentCount} panel agent${panelAgentCount === 1 ? "" : "s"} in this project running right now`
       : `all ${panelAgentCount} panel agent${panelAgentCount === 1 ? "" : "s"} in this project are not running — attention may be needed`;
