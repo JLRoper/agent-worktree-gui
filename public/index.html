@@ -111,11 +111,11 @@
           <label>budget s <input id="job-budget" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" value="1800" min="30" /></label>
           <label>max turns <input id="job-maxTurns" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" placeholder="(default)" /></label>
           <label>skills <input id="job-skills" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" placeholder="(not supported by a run yet)" disabled /></label>
-          <label class="chk" title="Approvals come to the agent's card while the run is live — a run is never blind to a flagged command, so there is nothing to bypass here.">
-            <input id="job-yolo" type="checkbox" disabled /> <code>--yolo</code> <span class="dimmer">(not used: approvals come to the card)</span>
+          <label class="chk" title="Not used: approvals come to the agent's card. A run is never blind to a flagged command, so there is nothing to bypass here.">
+            <input id="job-yolo" type="checkbox" disabled /> <code>--yolo</code>
           </label>
-          <label class="chk" title="Run in the 'start in' folder as it is — for an existing worktree. Without this, hermes creates a new worktree and branch.">
-            <input id="job-existing" type="checkbox" /> run in that folder as-is <span class="dimmer">(existing worktree, no new tree)</span>
+          <label class="chk" title="Existing worktree, no new tree: run in the 'start in' folder as it is. Without this, hermes creates a new worktree and branch.">
+            <input id="job-existing" type="checkbox" /> run in that folder as-is
           </label>
           <span class="spacer"></span>
           <button id="btn-preview" type="button">Preview request</button>
