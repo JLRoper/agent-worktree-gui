@@ -430,6 +430,72 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
    been going long enough that a reader would otherwise conclude the turn is frozen. */
 .jl-live { color: var(--dimmer); }
 .jl-live.is-long { color: #e0b341; }
+
+/* Files an agent produced: the count sits right after the worktree name, the list hangs off it.
+   Rows are "open in an editor" + the path + "copy", because the point is to grab the file or its
+   location and go. */
+.btn-artifacts {
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #151a22;
+  color: var(--text);
+  font: 11px/1.5 var(--term);
+  cursor: pointer;
+}
+.btn-artifacts:hover { border-color: #3b4757; background: #1b2230; }
+.artifacts-pop {
+  position: fixed;
+  z-index: 60;
+  width: 380px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #10141b;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+}
+.artifacts-pop .ap-head { padding: 3px 6px 6px; font-size: 11px; }
+.artifacts-pop .ap-row { display: flex; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; }
+.artifacts-pop .ap-row:hover { background: #171d27; }
+.artifacts-pop .ap-name {
+  flex: 0 1 auto;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #7fb3ff;
+  font: 12px/1.5 var(--term);
+  cursor: pointer;
+  text-align: left;
+}
+.artifacts-pop .ap-name:hover { text-decoration: underline; }
+.artifacts-pop .ap-dir {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.artifacts-pop .ap-copy {
+  flex: none;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: #151a22;
+  color: var(--dimmer);
+  font: 10px/1.6 var(--term);
+  cursor: pointer;
+}
+.artifacts-pop .ap-copy:hover { color: var(--text); border-color: #3b4757; }
+.artifacts-pop .ap-copy.is-copied { color: #8ee08a; border-color: #2f5a33; }
 /* a URL in an agent's console: click (or ctrl-click) opens it in the OS default browser */
 a.out-link { color: #7fb3ff; text-decoration: underline dotted; cursor: pointer; }
 a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }

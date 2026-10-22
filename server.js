@@ -2,7 +2,7 @@
 // The HTTP layer never runs git: the scheduler scans in worker threads and the
 // store holds the results. Spawned agents go through lib/jobs.js.
 import { createServer } from "node:http";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { gzipSync as zlibGzipSync } from "node:zlib";
 import { readFile, stat } from "node:fs/promises";
 import { cpus } from "node:os";
@@ -16,6 +16,35 @@ import { Jobs, makeThreadName, previewRequest } from "./lib/jobs.js";
 import { gitIn } from "./lib/scan.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
 import { Approvals } from "./lib/approvals.js";
+
+// A file an agent produced is meant to be OPENED, and the shell association may hand a .md to a
+// browser. Prefer a text editor: Notepad++ when installed, else Windows' notepad (always present),
+// else the platform's text opener. Resolved once — the answer cannot change while the panel runs.
+let editorResolver = null;
+async function editorFor(target) {
+  if (!editorResolver) {
+    if (process.platform === "win32") {
+      let bin = "notepad.exe";
+      let base = [];
+      for (const candidate of [
+        "C:/Program Files/Notepad++/notepad++.exe",
+        "C:/Program Files (x86)/Notepad++/notepad++.exe",
+      ]) {
+        const isFile = await stat(candidate).then((s) => s.isFile()).catch(() => false);
+        if (isFile) {
+          bin = candidate;
+          break;
+        }
+      }
+      editorResolver = (t) => [bin, [...base, t]];
+    } else if (process.platform === "darwin") {
+      editorResolver = (t) => ["open", ["-t", t]];
+    } else {
+      editorResolver = (t) => ["xdg-open", [t]];
+    }
+  }
+  return editorResolver(target);
+}
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(HERE, "public");
@@ -584,6 +613,26 @@ const server = createServer(async (req, res) => {
         else sendJson(res, 200, { ok: true, url });
       });
       return;
+    }
+
+    // Open a file an agent produced for the reader. Not a URL: a real path, opened in an editor.
+    if (route === "/api/open-path" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const target = path.resolve(String(body.path || "").trim());
+      const info = await stat(target).catch(() => null);
+      if (!info || !info.isFile()) return sendJson(res, 404, { error: `no such file: ${target}` });
+      const [bin, args] = await editorFor(target);
+      try {
+        // Detached, and no waiting: an editor stays open until the reader closes it, so an execFile
+        // callback would hold this response (and the browser) hostage for the whole editing session.
+        const child = spawn(bin, args, { detached: true, stdio: "ignore" });
+        child.on("error", () => {});
+        child.unref();
+      } catch (e) {
+        return sendJson(res, 500, { error: String((e && e.message) || e) });
+      }
+      return sendJson(res, 200, { ok: true, path: target, editor: path.basename(bin) });
     }
 
     // One worktree, read now — the next-read ring on a row is a button. Refused while that row is

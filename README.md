@@ -179,6 +179,19 @@ waiting for a scan. The `⧉ hermes` signal (which matches on a session's record
 place a panel-started agent on its own, because those sessions record no usable cwd. `⧉ panel (done)`
 means the agent that ran there has finished but is still in the panel's list.
 
+#### Files an agent produced
+
+An agent that writes something a person will *open* — a markdown doc, a SQL script, a key — gets a
+`📄 N` button in its card head, right after the worktree name. It lists what that conversation
+produced; clicking a name hands the file to an editor (Notepad++ if installed, else Notepad; `open -t`
+on macOS, `xdg-open` elsewhere — never the shell association, which sends a `.md` to a browser), and
+`copy` puts the full path on the clipboard.
+
+Only deliverable extensions count (`.md .txt .sql .csv .json .yaml .key .pem .sh .ps1 …`), from two
+sources: every `write_file` result, and — once a turn ends — the untracked files git reports in the
+run's directory, which catches `cat > x.sql` and `sqlplus @script`. Edits to existing tracked files
+are not artifacts. The list is persisted with the job, so it survives a panel restart.
+
 #### Replying to an agent, and steering it
 
 Each card is a conversation. Every agent runs on a named thread (`wtgui-<words>-<id>`) which is the

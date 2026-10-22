@@ -826,6 +826,86 @@ function turnBlock(conv, turn, index, copy = "") {
     `<div class="job-prompt" data-toggle-turn="${esc(tkey)}" title="collapse this turn${turn.prompt ? ` — ${esc(turn.prompt.slice(0, 120))}` : ""}">${esc(turn.prompt || "")}</div>${turnBody(turn, copy)}</div>`;
 }
 
+// Every file this conversation produced, oldest first, one entry per path — the card's "N files"
+// button is built from this. A turn carries what its own run wrote and, after it settles, whatever
+// git found untracked in its directory.
+function artifactsFor(conv) {
+  const seen = new Map();
+  for (const t of conv.turns) {
+    for (const a of t.artifacts || []) {
+      const key = String(a.path || "").toLowerCase();
+      if (key && !seen.has(key)) seen.set(key, a);
+    }
+  }
+  return [...seen.values()];
+}
+
+function baseNameOf(p) {
+  return String(p || "").split(/[\\/]/).pop();
+}
+
+function dirOf(p) {
+  const s = String(p || "");
+  const i = Math.max(s.lastIndexOf("/"), s.lastIndexOf("\\"));
+  return i > 0 ? s.slice(0, i) : "";
+}
+
+function closeArtifactPops() {
+  for (const pop of document.querySelectorAll("[data-artifacts-pop]")) pop.hidden = true;
+}
+
+async function openArtifact(path) {
+  try {
+    const r = await fetch("/api/open-path", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) showBanner(`open ${baseNameOf(path)}: ${d.error || `HTTP ${r.status}`}`);
+  } catch (e) {
+    showBanner(`open ${baseNameOf(path)}: ${e.message}`);
+  }
+}
+
+// navigator.clipboard needs a secure context; the panel is served over http on loopback, which
+// browsers do NOT always treat as secure, so there is a textarea fallback behind it.
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    /* fall through */
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {
+    ok = false;
+  }
+  ta.remove();
+  return ok;
+}
+
+const artifactsPopHtml = (thread, list) => `<div class="artifacts-pop" data-artifacts-pop="${esc(thread)}" hidden>
+      <div class="ap-head mono dimmer">${list.length} file${list.length === 1 ? "" : "s"} this agent produced</div>
+      ${list
+        .map(
+          (a) => `<div class="ap-row">
+        <button type="button" class="ap-name" data-open-path="${esc(a.path)}" title="open in an editor: ${esc(a.path)}">${esc(baseNameOf(a.path))}</button>
+        <span class="ap-dir mono dimmer" title="${esc(a.path)}">${esc(dirOf(a.path))}</span>
+        <button type="button" class="ap-copy mono" data-copy-path="${esc(a.path)}" title="copy the full path">copy</button>
+      </div>`
+        )
+        .join("")}
+    </div>`;
+
 function conversationHtml(conv) {
   const { thread, turns, latest } = conv;
   const collapsed = state.collapsedJobs.has(thread);
@@ -862,6 +942,7 @@ function conversationHtml(conv) {
   const foot = latest.status === "running" || latest.status === "starting"
     ? `<span class="dimmer mono">running ${esc(elapsed(latest))}</span>`
     : `<span class="mono dim">${esc(outcome)} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${latest.tokens.total}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>`;
+  const artifacts = artifactsFor(conv);
   const blocks = (() => {
     const offset = turnPageOffset(thread, turns.length);
     const end = turns.length - offset * TURNS_PER_PAGE;
@@ -893,6 +974,7 @@ function conversationHtml(conv) {
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       ${runApproval && !waitingApproval ? `<span class="sig sig-approval" title="this run is parked on a flagged command — answer it in the card below">waiting on approval</span>` : ""}
       <span class="mono dim">${esc(meta)}</span>
+      ${artifacts.length ? `<button type="button" class="btn-artifacts" data-artifacts="${esc(thread)}" title="${artifacts.length} file(s) this agent produced — click to list them (open in an editor, copy the path)">\u{1F4C4} ${artifacts.length}</button>` : ""}
       ${pager}
       <span class="spacer"></span>
       ${latest.yolo ? '<span class="pill yolo">--yolo</span>' : ""}
@@ -908,6 +990,7 @@ function conversationHtml(conv) {
       <select data-attach-path="${esc(thread)}"></select>
       <button class="btn-attach-go" data-attach-go="${esc(thread)}" type="button">Attach</button>
     </div>` : ""}
+    ${artifacts.length ? artifactsPopHtml(thread, artifacts) : ""}
     <div class="job-body">
       ${pinnedHtml}
       ${blocks.html}
@@ -3131,6 +3214,51 @@ $("btn-pause").addEventListener("click", () => {
 });
 
 document.addEventListener("click", async (e) => {
+  // Files this agent produced: the button opens the list, a row opens that file in an editor, and
+  // the copy button takes the full path. Clicking anywhere else closes the list.
+  const artBtn = e.target.closest("[data-artifacts]");
+  const insidePop = e.target.closest("[data-artifacts-pop]");
+  if (!artBtn && !insidePop) closeArtifactPops();
+  if (artBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const thread = artBtn.dataset.artifacts;
+    const pop = document.querySelector(`[data-artifacts-pop="${CSS.escape(thread)}"]`);
+    if (pop) {
+      const wasHidden = pop.hidden;
+      closeArtifactPops();
+      pop.hidden = !wasHidden;
+      if (!pop.hidden) {
+        // Fixed positioning in viewport space: the head is sticky-ish and the list must not be
+        // clipped by the card, so it hangs off the button itself.
+        const r = artBtn.getBoundingClientRect();
+        pop.style.left = `${Math.max(8, Math.min(window.innerWidth - 400, r.left))}px`;
+        pop.style.top = `${r.bottom + 6}px`;
+      }
+    }
+    return;
+  }
+  const openBtn = e.target.closest("[data-open-path]");
+  if (openBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    void openArtifact(openBtn.dataset.openPath);
+    return;
+  }
+  const copyBtn = e.target.closest("[data-copy-path]");
+  if (copyBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    void copyText(copyBtn.dataset.copyPath).then((ok) => {
+      copyBtn.textContent = ok ? "copied" : "failed";
+      copyBtn.classList.toggle("is-copied", ok);
+      setTimeout(() => {
+        copyBtn.textContent = "copy";
+        copyBtn.classList.remove("is-copied");
+      }, 1200);
+    });
+    return;
+  }
   const apBtn = e.target.closest("[data-approval-choice]");
   if (apBtn) {
     e.preventDefault();
@@ -3512,6 +3640,10 @@ document.addEventListener("click", async (e) => {
 
 // Reply affordances are re-created on every render, so they are handled at document level.
 document.addEventListener("keydown", async (e) => {
+  // Esc closes the produced-files list first; a second Esc does whatever Esc did before.
+  if (e.key === "Escape" && document.querySelector("[data-artifacts-pop]:not([hidden])")) {
+    closeArtifactPops();
+  }
   // Esc puts a pulled-out chat back; nothing else in the page holds that key.
   if (e.key === "Escape" && !$("settings").classList.contains("hidden")) {
     e.preventDefault();
