@@ -763,7 +763,9 @@ function turnBlock(conv, turn, index, copy = "") {
       `<div class="turn-prompt" data-toggle-turn="${esc(tkey)}" title="${esc(turn.prompt || "")}">${esc(turn.prompt || "(no prompt recorded)")}</div></div>`;
   }
   return `<div class="turn" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy)}` +
-    `<div class="job-prompt">${esc(turn.prompt || "")}</div>${turnBody(turn, copy)}</div>`;
+    // The prompt line toggles too, so the whole header area behaves the same whether the turn is open
+    // or folded: click the text to fold, click it again to unfold.
+    `<div class="job-prompt" data-toggle-turn="${esc(tkey)}" title="collapse this turn${turn.prompt ? ` — ${esc(turn.prompt.slice(0, 120))}` : ""}">${esc(turn.prompt || "")}</div>${turnBody(turn, copy)}</div>`;
 }
 
 function conversationHtml(conv) {

@@ -370,6 +370,9 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 .pill.interrupted { border-style: dashed; }
 .pill.yolo { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .job-prompt { margin: 7px 0 5px; font-size: 13px; color: #dbe3ec; font-family: var(--term); }
+/* A turn's prompt line folds the turn, exactly like the "turn 1 · done" head above it. */
+.turn > .job-prompt { cursor: pointer; }
+.turn > .job-prompt:hover { color: #eef2f8; }
 .job-cmd { font-size: 11px; word-break: break-all; margin-bottom: 6px; font-family: var(--term); }
 .job-out {
   margin: 0;
