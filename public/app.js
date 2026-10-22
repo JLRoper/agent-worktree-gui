@@ -443,6 +443,7 @@ function renderRoot(root) {
   }
   // Same count means this was a re-rank, not a filter change: say which projects moved. Flipping All
   // / 7d changes the set, and flashing every survivor of that would be noise.
+  pinOpenProjects(fresh.querySelector(".root-body"), prevKeys);
   const nextSections = [...fresh.querySelectorAll(".root-body section.project")];
   if (prevKeys.length === nextSections.length) flashMovedByKey(prevKeys, nextSections, fresh);
 }
@@ -3116,6 +3117,31 @@ function projectRanks() {
   return rank;
 }
 
+// A rebuild regenerates every section in ranked order, which loses the one rule the live reorder keeps:
+// the project you have OPEN stays where it is. Without this the 30-second resync slid the project being
+// read to the top the moment its agent did something — an open section must never move under the reader.
+// `prevNames` is that folder's project order from before the rebuild.
+function pinOpenProjects(body, prevNames) {
+  if (!body || !prevNames || !prevNames.length) return;
+  const els = [...body.querySelectorAll(":scope > section.project")];
+  if (!els.length) return;
+  const byName = new Map(els.map((el) => [el.dataset.project, el]));
+  const pinned = new Map();
+  prevNames.forEach((n, i) => {
+    if (!state.expandedProjects.has(n) || i >= els.length) return;
+    const el = byName.get(n);
+    if (el) pinned.set(i, el);
+  });
+  if (!pinned.size) return;
+  const held = new Set(pinned.values());
+  const free = els.filter((el) => !held.has(el));
+  const want = [];
+  let f = 0;
+  for (let i = 0; i < els.length; i++) want.push(pinned.has(i) ? pinned.get(i) : free[f++]);
+  if (want.every((el, i) => el === els[i])) return;
+  for (const el of want) body.appendChild(el);
+}
+
 function sortedProjects() {
   const rank = projectRanks();
   const at = (p) => rank.get(p.name) || { tier: 2, activity: 0 };
@@ -3187,11 +3213,20 @@ function reorderProjects() {
     }
     return { tier, act };
   };
-  const wantGroups = groups.slice().sort((a, b) => {
+  // A folder you are reading a project in holds its slot for the same reason the project does: the
+  // folder sliding up takes the open section with it, which looks exactly like the section itself jumping.
+  const holdsOpen = (g) => [...g.querySelectorAll("section.project")].some((s) => state.expandedProjects.has(s.dataset.project));
+  const ranked = groups.slice().sort((a, b) => {
     const ra = folderRank(a);
     const rb = folderRank(b);
     return ra.tier - rb.tier || rb.act - ra.act || String(a.dataset.root || "").localeCompare(String(b.dataset.root || ""));
   });
+  const pinnedGroups = new Map();
+  groups.forEach((g, i) => { if (holdsOpen(g)) pinnedGroups.set(i, g); });
+  const freeGroups = ranked.filter((g) => !pinnedGroups.has(groups.indexOf(g)));
+  const wantGroups = [];
+  let gf = 0;
+  groups.forEach((_, i) => wantGroups.push(pinnedGroups.has(i) ? pinnedGroups.get(i) : freeGroups[gf++]));
   if (!wantGroups.every((g, i) => g === groups[i])) for (const g of wantGroups) host.appendChild(g);
 }
 
@@ -3551,6 +3586,28 @@ function renderAll() {
       .sort((a, b) => projectActivity(b[1][0]) - projectActivity(a[1][0]) || a[0].localeCompare(b[0]))
       .map(([root, list]) => rootSection(root, list))
       .join("") || '<p class="empty">No git repos found under scanRoots.</p>';
+  // The rebuild sorted every folder by activity; put the open ones back in the slot they held.
+  for (const g of $("projects").querySelectorAll("section.root-group")) {
+    pinOpenProjects(g.querySelector(".root-body"), prevRoots.get(g.dataset.root));
+  }
+  // ...and the folder that holds an open project keeps its own place in the folder list.
+  {
+    const folders = [...$("projects").querySelectorAll("section.root-group")];
+    const holdsOpen = (g) => [...g.querySelectorAll("section.project")].some((s) => state.expandedProjects.has(s.dataset.project));
+    const pinned = new Map();
+    folders.forEach((g, i) => {
+      const prev = prevRoots.get(g.dataset.root);
+      if (prev && holdsOpen(g)) pinned.set(i, g);
+    });
+    if (pinned.size) {
+      const held = new Set(pinned.values());
+      const free = folders.filter((g) => !held.has(g));
+      const want = [];
+      let f = 0;
+      for (let i = 0; i < folders.length; i++) want.push(pinned.has(i) ? pinned.get(i) : free[f++]);
+      if (!want.every((g, i) => g === folders[i])) for (const g of want) $("projects").appendChild(g);
+    }
+  }
   state.tbodyEls.clear();
   state.rowEls.clear();
   state.detailEls.clear();
