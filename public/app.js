@@ -3144,16 +3144,22 @@ function chipsHtml(name) {
   // answer to one question — "is anything running".
   const outsideRunning = rows.reduce((n, r) => n + (Number(r.signals?.hermes?.running) || 0), 0);
   const runningAll = panelRunningCount + outsideRunning;
-  if (runningAll) {
-    out.push(
-      `<span class="chip live" title="${panelRunningCount} from the panel · ${outsideRunning} outside it — a turn is executing right now">${runningAll} running</span>`,
-    );
+  // The panel chip below carries the panel's own running count the way a row's badge does, so this one is
+  // only worth drawing when something OUTSIDE the panel is executing — otherwise it printed the same
+  // number twice, side by side.
+  if (outsideRunning) {
+    const title = `${runningAll} agent${runningAll === 1 ? "" : "s"} executing right now: ${panelRunningCount} from the panel · ${outsideRunning} from outside it`;
+    out.push(`<span class="chip live" title="${esc(title)}">${runningAll} running</span>`);
   }
-  // How many agent cards this project has, running or not: "how many panels are open".
+  // How many agent cards this project has, and how many of them are working — the project's version of
+  // the row badge's "⧉ 3 · 1 running".
   if (panelAgentCount) {
     const trees = rows.filter((r) => agentsFor(r).length).length;
-    const title = `${panelAgentCount} agent card${panelAgentCount === 1 ? "" : "s"} across ${trees} worktree${trees === 1 ? "" : "s"} in this project · ${panelRunningCount} running right now`;
-    out.push(`<span class="chip agents" title="${esc(title)}">⧉ ${panelAgentCount} panel${panelAgentCount === 1 ? "" : "s"}</span>`);
+    const title = `${panelAgentCount} agent card${panelAgentCount === 1 ? "" : "s"} across ${trees} worktree${trees === 1 ? "" : "s"} in this project${panelRunningCount ? ` · ${panelRunningCount} running right now` : " · none running"}`;
+    const runningTag = panelRunningCount ? ` · ${panelRunningCount} running` : "";
+    out.push(
+      `<span class="chip agents" title="${esc(title)}">⧉ ${panelAgentCount} panel${panelAgentCount === 1 ? "" : "s"}${runningTag}</span>`,
+    );
   }
   // Amber and loud: an agent parked on a permission request is the one thing here that is waiting for
   // a human, and it must be visible with the project collapsed.
