@@ -62,6 +62,14 @@
     </div>
     <div class="settings-preview mono" id="approval-preview">…</div>
     <p class="settings-note" id="approval-note">How long a permission prompt waits for you before it fails closed — if it expires, nothing runs. This is the gateway's own setting, saved to its config.yaml rather than this browser, and the next prompt uses it without a restart.</p>
+    <div class="settings-sep"></div>
+    <label class="settings-row" for="session-limit">
+      <span>CLI session list</span>
+      <input id="session-limit" type="number" inputmode="numeric" step="5" title="how many sessions the CLI's /sessions and /resume picker list at once">
+      <button id="btn-session-limit-save" type="button" title="write sessions.list_limit into the gateway's config.yaml">Save</button>
+    </label>
+    <div class="settings-preview mono" id="session-preview">…</div>
+    <p class="settings-note" id="session-note">How many sessions the CLI's /sessions and /resume browser list at once. The store keeps every session — nothing is deleted at ten; this only changes how many you can see.</p>
   </div>
 
   <div id="banner" class="banner hidden"></div>

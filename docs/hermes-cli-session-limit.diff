@@ -1,0 +1,83 @@
+diff --git a/hermes_cli/cli_commands_mixin.py b/hermes_cli/cli_commands_mixin.py
+index d90337b4f3..f420c67543 100644
+--- a/hermes_cli/cli_commands_mixin.py
++++ b/hermes_cli/cli_commands_mixin.py
+@@ -829,12 +829,12 @@ class CLICommandsMixin(CLICommandsSessionToolsMixin):
+             _cp(f"  {_t('resume.usage')}")
+             if self._show_recent_sessions(reason="resume"):
+                 # Arm a one-shot bare-number selection; must be the same list the table showed
+-                # and the numbered branch resolves (all use _list_recent_sessions(limit=10)).
++                # and the numbered branch resolves (all use _list_recent_sessions()).
+                 # Arm a one-shot pending-resume selection so the user can type just the number (`3`) on the
+                 # next line instead of having to retype `/resume 3`. The list here must match the one shown
+                 # by _show_recent_sessions and used for index resolution below — all three go through
+-                # _list_recent_sessions(limit=10). See #34584.
+-                self._pending_resume_sessions = self._list_recent_sessions(limit=10)
++                # _list_recent_sessions(). See #34584.
++                self._pending_resume_sessions = self._list_recent_sessions()
+                 return
+             return _cp(f"  {_t('resume.tip_find_sessions')}")
+         # Any explicit /resume <target> supersedes a previously-armed bare numbered prompt.
+@@ -898,7 +898,7 @@ class CLICommandsMixin(CLICommandsSessionToolsMixin):
+         """``(session_id, meta)`` for a numbered selection, title, or id (an empty compression-chain head
+         redirects to the descendant holding the transcript); None after printing why it was not resolved."""
+         if target.isdigit():
+-            sessions = self._list_recent_sessions(limit=10)
++            sessions = self._list_recent_sessions()
+             index = int(target)
+             if index < 1 or index > len(sessions):
+                 return _cp(*_lines(_gt("resume.out_of_range", index=index)))
+diff --git a/hermes_cli/cli_session_mixin.py b/hermes_cli/cli_session_mixin.py
+index cc1c5802dc..5d6fbc59d9 100644
+--- a/hermes_cli/cli_session_mixin.py
++++ b/hermes_cli/cli_session_mixin.py
+@@ -21,6 +21,23 @@ from rich.markup import escape as _escape
+ from typing import Any, Dict, List, Optional
+ 
+ 
++def _configured_session_list_limit() -> int:
++    """How many sessions the in-chat browser shows: ``sessions.list_limit`` from config.yaml.
++
++    Local patch. The number was a literal ``10`` at every call site, so a reader with a long history
++    could only ever see the last ten and had no way to ask for more. Clamped to 1..500 — this is a
++    menu, not a dump (``hermes sessions list --limit`` and ``sessions browse`` are for that).
++    """
++    try:
++        from hermes_cli.config import load_config_readonly
++
++        raw = (load_config_readonly().get("sessions") or {}).get("list_limit", 10)
++        value = int(raw)
++    except Exception:
++        return 10
++    return max(1, min(value, 500))
++
++
+ def _user_turn_indices(history: list) -> list[int]:
+     """Indices of *real* user turns: excludes ephemeral scaffolding, display_kind timeline
+     rows and compaction handoffs — the same predicate as resume turn counting."""
+@@ -375,8 +392,14 @@ class CLISessionMixin:
+         lines.extend(status_lines(fields, "created", "last_activity", "tokens", "agent_running"))
+         self._console_print("\n".join(lines), highlight=False, markup=False)
+ 
+-    def _list_recent_sessions(self, limit: int = 10) -> list[dict[str, Any]]:
+-        """Return recent CLI sessions for in-chat browsing/resume affordances."""
++    def _list_recent_sessions(self, limit: Optional[int] = None) -> list[dict[str, Any]]:
++        """Return recent CLI sessions for in-chat browsing/resume affordances.
++
++        ``limit`` defaults to ``sessions.list_limit`` (10 unless configured) — local patch, so the
++        browser and the bare-number resume both follow the same number the reader set.
++        """
++        if limit is None:
++            limit = _configured_session_list_limit()
+         if not self._session_db:
+             return []
+         try:
+@@ -390,7 +413,7 @@ class CLISessionMixin:
+         except Exception:
+             return []
+ 
+-    def _show_recent_sessions(self, *, reason: str = "history", limit: int = 10) -> bool:
++    def _show_recent_sessions(self, *, reason: str = "history", limit: Optional[int] = None) -> bool:
+         """Render recent sessions inline from the active chat TUI.
+ 
+         Returns True when something was shown, False if no session list was available.

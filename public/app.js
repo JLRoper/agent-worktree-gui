@@ -4452,6 +4452,7 @@ function toggleSettings(open = null) {
   // Read the gateway's window every time the panel opens: it can be changed from a CLI, and the
   // panel is not the owner of that value.
   void loadApprovalSetting();
+  void loadSessionSetting();
 }
 
 // ---- the approval window -------------------------------------------------------------------
@@ -4542,6 +4543,90 @@ async function saveApprovalSetting() {
   }
 }
 
+// ---- how many sessions the CLI's picker lists ------------------------------------------------
+// Not a panel preference and not a retention policy: the store keeps every session, and this is the
+// number the CLI's in-chat browser used to hardcode. It writes `sessions.list_limit`, which only the
+// local CLI patch reads — so the row says so when that patch is missing, instead of saving a number
+// nothing will honour.
+let sessionsState = null;
+
+function paintSessionSetting(note = "", bad = false) {
+  const s = sessionsState;
+  if (!s) return;
+  const input = $("session-limit");
+  if (input) {
+    if (document.activeElement !== input) input.value = s.listLimit;
+    input.disabled = !s.editable;
+    input.min = String(s.minLimit || 1);
+    input.max = String(s.maxLimit || 500);
+  }
+  const save = $("btn-session-limit-save");
+  if (save) {
+    save.disabled = !s.editable;
+    save.classList.remove("dirty");
+  }
+  const preview = $("session-preview");
+  if (preview) {
+    const bits = [`${s.listLimit} shown in /sessions`];
+    if (s.store) bits.push(`${s.store.sessions} in the store`);
+    bits.push(s.fromFile ? "set in config.yaml" : "the default (config.yaml does not set it)");
+    if (s.patched === false) bits.push("CLI patch missing — this number is ignored");
+    preview.textContent = note ? `${note} — ${bits.join(" · ")}` : bits.join(" · ");
+    preview.classList.toggle("bad", bad || s.patched === false);
+    preview.title = s.configPath;
+  }
+  const noteEl = $("session-note");
+  if (noteEl) {
+    const store = s.store
+      ? `The store holds ${s.store.sessions} sessions and ${s.store.messages.toLocaleString()} messages — nothing deletes at ten. `
+      : "The store could not be read. ";
+    noteEl.textContent =
+      s.patched === false
+        ? `${store}That number is written to config.yaml, but the installed CLI has no patch to read it (a hermes update replaces hermes_cli/*.py) — re-apply docs/hermes-cli-session-limit.diff.`
+        : `${store}This only changes how many the CLI's /sessions and /resume browser list at once.`;
+  }
+}
+
+async function loadSessionSetting() {
+  try {
+    const r = await fetch("/api/settings/sessions");
+    sessionsState = await r.json();
+    paintSessionSetting();
+  } catch (e) {
+    const preview = $("session-preview");
+    if (preview) {
+      preview.textContent = `could not read the session list setting: ${e.message}`;
+      preview.classList.add("bad");
+    }
+  }
+}
+
+async function saveSessionSetting() {
+  const input = $("session-limit");
+  if (!input || !sessionsState?.editable) return;
+  const preview = $("session-preview");
+  if (preview) {
+    preview.textContent = "saving…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await fetch("/api/settings/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ listLimit: Number(input.value) }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      paintSessionSetting(`not saved: ${d.error || `HTTP ${r.status}`}`, true);
+      return;
+    }
+    sessionsState = d;
+    paintSessionSetting(d.note || "saved");
+  } catch (e) {
+    paintSessionSetting(`not saved: ${e.message}`, true);
+  }
+}
+
 // The pickers are filled once, at start-up: a saved choice then has a real option to sit on before
 // the panel is ever opened.
 function initFonts() {
@@ -4571,6 +4656,16 @@ $("term-select")?.addEventListener("change", (e) => applyFont("term", e.target.v
 // The approval window. A preset only fills the box and lights Save: one click here rewrites the
 // user's global Hermes config, so it takes a deliberate second one.
 $("btn-approval-save")?.addEventListener("click", () => void saveApprovalSetting());
+$("btn-session-limit-save")?.addEventListener("click", () => void saveSessionSetting());
+$("session-limit")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  void saveSessionSetting();
+});
+$("session-limit")?.addEventListener("input", (e) => {
+  const dirty = Number(e.target.value) !== sessionsState?.listLimit;
+  $("btn-session-limit-save")?.classList.toggle("dirty", dirty);
+});
 $("approval-timeout")?.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   e.preventDefault();

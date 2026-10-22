@@ -205,6 +205,18 @@ the row it is already being credited to (a `wtgui-*` session records no usable `
 its newest tool calls). `GET /api/sessions?path=` answers the same question for a script, and a
 revive is refused (409) when that session already has a card.
 
+#### How many sessions the CLI lists
+
+`hermes`'s in-chat `/sessions` and `/resume` browser listed **ten**, whatever the store held — a
+literal `10` at every call site, not a retention limit. Nothing is deleted at ten: the store on this
+box holds 160 sessions, and nothing prunes them (`sessions.auto_prune` is off by default). Settings →
+**CLI session list** sets `sessions.list_limit` (1–500), writes that line into `config.yaml`, and shows
+what the store actually holds so the question answers itself.
+
+Hermes has no such key upstream, so reading it is a local patch
+(`docs/hermes-cli-session-limit.diff`; re-apply after `hermes update`). The row notices a missing patch
+and says the number is being ignored instead of pretending it took effect.
+
 #### Files an agent produced
 
 An agent that writes something a person will *open* — a markdown doc, a SQL script, a key — gets a
@@ -331,6 +343,7 @@ for the approval window — agent processes are not spawned from here any more.
 | GET/POST | `/api/settings/approvals` | the gateway's `approvals.timeout`. GET reports the value, whether `config.yaml` sets it, the file's path, and whether this panel may change it. POST `{timeoutSeconds}` rewrites only that line under `approvals:` in `<HERMES_HOME>/config.yaml` — comments, indentation and line endings untouched — and re-reads the file before writing, refusing if it does not say what was asked. **400** outside 15–86400, **409** when the gateway is not on this machine |
 | GET | `/api/sessions?path=` | the Hermes sessions the scheduler attributes to one worktree row: `{id, title, matched, lastActivityAt, onBoard}`. The same answer the row's "idle session" claim comes from |
 | POST | `/api/sessions/revive` | `{sessionId, path}` → a job record for a session the board has no card for (the run itself lives in the gateway; a reply continues it). **404** when the store does not attribute that session to that row, **409** when it already has a card |
+| GET/POST | `/api/settings/sessions` | the CLI's session-list length: GET reports `sessions.list_limit`, the store's real size (sessions, messages, by source) and whether the local CLI patch that reads the key is installed; POST `{listLimit}` rewrites that one line in `config.yaml`. **400** outside 1–500 |
 | GET | `/api/models` | the New-agent model menu: `{defaultModel, provider, count, fetchedAt, staleDays, providers:[{id,label,models}]}` — the provider list Hermes itself fetched, grouped, with the configured default first in its group. Falls back to the shipped catalogue when no provider was ever picked |
 | POST | `/api/jobs/cancel` | `{id}` → `POST /v1/runs/{id}/stop` (cooperative interrupt) |
 | POST | `/api/jobs/clear` | drop finished jobs from the list |

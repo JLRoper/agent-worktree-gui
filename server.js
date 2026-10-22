@@ -17,7 +17,10 @@ import { Jobs, makeThreadName, previewRequest } from "./lib/jobs.js";
 import { gitIn } from "./lib/scan.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
 import { Approvals } from "./lib/approvals.js";
-import { approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX } from "./lib/hermes-config.js";
+import {
+  approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
+  sessionSettings, writeSessionListLimit, SESSION_LIST_MIN, SESSION_LIST_MAX,
+} from "./lib/hermes-config.js";
 import { hermesSessionTail } from "./lib/activity.js";
 import { modelCatalogue } from "./lib/hermes-models.js";
 
@@ -358,6 +361,42 @@ const server = createServer(async (req, res) => {
     // runs inside the process executing the turn. It lives in <HERMES_HOME>/config.yaml, so this
     // reads and writes there rather than config.json, and it refuses when the gateway is another
     // machine. Read on demand — it is opened from Settings, never folded into the 30 s snapshot.
+    // ---- how many sessions the CLI's picker shows ------------------------------------------
+    // `sessions.list_limit`, read by the local CLI patch. The store itself is not capped — this
+    // reports what it actually holds, so "only ten are kept" is answerable — and `patched: false`
+    // means the installed CLI has no patch (a `hermes update` replaced it), which makes the value
+    // in config.yaml inert. Saying that is the point: a setting that quietly does nothing is worse
+    // than no setting.
+    if (route === "/api/settings/sessions" && req.method === "GET") {
+      return sendJson(res, 200, await sessionSettings());
+    }
+
+    if (route === "/api/settings/sessions" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const state = await sessionSettings();
+      if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
+      const limit = Number(body.listLimit ?? body.limit);
+      if (!Number.isInteger(limit) || limit < SESSION_LIST_MIN || limit > SESSION_LIST_MAX) {
+        return sendJson(res, 400, {
+          ...state,
+          error: `the session list must be a whole number between ${SESSION_LIST_MIN} and ${SESSION_LIST_MAX}`,
+        });
+      }
+      try {
+        writeSessionListLimit(limit);
+      } catch (e) {
+        return sendJson(res, 500, { ...state, error: String((e && e.message) || e) });
+      }
+      log(`sessions.list_limit = ${limit} written to ${state.configPath}`);
+      return sendJson(res, 200, {
+        ...(await sessionSettings()),
+        written: true,
+        // The CLI reads config at start-up of each invocation, so the next /sessions uses it.
+        note: "saved — the next hermes session's /sessions and /resume use it",
+      });
+    }
+
     if (route === "/api/settings/approvals" && req.method === "GET") {
       return sendJson(res, 200, approvalState({ gatewayUrl: jobs.api.url }));
     }
