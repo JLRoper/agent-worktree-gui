@@ -443,7 +443,16 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
   padding: 1px 4px 1px 7px; border: 1px solid #3b4757; border-radius: 5px;
   background: #12161d; color: #9ecbff; font-size: 11px; line-height: 1.5;
 }
+.attach-chip[data-open-path] { cursor: pointer; }
 .attach-chip:hover { border-color: #2f5a7a; }
+/* A turn's own attachments, under its prompt: the same chip look, but a link and no x — the turn
+   happened, and taking the file off the record afterwards would be a lie. */
+.turn-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 4px 18px; }
+.turn-attach {
+  padding: 1px 7px; border: 1px solid #2c3644; border-radius: 5px; background: #10141a;
+  color: #8fb8dd; font-size: 11px; line-height: 1.5; cursor: pointer;
+}
+.turn-attach:hover { border-color: #2f5a7a; color: #b9d9f5; background: #141b24; }
 .chip-x {
   border: none; background: transparent; color: var(--dimmer);
   font: 12px/1 var(--mono); padding: 0 3px; cursor: pointer; border-radius: 3px;

@@ -898,17 +898,38 @@ function turnHead(turn, index, open, copy = "") {
 // One turn: its head, then either the full prompt + output, or a single line carrying the request
 // that turn was about. The one-line form is what makes a long conversation readable.
 // `copy` marks the pinned duplicate's transcript so it cannot collide with the paged one.
+// The prompt the agent was given vs the prompt the card shows. Attachment paths are appended to the
+// request as a paragraph of machine text — the agent needs them, the reader has the chips for them — so
+// that paragraph is stripped before the prompt is drawn.
+const ATTACH_BLOCK_RE = /(?:\r?\n){1,2}Attachment: [^\n]*? — (?:read_file it|use vision_analyze on it) before answering\./g;
+function displayPrompt(text) {
+  return String(text || "").replace(ATTACH_BLOCK_RE, "").trim();
+}
+
+// What the reader attached to this turn, under its prompt: a link to the file, no x (the file is
+// already part of this turn — removing it here would mean editing history the agent has seen).
+function turnAttachmentsHtml(turn) {
+  const list = Array.isArray(turn.attachments) ? turn.attachments : [];
+  if (!list.length) return "";
+  return `<div class="turn-attachments">${list
+    .map(
+      (a) =>
+        `<button type="button" class="turn-attach mono" data-open-path="${esc(a.path)}" title="open ${esc(a.path)} in Notepad++">[${esc(a.name)}]</button>`,
+    )
+    .join("")}</div>`;
+}
+
 function turnBlock(conv, turn, index, copy = "") {
   const open = turnIsOpen(conv, turn, copy);
   const tkey = turnKey(turn, copy);
   if (!open) {
     return `<div class="turn folded" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy)}` +
-      `<div class="turn-prompt" data-toggle-turn="${esc(tkey)}" title="${esc(turn.prompt || "")}">${esc(turn.prompt || "(no prompt recorded)")}</div></div>`;
+      `<div class="turn-prompt" data-toggle-turn="${esc(tkey)}" title="${esc(turn.prompt || "")}">${esc(displayPrompt(turn.prompt) || "(no prompt recorded)")}</div>${turnAttachmentsHtml(turn)}</div>`;
   }
   return `<div class="turn" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy)}` +
     // The prompt line toggles too, so the whole header area behaves the same whether the turn is open
     // or folded: click the text to fold, click it again to unfold.
-    `<div class="job-prompt" data-toggle-turn="${esc(tkey)}" title="collapse this turn${turn.prompt ? ` — ${esc(turn.prompt.slice(0, 120))}` : ""}">${esc(turn.prompt || "")}</div>${turnBody(turn, copy)}</div>`;
+    `<div class="job-prompt" data-toggle-turn="${esc(tkey)}" title="collapse this turn${turn.prompt ? ` — ${esc(displayPrompt(turn.prompt).slice(0, 120))}` : ""}">${esc(displayPrompt(turn.prompt) || "")}</div>${turnAttachmentsHtml(turn)}${turnBody(turn, copy)}</div>`;
 }
 
 // Every deliverable this conversation produced — files and URLs — in the order they were delivered.
@@ -1523,7 +1544,7 @@ async function sendReply(thread, preset = null) {
     const r = await apiFetch("/api/agents/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ thread, text }),
+      body: JSON.stringify({ thread, text, attachments: attachmentsFor(thread) }),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
@@ -1566,7 +1587,7 @@ async function steerTurn(thread, id, text, btn = null) {
     const res = await apiFetch("/api/jobs/steer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, text: body }),
+      body: JSON.stringify({ id, text: body, attachments: attachmentsFor(thread) }),
     });
     const out = await res.json().catch(() => ({}));
     if (!res.ok || !out.ok) {
@@ -2095,6 +2116,7 @@ function appendJobLine(evt) {
 async function preview() {
   const body = formValues();
   body.prompt = String(body.prompt || "") + attachmentBlock("spawn");
+  body.attachments = attachmentsFor("spawn");
   try {
     const r = await apiFetch("/api/agents/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const d = await r.json();
@@ -2138,6 +2160,8 @@ async function spawnAgent() {
   }
   // The chips stay chips on screen; their paths are appended here, where the request is built.
   body.prompt = typed + attachmentBlock("spawn");
+  // The same list rides along as data, so the turn's card can list what it was given.
+  body.attachments = attachmentsFor("spawn");
   $("btn-spawn").disabled = true;
   try {
     const r = await apiFetch("/api/agents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, { timeoutMs: 60000 });
@@ -3741,7 +3765,7 @@ function attachmentChipsHtml(ctx) {
   return attachmentsFor(ctx)
     .map(
       (a) =>
-        `<span class="attach-chip mono" title="${esc(a.path)}">[${esc(a.name)}]<button type="button" class="chip-x" data-chip-remove="${esc(a.path)}" data-chip-ctx="${esc(ctx)}" title="remove this attachment">\u00d7</button></span>`,
+        `<span class="attach-chip mono" data-open-path="${esc(a.path)}" title="open ${esc(a.path)} in Notepad++">[${esc(a.name)}]<button type="button" class="chip-x" data-chip-remove="${esc(a.path)}" data-chip-ctx="${esc(ctx)}" title="remove this attachment">\u00d7</button></span>`,
     )
     .join("");
 }
@@ -3834,13 +3858,18 @@ document.addEventListener("drop", (e) => {
   void attachFiles(files, box);
 });
 
-// The x on a chip.
+// The chip opens its file; the x removes it.
 document.addEventListener("click", (e) => {
-  const x = e.target.closest && e.target.closest("[data-chip-remove]");
-  if (!x) return;
-  const ctx = x.dataset.chipCtx;
-  setAttachments(ctx, attachmentsFor(ctx).filter((a) => a.path !== x.dataset.chipRemove));
-  renderChips(ctx);
+  if (!e.target.closest) return;
+  const x = e.target.closest("[data-chip-remove]");
+  if (x) {
+    const ctx = x.dataset.chipCtx;
+    setAttachments(ctx, attachmentsFor(ctx).filter((a) => a.path !== x.dataset.chipRemove));
+    renderChips(ctx);
+    return;
+  }
+  const chip = e.target.closest(".attach-chip[data-open-path]");
+  if (chip) void openArtifact(chip.dataset.openPath);
 });
 
 // Enter in the prompt spawns, the way it does in every other box here. Shift+Enter is a newline, so a

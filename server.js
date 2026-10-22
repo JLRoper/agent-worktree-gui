@@ -656,6 +656,9 @@ const server = createServer(async (req, res) => {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const r = await jobs.steer(String(body.id || ""), body.text ?? body.input);
+      // A steer lands inside the turn that is already running, so its documents belong to that turn's
+      // card rather than to a new one.
+      if (r.ok && Array.isArray(body.attachments) && body.attachments.length) jobs.addAttachments(String(body.id || ""), body.attachments);
       return sendJson(res, r.ok ? 200 : r.code === "run_not_accepting_steer" ? 409 : 400, r);
     }
 
