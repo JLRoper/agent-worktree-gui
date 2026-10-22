@@ -70,6 +70,21 @@
     </label>
     <div class="settings-preview mono" id="session-preview">…</div>
     <p class="settings-note" id="session-note">How many sessions the CLI's /sessions and /resume browser list at once. The store keeps every session — nothing is deleted at ten; this only changes how many you can see.</p>
+    <div class="settings-sep"></div>
+    <label class="settings-row" for="reorder-every">
+      <span>Board reorder</span>
+      <input id="reorder-every" type="number" inputmode="numeric" step="5" min="0" max="600" title="how often the closed folders and projects re-sort themselves — 0 turns it off">
+      <span class="settings-unit mono">s</span>
+    </label>
+    <div class="settings-presets">
+      <button type="button" data-reorder-set="0">off</button>
+      <button type="button" data-reorder-set="5">5 s</button>
+      <button type="button" data-reorder-set="15">15 s</button>
+      <button type="button" data-reorder-set="30">30 s</button>
+      <button type="button" data-reorder-set="60">1 min</button>
+    </div>
+    <div class="settings-preview mono" id="reorder-preview">…</div>
+    <p class="settings-note" id="reorder-note">How often the closed folders and projects re-sort themselves. A project you have open — and the folder holding it — keeps its slot whatever this is set to, so this only ever moves what you are not reading. Saved in this browser, and it takes effect at once.</p>
   </div>
 
   <div id="banner" class="banner hidden"></div>

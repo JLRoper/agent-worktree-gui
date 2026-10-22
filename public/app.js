@@ -11,6 +11,8 @@ const SPAWN_HISTORY_MAX = 50;
 
 const state = {
   projects: new Map(),
+  // Handle for the board-reorder clock, which the settings row can re-arm at another cadence.
+  reorderTimer: null,
   rows: new Map(),
   expanded: new Set(),
   rowEls: new Map(),
@@ -4853,13 +4855,33 @@ setInterval(() => {
   if (quiet) void resync();
 }, 30000);
 
-setInterval(() => {
-  // A folder whose projects are all closed shows nothing but their titles, so a reorder there is easy
-  // to miss and no row event is arriving to trigger one — check it on a short clock instead. Folders
-  // holding an open project are skipped inside reorderProjects(), so this never moves a card being read.
-  if (document.hidden) return;
-  reorderProjects();
-}, 5000);
+// A folder whose projects are all closed shows nothing but their titles, so a reorder there is easy to
+// miss and no row event is arriving to trigger one — check it on a clock instead. Folders holding an open
+// project are skipped inside reorderProjects(), so this never moves a card being read. The cadence is a
+// setting (0 turns it off): some readers want the board to settle and stay put.
+const REORDER_KEY = "wm.reorderSeconds";
+const REORDER_DEFAULT = 5;
+const REORDER_MAX = 600;
+
+function reorderSeconds() {
+  const stored = localStorage.getItem(REORDER_KEY);
+  // Number(null) is 0, which would read as "off" for a reader who never touched the setting.
+  if (stored === null || stored === "") return REORDER_DEFAULT;
+  const n = Number(stored);
+  if (!Number.isFinite(n) || n < 0) return REORDER_DEFAULT;
+  return Math.min(REORDER_MAX, Math.round(n));
+}
+
+function startReorderClock() {
+  clearInterval(state.reorderTimer);
+  const every = reorderSeconds();
+  state.reorderTimer = every > 0
+    ? setInterval(() => {
+        if (document.hidden) return;
+        reorderProjects();
+      }, every * 1000)
+    : null;
+}
 
 document.addEventListener("visibilitychange", () => {
   // Coming back to the tab: one catch-up, then the stream and the 1s tick take over again.
@@ -5124,6 +5146,38 @@ async function saveApprovalSetting() {
   }
 }
 
+// ---- how often the closed part of the board re-sorts -----------------------------------------
+function paintReorderSetting(note = "") {
+  const input = $("reorder-every");
+  const every = reorderSeconds();
+  if (input && document.activeElement !== input) input.value = String(every);
+  const preview = $("reorder-preview");
+  if (preview) {
+    preview.textContent = note
+      ? `${note} — ${every ? `re-sorting every ${humanWindow(every)}` : "re-sorting off"}`
+      : every
+        ? `closed folders and projects re-sort every ${humanWindow(every)} (${every} s)`
+        : "closed folders and projects stay where they are (0 = off)";
+  }
+}
+
+function saveReorderSetting(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) {
+    paintReorderSetting("NOT SAVED — give a number of seconds, 0 for off");
+    return;
+  }
+  const clamped = Math.min(REORDER_MAX, Math.round(n));
+  try {
+    localStorage.setItem(REORDER_KEY, String(clamped));
+  } catch {
+    paintReorderSetting("NOT SAVED — this browser refused to store the setting");
+    return;
+  }
+  startReorderClock();
+  paintReorderSetting(clamped === Math.round(n) ? "saved" : `saved, clamped to ${REORDER_MAX} s`);
+}
+
 // ---- how many sessions the CLI's picker lists ------------------------------------------------
 // Not a panel preference and not a retention policy: the store keeps every session, and this is the
 // number the CLI's in-chat browser used to hardcode. It writes `sessions.list_limit`, which only the
@@ -5282,6 +5336,25 @@ initFonts();
 // The model menu is filled once at start-up from the gateway's own provider list; a failure leaves
 // the "(gateway default)" entry, which is what a spawn sends anyway.
 void loadModels();
+
+// The board-reorder cadence: an input plus presets, applied the moment it is accepted.
+$("reorder-every")?.addEventListener("change", (e) => saveReorderSetting(e.target.value));
+$("reorder-every")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    saveReorderSetting(e.target.value);
+    e.target.blur();
+  }
+});
+for (const b of document.querySelectorAll("[data-reorder-set]")) {
+  b.addEventListener("click", () => {
+    saveReorderSetting(b.dataset.reorderSet);
+    const input = $("reorder-every");
+    if (input) input.value = String(reorderSeconds());
+  });
+}
+startReorderClock();
+paintReorderSetting();
 
 // Reflect the remembered collapse state of the two fixed cards before the first paint of them.
 for (const id of ["newagent", "agents"]) applyFixedCollapse(id);
