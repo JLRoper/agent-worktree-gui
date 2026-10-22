@@ -41,7 +41,7 @@ index 8045b00317..c85e0f8874 100644
          route_source = (
              "session_model_lock" if confirmed_runtime_lock
 diff --git a/gateway/platforms/api_server_runs.py b/gateway/platforms/api_server_runs.py
-index bfb5b4dbee..d11080ac00 100644
+index bfb5b4dbee..0883152909 100644
 --- a/gateway/platforms/api_server_runs.py
 +++ b/gateway/platforms/api_server_runs.py
 @@ -1,6 +1,7 @@
@@ -117,7 +117,7 @@ index bfb5b4dbee..d11080ac00 100644
              **{k: agent_overrides.get(k) for k in ("requested_model", "requested_provider", "model_options")}),
          request_profile=_api_server._api_request_profile.get(),
          browser_control_principal=_api_server._api_request_browser_control_principal.get(),
-@@ -825,6 +870,15 @@ def _run_agent_sync(self, run: _RunLaunch, agent, approval_notify, *, _api_serve
+@@ -825,6 +870,23 @@ def _run_agent_sync(self, run: _RunLaunch, agent, approval_notify, *, _api_serve
              # /v1/runs owns its agent lifecycle (no TurnRunner): record process ownership
              # so stop/cancel reaps only the background processes this run created.
              _api_server._publish_turn_process_ownership(agent, effective_task_id)
@@ -127,13 +127,21 @@ index bfb5b4dbee..d11080ac00 100644
 +            # finally block, so one run's directory can never leak into the next.
 +            run_cwd = run.agent_kwargs.get("cwd")
 +            if run_cwd:
++                from agent.runtime_cwd import reset_session_cwd, set_session_cwd
 +                from tools.terminal_tool import clear_session_cwd, register_task_env_overrides
++                # cwd is carried TWICE and both halves matter: the tools resolve a directory per task
++                # (terminal_tool), while the system prompt, context-file discovery and the agent's own
++                # idea of "where am I" read the session cwd scope (agent.runtime_cwd). With only the
++                # tool half set, the agent was told it lived in the gateway's directory and prefixed
++                # its own commands with `cd ~` — measured: "what directory does your context say" ->
++                # C:\Users\roper while every tool ran in the worktree.
++                resets.append((set_session_cwd(run_cwd), reset_session_cwd))
 +                register_task_env_overrides(effective_task_id, {"cwd": run_cwd})
 +                resets.append((effective_task_id, clear_session_cwd))
              # Passed only when set: a human turn keeps today's call shape.
              author_kwargs = {"turn_author": run.turn_author} if run.turn_author is not None else {}
              r = agent.run_conversation(
-@@ -963,8 +1017,19 @@ async def _execute_run(self, run: _RunLaunch, *, _api_server) -> None:
+@@ -963,8 +1025,19 @@ async def _execute_run(self, run: _RunLaunch, *, _api_server) -> None:
                  interim_assistant_callback=_interim_cb, **run.agent_kwargs)
          self._active_run_agents[run_id] = agent
          approval_notify = _make_approval_notify(self, run, _api_server=_api_server)

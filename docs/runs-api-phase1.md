@@ -53,7 +53,7 @@ the wrong directory.
 
 The agent's own `cwd=` kwarg is not enough on its own: the terminal tool resolves a directory per
 **task**, through `tools.terminal_tool`, so binding the task is the part that makes `pwd` agree with
-the prompt. Measured before/after — the same run reported `C:\Users\roper` first, then the worktree.
+the prompt. Measured before/after — the same run reported `C:/Users/roper` first, then the worktree.
 
 Re-apply after `hermes update` (it replaces `gateway/platforms/api_server.py` and
 `api_server_runs.py`); `.orig-runs-api-knobs` backups sit next to both files.
@@ -130,26 +130,30 @@ each one's `pwd` returned its own worktree.
 
 `--yolo` is still not a Runs API field.
 
-## Open defect: a gated first tool call can use the gateway's directory
+## Fixed: a gated first tool call used the gateway's directory
 
-Reproduction (2026-10-22, live on `:7331`, gateway with the patch):
+Symptom: when a run's **first** tool call was a command that parks for approval, the request (and the
+command) was built as `cd ~ && …` / `cd "C:/Users/roper" && …`, i.e. against the gateway's home, while
+every other call ran in the run's worktree.
 
-| run shape | result |
+Two carriers, not one. `cwd` reaches a turn through:
+
+- `register_task_env_overrides(task_id, {"cwd": …})` — what the **tools** resolve per task, and
+- `agent.runtime_cwd.set_session_cwd(…)` — what the **system prompt**, context-file discovery and the
+  agent's own sense of "where am I" read.
+
+The gateway patch only set the first. So the tools were in the worktree while the model was told it
+lived in `C:/Users/roper` — and the model, being helpful, prefixed its own commands with `cd ~`.
+Measured directly: a run asked "what working directory does your context say you are in?" answered
+`C:/Users/roper` while its `pwd` returned the worktree.
+
+The patch now sets both, and releases both in the run's `finally` (the same shape cron already uses:
+`set_session_vars(cwd=…)` plus `record_session_cwd`). Verified after the fix:
+
+| check | result |
 |---|---|
-| first tool call plain (`pwd`, `sleep`) | correct — the run's own worktree, three concurrent runs included |
-| `pwd` first, gated second (`git reset --hard`) | both correct |
-| first tool call gated (parks for approval) | command built as `cd ~ && …` (or `cd "C:/Users/roper"`), so it would act on the gateway home |
+| "what directory does your context say?" | the run's worktree, same as `pwd` |
+| gated **first** call (`git reset --hard`) | `cd "…/.worktrees/run-the-terminal-command-d8a152" && git reset --hard …` |
+| denial round trip | `resolved:1`, tool BLOCKED, card keeps the correct command |
 
-Two occurrences, both with a gated first call, so the pattern is consistent rather than random — but it
-is not diagnosed. What is known:
-
-- `register_task_env_overrides(task_id, {"cwd": …})` is applied before `run_conversation` and its key
-  matches the task key the tools resolve (`qual == raw`, no profile prefix) — verified by probe.
-- The wrapper `cd <cwd>` comes from the terminal Env's `cwd`, so on the failing path that Env was
-  built with `config["cwd"]` (the gateway's directory) instead of the per-task override.
-- The next thing to instrument is `_run_approval_guards()` / the approval-present path in
-  `tools/terminal_tool.py`: it appears to materialise the command (and possibly the Env) before the
-  per-task override is consulted, which would explain why only a gated *first* call is affected.
-
-Until this is fixed, an agent whose very first action is a flagged command may run it in the gateway's
-working directory. Plain commands are unaffected.
+A plain call never showed the bug because it does not consult the prompt's idea of the directory.
