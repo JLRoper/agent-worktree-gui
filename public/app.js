@@ -740,6 +740,12 @@ function turnBody(turn, copy = "") {
 function approvalPrompt(turn, copy = "") {
   const approval = turn.approval;
   if (!approval) return "";
+  // A question only exists while its turn does. The panel's approval object can outlive the run — the
+  // run errors, is cancelled, or its stream simply ends while the request is still attached — and a box
+  // offering "Allow once" for a turn that is already dead is worse than no box. The terminal state of
+  // the turn wins, and the error line left in its console is the record of what happened.
+  const live = turn.status === "running" || turn.status === "starting";
+  if (!live || turn.approvalDone) return "";
   const choices = Array.isArray(approval.choices) && approval.choices.length ? approval.choices : ["once", "deny"];
   const label = { once: "Allow once", session: "Allow for this session", always: "Always allow", deny: "Deny" };
   return `<div class="turn-approval" data-approval-for="${esc(turn.id)}${esc(copy)}">
