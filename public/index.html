@@ -114,8 +114,8 @@
           <label class="chk" title="Not used: approvals come to the agent's card. A run is never blind to a flagged command, so there is nothing to bypass here.">
             <input id="job-yolo" type="checkbox" disabled /> <code>--yolo</code>
           </label>
-          <label class="chk" title="Existing worktree, no new tree: run in the 'start in' folder as it is. Without this, hermes creates a new worktree and branch.">
-            <input id="job-existing" type="checkbox" /> run in that folder as-is
+          <label class="chk" title="Create a workspace: a new worktree and branch under .worktrees/, so the agent's edits land there and never in the folder itself. Untick to run in the 'start in' folder as it is — that is how you aim an agent at an existing worktree.">
+            <input id="job-create" type="checkbox" checked /> create workspace
           </label>
           <span class="spacer"></span>
           <button id="btn-spawn" type="button" class="primary">Spawn agent</button>

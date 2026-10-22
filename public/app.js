@@ -2380,11 +2380,12 @@ function updateSpawnNote() {
   const cwd = $("job-cwd").value.trim();
   const where = cwd || p?.path || state.spawn.defaultCwd || "?";
   const custom = Boolean(cwd) && Boolean(p) && cwd !== p.path;
-  const existing = $("job-existing").checked;
-  $("spawn-note").textContent = existing
-    ? `runs IN ${where} (no new worktree${state.spawnTarget ? ` · ${state.spawnTarget}` : ""}); edits land in that tree`
-    : `run · new worktree under ${where}/.worktrees/` +
-      (custom ? " · custom location (differs from the selected project)" : ` · project ${p ? p.name : "(none)"}`);
+  // The checkbox is "create workspace": ticked means a new tree, unticked means run in the folder as it is.
+  const create = $("job-create").checked;
+  $("spawn-note").textContent = create
+    ? `run · new worktree under ${where}/.worktrees/` +
+      (custom ? " · custom location (differs from the selected project)" : ` · project ${p ? p.name : "(none)"}`)
+    : `runs IN ${where} (no new worktree${state.spawnTarget ? ` · ${state.spawnTarget}` : ""}); edits land in that tree`;
   // A repo with no commits has no HEAD to branch from, so the panel cannot create a worktree in it.
   const emptyRepo = Boolean(p) && Boolean(p.empty) && (!cwd || cwd === p.path);
   const warn = $("spawn-warn");
@@ -2455,7 +2456,8 @@ function focusPromptWithoutScrolling() {
 function focusSpawnForWorktree(path, name) {
   revealCard("newagent");
   $("job-cwd").value = path;
-  $("job-existing").checked = true;
+  // Aiming at a worktree that exists means "run here": no new workspace.
+  $("job-create").checked = false;
   state.spawnTarget = name || null;
   updateSpawnNote();
   const card = $("newagent");
@@ -2474,7 +2476,7 @@ function focusSpawn(projectName) {
     // The green "+" is the "start work here" gesture: point the location field at that project.
     if (p) $("job-cwd").value = p.path;
     // ...and that means a NEW worktree in that project, not the project folder itself.
-    $("job-existing").checked = false;
+    $("job-create").checked = true;
     state.spawnTarget = null;
     updateSpawnNote();
   }
@@ -2490,8 +2492,9 @@ function formValues() {
     prompt: $("job-prompt").value,
     // An explicitly edited location wins over the project picker (the server prefers `cwd`).
     cwd: $("job-cwd").value.trim() || undefined,
-    // true = run in that directory as-is (an existing worktree), no new worktree created.
-    existing: $("job-existing").checked,
+    // true = run in that directory as-is (an existing worktree), no new worktree created. The checkbox says
+    // the opposite ("create workspace"), so this is where the two meet.
+    existing: !$("job-create").checked,
     project: $("job-project").value || undefined,
     model: $("job-model").value.trim() || undefined,
     budget: Number($("job-budget").value) || undefined,
@@ -4080,12 +4083,12 @@ $("btn-fetch").addEventListener("click", () => post("/api/fetch"));
 $("job-project").addEventListener("change", () => {
   const p = selectedProject();
   if (p) $("job-cwd").value = p.path;
-  $("job-existing").checked = false;
+  $("job-create").checked = true;
   state.spawnTarget = null;
   updateSpawnNote();
 });
 $("job-cwd").addEventListener("input", updateSpawnNote);
-$("job-existing").addEventListener("change", () => {
+$("job-create").addEventListener("change", () => {
   updateSpawnNote();
 });
 $("btn-spawn").addEventListener("click", spawnAgent);
