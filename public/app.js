@@ -1199,7 +1199,7 @@ function contextBar(pct, width = 10) {
   return "\u2588".repeat(full) + tail + "\u00b7".repeat(Math.max(0, width - full - (tail ? 1 : 0)));
 }
 
-function statsLine(stats) {
+function statsLine(stats, model = null) {
   if (!stats || typeof stats !== "object") return "";
   const segs = [];
   const pct = Number.isFinite(stats.context_percent) ? stats.context_percent : null;
@@ -1222,8 +1222,15 @@ function statsLine(stats) {
   // missing number, and this one is a real measurement.
   if (Number.isFinite(stats.compressions)) segs.push(`\u29c9 ${stats.compressions}`);
   if (!segs.length) return "";
+  // The model leads the line: these figures describe what that model did, and the id's owner prefix is
+  // dropped for width (the full id stays in the tooltip).
+  const modelSeg = model
+    ? `<span class="stat stat-model" title="${esc(model)}">${esc(String(model).split("/").pop())}</span>`
+    : "";
   const title = "this session's usage: context occupancy, prompt-cache hit rate, compactions (\u29c9); latency and t/s are estimated from the turn's wall clock (~)";
-  const body = segs.map((s) => `<span class="stat">${esc(s)}</span>`).join('<span class="stat-sep">\u2502</span>');
+  const body = [modelSeg, segs.map((s) => `<span class="stat">${esc(s)}</span>`).join('<span class="stat-sep">\u2502</span>')]
+    .filter(Boolean)
+    .join('<span class="stat-sep">\u2502</span>');
   // A span, not a div: the readout belongs on the footer line with the outcome and the token count,
   // to their right, and a block element there costs a line of card height for nothing.
   return `<span class="job-stats mono" title="${esc(title)}">${body}</span>`;
@@ -1258,7 +1265,9 @@ function conversationHtml(conv) {
     latest.title ? null : latest.cwd ? `cwd ${latest.cwd}` : null,
     // Why this card is in the unattached panel: it has no worktree, or one that is not in the scan.
     homeless ? (latest.ownerPath ? `owner ${latest.ownerPath} (not in the scan)` : "no worktree") : null,
-    latest.model ? `model ${latest.model}` : "(default model)",
+    // With usage figures present the model leads that strip instead (it is what the numbers belong to);
+    // without them this line is the only place it can appear.
+    latest.stats ? null : latest.model ? `model ${latest.model}` : "(default model)",
     latest.worktree ? `worktree ${latest.worktree}` : null,
     latest.existing ? "in existing worktree" : null,
     turns.length > 1 ? `${turns.length} turns` : null,
@@ -1272,8 +1281,10 @@ function conversationHtml(conv) {
   const outcome = latest.runId
     ? `${latest.status}${latest.exitCode && latest.exitCode !== 0 ? ` · exit ${latest.exitCode}` : ""}`
     : `exit ${latest.exitCode ?? "?"}`;
+  // No clock here while a turn runs: the turn head already says "turn 2 - running 12s", and a second
+  // counter a few lines above the reply box only pushed the box down.
   const foot = latest.status === "running" || latest.status === "starting"
-    ? `<span class="dimmer mono" data-run-clock="1">running ${esc(elapsed(latest))}</span>`
+    ? ""
     : latest.revived
       // Rebuilt from the gateway's session store, so there was never a process here: "exit ?" and
       // "0s" would both describe a run that did not happen in this panel. Say when it was last used.
@@ -1336,7 +1347,7 @@ function conversationHtml(conv) {
       ${queued ? `<div class="ghost-turns">${queue
         .map((q) => `<div class="ghost-turn"><div class="ghost-head mono"><span class="ghost-badge">queued</span><span class="queue-ago" data-queued-at="${q.at}">${fmtDur(Date.now() - q.at)}</span><span class="dimmer">sends when the current turn finishes</span></div><div class="ghost-prompt">${linkifyText(q.text)}</div></div>`)
         .join("")}</div>` : ""}
-      <div class="job-foot">${foot}</div>
+      ${foot ? `<div class="job-foot">${foot}</div>` : ""}
       <div class="reply">
         <div class="reply-wrap">
           <div class="attach-chips" data-chips="${esc(thread)}">${attachmentChipsHtml(thread)}</div>
@@ -1351,11 +1362,11 @@ function conversationHtml(conv) {
             ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button" title="cancel the run this agent is in the middle of">Cancel turn</button>` : ""}
           </div>
         </div>
+        ${latest.stats ? `<div class="job-stats-row">${statsLine(latest.stats, latest.model || modelsState?.defaultModel || null)}</div>` : ""}
         <div class="reply-row">
           <span class="warnline" data-reply-warn="${esc(thread)}"></span>
         </div>
       </div>
-      ${latest.stats ? `<div class="job-stats-row">${statsLine(latest.stats)}</div>` : ""}
     </div>
   </div>`;
 }

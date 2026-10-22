@@ -846,9 +846,10 @@ body.modal-open { overflow: hidden; }
 .job.maximized .job-out { max-height: none; flex: 1; min-height: 0; }
 .job.maximized .reply-box { min-height: 46px; }
 .job-prompt, .job-cmd, .job-out, .job-foot { margin-left: 18px; }
-/* The usage readout sits under the reply box, not above it: the box is where the reader is looking, and the
-   numbers belong at the bottom of the card where they close it off. */
-.job-stats-row { margin: 4px 0 0 18px; }
+/* The usage readout sits directly under the reply box, not above it and not at the foot of the card: it
+   starts where the box starts and ends its line. No left margin of its own; the send/steer buttons are
+   pinned inside the box itself, so this must NOT live between the textarea and them. */
+.job-stats-row { margin: 2px 0 0; }
 /* The card's own title, set like the revive row: the name carries the weight, its age stays quiet. */
 .job-head .job-title { font-weight: 600; color: var(--text); max-width: 52ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-head .job-when { flex: none; font-size: 10.5px; color: var(--dimmer); }
