@@ -2182,11 +2182,19 @@ async function spawnAgent() {
     // Take the reader to the new agent: unfold folder/project/worktree and scroll to its card.
     revealSpawnedAgent(d.job);
   } catch (e) {
-    $("spawn-msg").textContent = `spawn failed: ${e.message}`;
+    const why = String(e.message || e);
+    // The one refusal with an obvious one-click fix: the repo has no commits, so there is no HEAD for a
+    // worktree to branch from. Offer the commit here rather than making the reader open a terminal.
+    if (/unborn HEAD|has no commits yet/i.test(why)) {
+      const dir = body.cwd || $("job-cwd").value.trim() || "";
+      $("spawn-msg").innerHTML = `${esc(`spawn failed: ${why}`)} <button type="button" class="btn-fix-first" data-first-commit="${esc(dir)}" title="create an empty initial commit in that repository — local only, nothing is pushed">make the first commit</button>`;
+    } else {
+      $("spawn-msg").textContent = `spawn failed: ${why}`;
+    }
     // A lost reply does not mean a lost turn: the gateway can die after the run was created, and the
     // card then arrives on its own while the form still holds the text — which reads exactly like a
     // spawn that never happened. Look for it before asking the reader to type it again.
-    if (/did not answer within/.test(String(e.message))) void recoverSpawnAfterTimeout(body);
+    if (/did not answer within/.test(why)) void recoverSpawnAfterTimeout(body);
   } finally {
     $("btn-spawn").disabled = false;
   }
@@ -3863,6 +3871,32 @@ document.addEventListener("drop", (e) => {
   e.preventDefault();
   box.classList.remove("drop-target");
   void attachFiles(files, box);
+});
+
+// "make the first commit" on an unborn-HEAD refusal: one empty local commit, then the spawn the button was
+// offered for runs again. No push, no file invented for the repo.
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest ? e.target.closest("[data-first-commit]") : null;
+  if (!btn) return;
+  const dir = btn.dataset.firstCommit || "";
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = "committing…";
+  try {
+    const r = await apiFetch(
+      "/api/repo/first-commit",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: dir }) },
+      { timeoutMs: 60000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    $("spawn-msg").textContent = `first commit ${d.sha} made in ${d.path} — nothing pushed. Spawning again…`;
+    void spawnAgent();
+  } catch (err) {
+    $("spawn-msg").textContent = `could not make the first commit: ${err.message}`;
+    btn.disabled = false;
+    btn.textContent = label;
+  }
 });
 
 // The chip opens its file; the x removes it.

@@ -471,6 +471,14 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 }
 .chip-x:hover { color: var(--red); background: var(--red-bg); }
 
+/* The one-click fix offered beside an unborn-HEAD refusal in the New agent form. */
+.btn-fix-first {
+  margin-left: 6px; padding: 1px 8px; border: 1px solid #2f5a7a; border-radius: 999px;
+  background: var(--blue-bg); color: #9ecbff; font-size: 11px; line-height: 1.6; cursor: pointer;
+}
+.btn-fix-first:hover { background: #16202c; border-color: #3d78a3; }
+.btn-fix-first:disabled { color: var(--dimmer); border-color: var(--line); cursor: default; }
+
 /* A document is being dragged over the box that will carry its path. */
 textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 

@@ -576,6 +576,36 @@ const server = createServer(async (req, res) => {
     }
 
     // Continue a conversation: same named thread, no new worktree, run where the agent is.
+    // A repo with no commits cannot host a worktree (there is no HEAD to branch from), and the spawn
+    // refuses with that reason. This is the one-line fix that reason asks for: an EMPTY commit, so no
+    // file is invented for the repo, and never a push — the commit stays local.
+    if (route === "/api/repo/first-commit" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const target = path.resolve(String(body.path || "").trim());
+      const info = await stat(target).catch(() => null);
+      if (!info || !info.isDirectory()) return sendJson(res, 404, { error: `no such directory: ${target}` });
+      const repoCheck = await gitIn(target, ["rev-parse", "--git-dir"], 15000);
+      if (!repoCheck.ok) return sendJson(res, 400, { error: `${target} is not a git repository` });
+      const head = await gitIn(target, ["rev-parse", "--verify", "--quiet", "HEAD"], 15000);
+      if (head.ok) {
+        const sha = await gitIn(target, ["rev-parse", "--short", "HEAD"], 10000);
+        return sendJson(res, 409, { error: `${target} already has commits (${String(sha.out || "").trim()})`, alreadyCommitted: true });
+      }
+      const message = String(body.message || "Initial commit").slice(0, 200);
+      const args = ["commit", "--allow-empty", "-m", message];
+      let made = await gitIn(target, args, 30000);
+      if (!made.ok && /tell me who you are|unable to auto-detect email|empty ident|Please tell me who/i.test(String(made.err || made.out || ""))) {
+        // No identity configured on this machine: a local bot identity keeps the commit local and
+        // attributable instead of failing on a prompt no one can answer.
+        made = await gitIn(target, ["-c", "user.name=Hermes Panel", "-c", "user.email=panel@localhost", ...args], 30000);
+      }
+      if (!made.ok) return sendJson(res, 400, { error: String(made.err || made.out || "git commit failed").slice(0, 400) });
+      const sha = await gitIn(target, ["rev-parse", "--short", "HEAD"], 10000);
+      log(`first commit made in ${target} (${String(sha.out || "").trim()}) — local only, nothing pushed`);
+      return sendJson(res, 201, { ok: true, path: target, sha: String(sha.out || "").trim(), message });
+    }
+
     // A pasted or dropped document is stored on disk and its ABSOLUTE path goes into the prompt. The
     // gateway's runs API has no attachment field, but the agent has file tools — and an absolute path
     // is independent of the run's cwd, which this gateway does not honour anyway.
