@@ -3161,11 +3161,10 @@ function detailHtml(row) {
     row.error ? `error: ${esc(row.error)}` : null,
   ].filter(Boolean).join(" · ");
   const agents = agentsFor(row);
+  // No heading: the row's own badge already says how many agents it owns and how many are running, and the
+  // cards are the first thing under the row - a title above them only pushed them down.
   const agentsHtml = agents.length
-    ? `<div class="agents-block">
-        <h4>Agents <span class="dimmer mono">${agents.length}${agentsRunning(agents) ? ` · ${agentsRunning(agents)} running` : ""}</span></h4>
-        ${agents.map((c) => conversationHtml(c)).join("")}
-      </div>`
+    ? `<div class="agents-block">${agents.map((c) => conversationHtml(c)).join("")}</div>`
     : "";
   // Sessions the row says are here but that have no card: the conversation lives in the gateway, and
   // the panel's job store is what held the card. Reviving one puts a card back you can reply to —

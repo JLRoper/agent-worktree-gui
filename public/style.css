@@ -245,7 +245,7 @@ td.age .age-num.dimmer { color: var(--dimmer); }
 /* agents owned by a worktree, listed inside that row's detail */
 /* The rule closes the agent list rather than opening it: it sits BELOW the cards, so the detail reads
    "what this tree is doing", then a line, then the reference material. */
-.agents-block { margin-top: 14px; padding-top: 10px; padding-bottom: 10px; border-bottom: 1px solid #1d222b; }
+.agents-block { margin-top: 4px; padding-top: 0; padding-bottom: 10px; border-bottom: 1px solid #1d222b; }
 /* With revivable sessions underneath, those belong to the same list: the line moves below them instead of
    cutting between the cards and the sessions. */
 .agents-block:has(+ .sessions-block) { border-bottom: 0; padding-bottom: 2px; }
