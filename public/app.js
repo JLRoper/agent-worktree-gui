@@ -489,7 +489,7 @@ function paintCollapseAll() {
   const open = anythingOpen();
   const names = [...state.projects.keys()];
   btn.textContent = open ? "Collapse all" : "Expand all";
-  btn.title = `${open ? "collapse" : "expand"} every folder and project section (${boardRoots().length} folders, ${names.length} projects) — Ctrl+${open ? "[" : "]"}`;
+  btn.title = `${open ? "collapse" : "expand"} the whole tree — every folder, project, worktree row, card and turn (${boardRoots().length} folders, ${names.length} projects) — Ctrl+${open ? "[" : "]"}`;
 }
 
 // One direction at a time. The header button must toggle (one button, two words), but a hotkey that
@@ -509,10 +509,23 @@ function setEverythingOpen(open) {
     for (const r of roots) state.collapsedRoots.delete(r);
     for (const id of FIXED_CARDS) state.collapsedFixed.delete(id);
   }
+  // ...and on down to the turns. A card body and a turn transcript are accordions too, and stopping at
+  // the row meant "collapse all" still left a screenful of open transcripts underneath.
+  for (const c of conversations()) {
+    if (open) state.collapsedJobs.delete(c.thread);
+    else state.collapsedJobs.add(c.thread);
+    for (const turn of c.turns || []) {
+      state.turnOpen.set(turnKey(turn), open);
+      // A pinned turn has its own copy above the paged ones with its own key.
+      if (state.pinnedTurns.has(turn.id)) state.turnOpen.set(turnKey(turn, "@pin"), open);
+    }
+  }
   saveExpandedProjects();
   saveCollapsedRoots();
   saveCollapsedFixed();
+  saveCollapsedJobs();
   renderAll(); // folders and projects both changed shape: one rebuild is cheaper than patching two layers
+  renderJobs(); // the unattached cards are not part of a project section
   // The fixed cards live in the static markup, so renderAll does not touch them.
   for (const id of FIXED_CARDS) applyFixedCollapse(id);
   paintCollapseAll();
