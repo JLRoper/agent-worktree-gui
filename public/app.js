@@ -1245,10 +1245,17 @@ function conversationHtml(conv) {
   // A run parks its own approval inside the turn (the Runs API path): same message, different
   // carrier, so the card can answer it without the CLI approval plugin.
   const runApproval = runningTurn?.approval || latest.approval || null;
+  // The session's own name is the card's title, and it is set like the revive row's: bold, with how long ago
+  // the thread was last used in the same dimmed grey next to it. The cwd only appears when a session has no
+  // name at all.
+  const titleHtml = latest.title
+    ? `<span class="job-title mono" title="${esc(latest.title)}">${esc(latest.title)}</span>` +
+      (latest.lastActiveAt
+        ? `<span class="job-when mono" title="last used ${esc(new Date(latest.lastActiveAt).toLocaleString())}">${esc(fmtAgo(latest.lastActiveAt))}</span>`
+        : "")
+    : "";
   const meta = [
-    // The session's own name, the one Hermes gave it (and the one the revive list offers), in place of its
-    // cwd — a path is long, identical for every card in a tree, and tells the reader nothing about the work.
-    latest.title || (latest.cwd ? `cwd ${latest.cwd}` : null),
+    latest.title ? null : latest.cwd ? `cwd ${latest.cwd}` : null,
     // Why this card is in the unattached panel: it has no worktree, or one that is not in the scan.
     homeless ? (latest.ownerPath ? `owner ${latest.ownerPath} (not in the scan)` : "no worktree") : null,
     latest.model ? `model ${latest.model}` : "(default model)",
@@ -1304,7 +1311,8 @@ function conversationHtml(conv) {
       <span class="pill ${runningNow ? "pill-running" : `pill-notrunning${latest.status === "failed" ? " is-failed" : ""}`}" title="${esc(runningNow ? `running ${elapsed(latest)}` : `${latest.status} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""}`)}">${runningNow ? "running" : latest.status === "failed" ? "exited" : "not-running"}</span>
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       ${runApproval && !waitingApproval ? `<span class="sig sig-approval" title="this run is parked on a flagged command — answer it in the card below">waiting on approval</span>` : ""}
-      <span class="mono dim">${esc(meta)}</span>
+      ${titleHtml}
+      ${meta ? `<span class="mono dim">${esc(meta)}</span>` : ""}
       ${artifacts.length ? `<button type="button" class="btn-artifacts" data-artifacts="${esc(thread)}" title="${artifacts.length} deliverable(s) from this agent — click to open, copy or delete them">\u{1F4C4} ${artifacts.length}</button>` : ""}
       ${pager}
       <span class="spacer"></span>

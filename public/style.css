@@ -846,6 +846,9 @@ body.modal-open { overflow: hidden; }
 /* The usage readout sits under the reply box, not above it: the box is where the reader is looking, and the
    numbers belong at the bottom of the card where they close it off. */
 .job-stats-row { margin: 4px 0 0 18px; }
+/* The card's own title, set like the revive row: the name carries the weight, its age stays quiet. */
+.job-head .job-title { font-weight: 600; color: var(--text); max-width: 52ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job-head .job-when { flex: none; font-size: 10.5px; color: var(--dimmer); }
 .job-preview { display: none; }
 
 /* A minimized card is a handle: the head, the preview line and the gaps between them all expand it. */
