@@ -426,6 +426,10 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
   opacity: .82;
 }
 .turn-prompt:hover { opacity: 1; color: #e6e9ef; }
+/* The live clock on a tool call that is still running: quiet while it is short, amber once it has
+   been going long enough that a reader would otherwise conclude the turn is frozen. */
+.jl-live { color: var(--dimmer); }
+.jl-live.is-long { color: #e0b341; }
 /* a URL in an agent's console: click (or ctrl-click) opens it in the OS default browser */
 a.out-link { color: #7fb3ff; text-decoration: underline dotted; cursor: pointer; }
 a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }

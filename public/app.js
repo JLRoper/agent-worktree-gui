@@ -663,10 +663,68 @@ function linkifyText(text) {
   });
 }
 
+// A tool that runs for minutes is the one thing that makes a healthy turn look frozen — a 159 s
+// recursive grep did exactly that, and the card showed nothing but the line that started it. Every
+// line carries the server's timestamp, so the tool still in flight can grow a live clock.
+const TOOL_START_RE = /^▸\s*([^\s·]+)/;
+const TOOL_DONE_RE = /^\s*↳\s*([^\s·]+)/;
+
+// Index of the started tool call that has no result yet, or -1. Parallel calls interleave, so count
+// starts and completions per tool name rather than assuming the last line is the running one.
+function inflightToolIndex(lines) {
+  const started = new Map();
+  const finished = new Map();
+  let lastIdx = -1;
+  let lastName = null;
+  lines.forEach((l, i) => {
+    const text = String(l.text || "");
+    const start = l.kind === "tool" ? TOOL_START_RE.exec(text) : null;
+    if (start) {
+      started.set(start[1], (started.get(start[1]) || 0) + 1);
+      lastIdx = i;
+      lastName = start[1];
+      return;
+    }
+    const done = l.kind === "tool-out" ? TOOL_DONE_RE.exec(text) : null;
+    if (done) finished.set(done[1], (finished.get(done[1]) || 0) + 1);
+  });
+  if (lastIdx < 0 || !lastName) return -1;
+  return (started.get(lastName) || 0) > (finished.get(lastName) || 0) ? lastIdx : -1;
+}
+
+function liveLabel(secs) {
+  const n = Math.max(0, Math.floor(secs));
+  return ` · running ${n < 60 ? `${n}s` : `${Math.floor(n / 60)}m${String(n % 60).padStart(2, "0")}s`}`;
+}
+
+function liveSuffix(from) {
+  return liveLabel((Date.now() - (Number(from) || Date.now())) / 1000);
+}
+
+// Redraws the clocks in place — never a repaint, so a scrolled console stays put while it ticks.
+function tickLiveClocks() {
+  for (const el of document.querySelectorAll("[data-live-from]")) {
+    const from = Number(el.dataset.liveFrom) || Date.now();
+    const secs = (Date.now() - from) / 1000;
+    el.textContent = liveLabel(secs);
+    // Past a minute it is the only moving part on the card, so it stops being quiet.
+    el.classList.toggle("is-long", secs >= 60);
+  }
+}
+
+setInterval(tickLiveClocks, 1000);
+
 function turnBody(turn, copy = "") {
-  const body = jobLines(turn.id)
-    .slice(-300)
-    .map((l) => `<div class="jl jl-${esc(l.kind || "raw")}" data-lid="${esc(l.lid ?? "")}">${linkifyText(l.text)}</div>`)
+  const lines = jobLines(turn.id).slice(-300);
+  const running = turn.status === "running" || turn.status === "starting";
+  // Which started tool call has no result yet. Parallel calls interleave, so count starts and
+  // completions per tool name instead of assuming "the last line is the running one".
+  const busy = running ? inflightToolIndex(lines) : -1;
+  const body = lines
+    .map((l, i) => {
+      const live = i === busy ? `<span class="jl-live" data-live-from="${Number(l.at) || Date.now()}">${liveSuffix(Number(l.at) || Date.now())}</span>` : "";
+      return `<div class="jl jl-${esc(l.kind || "raw")}" data-lid="${esc(l.lid ?? "")}">${linkifyText(l.text)}${live}</div>`;
+    })
     .join("") || '<div class="jl jl-dim">waiting for output…</div>';
   return `<pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>` +
     approvalPrompt(turn, copy) + approvalDecided(turn);
