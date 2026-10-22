@@ -2142,6 +2142,31 @@ function revealCard(id) {
   applyFixedCollapse(id);
 }
 
+// Aiming the spawn card must also SHOW it. The top bar is sticky, so `scrollIntoView({block:"start"})`
+// parks the card's own header underneath it, and focusing the prompt afterwards scrolls the textarea to
+// the bottom of the window — together they pushed the whole card above the fold (measured: card top at
+// -349px while the caret sat in the prompt). Scroll to just below the bar, then focus without letting
+// the browser scroll again.
+function scrollCardUnderBar(card) {
+  const bar = document.querySelector(".topbar");
+  const offset = (bar?.getBoundingClientRect().height || 0) + 12;
+  const top = window.scrollY + card.getBoundingClientRect().top - offset;
+  // Instant, not smooth: a smooth animation across a thousand rows is cancelled by the board's own
+  // repaint (the page height changes under it) and stops wherever it happened to be — which is how the
+  // card kept ending up half-visible.
+  window.scrollTo({ top: Math.max(0, top), behavior: "auto" });
+}
+
+function focusPromptWithoutScrolling() {
+  const prompt = $("job-prompt");
+  if (!prompt) return;
+  try {
+    prompt.focus({ preventScroll: true });
+  } catch {
+    prompt.focus(); // an engine without focus options: the scroll above has already put it in view
+  }
+}
+
 function focusSpawnForWorktree(path, name) {
   revealCard("newagent");
   $("job-cwd").value = path;
@@ -2151,8 +2176,8 @@ function focusSpawnForWorktree(path, name) {
   const card = $("newagent");
   card.classList.add("armed");
   setTimeout(() => card.classList.remove("armed"), 1400);
-  card.scrollIntoView({ block: "start", behavior: "smooth" });
-  $("job-prompt").focus();
+  scrollCardUnderBar(card);
+  focusPromptWithoutScrolling();
 }
 
 // The green "+": aim the spawn card at that project and put the cursor in the prompt.
@@ -2171,8 +2196,8 @@ function focusSpawn(projectName) {
   const card = $("newagent");
   card.classList.add("armed");
   setTimeout(() => card.classList.remove("armed"), 1400);
-  card.scrollIntoView({ block: "start", behavior: "smooth" });
-  $("job-prompt").focus();
+  scrollCardUnderBar(card);
+  focusPromptWithoutScrolling();
 }
 
 function formValues() {
