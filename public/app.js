@@ -118,6 +118,20 @@ function fmtDur(ms) {
   return `${Math.floor(h / 24)}d${String(h % 24).padStart(2, "0")}h`;
 }
 
+// Coarse on purpose: "4h ago" answers "when did I last use this", and a per-second figure on a stale
+// session would be noise. The exact moment is in the tooltip.
+function fmtAgo(ts) {
+  const t = typeof ts === "number" ? ts : Date.parse(String(ts || ""));
+  if (!Number.isFinite(t) || t <= 0) return "";
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 90) return "just now";
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
 function elapsed(j) {
   if (!j.startedAt) return "—";
   const end = j.endedAt ? Date.parse(j.endedAt) : Date.now();
@@ -2819,13 +2833,13 @@ function detailHtml(row) {
   const idleSessions = (row.signals?.hermes?.idleList || []).filter((s) => s && s.id && !known.has(s.id));
   const sessionsHtml = idleSessions.length
     ? `<div class="sessions-block">
-        <h4>Sessions <span class="dimmer mono">${idleSessions.length} here, no card on the board</span></h4>
         ${idleSessions
           .map(
             // The button leads the row, in the column where a card puts its status pill, so "revive"
             // and "EXITED" read as the same kind of thing in the same place.
             (s) => `<div class="session-row">
             <button type="button" class="btn-revive" data-revive-session="${esc(s.id)}" data-revive-path="${esc(row.path)}" title="put this session back on the board as a card — the conversation is in the gateway, so a reply continues it where it stopped">revive</button>
+            <span class="session-when mono" title="${esc(s.lastActivityAt ? new Date(s.lastActivityAt).toLocaleString() : "last use unknown")}">${esc(fmtAgo(s.lastActivityAt))}</span>
             <span class="session-name">${esc(s.title || "(untitled session)")}</span>
             <span class="session-id mono" title="${esc(s.id)}">${esc(String(s.id).slice(0, 16))}…</span>
           </div>`,

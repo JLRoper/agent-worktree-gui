@@ -249,13 +249,14 @@ td.age .age-num.dimmer { color: var(--dimmer); }
 .agents-block .job:last-child { margin-bottom: 0; }
 .agents-block .job-out { max-height: 320px; }
 /* Sessions the row knows about but the board has no card for. The gateway still has the
-   conversation, so these are offered back one at a time rather than auto-attached. */
-.sessions-block { margin-top: 14px; padding-top: 10px; border-top: 1px solid #1d222b; }
-.sessions-block h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .03em; color: var(--dim); font-weight: 600; }
+   conversation, so these are offered back one at a time rather than auto-attached. No heading and no
+   rule: the revive button says what the row is, and a label above three buttons was furniture. */
+.sessions-block { margin-top: 6px; }
 /* A card head spends 14px of padding plus 47px on its glyph and chevron before the status pill; the
    revive button starts in that same column, so "revive" and "EXITED" read down one edge of the row. */
 .session-row { display: flex; align-items: center; gap: 9px; padding: 3px 6px 3px calc(14px + 47px); border-radius: 6px; font-size: 12px; }
 .session-row:hover { background: #171d27; }
+.session-row .session-when { flex: none; font-size: 10.5px; color: var(--dimmer); }
 .session-row .session-name { flex: 1 1 auto; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-row .session-id { flex: none; font-size: 10.5px; color: var(--dimmer); }
 .session-row .spacer { flex: 1; }
