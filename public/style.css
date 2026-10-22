@@ -556,6 +556,11 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
   cursor: pointer;
   opacity: .55;
 }
+/* A delete that has been accepted but has not finished scanning: the x stays put, greyed and click-proof,
+   so the click is visibly registered and cannot be repeated. */
+.btn-del-tree.pending, .btn-del-tree:disabled {
+  opacity: .3 !important; cursor: default; border-color: var(--line); background: #14171d; color: var(--dimmer);
+}
 tr.row:hover .btn-del-tree { opacity: 1; }
 .btn-del-tree:hover { background: #2a1418; border-color: #57262a; color: #ff9c94; }
 /* The confirmation is its own row under the tree, so the question has room to say what will happen. */

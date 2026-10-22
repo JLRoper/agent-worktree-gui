@@ -2671,15 +2671,49 @@ function showWorktreeConfirm(key) {
   rowEl.after(confirm);
 }
 
+// The scanner runs on its own clock, so the board only knows a worktree is gone once a pass has been
+// round it. Waiting for the counter to move is what stops a row reappearing from a pass that began
+// before the delete.
+async function scanTick() {
+  try {
+    const s = await apiFetch("/api/stats").then((r) => r.json());
+    return Number(s?.scheduler?.ticks) || 0;
+  } catch {
+    return null;
+  }
+}
+
+async function waitForScanPass(baseline, { timeoutMs = 25000 } = {}) {
+  if (baseline === null) return false;
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs) {
+    await new Promise((r) => setTimeout(r, 700));
+    const now = await scanTick();
+    if (now !== null && now > baseline) return true;
+  }
+  return false;
+}
+
 async function confirmDeleteWorktree(key) {
   const [project, ...rest] = key.split("::");
   const target = rest.join("::");
   const confirmEl = document.querySelector(`tr.row-confirm[data-confirm-row="${CSS.escape(key)}"]`);
   const yes = confirmEl?.querySelector("[data-del-tree-yes]");
+  const rowEl = document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
+  const cross = rowEl?.querySelector("[data-del-tree]");
+  // The request is fire-and-forget, so the click has to look REGISTERED: the x greys out and stops
+  // accepting clicks, the confirmation keeps its "deleting…" label, and both stay that way until the
+  // scan has caught up.
+  if (cross) {
+    cross.disabled = true;
+    cross.classList.add("pending");
+    cross.title = "deleting this worktree — waiting for the next scan";
+  }
   if (yes) {
     yes.disabled = true;
     yes.textContent = "deleting…";
   }
+  const baseline = await scanTick();
   try {
     const r = await apiFetch("/api/worktree/delete", {
       method: "POST",
@@ -2689,12 +2723,22 @@ async function confirmDeleteWorktree(key) {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) {
       showBanner(`delete worktree: ${d.error || `HTTP ${r.status}`}`);
+      if (cross) {
+        cross.disabled = false;
+        cross.classList.remove("pending");
+        cross.title = "remove this worktree — its files go to the Recycle Bin and git's record of it is pruned";
+      }
       if (yes) {
         yes.disabled = false;
         yes.textContent = "Delete";
       }
       return;
     }
+    if (yes) yes.textContent = "waiting for the scan…";
+    // Everything the board must wait for: the scanner finishing a pass that saw the worktree already
+    // gone. Only then is the row dropped here — before it, a pass that started earlier can still put
+    // the row back on screen for a folder that no longer exists.
+    await waitForScanPass(baseline);
     confirmEl?.remove();
     // Drop it here too: the server broadcasts a `drop`, but a tab whose stream hiccuped would keep a
     // row for a worktree that is gone, and this is the tab that asked for the deletion.
@@ -2706,6 +2750,14 @@ async function confirmDeleteWorktree(key) {
     );
   } catch (e) {
     showBanner(`delete worktree: ${e.message}`);
+    if (cross) {
+      cross.disabled = false;
+      cross.classList.remove("pending");
+    }
+    if (yes) {
+      yes.disabled = false;
+      yes.textContent = "Delete";
+    }
   }
 }
 
