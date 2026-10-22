@@ -94,6 +94,21 @@ button.primary:hover { background: #24466a; }
 .settings-row select { flex: 1; min-width: 0; background: #12161d; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
 .settings-preview { margin-top: 10px; padding: 9px 10px; border: 1px dashed var(--line); border-radius: 6px; font-size: 13px; color: var(--text); }
 .settings-note { margin: 8px 0 0; font-size: 11px; color: var(--dimmer); line-height: 1.4; }
+/* The approval window is the one setting in here that is not a browser preference: it is the
+   gateway's own approvals.timeout, written to its config.yaml, so it is styled as a form field with
+   an explicit Save rather than a picker that applies on change. */
+.settings-sep { height: 1px; margin: 14px 0 12px; background: var(--line); }
+.settings-row input[type="number"] { width: 74px; background: #12161d; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
+.settings-row input[type="number"]:disabled { color: var(--dimmer); background: #0e1218; }
+.settings-unit { font-size: 11px; color: var(--dimmer); }
+.settings-row button { padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: #12161d; color: var(--text); font: 11px var(--mono); cursor: pointer; }
+.settings-row button:hover { border-color: #3b4757; }
+.settings-row button:disabled { color: var(--dimmer); cursor: default; }
+.settings-row button.dirty { border-color: #6b4d16; background: var(--amber-bg); color: #ffd479; }
+.settings-presets { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.settings-presets button { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; background: #12161d; color: var(--dim); font: 10.5px/1.7 var(--mono); cursor: pointer; }
+.settings-presets button:hover { color: var(--text); border-color: #3b4757; }
+.settings-preview.bad { border-color: #57262a; color: #ff9c94; }
 .hidden { display: none; }
 
 main { padding: 14px 16px 40px; }

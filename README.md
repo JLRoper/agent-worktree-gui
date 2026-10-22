@@ -229,6 +229,12 @@ Two gateway settings decide whether anything asks at all:
 - `security.approval.transport: builtin` — a selected plugin transport (e.g. `worktree-panel`) sends
   the question to the panel's legacy `/api/approvals` page instead of the run's stream.
 - `approvals.mode: manual` — `smart` judges many flagged commands safe and waves them through.
+- `approvals.timeout` — how long the ask waits for you before it fails closed (silence means the
+  command does not run). That is the **gateway's** clock, not the panel's: the panel only ever sees
+  the ask appear and expire. Settings shows it and writes it, and the write is the one line under
+  `approvals:` in `<HERMES_HOME>/config.yaml` — the gateway re-reads that file, so the next prompt
+  uses the new window with no restart. A gateway on another machine keeps its own file, so the
+  control is refused there instead of editing the wrong one.
 
 #### Credentials
 
@@ -237,7 +243,8 @@ with; this panel never touches it. What the panel needs is the api_server bearer
 `API_SERVER_KEY` in `$HERMES_HOME/.env` (or `apiServer.key` in `config.json`) and sent as
 `Authorization: Bearer …`. It is never logged and never returned by any endpoint.
 
-`HERMES_HOME` is only used to find that file; agent processes are not spawned from here any more.
+`HERMES_HOME` is only used to find the gateway's own files — `.env` for that token, and `config.yaml`
+for the approval window — agent processes are not spawned from here any more.
 
 ## Config (`config.json`)
 
@@ -278,6 +285,7 @@ with; this panel never touches it. What the panel needs is the api_server bearer
 | POST | `/api/agents/reply` | `{thread, text}` → another turn on the same `session_id` |
 | POST | `/api/jobs/steer` | `{id, text}` → `POST /v1/runs/{id}/steer`; read at the agent's next tool boundary. 409 when the turn already crossed it |
 | POST | `/api/jobs/approve` | `{id, choice, requestId?}` → `POST /v1/runs/{id}/approval`; `choice` must be one the host offered |
+| GET/POST | `/api/settings/approvals` | the gateway's `approvals.timeout`. GET reports the value, whether `config.yaml` sets it, the file's path, and whether this panel may change it. POST `{timeoutSeconds}` rewrites only that line under `approvals:` in `<HERMES_HOME>/config.yaml` — comments, indentation and line endings untouched — and re-reads the file before writing, refusing if it does not say what was asked. **400** outside 15–86400, **409** when the gateway is not on this machine |
 | POST | `/api/jobs/cancel` | `{id}` → `POST /v1/runs/{id}/stop` (cooperative interrupt) |
 | POST | `/api/jobs/clear` | drop finished jobs from the list |
 | POST | `/api/refresh` `/api/fetch` `/api/reload` | force a fast pass / fetch remotes / re-read config |

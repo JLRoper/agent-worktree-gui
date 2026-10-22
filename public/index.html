@@ -25,7 +25,7 @@
       <button id="btn-refresh" type="button">Refresh now</button>
       <button id="btn-fetch" type="button">Fetch remotes</button>
       <button id="btn-pause" type="button">Pause</button>
-      <button id="btn-settings" type="button" title="appearance settings — panel and terminal fonts (Ctrl+,)">⚙ Settings</button>
+      <button id="btn-settings" type="button" title="settings — fonts, and the gateway's approval window (Ctrl+,)">⚙ Settings</button>
     </div>
   </header>
 
@@ -46,6 +46,22 @@
     </label>
     <div class="settings-preview" id="term-preview">tool · read_file · exit 0 · +169 −265</div>
     <p class="settings-note">Panel font covers headings, labels and buttons. Terminal font covers the text inside an agent's card: its transcript, prompt, reply box and command preview. Both are saved in this browser.</p>
+    <div class="settings-sep"></div>
+    <label class="settings-row" for="approval-timeout">
+      <span>Approval window</span>
+      <input id="approval-timeout" type="number" inputmode="numeric" step="15" title="how long a permission prompt waits for you before it fails closed">
+      <span class="settings-unit mono">s</span>
+      <button id="btn-approval-save" type="button" title="write approvals.timeout into the gateway's config.yaml">Save</button>
+    </label>
+    <div class="settings-presets">
+      <button type="button" data-approval-set="120">2 min</button>
+      <button type="button" data-approval-set="300">5 min</button>
+      <button type="button" data-approval-set="600">10 min</button>
+      <button type="button" data-approval-set="1800">30 min</button>
+      <button type="button" data-approval-set="3600">1 h</button>
+    </div>
+    <div class="settings-preview mono" id="approval-preview">…</div>
+    <p class="settings-note" id="approval-note">How long a permission prompt waits for you before it fails closed — if it expires, nothing runs. This is the gateway's own setting, saved to its config.yaml rather than this browser, and the next prompt uses it without a restart.</p>
   </div>
 
   <div id="banner" class="banner hidden"></div>

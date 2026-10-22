@@ -17,6 +17,7 @@ import { Jobs, makeThreadName, previewRequest } from "./lib/jobs.js";
 import { gitIn } from "./lib/scan.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
 import { Approvals } from "./lib/approvals.js";
+import { approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX } from "./lib/hermes-config.js";
 
 // A file an agent produced is meant to be OPENED, and the shell association may hand a .md to a
 // browser. Prefer a text editor: Notepad++ when installed, else Windows' notepad (always present),
@@ -337,6 +338,42 @@ const server = createServer(async (req, res) => {
         ...settingsOut(),
         scanRoots: config.scanRoots || [],
         projects: registry.projects.map((p) => ({ name: p.name, path: p.path, remote: p.remote, mainBranch: p.mainBranch, activityAt: p.activityAt || null })),
+      });
+    }
+
+    // ---- the one Hermes setting the panel can change ------------------------------------
+    // approvals.timeout is the gateway's clock, not the panel's: the gate that waits for the answer
+    // runs inside the process executing the turn. It lives in <HERMES_HOME>/config.yaml, so this
+    // reads and writes there rather than config.json, and it refuses when the gateway is another
+    // machine. Read on demand — it is opened from Settings, never folded into the 30 s snapshot.
+    if (route === "/api/settings/approvals" && req.method === "GET") {
+      return sendJson(res, 200, approvalState({ gatewayUrl: jobs.api.url }));
+    }
+
+    if (route === "/api/settings/approvals" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const state = approvalState({ gatewayUrl: jobs.api.url });
+      if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
+      const seconds = Number(body.timeoutSeconds ?? body.timeout);
+      if (!Number.isInteger(seconds) || seconds < APPROVAL_TIMEOUT_MIN || seconds > APPROVAL_TIMEOUT_MAX) {
+        return sendJson(res, 400, {
+          ...state,
+          error: `the approval window must be a whole number of seconds between ${APPROVAL_TIMEOUT_MIN} and ${APPROVAL_TIMEOUT_MAX}`,
+        });
+      }
+      try {
+        writeApprovalTimeout(seconds);
+      } catch (e) {
+        return sendJson(res, 500, { ...state, error: String((e && e.message) || e) });
+      }
+      log(`approvals.timeout = ${seconds}s written to ${state.configPath}`);
+      return sendJson(res, 200, {
+        ...approvalState({ gatewayUrl: jobs.api.url }),
+        written: true,
+        // Hermes re-reads config.yaml when the file signature changes and reads this per request,
+        // so the next prompt uses the new window without restarting the gateway.
+        note: "saved",
       });
     }
 

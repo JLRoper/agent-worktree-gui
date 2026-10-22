@@ -4291,6 +4291,97 @@ function toggleSettings(open = null) {
     sel.value = currentFontId("ui");
     sel.focus();
   }
+  // Read the gateway's window every time the panel opens: it can be changed from a CLI, and the
+  // panel is not the owner of that value.
+  void loadApprovalSetting();
+}
+
+// ---- the approval window -------------------------------------------------------------------
+// approvals.timeout is not a panel preference like the fonts above it. The gate that waits for a
+// human runs inside the GATEWAY that is executing the turn, so the server reads and writes the
+// gateway's own Hermes config.yaml; the panel only shows what that file says. Which is also why this
+// control can be unavailable — a gateway on another machine keeps its own file.
+let approvalState = null;
+
+// The same wording the gateway uses for its own timeout notice: 600 → "10 minutes", 7200 → "2 hours".
+function humanWindow(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0));
+  if (s && s % 3600 === 0) return `${s / 3600} hour${s / 3600 === 1 ? "" : "s"}`;
+  if (s && s % 60 === 0) return `${s / 60} minute${s / 60 === 1 ? "" : "s"}`;
+  return `${s} second${s === 1 ? "" : "s"}`;
+}
+
+function paintApprovalSetting(note = "", bad = false) {
+  const s = approvalState;
+  if (!s) return;
+  const input = $("approval-timeout");
+  if (input) {
+    if (document.activeElement !== input) input.value = s.timeoutSeconds;
+    input.disabled = !s.editable;
+    input.min = String(s.minSeconds || 15);
+    input.max = String(s.maxSeconds || 86400);
+  }
+  const save = $("btn-approval-save");
+  if (save) {
+    save.disabled = !s.editable;
+    save.classList.toggle("dirty", false);
+  }
+  const preview = $("approval-preview");
+  if (preview) {
+    const bits = [`${humanWindow(s.timeoutSeconds)} · ${s.timeoutSeconds} s`];
+    bits.push(s.fromFile ? "set in config.yaml" : "the gateway's built-in default (no timeout in config.yaml)");
+    if (s.mode && s.mode !== "manual") bits.push(`approvals.mode ${s.mode} — only the asks that still happen get this window`);
+    preview.textContent = note ? `${note} — ${bits.join(" · ")}` : bits.join(" · ");
+    preview.classList.toggle("bad", bad);
+    preview.title = s.configPath;
+  }
+  const noteEl = $("approval-note");
+  if (noteEl) {
+    noteEl.textContent = s.editable
+      ? `How long a permission prompt waits for you before it fails closed — if it expires, nothing runs. Written to ${s.configPath}, which the gateway re-reads, so the next prompt uses it without a restart.`
+      : `${s.reason || "this window cannot be changed from here"} — nothing is written.`;
+  }
+}
+
+async function loadApprovalSetting() {
+  try {
+    const r = await fetch("/api/settings/approvals");
+    approvalState = await r.json();
+    paintApprovalSetting();
+  } catch (e) {
+    const preview = $("approval-preview");
+    if (preview) {
+      preview.textContent = `could not read the approval window: ${e.message}`;
+      preview.classList.add("bad");
+    }
+  }
+}
+
+async function saveApprovalSetting() {
+  const input = $("approval-timeout");
+  if (!input || !approvalState?.editable) return;
+  const preview = $("approval-preview");
+  if (preview) {
+    preview.textContent = "saving…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await fetch("/api/settings/approvals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ timeoutSeconds: Number(input.value) }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      // Keep what the file still says in approvalState, so a rejected value can never look saved.
+      paintApprovalSetting(`not saved: ${d.error || `HTTP ${r.status}`}`, true);
+      return;
+    }
+    approvalState = d;
+    paintApprovalSetting(d.note || "saved");
+  } catch (e) {
+    paintApprovalSetting(`not saved: ${e.message}`, true);
+  }
 }
 
 // The pickers are filled once, at start-up: a saved choice then has a real option to sit on before
@@ -4318,6 +4409,28 @@ $("title-settings")?.addEventListener("click", (e) => {
 });
 $("font-select")?.addEventListener("change", (e) => applyFont("ui", e.target.value));
 $("term-select")?.addEventListener("change", (e) => applyFont("term", e.target.value));
+
+// The approval window. A preset only fills the box and lights Save: one click here rewrites the
+// user's global Hermes config, so it takes a deliberate second one.
+$("btn-approval-save")?.addEventListener("click", () => void saveApprovalSetting());
+$("approval-timeout")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  void saveApprovalSetting();
+});
+$("approval-timeout")?.addEventListener("input", (e) => {
+  const dirty = Number(e.target.value) !== approvalState?.timeoutSeconds;
+  $("btn-approval-save")?.classList.toggle("dirty", dirty);
+});
+for (const btn of document.querySelectorAll("[data-approval-set]")) {
+  btn.addEventListener("click", () => {
+    const input = $("approval-timeout");
+    if (!input || input.disabled) return;
+    input.value = btn.dataset.approvalSet;
+    input.dispatchEvent(new Event("input"));
+    input.focus();
+  });
+}
 document.addEventListener("click", (e) => {
   const panel = $("settings");
   if (!panel || panel.classList.contains("hidden")) return;
