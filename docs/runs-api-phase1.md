@@ -129,3 +129,27 @@ in the gateway's own directory and stay there. Verified after the fix with three
 each one's `pwd` returned its own worktree.
 
 `--yolo` is still not a Runs API field.
+
+## Open defect: a gated first tool call can use the gateway's directory
+
+Reproduction (2026-10-22, live on `:7331`, gateway with the patch):
+
+| run shape | result |
+|---|---|
+| first tool call plain (`pwd`, `sleep`) | correct — the run's own worktree, three concurrent runs included |
+| `pwd` first, gated second (`git reset --hard`) | both correct |
+| first tool call gated (parks for approval) | command built as `cd ~ && …` (or `cd "C:/Users/roper"`), so it would act on the gateway home |
+
+Two occurrences, both with a gated first call, so the pattern is consistent rather than random — but it
+is not diagnosed. What is known:
+
+- `register_task_env_overrides(task_id, {"cwd": …})` is applied before `run_conversation` and its key
+  matches the task key the tools resolve (`qual == raw`, no profile prefix) — verified by probe.
+- The wrapper `cd <cwd>` comes from the terminal Env's `cwd`, so on the failing path that Env was
+  built with `config["cwd"]` (the gateway's directory) instead of the per-task override.
+- The next thing to instrument is `_run_approval_guards()` / the approval-present path in
+  `tools/terminal_tool.py`: it appears to materialise the command (and possibly the Env) before the
+  per-task override is consulted, which would explain why only a gated *first* call is affected.
+
+Until this is fixed, an agent whose very first action is a flagged command may run it in the gateway's
+working directory. Plain commands are unaffected.
