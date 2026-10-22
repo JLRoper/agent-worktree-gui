@@ -860,6 +860,30 @@ thead th {
   z-index: 5;
 }
 tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: top; }
+
+/* ---- hierarchy: a worktree row hangs under its project ------------------------
+   The board repeats one card style at three levels, so a worktree row and a collapsed project read alike
+   and the eye has to search for which one it is looking at. The rail plus indent makes the relation
+   explicit, and the column header steps back so it stops reading as another band of projects. */
+#projects section.project { border-left: 3px solid #33405a; }
+#projects section.project > table {
+  width: calc(100% - 26px);
+  margin-left: 24px;
+  border-left: 1px solid #2b3644;
+}
+#projects tbody tr.row td { padding-left: 12px; }
+#projects tbody tr.row td:first-child { position: relative; }
+#projects tbody tr.row td:first-child::before {
+  content: "\251c"; /* ├ */
+  position: absolute; left: -13px; top: 5px;
+  color: #465668; font-size: 12px; line-height: 1;
+}
+/* The last row of a project closes the rail. `:has(~ tr.row)` ignores the detail rows that sit between
+   a row and the next one, which `:last-of-type` cannot do. */
+#projects tbody tr.row:not(:has(~ tr.row)) td:first-child::before { content: "\2514"; /* └ */ }
+#projects thead th {
+  font-size: 10px; color: #66717f; letter-spacing: .07em; border-bottom-color: #1b222c;
+}
 tbody tr.row { cursor: pointer; }
 tbody tr.row:hover { background: #1a2029; }
 tbody tr.row.expanded { background: #1a2029; }
