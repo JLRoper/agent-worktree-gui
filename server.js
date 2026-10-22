@@ -5,7 +5,7 @@ import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { gzipSync as zlibGzipSync } from "node:zlib";
-import { readFile, stat, unlink } from "node:fs/promises";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { cpus } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -125,6 +125,26 @@ function sendJson(res, code, body) {
   }
   res.writeHead(code, { ...head, "Content-Length": raw.length });
   res.end(raw);
+}
+
+// Attachments arrive as raw bytes (no multipart parser here): the filename rides in x-filename, so the
+// body is exactly the file.
+function readRawBody(req, limit) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    req.on("data", (d) => {
+      size += d.length;
+      if (size > limit) {
+        reject(Object.assign(new Error(`attachment is larger than ${Math.round(limit / (1024 * 1024))} MB`), { tooLarge: true }));
+        req.destroy();
+        return;
+      }
+      chunks.push(d);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
 }
 
 function readBody(req, limit = 256 * 1024) {
@@ -556,6 +576,40 @@ const server = createServer(async (req, res) => {
     }
 
     // Continue a conversation: same named thread, no new worktree, run where the agent is.
+    // A pasted or dropped document is stored on disk and its ABSOLUTE path goes into the prompt. The
+    // gateway's runs API has no attachment field, but the agent has file tools — and an absolute path
+    // is independent of the run's cwd, which this gateway does not honour anyway.
+    if (route === "/api/attachments" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const LIMIT = 25 * 1024 * 1024;
+      let bytes;
+      try {
+        bytes = await readRawBody(req, LIMIT);
+      } catch (e) {
+        return sendJson(res, e.tooLarge ? 413 : 400, { error: String(e.message || e) });
+      }
+      if (!bytes || !bytes.length) return sendJson(res, 400, { error: "empty attachment" });
+      let name = "";
+      try {
+        name = decodeURIComponent(String(req.headers["x-filename"] || "").replace(/\+/g, " "));
+      } catch {
+        name = "";
+      }
+      name = path.basename(name || "pasted-file").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").slice(0, 120) || "pasted-file";
+      const dir = config.attachmentsDir || path.join(path.dirname(config.jobsFile || path.join(process.cwd(), "logs")), "attachments");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const target = path.join(dir, `${stamp}-${name}`);
+      try {
+        await mkdir(dir, { recursive: true });
+        await writeFile(target, bytes);
+      } catch (e) {
+        return sendJson(res, 500, { error: `could not store the attachment: ${String((e && e.message) || e)}` });
+      }
+      const type = String(req.headers["content-type"] || "application/octet-stream");
+      log(`attachment stored (${bytes.length} bytes): ${target}`);
+      return sendJson(res, 201, { path: target.replace(/\\/g, "/"), name, bytes: bytes.length, type });
+    }
+
     if (route === "/api/agents/reply" && req.method === "POST") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);

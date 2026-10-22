@@ -3624,6 +3624,93 @@ $("job-prompt").addEventListener("input", () => {
   $("job-cmd").textContent = "preview the run request the panel would send…";
   $("job-cmd").classList.add("dimmer");
 });
+// ---- documents pasted into a prompt ------------------------------------------------
+// The gateway's runs API has no attachment field, but the agent has file tools and the path is
+// absolute — so a pasted or dropped document is stored by the panel and its path is written into the
+// prompt. Absolute means it also works when the run's cwd is ignored, which this gateway does.
+function attachmentLine(d) {
+  const bytes = Number(d.bytes) || 0;
+  const size = bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  const how = /^image\//.test(String(d.type)) ? "use vision_analyze on it" : "read_file it";
+  return `Attachment: ${d.path} (${d.type || "unknown type"}, ${size}) — ${how} before answering.`;
+}
+
+function insertAtCaret(box, text) {
+  const at = typeof box.selectionStart === "number" ? box.selectionStart : box.value.length;
+  const end = typeof box.selectionEnd === "number" ? box.selectionEnd : at;
+  const before = box.value.slice(0, at);
+  const after = box.value.slice(end);
+  // A block of its own, so a pasted document never runs into the sentence being typed.
+  const head = before && !/\n\s*$/.test(before) ? "\n\n" : "";
+  const tail = after && !/^\s*\n/.test(after) ? "\n\n" : "";
+  const inserted = head + text + tail;
+  box.value = before + inserted + after;
+  const pos = (before + head + text).length;
+  box.setSelectionRange(pos, pos);
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+  box.focus();
+}
+
+async function attachFiles(files, box) {
+  for (const file of files) {
+    if (!file) continue;
+    if (!file.size) {
+      insertAtCaret(box, `[attachment failed] ${file.name || "file"}: it is empty`);
+      continue;
+    }
+    try {
+      const res = await apiFetch(
+        "/api/attachments",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": file.type || "application/octet-stream",
+            "x-filename": encodeURIComponent(file.name || "pasted-file"),
+          },
+          body: file,
+        },
+        { timeoutMs: 120000 },
+      );
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
+      insertAtCaret(box, attachmentLine(d));
+    } catch (e) {
+      insertAtCaret(box, `[attachment failed] ${file.name || "file"}: ${e.message}`);
+    }
+  }
+}
+
+function attachTarget(el) {
+  return el && el.closest ? el.closest("#job-prompt, .reply-box") : null;
+}
+
+document.addEventListener("paste", (e) => {
+  const box = attachTarget(e.target);
+  const files = [...((e.clipboardData && e.clipboardData.files) || [])];
+  if (!box || !files.length) return; // text pastes stay text
+  e.preventDefault();
+  void attachFiles(files, box);
+});
+
+document.addEventListener("dragover", (e) => {
+  const box = attachTarget(e.target);
+  if (!box || !e.dataTransfer || ![...(e.dataTransfer.types || [])].includes("Files")) return;
+  e.preventDefault();
+  box.classList.add("drop-target");
+});
+document.addEventListener("dragleave", (e) => {
+  const box = attachTarget(e.target);
+  if (box) box.classList.remove("drop-target");
+});
+document.addEventListener("drop", (e) => {
+  const box = attachTarget(e.target);
+  const files = [...((e.dataTransfer && e.dataTransfer.files) || [])];
+  if (!box || !files.length) return;
+  e.preventDefault();
+  box.classList.remove("drop-target");
+  void attachFiles(files, box);
+});
+
 // Enter in the prompt spawns, the way it does in every other box here. Shift+Enter is a newline, so a
 // multi-line prompt is still possible.
 $("job-prompt").addEventListener("keydown", (e) => {
