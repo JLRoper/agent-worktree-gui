@@ -254,13 +254,25 @@ td.age .age-num.dimmer { color: var(--dimmer); }
 .sessions-block { margin-top: 6px; }
 /* A card head spends 14px of padding plus 47px on its glyph and chevron before the status pill; the
    revive button starts in that same column, so "revive" and "EXITED" read down one edge of the row. */
-.session-row { display: flex; align-items: center; gap: 9px; padding: 3px 6px 3px calc(14px + 47px); border-radius: 6px; font-size: 12px; }
+/* A session row is an agent head without a card: same glyph, same chevron, and the revive button in the
+   column and with the metrics of a status pill — but grey glyph (no card) and a blue pill (an action, not
+   a state). The 15px is the card's 1px border plus its 14px padding, so the two glyphs line up exactly. */
+.session-row { display: flex; align-items: center; gap: 8px; padding: 3px 6px 3px 15px; border-radius: 6px; font-size: 12px; }
 .session-row:hover { background: #171d27; }
+.session-row .agent-glyph { flex: 0 0 auto; color: var(--dimmer); font-size: 13px; line-height: 1; }
+.session-row .chev { color: var(--dimmer); font-size: 13px; line-height: 1; width: 18px; display: inline-block; flex: 0 0 auto; }
+.session-row:hover .agent-glyph, .session-row:hover .chev { color: var(--dim); }
 .session-row .session-when { flex: none; font-size: 10.5px; color: var(--dimmer); }
 .session-row .session-name { flex: 1 1 auto; min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-row .session-id { flex: none; font-size: 10.5px; color: var(--dimmer); }
 .session-row .spacer { flex: 1; }
-.btn-revive { flex: none; padding: 1px 9px; border: 1px solid #3b4757; border-radius: 999px; background: #12161d; color: #9ecbff; font: 10.5px/1.7 var(--mono); cursor: pointer; }
+/* The metrics are .pill's, so "REVIVE" and "EXITED" are the same size sitting in the same column. */
+.btn-revive {
+  flex: none; padding: 2px 7px; border: 1px solid #2f5a7a; border-radius: 999px;
+  background: var(--blue-bg); color: #9ecbff;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; line-height: 1.5;
+  cursor: pointer;
+}
 .btn-revive:hover { background: #16202c; border-color: #2f5a7a; }
 .btn-revive:disabled { color: var(--dimmer); border-color: var(--line); cursor: default; }
 /* "waiting on you" — an agent blocked on an approval. Its colours live with the other .sig modifiers

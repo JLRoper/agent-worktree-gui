@@ -2887,12 +2887,15 @@ function detailHtml(row) {
     ? `<div class="sessions-block">
         ${idleSessions
           .map(
-            // The button leads the row, in the column where a card puts its status pill, so "revive"
-            // and "EXITED" read as the same kind of thing in the same place.
+            // Shaped like an agent card's head — glyph, chevron, then a pill-sized revive button in the
+            // status column — so a session with no card reads as the same kind of thing, one level down.
+            // The glyph is grey rather than the purple of a live agent: this session has no card.
             (s) => `<div class="session-row">
+            <span class="agent-glyph" title="a Hermes session in this worktree with no card on the board">\u29c9</span>
+            <span class="chev" title="no card on the board">\u25b8</span>
             <button type="button" class="btn-revive" data-revive-session="${esc(s.id)}" data-revive-path="${esc(row.path)}" title="put this session back on the board as a card — the conversation is in the gateway, so a reply continues it where it stopped">revive</button>
+            <span class="session-name mono dim">${esc(s.title || "(untitled session)")}</span>
             <span class="session-when mono" title="${esc(s.lastActivityAt ? new Date(s.lastActivityAt).toLocaleString() : "last use unknown")}">${esc(fmtAgo(s.lastActivityAt))}</span>
-            <span class="session-name">${esc(s.title || "(untitled session)")}</span>
             <span class="session-id mono" title="${esc(s.id)}">${esc(String(s.id).slice(0, 16))}…</span>
           </div>`,
           )
