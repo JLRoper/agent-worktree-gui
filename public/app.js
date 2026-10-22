@@ -672,7 +672,9 @@ function linkifyText(text) {
 // A tool that runs for minutes is the one thing that makes a healthy turn look frozen — a 159 s
 // recursive grep did exactly that, and the card showed nothing but the line that started it. Every
 // line carries the server's timestamp, so the tool still in flight can grow a live clock.
-const TOOL_START_RE = /^▸\s*([^\s·]+)/;
+// Lines lead with the tool's glyph (📖 read_file · path); history written before glyphs leads with ▸,
+// so the arrow is optional and the glyph run is skipped before the name is taken.
+const TOOL_START_RE = /^(?:▸\s*)?(?:[\p{Extended_Pictographic}\uFE0F\u200D]+\s*)?([^\s·]+)/u;
 const TOOL_DONE_RE = /^\s*↳\s*([^\s·]+)/;
 
 // Index of the started tool call that has no result yet, or -1. Parallel calls interleave, so count
@@ -4431,6 +4433,18 @@ const TERM_FONTS = [
   { id: "panel", label: "Same as the panel font", stack: "var(--ui)" },
 ];
 
+// A monospace face has no emoji of its own, and a stack that ends in `monospace` hands the glyph to
+// whatever monochrome symbol font the system offers — the console's tool icons then come out as small
+// grey marks instead of 📖 💻 🔧. Name the colour emoji fonts just before the generic keyword, so
+// ASCII still resolves in the chosen face and only the glyphs fall through.
+const EMOJI_FALLBACK = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji"';
+function withEmojiFallback(stack) {
+  const s = String(stack || "").trim();
+  if (!s || s.includes("Emoji")) return s;
+  const m = /^(.*?),?\s*(monospace|sans-serif|serif|system-ui)$/.exec(s);
+  return m ? `${m[1]}, ${EMOJI_FALLBACK}, ${m[2]}` : `${s}, ${EMOJI_FALLBACK}`;
+}
+
 const FONT_SETS = {
   ui: { key: "wtgui.font", varName: "--ui", select: "font-select", preview: "font-preview", list: UI_FONTS },
   term: { key: "wtgui.termFont", varName: "--term", select: "term-select", preview: "term-preview", list: TERM_FONTS },
@@ -4450,7 +4464,7 @@ function currentFontId(kind) {
 function applyFont(kind, id, { save = true } = {}) {
   const set = FONT_SETS[kind] || FONT_SETS.ui;
   const font = set.list.find((f) => f.id === id) || set.list[0];
-  document.documentElement.style.setProperty(set.varName, font.stack);
+  document.documentElement.style.setProperty(set.varName, withEmojiFallback(font.stack));
   const sel = $(set.select);
   if (sel && sel.value !== font.id) sel.value = font.id;
   const preview = $(set.preview);

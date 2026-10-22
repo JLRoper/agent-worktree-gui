@@ -16,7 +16,11 @@
   --blue-bg: #141f2c;
   --violet: #a371f7;
   --violet-bg: #1e1730;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  /* The console leads every tool call with the tool's emoji. A monospace stack has no emoji of its
+     own, so the color emoji fonts are named BEFORE the generic keyword: without them Chromium
+     falls back to a monochrome symbol font and the glyphs come out as small grey marks. */
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", monospace;
   /* Interface font and terminal font are separate settings: the panel's labels and the text inside
      an agent's terminal (transcript, prompt, reply box, command preview) can be chosen apart. */
   --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
