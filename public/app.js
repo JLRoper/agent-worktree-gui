@@ -2988,8 +2988,8 @@ function detailHtml(row) {
             <span class="agent-glyph" title="a Hermes session in this worktree with no card on the board">\u29c9</span>
             <span class="chev" title="no card on the board">\u25b8</span>
             <button type="button" class="btn-revive" data-revive-session="${esc(s.id)}" data-revive-path="${esc(row.path)}" title="put this session back on the board as a card — the conversation is in the gateway, so a reply continues it where it stopped">revive</button>
-            <span class="session-name mono dim">${esc(s.title || "(untitled session)")}</span>
             <span class="session-when mono" title="${esc(s.lastActivityAt ? new Date(s.lastActivityAt).toLocaleString() : "last use unknown")}">${esc(fmtAgo(s.lastActivityAt))}</span>
+            <span class="session-name mono dim">${esc(s.title || "(untitled session)")}</span>
             <span class="session-id mono" title="${esc(s.id)}">${esc(String(s.id).slice(0, 16))}…</span>
           </div>`,
           )
