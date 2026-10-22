@@ -118,7 +118,7 @@
   <footer class="foot">
     <span>Live over SSE: each worktree refreshes on its own cadence — cheap fields every <span id="f-worktree">5</span>s, merge verdict / PR / commit detail every <span id="f-slow">60</span>s. Rows flash when something changed.</span>
     <span>Read-only for git: every scan is an inspect (rev-parse / rev-list / merge-base / cherry / diff / status / log). Only <code>fetch</code> touches refs.</span>
-    <span>Spawning writes: a new worktree + branch under <code>.worktrees/</code>, created by <code>hermes chat -w</code>. The panel reads the OpenRouter key from your User environment and passes it to the child, because spawned CLIs don't inherit it.</span>
+    <span>Spawning writes: a new worktree + branch under <code>.worktrees/</code> (<code>git worktree add -b wtgui/…</code>), and the agent runs in that tree through the Hermes gateway — no child process, no API key handed to one.</span>
     <span>Projects: every git repo under <code>scanRoots</code> in <code>config.json</code>, grouped in a folder accordion per root (a project outside every root gets its own sibling folder), ordered by most recent activity. The green <b>+</b> beside a project name aims the spawn card at that project.</span>
     <span id="skipped-note" class="dimmer"></span>
     <span>Config: <code>config.json</code> — scanRoots, projects, cadences, <code>dormantSeconds</code>, <code>host</code> (loopback by default).</span>

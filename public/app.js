@@ -1550,6 +1550,12 @@ function updateJob(j, { scroll = false } = {}) {
 // rebuilding is what used to throw the reader back to the top of a chat mid-read.
 function conversationSignature(conv) {
   const turns = conv.turns.map((t) => `${t.id}:${t.status}:${t.exitCode ?? ""}:${t.error ? 1 : 0}`).join(",");
+  // A run's approval lives on the TURN (Runs API), not in state.approvals. Without it here, a prompt
+  // arriving mid-turn changes nothing in the signature, so the card is not repainted and the approval
+  // box only appears whenever some unrelated event forces a rebuild (observed: ~20 s later).
+  const runApprovals = conv.turns
+    .map((t) => `${t.id}:${t.approval ? t.approval.requestId || t.approval.command || 1 : 0}:${t.approvalDone ? t.approvalDone.choice || 1 : 0}`)
+    .join(",");
   const open = [...state.turnOpen].map(([k, v]) => `${k}${v ? 1 : 0}`).join(",");
   const approvals = [...state.approvals.values()]
     .filter((a) => a && a.thread === conv.thread)
@@ -1573,6 +1579,7 @@ function conversationSignature(conv) {
     state.maximized === conv.thread ? "m" : "-",
     isHomelessConv(conv) ? "h" : "-",
     approvals,
+    runApprovals,
     l.runId || "",
     l.cwd || "",
     l.model || "",
@@ -1729,10 +1736,10 @@ function updateSpawnNote() {
   const custom = Boolean(cwd) && Boolean(p) && cwd !== p.path;
   const existing = $("job-existing").checked;
   $("spawn-note").textContent = existing
-    ? `hermes chat — runs IN ${where} (no new worktree${state.spawnTarget ? ` · ${state.spawnTarget}` : ""}); edits land in that tree`
-    : `hermes chat -w — worktree under ${where}\\.worktrees\\` +
+    ? `runs IN ${where} (no new worktree${state.spawnTarget ? ` · ${state.spawnTarget}` : ""}); edits land in that tree`
+    : `run · new worktree under ${where}/.worktrees/` +
       (custom ? " · custom location (differs from the selected project)" : ` · project ${p ? p.name : "(none)"}`);
-  // A repo with no commits has no HEAD to branch from, so -w cannot create a worktree in it.
+  // A repo with no commits has no HEAD to branch from, so the panel cannot create a worktree in it.
   const emptyRepo = Boolean(p) && Boolean(p.empty) && (!cwd || cwd === p.path);
   const warn = $("spawn-warn");
   warn.textContent = emptyRepo
