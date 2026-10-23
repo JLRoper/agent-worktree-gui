@@ -476,7 +476,6 @@ button.chip:active { transform: translateY(1px); }
 .subagents .sub-row.is-running .sub-dot { background: #c8a6ff; box-shadow: 0 0 0 3px rgba(200, 166, 255, .16); animation: subpulse 1.6s ease-in-out infinite; }
 .subagents .sub-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .subagents .sub-meta { flex: none; color: var(--dimmer); font-size: 10.5px; }
-.subagents .sub-peek { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); }
 @keyframes subpulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 .pill {
   font-size: 10.5px;

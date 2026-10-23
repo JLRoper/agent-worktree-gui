@@ -1262,58 +1262,79 @@ function turnRetryHtml(latest, thread) {
 }
 
 // ---- subagents ------------------------------------------------------------------------------
-// A run that delegates gets one long `delegate_task` tool call on its own stream and nothing else: the children
-// work on their own sessions, which the gateway does not relay. But they ARE in the store - `source='subagent'`
-// rows whose parent_session_id is this thread - so the panel asks for them directly while a card is working.
-// Only running children are drawn: a finished one is history, and the card already summarises that.
-async function refreshSubagents(thread) {
-  const box = document.querySelector(`[data-subagents="${CSS.escape(thread)}"]`);
-  if (!box) return;
-  let list = [];
+// A run's own stream announces each delegated child twice - subagent.start and subagent.complete - and that is the
+// live signal. The gateway's durable admission path does not relay those at all, so the panel also reads the store:
+// a subagent is a `sessions` row with source='subagent' and the parent thread in parent_session_id. One roster
+// query covers every card, which matters because a child can still be working after the turn that started it has
+// finished - exactly when a reader most wants to know.
+const subagentFallback = new Map(); // thread -> rows
+let subagentRosterAt = 0;
+
+function fmtSeconds(s) {
+  const n = Math.max(0, Math.round(Number(s) || 0));
+  return n < 60 ? `${n}s` : `${Math.floor(n / 60)}m ${String(n % 60).padStart(2, "0")}s`;
+}
+
+function subagentsHtml(list, thread = "") {
+  const subs = Array.isArray(list) ? list : [];
+  if (!subs.length) return "";
+  const running = subs.filter((s) => s.running).length;
+  const head = `\u29c9 ${subs.length} subagent${subs.length === 1 ? "" : "s"} \u00b7 ${running ? `${running} running` : "all done"}`;
+  return `<div class="subagents mono" data-subagents="${esc(thread)}">
+    <span class="sub-head" title="agents this run delegated. Their tools run on their own sessions, so only their start and finish reach this card.">${esc(head)}</span>
+    ${subs
+      .map(
+        (s) => `<div class="sub-row${s.running ? " is-running" : ""}">
+      <span class="sub-dot"></span>
+      <span class="sub-title" title="${esc(s.goal || "")}">${esc(s.goal || "subagent")}</span>
+      <span class="sub-meta mono">${s.running ? "running" : esc(s.status || "done")}${!s.running && s.duration ? ` · ${fmtSeconds(s.duration)}` : ""}</span>
+    </div>`,
+      )
+      .join("")}
+  </div>`;
+}
+
+// Repaint every strip already on the page, in place: a roster poll must not re-render cards (that would move the
+// reader's scroll) and must not need a card to be re-rendered before it can show a child.
+function paintSubagents() {
+  for (const [thread, rows] of subagentFallback) {
+    const box = document.querySelector(`[data-subagents="${CSS.escape(thread)}"]`);
+    if (!box) continue;
+    const running = rows.filter((r) => r.running);
+    if (!running.length) {
+      box.hidden = true;
+      box.innerHTML = "";
+      continue;
+    }
+    box.outerHTML = subagentsHtml(rows, thread);
+  }
+}
+
+async function refreshSubagentRoster() {
+  if (document.hidden) return;
+  let roster = null;
   try {
-    const r = await apiFetch(`/api/subagents?thread=${encodeURIComponent(thread)}`);
+    const r = await apiFetch("/api/subagents");
     if (!r.ok) return;
-    list = (await r.json()).subagents || [];
+    roster = (await r.json()).roster || {};
   } catch {
     return;
   }
-  const running = list.filter((k) => k.running);
-  if (!running.length) {
-    box.hidden = true;
-    box.innerHTML = "";
-    return;
+  subagentFallback.clear();
+  for (const [thread, rows] of Object.entries(roster)) {
+    subagentFallback.set(thread, rows.map((k) => ({
+      goal: k.title,
+      running: k.running,
+      status: k.running ? "running" : "done",
+      duration: null,
+    })));
   }
-  box.hidden = false;
-  const head = `\u29c9 ${list.length} subagent${list.length === 1 ? "" : "s"} \u00b7 ${running.length} running`;
-  box.innerHTML =
-    `<span class="sub-head" title="agents this run delegated. Their work does not appear on this card's stream — the row below is the newest thing each one did.">${esc(head)}</span>` +
-    list
-      .map(
-        (k) => `<div class="sub-row${k.running ? " is-running" : ""}">
-        <span class="sub-dot"></span>
-        <span class="sub-title" title="${esc(k.title)}">${esc(k.title)}</span>
-        <span class="sub-meta mono">${k.running ? "running" : "done"}${k.at ? ` · ${esc(fmtAgo(k.at))}` : ""} · ${k.msgs} msgs · ${k.tools} tools</span>
-        ${k.peek ? `<span class="sub-peek mono" title="${esc(k.peek)}">${esc(k.peek)}</span>` : ""}
-      </div>`,
-      )
-      .join("");
+  subagentRosterAt = Date.now();
+  paintSubagents();
 }
 
-// Polled rather than pushed: a child's tool calls never reach this panel, and a 4s cadence is well inside the
-// time it takes to read one line of a transcript.
-const subagentPoll = new Map();
-function pollSubagents() {
-  for (const [thread, j] of state.jobs) {
-    const busy = j.status === "running" || j.status === "starting";
-    const shown = document.querySelector(`[data-subagents="${CSS.escape(thread)}"]:not([hidden])`);
-    if (!busy && !shown) continue;
-    const last = subagentPoll.get(thread) || 0;
-    if (Date.now() - last < 4000) continue;
-    subagentPoll.set(thread, Date.now());
-    void refreshSubagents(thread);
-  }
-}
-setInterval(pollSubagents, 2000);
+// 5s: one small request for the whole board, and well inside the time it takes to read a card.
+setInterval(refreshSubagentRoster, 5000);
 
 function conversationHtml(conv) {
   const { thread, turns, latest } = conv;
@@ -1321,6 +1342,11 @@ function conversationHtml(conv) {
   const maximized = state.maximized === thread;
   const homeless = isHomelessConv(conv);
   const runningTurn = turns.find((t) => t.status === "running" || t.status === "starting");
+  // Children any of this card's turns delegated. The run's own events are the live source; `subagentFallback` holds
+  // the store lookup for a card whose start events went by before the panel was watching (the gateway's durable
+  // admission path does not relay them at all).
+  const streamedSubs = turns.flatMap((t) => t.subagents || []);
+  const subs = streamedSubs.length ? streamedSubs : subagentFallback.get(thread) || [];
   const running = Boolean(runningTurn);
   const queue = state.replyQueue.get(thread) || [];
   const queued = queue.length;
@@ -1415,7 +1441,11 @@ function conversationHtml(conv) {
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
       <button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>
     </div>
-    <div class="subagents mono" data-subagents="${esc(thread)}" hidden></div>
+    ${
+      subs.length && (subs.some((s) => s.running) || latest.status === "running" || latest.status === "starting" || latest.status === "waiting_for_approval")
+        ? subagentsHtml(subs, thread)
+        : `<div class="subagents mono" data-subagents="${esc(thread)}" hidden></div>`
+    }
     ${collapsed ? `<div class="job-preview mono" data-preview="${esc(thread)}">${esc(jobPreview(latest))}</div>` : ""}
     ${homeless ? `<div class="attach-row" data-attach-row="${esc(thread)}" hidden>
       <span class="dimmer mono">attach to</span>
@@ -6162,6 +6192,7 @@ document.addEventListener("click", (e) => {
 initFonts();
 applyGreyFlash(greyFlashOn());
 applyContrast(contrastSetting(), { save: false });
+void refreshSubagentRoster();
 // The model menu is filled once at start-up from the gateway's own provider list; a failure leaves
 // the "(gateway default)" entry, which is what a spawn sends anyway.
 void loadModels();
