@@ -505,7 +505,8 @@
       <div class="as-group">
         <h4>Thresholds</h4>
         <div class="as-line"><label>pass every <input type="number" min="2" max="120" data-as-set="seconds" value="${s.seconds}"> s</label>
-          <label>same call × <input type="number" min="2" max="12" data-as-set="repeatLimit" value="${s.repeatLimit}"></label></div>
+          <label>same call × <input type="number" min="2" max="12" data-as-set="repeatLimit" value="${s.repeatLimit}"></label>
+          <label title="consecutive turns of one thread ending on the same failure before it is reported">same failure × <input type="number" min="2" max="10" data-as-set="repeatTurns" value="${s.repeatTurns}"></label></div>
         <div class="as-line"><label>silent for <input type="number" min="30" max="3600" data-as-set="quietSeconds" value="${s.quietSeconds}"> s</label>
           <label>approval waiting <input type="number" min="15" max="3600" data-as-set="approvalSeconds" value="${s.approvalSeconds}"> s</label></div>
         <div class="as-line"><label>context over <input type="number" min="50" max="100" data-as-set="contextPercent" value="${s.contextPercent}"> %</label>

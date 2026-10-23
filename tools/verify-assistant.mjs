@@ -9,7 +9,7 @@
 import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { Assistant, ASSISTANT_THREAD, parseActions, looksLikeQuestion, detectRepeat, detectCycle, detectErrorRepeat, matchRule } from "../lib/assistant.js";
+import { Assistant, ASSISTANT_THREAD, parseActions, looksLikeQuestion, detectRepeat, detectCycle, detectErrorRepeat, isFailureLine, matchRule } from "../lib/assistant.js";
 
 const dir = mkdtempSync(path.join(tmpdir(), "assistant-test-"));
 const file = path.join(dir, "assistant.json");
@@ -131,6 +131,13 @@ console.log("rules fire once, with evidence, at their escalation");
   a.tick();
   const coll = a.state().alerts.find((x) => x.rule === "collision");
   ok(coll && /2 agents live in one tree/.test(coll.title), "two agents in one tree collide once", coll?.title);
+
+  // ...but two turns of one thread are that agent's own queue
+  const solo = make();
+  board = [job({ thread: "wtgui-solo", turn: 1, ownerPath: "C:/work/solo" }), job({ thread: "wtgui-solo", turn: 2, ownerPath: "C:/work/solo" })];
+  solo.tick();
+  eq(solo.state().alerts.filter((x) => x.rule === "collision").length, 0, "a thread's own two turns are not a collision");
+  board = [];
 
   // context pressure
   board = [job({ thread: "wtgui-ctx", stats: { context_percent: 94 } })];
@@ -320,6 +327,50 @@ console.log("a changed default reaches files written before it");
   const v1log = path.join(dir, "assistant-v1-log.json");
   writeFileSync(v1log, JSON.stringify({ version: 1, settings: { rules: { watch: "log" } } }));
   eq(make({}, v1log).settings.rules.watch, "log", "a non-default value is never migrated");
+}
+
+console.log("the same failure across turns");
+{
+  const failLines = (n) => [
+    line("tool", "💻 terminal · npm test"),
+    line("tool-out", "  ↳ terminal · 1.2s"),
+    line("tool-out", `Tests failed: ${n}`),
+    line("tool-out", "(exit 1)"),
+  ];
+  const a = make();
+  board = [
+    job({ thread: "wtgui-stuck", turn: 1, status: "failed", endedAt: iso(t0 - 9 * 60_000), lines: failLines(2) }),
+    job({ thread: "wtgui-stuck", turn: 2, status: "failed", endedAt: iso(t0 - 6 * 60_000), lines: failLines(3) }),
+    job({ thread: "wtgui-stuck", turn: 3, status: "failed", endedAt: iso(t0 - 2 * 60_000), lines: failLines(2) }),
+  ];
+  a.tick();
+  const al = a.state().alerts.find((x) => x.rule === "repeat");
+  ok(al && /same failure in 3 turns/.test(al.title), "three turns on the same failure are reported", al?.title);
+  ok(al.evidence.some((e) => e.label === "failure" && /npm test/.test(e.value)), "the alert names the failing call", JSON.stringify(al?.evidence));
+
+  const b = make();
+  board = [
+    job({ thread: "wtgui-ok", turn: 1, status: "failed", endedAt: iso(t0 - 9 * 60_000), lines: failLines(2) }),
+    // A turn that came back clean is a reply that did change the outcome: the streak ends there.
+    job({
+      thread: "wtgui-ok",
+      turn: 2,
+      status: "done",
+      endedAt: iso(t0 - 6 * 60_000),
+      lines: [line("tool", "🔧 patch · a.js"), line("tool-out", "  ↳ patch · 0.1s"), line("text", "Fixed it.")],
+    }),
+    job({ thread: "wtgui-ok", turn: 3, status: "failed", endedAt: iso(t0 - 2 * 60_000), lines: failLines(2) }),
+  ];
+  b.tick();
+  eq(b.state().alerts.filter((x) => x.rule === "repeat").length, 0, "a clean turn breaks the streak");
+
+  // The gateway marks a failed tool in the result header when the preview is empty - the only signal there is.
+  ok(isFailureLine("  ↳ terminal · error") && isFailureLine("(exit 1)") && !isFailureLine("  ↳ terminal · 1.2s"), "a result header marks a failure, a normal result does not");
+  const c = make();
+  const headerFail = () => [line("tool", "💻 terminal · node -e \"process.exit(1)\""), line("tool-out", "  ↳ terminal · error")];
+  board = [1, 2, 3].map((n) => job({ thread: "wtgui-head", turn: n, status: "done", endedAt: iso(t0 - n * 60_000), lines: headerFail() }));
+  c.tick();
+  ok(c.state().alerts.some((x) => x.rule === "repeat"), "three turns whose only failure signal is the header are reported", JSON.stringify(c.state().alerts.map((x) => x.rule)));
 }
 
 console.log("work left in a finished tree");
