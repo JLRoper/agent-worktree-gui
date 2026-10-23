@@ -219,7 +219,7 @@ main { padding: 14px 16px 40px; }
    title row, the column header and the legend. The verdict badges, the chips and the text inside the
    rows keep their own colours - the theme says WHICH project you are looking at, never what a row
    means. Saturation and lightness are fixed here so any hue reads on the dark palette. */
-section.project.has-hue { border-color: hsl(var(--proj-hue) 40% 34%); background: hsl(var(--proj-hue) 20% 10%); --proj-rest-bg: hsl(var(--proj-hue) 20% 10%); }
+section.project.has-hue { border-color: hsl(var(--proj-hue) 40% 34%); background: hsl(var(--proj-hue) 20% 10%); }
 section.project.has-hue > .project-head[data-toggle-project] {
   background: linear-gradient(180deg, hsl(var(--proj-hue) 34% 17%), hsl(var(--proj-hue) 30% 13%));
   border-bottom-color: hsl(var(--proj-hue) 36% 27%);
@@ -1414,9 +1414,14 @@ body.no-grey-flash tbody tr.row.flash-idle { animation: none; }
 /* A section's own background is mostly covered by its children, so the flash has to reach the title
    row as well: a tinted section alone was too quiet to notice. The head flashes solid green and the
    section carries the ring. */
+/* A project flashes when it is promoted up the order, and (with "Flash on events") when one of its worktrees gets an
+   event. The ring is on the box's own edge and the wash is on its title row - never the body. Painting the whole
+   section green washed over the table the reader was reading: the rows, their verdict badges and their dirty marks
+   all sat under a green film, which said "this project" louder than it said "it moved". A worktree row flashes as a
+   band because a row is one band; a project is a box, so its edge and its header say it. */
 @keyframes flashsection {
-  from { background-color: #1d3f2b; box-shadow: 0 0 0 2px #3d8f5c inset, 0 0 14px rgba(61, 143, 92, .45); }
-  to { background-color: var(--proj-rest-bg, var(--panel)); box-shadow: 0 0 0 2px transparent inset, 0 0 0 rgba(61, 143, 92, 0); }
+  from { box-shadow: 0 0 0 2px #3d8f5c inset, 0 0 14px rgba(61, 143, 92, .45); }
+  to { box-shadow: 0 0 0 2px transparent inset, 0 0 0 rgba(61, 143, 92, 0); }
 }
 /* The title row flashes as a wash over whatever it is already painted with. A themed project's head is an opaque
    linear-gradient, and animating background-color behind an opaque background-image is invisible - which is why a
