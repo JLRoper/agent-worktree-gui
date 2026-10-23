@@ -674,6 +674,19 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
   user-select: none;
 }
 .turn-head .chev { color: var(--dimmer); font-size: 18px; line-height: 1; display: inline-block; width: 16px; vertical-align: -3px; }
+/* The model on the readout: a control by double-click, quiet enough to still read as part of the line. */
+.stat-model { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.stat-model:hover { color: var(--text); text-decoration: underline dotted; text-underline-offset: 2px; }
+.stat-model.is-static { cursor: default; }
+/* The picker: a search box and the list, floating under the readout. */
+.model-pop { position: fixed; z-index: 40; width: 360px; max-height: 320px; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 10px 26px #0008; overflow: hidden; }
+.model-search { border: 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--text); font-size: 12px; padding: 7px 9px; outline: none; }
+.model-list { overflow: auto; padding: 4px; }
+.model-group { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; padding: 6px 6px 3px; }
+.model-item { display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: 5px; color: var(--text); font-size: 12px; padding: 4px 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.model-item:hover, .model-item.is-sel { background: #241d33; color: #ecd9ff; }
+.model-item.is-current { color: #c8a6ff; }
+.model-none { padding: 8px; font-size: 12px; }
 /* A turn that answers a subagent delivery: the attribution rides on the turn head, not in the transcript. */
 .turn-origin { flex: none; white-space: nowrap; color: #c8a6ff; border: 1px solid #3d3350; background: #241d33; border-radius: 4px; padding: 0 5px; font-size: 10.5px; }
 .turn-head:hover { color: var(--text); }

@@ -672,6 +672,14 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 201, { path: target.replace(/\\/g, "/"), name, bytes: bytes.length, type });
     }
 
+    if (route === "/api/threads/model" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const thread = String(body.thread || "").trim();
+      if (!thread) return sendJson(res, 400, { error: "thread is required" });
+      return sendJson(res, 200, jobs.setThreadModel(thread, body.model));
+    }
+
     if (route === "/api/agents/reply" && req.method === "POST") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
@@ -699,7 +707,8 @@ const server = createServer(async (req, res) => {
         origin,
         resumeDir: dir,
         cwd: dir,
-        model: body.model ?? first.model,
+        // A model picked on the card wins; otherwise the thread's own choice, then whatever the first turn used.
+        model: body.model ?? jobs.modelFor(first.thread) ?? first.model,
         budget: body.budget ?? first.budget ?? 1800,
         maxTurns: body.maxTurns ?? first.maxTurns,
         yolo: body.yolo ?? first.yolo,

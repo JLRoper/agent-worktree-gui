@@ -689,9 +689,9 @@ function scrollThreadToBottom(thread) {
   // Sending asked for this turn: follow it even if the reader had scrolled up in an older one.
   for (const o of outs) pinConsole(o.dataset.out);
   const out = outs[outs.length - 1];
-  if (out) out.scrollTop = out.scrollHeight;
+  if (out) setScroll(out, out.scrollHeight);
   const body = card.querySelector(".job-body");
-  if (card.classList.contains("maximized") && body) body.scrollTop = body.scrollHeight;
+  if (card.classList.contains("maximized") && body) setScroll(body, body.scrollHeight);
 }
 
 function foldAll(collapsed) {
@@ -1058,7 +1058,7 @@ function toggleTurn(key) {
   // A turn that was just opened should show its newest lines, not its first line.
   if (turnIsOpen(conv, turn, copy)) {
     const pre = document.querySelector(`pre[data-out="${CSS.escape(id)}${copy}"]`);
-    if (pre) pre.scrollTop = pre.scrollHeight;
+    if (pre) setScroll(pre, pre.scrollHeight);
   }
 }
 
@@ -1378,8 +1378,25 @@ function contextBar(pct, width = 10) {
   return "\u2588".repeat(full) + tail + "\u00b7".repeat(Math.max(0, width - full - (tail ? 1 : 0)));
 }
 
-function statsLine(stats, model = null) {
-  if (!stats || typeof stats !== "object") return "";
+// Double-click opens the picker; a single click does nothing, so a stray click on the readout cannot change a model.
+function modelSegHtml(model, thread) {
+  return `<button type="button" class="stat stat-model${thread ? "" : " is-static"}"${thread ? ` data-model-pick="${esc(thread)}"` : ""} title="${esc(model)} — double-click to pick the model this session runs with">${esc(String(model).split("/").pop())}</button>`;
+}
+
+function statsRowHtml(latest, thread) {
+  const model = latest.effectiveModel || latest.model || modelsState?.defaultModel || null;
+  if (!latest.stats && !model) return "";
+  return `<div class="job-stats-row">${statsLine(latest.stats, model, thread)}</div>`;
+}
+
+function statsLine(stats, model = null, thread = "") {
+  // The model is a control even when there are no numbers to put beside it: it is the one place a session's model can
+  // be changed, and a card whose run left no usage still needs to say (and offer) it.
+  if (!stats || typeof stats !== "object") {
+    return model
+      ? `<span class="job-stats mono">${modelSegHtml(model, thread)}</span>`
+      : "";
+  }
   const segs = [];
   const pct = Number.isFinite(stats.context_percent) ? stats.context_percent : null;
   const mark = stats.context_estimated ? "~" : "";
@@ -1406,9 +1423,7 @@ function statsLine(stats, model = null) {
   if (!segs.length) return "";
   // The model leads the line: these figures describe what that model did, and the id's owner prefix is
   // dropped for width (the full id stays in the tooltip).
-  const modelSeg = model
-    ? `<span class="stat stat-model" title="${esc(model)}">${esc(String(model).split("/").pop())}</span>`
-    : "";
+  const modelSeg = model ? modelSegHtml(model, thread) : "";
   const title = "this session's usage: context occupancy, prompt-cache hit rate, and \u21ca = how many times the transcript was compacted into a summary; latency and t/s are estimated from the turn's wall clock (~)";
   const body = [modelSeg, segs.map((s) => `<span class="stat">${esc(s)}</span>`).join('<span class="stat-sep">\u2502</span>')]
     .filter(Boolean)
@@ -1416,6 +1431,113 @@ function statsLine(stats, model = null) {
   // A span, not a div: the readout belongs on the footer line with the outcome and the token count,
   // to their right, and a block element there costs a line of card height for nothing.
   return `<span class="job-stats mono" title="${esc(title)}">${body}</span>`;
+}
+
+// ---- picking a session's model -----------------------------------------------------------------
+// Double-click the model on a card: a search-as-you-type list of everything the provider advertises, with the
+// session's current choice marked. The pick is stored per thread (beside the labels) and the next turn uses it.
+let modelPop = null;
+
+function closeModelPop() {
+  modelPop?.remove();
+  modelPop = null;
+}
+
+function modelChoices() {
+  const d = modelsState;
+  const out = [{ id: "", label: `(default${d?.defaultModel ? `: ${String(d.defaultModel).split("/").pop()}` : ""})`, group: "" }];
+  for (const p of d?.providers || []) {
+    for (const m of p.models || []) out.push({ id: String(m), label: String(m), group: p.label || "" });
+  }
+  return out;
+}
+
+function openModelPop(thread, anchor) {
+  closeModelPop();
+  const pop = document.createElement("div");
+  pop.className = "model-pop";
+  pop.innerHTML = `<input class="model-search mono" data-1p-ignore autocomplete="off" spellcheck="false" placeholder="search ${modelChoices().length - 1} models…" />
+    <div class="model-list mono"></div>`;
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  pop.style.left = `${Math.max(8, Math.min(window.innerWidth - 380, r.left))}px`;
+  pop.style.top = `${Math.max(8, Math.min(window.innerHeight - 340, r.bottom + 4))}px`;
+  modelPop = pop;
+  const search = pop.querySelector(".model-search");
+  const list = pop.querySelector(".model-list");
+  const current = [...state.jobs.values()].find((j) => (j.thread || j.id) === thread)?.effectiveModel || "";
+  let sel = 0;
+
+  const paint = (q) => {
+    const s = String(q || "").trim().toLowerCase();
+    const hits = modelChoices().filter((c) => !s || c.label.toLowerCase().includes(s) || c.group.toLowerCase().includes(s));
+    sel = 0;
+    if (!hits.length) {
+      list.innerHTML = `<div class="model-none dimmer">no model matches "${esc(q)}"</div>`;
+      return;
+    }
+    let group = null;
+    list.innerHTML = hits
+      .map((c, i) => {
+        const head = c.group && c.group !== group ? `<div class="model-group dimmer">${esc(c.group)}</div>` : "";
+        group = c.group || group;
+        return `${head}<button type="button" class="model-item${i === 0 ? " is-sel" : ""}${c.id === current ? " is-current" : ""}" data-model="${esc(c.id)}" title="${esc(c.id || "gateway default")}">${esc(c.label)}${c.id === current ? " ✓" : ""}</button>`;
+      })
+      .join("");
+  };
+
+  const move = (d) => {
+    const items = [...list.querySelectorAll(".model-item")];
+    if (!items.length) return;
+    items[sel]?.classList.remove("is-sel");
+    sel = (sel + d + items.length) % items.length;
+    items[sel].classList.add("is-sel");
+    items[sel].scrollIntoView({ block: "nearest" });
+  };
+
+  paint("");
+  search.addEventListener("input", () => paint(search.value));
+  search.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      closeModelPop();
+    } else if (ev.key === "Enter") {
+      ev.preventDefault();
+      const items = [...list.querySelectorAll(".model-item")];
+      const pick = items[sel] || items[0];
+      if (pick) void pickModel(thread, pick.dataset.model);
+    } else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();
+      move(ev.key === "ArrowDown" ? 1 : -1);
+    }
+  });
+  list.addEventListener("click", (ev) => {
+    const b = ev.target.closest(".model-item");
+    if (b) void pickModel(thread, b.dataset.model);
+  });
+  search.focus();
+}
+
+async function pickModel(thread, model) {
+  closeModelPop();
+  try {
+    const r = await apiFetch("/api/threads/model", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thread, model }),
+    });
+    if (!r.ok) return;
+    const d = await r.json();
+    // The card says the model that will run next; the server is the record, this only spares a round trip.
+    for (const j of state.jobs.values()) {
+      if ((j.thread || j.id) !== thread) continue;
+      j.effectiveModel = d.model || j.model || null;
+    }
+    renderConversation(thread);
+    showBanner(d.model ? `this session runs ${d.model} from its next turn` : "this session is back on the gateway's default model");
+  } catch {
+    /* a pick that cannot be stored leaves the label as it was */
+  }
 }
 
 // A failed turn can be asked again, but it is not a "retry" in the strict sense: the run is over, and re-sending
@@ -1859,7 +1981,7 @@ function conversationHtml(conv) {
   // How stale the thread is, right after the state it belongs to: "NOT-RUNNING · 2m ago" reads as one fact,
   // while the same counter trailing a long session name sat far from the thing it describes.
   const whenHtml = latest.lastActiveAt
-    ? `<span class="job-when mono" title="last used ${esc(new Date(latest.lastActiveAt).toLocaleString())}">${esc(fmtAgo(latest.lastActiveAt))}</span>`
+    ? `<span class="job-when mono" data-when="${esc(thread)}" title="last used ${esc(new Date(latest.lastActiveAt).toLocaleString())}">${esc(fmtAgo(latest.lastActiveAt))}</span>`
     : "";
   const meta = [
     latest.title ? null : latest.cwd ? `cwd ${latest.cwd}` : null,
@@ -1972,7 +2094,7 @@ function conversationHtml(conv) {
             ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button" title="cancel the run this agent is in the middle of">Cancel turn</button>` : ""}
           </div>
         </div>
-        ${latest.stats ? `<div class="job-stats-row">${statsLine(latest.stats, latest.model || modelsState?.defaultModel || null)}</div>` : ""}
+        <div class="job-stats-slot" data-stats="${esc(thread)}">${statsRowHtml(latest, thread)}</div>
         ${pendingSteer
           ? `<div class="reply-note mono" data-pending-steer="${esc(thread)}" title="the turn ended before the gateway could read your steer at a tool boundary. It is in the box above, unsent — send it to continue on the same thread.">⇢ that steer missed the turn — it is in the box, unsent</div>`
           : ""}
@@ -2610,8 +2732,7 @@ function stickSubConsole(box) {
   if (state.subConsolePinned.get(id) === false) return;
   const max = box.scrollHeight - box.clientHeight;
   if (max <= 0 || Math.abs(box.scrollTop - max) <= 1) return;
-  selfScrolled.add(box);
-  box.scrollTop = max;
+  setScroll(box, max);
 }
 
 function stickThinkBody(body) {
@@ -2620,8 +2741,7 @@ function stickThinkBody(body) {
   if (state.thinkPinned.get(key) === false) return;
   const max = body.scrollHeight - body.clientHeight;
   if (max <= 0 || Math.abs(body.scrollTop - max) <= 1) return;
-  selfScrolled.add(body);
-  body.scrollTop = max;
+  setScroll(body, max);
 }
 
 function paintThink(turn, copy = "") {
@@ -2693,12 +2813,40 @@ function pinConsole(id) {
   if (id) state.outPinned[id] = true;
 }
 
+// Every scroll the panel performs goes through here. Its scroll event arrives after this task, and without a
+// record of what the panel did it is indistinguishable from the reader scrolling - which unpinned consoles during
+// a rebuild and left them parked at the top until something else happened to move them.
+// A node whose scrollTop is still where the panel put it: the event it is reporting is the panel's own.
+function justPlaced(el) {
+  return el._selfTop != null && Math.abs(el.scrollTop - el._selfTop) <= 1;
+}
+
+function setScroll(el, top) {
+  if (!el) return;
+  const v = Math.max(0, Math.round(Number(top) || 0));
+  el._selfTop = v;
+  selfScrolled.add(el);
+  el.scrollTop = v;
+}
+
+// Rebuilds land before the browser has finished laying the new nodes out, so a "go to the bottom" can be clamped
+// to a shorter height than the console ends up with. Once the frame is done, put the pinned ones back on their
+// newest line - and only those, so a console the reader took control of is never moved.
+function settleScrolls(root) {
+  const run = () => {
+    if (!root || !root.isConnected) return;
+    for (const o of root.querySelectorAll("pre.job-out")) stickConsole(o);
+    for (const b of root.querySelectorAll(".think-body")) stickThinkBody(b);
+    for (const s of root.querySelectorAll(".sub-console")) stickSubConsole(s);
+  };
+  requestAnimationFrame(() => requestAnimationFrame(run));
+}
+
 function stickConsole(pre) {
   if (!pre || !pre.dataset || !consolePinned(pre.dataset.out)) return;
   const max = pre.scrollHeight - pre.clientHeight;
   if (max <= 0 || Math.abs(pre.scrollTop - max) <= 1) return;
-  selfScrolled.add(pre);
-  pre.scrollTop = max;
+  setScroll(pre, max);
 }
 
 function captureScrolls(root) {
@@ -2707,7 +2855,9 @@ function captureScrolls(root) {
   for (const o of root.querySelectorAll("pre.job-out")) {
     map.set(o.dataset.out, {
       top: o.scrollTop,
-      atBottom: o.scrollHeight - o.scrollTop - o.clientHeight < 32,
+      // A node the panel has never placed (a fresh build) sits at 0 until something moves it. Reading that 0 as
+      // "the reader scrolled up" is what made a rebuilt console come back at its first line.
+      atBottom: o._selfTop == null || o.scrollHeight - o.scrollTop - o.clientHeight < 32,
     });
   }
   return map;
@@ -2718,7 +2868,7 @@ function restoreScrolls(root, map) {
   for (const o of root.querySelectorAll("pre.job-out")) {
     const was = map.get(o.dataset.out);
     if (!was) continue;
-    o.scrollTop = consolePinned(o.dataset.out) || was.atBottom ? o.scrollHeight : Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight));
+    setScroll(o, consolePinned(o.dataset.out) || was.atBottom ? o.scrollHeight : Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight)));
   }
 }
 
@@ -2729,7 +2879,7 @@ function applyStoredScrolls(root) {
   for (const o of root.querySelectorAll("pre.job-out")) {
     const was = state.outScrolls[o.dataset.out];
     if (!was) continue;
-    o.scrollTop = consolePinned(o.dataset.out) || was.atBottom ? o.scrollHeight : Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight));
+    setScroll(o, consolePinned(o.dataset.out) || was.atBottom ? o.scrollHeight : Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight)));
   }
 }
 
@@ -2893,7 +3043,9 @@ function conversationSignature(conv) {
     // The session's own name, which Hermes writes a moment after the first turn: a card created here can be
     // repainted by its title landing, so the title belongs in the signature even though nothing else changes.
     l.title || "",
-    l.lastActiveAt || "",
+    // l.lastActiveAt is NOT here: it moves with every event of a running turn, and rebuilding the whole card for
+    // it destroyed the console under the reader several times a second - which is what made the scroll jump. It is
+    // repainted in place by paintCardMeta().
     // Queued replies show as a note next to the buttons; a change must repaint the card.
     (state.replyQueue.get(conv.thread) || []).length,
     state.collapsedJobs.has(conv.thread) ? "c" : "o",
@@ -2918,10 +3070,29 @@ function conversationSignature(conv) {
     conv.turns.some((t) => (t.subagents || []).some((s) => s.running))
       ? "r"
       : "-",
-    // The stats row lives in the foot of the card: a new reading must repaint it, or the numbers
-    // stay as they were until some unrelated event rebuilds the conversation.
-    JSON.stringify(l.stats || null),
+    // The stats row is repainted in place too: a new reading must update the numbers, but it must not rebuild
+    // the console under them.
   ].join("~");
+}
+
+// The two things on a card that move without changing its markup: when it was last used, and its usage figures.
+// Writing them where they stand is what keeps a streaming turn from rebuilding (and resetting) its own console.
+function paintCardMeta(el, conv) {
+  const latest = conv.latest;
+  const when = el.querySelector("[data-when]");
+  if (when) {
+    const next = latest.lastActiveAt ? fmtAgo(latest.lastActiveAt) : "";
+    if (when.textContent !== next) when.textContent = next;
+    if (latest.lastActiveAt) when.title = `last used ${new Date(latest.lastActiveAt).toLocaleString()}`;
+  }
+  const slot = el.querySelector("[data-stats]");
+  if (slot) {
+    const html = statsRowHtml(latest, conv.thread);
+    if (slot._html !== html) {
+      slot.innerHTML = html;
+      slot._html = html;
+    }
+  }
 }
 
 function renderConversation(thread, { scroll = false } = {}) {
@@ -2930,14 +3101,17 @@ function renderConversation(thread, { scroll = false } = {}) {
   if (!conv) return renderJobs();
   if (!el) return renderJobs();
   const sig = conversationSignature(conv);
-  if (el.dataset.sig === sig) return;
+  if (el.dataset.sig === sig) {
+    paintCardMeta(el, conv);
+    return;
+  }
   // Rebuild, then put the reader back exactly where they were: every output pane, the maximized
   // body, and the page itself. Following the newest output only happens when they were already at
   // the bottom (or when the caller explicitly asks for it, e.g. a freshly spawned turn).
   const prev = [...el.querySelectorAll("pre.job-out")].map((o) => ({
     id: o.dataset.out,
     top: o.scrollTop,
-    atBottom: o.scrollHeight - o.scrollTop - o.clientHeight < 32,
+    atBottom: o._selfTop == null || o.scrollHeight - o.scrollTop - o.clientHeight < 32,
   }));
   const prevBody = el.querySelector(".job-body");
   const bodyTop = prevBody ? prevBody.scrollTop : 0;
@@ -2957,13 +3131,14 @@ function renderConversation(thread, { scroll = false } = {}) {
   for (const o of fresh.querySelectorAll("pre.job-out")) {
     const was = prev.find((p) => p.id === o.dataset.out);
     const follow = scroll || consolePinned(o.dataset.out) || (was ? was.atBottom : conv.latest.status === "running");
-    if (follow) o.scrollTop = o.scrollHeight;
-    else if (was) o.scrollTop = Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight));
+    if (follow) setScroll(o, o.scrollHeight);
+    else if (was) setScroll(o, Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight)));
   }
   const body = fresh.querySelector(".job-body");
   if (body) {
-    body.scrollTop = bodyAtBottom ? body.scrollHeight : Math.min(bodyTop, Math.max(0, body.scrollHeight - body.clientHeight));
+    setScroll(body, bodyAtBottom ? body.scrollHeight : Math.min(bodyTop, Math.max(0, body.scrollHeight - body.clientHeight)));
   }
+  settleScrolls(fresh);
   // A repaint replaces the card node, and the node that held the caret is gone with it — so a spawn
   // that asked for the reply box puts the caret back here, once the new card is in the document.
   applyPendingFocus();
@@ -3068,7 +3243,7 @@ function appendJobLine(evt) {
         out.appendChild(div);
       }
     }
-    if (stick) out.scrollTop = out.scrollHeight;
+    if (stick) setScroll(out, out.scrollHeight);
   }
   refreshJobPreview(evt.id);
 }
@@ -4016,6 +4191,33 @@ function paintAgeCell(cell, row) {
   if (cell.title !== title) cell.title = title;
 }
 
+// Move each live card into the slot the freshly built detail made for it. A card that is not on the board yet is
+// built here; one that is keeps its DOM, so its console, its open turns and its scroll position all survive a
+// row repaint. Insertion order follows the slots, so the agents stay in the order the row ranks them.
+function fillAgentSlots(root, reuse) {
+  if (!root) return;
+  for (const slot of [...root.querySelectorAll("[data-agent-slot]")]) {
+    const thread = slot.dataset.agentSlot;
+    const card = reuse?.get(thread);
+    if (card) {
+      slot.replaceWith(card);
+      continue;
+    }
+    const conv = conversations().find((c) => c.thread === thread);
+    if (!conv) {
+      slot.remove();
+      continue;
+    }
+    const holder = document.createElement("div");
+    holder.innerHTML = conversationHtml(conv);
+    const fresh = holder.firstElementChild;
+    if (fresh) {
+      fresh.dataset.sig = conversationSignature(conv);
+      slot.replaceWith(fresh);
+    } else slot.remove();
+  }
+}
+
 function detailHtml(row) {
   const parts = [];
   const dirty = row.dirtyFiles || [];
@@ -4078,8 +4280,11 @@ function detailHtml(row) {
   const agents = agentsFor(row);
   // No heading: the row's own badge already says how many agents it owns and how many are running, and the
   // cards are the first thing under the row - a title above them only pushed them down.
+  // A slot per card, not a copy of it: placeRow() moves the card that is already on the board into its slot.
+  // Rebuilding the cards here destroyed their consoles on every scan - several times a second while a turn ran -
+  // and every rebuild is a chance for a scroll position to be lost.
   const agentsHtml = agents.length
-    ? `<div class="agents-block">${agents.map((c) => conversationHtml(c)).join("")}</div>`
+    ? `<div class="agents-block">${agents.map((c) => `<div class="agent-slot" data-agent-slot="${esc(c.thread)}"></div>`).join("")}</div>`
     : "";
   // Sessions the row says are here but that have no card: the conversation lives in the gateway, and
   // the panel's job store is what held the card. Reviving one puts a card back you can reply to —
@@ -4613,12 +4818,14 @@ function placeRow(project, row, { flash = false } = {}) {
     return;
   }
   const oldDetail = state.detailEls.get(key);
+  const oldCards = new Map();
+  if (oldDetail) for (const card of oldDetail.querySelectorAll(".job[data-thread]")) oldCards.set(card.dataset.thread, card);
   const typing = oldDetail ? captureTyping(oldDetail) : null;
   const outs = oldDetail
     ? [...oldDetail.querySelectorAll("pre.job-out")].map((o) => ({
         id: o.dataset.out,
         top: o.scrollTop,
-        atBottom: o.scrollHeight - o.scrollTop - o.clientHeight < 32,
+        atBottom: o._selfTop == null || o.scrollHeight - o.scrollTop - o.clientHeight < 32,
       }))
     : [];
   if (oldDetail) oldDetail.remove();
@@ -4632,12 +4839,16 @@ function placeRow(project, row, { flash = false } = {}) {
     const dEl = h2.firstElementChild;
     newTr.after(dEl);
     state.detailEls.set(key, dEl);
+    // The cards move across before anything is measured, so "where was this console" is answered by the node
+    // that is actually going to stay on screen.
+    fillAgentSlots(dEl, oldCards);
     // Put the reader back: the reply they were typing, where the caret was, and how far each
     // transcript had been scrolled.
     restoreTyping(dEl, typing);
     const scrollMap = new Map(outs.map((o) => [o.id, { top: o.top, atBottom: o.atBottom }]));
     restoreScrolls(dEl, scrollMap);
     applyStoredScrolls(dEl);
+    settleScrolls(dEl);
   }
   if (flash && old) {
     // Green when an agent moved in this row; a quiet grey when the refresh ran and found nothing new.
@@ -5907,6 +6118,34 @@ document.addEventListener("click", async (e) => {
 });
 
 // Reply affordances are re-created on every render, so they are handled at document level.
+// Double-click, on its own listener: a single click on the readout must stay a single click.
+document.addEventListener("dblclick", (e) => {
+  const btn = e.target.closest?.("[data-model-pick]");
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  void openModelPop(btn.dataset.modelPick, btn);
+});
+
+// Clicking anywhere else, or scrolling the board, closes the model list.
+document.addEventListener(
+  "mousedown",
+  (e) => {
+    if (!modelPop || modelPop.contains(e.target) || e.target.closest?.("[data-model-pick]")) return;
+    closeModelPop();
+  },
+  true,
+);
+// A console sticking to its newest line scrolls constantly, and that is not the reader moving the page - only a
+// scroll of the page itself puts the anchor somewhere else, so only that closes the list.
+window.addEventListener(
+  "scroll",
+  (e) => {
+    if (e.target === document) closeModelPop();
+  },
+  true,
+);
+
 // A subagent line is focusable, so Enter or Space has to do what a click does.
 document.addEventListener("keydown", async (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
@@ -6036,7 +6275,7 @@ document.addEventListener(
     const pre = e.target;
     if (pre && pre.classList && pre.classList.contains("think-body")) {
       const key = pre.closest("details.think")?.dataset.thinkTurn || "";
-      if (selfScrolled.has(pre)) {
+      if (selfScrolled.has(pre) || justPlaced(pre)) {
         selfScrolled.delete(pre);
         return;
       }
@@ -6047,7 +6286,7 @@ document.addEventListener(
     }
     if (pre && pre.classList && pre.classList.contains("sub-console")) {
       const id = pre.dataset.subConsoleBox || "";
-      if (selfScrolled.has(pre)) {
+      if (selfScrolled.has(pre) || justPlaced(pre)) {
         selfScrolled.delete(pre);
         return;
       }
@@ -6059,7 +6298,7 @@ document.addEventListener(
     if (!pre || pre.tagName !== "PRE" || !pre.classList || !pre.classList.contains("job-out") || !pre.dataset.out) return;
     // A scroll the panel caused itself (restoring a position, following new lines) is not the reader leaving the
     // bottom, so it must not unpin the console.
-    if (selfScrolled.has(pre)) {
+    if (selfScrolled.has(pre) || justPlaced(pre)) {
       selfScrolled.delete(pre);
       return;
     }
@@ -6147,6 +6386,7 @@ $("projects").addEventListener("click", (e) => {
         const dEl = holder.firstElementChild;
         tr.after(dEl);
         state.detailEls.set(key, dEl);
+        fillAgentSlots(dEl, new Map());
         tr.classList.add("expanded");
       }
     },
