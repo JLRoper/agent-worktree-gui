@@ -647,9 +647,12 @@ tr.row-confirm .btn-del-no {
   cursor: pointer;
 }
 tr.row-confirm .btn-del-no { border-color: var(--line); background: #151a22; color: var(--text); }
-/* Two buttons in one cell. The plain actions column is 26px wide, which stacked them on top of each other;
-   this pair has to read Cancel then Delete, left to right, so the cell gives them one line. */
-tr.row-confirm td.row-actions { width: auto; white-space: nowrap; text-align: right; }
+/* The confirmation is one cell spanning the table: message on the left, Cancel then Delete on the right. It used
+   to hand the buttons to the narrow actions column, which a fixed-width table cannot widen for one row. */
+tr.row-confirm .row-confirm-cell { display: flex; align-items: center; gap: 12px; }
+tr.row-confirm .rc-msg { flex: 1 1 auto; min-width: 0; }
+tr.row-confirm .rc-actions { display: flex; gap: 8px; flex: none; }
+tr.row-confirm .rc-actions button { margin-left: 0; white-space: nowrap; }
 tr.row-confirm .btn-del-yes:hover { background: #3a1d22; }
 .artifacts-pop {
   position: fixed;

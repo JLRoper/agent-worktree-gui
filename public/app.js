@@ -2965,7 +2965,17 @@ function showWorktreeConfirm(key) {
   const confirm = document.createElement("tr");
   confirm.className = "row-confirm";
   confirm.dataset.confirmRow = key;
-  confirm.innerHTML = `<td colspan="9"><span class="dimmer">Remove worktree</span> <b>${esc(row.name)}</b> <span class="dimmer">on</span> <span class="mono">${esc(row.branch || "—")}</span><span class="dimmer">? Its files go to the Recycle Bin (recoverable there) and git's record of it is pruned.</span></td><td class="row-actions"><button class="btn-del-no" type="button" data-del-tree-no="${esc(key)}">Cancel</button><button class="btn-del-yes" type="button" data-del-tree-yes="${esc(key)}">Delete</button></td>`;
+  // One cell across every column, not a message cell plus the narrow actions column: the table is laid out at a
+  // fixed width, so the 3% actions column could not hold two buttons and they were pushed past the card's edge,
+  // where `.project`'s overflow clipped them and nothing could be clicked.
+  // The flex layout lives on a div INSIDE the cell: a td with `display:flex` stops being a table cell and loses
+  // its colspan, which collapsed this row to its content width instead of the card's.
+  confirm.innerHTML = `<td colspan="10">
+      <div class="row-confirm-cell">
+        <span class="rc-msg"><span class="dimmer">Remove worktree</span> <b>${esc(row.name)}</b> <span class="dimmer">on</span> <span class="mono">${esc(row.branch || "—")}</span><span class="dimmer">? Its files go to the Recycle Bin (recoverable there) and git's record of it is pruned.</span></span>
+        <span class="rc-actions"><button class="btn-del-no" type="button" data-del-tree-no="${esc(key)}">Cancel</button><button class="btn-del-yes" type="button" data-del-tree-yes="${esc(key)}">Delete</button></span>
+      </div>
+    </td>`;
   rowEl.after(confirm);
 }
 
