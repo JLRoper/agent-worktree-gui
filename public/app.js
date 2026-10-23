@@ -3695,7 +3695,7 @@ function applyPendingFocus() {
       const outOfView = r.top < 48 || r.bottom > window.innerHeight - 48;
       pending.placed = true; // once is a welcome; repeating it is the page fighting the reader
       if (outOfView) {
-        pendingScrollAt = Date.now();
+        programmaticScroll();
         card.scrollIntoView({ block: "center", behavior: "auto" });
       }
     }
@@ -3712,8 +3712,18 @@ setInterval(applyPendingFocus, 250);
 // trackpad fling still got yanked back a moment later - which is the "it pops me back up to the box"
 // report. pendingScrollAt stamps our own one-time jump so it is not read as the reader scrolling.
 let pendingScrollAt = 0;
-const endFollowOnScroll = () => {
-  if (Date.now() - pendingScrollAt < 400) return;
+// Every scroll the panel performs on purpose stamps this. The follow below ends on a READER scroll - and the
+// panel's own aim/follow jumps (up to the New-agent card, then down to the new agent) are not that.
+function programmaticScroll() {
+  pendingScrollAt = Date.now();
+}
+const endFollowOnScroll = (e) => {
+  if (Date.now() - pendingScrollAt < 600) return;
+  // Only the page counts. A console scrolling its own output (captured here because scroll does not
+  // bubble but capture sees every descendant) is the agent working, not the reader leaving.
+  const t = e && e.target;
+  const page = !t || t === document || t === document.scrollingElement || t === window || t === document.documentElement;
+  if (!page) return;
   if (state.pendingFocus) state.pendingFocus = null;
 };
 document.addEventListener("wheel", endFollowOnScroll, { passive: true });
@@ -4016,6 +4026,7 @@ function revealCard(id) {
 function scrollCardUnderBar(card) {
   const bar = document.querySelector(".topbar");
   const offset = (bar?.getBoundingClientRect().height || 0) + 12;
+  programmaticScroll();
   const top = window.scrollY + card.getBoundingClientRect().top - offset;
   // Instant, not smooth: a smooth animation across a thousand rows is cancelled by the board's own
   // repaint (the page height changes under it) and stops wherever it happened to be — which is how the
@@ -4028,7 +4039,10 @@ function scrollCardUnderBar(card) {
     const bar2 = document.querySelector(".topbar");
     const off2 = (bar2?.getBoundingClientRect().height || 0) + 12;
     const want = Math.max(0, window.scrollY + card.getBoundingClientRect().top - off2);
-    if (Math.abs(want - window.scrollY) > 2) window.scrollTo({ top: want, behavior: "auto" });
+    if (Math.abs(want - window.scrollY) > 2) {
+      programmaticScroll();
+      window.scrollTo({ top: want, behavior: "auto" });
+    }
   };
   requestAnimationFrame(again);
   setTimeout(again, 120);
@@ -4186,7 +4200,9 @@ function jumpToPanelAgent(projectName, { running = false } = {}) {
     const card = document.querySelector(`.job[data-thread="${CSS.escape(found.thread)}"]`);
     if (!card) return;
     // Center it: a card pinned under the sticky bar is "visible" by the numbers and useless to read.
+    programmaticScroll();
     card.scrollIntoView({ block: "center", behavior: "auto" });
+    refreshAnchorBaseline();
     state.jumpThread = { thread: found.thread, until: Date.now() + 1700 };
     card.classList.add("jump");
     setTimeout(() => {
@@ -4213,10 +4229,13 @@ function jumpToAgent(thread) {
   }
   const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
   if (!card) {
+    programmaticScroll();
     $("jobs").scrollIntoView({ block: "start", behavior: "smooth" });
     return;
   }
+  programmaticScroll();
   card.scrollIntoView({ block: "center", behavior: "smooth" });
+  refreshAnchorBaseline();
   card.classList.add("jump");
   setTimeout(() => card.classList.remove("jump"), 1700);
   // Remember the target so a repaint (which replaces this node) lands the caret back in it. The jump
@@ -4231,6 +4250,24 @@ function findTurnStar(thread, turnId) {
   if (!card) return null;
   const stars = [...card.querySelectorAll(`[data-star-turn="${CSS.escape(turnId)}"]`)];
   return stars.find((b) => !b.closest(".pinned-turns")) || stars[0] || null;
+}
+
+// One scroll, once, to the card a spawn just produced; the caret goes there too, but focusing never
+// scrolls. Returns false when the card is not painted yet, so the caller can retry.
+function landOnSpawnedCard(thread) {
+  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+  if (!card) return false;
+  programmaticScroll();
+  card.scrollIntoView({ block: "center", behavior: "auto" });
+  refreshAnchorBaseline();
+  card.classList.add("jump");
+  setTimeout(() => {
+    document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)?.classList.remove("jump");
+  }, 1700);
+  // placed: true - this IS the centring; applyPendingFocus must not do it again on the next repaint.
+  state.pendingFocus = { thread, until: Date.now() + 20_000, scrollUntil: Date.now() + 6_000, placed: true };
+  applyPendingFocus();
+  return true;
 }
 
 // After a spawn, follow the agent home: unfold its folder, its project and its worktree row, then
@@ -4272,10 +4309,10 @@ function revealSpawnedAgent(job, deadlineMs = 30_000) {
     // posted back before its first job event arrived), keep trying instead of giving up on frame one
     // — that race is why the jump only sometimes happened.
     requestAnimationFrame(() => {
-      jumpToAgent(thread);
-      if (!document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`) && Date.now() - started < deadlineMs) {
-        setTimeout(attempt, 400);
-      }
+      // Land on the card where it is: jumpToAgent() falls back to scrolling the Agents panel when the
+      // card is not painted yet, and a spawn that was still racing its first job event then jumped
+      // somewhere else entirely. Here: only scroll when the card exists, and retry quietly otherwise.
+      if (!landOnSpawnedCard(thread) && Date.now() - started < deadlineMs) setTimeout(attempt, 400);
     });
   };
   attempt();
@@ -4849,6 +4886,12 @@ function scheduleAnchorCompensation() {
 }
 
 function compensateAnchor() {
+  // A spawn/jump follow owns the scroll until it is done: compensating against the position the reader
+  // held before the jump would drag them straight back off the card the panel just landed on.
+  if (state.pendingFocus) {
+    refreshAnchorBaseline();
+    return;
+  }
   if (!anchorState) return;
   if (!anchorState.el.isConnected) {
     refreshAnchorBaseline();
@@ -4861,6 +4904,7 @@ function compensateAnchor() {
   // inside the anchor itself is the reader watching it expand - never compensated.
   if (!grewSelf && Math.abs(delta) > 1 && window.scrollY > 0) {
     lastAnchorScrollAt = Date.now();
+    programmaticScroll();
     window.scrollBy(0, delta);
   }
   const after = anchorState.el.getBoundingClientRect();
@@ -4926,7 +4970,10 @@ function restoreBoardAnchor(anchor) {
   const top = bar ? bar.getBoundingClientRect().bottom : 0;
   const now = Math.round(tr.getBoundingClientRect().top - top);
   const delta = now - anchor.offset;
-  if (Math.abs(delta) > 2) window.scrollBy(0, delta);
+  if (Math.abs(delta) > 2) {
+    programmaticScroll();
+    window.scrollBy(0, delta);
+  }
 }
 
 function scheduleBoardSweep(anchor = null) {
