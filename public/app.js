@@ -1261,6 +1261,60 @@ function turnRetryHtml(latest, thread) {
   return ` <button type="button" class="btn-retry" data-retry-turn="${esc(thread)}" title="send this turn's prompt again as a NEW turn — the failed turn's edits are already on disk">retry</button>`;
 }
 
+// ---- subagents ------------------------------------------------------------------------------
+// A run that delegates gets one long `delegate_task` tool call on its own stream and nothing else: the children
+// work on their own sessions, which the gateway does not relay. But they ARE in the store - `source='subagent'`
+// rows whose parent_session_id is this thread - so the panel asks for them directly while a card is working.
+// Only running children are drawn: a finished one is history, and the card already summarises that.
+async function refreshSubagents(thread) {
+  const box = document.querySelector(`[data-subagents="${CSS.escape(thread)}"]`);
+  if (!box) return;
+  let list = [];
+  try {
+    const r = await apiFetch(`/api/subagents?thread=${encodeURIComponent(thread)}`);
+    if (!r.ok) return;
+    list = (await r.json()).subagents || [];
+  } catch {
+    return;
+  }
+  const running = list.filter((k) => k.running);
+  if (!running.length) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  box.hidden = false;
+  const head = `\u29c9 ${list.length} subagent${list.length === 1 ? "" : "s"} \u00b7 ${running.length} running`;
+  box.innerHTML =
+    `<span class="sub-head" title="agents this run delegated. Their work does not appear on this card's stream — the row below is the newest thing each one did.">${esc(head)}</span>` +
+    list
+      .map(
+        (k) => `<div class="sub-row${k.running ? " is-running" : ""}">
+        <span class="sub-dot"></span>
+        <span class="sub-title" title="${esc(k.title)}">${esc(k.title)}</span>
+        <span class="sub-meta mono">${k.running ? "running" : "done"}${k.at ? ` · ${esc(fmtAgo(k.at))}` : ""} · ${k.msgs} msgs · ${k.tools} tools</span>
+        ${k.peek ? `<span class="sub-peek mono" title="${esc(k.peek)}">${esc(k.peek)}</span>` : ""}
+      </div>`,
+      )
+      .join("");
+}
+
+// Polled rather than pushed: a child's tool calls never reach this panel, and a 4s cadence is well inside the
+// time it takes to read one line of a transcript.
+const subagentPoll = new Map();
+function pollSubagents() {
+  for (const [thread, j] of state.jobs) {
+    const busy = j.status === "running" || j.status === "starting";
+    const shown = document.querySelector(`[data-subagents="${CSS.escape(thread)}"]:not([hidden])`);
+    if (!busy && !shown) continue;
+    const last = subagentPoll.get(thread) || 0;
+    if (Date.now() - last < 4000) continue;
+    subagentPoll.set(thread, Date.now());
+    void refreshSubagents(thread);
+  }
+}
+setInterval(pollSubagents, 2000);
+
 function conversationHtml(conv) {
   const { thread, turns, latest } = conv;
   const collapsed = state.collapsedJobs.has(thread);
@@ -1361,6 +1415,7 @@ function conversationHtml(conv) {
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
       <button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>
     </div>
+    <div class="subagents mono" data-subagents="${esc(thread)}" hidden></div>
     ${collapsed ? `<div class="job-preview mono" data-preview="${esc(thread)}">${esc(jobPreview(latest))}</div>` : ""}
     ${homeless ? `<div class="attach-row" data-attach-row="${esc(thread)}" hidden>
       <span class="dimmer mono">attach to</span>

@@ -462,6 +462,18 @@ button.chip:active { transform: translateY(1px); }
 .agents-block .job:last-child { border-bottom: 1px solid #2f3947; }
 .job-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding-bottom: 6px; }
 .job-head .spacer { flex: 1; }
+/* Subagents a run delegated, under the card's head. The parent's own stream carries a single delegate_task call;
+   these rows are what the children are actually doing, read from their own sessions in the store. */
+.subagents { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 6px 18px; font-size: 11px; color: var(--dim); }
+.subagents[hidden] { display: none; }
+.subagents .sub-head { color: #c8a6ff; font-size: 10.5px; letter-spacing: .03em; }
+.subagents .sub-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding-left: 12px; }
+.subagents .sub-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dimmer); }
+.subagents .sub-row.is-running .sub-dot { background: #c8a6ff; box-shadow: 0 0 0 3px rgba(200, 166, 255, .16); animation: subpulse 1.6s ease-in-out infinite; }
+.subagents .sub-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.subagents .sub-meta { flex: none; color: var(--dimmer); font-size: 10.5px; }
+.subagents .sub-peek { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); }
+@keyframes subpulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 .pill {
   font-size: 10.5px;
   font-weight: 700;

@@ -22,6 +22,7 @@ import {
   sessionSettings, writeSessionListLimit, SESSION_LIST_MIN, SESSION_LIST_MAX,
 } from "./lib/hermes-config.js";
 import { hermesSessionTail } from "./lib/activity.js";
+import { subagentsFor } from "./lib/subagents.js";
 import { modelCatalogue } from "./lib/hermes-models.js";
 
 // A file an agent produced is meant to be OPENED, and the shell association may hand a .md to a
@@ -717,6 +718,19 @@ const server = createServer(async (req, res) => {
     // click. These turn that claim into a list, and put ONE back on the board when the reader picks
     // it — never automatically, because a tree accumulates every session ever run in it and the
     // board must not refill with all of them at once.
+    if (route === "/api/subagents" && req.method === "GET") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const thread = String(url.searchParams.get("thread") || "").trim();
+      if (!thread) return sendJson(res, 400, { error: "thread is required" });
+      // Children the run delegated: their sessions, their state and the last thing each one did. Polled while a
+      // card is working, because the gateway does not put a child's work on the parent's event stream.
+      const { hermesHome } = await import("./lib/jobs.js");
+      return sendJson(res, 200, {
+        thread,
+        subagents: subagentsFor(thread, { dbPath: path.join(hermesHome(), "state.db") }),
+      });
+    }
+
     if (route === "/api/sessions" && req.method === "GET") {
       const target = cleanPath(url.searchParams.get("path"));
       if (!target) return sendJson(res, 400, { error: "path is required" });
