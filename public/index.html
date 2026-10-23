@@ -114,6 +114,20 @@
         </div>
         <div class="settings-preview mono" id="reorder-preview">…</div>
 
+        <label class="settings-row settings-gap" for="anchor-hover" title="The hover anchor: the card the pointer is moving over keeps its screen position while other cards above it grow. It lingers for the seconds beside it after the pointer stops. Off, hovering chooses nothing and the anchor falls through to the next rule. Saved in this browser.">
+          <span>Hover anchor <span class="settings-info">ⓘ</span></span>
+          <input id="anchor-hover" type="checkbox" checked>
+          <input id="anchor-hover-seconds" type="number" inputmode="numeric" step="1" min="1" max="600" title="how long a hovered card keeps the anchor after the pointer stops moving over it">
+          <span class="settings-unit mono">s</span>
+        </label>
+
+        <label class="settings-row" for="anchor-touch" title="The last-touched anchor: the card you last clicked, focused or typed in keeps its screen position for the seconds beside it after you stop touching it. On screen only — a card that has scrolled away never holds the anchor. Saved in this browser.">
+          <span>Touched anchor <span class="settings-info">ⓘ</span></span>
+          <input id="anchor-touch" type="checkbox" checked>
+          <input id="anchor-touch-seconds" type="number" inputmode="numeric" step="5" min="3" max="600" title="how long the last card you touched keeps the anchor after you stop typing or lean away from it">
+          <span class="settings-unit mono">s</span>
+        </label>
+
         <label class="settings-row settings-gap" for="grey-flash" title="Grey is the quiet one: the row was re-read and nothing had moved. Green — a sign of life, an agent doing something — always flashes. Off, a refreshed row just stays as it is.">
           <span>Grey flash <span class="settings-info">ⓘ</span></span>
           <input id="grey-flash" type="checkbox" checked>

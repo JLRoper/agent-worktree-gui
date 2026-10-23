@@ -15,6 +15,12 @@ const SPAWN_HISTORY_MAX = 50;
 // empty after every reload).
 const PROJECT_HUE_KEY = "wm.projectHues";
 const ANCHOR_THREAD_KEY = "wm.anchorThread";
+const ANCHOR_HOVER_KEY = "wm.anchorHover";
+const ANCHOR_HOVER_SECONDS_KEY = "wm.anchorHoverSeconds";
+const ANCHOR_HOVER_SECONDS_DEFAULT = 3;
+const ANCHOR_TOUCH_KEY = "wm.anchorTouch";          // was wm.anchorFollow
+const ANCHOR_TOUCH_SECONDS_KEY = "wm.anchorTouchSeconds"; // was wm.anchorFollowSeconds
+const ANCHOR_TOUCH_SECONDS_DEFAULT = 30;
 
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
@@ -92,6 +98,12 @@ const state = {
   hoverAt: 0,
   touchThread: null,
   touchAt: 0,
+  // Whether the anchor follows the pointer / last touched card at all, and how long a touched card keeps it.
+  // Off is the pure geometry of the reading line, which is what the panel did before any of this.
+  anchorHover: loadAnchorFlag(ANCHOR_HOVER_KEY, true),
+  anchorHoverSeconds: loadAnchorSeconds(ANCHOR_HOVER_SECONDS_KEY, ANCHOR_HOVER_SECONDS_DEFAULT, 1),
+  anchorTouch: loadAnchorFlag(ANCHOR_TOUCH_KEY, true, "wm.anchorFollow"),
+  anchorTouchSeconds: loadAnchorSeconds(ANCHOR_TOUCH_SECONDS_KEY, ANCHOR_TOUCH_SECONDS_DEFAULT, 3, "wm.anchorFollowSeconds"),
   cloneStatus: {},
   approvals: new Map(),
   scanRoots: [],
@@ -5051,6 +5063,44 @@ function headTitle(name) {
 
 // ANCHOR_THREAD_KEY is declared near the top of the file: loadAnchorThread() runs while `state` is built.
 
+// Two independent signals, each with its own switch and its own window: the pointer (hover) and the hand
+// (clicked / focused / typed). `legacyKey` is read once so a preference saved under the older single setting is
+// not silently lost when the two were split apart.
+function loadAnchorFlag(key, fallback, legacyKey = null) {
+  try {
+    const v = localStorage.getItem(key) ?? (legacyKey ? localStorage.getItem(legacyKey) : null);
+    return v === null ? fallback : v === "1";
+  } catch {
+    return fallback;
+  }
+}
+
+function saveAnchorFlag(key, on) {
+  try {
+    localStorage.setItem(key, on ? "1" : "0");
+  } catch {
+    /* no storage: this tab only */
+  }
+}
+
+function loadAnchorSeconds(key, fallback, min = 1, legacyKey = null) {
+  try {
+    const raw = localStorage.getItem(key) ?? (legacyKey ? localStorage.getItem(legacyKey) : null);
+    const n = Number(raw);
+    return Number.isFinite(n) && raw !== null && n >= min && n <= 600 ? Math.round(n) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveAnchorSeconds(key, seconds) {
+  try {
+    localStorage.setItem(key, String(seconds));
+  } catch {
+    /* no storage: this tab only */
+  }
+}
+
 function loadAnchorThread() {
   try {
     return localStorage.getItem(ANCHOR_THREAD_KEY) || null;
@@ -5126,16 +5176,21 @@ function anchorCardFor(thread) {
 //     two minutes ago says nothing about what is being read now),
 //   * the card last interacted with - clicked, focused, typed in - for a couple of minutes, which is the
 //     "last panel I touched is where I am thinking" case.
-const HOVER_MS = 3000;
-const TOUCH_MS = 120_000;
+function anchorHoverMs() {
+  return state.anchorHoverSeconds * 1000;
+}
+
+function anchorTouchMs() {
+  return state.anchorTouchSeconds * 1000;
+}
 
 function intentAnchorCard() {
   const now = Date.now();
-  if (state.hoverThread && now - state.hoverAt < HOVER_MS) {
+  if (state.anchorHover && state.hoverThread && now - state.hoverAt < anchorHoverMs()) {
     const hovered = anchorCardFor(state.hoverThread);
     if (hovered) return hovered;
   }
-  if (state.touchThread && now - state.touchAt < TOUCH_MS) {
+  if (state.anchorTouch && state.touchThread && now - state.touchAt < anchorTouchMs()) {
     const touched = anchorCardFor(state.touchThread);
     if (touched) return touched;
   }
@@ -8819,6 +8874,52 @@ $("font-select")?.addEventListener("change", (e) => applyFont("ui", e.target.val
 $("term-select")?.addEventListener("change", (e) => applyFont("term", e.target.value));
 $("term-size-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, size: e.target.value }));
 $("grey-flash")?.addEventListener("change", (e) => applyGreyFlash(Boolean(e.target.checked)));
+
+// ---- the anchor's two signals: hover and last touched, each switched and timed on its own ----------
+function paintAnchorSettings() {
+  const hover = $("anchor-hover");
+  const hoverSeconds = $("anchor-hover-seconds");
+  const touch = $("anchor-touch");
+  const touchSeconds = $("anchor-touch-seconds");
+  if (hover) hover.checked = state.anchorHover;
+  if (hoverSeconds) hoverSeconds.value = String(state.anchorHoverSeconds);
+  if (touch) touch.checked = state.anchorTouch;
+  if (touchSeconds) touchSeconds.value = String(state.anchorTouchSeconds);
+}
+
+$("anchor-hover")?.addEventListener("change", (e) => {
+  state.anchorHover = Boolean(e.target.checked);
+  saveAnchorFlag(ANCHOR_HOVER_KEY, state.anchorHover);
+  if (!state.anchorHover) {
+    state.hoverThread = null;
+    state.hoverAt = 0;
+  }
+  refreshAnchorBaseline();
+});
+
+$("anchor-hover-seconds")?.addEventListener("input", (e) => {
+  const n = Math.max(1, Math.min(600, Math.round(Number(e.target.value)) || ANCHOR_HOVER_SECONDS_DEFAULT));
+  state.anchorHoverSeconds = n;
+  saveAnchorSeconds(ANCHOR_HOVER_SECONDS_KEY, n);
+  refreshAnchorBaseline();
+});
+
+$("anchor-touch")?.addEventListener("change", (e) => {
+  state.anchorTouch = Boolean(e.target.checked);
+  saveAnchorFlag(ANCHOR_TOUCH_KEY, state.anchorTouch);
+  if (!state.anchorTouch) {
+    state.touchThread = null;
+    state.touchAt = 0;
+  }
+  refreshAnchorBaseline();
+});
+
+$("anchor-touch-seconds")?.addEventListener("input", (e) => {
+  const n = Math.max(3, Math.min(600, Math.round(Number(e.target.value)) || ANCHOR_TOUCH_SECONDS_DEFAULT));
+  state.anchorTouchSeconds = n;
+  saveAnchorSeconds(ANCHOR_TOUCH_SECONDS_KEY, n);
+  refreshAnchorBaseline();
+});
 $("contrast")?.addEventListener("input", (e) => applyContrast(Number(e.target.value)));
 $("auto-collect")?.addEventListener("change", (e) => {
   try {
@@ -8938,6 +9039,7 @@ for (const id of ["newagent", "agents"]) applyFixedCollapse(id);
     connect();
     startAnchorObserver();
     updateColorsRow();
+    paintAnchorSettings();
     state.eventsAt = Date.now();
   } catch (e) {
     setStream("offline", "bad");
