@@ -1498,7 +1498,7 @@ function conversationHtml(conv) {
       ${artifacts.length ? `<button type="button" class="btn-artifacts" data-artifacts="${esc(thread)}" title="${artifacts.length} deliverable(s) from this agent — click to open, copy or delete them">\u{1F4C4} ${artifacts.length}</button>` : ""}
       ${pager}
       <span class="spacer"></span>
-      ${latest.yolo ? '<span class="pill yolo">--yolo</span>' : ""}
+      ${latest.yolo ? '<span class="pill yolo" title="this run was started with the --yolo flag (auto-approve, no prompts). The panel does not send it: approvals still come to this card.">yolo</span>' : ""}
       ${homeless ? `<button class="btn-attach" data-attach-toggle="${esc(thread)}" type="button" title="attach this agent to a worktree — it then lives under that row">\u2935 attach</button>` : ""}
       <span class="mono dimmer thread-name" data-thread-name="${esc(thread)}" data-label="${esc(latest.label || "")}" title="${latest.label ? esc(`${latest.label} — Hermes thread ${thread}`) : "Hermes session thread — continue it any time"}">${esc(latest.label || thread)}</span>
       <button class="btn-rename" data-rename-thread="${esc(thread)}" type="button" title="rename this session — a label for the panel only; the Hermes thread id never changes">\u270e</button>
