@@ -591,7 +591,10 @@ button.chip:active { transform: translateY(1px); }
 .think-title { font-size: 10.5px; letter-spacing: .03em; color: #9db4d0; }
 .think-meta { font-size: 10.5px; color: var(--dimmer); }
 .think-body { margin: 6px 0 2px; max-height: 260px; overflow: auto; }
-.think-block { white-space: pre-wrap; word-break: break-word; font-size: 11.5px; line-height: 1.5; font-style: italic; color: var(--dim); margin: 0 0 8px; }
+.think-block { white-space: pre-wrap; word-break: break-word; font-size: var(--think-size, 12px); line-height: 1.5; font-style: italic; color: var(--dim); margin: 0 0 8px; }
+/* The blocks also carry .mono, which sets a 12px size and would otherwise win on the var: this rule is two classes
+   deep so Ctrl+wheel can actually size the reasoning text. */
+.think-block.mono { font-size: var(--think-size, 12px); }
 .think-block:last-child { margin-bottom: 0; }
 .think-empty { color: var(--dimmer); font-style: normal; }
 /* The card's own switch. Off is a quiet glyph; on is visibly live, because the block it controls is easy to miss. */
@@ -677,9 +680,14 @@ button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241
    the corner of the CONSOLE, not in the flow of its text. The chip is only visible while the reader is scrolled
    away from the end; at the end there is nothing to jump to. */
 .out-wrap { position: relative; }
+/* The console has an 18px left tab (.job-cmd, .job-out, .job-foot). The wrapper takes the tab instead, so the two
+   boxes line up exactly and the chip centred in the wrapper is centred in the console. */
+.out-wrap.out-tab { margin-left: 18px; }
+.out-wrap.out-tab > .job-out { margin-left: 0; }
 .out-wrap > .to-bottom {
   position: absolute;
-  right: 16px;
+  left: 50%;
+  transform: translateX(-50%);
   bottom: 9px;
   z-index: 2;
   width: 21px;
@@ -689,16 +697,18 @@ button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241
   padding: 0;
   font-size: 12px;
   line-height: 1;
-  color: var(--dim);
-  background: rgba(18, 22, 29, .92);
-  border: 1px solid var(--line);
+  /* Centred over the console's own text, so it has to be opaque and carry a halo: at 92% the lines behind it
+     showed through the circle and the arrow read as a ghost. */
+  color: #c3ccd8;
+  background: #161c24;
+  border: 1px solid #39424f;
   border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .45);
+  box-shadow: 0 0 0 4px rgba(10, 13, 18, .55), 0 2px 8px rgba(0, 0, 0, .45);
   cursor: pointer;
   transition: opacity .16s ease, color .16s ease, border-color .16s ease;
 }
 .out-wrap > .to-bottom:hover { color: var(--text); border-color: #3a4353; }
-.out-wrap > .to-bottom:active { transform: translateY(1px); }
+.out-wrap > .to-bottom:active { transform: translate(-50%, 1px); }
 /* Scrolled to the newest line, or nothing to scroll: the chip fades out and stops taking clicks. */
 .out-wrap.is-at-end > .to-bottom { opacity: 0; pointer-events: none; }
 

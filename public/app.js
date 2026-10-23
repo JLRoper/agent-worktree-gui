@@ -28,6 +28,9 @@ const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
   // "Console size" stays the baseline for every card. Kept in memory so a repaint does not undo it.
   consoleZoom: new Map(),
+  // Ctrl+wheel over a thinking body sizes it, the same way it sizes the console - per card, so one long reasoning
+  // block can be shrunk without touching the rest of the board.
+  thinkZoom: new Map(),
   // Hot Agent: the rotation through agents that are waiting for input. `stack` is the visit history (so
   // Alt+Left can walk back), `cursor` points at the one on screen.
   hot: { on: false, stack: [], cursor: -1 },
@@ -1132,7 +1135,9 @@ function turnBody(turn, copy = "") {
       })
       .join("") || '<div class="jl jl-dim">waiting for output…</div>';
   return thinkHtml(turn, copy) +
-    `<div class="out-wrap"><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${toBottomBtnHtml()}</div>` +
+    // `out-tab` carries the 18px left tab the console itself has, so the wrapper is the console's box: the chip
+    // centred in the wrapper is centred in the console, not 9px off it.
+    `<div class="out-wrap out-tab"><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${toBottomBtnHtml()}</div>` +
     // The subagents this turn spawned, right under the console they ran beside: the delegation is the turn's own
     // work, not the card's, and a card with several turns would otherwise show the newest one's children under all
     // of them.
@@ -2467,8 +2472,10 @@ function conversationHtml(conv) {
     : "";
   const jumped = state.jumpThread && state.jumpThread.thread === thread && Date.now() < state.jumpThread.until ? " jump" : "";
   const zoom = state.consoleZoom.get(thread);
+  const thinkZoom = state.thinkZoom.get(thread);
+  const sizeVars = [zoom ? `--out-size:${zoom}px` : "", thinkZoom ? `--think-size:${thinkZoom}px` : ""].filter(Boolean).join(";");
   const hotFlash = state.hotFlash.thread === thread && Date.now() < state.hotFlash.until;
-  return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}${jumped}${hotFlash ? " hot-flash" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}"${zoom ? ` style="--out-size:${zoom}px"` : ""}>
+  return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}${jumped}${hotFlash ? " hot-flash" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}"${sizeVars ? ` style="${sizeVars}"` : ""}>
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
       <span class="agent-glyph" title="a Hermes agent session — ⧉ marks an agent row">\u29c9</span>
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
@@ -6801,6 +6808,8 @@ $("job-prompt").addEventListener("input", () => updateSpawnNote());
 // at, and the page zoom is only suppressed while the pointer is actually over a console.
 const CONSOLE_ZOOM_MIN = 7;
 const CONSOLE_ZOOM_MAX = 24;
+const THINK_ZOOM_MIN = 8;
+const THINK_ZOOM_MAX = 22;
 
 function zoomConsole(out, step) {
   const card = out.closest(".job");
@@ -6815,17 +6824,33 @@ function zoomConsole(out, step) {
   out.style.fontSize = `${next}px`;
 }
 
+// The same gesture over a thinking body: reasoning text has its own size (11.5px by default) and its own var, so
+// zooming it never moves the console's text.
+function zoomThink(body, step) {
+  const card = body.closest(".job");
+  const thread = card && card.dataset.thread;
+  if (!thread) return;
+  const block = body.querySelector(".think-block") || body;
+  const base = Number(state.thinkZoom.get(thread)) || parseFloat(getComputedStyle(block).fontSize) || 11.5;
+  const next = Math.min(THINK_ZOOM_MAX, Math.max(THINK_ZOOM_MIN, Math.round((base + step) * 2) / 2));
+  state.thinkZoom.set(thread, next);
+  card.style.setProperty("--think-size", `${next}px`);
+}
+
 // Ctrl+wheel over a console must not ALSO zoom the window. Cancel it at the earliest point in the event's path
 // (capture on window) and stop it there, so neither the page's own listeners nor anything above them sees a
 // cancellable wheel: a passive listener anywhere in the path - the panel has one on document for pendingFocus -
 // can otherwise leave the browser free to run its zoom gesture.
 const onConsoleWheel = (e) => {
   if (!e.ctrlKey) return;
-  const out = e.target && e.target.closest ? e.target.closest(".job-out") : null;
-  if (!out) return;
+  const target = e.target && e.target.closest ? e.target : null;
+  const out = target ? target.closest(".job-out") : null;
+  const think = !out && target ? target.closest(".think-body") : null;
+  if (!out && !think) return;
   if (e.cancelable) e.preventDefault();
   e.stopPropagation();
-  zoomConsole(out, e.deltaY < 0 ? 1 : -1);
+  if (out) zoomConsole(out, e.deltaY < 0 ? 1 : -1);
+  else zoomThink(think, e.deltaY < 0 ? 1 : -1);
 };
 window.addEventListener("wheel", onConsoleWheel, { passive: false, capture: true });
 // Trackpad pinch arrives as a gesture in Safari, not as a ctrl+wheel, and would zoom the page under the pointer.
