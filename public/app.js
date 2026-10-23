@@ -1418,9 +1418,9 @@ function contextSegHtml(stats, thread, contextLimit) {
   const over = Number.isFinite(stats.context_used) && stats.context_used > ceiling;
   const shown = used ? `${used}/${fmtTokens(ceiling)}` : `ctx ${fmtTokens(ceiling)}`;
   const why = contextLimit
-    ? `this card measures its context against ${fmtTokens(contextLimit)}${window ? ` (the model's own window is ${fmtTokens(window)})` : ""} — double-click to change it`
-    : `the model's context window${window ? ` (${fmtTokens(window)})` : ""} — double-click to set a ceiling for this session`;
-  return `<button type="button" class="stat stat-ctx${over ? " is-over" : ""}" data-context-pick="${esc(thread)}" title="${esc(why)}">${esc(shown)}</button>`;
+    ? `this card measures its context against ${fmtTokens(contextLimit)}${window ? ` (the model's own window is ${fmtTokens(window)})` : ""} — click to cycle through the sizes, right-click for the full list`
+    : `the model's context window${window ? ` (${fmtTokens(window)})` : ""} — click to cycle through the sizes, right-click for the full list`;
+  return `<button type="button" class="stat stat-ctx${over ? " is-over" : ""}" data-context-pick="${esc(thread)}" title="${esc(why)}">${esc(shown)}<span class="stat-caret">\u2304</span></button>`;
 }
 
 function statsLine(stats, model = null, thread = "", contextLimit = null) {
@@ -1609,6 +1609,28 @@ function contextTiers(window) {
     label: `${fmtTokens(n)}${w && n === w ? " · the model's window" : w ? ` · ${Math.round((n / w) * 100)}% of the window` : ""}`,
     full: Boolean(w && n === w),
   }));
+}
+
+// The sizes this session can be measured against, biggest first: the model's own window, then the usual
+// fractions of it, then the round sizes that are not fractions of anything. Clicking the readout walks this
+// list, which is the whole setting for most readers - the full picker (with a typed size) is a right-click away.
+function contextTierValues(window) {
+  return contextTiers(window).map((t) => t.value);
+}
+
+async function cycleContext(thread) {
+  const latest = [...state.jobs.values()].find((j) => (j.thread || j.id) === thread) || {};
+  const model = latest.effectiveModel || latest.model || modelsState?.defaultModel || null;
+  const win = Number(latest.stats?.context_max) > 0 ? Number(latest.stats.context_max) : modelsState?.contexts?.[model] || null;
+  const tiers = contextTierValues(win);
+  if (!tiers.length) return;
+  const full = win || tiers[0];
+  const current = Number(latest.contextLimit) > 0 ? Number(latest.contextLimit) : full;
+  // A stored size that is not in the ladder (typed by hand) steps to the next smaller tier rather than
+  // jumping back to the top.
+  const at = tiers.indexOf(current);
+  const next = at === -1 ? tiers.find((n) => n < current) || tiers[0] : tiers[(at + 1) % tiers.length];
+  await pickContext(thread, next === full ? 0 : next);
 }
 
 function openContextPop(thread, anchor) {
@@ -6015,6 +6037,14 @@ document.addEventListener("click", async (e) => {
   if (state.pendingFocus && !e.target.closest(`.job[data-thread="${CSS.escape(state.pendingFocus.thread)}"]`)) {
     state.pendingFocus = null;
   }
+  // The context readout right of the model: one click moves the session's ceiling to the next size.
+  const ctxPick = e.target.closest?.("[data-context-pick]");
+  if (ctxPick) {
+    e.preventDefault();
+    e.stopPropagation();
+    void cycleContext(ctxPick.dataset.contextPick);
+    return;
+  }
   // Files this agent produced: the button opens the list, a row opens that file in an editor, and
   // the copy button takes the full path. Clicking anywhere else closes the list.
   const artBtn = e.target.closest("[data-artifacts]");
@@ -6588,18 +6618,21 @@ document.addEventListener("click", async (e) => {
 // Reply affordances are re-created on every render, so they are handled at document level.
 // Double-click, on its own listener: a single click on the readout must stay a single click.
 document.addEventListener("dblclick", (e) => {
-  const ctx = e.target.closest?.("[data-context-pick]");
-  if (ctx) {
-    e.preventDefault();
-    e.stopPropagation();
-    void openContextPop(ctx.dataset.contextPick, ctx);
-    return;
-  }
   const btn = e.target.closest?.("[data-model-pick]");
   if (!btn) return;
   e.preventDefault();
   e.stopPropagation();
   void openModelPop(btn.dataset.modelPick, btn);
+});
+
+// The context readout is a one-click control: each click moves to the next size in the ladder. The full list
+// (and a typed size) is still there on right-click, which no ordinary click can trigger by accident.
+document.addEventListener("contextmenu", (e) => {
+  const ctx = e.target.closest?.("[data-context-pick]");
+  if (!ctx) return;
+  e.preventDefault();
+  e.stopPropagation();
+  void openContextPop(ctx.dataset.contextPick, ctx);
 });
 
 // Clicking anywhere else, or scrolling the board, closes the model list.

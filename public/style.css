@@ -706,6 +706,9 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 .stat-ctx { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
 .stat-ctx:hover { color: var(--text); text-decoration: underline dotted; text-underline-offset: 2px; }
 .stat-ctx.is-over { color: #e8a33d; }
+/* The tiny chevron says "this cycles" without turning the readout into a form control. */
+.stat-caret { margin-left: 3px; font-size: 9px; opacity: .6; }
+.stat-ctx:hover .stat-caret { opacity: 1; }
 .model-ctx-n { color: var(--dimmer); font-size: 10.5px; padding-left: 6px; }
 .model-hint { font-size: 10.5px; padding: 4px 7px 6px; }
 .ctx-pop .model-item.is-current { color: #c8a6ff; }
