@@ -1477,15 +1477,20 @@ let modelPop = null;
 // What the open popover belongs to, so a repaint can put it back under the same control instead of closing it.
 // A refresh moves the card's DOM around; the reader's picker has no business disappearing because of that.
 let modelPopTarget = null;
+// The control the reader opened the list from. Kept by reference: a card can be repainted under the popup, and
+// re-finding it by attribute name is how the list once anchored itself to a different copy of the label.
+let modelPopAnchorEl = null;
 
 function closeModelPop() {
   modelPop?.remove();
   modelPop = null;
   modelPopTarget = null;
+  modelPopAnchorEl = null;
 }
 
 function popAnchor(thread, kind) {
   if (!thread) return null;
+  if (modelPopAnchorEl && modelPopAnchorEl.isConnected) return modelPopAnchorEl;
   const attr = kind === "context" ? "data-context-pick" : "data-model-pick";
   return document.querySelector(`[${attr}="${CSS.escape(thread)}"]`);
 }
@@ -1505,8 +1510,27 @@ function positionModelPop() {
     closeModelPop();
     return false;
   }
-  modelPop.style.left = `${Math.max(8, Math.min(window.innerWidth - 380, r.left))}px`;
-  modelPop.style.top = `${Math.max(8, Math.min(window.innerHeight - (modelPop.offsetHeight || 300) - 8, r.bottom + 4))}px`;
+  const gap = 4;
+  const margin = 8;
+  const width = modelPop.offsetWidth || 360;
+  const natural = 320; // the height the list wants
+  const below = window.innerHeight - r.bottom - gap - margin;
+  const above = r.top - gap - margin;
+  // Below the label when there is a usable list down there; otherwise above it, with the list above the search
+  // bar (column-reverse) so the box the reader types in stays right where the label is. The panel never floats
+  // away from the control it belongs to; it shrinks instead.
+  const flip = below < Math.min(natural, 160) && above > below;
+  modelPop.classList.toggle("is-flipped", flip);
+  modelPop.style.left = `${Math.max(margin, Math.min(window.innerWidth - width - margin, r.left))}px`;
+  if (flip) {
+    modelPop.style.top = "auto";
+    modelPop.style.bottom = `${window.innerHeight - r.top + gap}px`;
+    modelPop.style.maxHeight = `${Math.max(160, Math.min(natural, above))}px`;
+  } else {
+    modelPop.style.bottom = "auto";
+    modelPop.style.top = `${r.bottom + gap}px`;
+    modelPop.style.maxHeight = `${Math.max(160, Math.min(natural, below))}px`;
+  }
   return true;
 }
 
@@ -1521,6 +1545,7 @@ function modelChoices() {
 
 function openModelPop(thread, anchor) {
   closeModelPop();
+  modelPopAnchorEl = anchor || null;
   const pop = document.createElement("div");
   pop.className = "model-pop";
   pop.innerHTML = `<input class="model-search mono" data-1p-ignore autocomplete="off" spellcheck="false" placeholder="search ${modelChoices().length - 1} models…" />
@@ -1635,6 +1660,7 @@ async function cycleContext(thread) {
 
 function openContextPop(thread, anchor) {
   closeModelPop();
+  modelPopAnchorEl = anchor || null;
   const latest = [...state.jobs.values()].find((j) => (j.thread || j.id) === thread) || {};
   const model = latest.effectiveModel || latest.model || modelsState?.defaultModel || null;
   const win = Number(latest.stats?.context_max) > 0 ? Number(latest.stats.context_max) : modelsState?.contexts?.[model] || null;

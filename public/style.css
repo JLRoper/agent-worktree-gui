@@ -733,6 +733,10 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 .model-pop { position: fixed; z-index: 40; width: 360px; max-height: 320px; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 10px 26px #0008; overflow: hidden; }
 .model-search::selection { background: #4b3a6b; color: #ecd9ff; }
 .model-search { border: 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--text); font-size: 12px; padding: 7px 9px; outline: none; }
+/* Opened upwards (no room below the label): the list goes above the search bar so the box you type in stays
+   against the model name, which is where the eye already is. */
+.model-pop.is-flipped { flex-direction: column-reverse; }
+.model-pop.is-flipped .model-search { border-bottom: 0; border-top: 1px solid var(--line); }
 .model-list { overflow: auto; padding: 4px; }
 .model-group { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; padding: 6px 6px 3px; }
 .model-item { display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: 5px; color: var(--text); font-size: 12px; padding: 4px 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
