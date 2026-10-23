@@ -1103,6 +1103,41 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
 /* …and once answered it collapses to this one line. */
 .turn-approval-done { margin: 6px 2px 2px; padding: 3px 9px; font-size: 11px; color: #8fd6a0; border-left: 2px solid #2f6b3f; background: rgba(47,107,63,.10); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .turn-approval-done.is-deny { color: #ff9c9c; border-left-color: #6b2a2a; background: rgba(107,42,42,.10); }
+/* The agent's own question: the approval box's place in the flow, in light purple instead of amber, and sized for
+   sentences rather than a command. A choice is a full-width row so a long label wraps inside its own control
+   instead of stretching the box; the typed "Other" answer and the send button share the row under them. */
+.turn-question { margin: 8px 2px 6px; border: 1px solid #55407a; border-radius: 8px; background: linear-gradient(180deg, rgba(42,32,68,.72), rgba(30,24,46,.72)); box-shadow: 0 6px 18px rgba(0,0,0,.35); padding: 10px 12px; }
+.tq-head { font-size: 11.5px; color: #ecd9ff; letter-spacing: .01em; }
+.tq-question { margin: 8px 0 9px; font: 13px/1.5 var(--ui); color: #f4efff; white-space: pre-wrap; word-break: break-word; }
+.tq-choices { display: flex; flex-direction: column; gap: 6px; }
+.tq-choice { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; padding: 7px 10px; border: 1px solid #4a3a6b; border-radius: 6px; background: rgba(26,20,40,.55); color: #e7dcff; font: 12.5px/1.45 var(--ui); white-space: pre-wrap; word-break: break-word; cursor: pointer; }
+button.tq-choice:hover { background: #352a52; border-color: #66509a; }
+label.tq-choice { position: relative; }
+label.tq-choice:hover { background: #2f2549; }
+label.tq-choice.on { border-color: #8a6fc0; background: #3b2e5c; }
+.tq-choice:focus-within { border-color: #8a6fc0; }
+/* The tick is drawn by .tq-box, so the native control is present (focusable, clickable) but invisible. */
+.tq-choice.is-multi input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.tq-box { flex: none; width: 13px; height: 13px; margin-top: 2px; border: 1px solid #66509a; border-radius: 50%; background: rgba(0,0,0,.35); }
+.tq-choice.is-multi .tq-box { border-radius: 4px; }
+.tq-choice.is-multi.on .tq-box { background: #ecd9ff; border-color: #ecd9ff; box-shadow: inset 0 0 0 2px #2a2044; }
+/* A long sentence on a 1300px row reads as one wall of text; the row stays full-width (it is the click
+   target) and the measure inside it is held to about a hundred characters. */
+.tq-text { min-width: 0; max-width: 100ch; }
+.tq-rec { flex: none; margin-left: 6px; padding: 0 6px; border-radius: 999px; border: 1px solid #8a6fc0; color: #ecd9ff; font: 10px/1.7 var(--ui); letter-spacing: .04em; white-space: nowrap; }
+.tq-other-row { display: flex; align-items: stretch; gap: 8px; margin-top: 9px; }
+.tq-other { flex: 1; min-width: 0; min-height: 34px; max-height: 160px; resize: vertical; padding: 6px 9px; border: 1px solid #4a3a6b; border-radius: 6px; background: rgba(0,0,0,.34); color: #f4efff; font: 12.5px/1.45 var(--ui); }
+.tq-other:focus { outline: none; border-color: #8a6fc0; }
+button.tq-send { flex: none; align-self: flex-end; padding: 4px 14px; font-size: 11.5px; background: #3b2e5c; border-color: #66509a; color: #ecd9ff; }
+button.tq-send:hover { background: #473767; }
+button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: default; }
+.tq-note { margin: 9px 0 5px; font-size: 10.5px; color: #b6a3d6; }
+.tq-warn { margin-top: 4px; font-size: 11px; color: #ff9c9c; }
+.tq-warn:empty { display: none; }
+.turn-question.jump { animation: jumpflash var(--flash-ring, 1700ms) ease-out; }
+/* …and once answered, the same one-line record the approval leaves. */
+.turn-question-done { margin: 6px 2px 2px; padding: 3px 9px; font-size: 11px; color: #cdb6ef; border-left: 2px solid #55407a; background: rgba(85,64,122,.14); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.turn-question-done.is-quiet { color: var(--dimmer); }
 .queue-note { font-size: 11px; color: #ffd479; }
 /* A reply waiting to be sent, drawn where it will land but visibly not sent yet: dashed, dimmed, italic. */
 .ghost-turns { margin: 10px 0 4px; display: flex; flex-direction: column; gap: 8px; }
@@ -1441,6 +1476,10 @@ button.sig:hover { filter: brightness(1.25); }
    .chip form is the project-level count, which has to read with the whole project folded. */
 .sig-approval,
 .chip.sig-approval { color: #ffd479; border-color: #6b4d16; background: var(--amber-bg); font-weight: 700; }
+/* Waiting on an ANSWER is not waiting on an ALLOW: the question chip carries the light purple the panel uses
+   for its own surfaces, so the two parked states are told apart without reading them. */
+.sig-question,
+.chip.sig-question { color: #ecd9ff; border-color: #55407a; background: #2a2044; font-weight: 700; }
 @keyframes jumpflash {
   from { box-shadow: 0 0 0 3px #2ea043cc; }
   to { box-shadow: 0 0 0 3px rgba(46, 160, 67, 0); }

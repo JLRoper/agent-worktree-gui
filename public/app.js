@@ -1197,7 +1197,8 @@ function turnBody(turn, copy = "") {
     // work, not the card's, and a card with several turns would otherwise show the newest one's children under all
     // of them.
     turnSubagentsHtml(turn, copy) +
-    approvalPrompt(turn, copy) + approvalDecided(turn);
+    approvalPrompt(turn, copy) + approvalDecided(turn) +
+    questionPrompt(turn, copy) + questionAnswered(turn);
 }
 
 // The approval question belongs where the reading stopped: directly under the console output of the
@@ -1231,6 +1232,109 @@ function approvalDecided(turn) {
   const denied = String(done.choice || "").toLowerCase() === "deny";
   const verb = denied ? "denied" : `approved ${done.choice || ""}`.trim();
   return `<div class="turn-approval-done mono${denied ? " is-deny" : ""}" title="${esc(done.command || "")}">${denied ? "✕" : "✓"} ${esc(verb)}${done.command ? `: ${esc(String(done.command).slice(0, 140))}` : ""}</div>`;
+}
+
+// ---- the agent's own question (the `clarify` tool) ---------------------------------------
+// Same place as an approval — under the console of the turn that is parked on it — but a different
+// thing: there is no command to judge, the prompt is a sentence to read, and the answers are full
+// sentences. Light purple, not amber, so "answer me" and "allow this" never read as one interruption.
+//
+// The reader's picks (multi-select) and their typed "Other" answer survive a repaint: the card is
+// rebuilt from a poll the moment anything else about the turn changes, and losing a half-made
+// selection to that is the same bug as losing a draft.
+const questionPicks = new Map(); // `${turnId}${copy}` -> Set(choice index)
+const questionDrafts = new Map(); // `${turnId}${copy}` -> typed answer
+const questionSending = new Set(); // `${turnId}` while a POST is in flight
+const RECOMMENDED_RE = /^(.*?)\s*\(Recommended\)$/;
+
+function questionHead(choice) {
+  const m = RECOMMENDED_RE.exec(String(choice));
+  if (!m) return `<span class="tq-text">${esc(choice)}</span>`;
+  return `<span class="tq-text">${esc(m[1])}</span><span class="tq-rec">recommended</span>`;
+}
+
+function questionPrompt(turn, copy = "") {
+  const q = turn.question;
+  if (!q) return "";
+  // A question exists only while its turn does: the clarify waiter is retired with the turn, so a box
+  // still offering an answer after the run ended would be answering nobody.
+  if (!turnLive(turn) || turn.questionDone) return "";
+  const key = `${turn.id}${copy}`;
+  const choices = Array.isArray(q.choices) ? q.choices : [];
+  const multi = Boolean(q.multiSelect) && choices.length > 0;
+  const picks = questionPicks.get(key) || new Set();
+  const draft = questionDrafts.get(key) || "";
+  const rows = choices
+    .map((c, i) =>
+      multi
+        ? `<label class="tq-choice is-multi${picks.has(i) ? " on" : ""}" data-qvalue="${esc(c)}" title="tick the answers you want, then send them">
+      <input type="checkbox" data-qpick="1" data-qturn="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qindex="${i}"${picks.has(i) ? " checked" : ""}>
+      <span class="tq-box" aria-hidden="true"></span>${questionHead(c)}</label>`
+        : `<button type="button" class="tq-choice" data-qanswer="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qrequest="${esc(q.requestId || "")}" data-qvalue="${esc(c)}" title="send this answer — the agent carries on with it">
+      <span class="tq-box" aria-hidden="true"></span>${questionHead(c)}</button>`,
+    )
+    .join("");
+  const note = multi
+    ? "tick any that apply, then Send answer · a typed answer replaces the ticks"
+    : choices.length
+      ? "click a choice above, or type your own answer · Enter sends"
+      : "type your answer · Enter sends, Shift+Enter adds a line";
+  return `<div class="turn-question" data-question-for="${esc(turn.id)}${esc(copy)}">
+    <div class="tq-head mono">❓ waiting on you — the agent is parked until you answer</div>
+    <div class="tq-question">${esc(q.question || "(no question text)")}</div>
+    ${rows ? `<div class="tq-choices${multi ? " is-multi" : ""}">${rows}</div>` : ""}
+    <div class="tq-note mono">${esc(note)}</div>
+    <div class="tq-other-row">
+      <textarea class="tq-other" data-qother="${esc(turn.id)}" data-qcopy="${esc(copy)}" rows="2" placeholder="or type your own answer" title="anything you type here is sent as your answer, in your own words">${esc(draft)}</textarea>
+      <button type="button" class="tq-send" data-qsend="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qrequest="${esc(q.requestId || "")}"${questionSending.has(turn.id) ? " disabled" : ""}>Send answer</button>
+    </div>
+    <div class="tq-warn mono" data-qwarn="${esc(turn.id)}${esc(copy)}"></div>
+  </div>`;
+}
+
+// Once answered the box becomes one line: what the reader said, or the honest other case — the question
+// closed without this panel answering it (another surface, a stop, or the clarify timeout).
+function questionAnswered(turn) {
+  const done = turn.questionDone;
+  if (!done || turn.question) return "";
+  const text = String(done.answer || "").trim();
+  if (!text) return `<div class="turn-question-done mono is-quiet" title="the question was withdrawn with the turn, answered on another surface, or timed out">· question closed without an answer here</div>`;
+  return `<div class="turn-question-done mono" title="${esc(text)}">✓ answered: ${esc(text.length > 220 ? `${text.slice(0, 220)}…` : text)}</div>`;
+}
+
+// Answer a question a run is parked on. One path for a clicked choice, a typed answer and a multi-select
+// batch, so there is exactly one place that posts and one place that reports a refusal.
+async function answerRunQuestion(turnId, answer, requestId, box) {
+  if (questionSending.has(turnId)) return;
+  questionSending.add(turnId);
+  const warn = box ? box.querySelector(`[data-qwarn]`) : null;
+  const buttons = box ? [...box.querySelectorAll("button.tq-choice, button.tq-send")] : [];
+  for (const b of buttons) b.disabled = true;
+  try {
+    const card = box?.closest(".job");
+    const res = await apiFetch("/api/jobs/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: turnId, answer, requestId: requestId || null }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) {
+      const text = out.error || `could not answer (HTTP ${res.status})`;
+      if (warn) warn.textContent = text;
+      else if (card) showBanner(`answer: ${text}`);
+      for (const b of buttons) b.disabled = false;
+      questionSending.delete(turnId);
+      return;
+    }
+    // The job event that follows clears the box; drop the reader's scratch state with it.
+    for (const k of [...questionPicks.keys()]) if (k.startsWith(turnId)) questionPicks.delete(k);
+    for (const k of [...questionDrafts.keys()]) if (k.startsWith(turnId)) questionDrafts.delete(k);
+  } catch (err) {
+    if (warn) warn.textContent = `could not answer: ${err.message}`;
+    for (const b of buttons) b.disabled = false;
+  } finally {
+    questionSending.delete(turnId);
+  }
 }
 
 // A turn is open when the reader opened it, otherwise only the newest turn is: opening an agent
@@ -2460,6 +2564,9 @@ function conversationHtml(conv) {
   // A run parks its own approval inside the turn (the Runs API path): same message, different
   // carrier, so the card can answer it without the CLI approval plugin.
   const runApproval = runningTurn?.approval || latest.approval || null;
+  // …and the same for the agent's own question: the head says the agent is waiting on an ANSWER, which is
+  // a different act from allowing a command, so it gets its own chip in the light purple.
+  const runQuestion = runningTurn?.question || latest.question || null;
   // The session's own name is the card's title, and it is set like the revive row's: bold, with how long ago
   // the thread was last used in the same dimmed grey next to it. The cwd only appears when a session has no
   // name at all.
@@ -2544,6 +2651,7 @@ function conversationHtml(conv) {
       ${whenHtml}
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       ${runApproval && !waitingApproval ? `<span class="sig sig-approval" title="this run is parked on a flagged command — answer it in the card below">waiting on approval</span>` : ""}
+      ${runQuestion ? `<button type="button" class="sig sig-question" data-question-jump="${esc(thread)}" title="the agent stopped to ask you something — click to jump to its question box">waiting on your answer →</button>` : ""}
       ${titleHtml}
       ${meta ? `<span class="mono dim">${esc(meta)}</span>` : ""}
       ${artSplit.files.length ? `<button type="button" class="btn-artifacts" data-artifacts="${esc(thread)}" data-artifacts-kind="file" title="${artSplit.files.length} file deliverable(s) from this agent — click to open in an editor, copy the path or delete the file">\u{1F4C4} ${artSplit.files.length}</button>` : ""}
@@ -3837,6 +3945,11 @@ function conversationSignature(conv) {
   const runApprovals = conv.turns
     .map((t) => `${t.id}:${t.approval ? t.approval.requestId || t.approval.command || 1 : 0}:${t.approvalDone ? t.approvalDone.choice || 1 : 0}`)
     .join(",");
+  // The same for an agent's own question: without it here, a `clarify.request` landing mid-turn
+  // changes nothing in the signature and the box only appears when some unrelated event repaints.
+  const runQuestions = conv.turns
+    .map((t) => `${t.id}:${t.question ? t.question.requestId || t.question.question?.slice(0, 40) || 1 : 0}:${t.question ? (t.question.choices || []).length : 0}:${t.questionDone ? (t.questionDone.answer || "closed").slice(0, 40) : 0}`)
+    .join(",");
   const open = [...state.turnOpen].map(([k, v]) => `${k}${v ? 1 : 0}`).join(",");
   const approvals = [...state.approvals.values()]
     .filter((a) => a && a.thread === conv.thread)
@@ -3867,6 +3980,7 @@ function conversationSignature(conv) {
     isHomelessConv(conv) ? "h" : "-",
     approvals,
     runApprovals,
+    runQuestions,
     l.runId || "",
     l.cwd || "",
     l.model || "",
@@ -7529,6 +7643,25 @@ document.addEventListener("click", async (e) => {
     applyApprovalsFold();
     return;
   }
+  // "waiting on your answer →" on an agent card: take the reader to the question box in that card, unfolding
+  // the card first if they had minimised it (a folded card renders no turn body, so there is nothing to jump to).
+  const qJump = e.target.closest("[data-question-jump]");
+  if (qJump) {
+    e.preventDefault();
+    e.stopPropagation();
+    const thread = qJump.dataset.questionJump;
+    if (state.collapsedJobs.has(thread)) {
+      state.collapsedJobs.delete(thread);
+      renderConversation(thread);
+    }
+    const box = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"] .turn-question`);
+    if (box) {
+      box.scrollIntoView({ block: "center", behavior: "smooth" });
+      box.classList.add("jump");
+      setTimeout(() => box.classList.remove("jump"), 1600);
+    }
+    return;
+  }
   // "waiting on you →" on an agent card: take the reader to the approval that is blocking it. The dock is fixed,
   // so this unfolds it and scrolls its own list — scrollIntoView on a fixed element only moves the page.
   const apJump = e.target.closest("[data-approval-jump]");
@@ -7788,6 +7921,30 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     void answerRunApproval(approveBtn);
+    return;
+  }
+  // Send what the question box holds: a typed answer wins (that is the tool's "Other"), otherwise the
+  // ticked choices go back as one array — the clarify tool decodes it as a multi-select answer.
+  const qSend = e.target.closest("[data-qsend]");
+  if (qSend) {
+    e.preventDefault();
+    e.stopPropagation();
+    const turnId = qSend.dataset.qsend;
+    const copy = qSend.dataset.qcopy || "";
+    const box = qSend.closest(".turn-question");
+    const typed = (box?.querySelector(".tq-other")?.value || "").trim();
+    if (typed) {
+      void answerRunQuestion(turnId, typed, qSend.dataset.qrequest, box);
+      return;
+    }
+    const labels = [...(box?.querySelectorAll(".tq-choice[data-qvalue]") || [])].map((el) => el.dataset.qvalue);
+    const picked = [...(questionPicks.get(`${turnId}${copy}`) || new Set())].sort((a, b) => a - b).map((i) => labels[i]).filter(Boolean);
+    if (!picked.length) {
+      const warn = box?.querySelector("[data-qwarn]");
+      if (warn) warn.textContent = "pick an answer, or type one";
+      return;
+    }
+    void answerRunQuestion(turnId, picked, qSend.dataset.qrequest, box);
     return;
   }
   // Steer the turn that is running: the primary action while the agent is busy.
@@ -8107,7 +8264,43 @@ document.addEventListener("pointerup", (e) => {
   if (runBtn) {
     e.preventDefault();
     void answerRunApproval(runBtn);
+    return;
   }
+  // A choice in the agent's question is the same kind of decision: answered on the release, so a repaint
+  // between press and release cannot swallow it the way it swallows a click.
+  const qChoice = e.target.closest && e.target.closest("[data-qanswer]");
+  if (qChoice) {
+    e.preventDefault();
+    void answerRunQuestion(qChoice.dataset.qanswer, qChoice.dataset.qvalue, qChoice.dataset.qrequest, qChoice.closest(".turn-question"));
+  }
+});
+
+// Multi-select ticks and a typed answer are the reader's scratch state until they send: keep them where a
+// repaint of the card will find them again.
+document.addEventListener("change", (e) => {
+  const pick = e.target.closest && e.target.closest("[data-qpick]");
+  if (!pick) return;
+  const key = `${pick.dataset.qturn}${pick.dataset.qcopy}`;
+  const set = questionPicks.get(key) || new Set();
+  if (pick.checked) set.add(Number(pick.dataset.qindex));
+  else set.delete(Number(pick.dataset.qindex));
+  questionPicks.set(key, set);
+  pick.closest(".tq-choice")?.classList.toggle("on", pick.checked);
+});
+
+document.addEventListener("input", (e) => {
+  const box = e.target.closest && e.target.closest(".tq-other");
+  if (!box) return;
+  questionDrafts.set(`${box.dataset.qother}${box.dataset.qcopy}`, box.value);
+});
+
+// Enter sends a typed answer, Shift+Enter adds a line: the same rule as the reply box, because this is a
+// box the reader types a sentence into.
+document.addEventListener("keydown", (e) => {
+  const box = e.target.closest && e.target.closest(".tq-other");
+  if (!box || e.key !== "Enter" || e.shiftKey) return;
+  e.preventDefault();
+  box.closest(".turn-question")?.querySelector("[data-qsend]")?.click();
 });
 
 document.addEventListener("input", (e) => {

@@ -793,6 +793,16 @@ const server = createServer(async (req, res) => {
       return sendJson(res, r.ok ? 200 : r.code === "approval_not_pending" ? 409 : 400, r);
     }
 
+    // Answer a question the agent's `clarify` tool is blocked on. Same fence as an approval: the
+    // gateway re-validates the prompt id against the run's pending controls and its execution
+    // generation, so a stale card cannot answer a question that has already been settled.
+    if (route === "/api/jobs/answer" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const r = await jobs.answerQuestion(String(body.id || ""), body.answer, body.requestId ?? body.request_id);
+      return sendJson(res, r.ok ? 200 : r.code === "approval_not_pending" ? 409 : 400, r);
+    }
+
     // ---- reviving a conversation the panel no longer has a card for -------------------------
     // A session outlives the panel's job store: the conversation lives in the gateway, so a reset
     // store (or a ✕) leaves the row still saying "Hermes session open here but idle" with nothing to

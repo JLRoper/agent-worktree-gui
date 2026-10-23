@@ -291,6 +291,39 @@ Two gateway settings decide whether anything asks at all:
   uses the new window with no restart. A gateway on another machine keeps its own file, so the
   control is refused there instead of editing the wrong one.
 
+#### The agent's own questions
+
+An agent that stops to ask something ("which of these three summaries do you want?") uses Hermes'
+`clarify` tool, and that is a **control on the run** exactly like an approval: the gateway parks the
+turn and emits `clarify.request` carrying `prompt_id`, the question, the choices and `multi_select`.
+The card renders it under the parked turn's console as a **light-purple box** — the approval's
+placement, a different colour, and room for sentence-long answers: every choice is a full-width row
+that wraps, the first one carries the tool's `recommended` mark, multi-select choices are ticked and
+sent together, and the box under them takes a typed answer of your own (`Enter` sends). Answered, it
+collapses to `✓ answered: <what you said>`; a question that was answered elsewhere, withdrawn with the
+turn or timed out leaves `· question closed without an answer here`.
+
+Three pieces have to line up, and each one alone is a silent no-op:
+
+- `platform_toolsets.api_server` must include `clarify` in `<HERMES_HOME>/config.yaml`. The stock
+  `hermes-api-server` toolset deliberately drops interactive UI tools, so without this line a
+  panel-spawned agent does not have `clarify` at all and its questions stay prose in the console:
+
+  ```bash
+  hermes config set platform_toolsets.api_server '["hermes-api-server","clarify"]'
+  ```
+
+  The gateway re-reads that file per run, so the next spawn has the tool; a running turn does not.
+- The panel answers through `POST /v1/runs/{run_id}/clarify` with the same fence as an approval —
+  `{request_id, execution_generation, answer}` where `answer` is a string (a multi-select answer is a
+  JSON array string, which the tool decodes). Both ids come from the run's `pending_controls[]`, not
+  from the event; the panel re-reads and retries once on `invalid_params` / `stale_generation`.
+- `POST /api/jobs/answer` on this panel is the one route the card posts to, so the gateway body is built
+  and validated in one place.
+
+The gateway also appends a messaging-only `Reply "skip" to skip this question.` line to the question;
+the panel strips it, because a card has its own controls.
+
 #### Credentials
 
 A run executes inside the gateway process, so the provider key is whatever that gateway is configured
