@@ -363,7 +363,9 @@ for the approval window — agent processes are not spawned from here any more.
 ### The assistant
 
 **✧ Assistant** in the header opens a floating panel that can be dragged, resized and closed (position and
-size are remembered; `Ctrl+Shift+A` toggles it, `Esc` closes it when the caret is in it). It is two things:
+size are remembered; `Ctrl+Shift+A` toggles it, `Esc` closes it when the caret is in it). It is a window, not a
+strip of content: drag it larger and the card fills it — the turns take the new room, the open turn's console grows
+with it, and the composer stays at the foot. Only the turns scroll. It is two things:
 
 - **A sentry** that runs in the panel's own process, on `settings.seconds` (default 5 s), over the same job
   summaries the cards are drawn from. It costs no tokens and it is always awake. Twelve rules:
