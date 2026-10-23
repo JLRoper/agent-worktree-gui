@@ -9331,6 +9331,54 @@ function contrastSetting() {
   return 15;
 }
 
+// ---- the add-agent bar's green --------------------------------------------------------------
+// The + bar under a worktree's agents is the one thing on the row you click to start an agent, so it is meant to be
+// bright and solid. But "bright" is not one number on every screen: the same green reads like a warning label on a
+// dark 4K panel. One scale moves lightness and saturation together - 0% a deep, quiet green, 100% the vivid one -
+// and the bar's CSS reads the five variables this writes. Saved in this browser, applied at once.
+const ADDBAR_KEY = "wtgui.addbar";
+const ADDBAR_DEFAULT = 40; // a notch below the old fixed #1e6b38: still solid, less shouty
+function addBarColors(pct) {
+  const k = Math.max(0, Math.min(100, Number(pct))) / 100;
+  const s = 42 + 18 * k; // saturation 42% .. 60%
+  const l = 15 + 25 * k; // lightness 15% .. 40%
+  const hsl = (l2) => `hsl(140 ${Math.round(s)}% ${Math.round(l2)}%)`;
+  return {
+    "--addbar": hsl(l),
+    "--addbar-edge": hsl(l + 9),
+    "--addbar-hover": hsl(l + 5),
+    "--addbar-hover-edge": hsl(l + 13),
+    "--addbar-active": hsl(l - 4),
+  };
+}
+
+function applyAddBarBrightness(pct, { save = true } = {}) {
+  const p = Math.max(0, Math.min(100, Math.round(Number(pct)) || 0));
+  const root = document.documentElement.style;
+  for (const [name, value] of Object.entries(addBarColors(p))) root.setProperty(name, value);
+  const input = $("addbar-bright");
+  if (input && Number(input.value) !== p) input.value = String(p);
+  const label = $("addbar-pct");
+  if (label) label.textContent = `${p}%`;
+  if (save) {
+    try {
+      localStorage.setItem(ADDBAR_KEY, String(p));
+    } catch {
+      /* private mode: the choice just will not persist */
+    }
+  }
+}
+
+function addBarBrightnessSetting() {
+  try {
+    const raw = localStorage.getItem(ADDBAR_KEY);
+    if (raw !== null && Number.isFinite(Number(raw))) return Math.max(0, Math.min(100, Number(raw)));
+  } catch {
+    /* private mode */
+  }
+  return ADDBAR_DEFAULT;
+}
+
 // The grey flash says "re-read, nothing moved". It is useful when watching a row settle and noise when the board
 // is busy, so it can be switched off - while the green flash, which means something actually happened, cannot.
 // A body class is enough: the row still gets its class for 950ms, the animation just does not run.
@@ -9827,6 +9875,7 @@ $("anchor-touch-seconds")?.addEventListener("input", (e) => {
   refreshAnchorBaseline();
 });
 $("contrast")?.addEventListener("input", (e) => applyContrast(Number(e.target.value)));
+$("addbar-bright")?.addEventListener("input", (e) => applyAddBarBrightness(Number(e.target.value)));
 $("auto-collect")?.addEventListener("change", (e) => {
   try {
     localStorage.setItem(AUTO_COLLECT_KEY, e.target.checked ? "1" : "0");
@@ -9900,6 +9949,7 @@ document.addEventListener("click", (e) => {
 initFonts();
 applyGreyFlash(greyFlashOn());
 applyContrast(contrastSetting(), { save: false });
+applyAddBarBrightness(addBarBrightnessSetting(), { save: false });
 if ($("show-thinking")) $("show-thinking").checked = thinkDefault();
 if ($("auto-collect")) $("auto-collect").checked = autoCollectOn();
 void refreshSubagentRoster();

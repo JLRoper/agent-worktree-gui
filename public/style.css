@@ -183,6 +183,13 @@ button.primary:hover { background: #24466a; }
 .settings-row input[type="range"] { flex: 1; min-width: 0; height: 18px; accent-color: #4a90d9; }
 .settings-preview.contrast { display: flex; padding: 0; height: 24px; overflow: hidden; border-style: solid; }
 .settings-preview.contrast span { flex: 1; }
+/* The add-agent bar's own swatch: it IS the button, shrunk - the same five variables, so the preview is the setting. */
+.settings-preview.addbar {
+  display: flex; align-items: center; justify-content: center;
+  height: 26px; padding: 0; border-style: solid; border-radius: 6px;
+  border-color: var(--addbar-edge, #2c8148); background: var(--addbar, #215f35);
+  color: #fff; font: 700 14px/1 system-ui, sans-serif;
+}
 .settings-note { display: none; }
 /* The approval window is the one setting in here that is not a browser preference: it is the
    gateway's own approvals.timeout, written to its config.yaml, so it is styled as a form field with
@@ -1453,15 +1460,19 @@ button.btn-row-agent.is-probing { opacity: .55; cursor: progress; }
    as the way to start an agent in a worktree, so it sits right where that decision is made — under the cards, and
    present even when the row has none. */
 /* A minimized agent card measures 94px on this panel, so half of one is 47px. */
+/* Its green is a setting, not a constant. The bar is meant to be bright and solid - it is the one thing on the row
+   you click to start an agent - but "bright" is not one number on every screen: the same green reads like a warning
+   label on a dark 4K panel. Settings > Display > Add-agent bar moves lightness and saturation on one scale and
+   writes these five variables. The values here are the resting palette before that runs. */
 .btn-add-agent {
   display: flex; align-items: center; justify-content: center;
   width: 100%; height: 47px; margin: 8px 0 2px; padding: 0;
-  background: #1e6b38; border: 1px solid #2c8a4b; border-radius: 6px;
+  background: var(--addbar, #215f35); border: 1px solid var(--addbar-edge, #2c8148); border-radius: 6px;
   box-shadow: inset 0 1px 0 #ffffff1f;
   color: #fff; font: 700 24px/1 system-ui, sans-serif; cursor: pointer;
 }
-.btn-add-agent:hover { background: #26804a; border-color: #38a35d; }
-.btn-add-agent:active { background: #1a5c31; }
+.btn-add-agent:hover { background: var(--addbar-hover, #27723f); border-color: var(--addbar-hover-edge, #319051); }
+.btn-add-agent:active { background: var(--addbar-active, #1b502d); }
 .btn-add-agent > span { transform: translateY(-1px); }
 .branch { color: #c8d1dc; }
 .dim { color: var(--dim); }

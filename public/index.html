@@ -75,6 +75,13 @@
         <div class="settings-preview contrast" id="contrast-preview" title="the layers this controls, darkest to lightest">
           <span style="background: var(--console)"></span><span style="background: var(--bg)"></span><span style="background: var(--surface)"></span><span style="background: var(--panel)"></span><span style="background: var(--card)"></span><span style="background: var(--band)"></span><span style="background: var(--panel-2)"></span>
         </div>
+        <label class="settings-row settings-gap" for="addbar-bright" title="The green of the + bar under a worktree's agents — the button that starts another agent in that worktree. It is meant to be bright and solid, but bright is not the same number on every screen. This scale moves its lightness and saturation together: 0% is a deep, quiet green, 100% the vivid one. Saved in this browser and applied at once.">
+          <span>Add-agent bar <span class="settings-info">ⓘ</span></span>
+          <input id="addbar-bright" type="range" min="0" max="100" step="5" value="40">
+          <span class="settings-unit mono" id="addbar-pct">40%</span>
+        </label>
+        <div class="settings-preview addbar" id="addbar-preview" title="the + bar this controls — the preview reads the same variables as the real button"><span aria-hidden="true">+</span></div>
+
         <div class="settings-row settings-gap" id="colors-row" title="Project theme colours are kept in this browser: Ctrl+click a project's title row to give it one, Ctrl+Shift+click to drop it. This button clears them all.">
           <span>Project colours <span class="settings-info">ⓘ</span></span>
           <button id="btn-reset-colors" type="button" title="clear the theme colour from every project">reset colours</button>
