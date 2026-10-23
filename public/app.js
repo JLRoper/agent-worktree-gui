@@ -2265,7 +2265,7 @@ function conversationHtml(conv) {
     // without them this line is the only place it can appear.
     latest.stats ? null : latest.model ? `model ${latest.model}` : "(default model)",
     latest.worktree ? `worktree ${latest.worktree}` : null,
-    latest.existing ? "in existing worktree" : null,
+    latest.baseCheckout ? "in the project checkout (no worktree)" : latest.existing ? "in existing worktree" : null,
     turns.length > 1 ? `${turns.length} turns` : null,
     // The run id is bookkeeping and it now sits at the end of the row, to the right of the turn count,
     // instead of leading the line.

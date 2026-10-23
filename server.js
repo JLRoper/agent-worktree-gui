@@ -627,7 +627,12 @@ const server = createServer(async (req, res) => {
         const top = await gitIn(cwd, ["rev-parse", "--show-toplevel"]);
         ownerPath = top.ok && top.out ? top.out : cwd;
       }
-      const job = await jobs.create({ ...body, cwd, existing, ownerPath, ownerPending: !existing });
+      // A spawn that stays in the project's own checkout is not "an existing worktree": the card should
+      // say so, because that is the difference between an agent working in a branch of its own and one
+      // editing the tree the reader has checked out.
+      const norm = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+      const baseCheckout = Boolean(existing && cwdProject && norm(ownerPath || cwd) === norm(cwdProject.path));
+      const job = await jobs.create({ ...body, cwd, existing, ownerPath, ownerPending: !existing, baseCheckout });
       return sendJson(res, 202, { job });
     }
 
