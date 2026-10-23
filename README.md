@@ -344,8 +344,9 @@ size are remembered; `Ctrl+Shift+A` toggles it, `Esc` closes it when the caret i
   `loop` (the same tool with the same input N times, read-only helpers held to a higher bar), `errorloop`
   (identical failing output), `quiet` (a running turn with no new output — a long build looks exactly like
   this, so it only journals by default), `approval` (parked longer than the threshold), `question` (a turn
-  ended on a question), `noevidence` (an implementation-sounding turn that touched no file and left no
-  deliverable), `collision` (two live turns in one tree), `context` (near the context ceiling), `watch`
+  parked on the `clarify` tool, or ended on a question in prose), `noevidence` (an implementation-sounding
+  turn that touched no file and left no deliverable), `collision` (two live turns in one tree), `context`
+  (near the context ceiling), `watch`
   (a watch finished or missed its deadline), `repeat` (the same failure in consecutive turns of one thread — the
   failure is the call that produced it plus the failing line with its numbers masked, so "npm test, 3 failures" in
   three replies is one alert and a clean turn breaks the streak; a tool the gateway marks only in its result header
@@ -377,6 +378,15 @@ Per-rule escalation decides what happens when a rule fires: `log` (journal only)
 `wake` (also hands the assistant a digest; rate limited to `maxWakesPerHour`, coalesced while a turn runs) ·
 `act` (wake, and let it send when autonomy allows). An approval is never answerable from the panel at any
 setting — that boundary belongs to the gateway and the agent's own card.
+
+A question a run is parked on is **not a reply**: the gateway is holding the turn open, so answering it is
+a control call, not another message queued behind it. The alert carries the choices as buttons (ticks when
+the tool takes several, because one click must not answer with only the first label), and **Send answer**
+settles the prompt through the same endpoint the card's box uses. A standing rule that names exactly one
+of the offered choices *is* the answer (`rule+choice`); a rule that names two is ambiguous and stays a
+draft; at `auto` the assistant answers only the former, once per question. Answered on the card, withdrawn
+with the turn or timed out, the alert closes itself. The same `question` rule still catches a turn that
+merely *ended* on a question in prose, where a reply is the right shape.
 
 `watch` ships at **wake**: a watch is the reader explicitly asking to be told, and an alert on its own is a notice
 nobody reads. When a watch expires or its thread finishes, the assistant is woken with the watch, the deadline and
@@ -467,6 +477,7 @@ Watches without a deadline, and finished ones, say so instead.
 | POST | `/api/assistant/settings` | `{autonomy, model, seconds, repeatLimit, quietSeconds, approvalSeconds, contextPercent, maxWakesPerHour, rules:{id: escalation}}` — applied immediately, saved in the scratchpad |
 | POST | `/api/assistant/alert` | `{id, action:"dismiss"\|"ask"}` — `ask` wakes the assistant with that alert's digest |
 | POST | `/api/assistant/answer` | `{thread, text, alertId?}` — post a reply into a worker's thread from the panel (the only route that does it on your behalf) |
+| POST | `/api/assistant/answer-question` | `{id, answer}` — settle a question a run is parked on (the `clarify` control), from a choice button or a typed answer; `answer` is a string, or an **array** for a multi-select question. Not a reply: a reply would queue behind the held turn |
 | POST | `/api/assistant/spawn` | `{id}` confirms a spawn card the assistant proposed, or `{project\|target, prompt, existing?}` does the same without a card: cut a worktree in that project (or run in an existing directory) and start a worker. Same refusals as `/api/agents` — gateway unreachable **400**, unborn HEAD **400** |
 | POST | `/api/assistant/watch` · `/api/assistant/watch/remove` | add `{thread, title, doneWhen?, minutes?}` / remove `{id}` |
 | POST | `/api/assistant/rule` · `/api/assistant/rule/remove` | add `{text}` / remove `{id}` — the assistant's standing answers |

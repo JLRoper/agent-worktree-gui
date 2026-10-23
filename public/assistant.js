@@ -16,6 +16,12 @@
   const SEEN_KEY = "wm.assistantSeenAt";
   const TABS = ["chat", "alerts", "watches", "pad", "settings"];
 
+  // Ticks on a multi-select question outlive a repaint: the alerts pane is rebuilt whenever the assistant's
+  // state changes, and a selection that vanishes on the next job event is the same bug as a lost draft.
+  const parkedPicks = new Map(); // alert id -> Set(choice index)
+  // "(Recommended)" is the gateway's decoration, not part of the label an answer needs to send.
+  const stripRecommended = (c) => String(c).replace(/\s*\(Recommended\)\s*$/i, "");
+
   const as$ = (id) => document.getElementById(id);
 
   function readFlag(key, fallback) {
@@ -288,18 +294,59 @@
     const draft = a.draft && a.draft.thread ? a.draft : null;
     const conf = draft?.confidence || "";
     const spawn = a.spawn && typeof a.spawn.prompt === "string" ? a.spawn : null;
+    const parked = Boolean(a.parked);
+    const choices = Array.isArray(a.choices) ? a.choices : [];
+    // A parked question is the one alert whose answer settles the run: a single choice is one button, a
+    // multi-select question is ticks plus Send (one click must not answer with only the first label), and a
+    // typed answer goes over the same call. Draft text is only a suggestion for the box, never a reply.
+    const multi = Boolean(a.multiSelect) && choices.length > 0;
+    const picks = parkedPicks.get(a.id) || new Set();
+    const canSend = Boolean((draft?.text || "").trim()) || (multi && picks.size > 0);
+    const parkedChoices = parked && choices.length
+      ? multi
+        ? `<div class="as-choices is-multi">${choices
+            .map(
+              (c, i) =>
+                `<label class="as-qcheck${picks.has(i) ? " on" : ""}"><input type="checkbox" data-as-qpick="${esc(a.id)}" data-qindex="${i}"${picks.has(i) ? " checked" : ""}><span>${esc(stripRecommended(c))}</span></label>`,
+            )
+            .join("")}</div>`
+        : `<div class="as-choices">${choices
+            .map(
+              (c) =>
+                `<button type="button" data-as-qchoice="${esc(a.id)}" data-choice="${esc(c)}" title="send this answer — the agent carries on with it">${esc(stripRecommended(c))}</button>`,
+            )
+            .join("")}</div>`
+      : "";
     // A spawn card is the one alert with a real side effect: one button, and it cuts a worktree. It gets its
     // own action row so "Dismiss" cannot be mistaken for "not now, but keep the prompt".
     const actions = spawn
       ? `<button type="button" class="primary" data-as-spawn="${esc(a.id)}">${spawn.existing ? "Start worker there" : "Create worktree &amp; start"}</button>
          <button type="button" data-as-action="dismiss" data-id="${esc(a.id)}">Discard</button>
          <span class="as-err" data-as-err="${esc(a.id)}"></span>`
-      : `${draft ? `<button type="button" class="primary" data-as-send="${esc(a.id)}" data-thread="${esc(draft.thread)}"${draft.text ? "" : " disabled"}>Send reply</button>` : ""}
+      : parked
+        ? `${parkedChoices}
+         <div class="as-draft-wrap">
+           <textarea class="as-draft" data-as-qtext="${esc(a.id)}" rows="2" placeholder="${choices.length ? "or type your own answer" : "type your answer"}">${esc(draft?.text || "")}</textarea>
+           <div class="as-draft-meta${(draft?.confidence || "none") === "none" ? " is-none" : ""}">${
+             (draft?.confidence || "none") === "none"
+               ? "no standing rule covers this"
+               : draft.confidence === "rule+choice"
+                 ? `a standing rule picks “${esc(stripRecommended(draft.text))}”`
+                 : `drafted from ${esc(draft.source || "a rule")}`
+           } · the answer unblocks ${esc(assistantThreadName(a.thread))}, it is not a reply</div>
+           <div class="as-actions">
+             <button type="button" class="primary" data-as-qsend="${esc(a.id)}"${canSend ? "" : " disabled"}>Send answer</button>
+             ${a.thread ? `<button type="button" data-as-open="${esc(a.thread)}">Open agent</button>` : ""}
+             <button type="button" data-as-action="dismiss" data-id="${esc(a.id)}">Dismiss</button>
+             <span class="as-err" data-as-err="${esc(a.id)}"></span>
+           </div>
+         </div>`
+        : `${draft ? `<button type="button" class="primary" data-as-send="${esc(a.id)}" data-thread="${esc(draft.thread)}"${draft.text ? "" : " disabled"}>Send reply</button>` : ""}
          <button type="button" data-as-action="ask" data-id="${esc(a.id)}" title="hand this to the assistant with a digest — one turn, rate limited">Ask assistant</button>
          ${a.thread ? `<button type="button" data-as-open="${esc(a.thread)}">Open agent</button>` : ""}
          <button type="button" data-as-action="dismiss" data-id="${esc(a.id)}">Dismiss</button>
          <span class="as-err" data-as-err="${esc(a.id)}"></span>`;
-    return `<div class="as-alert is-${esc(a.severity || "warn")}${spawn ? " is-spawn" : ""}" data-alert="${esc(a.id)}">
+    return `<div class="as-alert is-${esc(a.severity || "warn")}${spawn ? " is-spawn" : ""}${parked ? " is-parked" : ""}" data-alert="${esc(a.id)}">
       <div class="as-alert-head">
         <span class="as-rule is-${esc(a.severity || "warn")}">${esc(a.rule)}</span>
         ${a.thread ? `<button class="as-thread" data-as-open="${esc(a.thread)}" type="button" title="open that agent's card">${esc(assistantThreadName(a.thread))}</button>` : ""}
@@ -308,7 +355,7 @@
       <h4>${esc(a.title)}</h4>
       ${a.detail ? `<div class="as-detail">${esc(a.detail)}</div>` : ""}
       ${(a.evidence || []).length ? `<div class="as-ev">${a.evidence.map((e) => `<span>${esc(e.label)} <b>${esc(e.value)}</b></span>`).join("")}</div>` : ""}
-      ${draft ? `<div class="as-draft-wrap">
+      ${draft && !parked ? `<div class="as-draft-wrap">
         <textarea class="as-draft" data-as-draft="${esc(a.id)}" rows="3" placeholder="${conf === "none" ? "No confident answer — write one, or leave it for later" : ""}">${esc(draft.text || "")}</textarea>
         <div class="as-draft-meta${conf === "none" ? " is-none" : ""}">${conf === "none" ? "no standing rule covers this" : `drafted from ${esc(draft.source || conf)}`} · goes into ${esc(assistantThreadName(draft.thread))} as a reply</div>
       </div>` : ""}
@@ -651,6 +698,40 @@
       return;
     }
 
+    // A parked question: the answer settles the prompt the run is holding, so it unblocks the agent instead
+    // of stacking a reply behind it. A typed answer wins over ticks, exactly like the card's own box.
+    if (t.dataset.asQchoice || t.dataset.asQsend) {
+      const id = t.dataset.asQchoice || t.dataset.asQsend;
+      const box = document.querySelector(`[data-as-qtext="${CSS.escape(id)}"]`);
+      const typed = String(box?.value || "").trim();
+      let answer = t.dataset.asQchoice ? t.dataset.choice : typed;
+      if (!answer) {
+        const picks = parkedPicks.get(id);
+        const alert = (state.assistant?.alerts || []).find((x) => x.id === id);
+        if (picks?.size && alert) {
+          answer = [...picks]
+            .sort((a, b) => a - b)
+            .map((i) => (alert.choices || [])[i])
+            .filter(Boolean);
+        }
+      }
+      if (!answer || (Array.isArray(answer) && !answer.length)) return;
+      t.disabled = true;
+      try {
+        const d = await asPost("/api/assistant/answer-question", { id, answer });
+        parkedPicks.delete(id);
+        if (d.assistant) applyAssistant(d.assistant);
+        else renderAssistantAlerts(true);
+        renderAssistant();
+      } catch (err) {
+        const slot = document.querySelector(`[data-as-err="${CSS.escape(id)}"]`);
+        if (slot) slot.textContent = err.message;
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
     if (t.dataset.asSend) {
       const id = t.dataset.asSend;
       const box = document.querySelector(`[data-as-draft="${CSS.escape(id)}"]`);
@@ -769,10 +850,37 @@
   // A draft with no confident text starts with Send disabled (there is nothing to send); the moment the reader
   // writes an answer the button has to come alive, or the alert reads "write one" and then refuses it.
   as$("assistant")?.addEventListener("input", (e) => {
+    // A typed answer to a parked question: the Send button has to come alive as soon as there is one, or the
+    // box reads "type your answer" and then refuses it.
+    const q = e.target.closest?.("[data-as-qtext]");
+    if (q) {
+      const id = q.dataset.asQtext;
+      const btn = document.querySelector(`[data-as-qsend="${CSS.escape(id)}"]`);
+      if (btn) btn.disabled = !String(q.value || "").trim() && !parkedPicks.get(id)?.size;
+      return;
+    }
     const box = e.target.closest?.("[data-as-draft]");
     if (!box) return;
     const btn = document.querySelector(`[data-as-send="${CSS.escape(box.dataset.asDraft)}"]`);
     if (btn) btn.disabled = !String(box.value || "").trim();
+  });
+
+  // Ticks on a multi-select question are kept outside the DOM so a repaint cannot erase them, and Send is
+  // enabled by a tick the same way it is by a typed answer.
+  as$("assistant")?.addEventListener("change", (e) => {
+    const box = e.target.closest?.("[data-as-qpick]");
+    if (!box) return;
+    const id = box.dataset.asQpick;
+    const i = Number(box.dataset.qindex);
+    const set = parkedPicks.get(id) || new Set();
+    if (box.checked) set.add(i);
+    else set.delete(i);
+    if (set.size) parkedPicks.set(id, set);
+    else parkedPicks.delete(id);
+    box.closest(".as-qcheck")?.classList.toggle("on", box.checked);
+    const typed = String(document.querySelector(`[data-as-qtext="${CSS.escape(id)}"]`)?.value || "").trim();
+    const btn = document.querySelector(`[data-as-qsend="${CSS.escape(id)}"]`);
+    if (btn) btn.disabled = !set.size && !typed;
   });
 
   // Settings apply the moment they change: a threshold that needs a Save button is a threshold the reader

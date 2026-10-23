@@ -50,6 +50,7 @@ const job = (over = {}) => ({
 });
 
 const created = [];
+const answered = [];
 let board = [];
 const jobs = {
   list: () => board,
@@ -58,6 +59,10 @@ const jobs = {
   create: async (opts) => {
     created.push(opts);
     return { id: `fake-${created.length}`, ...opts };
+  },
+  answerQuestion: async (id, answer, requestId) => {
+    answered.push({ id, answer, requestId });
+    return { ok: true };
   },
 };
 
@@ -159,6 +164,100 @@ console.log("questions: confident means a written-down answer");
   a.tick();
   const q2 = a.state().alerts.find((x) => x.rule === "question" && x.thread === "wtgui-q2");
   ok(q2 && q2.draft?.confidence === "none" && !q2.draft.text, "a question with no standing answer is left for the reader", JSON.stringify(q2?.draft));
+}
+
+console.log("a question the run is parked on (the clarify tool)");
+{
+  const a = make();
+  a.settings.rules.question = "alert";
+  const parkedJob = (over = {}) =>
+    job({
+      id: "turn-parked-1",
+      thread: "wtgui-parked",
+      question: {
+        requestId: "req-1",
+        question: "Should I deploy this to QA or PROD?",
+        choices: ["QA", "PROD"],
+        multiSelect: false,
+        at: iso(t0 - 3 * 60_000),
+      },
+      ...over,
+    });
+
+  board = [parkedJob()];
+  a.tick();
+  const q = a.state().alerts.find((x) => x.rule === "question" && x.parked);
+  ok(q && /waiting on your answer/.test(q.title), "a parked question is reported as waiting on you", q?.title);
+  eq(q?.choices, ["QA", "PROD"], "the choices travel with the alert");
+  ok(q?.evidence.some((e) => e.label === "choices" && /QA · PROD/.test(e.value)), "the alert shows the choices", JSON.stringify(q?.evidence));
+  ok(q?.draft?.confidence === "none" && !q.draft.text, "with no matching rule it is left for the reader", JSON.stringify(q?.draft));
+
+  // A rule that names exactly one offered choice IS the answer; a rule naming two is not (the reader's
+  // intent is ambiguous, so it stays a draft).
+  a.addRule("Deploy to QA only, from a worktree agent.");
+  a.tick();
+  const pick = a.state().alerts.find((x) => x.rule === "question" && x.parked);
+  ok(pick?.draft?.confidence === "rule+choice" && pick.draft.text === "QA", "a rule naming one choice is a confident answer", JSON.stringify(pick?.draft));
+
+  const b = make();
+  b.settings.rules.question = "alert";
+  b.addRule("Deploy to QA, never PROD, from a worktree agent.");
+  board = [parkedJob({ id: "turn-parked-2" })];
+  b.tick();
+  const both = b.state().alerts.find((x) => x.rule === "question" && x.parked);
+  ok(both?.draft?.confidence === "rule" && /never PROD/.test(both.draft.text), "a rule naming both choices stays a draft, not a pick", JSON.stringify(both?.draft));
+
+  // The turn is parked, not stalled: the quiet rule must not stack a second alert on the same fact.
+  const quietBoard = make();
+  quietBoard.settings.rules.quiet = "alert";
+  board = [parkedJob({ startedAt: iso(t0 - 30 * 60_000), lines: [line("tool", "💻 terminal · x", t0 - 25 * 60_000)] })];
+  quietBoard.tick();
+  eq(quietBoard.state().alerts.filter((x) => x.rule === "quiet").length, 0, "a parked question is not reported as quiet");
+
+  // Answering from the float settles the prompt (one call, with the request id) and closes the alert.
+  answered.length = 0;
+  const c = make();
+  c.settings.rules.question = "alert";
+  board = [parkedJob({ id: "turn-parked-3" })];
+  c.tick();
+  const alert = c.state().alerts.find((x) => x.rule === "question" && x.parked);
+  const r = await c.answerParked(alert.id, "QA");
+  ok(r.ok, "the answer was accepted");
+  eq(answered[0], { id: "turn-parked-3", answer: "QA", requestId: "req-1" }, "it answers the parked run with its request id");
+  eq(c.state().alerts.find((x) => x.id === alert.id), undefined, "the alert closes with the answer");
+
+  // A multi-select answer goes through as an array; flattening it would answer with one label.
+  answered.length = 0;
+  const m = make();
+  m.settings.rules.question = "alert";
+  board = [parkedJob({ id: "turn-parked-4", question: { requestId: "req-4", question: "Which surfaces ship?", choices: ["QA", "Docs"], multiSelect: true, at: iso(t0 - 60_000) } })];
+  m.tick();
+  const malert = m.state().alerts.find((x) => x.rule === "question" && x.parked);
+  ok(malert?.multiSelect === true, "the alert says the question takes several answers");
+  await m.answerParked(malert.id, ["QA", "Docs"]);
+  eq(answered[0].answer, ["QA", "Docs"], "a multi-select answer stays an array");
+
+  // At auto autonomy the assistant answers a rule-picked choice itself; a draft is still never sent.
+  answered.length = 0;
+  const d = make();
+  d.settings.rules.question = "alert";
+  d.settings.autonomy = "auto";
+  d.addRule("Deploy to QA only, from a worktree agent.");
+  board = [parkedJob({ id: "turn-parked-5" })];
+  d.tick();
+  await new Promise((r) => setTimeout(r, 30));
+  eq(answered.length, 1, "auto autonomy answers a choice a standing rule named");
+  eq(answered[0]?.answer, "QA", "with the choice, not the rule's prose");
+
+  // Answered elsewhere (the card, another surface) or withdrawn: the alert closes without a click.
+  const e = make();
+  e.settings.rules.question = "alert";
+  board = [parkedJob({ id: "turn-parked-6" })];
+  e.tick();
+  eq(e.state().alerts.filter((x) => x.rule === "question" && x.status === "open").length, 1, "open while the question is");
+  board = [job({ id: "turn-parked-6", thread: "wtgui-parked", status: "running" })];
+  e.tick();
+  eq(e.state().alerts.filter((x) => x.rule === "question" && x.status === "open").length, 0, "and closed when it is gone");
 }
 
 console.log("a turn that sounds like work and left no trace");

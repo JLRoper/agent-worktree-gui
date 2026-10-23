@@ -1684,3 +1684,14 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
   position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize;
   background: linear-gradient(135deg, transparent 55%, #33415a 55%, #33415a 62%, transparent 62%, transparent 72%, #33415a 72%, #33415a 79%, transparent 79%);
 }
+
+/* A parked question in the float: violet, same family as the card's own box, because "answer me" must not
+   read as an alert about a failure. A single-select choice is one button; a multi-select question is ticks,
+   since one click must never answer with only the first label. */
+.as-alert.is-parked { border-left-color: #a78bfa; background: linear-gradient(180deg, #1b1a26, var(--card)); }
+.as-choices { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
+.as-choices button { font-size: 11.5px; padding: 3px 9px; border-radius: 999px; }
+.as-choices.is-multi { flex-direction: column; gap: 4px; align-items: stretch; }
+.as-qcheck { display: flex; align-items: center; gap: 7px; font-size: 11.5px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.as-qcheck input { margin: 0; accent-color: #a78bfa; }
+.as-qcheck.on { border-color: #a78bfa; background: #241f38; }

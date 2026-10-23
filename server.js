@@ -660,6 +660,20 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // Answer a question the run is parked on (the `clarify` tool). Not a reply: it settles the prompt the
+    // gateway is holding, so the turn resumes where it stopped.
+    if (route === "/api/assistant/answer-question" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const result = await assistant.answerParked(String(body.id || ""), body.answer);
+        broadcast({ type: "jobs", jobs: jobs.list() });
+        return sendJson(res, 200, { result, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
+    }
+
     // Create a worktree (or use a directory that already exists) and start a worker. `{id}` confirms a spawn
     // card the assistant proposed; the spec form is the same act without a card. Both go through the one
     // spawner, so neither can skip the gateway probe or the unborn-HEAD refusal.
