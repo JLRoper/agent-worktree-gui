@@ -1448,9 +1448,12 @@ function subConsoleHtml(id) {
   const c = state.subConsoles.get(id);
   if (!c || c.loading) return `<pre class="sub-console mono jl-dim">reading this subagent…</pre>`;
   if (!c.lines.length) return `<pre class="sub-console mono jl-dim">nothing on its console yet</pre>`;
-  return `<pre class="sub-console mono">${c.lines
-    .map((l) => `<div class="jl jl-${esc(l.kind || "raw")}">${linkifyText(l.text)}</div>`)
-    .join("")}</pre>`;
+  // The child's transcript is condensed exactly like a turn's: a run of tool calls is one row per tool with a tally,
+  // the rest is its text. Same components, so the two consoles behave the same way.
+  const body = burstGroups(c.lines)
+    .map((item, gi) => (item.group ? toolGroupHtml(item.lines, `${id}#${gi}`) : lineHtml(item.line)))
+    .join("");
+  return `<pre class="sub-console mono" data-sub-console-box="${esc(id)}">${body}</pre>`;
 }
 
 function subagentsHtml(list, key = "", collected = false) {
@@ -2599,6 +2602,18 @@ const thinkAutoOpened = new WeakSet();
 
 // The block scrolls like a console: new thinking keeps the newest line in view unless the reader has gone back up.
 // Without this every repaint (every couple of seconds while a turn runs) put the body back at its first line.
+state.subConsolePinned = state.subConsolePinned || new Map(); // child console id -> false once the reader scrolls up
+
+function stickSubConsole(box) {
+  if (!box || !box.isConnected) return;
+  const id = box.dataset.subConsoleBox || "";
+  if (state.subConsolePinned.get(id) === false) return;
+  const max = box.scrollHeight - box.clientHeight;
+  if (max <= 0 || Math.abs(box.scrollTop - max) <= 1) return;
+  selfScrolled.add(box);
+  box.scrollTop = max;
+}
+
 function stickThinkBody(body) {
   if (!body || !body.isConnected) return;
   const key = body.closest("details.think")?.dataset.thinkTurn || "";
@@ -6030,6 +6045,17 @@ document.addEventListener(
       }
       return;
     }
+    if (pre && pre.classList && pre.classList.contains("sub-console")) {
+      const id = pre.dataset.subConsoleBox || "";
+      if (selfScrolled.has(pre)) {
+        selfScrolled.delete(pre);
+        return;
+      }
+      if (Date.now() - lastInputAt < 1200) {
+        state.subConsolePinned.set(id, pre.scrollHeight - pre.scrollTop - pre.clientHeight < 24);
+      }
+      return;
+    }
     if (!pre || pre.tagName !== "PRE" || !pre.classList || !pre.classList.contains("job-out") || !pre.dataset.out) return;
     // A scroll the panel caused itself (restoring a position, following new lines) is not the reader leaving the
     // bottom, so it must not unpin the console.
@@ -6051,6 +6077,7 @@ document.addEventListener(
 setInterval(() => {
   for (const pre of document.querySelectorAll("pre.job-out")) stickConsole(pre);
   for (const body of document.querySelectorAll(".think-body")) stickThinkBody(body);
+  for (const box of document.querySelectorAll(".sub-console")) stickSubConsole(box);
 }, 400);
 
 // A wheel up is the reader leaving the bottom on purpose; coming back down re-pins in the scroll handler.
@@ -6059,6 +6086,8 @@ document.addEventListener(
   (e) => {
     const pre = e.target && e.target.closest && e.target.closest("pre.job-out");
     if (pre && e.deltaY < 0) state.outPinned[pre.dataset.out] = false;
+    const subBox = e.target && e.target.closest && e.target.closest(".sub-console");
+    if (subBox && e.deltaY < 0) state.subConsolePinned.set(subBox.dataset.subConsoleBox || "", false);
     const body = e.target && e.target.closest && e.target.closest(".think-body");
     if (body && e.deltaY < 0) {
       const key = body.closest("details.think")?.dataset.thinkTurn || "";
