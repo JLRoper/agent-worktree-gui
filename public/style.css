@@ -487,9 +487,7 @@ button.chip:active { transform: translateY(1px); }
 button.btn-think { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dimmer); font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; }
 button.btn-think:hover { color: var(--text); border-color: var(--line); }
 button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241d33; }
-/* Reasoning while the agent works: the newest block, dimmed and italic, tailing the console. It is not part of the
-   transcript - when the turn ends it goes, and the per-turn thinking block is the record. */
-.jl-reasoning { color: #8fb8d8; font-style: italic; opacity: .92; white-space: pre-wrap; word-break: break-word; }
+
 
 /* A steer the turn never read: offered back, unsent, rather than sent as a second turn. */
 .reply-note { color: #c8a6ff; font-size: 11px; margin: 6px 0 0 2px; }
