@@ -1224,14 +1224,17 @@ function statsLine(stats, model = null) {
   if (Number.isFinite(stats.avg_tps)) segs.push(`\u2191 ${est(stats.tps_estimated)}${Math.round(stats.avg_tps)} t/s`);
   // Shown even at 0: a compaction count that only appears after the first compaction reads as a
   // missing number, and this one is a real measurement.
-  if (Number.isFinite(stats.compressions)) segs.push(`\u29c9 ${stats.compressions}`);
+  // Compactions get their own mark. \u29c9 was already the panel/agent glyph everywhere else in the board, so
+  // the same square meant "an agent lives here" and "this transcript was compacted N times". A double arrow
+  // pressed down reads as "condensed" and collides with nothing.
+  if (Number.isFinite(stats.compressions)) segs.push(`\u21ca ${stats.compressions}`);
   if (!segs.length) return "";
   // The model leads the line: these figures describe what that model did, and the id's owner prefix is
   // dropped for width (the full id stays in the tooltip).
   const modelSeg = model
     ? `<span class="stat stat-model" title="${esc(model)}">${esc(String(model).split("/").pop())}</span>`
     : "";
-  const title = "this session's usage: context occupancy, prompt-cache hit rate, compactions (\u29c9); latency and t/s are estimated from the turn's wall clock (~)";
+  const title = "this session's usage: context occupancy, prompt-cache hit rate, and \u21ca = how many times the transcript was compacted into a summary; latency and t/s are estimated from the turn's wall clock (~)";
   const body = [modelSeg, segs.map((s) => `<span class="stat">${esc(s)}</span>`).join('<span class="stat-sep">\u2502</span>')]
     .filter(Boolean)
     .join('<span class="stat-sep">\u2502</span>');
