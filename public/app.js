@@ -3610,6 +3610,8 @@ function renderJobs() {
   // The list is rebuilt wholesale, so remember where every open transcript was and put it back:
   // a `jobs` event must not cost the reader their place in an agent they are reading.
   const prevScrolls = captureScrolls($("jobs"));
+  // These cards are rebuilt from scratch, so a selection standing in one is recorded and put back on the new nodes.
+  const heldSelection = captureCardSelection();
   $("jobs").innerHTML = convs.length
     ? convs.map(conversationHtml).join("")
     : `<p class="empty">No unattached agents${nested ? ` — ${nested} agent${nested === 1 ? "" : "s"} listed under their worktree rows` : ""}.</p>`;
@@ -3617,6 +3619,7 @@ function renderJobs() {
   applyStoredScrolls($("jobs"));
   restoreThinkBodies($("jobs"));
   for (const c of convs) restoreReplyDraft(c.thread);
+  restoreCardSelection(heldSelection);
   scheduleBoardSweep();
   const running = convs.filter((c) => c.turns.some((t) => turnLive(t))).length;
   const folded = convs.filter((c) => state.collapsedJobs.has(c.thread)).length;
@@ -3779,36 +3782,90 @@ function selectionIn(el) {
   return false;
 }
 
-// A board rebuild detaches every card and puts it back in the rebuilt detail, and the browser drops the highlight on
-// the way through: the nodes come back, the selection does not (measured — a range over the figures, nine text nodes
-// untouched and connected, and `getSelection()` anchored on the tbody a second later). That is what made the figures
-// unselectable in practice: any row repaint under a reader copying them took the selection with it. Record the ranges
-// that stand inside a card before the rebuild and put them back after it; the card's own nodes are reused, so a saved
-// range still points at the same text.
+// A board rebuild detaches every card and puts it back, and the browser drops the selection on the way through: a
+// saved `Range` does not bring it back (measured — a clone whose boundary nodes are connected again, reattached card,
+// `addRange` leaves `getSelection()` empty and collapsed; the boundary points died with the subtree). What survives
+// is where in the readout the selection stood, so that is what is recorded: the card it belongs to and a character
+// offset into its usage readout. A rebuild re-renders that markup, so the range is rebuilt against the nodes that are
+// actually on screen afterwards.
+function offsetIn(root, node, offset) {
+  const r = document.createRange();
+  r.selectNodeContents(root);
+  try {
+    r.setEnd(node, offset);
+  } catch {
+    return null;
+  }
+  return r.toString().length;
+}
+
+// The text node and offset at character position `n` inside `root`.
+function pointAt(root, n) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let seen = 0;
+  let last = null;
+  for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+    const len = t.data.length;
+    if (n <= seen + len) return { node: t, offset: n - seen };
+    seen += len;
+    last = t;
+  }
+  return last ? { node: last, offset: last.data.length } : null;
+}
+
+// Which copy of a thread's card to restore onto: the board's, not the unattached panel's, when both exist.
+function cardForThread(thread) {
+  const cards = [...document.querySelectorAll(`.job[data-thread="${CSS.escape(thread)}"]`)];
+  return cards.find((c) => c.closest("tr.detail")) || cards[0] || null;
+}
+
 function captureCardSelection() {
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
-  const ranges = [];
+  const held = [];
   for (let i = 0; i < sel.rangeCount; i++) {
     const r = sel.getRangeAt(i);
-    const start = r.startContainer.nodeType === 1 ? r.startContainer : r.startContainer.parentElement;
-    if (!start?.closest?.(".job[data-thread]")) continue;
-    if (!r.collapsed) ranges.push(r.cloneRange());
+    if (r.collapsed) continue;
+    const startEl = r.startContainer.nodeType === 1 ? r.startContainer : r.startContainer.parentElement;
+    const card = startEl?.closest?.(".job[data-thread]");
+    if (!card) continue;
+    // The readout when the selection sits in it, the whole card otherwise.
+    const root = startEl.closest("[data-stats]") || card;
+    if (!root.contains(r.endContainer)) continue;
+    const start = offsetIn(root, r.startContainer, r.startOffset);
+    const end = offsetIn(root, r.endContainer, r.endOffset);
+    if (start == null || end == null || end <= start) continue;
+    held.push({ thread: card.dataset.thread, stats: root !== card, start, end });
   }
-  return ranges.length ? ranges : null;
+  return held.length ? held : null;
 }
 
-function restoreCardSelection(ranges) {
-  if (!ranges) return;
+function restoreCardSelection(held) {
+  if (!held || !held.length) return;
   const sel = window.getSelection();
   if (!sel) return;
-  // Only when nothing else is selected now, and only onto nodes that came back: a full re-render builds new ones, and
-  // restoring a range into the old copies would leave an invisible selection standing.
+  // Only when nothing else is selected now: a reader who has picked something else has moved on.
   if (sel.rangeCount && !sel.isCollapsed) return;
-  const live = ranges.filter((r) => r.startContainer.isConnected && r.endContainer.isConnected);
-  if (!live.length) return;
+  const ranges = [];
+  for (const h of held) {
+    const card = cardForThread(h.thread);
+    const root = card && (h.stats ? card.querySelector("[data-stats]") : card);
+    if (!root) continue;
+    const a = pointAt(root, h.start);
+    const b = pointAt(root, h.end);
+    if (!a || !b) continue;
+    const r = document.createRange();
+    try {
+      r.setStart(a.node, a.offset);
+      r.setEnd(b.node, b.offset);
+    } catch {
+      continue;
+    }
+    ranges.push(r);
+  }
+  if (!ranges.length) return;
   sel.removeAllRanges();
-  for (const r of live) sel.addRange(r);
+  for (const r of ranges) sel.addRange(r);
 }
 
 // The two things on a card that move without changing its markup: when it was last used, and its usage figures.
@@ -3859,6 +3916,8 @@ function renderConversation(thread, { scroll = false } = {}) {
   const bodyAtBottom = prevBody ? prevBody.scrollHeight - prevBody.scrollTop - prevBody.clientHeight < 32 : true;
   const pageY = window.scrollY;
   const typing = captureTyping(el);
+  // A rebuild replaces the card node, which drops any selection standing in its readout; record it and put it back.
+  const heldSelection = captureCardSelection();
   const holder = document.createElement("div");
   holder.innerHTML = conversationHtml(conv);
   const fresh = holder.firstElementChild;
@@ -3866,6 +3925,7 @@ function renderConversation(thread, { scroll = false } = {}) {
   el.replaceWith(fresh);
   restoreThinkBodies(fresh);
   restoreTyping(fresh, typing);
+  restoreCardSelection(heldSelection);
   if (window.scrollY !== pageY) {
     const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
     window.scrollTo({ top: Math.min(pageY, maxY) });
@@ -5866,6 +5926,8 @@ function queueReorderProjects() {
 function reorderProjects() {
   const host = $("projects");
   if (!host) return;
+  // Moving a section or a folder moves the cards inside them, and that drops a selection standing in one.
+  const heldSelection = captureCardSelection();
   const rank = projectRanks();
   const at = (n) => rank.get(n) || { tier: 2, activity: 0 };
   const cmp = (x, y) => {
@@ -5923,6 +5985,7 @@ function reorderProjects() {
   let gf = 0;
   groups.forEach((_, i) => wantGroups.push(pinnedGroups.has(i) ? pinnedGroups.get(i) : freeGroups[gf++]));
   if (!wantGroups.every((g, i) => g === groups[i])) for (const g of wantGroups) host.appendChild(g);
+  restoreCardSelection(heldSelection);
 }
 
 // One accordion per folder. The header carries the folder path and the aggregate state of
@@ -6026,6 +6089,8 @@ function refreshChips(name) {
 function reorder(name) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
+  // Re-appending a detail takes its cards out of the DOM on the way, which is enough to lose a selection.
+  const heldSelection = captureCardSelection();
   const mine = [...state.rows.values()].filter((r) => r.project === name);
   // The order if nothing were pinned: our running agents first, then everything by how recently it
   // showed life. This is what "latest movement at the top" means once all the accordions are closed.
@@ -6064,6 +6129,7 @@ function reorder(name) {
     (el) => (state.movedRows.has(el.dataset.key) ? "flash" : "flash-idle"),
   );
   state.movedRows.clear();
+  restoreCardSelection(heldSelection);
 }
 
 // Green flash on the things that moved UP the order. A project pushed to the top shifts everything
