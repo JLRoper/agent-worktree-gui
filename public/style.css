@@ -39,6 +39,33 @@
 }
 
 * { box-sizing: border-box; }
+/* Scrollbars are part of the surface. The platform default is a light track with stepper arrows, and on this
+   dark panel it was the brightest thing on screen - more attention than the output it belonged to. Thin, dark,
+   no buttons: a rail that reports position and nothing else.
+
+   The pseudo-elements are the only way to keep a scrollbar VISIBLE here. Chromium's standard scrollbar-width/
+   scrollbar-color paint an overlay scrollbar that fades out a second after the last scroll, and styling the
+   old pseudo-elements at the same time is not allowed: a non-auto scrollbar-width makes Chromium ignore them
+   entirely. So the webkit rules below are the whole story for Chromium, and Firefox (which has no
+   pseudo-elements) gets the standard properties in the @supports guard - thin and dark, its closest match. */
+*::-webkit-scrollbar { width: 11px; height: 11px; background: transparent; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: #3d4655;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: #4e596b; background-clip: content-box; }
+*::-webkit-scrollbar-thumb:active { background: #55616f; background-clip: content-box; }
+*::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
+*::-webkit-scrollbar-corner { background: transparent; }
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #333c49 transparent;
+  }
+}
 
 body {
   margin: 0;
@@ -124,7 +151,7 @@ button.primary:hover { background: #24466a; }
 .settings { position: fixed; right: 16px; top: 74px; z-index: 120; width: 340px; max-height: calc(100vh - 90px); display: flex; flex-direction: column; padding: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 14px 34px #0009; overflow: hidden; }
 /* The body owns the scrollbar. Both spellings are set: Chrome 121+ honours scrollbar-width/color and ignores the
    ::-webkit- rules, older Chromium is the other way round, and Firefox only knows the standard pair. */
-.settings-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 14px 14px; scrollbar-width: thin; scrollbar-color: #39424f var(--panel); }
+.settings-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 14px 14px; }
 .settings-body::-webkit-scrollbar { width: 10px; }
 .settings-body::-webkit-scrollbar-track { background: var(--panel); }
 .settings-body::-webkit-scrollbar-thumb { background: #39424f; border: 2px solid var(--panel); border-radius: 999px; }
