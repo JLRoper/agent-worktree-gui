@@ -1414,11 +1414,10 @@ body.no-grey-flash tbody tr.row.flash-idle { animation: none; }
 /* A section's own background is mostly covered by its children, so the flash has to reach the title
    row as well: a tinted section alone was too quiet to notice. The head flashes solid green and the
    section carries the ring. */
-/* A project flashes when it is promoted up the order, and (with "Flash on events") when one of its worktrees gets an
-   event. The ring is on the box's own edge and the wash is on its title row - never the body. Painting the whole
-   section green washed over the table the reader was reading: the rows, their verdict badges and their dirty marks
-   all sat under a green film, which said "this project" louder than it said "it moved". A worktree row flashes as a
-   band because a row is one band; a project is a box, so its edge and its header say it. */
+/* Only a COLLAPSED project flashes: it is the reader's only way to know something happened inside a box they are not
+   looking into. The bar takes the wash and the box its ring, which for a collapsed section is just the bar's edge.
+   An open project never flashes - the worktree rows are right there under it and they say what happened; painting
+   the whole panel green only repeated it, over the table. */
 @keyframes flashsection {
   from { box-shadow: 0 0 0 2px #3d8f5c inset, 0 0 14px rgba(61, 143, 92, .45); }
   to { box-shadow: 0 0 0 2px transparent inset, 0 0 0 rgba(61, 143, 92, 0); }
@@ -1430,8 +1429,8 @@ body.no-grey-flash tbody tr.row.flash-idle { animation: none; }
   from { box-shadow: inset 0 0 0 999px rgba(46, 96, 66, .92); }
   to { box-shadow: inset 0 0 0 999px rgba(46, 96, 66, 0); }
 }
-section.project.flash { animation: flashsection var(--flash-project, 1100ms) ease-out; }
-section.project.flash .project-head { animation: flashhead var(--flash-project, 1100ms) ease-out; }
+section.project.collapsed.flash { animation: flashsection var(--flash-project, 1100ms) ease-out; }
+section.project.collapsed.flash .project-head { animation: flashhead var(--flash-project, 1100ms) ease-out; }
 
 .mono { font-family: var(--mono); font-size: 12px; }
 .name { font-weight: 600; }

@@ -5512,7 +5512,8 @@ function pulseRow(key) {
 function pulseProject(project) {
   if (!project) return;
   const sec = document.querySelector(`section.project[data-project="${CSS.escape(project)}"]`);
-  if (!sec) return;
+  // Only a collapsed project: an open one shows its rows, and they are the ones that flash when something happens.
+  if (!sec || !sec.classList.contains("collapsed")) return;
   sec.classList.remove("flash");
   void sec.offsetWidth;
   sec.classList.add("flash");
@@ -6804,6 +6805,10 @@ function placeRow(project, row, { flash = false } = {}) {
   // A collapsed section is not on screen: keep the row in state (the chips and counters need it)
   // but spend nothing on its markup. Expanding the project renders it from state.
   if (!state.expandedProjects.has(project)) {
+    // Collapsed: there is no row on screen to flash, so a GREEN row flash becomes a green flash on the project's own
+    // bar - "something inside this box moved and you could not see it". The quiet grey pulse is not repeated here:
+    // "re-read, nothing moved" is not worth a project-level signal.
+    if (flash && moved) pulseProject(project);
     refreshChips(project);
     return;
   }
