@@ -1,0 +1,819 @@
+// Worktree Monitor — the assistant's client half.
+//
+// One header button, one floating panel, and inside it the assistant's own agent card. The card is built by
+// app.js's own renderer (conversationHtml / renderConversation), so it is not a lookalike: it has the console,
+// the reply box, steering, approvals and the usage readout because it IS one of those cards. This file owns the
+// float around it, the alerts list, the watchlist, the scratchpad and the settings.
+//
+// Loaded as a classic script after app.js, so `state`, `$`, `esc`, `conversations`, `conversationHtml` and the
+// rest of app.js's top-level bindings are in scope. app.js calls exactly one function here: applyAssistant().
+(() => {
+  "use strict";
+
+  const OPEN_KEY = "wm.assistantOpen";
+  const TAB_KEY = "wm.assistantTab";
+  const RECT_KEY = "wm.assistantRect";
+  const SEEN_KEY = "wm.assistantSeenAt";
+  const TABS = ["chat", "alerts", "watches", "pad", "settings"];
+
+  const as$ = (id) => document.getElementById(id);
+
+  function readFlag(key, fallback) {
+    try {
+      const v = localStorage.getItem(key);
+      return v == null ? fallback : v === "1";
+    } catch {
+      return fallback;
+    }
+  }
+  function writeFlag(key, on) {
+    try {
+      localStorage.setItem(key, on ? "1" : "0");
+    } catch {
+      /* a browser with storage off still gets the panel; it just forgets where it was */
+    }
+  }
+  function readTab() {
+    try {
+      const v = localStorage.getItem(TAB_KEY);
+      return TABS.includes(v) ? v : "chat";
+    } catch {
+      return "chat";
+    }
+  }
+  function readRect() {
+    try {
+      const r = JSON.parse(localStorage.getItem(RECT_KEY) || "null");
+      if (!r || !["x", "y", "w", "h"].every((k) => Number.isFinite(Number(r[k])))) return null;
+      return { x: Number(r.x), y: Number(r.y), w: Number(r.w), h: Number(r.h) };
+    } catch {
+      return null;
+    }
+  }
+  function writeRect(r) {
+    try {
+      localStorage.setItem(RECT_KEY, JSON.stringify(r));
+    } catch {
+      /* not fatal */
+    }
+  }
+  function seenAt() {
+    try {
+      return Number(localStorage.getItem(SEEN_KEY) || 0) || 0;
+    } catch {
+      return 0;
+    }
+  }
+  function markSeen() {
+    try {
+      localStorage.setItem(SEEN_KEY, String(Date.now()));
+    } catch {
+      /* not fatal */
+    }
+  }
+
+  // The assistant's own fields on the shared state object. app.js reads assistantThread in three places
+  // (the board excludes it, the reply route is chosen by it, and a missing card is repainted into the float).
+  state.assistant = state.assistant || null;
+  state.assistantThread = state.assistantThread || "panel-assistant";
+  state.assistantOpen = state.assistantOpen ?? readFlag(OPEN_KEY, false);
+  state.assistantTab = state.assistantTab || readTab();
+  state.assistantSeenAt = state.assistantSeenAt ?? seenAt();
+
+  let dragState = null;
+
+  // ---- the panel's own frame ------------------------------------------------------------------
+
+  function placeAssistant() {
+    const el = as$("assistant");
+    if (!el) return;
+    const r = state.assistantRect || readRect();
+    if (!r) return;
+    const maxW = window.innerWidth - 16;
+    const maxH = window.innerHeight - 16;
+    const w = Math.max(320, Math.min(r.w, maxW));
+    const h = Math.max(220, Math.min(r.h, maxH));
+    el.style.width = `${w}px`;
+    el.style.height = `${h}px`;
+    el.style.left = `${Math.max(8, Math.min(r.x, window.innerWidth - w - 8))}px`;
+    el.style.top = `${Math.max(8, Math.min(r.y, window.innerHeight - h - 8))}px`;
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+  }
+
+  function currentRect() {
+    const el = as$("assistant");
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+  }
+
+  function toggleAssistant(open = !state.assistantOpen) {
+    state.assistantOpen = Boolean(open);
+    writeFlag(OPEN_KEY, state.assistantOpen);
+    const el = as$("assistant");
+    const btn = as$("btn-assistant");
+    if (el) el.hidden = !state.assistantOpen;
+    if (btn) btn.classList.toggle("is-on", state.assistantOpen);
+    if (state.assistantOpen) {
+      placeAssistant();
+      state.assistantSeenAt = Date.now();
+      markSeen();
+      renderAssistant();
+      paintAssistantBadge();
+    }
+  }
+
+  // ---- what arrives from the server ------------------------------------------------------------
+
+  function applyAssistant(data) {
+    if (!data || typeof data !== "object") return;
+    state.assistant = data;
+    if (data.thread) state.assistantThread = data.thread;
+    paintAssistantBadge();
+    // The card has to exist even while the float is closed: app.js's renderConversation finds it by thread
+    // anywhere in the document, and that is what keeps a running turn current instead of frozen.
+    renderAssistantChat();
+    if (state.assistantOpen) renderAssistant();
+  }
+
+  function paintAssistantBadge() {
+    const btn = as$("btn-assistant");
+    const badge = as$("assistant-badge");
+    if (!btn || !badge) return;
+    const alerts = state.assistant?.alerts || [];
+    const n = alerts.length;
+    badge.hidden = n === 0;
+    badge.textContent = n > 99 ? "99+" : String(n);
+    const newest = alerts.reduce((t, a) => Math.max(t, Date.parse(a.at) || 0), 0);
+    btn.classList.toggle("is-hot", n > 0 && newest > (state.assistantSeenAt || 0));
+    btn.title = n
+      ? `assistant — ${n} thing${n === 1 ? "" : "s"} on the board need${n === 1 ? "s" : ""} a look (Ctrl+Shift+A)`
+      : "assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (Ctrl+Shift+A)";
+  }
+
+  function renderAssistant() {
+    const a = state.assistant;
+    const mode = a?.settings?.autonomy || "draft";
+    const modeEl = as$("as-mode");
+    if (modeEl) {
+      modeEl.textContent = mode === "draft" ? "draft-only" : mode === "auto-safe" ? "auto-safe" : "auto";
+      modeEl.className = `as-mode mono${mode === "auto" ? " is-auto" : mode === "auto-safe" ? " is-safe" : ""}`;
+    }
+    const openAlerts = (a?.alerts || []).length;
+    const liveWatches = (a?.watches || []).filter((w) => w.state !== "done").length;
+    if (as$("as-alert-n")) as$("as-alert-n").textContent = String(openAlerts);
+    if (as$("as-watch-n")) as$("as-watch-n").textContent = String(liveWatches);
+    if (as$("as-chips")) {
+      as$("as-chips").innerHTML = [
+        a?.running ? `<span class="chip warn" title="its own turn is running">thinking</span>` : "",
+        a && a.enabled === false ? `<span class="chip" title="the sentry is off — no rule is being evaluated">off</span>` : "",
+        a ? `<span class="chip" title="self-wakes in the last hour (a rule set to wake, or an alert handed to it)">${a.wakes?.lastHour ?? 0}/${a.wakes?.limit ?? 0} wakes</span>` : "",
+      ].join("");
+    }
+    for (const b of document.querySelectorAll("#as-tabs [data-as-tab]")) {
+      b.classList.toggle("is-on", b.dataset.asTab === state.assistantTab);
+    }
+    for (const p of document.querySelectorAll("#assistant .as-pane")) {
+      p.classList.toggle("hidden", p.dataset.pane !== state.assistantTab);
+    }
+    renderAssistantChat();
+    if (state.assistantTab === "alerts") renderAssistantAlerts();
+    else if (state.assistantTab === "watches") renderAssistantWatches();
+    else if (state.assistantTab === "pad") renderAssistantPad();
+    else if (state.assistantTab === "settings") renderAssistantSettings();
+  }
+
+  // ---- chat: the assistant as one of the agents -------------------------------------------------
+
+  function assistantIntroHtml() {
+    const off = state.assistant?.enabled === false;
+    return `<div class="as-intro">
+      <p><b>✧ Assistant</b> reads this board and nothing else: the agents' cards, the approvals and its own
+      scratchpad. It has no terminal of its own.</p>
+      <ul>
+        <li>“What is going on?” — a digest of the live agents.</li>
+        <li>“Keep an eye on the deploy one, and tell me if it stalls.”</li>
+        <li>It answers a worker only when your standing rules cover the question; otherwise it drafts and waits
+        for your click.</li>
+      </ul>
+      ${off ? `<p class="as-hint">It is switched off in Settings — turn it on there to start.</p>` : ""}
+      <div class="as-first">
+        <textarea id="as-first-text" rows="3" placeholder="Ask it something, or tell it what to watch…"${off ? " disabled" : ""}></textarea>
+        <div class="as-first-actions">
+          <button id="btn-as-first" type="button" class="primary"${off ? " disabled" : ""}>Send to the assistant</button>
+          <span class="as-hint">its own Hermes thread · it knows the board, not your repository</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function renderAssistantChat() {
+    const host = as$("as-chat");
+    if (!host) return;
+    const conv = conversations().find((c) => c.thread === state.assistantThread);
+    if (!conv) {
+      if (host.dataset.mode !== "intro") {
+        host.dataset.mode = "intro";
+        host.innerHTML = assistantIntroHtml();
+      }
+      return;
+    }
+    // A live edit in the intro box survives until the first turn exists; after that the card owns the box.
+    host.dataset.mode = "card";
+    const sig = conversationSignature(conv);
+    const card = host.querySelector(`.job[data-thread="${CSS.escape(conv.thread)}"]`);
+    if (card && card.dataset.sig === sig) {
+      paintCardMeta(card, conv);
+      return;
+    }
+    const prevScrolls = captureScrolls(host);
+    const held = captureCardSelection();
+    const typing = captureTyping(host);
+    const pageY = window.scrollY;
+    host.innerHTML = conversationHtml(conv);
+    const fresh = host.firstElementChild;
+    if (fresh) fresh.dataset.sig = sig;
+    restoreScrolls(host, prevScrolls);
+    applyStoredScrolls(host);
+    restoreThinkBodies(host);
+    restoreReplyDraft(conv.thread);
+    restoreTyping(host, typing);
+    restoreCardSelection(held);
+    settleScrolls(host);
+    // The panel is fixed, so a rebuild can never move the page — but a focus() inside it can, and this keeps
+    // that promise local instead of relying on every callee remembering preventScroll.
+    if (window.scrollY !== pageY) window.scrollTo({ top: pageY });
+  }
+
+  // ---- alerts ---------------------------------------------------------------------------------
+
+  function assistantThreadName(thread) {
+    const conv = conversations().find((c) => c.thread === thread);
+    return conv?.latest?.label || conv?.latest?.title || thread;
+  }
+
+  // "Open agent" has to open every accordion between the reader and the card: a card owned by a worktree
+  // exists in the DOM only while its project and its row are open, and jumpToAgent alone lands on
+  // #jobs — the wrong place — when it is not. Same path the row's own ⧉ badge takes.
+  function openAgentThread(thread) {
+    if (!thread) return;
+    if (thread === state.assistantThread) {
+      state.assistantTab = "chat";
+      renderAssistant();
+      return;
+    }
+    const conv = conversations().find((c) => c.thread === thread);
+    const owner = conv?.latest?.ownerPath || conv?.first?.ownerPath || null;
+    const want = normPath(owner || "").toLowerCase();
+    const row = want ? [...state.rows.values()].find((r) => normPath(r.path).toLowerCase() === want) : null;
+    if (row) {
+      const project = state.projects.get(row.project);
+      const root = project ? rootOf(project) : null;
+      if (root && state.collapsedRoots.has(root)) toggleRoot(root);
+      if (!state.expandedProjects.has(row.project)) toggleProject(row.project);
+      const key = keyOf(row.project, row.path);
+      if (!state.expanded.has(key)) document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
+    } else {
+      // Unattached: the Agents section is its home.
+      const fixed = document.getElementById("agents");
+      if (fixed && fixed.classList.contains("collapsed")) revealCard("agents");
+    }
+    jumpToAgent(thread);
+  }
+
+  function alertHtml(a) {
+    const draft = a.draft && a.draft.thread ? a.draft : null;
+    const conf = draft?.confidence || "";
+    return `<div class="as-alert is-${esc(a.severity || "warn")}" data-alert="${esc(a.id)}">
+      <div class="as-alert-head">
+        <span class="as-rule is-${esc(a.severity || "warn")}">${esc(a.rule)}</span>
+        ${a.thread ? `<button class="as-thread" data-as-open="${esc(a.thread)}" type="button" title="open that agent's card">${esc(assistantThreadName(a.thread))}</button>` : ""}
+        <span class="as-ago">${esc(fmtDur(Date.now() - (Date.parse(a.at) || Date.now())))} ago</span>
+      </div>
+      <h4>${esc(a.title)}</h4>
+      ${a.detail ? `<div class="as-detail">${esc(a.detail)}</div>` : ""}
+      ${(a.evidence || []).length ? `<div class="as-ev">${a.evidence.map((e) => `<span>${esc(e.label)} <b>${esc(e.value)}</b></span>`).join("")}</div>` : ""}
+      ${draft ? `<div class="as-draft-wrap">
+        <textarea class="as-draft" data-as-draft="${esc(a.id)}" rows="3" placeholder="${conf === "none" ? "No confident answer — write one, or leave it for later" : ""}">${esc(draft.text || "")}</textarea>
+        <div class="as-draft-meta${conf === "none" ? " is-none" : ""}">${conf === "none" ? "no standing rule covers this" : `drafted from ${esc(draft.source || conf)}`} · goes into ${esc(assistantThreadName(draft.thread))} as a reply</div>
+      </div>` : ""}
+      <div class="as-actions">
+        ${draft ? `<button type="button" class="primary" data-as-send="${esc(a.id)}" data-thread="${esc(draft.thread)}"${draft.text ? "" : " disabled"}>Send reply</button>` : ""}
+        <button type="button" data-as-action="ask" data-id="${esc(a.id)}" title="hand this to the assistant with a digest — one turn, rate limited">Ask assistant</button>
+        ${a.thread ? `<button type="button" data-as-open="${esc(a.thread)}">Open agent</button>` : ""}
+        <button type="button" data-as-action="dismiss" data-id="${esc(a.id)}">Dismiss</button>
+        <span class="as-err" data-as-err="${esc(a.id)}"></span>
+      </div>
+    </div>`;
+  }
+
+  function typingInside(sel) {
+    const el = document.activeElement;
+    return Boolean(el && el.closest?.(sel));
+  }
+
+  function renderAssistantAlerts(force = false) {
+    const host = as$("as-alerts");
+    if (!host) return;
+    if (!state.assistant) {
+      host.innerHTML = `<div class="as-empty">connecting…</div>`;
+      return;
+    }
+    // A poll must not take the draft the reader is writing: the list is only repainted when nothing in it
+    // holds the caret, or when the reader's own action asked for it.
+    if (!force && typingInside("#as-alerts")) return;
+    const alerts = state.assistant.alerts || [];
+    if (!alerts.length) {
+      const w = (state.assistant.watches || []).filter((x) => x.state !== "done").length;
+      host.innerHTML = `<div class="as-empty">Nothing needs you. ${w ? `Watching ${w} thing${w === 1 ? "" : "s"}.` : "No watches either."} It is still reading the board every ${state.assistant.settings?.seconds ?? 5}s.</div>`;
+      return;
+    }
+    host.innerHTML = alerts.map(alertHtml).join("");
+  }
+
+  // ---- watches --------------------------------------------------------------------------------
+
+  function renderAssistantWatches(force = false) {
+    const host = as$("as-watches");
+    if (!host || !state.assistant) return;
+    if (!force && typingInside("#as-watches")) return;
+    const watches = state.assistant.watches || [];
+    const rows = watches
+      .map(
+        (w) => `<div class="as-row${w.state === "done" ? " is-done" : ""}">
+          <button class="as-thread" data-as-open="${esc(w.thread)}" type="button">${esc(assistantThreadName(w.thread))}</button>
+          <span class="as-what">${esc(w.title)}${w.doneWhen ? `<span class="as-hint"> · done when ${esc(w.doneWhen)}</span>` : ""}</span>
+          <span class="as-until">${w.state === "done" ? "done" : w.state === "alerted" ? "overdue" : w.minutes ? `deadline ${w.minutes}m` : "no deadline"}</span>
+          <button type="button" data-as-unwatch="${esc(w.id)}" title="stop watching this">✕</button>
+        </div>`,
+      )
+      .join("");
+    const options = conversations()
+      .map((c) => `<option value="${esc(c.thread)}">${esc(String(c.latest.label || c.latest.title || c.thread).slice(0, 60))}</option>`)
+      .join("");
+    host.innerHTML = `${rows || `<div class="as-empty">Nothing on the watchlist. Tell it in Chat (“keep an eye on…”), or add one here.</div>`}
+      <div class="as-form">
+        <div class="as-line">
+          <select id="as-w-thread" title="which agent to watch">${options || '<option value="">(no agents yet)</option>'}</select>
+          <input id="as-w-title" class="as-grow" placeholder="what to watch for — e.g. the deploy finishes" />
+        </div>
+        <div class="as-line">
+          <label>deadline <input id="as-w-min" type="number" min="1" max="1440" placeholder="minutes" /></label>
+          <button id="btn-as-watch" type="button" class="primary">Add watch</button>
+          <span class="as-hint">it tells you when that thread finishes, or when the deadline passes</span>
+        </div>
+        <span class="as-err" id="as-w-err"></span>
+      </div>`;
+  }
+
+  // ---- scratchpad -----------------------------------------------------------------------------
+
+  function renderAssistantPad(force = false) {
+    const host = as$("as-pad");
+    if (!host || !state.assistant) return;
+    if (!force && typingInside("#as-pad")) return;
+    const a = state.assistant;
+    const rules = a.rules || [];
+    host.innerHTML = `
+      <div class="as-group">
+        <h4>Notes — read on every turn</h4>
+        <textarea class="as-note-box" id="as-notes" rows="6" placeholder="What it should remember: how this project deploys, which agents are doing what, an answer you gave today…">${esc(a.notes || "")}</textarea>
+        <div class="as-actions">
+          <button id="btn-as-notes" type="button" class="primary">Save notes</button>
+          <span class="as-hint">kept on the server in assistant.json</span>
+          <span class="as-err" id="as-pad-err"></span>
+        </div>
+      </div>
+      <div class="as-group">
+        <h4>Standing rules — its only confident answers</h4>
+        ${rules.map((r) => `<div class="as-rule-row"><span class="as-rule-name">${esc(r.text)}</span><button type="button" data-as-unrule="${esc(r.id)}" title="remove this rule">✕</button></div>`).join("") || `<div class="as-help">None yet. A rule is an answer you have given once and do not want to give twice.</div>`}
+        <div class="as-form">
+          <div class="as-line">
+            <input id="as-rule-text" class="as-grow" placeholder="e.g. Deploy to QA, never PROD, from a worktree agent" />
+            <button id="btn-as-rule" type="button">Add rule</button>
+          </div>
+        </div>
+      </div>
+      <div class="as-group">
+        <h4>Journal</h4>
+        <div class="as-journal">${
+          (a.journal || [])
+            .map((j) => `<div><span class="t">${esc(new Date(j.at).toLocaleTimeString())}</span> <span class="k">${esc(j.kind)}</span> ${esc(j.text)}</div>`)
+            .join("") || `<div class="as-help">quiet</div>`
+        }</div>
+      </div>`;
+  }
+
+  // ---- settings -------------------------------------------------------------------------------
+
+  function modelOptionsHtml(selected) {
+    const choices = typeof modelChoices === "function" ? modelChoices() : [{ id: "", label: "(default)" }];
+    // A model the catalogue no longer lists must still render, or saving the panel would silently replace it.
+    if (selected && !choices.some((c) => c.id === selected)) choices.push({ id: selected, label: `${selected} (not in the catalogue)` });
+    return choices
+      .map((c) => `<option value="${esc(c.id)}"${c.id === selected ? " selected" : ""}>${esc(c.label)}${c.group ? ` · ${esc(c.group)}` : ""}</option>`)
+      .join("");
+  }
+
+  function renderAssistantSettings(force = false) {
+    const host = as$("as-settings");
+    if (!host || !state.assistant) return;
+    if (!force && typingInside("#as-settings")) return;
+    const a = state.assistant;
+    const s = a.settings;
+    const defs = a.ruleDefs || {};
+    const levels = a.escalations || ["log", "alert", "wake", "act"];
+    const autonomy = a.autonomy || ["draft", "auto-safe", "auto"];
+    const autonomyLabel = {
+      draft: "draft only — nothing is sent without my click",
+      "auto-safe": "auto-safe — send what the assistant writes",
+      auto: "auto — send any draft it has text for",
+    };
+    host.innerHTML = `
+      <div class="as-group">
+        <h4>How it behaves</h4>
+        <div class="as-line">
+          <label>watching <input type="checkbox" data-as-set="enabled"${s.enabled ? " checked" : ""}></label>
+          <label>autonomy <select data-as-set="autonomy">${autonomy.map((v) => `<option value="${v}"${s.autonomy === v ? " selected" : ""}>${esc(autonomyLabel[v] || v)}</option>`).join("")}</select></label>
+        </div>
+        <div class="as-line"><label>model <select data-as-set="model" title="the assistant's own model — pick something small and fast; the board digest is the whole input">${modelOptionsHtml(s.model || "")}</select></label></div>
+        <div class="as-help">Draft-only is the default: a reply reaches a worker only when you press Send on it. Auto-safe sends a reply the assistant itself wrote with a TO line; auto also sends anything a standing rule drafted. An approval is never answered from here at any setting.</div>
+      </div>
+      <div class="as-group">
+        <h4>Thresholds</h4>
+        <div class="as-line"><label>pass every <input type="number" min="2" max="120" data-as-set="seconds" value="${s.seconds}"> s</label>
+          <label>same call × <input type="number" min="2" max="12" data-as-set="repeatLimit" value="${s.repeatLimit}"></label></div>
+        <div class="as-line"><label>silent for <input type="number" min="30" max="3600" data-as-set="quietSeconds" value="${s.quietSeconds}"> s</label>
+          <label>approval waiting <input type="number" min="15" max="3600" data-as-set="approvalSeconds" value="${s.approvalSeconds}"> s</label></div>
+        <div class="as-line"><label>context over <input type="number" min="50" max="100" data-as-set="contextPercent" value="${s.contextPercent}"> %</label>
+          <label>wakes / hour <input type="number" min="0" max="60" data-as-set="maxWakesPerHour" value="${s.maxWakesPerHour}"></label></div>
+        <div class="as-help">A long build is silent too, which is why “no new output” only journals by default. Raise the repeat bar if “same call” is noisy on your agents.</div>
+      </div>
+      <div class="as-group">
+        <h4>Per-rule escalation</h4>
+        ${Object.entries(defs)
+          .map(
+            ([id, def]) => `<div class="as-rule-row">
+              <span class="as-rule-name"><b>${esc(def.label)}</b><i>${esc(def.hint)}</i></span>
+              <select data-as-rule="${esc(id)}">${levels.map((v) => `<option value="${v}"${s.rules[id] === v ? " selected" : ""}>${v}</option>`).join("")}</select>
+            </div>`,
+          )
+          .join("")}
+        <div class="as-help">log keeps it in the journal · alert shows it under Alerts · wake asks the assistant about it (rate limited) · act wakes it and lets it send a reply when autonomy allows.</div>
+      </div>
+      <div class="as-group">
+        <h4>Now</h4>
+        <div class="as-line">
+          <button type="button" id="btn-as-check" title="one sentry pass, no waiting for the clock">Check the board now</button>
+          <button type="button" id="btn-as-wake" title="ask the assistant what it sees — one turn">Ask what it sees</button>
+          <span class="as-err" id="as-set-err"></span>
+        </div>
+        <div class="as-help">${a.wakes.lastHour}/${a.wakes.limit} wakes in the last hour${a.wakePending ? ` · ${a.wakePending} queued behind the running turn` : ""} · scratchpad at ${esc(a.settings.model || "(gateway default model)")}</div>
+      </div>`;
+  }
+
+  // ---- talking to the server -------------------------------------------------------------------
+
+  async function asPost(route, body = {}) {
+    const r = await apiFetch(route, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    if (d.assistant) applyAssistant(d.assistant);
+    if (d.job) updateJob(d.job, { scroll: true });
+    return d;
+  }
+
+  function setErr(sel, message) {
+    const el = as$(sel) || document.querySelector(sel);
+    if (el) el.textContent = message || "";
+  }
+
+  async function say(text, button = null) {
+    const t = String(text || "").trim();
+    if (!t) return;
+    if (button) button.disabled = true;
+    try {
+      await asPost("/api/assistant/say", { text: t });
+      // The intro box is gone once the card exists; clear it in case a repaint has not landed yet.
+      const box = as$("as-first-text");
+      if (box) box.value = "";
+      state.assistantTab = "chat";
+      try {
+        localStorage.setItem(TAB_KEY, "chat");
+      } catch {
+        /* not fatal */
+      }
+      renderAssistant();
+    } catch (e) {
+      showBanner(`assistant: ${e.message}`);
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  // ---- wiring ---------------------------------------------------------------------------------
+
+  as$("btn-assistant")?.addEventListener("click", () => toggleAssistant());
+  as$("btn-as-close")?.addEventListener("click", () => toggleAssistant(false));
+
+  as$("as-tabs")?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-as-tab]");
+    if (!b) return;
+    state.assistantTab = b.dataset.asTab;
+    try {
+      localStorage.setItem(TAB_KEY, state.assistantTab);
+    } catch {
+      /* not fatal */
+    }
+    renderAssistant();
+  });
+
+  as$("assistant")?.addEventListener("click", async (e) => {
+    const t = e.target.closest("button");
+    if (!t) return;
+    // Tabs are buttons too and are handled above; ignore a second pass here.
+    if (t.dataset.asTab) return;
+
+    if (t.dataset.asOpen) {
+      openAgentThread(t.dataset.asOpen);
+      return;
+    }
+
+    if (t.dataset.asAction) {
+      t.disabled = true;
+      try {
+        await asPost("/api/assistant/alert", { id: t.dataset.id, action: t.dataset.asAction });
+        renderAssistantAlerts(true);
+        if (t.dataset.asAction === "ask") state.assistantTab = "chat";
+        renderAssistant();
+      } catch (err) {
+        const slot = document.querySelector(`[data-as-err="${CSS.escape(t.dataset.id || "")}"]`);
+        if (slot) slot.textContent = err.message;
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.dataset.asSend) {
+      const id = t.dataset.asSend;
+      const box = document.querySelector(`[data-as-draft="${CSS.escape(id)}"]`);
+      const text = String(box?.value || "").trim();
+      if (!text) return;
+      t.disabled = true;
+      try {
+        await asPost("/api/assistant/answer", { thread: t.dataset.thread, text, alertId: id });
+        renderAssistantAlerts(true);
+        renderAssistant();
+      } catch (err) {
+        const slot = document.querySelector(`[data-as-err="${CSS.escape(id)}"]`);
+        if (slot) slot.textContent = err.message;
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.dataset.asUnwatch) {
+      t.disabled = true;
+      try {
+        await asPost("/api/assistant/watch/remove", { id: t.dataset.asUnwatch });
+        renderAssistantWatches(true);
+      } catch (err) {
+        setErr("as-w-err", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.dataset.asUnrule) {
+      t.disabled = true;
+      try {
+        await asPost("/api/assistant/rule/remove", { id: t.dataset.asUnrule });
+        renderAssistantPad(true);
+      } catch (err) {
+        setErr("as-pad-err", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.id === "btn-as-first") {
+      await say(as$("as-first-text")?.value, t);
+      return;
+    }
+
+    if (t.id === "btn-as-watch") {
+      const thread = as$("as-w-thread")?.value;
+      const title = String(as$("as-w-title")?.value || "").trim();
+      const minutes = Number(as$("as-w-min")?.value) || null;
+      if (!thread || !title) return setErr("as-w-err", "pick an agent and say what to watch for");
+      t.disabled = true;
+      try {
+        await asPost("/api/assistant/watch", { thread, title, minutes });
+        renderAssistantWatches(true);
+      } catch (err) {
+        setErr("as-w-err", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.id === "btn-as-rule") {
+      const text = String(as$("as-rule-text")?.value || "").trim();
+      if (!text) return;
+      t.disabled = true;
+      try {
+        await asPost("/api/assistant/rule", { text });
+        renderAssistantPad(true);
+      } catch (err) {
+        setErr("as-pad-err", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.id === "btn-as-notes") {
+      const text = String(as$("as-notes")?.value || "");
+      t.disabled = true;
+      try {
+        await asPost("/api/assistant/notes", { text });
+        renderAssistantPad(true);
+      } catch (err) {
+        setErr("as-pad-err", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.id === "btn-as-check") {
+      t.disabled = true;
+      try {
+        await asPost("/api/assistant/check");
+        renderAssistant();
+      } catch (err) {
+        setErr("as-set-err", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.id === "btn-as-wake") {
+      await say("What do you see on the board right now? Keep it to a few lines.", t);
+      return;
+    }
+  });
+
+  // A draft with no confident text starts with Send disabled (there is nothing to send); the moment the reader
+  // writes an answer the button has to come alive, or the alert reads "write one" and then refuses it.
+  as$("assistant")?.addEventListener("input", (e) => {
+    const box = e.target.closest?.("[data-as-draft]");
+    if (!box) return;
+    const btn = document.querySelector(`[data-as-send="${CSS.escape(box.dataset.asDraft)}"]`);
+    if (btn) btn.disabled = !String(box.value || "").trim();
+  });
+
+  // Settings apply the moment they change: a threshold that needs a Save button is a threshold the reader
+  // will believe is live when it is not.
+  as$("assistant")?.addEventListener("change", async (e) => {
+    const el = e.target;
+    if (el.dataset.asSet) {
+      const key = el.dataset.asSet;
+      const value = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
+      try {
+        await asPost("/api/assistant/settings", { [key]: value });
+        renderAssistantSettings(true);
+      } catch (err) {
+        setErr("as-set-err", err.message);
+      }
+      return;
+    }
+    if (el.dataset.asRule) {
+      try {
+        await asPost("/api/assistant/settings", { rules: { [el.dataset.asRule]: el.value } });
+        renderAssistantSettings(true);
+      } catch (err) {
+        setErr("as-set-err", err.message);
+      }
+    }
+  });
+
+  // ---- drag and resize -------------------------------------------------------------------------
+
+  (() => {
+    const el = as$("assistant");
+    const head = as$("as-drag");
+    const grip = as$("as-resize");
+    if (!el || !head || !grip) return;
+
+    const onDown = (mode) => (e) => {
+      if (e.button !== 0) return;
+      if (mode === "move" && e.target.closest("button,input,select,textarea")) return;
+      const r = el.getBoundingClientRect();
+      dragState = { mode, px: e.clientX, py: e.clientY, x: r.left, y: r.top, w: r.width, h: r.height };
+      el.classList.add("is-dragging");
+      e.preventDefault();
+    };
+
+    const onMove = (e) => {
+      if (!dragState) return;
+      const d = dragState;
+      const dx = e.clientX - d.px;
+      const dy = e.clientY - d.py;
+      if (d.mode === "move") {
+        const maxX = window.innerWidth - 80;
+        const maxY = window.innerHeight - 40;
+        const x = Math.max(8 - d.w + 120, Math.min(d.x + dx, maxX));
+        const y = Math.max(8, Math.min(d.y + dy, maxY));
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        el.style.right = "auto";
+        el.style.bottom = "auto";
+        return;
+      }
+      const w = Math.max(340, Math.min(d.w + dx, window.innerWidth - d.x - 8));
+      const h = Math.max(260, Math.min(d.h + dy, window.innerHeight - d.y - 8));
+      el.style.width = `${w}px`;
+      el.style.height = `${h}px`;
+    };
+
+    const onUp = () => {
+      if (!dragState) return;
+      dragState = null;
+      el.classList.remove("is-dragging");
+      const r = currentRect();
+      if (r) {
+        state.assistantRect = r;
+        writeRect(r);
+      }
+    };
+
+    head.addEventListener("pointerdown", onDown("move"));
+    grip.addEventListener("pointerdown", onDown("size"));
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  })();
+
+  // Keep the panel on screen when the window shrinks: a remembered position from a 4K screen must not open
+  // half outside a laptop screen.
+  window.addEventListener("resize", () => {
+    if (!state.assistantOpen) return;
+    placeAssistant();
+    const r = currentRect();
+    if (r) {
+      state.assistantRect = r;
+      writeRect(r);
+    }
+  });
+
+  // ---- keys ------------------------------------------------------------------------------------
+
+  window.addEventListener("keydown", (e) => {
+    if (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === "A" || e.key === "a")) {
+      e.preventDefault();
+      toggleAssistant();
+      return;
+    }
+    if (e.key !== "Escape") return;
+    const el = as$("assistant");
+    if (!el || el.hidden) return;
+    // Esc closes the float only when the caret is in it: a reader dismissing something on the board, or a
+    // model popup, must not lose the panel.
+    if (document.activeElement && el.contains(document.activeElement)) {
+      e.preventDefault();
+      toggleAssistant(false);
+    }
+  });
+
+  // ---- boot ------------------------------------------------------------------------------------
+
+  // app.js's boot fills state from the first snapshot and connects the stream; this restores the frame in the
+  // same breath, so a reload opens on the panel the reader left open.
+  (function restoreFrame() {
+    const el = as$("assistant");
+    if (!el) return;
+    el.hidden = !state.assistantOpen;
+    as$("btn-assistant")?.classList.toggle("is-on", state.assistantOpen);
+    placeAssistant();
+    paintAssistantBadge();
+    if (state.assistantOpen) renderAssistant();
+  })();
+
+  // app.js calls these: applyAssistant from the snapshot, the SSE event and after a reply; the chat renderer
+  // when a job event arrives for a card that does not exist yet (the float may never have been opened).
+  window.applyAssistant = applyAssistant;
+  window.__assistantRenderChat = renderAssistantChat;
+  window.__assistantToggle = toggleAssistant;
+})();

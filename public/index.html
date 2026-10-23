@@ -16,6 +16,7 @@
     <div class="controls">
       <span class="meta" id="stream-state">—</span>
       <span class="meta" id="stream-rate"></span>
+      <button id="btn-assistant" type="button" class="btn-assistant" title="assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (Ctrl+Shift+A)">✧ Assistant<span id="assistant-badge" hidden>0</span></button>
       <button id="btn-hot" type="button" title="NOT-RUNNING — step through the agents that are not running and are waiting on you: each one is opened, its reply box focused and flashed amber. Enter sends and moves on; Alt+Right skips; Alt+Left goes back.">NOT-RUNNING</button>
       <button id="btn-collapse-all" type="button" title="collapse every folder and project section">Collapse all</button>
       <button id="btn-refresh" type="button">Refresh now</button>
@@ -24,6 +25,35 @@
       <button id="btn-settings" type="button" title="settings — fonts, and the gateway's approval window (Ctrl+,)">⚙ Settings</button>
     </div>
   </header>
+
+  <!-- The assistant: a sentry over this board plus one real agent thread, in a floating panel that can be
+       dragged, resized and closed. It is deliberately not modal — the reader keeps reading the board while
+       it is open, and its alerts are a badge and a list, never a window that steals the caret. -->
+  <aside id="assistant" class="assistant" hidden aria-label="assistant">
+    <div class="as-head" id="as-drag" title="drag to move">
+      <span class="as-glyph">✧</span>
+      <strong>Assistant</strong>
+      <span class="as-mode mono" id="as-mode">draft-only</span>
+      <span class="spacer"></span>
+      <span class="chips" id="as-chips"></span>
+      <button id="btn-as-close" type="button" title="close (Esc) — it keeps watching while closed">✕</button>
+    </div>
+    <div class="as-tabs" id="as-tabs">
+      <button type="button" data-as-tab="chat" class="is-on" title="the assistant itself — a normal agent card, with its own thread">Chat</button>
+      <button type="button" data-as-tab="alerts" title="what it noticed and what is waiting on you">Alerts <span class="as-n" id="as-alert-n">0</span></button>
+      <button type="button" data-as-tab="watches" title="what it is keeping an eye on, and until when">Watches <span class="as-n" id="as-watch-n">0</span></button>
+      <button type="button" data-as-tab="pad" title="the server-side scratchpad: notes, standing rules and the journal">Scratchpad</button>
+      <button type="button" data-as-tab="settings" title="how aggressive it is, per rule">Settings</button>
+    </div>
+    <div class="as-body">
+      <section class="as-pane" data-pane="chat" id="as-chat"></section>
+      <section class="as-pane hidden" data-pane="alerts" id="as-alerts"></section>
+      <section class="as-pane hidden" data-pane="watches" id="as-watches"></section>
+      <section class="as-pane hidden" data-pane="pad" id="as-pad"></section>
+      <section class="as-pane hidden" data-pane="settings" id="as-settings"></section>
+    </div>
+    <div class="as-resize" id="as-resize" title="drag to resize"></div>
+  </aside>
 
   <div id="settings" class="settings hidden">
     <div class="settings-head">
@@ -341,5 +371,8 @@
   </footer>
 
   <script src="/app.js"></script>
+  <!-- The assistant's floating panel. Loaded after app.js on purpose: it reads that file's own state and card
+       renderer, so the assistant's card is a real card rather than a second implementation of one. -->
+  <script src="/assistant.js"></script>
 </body>
 </html>

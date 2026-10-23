@@ -360,6 +360,54 @@ with; this panel never touches it. What the panel needs is the api_server bearer
 `HERMES_HOME` is only used to find the gateway's own files — `.env` for that token, and `config.yaml`
 for the approval window — agent processes are not spawned from here any more.
 
+### The assistant
+
+**✧ Assistant** in the header opens a floating panel that can be dragged, resized and closed (position and
+size are remembered; `Ctrl+Shift+A` toggles it, `Esc` closes it when the caret is in it). It is two things:
+
+- **A sentry** that runs in the panel's own process, on `settings.seconds` (default 5 s), over the same job
+  summaries the cards are drawn from. It costs no tokens and it is always awake. Nine rules:
+  `loop` (the same tool with the same input N times, read-only helpers held to a higher bar), `errorloop`
+  (identical failing output), `quiet` (a running turn with no new output — a long build looks exactly like
+  this, so it only journals by default), `approval` (parked longer than the threshold), `question` (a turn
+  ended on a question), `noevidence` (an implementation-sounding turn that touched no file and left no
+  deliverable), `collision` (two live turns in one tree), `context` (near the context ceiling) and `watch`
+  (a watch finished or missed its deadline). Every alert carries the evidence it was built from — counts,
+  the repeated call, the failing line, the command being waited on — because "it looks stuck" is not
+  actionable.
+- **A real agent thread** (`panel-assistant`) rendered inside the panel by the panel's own card renderer:
+  console, reply box, steering, usage, turns. It is not a second kind of chat. Its `input` carries a
+  preamble the card does not show: its standing rules, its scratchpad notes, the watches and a digest of
+  the board. It runs on the gateway default until you pick a smaller model under **Settings → model**.
+
+**Answers are drafts.** A question alert that a standing rule covers arrives with the rule's answer
+prefilled; one with no rule says so and leaves it to you. Nothing is posted into a worker's thread until you
+press **Send reply**. The autonomy ladder (per panel, in the assistant's Settings tab):
+
+| Autonomy | What it may send |
+| --- | --- |
+| `draft` (default) | nothing — every reply waits for a click |
+| `auto-safe` | a reply the assistant itself wrote (a `TO` line); rule-derived drafts still wait |
+| `auto` | any draft it has text for |
+
+Per-rule escalation decides what happens when a rule fires: `log` (journal only) · `alert` (badge + list) ·
+`wake` (also hands the assistant a digest; rate limited to `maxWakesPerHour`, coalesced while a turn runs) ·
+`act` (wake, and let it send when autonomy allows). An approval is never answerable from the panel at any
+setting — that boundary belongs to the gateway and the agent's own card.
+
+The assistant acts by writing plain lines at the end of a reply, and only those lines are read:
+
+    TO <thread>: the reply to that worker
+    WATCH <thread>: what to watch for | 30        (minutes, optional)
+    NOTE: something to remember
+
+**The scratchpad** is one JSON file beside the job store (`assistantFile`, default
+`logs/assistant.json`): `settings`, `notes` (freeform, read every turn), `rules` (standing answers),
+`watches`, persisted `alerts` (so a restart does not shout twice) and a capped `journal`. It is written
+through a temp file + rename, and a second panel instance with its own `jobsFile` keeps its own.
+The panel's **Scratchpad** tab edits the notes and rules; **Watches** adds and removes watches; **Alerts**
+dismisses one, hands it to the assistant, or opens the agent.
+
 ## Config (`config.json`)
 
 | Key | Default | Meaning |
@@ -372,6 +420,8 @@ for the approval window — agent processes are not spawned from here any more.
 | `hermesBin` | auto | explicit path to the hermes executable; used by the `hermes worktree` audits behind `/api/cleanup` (agent runs do not spawn it) |
 | `apiServer` | `{"url":"http://127.0.0.1:8642"}` | `url` of the gateway's api_server, and optionally `key` (else `API_SERVER_KEY` from `$HERMES_HOME/.env`) |
 | `jobMaxRuntimeSeconds` | 3600 | hard cap on a spawned job |
+| `assistantFile` | `logs/assistant.json` | the assistant's scratchpad: settings, notes, standing rules, watches, alerts and journal |
+| `assistant` | `{}` | starting knobs for the assistant: `enabled`, `autonomy` (`draft`/`auto-safe`/`auto`), `model`, `seconds`, `repeatLimit`, `quietSeconds`, `approvalSeconds`, `contextPercent`, `maxWakesPerHour`, `rearmSeconds`, `rules:{id: log\|alert\|wake\|act}`. The panel writes changes back to `assistantFile`, so this is the first-run default |
 | `liveSeconds` | 5 | how often liveness evidence is re-read for every row (no git) |
 | `worktreeSeconds` / `dormantSeconds` | 5 / 30 | active-row / dormant-row git scan cadence |
 | `slowSeconds` | 60 | project meta, discovery, and expensive per-row fields |
@@ -404,6 +454,15 @@ for the approval window — agent processes are not spawned from here any more.
 | POST | `/api/sessions/revive` | `{sessionId, path}` → a job record for a session the board has no card for (the run itself lives in the gateway; a reply continues it). **404** when the store does not attribute that session to that row, **409** when it already has a card |
 | GET/POST | `/api/settings/sessions` | the CLI's session-list length: GET reports `sessions.list_limit`, the store's real size (sessions, messages, by source) and whether the local CLI patch that reads the key is installed; POST `{listLimit}` rewrites that one line in `config.yaml`. **400** outside 1–500 |
 | GET | `/api/models` | the New-agent model menu: `{defaultModel, provider, count, fetchedAt, staleDays, providers:[{id,label,models}]}` — the provider list Hermes itself fetched, grouped, with the configured default first in its group. Falls back to the shipped catalogue when no provider was ever picked |
+| GET | `/api/assistant` | the sentry's whole state: settings, rule definitions, alerts, watches, notes, journal, wake counter and the current board digest |
+| POST | `/api/assistant/say` | `{text}` → one turn on the assistant's own thread (`panel-assistant`), with the scratchpad and board digest attached to the input. **409** while its previous turn is still running |
+| POST | `/api/assistant/settings` | `{autonomy, model, seconds, repeatLimit, quietSeconds, approvalSeconds, contextPercent, maxWakesPerHour, rules:{id: escalation}}` — applied immediately, saved in the scratchpad |
+| POST | `/api/assistant/alert` | `{id, action:"dismiss"\|"ask"}` — `ask` wakes the assistant with that alert's digest |
+| POST | `/api/assistant/answer` | `{thread, text, alertId?}` — post a reply into a worker's thread from the panel (the only route that does it on your behalf) |
+| POST | `/api/assistant/watch` · `/api/assistant/watch/remove` | add `{thread, title, doneWhen?, minutes?}` / remove `{id}` |
+| POST | `/api/assistant/rule` · `/api/assistant/rule/remove` | add `{text}` / remove `{id}` — the assistant's standing answers |
+| POST | `/api/assistant/notes` | `{text}` — the freeform scratchpad, read on every turn |
+| POST | `/api/assistant/check` | run one sentry pass now (used by the page after a change, and by probes instead of waiting for the clock) |
 | POST | `/api/jobs/cancel` | `{id}` → `POST /v1/runs/{id}/stop` (cooperative interrupt) |
 | POST | `/api/jobs/clear` | drop finished jobs from the list |
 | POST | `/api/refresh` `/api/fetch` `/api/reload` | force a fast pass / fetch remotes / re-read config |

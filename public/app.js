@@ -161,6 +161,10 @@ const state = {
   liveOpen: new Set(), // row key -> the liveness-evidence block is unfolded
   maximized: null, // thread id of the conversation pulled out to fill the window
   zoom: 100, // page zoom percent (the browser's own Ctrl +/- is not always delivered)
+  // The assistant's own Hermes thread, and the last state the server sent for it. Its card lives in the
+  // floating panel (assistant.js owns the frame); the board must never render a second copy of it.
+  assistantThread: "panel-assistant",
+  assistant: null,
 };
 
 // Every call to the panel's own server goes through here. A plain fetch has no deadline, so when the
@@ -1658,6 +1662,16 @@ function turnPageOffset(thread, turnCount) {
 // several are listed in the tooltip, in the same order the collect prompt numbered them.
 function originHtml(turn) {
   const o = turn.origin;
+  // A turn the panel assistant caused: it wrote a reply into this thread, or it woke itself about something.
+  // Saying so on the turn head is the difference between "the agent suddenly changed course" and a move the
+  // reader can trace back to the alert that prompted it.
+  if (o && o.kind === "assistant-reply") {
+    const how = o.by === "reader" ? "sent from the assistant panel" : "written by the assistant";
+    return ` <span class="turn-origin mono" title="${esc(how)}${o.autonomy ? ` · autonomy: ${esc(o.autonomy)}` : ""}">\u21b3 ${esc(o.by === "reader" ? "from the assistant panel" : "from the assistant")}</span>`;
+  }
+  if (o && o.kind === "assistant-wake") {
+    return ` <span class="turn-origin mono" title="${esc(o.reason || "the assistant woke itself")}">\u21b3 assistant woke itself</span>`;
+  }
   if (!o || o.kind !== "subagent-delivery") return "";
   const subs = Array.isArray(o.subagents) ? o.subagents : [];
   const one = subs.length === 1 ? subs[0] : null;
@@ -3729,11 +3743,14 @@ async function sendReply(thread, preset = null) {
   rememberReply(thread, typed);
   const btn = document.querySelector(`.btn-reply[data-thread="${CSS.escape(thread)}"]`);
   if (btn) btn.disabled = true;
+  // The assistant's thread is answered through its own route: the server attaches the scratchpad and the
+  // board digest to that turn, and a plain reply here would start a turn with neither.
+  const toAssistant = thread === state.assistantThread;
   try {
-    const r = await apiFetch("/api/agents/reply", {
+    const r = await apiFetch(toAssistant ? "/api/assistant/say" : "/api/agents/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ thread, text, attachments: attachmentsFor(thread) }),
+      body: JSON.stringify(toAssistant ? { text } : { thread, text, attachments: attachmentsFor(thread) }),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
@@ -3749,10 +3766,12 @@ async function sendReply(thread, preset = null) {
     if (live && (preset == null || !live.value.trim() || live.value.trim() === typed)) live.value = "";
     if (box && box !== live && (preset == null || !box.value.trim())) box.value = "";
     updateJob(d.job, { scroll: true });
+    if (d.assistant && typeof applyAssistant === "function") applyAssistant(d.assistant);
     // Sending a reply is you switching to the new turn: fold everything before it, including turns
     // you had opened by hand, so the card shows one full chat — the one you are now in — instead of
-    // that one plus the scrollback you were reading a moment ago.
-    focusNewTurn(thread, d.job.id);
+    // that one plus the scrollback you were reading a moment ago. The assistant's card sits in a fixed
+    // panel, so there is no page position to hold there.
+    if (!toAssistant) focusNewTurn(thread, d.job.id);
     // Sending is one keystroke away from the follow-up: keep the caret in the box instead of dropping
     // it (the click on Send used to move focus to the button, and the rebuild replaces the textarea).
     focusReplyBox(thread);
@@ -4416,8 +4435,11 @@ function renderJobs() {
   // Only unattached agents live here now: anything created in a worktree is listed under that
   // worktree's row, so this panel is the "homeless" workspace (project-root runs, pending spawns,
   // agents whose worktree was removed).
+  // The assistant's thread is a conversation but not a board agent: it is counted on neither side of
+  // "unattached / in worktrees", and it is rendered only inside its floating panel.
+  const boardConvs = conversations().filter((c) => c.thread !== state.assistantThread);
   const convs = homelessConversations();
-  const nested = conversations().length - convs.length;
+  const nested = boardConvs.length - convs.length;
   for (const id of [...state.collapsedJobs]) if (!conversations().some((c) => c.thread === id)) state.collapsedJobs.delete(id);
   // Forgetting a cleared job's explicit turn state keeps the map from growing forever.
   const live = new Set([...state.jobs.keys()]);
@@ -4468,7 +4490,7 @@ function renderJobs() {
   scheduleBoardSweep(anchor);
   const running = convs.filter((c) => c.turns.some((t) => turnLive(t))).length;
   const folded = convs.filter((c) => state.collapsedJobs.has(c.thread)).length;
-  const turns = [...state.jobs.values()].length;
+  const turns = [...state.jobs.values()].filter((j) => (j.thread || j.id) !== state.assistantThread).length;
   $("agents-chips").innerHTML =
     `<span class="chip">${convs.length} unattached</span>` +
     (nested ? `<span class="chip">${nested} in worktrees</span>` : "") +
@@ -4748,7 +4770,15 @@ function renderConversation(thread, { scroll = false } = {}) {
   const conv = conversations().find((c) => c.thread === thread);
   const el = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
   if (!conv) return renderJobs();
-  if (!el) return renderJobs();
+  if (!el) {
+    // The assistant's card lives in the floating panel, not in #jobs. Rebuilding the unattached list would
+    // leave the float empty until some unrelated render, so paint that one card in its own host.
+    if (thread === state.assistantThread && typeof window.__assistantRenderChat === "function") {
+      window.__assistantRenderChat();
+      return;
+    }
+    return renderJobs();
+  }
   const sig = conversationSignature(conv);
   if (el.dataset.sig === sig) {
     paintCardMeta(el, conv);
@@ -5573,6 +5603,9 @@ function isAgentRunning(conv) {
 }
 
 function isHomelessConv(conv) {
+  // The assistant is not a homeless worker even though it has no worktree: its card belongs to the floating
+  // panel, and listing it in the Agents section as well would put two copies of one thread on the page.
+  if (conv?.thread === state.assistantThread) return false;
   const owner = conv.latest.ownerPath || conv.first.ownerPath || null;
   if (!owner) return true;
   const k = normPath(owner).toLowerCase();
@@ -6654,6 +6687,8 @@ function sweepStaleBoard() {
     const conv = conversations().find((c) => c.thread === thread);
     const owner = normPath(conv?.latest?.ownerPath || conv?.first?.ownerPath || "").toLowerCase();
     const rank = (card) => {
+      // The floating assistant panel is the assistant thread's only home: it outranks every board copy.
+      if (card.closest("#as-chat")) return 5;
       const body = card.closest("tr.detail");
       const key = body?.previousElementSibling?.dataset?.key || "";
       const path = String(key).split("::").slice(1).join("::");
@@ -7691,6 +7726,8 @@ function applySnapshot(data) {
     for (const r of data.approvals) if (r && r.id) state.approvals.set(r.id, r);
     renderApprovals();
   }
+  // The assistant's scratchpad, alerts and thread id travel with the snapshot (assistant.js owns the panel).
+  if (data.assistant && typeof applyAssistant === "function") applyAssistant(data.assistant);
   // A snapshot refreshes what it carries; it does not retract rows. Only an explicit "drop"
   // event retires a worktree, so a snapshot arriving mid-scan can never blank the table.
   const incomingProjects = data.projects || [];
@@ -7892,6 +7929,12 @@ function connect() {
     for (const j of JSON.parse(e.data).jobs) state.jobs.set(j.id, j);
     scheduleRenderJobs();
     repaintAgentState();
+  });
+  // The sentry's own state: a new alert, a dismissed one, a watch closing, a settings change from another tab.
+  es.addEventListener("assistant", (e) => {
+    state.lastEventAt = Date.now();
+    const d = JSON.parse(e.data);
+    if (d.assistant && typeof applyAssistant === "function") applyAssistant(d.assistant);
   });
   es.addEventListener("heartbeat", (e) => {
     state.pool = JSON.parse(e.data).pool;
@@ -9488,9 +9531,11 @@ setInterval(() => {
   const bits = [];
   if (state.pool) bits.push(`pool ${state.pool.inFlight}/${state.settings.threads || "?"}`);
   if (state.jobs.size) {
-    const convs = conversations();
+    // The assistant is a conversation but not a board agent: the float says "thinking" for it, and counting
+    // it here read as a phantom agent while the Agents panel said there were none.
+    const convs = conversations().filter((c) => c.thread !== state.assistantThread);
     const running = convs.filter(convLive).length;
-    bits.push(`${convs.length} conversation${convs.length === 1 ? "" : "s"}${running ? ` · ${running} running` : ""}`);
+    if (convs.length) bits.push(`${convs.length} conversation${convs.length === 1 ? "" : "s"}${running ? ` · ${running} running` : ""}`);
   }
   if (state.lastEventAt) {
     const rate = state.events / Math.max(1, (Date.now() - state.eventsAt) / 1000);
