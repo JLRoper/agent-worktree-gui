@@ -839,18 +839,98 @@ function isBookkeeping(l) {
   return Boolean(l && BOOKKEEPING_LINES.has(l.kind));
 }
 
+// A run of tool calls with nothing said in between is one burst. The console draws it as one row per tool with a
+// tally and the input of the last call - what the agent is doing, not every instance of it - while the full lines
+// stay one click away. Text ends the burst: the next tool call starts a fresh tally at that point in the transcript.
+function lineHtml(l, live = "") {
+  return `<div class="jl jl-${esc(l.kind || "raw")}" data-lid="${esc(l.lid ?? "")}">${linkifyText(l.text)}${live}</div>`;
+}
+
+function burstGroups(lines) {
+  const out = [];
+  let burst = null;
+  for (const l of lines) {
+    if (l.kind === "tool" || l.kind === "tool-out") {
+      if (!burst) {
+        burst = { group: true, lines: [] };
+        out.push(burst);
+      }
+      burst.lines.push(l);
+    } else {
+      burst = null;
+      out.push({ group: false, line: l });
+    }
+  }
+  return out;
+}
+
+// One row per tool name: how many times, the input of the most recent call, and whether it is still running.
+function toolBurstRows(lines) {
+  const rows = new Map();
+  for (const l of lines) {
+    const text = String(l.text || "");
+    if (l.kind === "tool") {
+      const m = TOOL_START_RE.exec(text);
+      if (!m) continue;
+      const name = m[1];
+      const sep = text.indexOf(" · ");
+      const g = /^(\p{Extended_Pictographic}[\uFE0F\u200D]*)\s*/u.exec(text);
+      const row = rows.get(name) || { name, glyph: (g && g[1]) || "⚡", count: 0, done: 0, last: "", at: null, duration: null };
+      row.count += 1;
+      row.last = sep >= 0 ? text.slice(sep + 3) : "";
+      row.at = Number(l.at) || Date.now();
+      rows.set(name, row);
+    } else if (l.kind === "tool-out") {
+      const m = TOOL_DONE_RE.exec(text);
+      if (!m) continue;
+      const row = rows.get(m[1]);
+      if (!row) continue;
+      row.done += 1;
+      const d = /·\s*([\d.]+)s/.exec(text);
+      if (d) row.duration = Number(d[1]);
+    }
+  }
+  return [...rows.values()];
+}
+
+function toolGroupHtml(lines, key) {
+  const rows = toolBurstRows(lines);
+  // No recognisable call lines (a result whose start was trimmed away): show the plain lines rather than an empty box.
+  if (!rows.length) return lines.map((l) => lineHtml(l)).join("");
+  const head = rows
+    .map((r) => {
+      const running = r.count > r.done;
+      const state = running
+        ? `<span class="jl-live tgrp-state" data-live-from="${r.at || Date.now()}">${liveSuffix(r.at || Date.now())}</span>`
+        : r.duration != null
+          ? `<span class="tgrp-state">${r.duration.toFixed(2)}s</span>`
+          : "";
+      const last = r.last ? `<span class="tgrp-last mono" title="${esc(r.last)}">${esc(r.last)}</span>` : "";
+      return `<div class="tgrp-row"><span class="tgrp-g">${esc(r.glyph)}</span><span class="tgrp-name">${esc(r.name)}</span><span class="tgrp-n">×${r.count}</span>${last}${state}</div>`;
+    })
+    .join("");
+  return `<div class="tgrp" data-tgrp="${esc(key)}">
+      <div class="tgrp-head">${head}<button type="button" class="tgrp-more" data-tgrp-more="${esc(key)}" title="show every call in this run of tools, with its output">${lines.length} line${lines.length === 1 ? "" : "s"}</button></div>
+      <div class="tgrp-body" hidden>${lines.map((l) => lineHtml(l)).join("")}</div>
+    </div>`;
+}
+
 function turnBody(turn, copy = "") {
   const lines = jobLines(turn.id).filter((l) => !isBookkeeping(l)).slice(-300);
   const running = turn.status === "running" || turn.status === "starting";
   // Which started tool call has no result yet. Parallel calls interleave, so count starts and
   // completions per tool name instead of assuming "the last line is the running one".
   const busy = running ? inflightToolIndex(lines) : -1;
-  const body = lines
-    .map((l, i) => {
-      const live = i === busy ? `<span class="jl-live" data-live-from="${Number(l.at) || Date.now()}">${liveSuffix(Number(l.at) || Date.now())}</span>` : "";
-      return `<div class="jl jl-${esc(l.kind || "raw")}" data-lid="${esc(l.lid ?? "")}">${linkifyText(l.text)}${live}</div>`;
-    })
-    .join("") || '<div class="jl jl-dim">waiting for output…</div>';
+  const body =
+    burstGroups(lines)
+      .map((item, gi) => {
+        if (item.group) return toolGroupHtml(item.lines, `${turn.id}#${gi}`);
+        const l = item.line;
+        const i = lines.indexOf(l);
+        const live = i === busy ? `<span class="jl-live" data-live-from="${Number(l.at) || Date.now()}">${liveSuffix(Number(l.at) || Date.now())}</span>` : "";
+        return lineHtml(l, live);
+      })
+      .join("") || '<div class="jl jl-dim">waiting for output…</div>';
   return thinkHtml(turn, copy) +
     `<pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>` +
     // The subagents this turn spawned, right under the console they ran beside: the delegation is the turn's own
@@ -2675,15 +2755,37 @@ function appendJobLine(evt) {
     // scrolled up to read stays where they are.
     const stick = consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
     if (out.firstElementChild?.classList.contains("jl-dim")) out.innerHTML = "";
-    const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
-    if (line.mode === "set" && existing) {
-      existing.innerHTML = linkifyText(line.text);
+    // A tool call joins the burst at the tail of the console and updates its tally in place; anything said in
+    // between ends that burst, so the next call starts a fresh tally where the transcript has got to.
+    const isTool = line.kind === "tool" || line.kind === "tool-out";
+    const tail = out.lastElementChild;
+    const openGroup = isTool && tail && tail.classList.contains("tgrp") ? tail : null;
+    if (isTool) {
+      const key = openGroup ? openGroup.dataset.tgrp : `${evt.id}#${Date.now().toString(36)}`;
+      const lines = [...((openGroup && openGroup._burst) || []), line];
+      const holder = document.createElement("div");
+      holder.innerHTML = toolGroupHtml(lines, key);
+      const fresh = holder.firstElementChild;
+      if (fresh) {
+        fresh._burst = lines;
+        if (openGroup) {
+          fresh.querySelector(".tgrp-body").hidden = openGroup.querySelector(".tgrp-body").hidden;
+          openGroup.replaceWith(fresh);
+        } else {
+          out.appendChild(fresh);
+        }
+      }
     } else {
-      const div = document.createElement("div");
-      div.className = `jl jl-${line.kind || "raw"}`;
-      if (line.lid) div.dataset.lid = line.lid;
-      div.innerHTML = linkifyText(line.text);
-      out.appendChild(div);
+      const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
+      if (line.mode === "set" && existing) {
+        existing.innerHTML = linkifyText(line.text);
+      } else {
+        const div = document.createElement("div");
+        div.className = `jl jl-${line.kind || "raw"}`;
+        if (line.lid) div.dataset.lid = line.lid;
+        div.innerHTML = linkifyText(line.text);
+        out.appendChild(div);
+      }
     }
     if (stick) out.scrollTop = out.scrollHeight;
   }
@@ -5443,6 +5545,18 @@ document.addEventListener("click", async (e) => {
     return;
   }
   // Steer the turn that is running: the primary action while the agent is busy.
+  const tgrpMore = e.target.closest("[data-tgrp-more]");
+  if (tgrpMore) {
+    e.preventDefault();
+    e.stopPropagation();
+    const grp = tgrpMore.closest(".tgrp");
+    const bodyEl = grp?.querySelector(".tgrp-body");
+    if (bodyEl) {
+      bodyEl.hidden = !bodyEl.hidden;
+      tgrpMore.classList.toggle("is-open", !bodyEl.hidden);
+    }
+    return;
+  }
   const thinkBtn = e.target.closest("[data-think-thread]");
   if (thinkBtn) {
     e.preventDefault();
