@@ -16,11 +16,6 @@
     <div class="controls">
       <span class="meta" id="stream-state">—</span>
       <span class="meta" id="stream-rate"></span>
-      <span class="zoom" title="page zoom — Ctrl+wheel, Ctrl + / Ctrl − , Ctrl 0 resets">
-        <button id="btn-zoom-out" type="button" title="zoom out (Ctrl −)">−</button>
-        <span class="mono" id="zoom-pct">100%</span>
-        <button id="btn-zoom-in" type="button" title="zoom in (Ctrl +)">+</button>
-      </span>
       <button id="btn-hot" type="button" title="Hot Agent — step through the agents that are waiting on you: each one is opened, its reply box focused and flashed amber. Enter sends and moves on; Alt+Right skips; Alt+Left goes back.">Hot Agent</button>
       <button id="btn-collapse-all" type="button" title="collapse every folder and project section">Collapse all</button>
       <button id="btn-refresh" type="button">Refresh now</button>
@@ -36,6 +31,16 @@
       <span class="spacer"></span>
       <button id="btn-settings-close" type="button" title="close (Esc)">✕</button>
     </div>
+    <div class="settings-row" title="page zoom — Ctrl+wheel, Ctrl + / Ctrl − , Ctrl 0 resets">
+      <span>Page zoom</span>
+      <span class="zoom">
+        <button id="btn-zoom-out" type="button" title="zoom out (Ctrl −)">−</button>
+        <span class="mono" id="zoom-pct">100%</span>
+        <button id="btn-zoom-in" type="button" title="zoom in (Ctrl +)">+</button>
+      </span>
+    </div>
+    <p class="settings-note">Ctrl+wheel, Ctrl + / Ctrl −, and Ctrl 0 resets. Saved in this browser.</p>
+    <div class="settings-sep"></div>
     <label class="settings-row">
       <span>Panel font</span>
       <select id="font-select"></select>

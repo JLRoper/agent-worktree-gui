@@ -89,6 +89,10 @@ button, select, input, textarea { font-family: var(--ui); }
 .zoom button { padding: 2px 7px; font-size: 13px; line-height: 1.15; border: none; background: transparent; color: var(--dim); }
 .zoom button:hover { background: var(--panel-2); color: var(--text); }
 .zoom #zoom-pct { min-width: 42px; text-align: center; font-size: 11px; color: var(--dim); }
+/* The zoom control lives in Settings now: keep its own look rather than inheriting .settings-row button. */
+.settings-row .zoom { margin-left: auto; }
+.settings-row .zoom button { border: none; background: transparent; padding: 2px 7px; font-size: 13px; line-height: 1.15; color: var(--dim); }
+.settings-row .zoom button:hover { background: var(--panel-2); color: var(--text); }
 
 button {
   background: var(--panel-2);
