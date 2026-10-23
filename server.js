@@ -680,6 +680,14 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, jobs.setThreadModel(thread, body.model));
     }
 
+    if (route === "/api/threads/context" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const thread = String(body.thread || "").trim();
+      if (!thread) return sendJson(res, 400, { error: "thread is required" });
+      return sendJson(res, 200, jobs.setThreadContext(thread, body.limit));
+    }
+
     if (route === "/api/agents/reply" && req.method === "POST") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);

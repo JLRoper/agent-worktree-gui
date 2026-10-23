@@ -678,8 +678,16 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 .stat-model { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
 .stat-model:hover { color: var(--text); text-decoration: underline dotted; text-underline-offset: 2px; }
 .stat-model.is-static { cursor: default; }
+/* The context reading is a control too: the ceiling it is measured against is the reader's call. */
+.stat-ctx { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.stat-ctx:hover { color: var(--text); text-decoration: underline dotted; text-underline-offset: 2px; }
+.stat-ctx.is-over { color: #e8a33d; }
+.model-ctx-n { color: var(--dimmer); font-size: 10.5px; padding-left: 6px; }
+.model-hint { font-size: 10.5px; padding: 4px 7px 6px; }
+.ctx-pop .model-item.is-current { color: #c8a6ff; }
 /* The picker: a search box and the list, floating under the readout. */
 .model-pop { position: fixed; z-index: 40; width: 360px; max-height: 320px; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 10px 26px #0008; overflow: hidden; }
+.model-search::selection { background: #4b3a6b; color: #ecd9ff; }
 .model-search { border: 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--text); font-size: 12px; padding: 7px 9px; outline: none; }
 .model-list { overflow: auto; padding: 4px; }
 .model-group { font-size: 10px; letter-spacing: .06em; text-transform: uppercase; padding: 6px 6px 3px; }

@@ -1386,23 +1386,41 @@ function modelSegHtml(model, thread) {
 function statsRowHtml(latest, thread) {
   const model = latest.effectiveModel || latest.model || modelsState?.defaultModel || null;
   if (!latest.stats && !model) return "";
-  return `<div class="job-stats-row">${statsLine(latest.stats, model, thread)}</div>`;
+  return `<div class="job-stats-row">${statsLine(latest.stats, model, thread, latest.contextLimit || null)}</div>`;
 }
 
-function statsLine(stats, model = null, thread = "") {
+// Where this session is against the ceiling the reader picked (or the model's own window when there is none).
+// Double-click opens the picker, exactly like the model beside it.
+function contextSegHtml(stats, thread, contextLimit) {
+  const used = Number.isFinite(stats.context_used) ? fmtTokens(stats.context_used) : null;
+  const window = Number.isFinite(stats.context_max) && stats.context_max > 0 ? stats.context_max : null;
+  const ceiling = contextLimit && window ? Math.min(contextLimit, window) : contextLimit || window;
+  if (!ceiling) return "";
+  const over = Number.isFinite(stats.context_used) && stats.context_used > ceiling;
+  const shown = used ? `${used}/${fmtTokens(ceiling)}` : `ctx ${fmtTokens(ceiling)}`;
+  const why = contextLimit
+    ? `this card measures its context against ${fmtTokens(contextLimit)}${window ? ` (the model's own window is ${fmtTokens(window)})` : ""} — double-click to change it`
+    : `the model's context window${window ? ` (${fmtTokens(window)})` : ""} — double-click to set a ceiling for this session`;
+  return `<button type="button" class="stat stat-ctx${over ? " is-over" : ""}" data-context-pick="${esc(thread)}" title="${esc(why)}">${esc(shown)}</button>`;
+}
+
+function statsLine(stats, model = null, thread = "", contextLimit = null) {
   // The model is a control even when there are no numbers to put beside it: it is the one place a session's model can
   // be changed, and a card whose run left no usage still needs to say (and offer) it.
   if (!stats || typeof stats !== "object") {
-    return model
-      ? `<span class="job-stats mono">${modelSegHtml(model, thread)}</span>`
-      : "";
+    const bits = [model ? modelSegHtml(model, thread) : "", contextLimit ? contextSegHtml({}, thread, contextLimit) : ""].filter(Boolean);
+    return bits.length ? `<span class="job-stats mono">${bits.join(" · ")}</span>` : "";
   }
   const segs = [];
-  const pct = Number.isFinite(stats.context_percent) ? stats.context_percent : null;
+  const window = Number.isFinite(stats.context_max) && stats.context_max > 0 ? stats.context_max : null;
+  const ceiling = contextLimit && window ? Math.min(contextLimit, window) : contextLimit || window;
+  const pct =
+    ceiling && Number.isFinite(stats.context_used) ? (stats.context_used / ceiling) * 100 : Number.isFinite(stats.context_percent) ? stats.context_percent : null;
   const mark = stats.context_estimated ? "~" : "";
   const known = Number.isFinite(stats.context_used) && Number.isFinite(stats.context_max) && stats.context_max > 0;
+  // Kept out of `segs`: that list is escaped when it is joined, and this one is markup (a button).
+  const ctxSeg = known ? contextSegHtml(stats, thread, contextLimit) : "";
   if (known) {
-    segs.push(`${mark}${fmtTokens(stats.context_used)}/${fmtTokens(stats.context_max)}`);
     if (pct !== null) segs.push(`${contextBar(pct)} ${mark}${Math.round(pct)}%`);
   } else if (pct !== null) {
     segs.push(`${mark}${Math.round(pct)}%`);
@@ -1425,7 +1443,7 @@ function statsLine(stats, model = null, thread = "") {
   // dropped for width (the full id stays in the tooltip).
   const modelSeg = model ? modelSegHtml(model, thread) : "";
   const title = "this session's usage: context occupancy, prompt-cache hit rate, and \u21ca = how many times the transcript was compacted into a summary; latency and t/s are estimated from the turn's wall clock (~)";
-  const body = [modelSeg, segs.map((s) => `<span class="stat">${esc(s)}</span>`).join('<span class="stat-sep">\u2502</span>')]
+  const body = [modelSeg, ctxSeg, segs.map((s) => `<span class="stat">${esc(s)}</span>`).join('<span class="stat-sep">\u2502</span>')]
     .filter(Boolean)
     .join('<span class="stat-sep">\u2502</span>');
   // A span, not a div: the readout belongs on the footer line with the outcome and the token count,
@@ -1481,7 +1499,9 @@ function openModelPop(thread, anchor) {
       .map((c, i) => {
         const head = c.group && c.group !== group ? `<div class="model-group dimmer">${esc(c.group)}</div>` : "";
         group = c.group || group;
-        return `${head}<button type="button" class="model-item${i === 0 ? " is-sel" : ""}${c.id === current ? " is-current" : ""}" data-model="${esc(c.id)}" title="${esc(c.id || "gateway default")}">${esc(c.label)}${c.id === current ? " ✓" : ""}</button>`;
+        const win = c.id ? modelsState?.contexts?.[c.id] : null;
+        const winText = win ? ` <span class="model-ctx-n">${esc(fmtTokens(win))}</span>` : "";
+        return `${head}<button type="button" class="model-item${i === 0 ? " is-sel" : ""}${c.id === current ? " is-current" : ""}" data-model="${esc(c.id)}" title="${esc(c.id || "gateway default")}${win ? ` — context window ${fmtTokens(win)}` : ""}">${esc(c.label)}${winText}${c.id === current ? " ✓" : ""}</button>`;
       })
       .join("");
   };
@@ -1516,6 +1536,103 @@ function openModelPop(thread, anchor) {
     if (b) void pickModel(thread, b.dataset.model);
   });
   search.focus();
+}
+
+// ---- the context ceiling ----------------------------------------------------------------------
+// Same shape as the model picker: double-click, type or pick, Enter puts the readout back. The numbers are real
+// sizes (the model's window is known from the provider catalogue), the ceiling is what this card measures against.
+function parseContextSize(text) {
+  const s = String(text ?? "").trim().toLowerCase().replace(/[,_\s]/g, "");
+  if (!s || ["full", "default", "auto", "model", "window", "reset"].includes(s)) return 1;
+  const m = s.match(/^(\d+(?:\.\d+)?)([km])?$/);
+  if (!m) return NaN;
+  const n = Number(m[1]) * (m[2] === "k" ? 1000 : m[2] === "m" ? 1e6 : 1);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : NaN;
+}
+
+function contextTiers(window) {
+  const w = Number(window) > 0 ? Number(window) : null;
+  const sizes = new Set();
+  if (w) for (const f of [1, 0.75, 0.5, 0.25]) sizes.add(Math.round(w * f));
+  for (const n of [1000000, 400000, 200000, 128000]) if (!w || n <= w) sizes.add(n);
+  const list = [...sizes].filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => b - a);
+  return list.map((n) => ({
+    value: n,
+    label: `${fmtTokens(n)}${w && n === w ? " · the model's window" : w ? ` · ${Math.round((n / w) * 100)}% of the window` : ""}`,
+    full: Boolean(w && n === w),
+  }));
+}
+
+function openContextPop(thread, anchor) {
+  closeModelPop();
+  const latest = [...state.jobs.values()].find((j) => (j.thread || j.id) === thread) || {};
+  const model = latest.effectiveModel || latest.model || modelsState?.defaultModel || null;
+  const win = Number(latest.stats?.context_max) > 0 ? Number(latest.stats.context_max) : modelsState?.contexts?.[model] || null;
+  const current = latest.contextLimit || win || null;
+  const pop = document.createElement("div");
+  pop.className = "model-pop ctx-pop";
+  pop.innerHTML = `<input class="model-search mono" data-1p-ignore autocomplete="off" spellcheck="false"
+      placeholder="ceiling: 200k, 1m, blank = the model's window" />
+    <div class="model-list mono"></div>`;
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  pop.style.left = `${Math.max(8, Math.min(window.innerWidth - 360, r.left))}px`;
+  pop.style.top = `${Math.max(8, Math.min(window.innerHeight - 300, r.bottom + 4))}px`;
+  modelPop = pop;
+  const input = pop.querySelector(".model-search");
+  const list = pop.querySelector(".model-list");
+  list.innerHTML =
+    `<div class="model-hint dimmer">${win ? `this model's window: ${esc(fmtTokens(win))}` : "the model's window is unknown for this id"}</div>` +
+    contextTiers(win)
+      .map(
+        (t) =>
+          `<button type="button" class="model-item${t.value === current ? " is-current" : ""}" data-context="${t.value}" title="measure this session against ${fmtTokens(t.value)}">${esc(t.label)}${t.value === current ? " ✓" : ""}</button>`,
+      )
+      .join("") +
+    `<button type="button" class="model-item" data-context="0" title="go back to the model's own window">blank · no ceiling</button>`;
+  input.value = current ? fmtTokens(current) : "";
+  input.select();
+
+  const apply = (rawText) => {
+    const n = parseContextSize(rawText);
+    if (!Number.isFinite(n)) return; // unreadable: leave the box alone rather than guess a size
+    void pickContext(thread, n === 1 ? 0 : n);
+  };
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      closeModelPop();
+    } else if (ev.key === "Enter") {
+      ev.preventDefault();
+      apply(input.value);
+    }
+  });
+  list.addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-context]");
+    if (b) void pickContext(thread, Number(b.dataset.context));
+  });
+  input.focus();
+}
+
+async function pickContext(thread, limit) {
+  closeModelPop();
+  try {
+    const r = await apiFetch("/api/threads/context", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thread, limit }),
+    });
+    if (!r.ok) return;
+    const d = await r.json();
+    for (const j of state.jobs.values()) {
+      if ((j.thread || j.id) !== thread) continue;
+      j.contextLimit = d.limit || null;
+    }
+    renderConversation(thread);
+    showBanner(d.limit ? `this session measures its context against ${fmtTokens(d.limit)}` : "this session is back on the model's own context window");
+  } catch {
+    /* a pick that cannot be stored leaves the readout as it was */
+  }
 }
 
 async function pickModel(thread, model) {
@@ -6120,6 +6237,13 @@ document.addEventListener("click", async (e) => {
 // Reply affordances are re-created on every render, so they are handled at document level.
 // Double-click, on its own listener: a single click on the readout must stay a single click.
 document.addEventListener("dblclick", (e) => {
+  const ctx = e.target.closest?.("[data-context-pick]");
+  if (ctx) {
+    e.preventDefault();
+    e.stopPropagation();
+    void openContextPop(ctx.dataset.contextPick, ctx);
+    return;
+  }
   const btn = e.target.closest?.("[data-model-pick]");
   if (!btn) return;
   e.preventDefault();
@@ -6131,7 +6255,7 @@ document.addEventListener("dblclick", (e) => {
 document.addEventListener(
   "mousedown",
   (e) => {
-    if (!modelPop || modelPop.contains(e.target) || e.target.closest?.("[data-model-pick]")) return;
+    if (!modelPop || modelPop.contains(e.target) || e.target.closest?.("[data-model-pick],[data-context-pick]")) return;
     closeModelPop();
   },
   true,
