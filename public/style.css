@@ -120,7 +120,7 @@ button, select, input, textarea { font-family: var(--ui); }
   65% { border-color: #ffb545; box-shadow: 0 0 0 2px rgba(255, 181, 69, .28), 0 0 12px rgba(255, 181, 69, .09); background: rgba(255, 181, 69, .03); }
   100% { border-color: var(--line); box-shadow: none; background: var(--card); }
 }
-.job.hot-flash { animation: hotflash 1.25s ease-out; }
+.job.hot-flash { animation: hotflash var(--flash-ring, 1700ms) ease-out; }
 .zoom button { padding: 2px 7px; font-size: 13px; line-height: 1.15; border: none; background: transparent; color: var(--dim); }
 .zoom button:hover { background: var(--panel-2); color: var(--text); }
 .zoom #zoom-pct { min-width: 42px; text-align: center; font-size: 11px; color: var(--dim); }
@@ -211,7 +211,7 @@ main { padding: 14px 16px 40px; }
    title row, the column header and the legend. The verdict badges, the chips and the text inside the
    rows keep their own colours - the theme says WHICH project you are looking at, never what a row
    means. Saturation and lightness are fixed here so any hue reads on the dark palette. */
-section.project.has-hue { border-color: hsl(var(--proj-hue) 40% 34%); background: hsl(var(--proj-hue) 20% 10%); }
+section.project.has-hue { border-color: hsl(var(--proj-hue) 40% 34%); background: hsl(var(--proj-hue) 20% 10%); --proj-rest-bg: hsl(var(--proj-hue) 20% 10%); }
 section.project.has-hue > .project-head[data-toggle-project] {
   background: linear-gradient(180deg, hsl(var(--proj-hue) 34% 17%), hsl(var(--proj-hue) 30% 13%));
   border-bottom-color: hsl(var(--proj-hue) 36% 27%);
@@ -228,7 +228,7 @@ section.project.has-hue > table > thead > tr > th {
   border-bottom-color: hsl(var(--proj-hue) 30% 24%);
   color: hsl(var(--proj-hue) 20% 70%);
 }
-section.project.has-hue > table > tbody > tr.row:hover { background: hsl(var(--proj-hue) 28% 14%); }
+section.project.has-hue > table > tbody > tr.row:hover { background: hsl(var(--proj-hue) 28% 14%); --row-rest-bg: hsl(var(--proj-hue) 28% 14%); }
 section.project.has-hue > .legend { background: hsl(var(--proj-hue) 22% 11%); border-top-color: hsl(var(--proj-hue) 30% 22%); }
 
 .project-head {
@@ -1314,22 +1314,26 @@ tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: 
   font-size: 10px; color: #66717f; letter-spacing: .07em; border-bottom-color: #1b222c;
 }
 tbody tr.row { cursor: pointer; }
-tbody tr.row:hover { background: var(--hover); }
-tbody tr.row.expanded { background: var(--hover); }
+/* A flash fades back to whatever the row's own background is, not to a hardcoded endpoint: an open row and a
+   hovered row are not transparent, and a themed project's hover is its own tint. Without this the animation ended
+   on the wrong colour and the row snapped back on the last frame. */
+tbody tr.row { --row-rest-bg: transparent; }
+tbody tr.row:hover { background: var(--hover); --row-rest-bg: var(--hover); }
+tbody tr.row.expanded { background: var(--hover); --row-rest-bg: var(--hover); }
 
 /* How long a flash lasts is a setting (Settings > Board > Flash time): the three durations below are read from
    --flash-row / --flash-project / --flash-ring, which the page sets from that number. */
 @keyframes flashrow {
-  from { background: #1f3a2a; }
-  to { background: transparent; }
+  from { background-color: #1f3a2a; }
+  to { background-color: var(--row-rest-bg, transparent); }
 }
 tbody tr.row.flash { animation: flashrow var(--flash-row, 900ms) ease-out; }
 /* The same pulse for a refresh that found nothing: the row is known current, but an agent did not move
    in it. Deliberately a lift in the panel's own grey, not a tint — this one should be noticed only if
    you are watching for it. */
 @keyframes flashrow-idle {
-  from { background: #232833; }
-  to { background: transparent; }
+  from { background-color: #232833; }
+  to { background-color: var(--row-rest-bg, transparent); }
 }
 tbody tr.row.flash-idle { animation: flashrow-idle var(--flash-row, 900ms) ease-out; }
 /* Settings > Grey flash off: the row is still re-read, it just says nothing about it. The green flash above is
@@ -1339,12 +1343,15 @@ body.no-grey-flash tbody tr.row.flash-idle { animation: none; }
    row as well: a tinted section alone was too quiet to notice. The head flashes solid green and the
    section carries the ring. */
 @keyframes flashsection {
-  from { background: #1d3f2b; box-shadow: 0 0 0 2px #3d8f5c inset, 0 0 14px rgba(61, 143, 92, .45); }
-  to { background: var(--panel); box-shadow: 0 0 0 2px transparent inset, 0 0 0 rgba(61, 143, 92, 0); }
+  from { background-color: #1d3f2b; box-shadow: 0 0 0 2px #3d8f5c inset, 0 0 14px rgba(61, 143, 92, .45); }
+  to { background-color: var(--proj-rest-bg, var(--panel)); box-shadow: 0 0 0 2px transparent inset, 0 0 0 rgba(61, 143, 92, 0); }
 }
+/* The title row flashes as a wash over whatever it is already painted with. A themed project's head is an opaque
+   linear-gradient, and animating background-color behind an opaque background-image is invisible - which is why a
+   themed project looked like it never flashed. An inset shadow paints over the gradient and fades like the rest. */
 @keyframes flashhead {
-  from { background: #245038; }
-  to { background: transparent; }
+  from { box-shadow: inset 0 0 0 999px rgba(46, 96, 66, .92); }
+  to { box-shadow: inset 0 0 0 999px rgba(46, 96, 66, 0); }
 }
 section.project.flash { animation: flashsection var(--flash-project, 1100ms) ease-out; }
 section.project.flash .project-head { animation: flashhead var(--flash-project, 1100ms) ease-out; }
