@@ -269,6 +269,21 @@ const settingsOut = () => ({
 
 const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 
+// Which project a directory belongs to: the innermost project root that contains it (a project can be nested inside
+// another checkout), matched on a path boundary so `…/app-other` is not inside `…/app`.
+const projectForPath = (dir) => {
+  const key = normPathKey(dir);
+  if (!key) return null;
+  let best = null;
+  for (const proj of registry.projects) {
+    const root = normPathKey(proj.path);
+    if (!root) continue;
+    if (key !== root && !key.startsWith(`${root}/`)) continue;
+    if (!best || root.length > normPathKey(best.path).length) best = proj;
+  }
+  return best;
+};
+
 // Rows are written by the scheduler, so their copy of the panel-agent state is as old as that
 // row's last scan (45-90s on a big fleet). Overlay it at snapshot time: a turn starting or
 // finishing is known here immediately, and the row must not keep claiming "done" meanwhile.
@@ -541,9 +556,16 @@ const server = createServer(async (req, res) => {
     if (route === "/api/agents" && req.method === "POST") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
+      const pickerTarget = body.project ? registry.projects.find((p) => p.name === body.project) : null;
+      if (body.project && !pickerTarget) return sendJson(res, 400, { error: `unknown project: ${body.project}` });
+      // The directory is the ground truth: a cwd inside a known project overrides a stale project picker, so a spawn
+      // aimed at one worktree can never be checked, filed or cut against another project.
+      const cwdProject = projectForPath(body.cwd);
+      if (cwdProject && body.project !== cwdProject.name) body.project = cwdProject.name;
+      const target = cwdProject || pickerTarget;
       if (body.dryRun) {
         const req0 = previewRequest(body);
-        return sendJson(res, 200, { dryRun: true, transport: jobs.transportInfo(), request: req0, cwd: body.cwd || config.defaultCwd, command: `POST ${jobs.api.url}${req0.path}\n${JSON.stringify(req0.body, null, 1)}` });
+        return sendJson(res, 200, { dryRun: true, project: body.project || null, transport: jobs.transportInfo(), request: req0, cwd: body.cwd || target?.path || config.defaultCwd, command: `POST ${jobs.api.url}${req0.path}\n${JSON.stringify(req0.body, null, 1)}` });
       }
       // Refuse before promising a job: a stopped gateway or a missing key is the answer to "why did
       // nothing happen", not a card that says "starting" forever.
@@ -551,8 +573,6 @@ const server = createServer(async (req, res) => {
       if (!transport.reachable || !transport.capabilities?.runs) {
         return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}` });
       }
-      const target = body.project ? registry.projects.find((p) => p.name === body.project) : null;
-      if (body.project && !target) return sendJson(res, 400, { error: `unknown project: ${body.project}` });
       const cwd = body.cwd || target?.path || config.defaultCwd;
       // "existing": run in a directory that is already there (a worktree you picked), so no
       // worktree is created and the agent's edits land directly in that tree.

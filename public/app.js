@@ -3187,9 +3187,15 @@ function focusPromptWithoutScrolling() {
   }
 }
 
-function focusSpawnForWorktree(path, name) {
+function focusSpawnForWorktree(path, name, projectName = "") {
   revealCard("newagent");
   $("job-cwd").value = path;
+  // The picker has to follow the row, not stay wherever it was: a run created with a stale project is filed, blocked
+  // and re-used against that project, and the next change to the picker drags the location field with it.
+  if (projectName) {
+    const sel = $("job-project");
+    if ([...sel.options].some((o) => o.value === projectName)) sel.value = projectName;
+  }
   // Aiming at a worktree that exists means "run here": no new workspace.
   $("job-create").checked = false;
   state.spawnTarget = name || null;
@@ -3753,7 +3759,7 @@ function rowHtml(row) {
   const projectRoot = state.projects.get(row.project)?.path;
   const isProjectRoot = projectRoot && normPath(projectRoot).toLowerCase() === normPath(row.path).toLowerCase();
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
-    <td class="name"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}"
+    <td class="name"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
       title="start a Hermes agent in this worktree — it runs here (no new worktree)">\u25b6</button> <span>${esc(row.name)}</span> ${agentBadgeHtml(row)}</td>
     <td class="mono branch">${esc(row.branch || "—")}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
@@ -5387,7 +5393,7 @@ document.addEventListener("click", async (e) => {
       );
       if (!ok) return;
     }
-    focusSpawnForWorktree(path, name);
+    focusSpawnForWorktree(path, name, rowAgent.dataset.agentProject || "");
     return;
   }
   // The row's agent badge: open the row so the agents block is visible.
