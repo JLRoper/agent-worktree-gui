@@ -5229,6 +5229,19 @@ function renderProjectRows(name) {
   // Open rows carry agent transcripts; a rebuild must not throw the reader to the top of one.
   const prevScrolls = captureScrolls(tbody);
   const prevRowKeys = [...tbody.children].filter((el) => el.classList.contains("row")).map((el) => el.dataset.key);
+  // The cards and the typing inside each open row live in its detail element, and this path replaces the whole
+  // tbody. Capture them by row key first: the detail is rebuilt from detailHtml() below, whose agent slots are
+  // empty placeholders, so without this the agents block came back as nothing and stayed empty until the next
+  // scan's placeRow happened to fill it — which is what made the agents vanish for ~5s after sending a reply.
+  const prevCards = new Map();
+  const prevTyping = new Map();
+  for (const [k, dEl] of state.detailEls) {
+    if (state.rows.get(k)?.project !== name) continue;
+    const cards = new Map();
+    for (const card of dEl.querySelectorAll(".job[data-thread]")) cards.set(card.dataset.thread, card);
+    prevCards.set(k, cards);
+    prevTyping.set(k, captureTyping(dEl));
+  }
   tbody.innerHTML = "";
   // A collapsed project shows nothing, so building its rows would be pure waste — with 94
   // projects that was ~110 invisible rows and most of the render cost of a snapshot.
@@ -5251,7 +5264,16 @@ function renderProjectRows(name) {
       const dEl = h2.firstElementChild;
       tr.after(dEl);
       state.detailEls.set(key, dEl);
+      // Put the cards back into the slots the rebuilt detail made for them, and the reader's draft and caret
+      // back into the reply box.
+      fillAgentSlots(dEl, prevCards.get(key) || new Map());
+      restoreTyping(dEl, prevTyping.get(key) || null);
     }
+  }
+  // A row that no longer exists must not leave a dead detail element remembered.
+  for (const k of [...state.detailEls.keys()]) {
+    if (state.rows.get(k)?.project !== name) state.detailEls.delete(k);
+    else if (!state.expanded.has(k)) state.detailEls.delete(k);
   }
   restoreScrolls(tbody, prevScrolls);
   applyStoredScrolls(tbody);
