@@ -989,6 +989,9 @@ tbody tr.row.flash { animation: flashrow .9s ease-out; }
   to { background: transparent; }
 }
 tbody tr.row.flash-idle { animation: flashrow-idle .9s ease-out; }
+/* Settings > Grey flash off: the row is still re-read, it just says nothing about it. The green flash above is
+   deliberately not gated - that one means a sign of life was found. */
+body.no-grey-flash tbody tr.row.flash-idle { animation: none; }
 /* A section's own background is mostly covered by its children, so the flash has to reach the title
    row as well: a tinted section alone was too quiet to notice. The head flashes solid green and the
    section carries the ring. */

@@ -5427,6 +5427,28 @@ function applyTermStyle({ save = false, size = null, weight = null } = {}) {
   }
 }
 
+// The grey flash says "re-read, nothing moved". It is useful when watching a row settle and noise when the board
+// is busy, so it can be switched off - while the green flash, which means something actually happened, cannot.
+// A body class is enough: the row still gets its class for 950ms, the animation just does not run.
+function greyFlashOn() {
+  try {
+    return localStorage.getItem("wtgui.greyFlash") !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function applyGreyFlash(on) {
+  document.body.classList.toggle("no-grey-flash", !on);
+  const box = $("grey-flash");
+  if (box && box.checked !== on) box.checked = on;
+  try {
+    localStorage.setItem("wtgui.greyFlash", on ? "1" : "0");
+  } catch {
+    /* private mode: the choice just will not persist */
+  }
+}
+
 function toggleSettings(open = null) {
   const panel = $("settings");
   if (!panel) return;
@@ -5697,6 +5719,7 @@ $("title-settings")?.addEventListener("click", (e) => {
 $("font-select")?.addEventListener("change", (e) => applyFont("ui", e.target.value));
 $("term-select")?.addEventListener("change", (e) => applyFont("term", e.target.value));
 $("term-size-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, size: e.target.value }));
+$("grey-flash")?.addEventListener("change", (e) => applyGreyFlash(Boolean(e.target.checked)));
 $("term-weight-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, weight: e.target.value }));
 
 // The approval window. A preset only fills the box and lights Save: one click here rewrites the
@@ -5738,6 +5761,7 @@ document.addEventListener("click", (e) => {
 });
 
 initFonts();
+applyGreyFlash(greyFlashOn());
 // The model menu is filled once at start-up from the gateway's own provider list; a failure leaves
 // the "(gateway default)" entry, which is what a spawn sends anyway.
 void loadModels();
