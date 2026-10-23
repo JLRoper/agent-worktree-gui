@@ -101,6 +101,10 @@ const state = {
   // fetched on demand when the reader opens a call. Key "<turnId>|<tool>" -> array of { text }.
   toolStore: new Map(),
   toolStorePending: new Set(),
+  // Which tool bursts the reader has opened, and which tool they filtered one to: "<turnId>|<first line>" ->
+  // { open, filter }. Kept here rather than in the DOM because every snapshot rebuild replaces the console's
+  // markup - the block was opening and then snapping shut the next time a line arrived.
+  toolGroupOpen: new Map(),
   // The reader's attention, tracked beside the geometry: the card under a moving pointer, and the card last
   // clicked / focused / typed in. Either one, while it is on screen and recent, wins over the reading line.
   hoverThread: null,
@@ -1066,18 +1070,58 @@ async function fetchToolStore(turnId, tool, grp = null) {
 function rebuildToolGroup(grp, { filter = "", open = false } = {}) {
   const key = grp.dataset.tgrp || "";
   const lines = groupLines(grp);
+  const gkey = grp.dataset.gstate || toolGroupStateKey(key, lines);
+  // The click is the new truth, so record it before rendering: toolGroupHtml prefers the remembered state, and
+  // otherwise it would faithfully put back the state the reader just changed.
+  if (!open && !filter) state.toolGroupOpen.delete(gkey);
+  else state.toolGroupOpen.set(gkey, { open, filter });
   const holder = document.createElement("div");
   holder.innerHTML = toolGroupHtml(lines, key, filter, open);
   const fresh = holder.firstElementChild;
   if (!fresh) return;
   fresh._burst = lines;
   grp.replaceWith(fresh);
+  rememberToolGroup(fresh);
+}
+
+// A burst's identity, for remembering whether the reader opened it. The group's DOM key changes when the console
+// is rebuilt from the buffer (it is the group's index) and when the stream starts a new burst (it is a timestamp),
+// so the state is keyed by the turn plus the first line the burst holds - which is the same line in all three.
+function toolGroupStateKey(key, lines) {
+  const first = Array.isArray(lines) && lines.length ? lines[0] : null;
+  const anchor = first ? String(first.lid || first.at || first.text || "").slice(0, 40) : "";
+  return `${String(key || "").split("#")[0]}|${anchor}`;
+}
+
+// Record the reader's choice from a rendered group, so the next rebuild can put it back. An open block with no
+// filter is worth keeping; a closed, unfiltered one is the default and leaves nothing to remember.
+function rememberToolGroup(grp) {
+  if (!grp || !grp.dataset) return;
+  const gkey = grp.dataset.gstate;
+  if (!gkey) return;
+  const body = grp.querySelector(".tgrp-body");
+  const filter = grp.dataset.filter || "";
+  const open = Boolean(body && !body.hidden);
+  if (!open && !filter) {
+    state.toolGroupOpen.delete(gkey);
+    return;
+  }
+  state.toolGroupOpen.set(gkey, { open, filter });
+  // A long-lived tab would otherwise accumulate one entry per burst it ever opened.
+  while (state.toolGroupOpen.size > 500) state.toolGroupOpen.delete(state.toolGroupOpen.keys().next().value);
 }
 
 function toolGroupHtml(lines, key, filter = "", openBody = false) {
   const rows = toolBurstRows(lines);
   // No recognisable call lines (a result whose start was trimmed away): show the plain lines rather than an empty box.
   if (!rows.length) return lines.map((l) => lineHtml(l)).join("");
+  // The reader's own choice wins over the caller's default: a rebuild is not the reader closing the block.
+  const gkey = toolGroupStateKey(key, lines);
+  const saved = state.toolGroupOpen.get(gkey);
+  if (saved) {
+    filter = saved.filter || filter;
+    openBody = saved.open;
+  }
   const head = rows
     .map((r) => {
       const running = r.count > r.done;
@@ -1108,7 +1152,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false) {
       ? segments.map((seg, i) => seg.lines.map((l) => lineHtml(l)).join("") + storeHtml(seg, i)).join("")
       : `<div class="jl jl-dim">this run recorded nothing for ${esc(filter)}</div>`;
   const label = filter ? `all ${lines.length}` : `${lines.length} line${lines.length === 1 ? "" : "s"}`;
-  return `<div class="tgrp" data-tgrp="${esc(key)}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
+  return `<div class="tgrp" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
       <div class="tgrp-head">${head}<button type="button" class="tgrp-more${filter ? " is-open" : ""}" data-tgrp-more="${esc(key)}" title="${filter ? "show every tool in this run, not just this one" : "show every call in this run of tools, with its output"}">${label}</button></div>
       <div class="tgrp-body"${openBody || filter ? "" : " hidden"}>${body}</div>
     </div>`;
@@ -4115,7 +4159,9 @@ function appendJobLine(evt) {
     const openGroup = isTool && tail && tail.classList.contains("tgrp") ? tail : null;
     if (isTool) {
       const key = openGroup ? openGroup.dataset.tgrp : `${evt.id}#${Date.now().toString(36)}`;
-      const lines = [...((openGroup && openGroup._burst) || []), line];
+      // A group that came from a full render has no `_burst`; read its lines back from the DOM so the new call joins
+      // the burst the reader is looking at instead of starting a group that shows this line alone.
+      const lines = [...(openGroup ? openGroup._burst || groupLines(openGroup) : []), line];
       // A tool chosen by the reader keeps its filter and open body while the burst grows under it.
       const filter = openGroup ? openGroup.dataset.filter || "" : "";
       const bodyEl = openGroup ? openGroup.querySelector(".tgrp-body") : null;
@@ -4126,6 +4172,7 @@ function appendJobLine(evt) {
         fresh._burst = lines;
         if (openGroup) openGroup.replaceWith(fresh);
         else out.appendChild(fresh);
+        rememberToolGroup(fresh);
       }
     } else {
       const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
