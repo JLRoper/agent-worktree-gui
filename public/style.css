@@ -467,7 +467,11 @@ button.chip:active { transform: translateY(1px); }
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 8px 10px;
-  font: var(--term-weight) var(--term-size)/1.5 var(--term);
+  /* Size comes from the card's `--out-size` when Ctrl+wheel has zoomed this console, otherwise from Settings. */
+  font-weight: var(--term-weight);
+  font-family: var(--term);
+  line-height: 1.5;
+  font-size: var(--out-size, var(--term-size));
   white-space: pre-wrap;
   word-break: break-word;
 }

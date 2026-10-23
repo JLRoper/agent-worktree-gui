@@ -10,6 +10,9 @@ const SPAWN_HISTORY_KEY = "wm.spawnHistory";
 const SPAWN_HISTORY_MAX = 50;
 
 const state = {
+  // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
+  // "Console size" stays the baseline for every card. Kept in memory so a repaint does not undo it.
+  consoleZoom: new Map(),
   projects: new Map(),
   // Handle for the board-reorder clock, which the settings row can re-arm at another cadence.
   reorderTimer: null,
@@ -1331,7 +1334,8 @@ function conversationHtml(conv) {
       `</span>`
     : "";
   const jumped = state.jumpThread && state.jumpThread.thread === thread && Date.now() < state.jumpThread.until ? " jump" : "";
-  return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}${jumped}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}">
+  const zoom = state.consoleZoom.get(thread);
+  return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}${jumped}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}"${zoom ? ` style="--out-size:${zoom}px"` : ""}>
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
       <span class="agent-glyph" title="a Hermes agent session — ⧉ marks an agent row">\u29c9</span>
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
@@ -4200,6 +4204,34 @@ $("btn-fold-jobs").addEventListener("click", () => {
   foldAll(!allFolded);
 });
 $("job-prompt").addEventListener("input", () => updateSpawnNote());
+// Ctrl+wheel over a console resizes its text, the way a terminal does, instead of zooming the page. Scoped to
+// that card's output (`--out-size`), so one long transcript can be shrunk without touching the rest of the board;
+// the Settings "Console size" remains the baseline. Steps of 1px, clamped to what a monospace face still reads
+// at, and the page zoom is only suppressed while the pointer is actually over a console.
+const CONSOLE_ZOOM_MIN = 7;
+const CONSOLE_ZOOM_MAX = 24;
+document.addEventListener(
+  "wheel",
+  (e) => {
+    if (!e.ctrlKey) return;
+    const out = e.target && e.target.closest ? e.target.closest(".job-out") : null;
+    if (!out) return;
+    e.preventDefault();
+    const card = out.closest(".job");
+    const thread = card && card.dataset.thread;
+    if (!thread) return;
+    const base = Number(state.consoleZoom.get(thread)) || parseFloat(getComputedStyle(out).fontSize) || 11.5;
+    const step = e.deltaY < 0 ? 1 : -1;
+    // Half-pixel steps: the console's default size is 11.5px, and rounding to whole pixels made the first tick
+    // jump 1.5px while every tick after it moved 1.
+    const next = Math.min(CONSOLE_ZOOM_MAX, Math.max(CONSOLE_ZOOM_MIN, Math.round((base + step) * 2) / 2));
+    state.consoleZoom.set(thread, next);
+    card.style.setProperty("--out-size", `${next}px`);
+    out.style.fontSize = `${next}px`;
+  },
+  { passive: false },
+);
+
 // The console resizes like the reply box, but its max-height is what stops it eating the card — and a
 // max-height also stops the drag dead. The handle lives in the bottom-right 16px corner, so grabbing
 // there lifts the cap first; the height the drag then writes is an inline style and wins over both.
