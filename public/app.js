@@ -3320,7 +3320,6 @@ function chipsHtml(name) {
     return !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN";
   }).length;
   const dirty = rows.filter((r) => r.dirty || r.untracked).length;
-  const open = rows.filter((r) => !isRowLive(r) && r.idle).length;
   const serving = rows.filter((r) => r.signals?.ports?.on).length;
   const removable = rows.filter((r) => r.mergeable).length;
   // Every agent whose home is a row in this project. Violet while any of them is working; amber as
@@ -3336,7 +3335,6 @@ function chipsHtml(name) {
   if (noCommits) out.push(`<span class="chip">${noCommits} no commits</span>`);
   if (unmerged) out.push(`<span class="chip bad">${unmerged} unmerged</span>`);
   if (dirty) out.push(`<span class="chip warn">${dirty} dirty</span>`);
-  if (open) out.push(`<span class="chip">${open} open idle</span>`);
   if (serving) out.push(`<span class="chip info">${serving} serving</span>`);
   // Violet in both states, like the ⧉ hermes chip: this is a Hermes-agent fact, not a warning. Amber
   // made every project with finished agents look like it wanted attention; the tooltip still says how
@@ -3344,14 +3342,25 @@ function chipsHtml(name) {
   // How many agents are working RIGHT NOW, from every source: the panel's own cards and any Hermes
   // session (CLI or otherwise) whose turn is leased. The split is in the tooltip, so the chip stays the
   // answer to one question — "is anything running".
-  const outsideRunning = rows.reduce((n, r) => n + (Number(r.signals?.hermes?.running) || 0), 0);
-  // Hermes agents that are NOT this panel's: an external CLI session taking a turn in one of this
-  // project's worktrees. Counted only while it is executing — a closed or idle CLI session has nothing
-  // to report at project level.
-  if (outsideRunning) {
-    const head = `${outsideRunning} Hermes agent${outsideRunning === 1 ? "" : "s"} from outside this panel ${outsideRunning === 1 ? "is" : "are"} executing a turn in this project right now`;
-    const titles = rows.filter((r) => Number(r.signals?.hermes?.running) > 0).flatMap((r) => r.signals?.hermes?.titles || []);
-    out.push(`<span class="chip hermes" title="${esc(hermesTitle(head, titles))}">${outsideRunning} hermes</span>`);
+  // Hermes agents that are NOT this panel's, read the way the panel chip is: how many sessions the project
+  // has, and how many of them are executing right now. Grey while they are all sitting there, violet as soon
+  // as one is running, so the colour answers "is someone working" without parsing the numbers.
+  const hermesRunning = rows.reduce((n, r) => n + (Number(r.signals?.hermes?.running) || 0), 0);
+  const hermesIdle = rows.reduce((n, r) => n + (Number(r.signals?.hermes?.idle) || 0), 0);
+  const hermesTotal = hermesRunning + hermesIdle;
+  if (hermesTotal) {
+    const busy = hermesRunning > 0;
+    const head = busy
+      ? `${hermesTotal} Hermes session${hermesTotal === 1 ? "" : "s"} from outside this panel in this project · ${hermesRunning} executing a turn right now`
+      : `${hermesTotal} Hermes session${hermesTotal === 1 ? "" : "s"} from outside this panel in this project · none executing right now`;
+    const titles = rows.flatMap((r) => [
+      ...(r.signals?.hermes?.titles || []),
+      ...((r.signals?.hermes?.idleList || []).map((s) => s.title).filter(Boolean)),
+    ]);
+    const tag = busy ? ` · ${hermesRunning} running` : "";
+    out.push(
+      `<span class="chip hermes${busy ? " on" : ""}" title="${esc(hermesTitle(head, titles))}">${hermesTotal} hermes${tag}</span>`,
+    );
   }
   // The panel's own agents: how many cards, and how many of them are executing. The colour IS the state —
   // violet while something runs, grey while the panel is quiet — so a reader does not have to parse the
