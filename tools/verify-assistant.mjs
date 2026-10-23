@@ -385,6 +385,37 @@ console.log("creating worktrees: ask, auto and off");
   ok(a.state().journal.some((j) => j.kind === "spawn-skipped"), "off is journaled, not silently dropped");
 }
 
+// A SPAWN line names a project, not a path. The server's spawner resolves a registry *name* for a new
+// worktree and a real directory for SPAWN IN; a bare name left in `target` used to be read as a path and
+// refused as "unknown project" on the auto path only, which is how a card could work and auto could not.
+console.log("a bare project name reaches the spawner as a name");
+{
+  const projects = [{ name: "agent-worktree-gui", path: "C:/ProjectDevelopment/agent-worktree-gui" }];
+  const spawned = [];
+  const a = make();
+  a.getProjects = () => projects;
+  a.spawner = async (spec) => {
+    spawned.push(spec);
+    return { id: "job-name", thread: "wtgui-name-1" };
+  };
+  a.settings.spawn = "auto";
+
+  a.harvest({ id: "name-turn-1", thread: ASSISTANT_THREAD, lines: [line("text", "SPAWN agent-worktree-gui | second worker")] });
+  await new Promise((r) => setTimeout(r, 20));
+  ok(spawned[0]?.project === "agent-worktree-gui", "auto hands the spawner the registry name", JSON.stringify(spawned[0]));
+  eq(spawned.length, 1, "exactly one worker started");
+
+  a.harvest({ id: "name-turn-2", thread: ASSISTANT_THREAD, lines: [line("text", "SPAWN no-such-project | do a thing")] });
+  await new Promise((r) => setTimeout(r, 20));
+  eq(spawned.length, 1, "an unknown project starts nothing");
+  ok(a.state().journal.some((j) => j.kind === "spawn-failed" && /unknown project: no-such-project/.test(j.text)), "and is journaled with the name it was given");
+  ok(/Spawn attempts that FAILED/.test(a.digest()) && /no-such-project/.test(a.digest()), "the next turn's digest carries the failure, so it cannot call it queued", a.digest().split("\n").slice(-2).join(" | "));
+
+  a.harvest({ id: "name-turn-3", thread: ASSISTANT_THREAD, lines: [line("text", "SPAWN IN agent-worktree-gui | tidy the root")] });
+  await new Promise((r) => setTimeout(r, 20));
+  ok(spawned[1]?.existing === true && spawned[1]?.target === "C:/ProjectDevelopment/agent-worktree-gui", "SPAWN IN a project name resolves to its path", JSON.stringify(spawned[1]));
+}
+
 console.log("a watch that expires wakes the assistant");
 {
   created.length = 0;
