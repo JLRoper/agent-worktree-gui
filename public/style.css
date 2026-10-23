@@ -516,6 +516,10 @@ button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241
 .subs-collect:hover { color: #ecd9ff; border-color: #55407a; background: #241d33; }
 .subagents .sub-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .subagents .sub-meta { flex: none; color: var(--dimmer); font-size: 10.5px; }
+/* A folded running row keeps saying what is happening: the newest thing the child wrote, pushed to the right of the
+   line and cut short when it is long. It takes the space the title leaves rather than shoving the status around. */
+.subagents .sub-preview { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; color: var(--dimmer); font-size: 10.5px; padding-left: 12px; }
+.subagents .sub-row:hover .sub-preview { color: var(--dim); }
 /* A subagent line is a door: click it for that child's own console, click it again to close. */
 .subagents .sub-row { cursor: pointer; border-radius: 4px; }
 .subagents .sub-row:hover { background: rgba(255, 255, 255, .035); }

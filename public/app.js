@@ -1721,6 +1721,7 @@ function subagentsHtml(list, key = "", collected = false) {
       <span class="sub-caret sub-chev">${id ? (open ? "\u25be" : "\u25b8") : ""}</span>
       <span class="sub-dot"></span>
       <span class="sub-title">${esc(s.goal || "subagent")}</span>
+      ${s.running && !open && s.preview ? `<span class="sub-preview mono" title="${esc(s.preview)}">${esc(s.preview)}</span>` : ""}
       <span class="sub-meta mono">${meta}</span>
     </div>${open ? subConsoleHtml(id) : ""}`;
     })
@@ -1926,6 +1927,8 @@ async function refreshSubagentRoster() {
       lastSeen: k.lastSeen,
       hung: Boolean(k.hung),
       msgs: k.msgs,
+      // A folded row says what the child is doing, not just that it is out.
+      preview: k.preview || null,
     })));
   }
   subagentRosterAt = Date.now();
