@@ -10,7 +10,8 @@ served straight from `public/`.
     start-background.cmd   # detached, logs to logs\server.out.log / .err.log
     stop-background.cmd    # stop it
 
-Then open **http://127.0.0.1:7331**.
+Then open **http://127.0.0.1:7331**. The page itself — every control, chip and gesture — is documented in
+[docs/using-the-board.md](docs/using-the-board.md).
 
 ## Running it on another machine
 
