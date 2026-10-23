@@ -893,7 +893,54 @@ function toolBurstRows(lines) {
   return [...rows.values()];
 }
 
-function toolGroupHtml(lines, key) {
+// A call plus the output it produced, so one tool's rows can be opened on their own. A result block starts at the
+// "↳ name" line and runs until the next call or result; the plain lines belong to the result above them.
+function burstSegments(lines) {
+  const out = [];
+  let cur = null;
+  for (const l of lines) {
+    const text = String(l.text || "");
+    if (l.kind === "tool") {
+      const m = TOOL_START_RE.exec(text);
+      cur = { tool: m ? m[1] : "", lines: [l] };
+      out.push(cur);
+    } else if (l.kind === "tool-out") {
+      const m = TOOL_DONE_RE.exec(text);
+      if (m) {
+        cur = { tool: m[1], lines: [l] };
+        out.push(cur);
+      } else if (cur) {
+        cur.lines.push(l);
+      } else {
+        cur = { tool: "", lines: [l] };
+        out.push(cur);
+      }
+    }
+  }
+  return out;
+}
+
+// Every line of a group, from the live model when we have it and from the DOM when the group came from a full render.
+function groupLines(grp) {
+  if (grp._burst) return grp._burst;
+  return [...grp.querySelectorAll(".tgrp-body .jl")].map((d) => ({
+    kind: (d.className.match(/jl-([a-z-]+)/) || [])[1] || "raw",
+    text: d.textContent,
+  }));
+}
+
+function rebuildToolGroup(grp, { filter = "", open = false } = {}) {
+  const key = grp.dataset.tgrp || "";
+  const lines = groupLines(grp);
+  const holder = document.createElement("div");
+  holder.innerHTML = toolGroupHtml(lines, key, filter, open);
+  const fresh = holder.firstElementChild;
+  if (!fresh) return;
+  fresh._burst = lines;
+  grp.replaceWith(fresh);
+}
+
+function toolGroupHtml(lines, key, filter = "", openBody = false) {
   const rows = toolBurstRows(lines);
   // No recognisable call lines (a result whose start was trimmed away): show the plain lines rather than an empty box.
   if (!rows.length) return lines.map((l) => lineHtml(l)).join("");
@@ -906,12 +953,20 @@ function toolGroupHtml(lines, key) {
           ? `<span class="tgrp-state">${r.duration.toFixed(2)}s</span>`
           : "";
       const last = r.last ? `<span class="tgrp-last mono" title="${esc(r.last)}">${esc(r.last)}</span>` : "";
-      return `<div class="tgrp-row"><span class="tgrp-g">${esc(r.glyph)}</span><span class="tgrp-name">${esc(r.name)}</span><span class="tgrp-n">×${r.count}</span>${last}${state}</div>`;
+      const active = filter === r.name ? " is-active" : "";
+      return `<div class="tgrp-row${active}" role="button" tabindex="0" data-tgrp-tool="${esc(r.name)}" title="show the ${r.count} call${r.count === 1 ? "" : "s"} this run made to ${esc(r.name)}${r.count === 1 ? "" : ", with their output"}"><span class="tgrp-g">${esc(r.glyph)}</span><span class="tgrp-name">${esc(r.name)}</span><span class="tgrp-n">×${r.count}</span>${last}${state}</div>`;
     })
     .join("");
-  return `<div class="tgrp" data-tgrp="${esc(key)}">
-      <div class="tgrp-head">${head}<button type="button" class="tgrp-more" data-tgrp-more="${esc(key)}" title="show every call in this run of tools, with its output">${lines.length} line${lines.length === 1 ? "" : "s"}</button></div>
-      <div class="tgrp-body" hidden>${lines.map((l) => lineHtml(l)).join("")}</div>
+  const segments = burstSegments(lines).filter((s) => !filter || s.tool === filter);
+  const bodyLines = segments.flatMap((s) => s.lines);
+  const body =
+    bodyLines.length > 0
+      ? bodyLines.map((l) => lineHtml(l)).join("")
+      : `<div class="jl jl-dim">this run recorded nothing for ${esc(filter)}</div>`;
+  const label = filter ? `all ${lines.length}` : `${lines.length} line${lines.length === 1 ? "" : "s"}`;
+  return `<div class="tgrp" data-tgrp="${esc(key)}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
+      <div class="tgrp-head">${head}<button type="button" class="tgrp-more${filter ? " is-open" : ""}" data-tgrp-more="${esc(key)}" title="${filter ? "show every tool in this run, not just this one" : "show every call in this run of tools, with its output"}">${label}</button></div>
+      <div class="tgrp-body"${openBody || filter ? "" : " hidden"}>${body}</div>
     </div>`;
 }
 
@@ -2847,17 +2902,16 @@ function appendJobLine(evt) {
     if (isTool) {
       const key = openGroup ? openGroup.dataset.tgrp : `${evt.id}#${Date.now().toString(36)}`;
       const lines = [...((openGroup && openGroup._burst) || []), line];
+      // A tool chosen by the reader keeps its filter and open body while the burst grows under it.
+      const filter = openGroup ? openGroup.dataset.filter || "" : "";
+      const bodyEl = openGroup ? openGroup.querySelector(".tgrp-body") : null;
       const holder = document.createElement("div");
-      holder.innerHTML = toolGroupHtml(lines, key);
+      holder.innerHTML = toolGroupHtml(lines, key, filter, bodyEl ? !bodyEl.hidden : false);
       const fresh = holder.firstElementChild;
       if (fresh) {
         fresh._burst = lines;
-        if (openGroup) {
-          fresh.querySelector(".tgrp-body").hidden = openGroup.querySelector(".tgrp-body").hidden;
-          openGroup.replaceWith(fresh);
-        } else {
-          out.appendChild(fresh);
-        }
+        if (openGroup) openGroup.replaceWith(fresh);
+        else out.appendChild(fresh);
       }
     } else {
       const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
@@ -5629,15 +5683,27 @@ document.addEventListener("click", async (e) => {
     return;
   }
   // Steer the turn that is running: the primary action while the agent is busy.
+  const tgrpRow = e.target.closest("[data-tgrp-tool]");
+  if (tgrpRow) {
+    e.preventDefault();
+    e.stopPropagation();
+    const grp = tgrpRow.closest(".tgrp");
+    if (grp) {
+      const active = grp.dataset.filter === tgrpRow.dataset.tgrpTool;
+      rebuildToolGroup(grp, { filter: active ? "" : tgrpRow.dataset.tgrpTool, open: !active });
+    }
+    return;
+  }
   const tgrpMore = e.target.closest("[data-tgrp-more]");
   if (tgrpMore) {
     e.preventDefault();
     e.stopPropagation();
     const grp = tgrpMore.closest(".tgrp");
-    const bodyEl = grp?.querySelector(".tgrp-body");
-    if (bodyEl) {
-      bodyEl.hidden = !bodyEl.hidden;
-      tgrpMore.classList.toggle("is-open", !bodyEl.hidden);
+    if (grp) {
+      // "all N" while one tool is being shown clears the filter; otherwise it just folds the block.
+      const filtered = Boolean(grp.dataset.filter);
+      const bodyEl = grp.querySelector(".tgrp-body");
+      rebuildToolGroup(grp, { filter: "", open: filtered || Boolean(bodyEl && bodyEl.hidden) });
     }
     return;
   }
@@ -5695,6 +5761,16 @@ document.addEventListener("click", async (e) => {
 // A subagent line is focusable, so Enter or Space has to do what a click does.
 document.addEventListener("keydown", async (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
+  const tgrpRow = e.target.closest?.("[data-tgrp-tool]");
+  if (tgrpRow) {
+    e.preventDefault();
+    const grp = tgrpRow.closest(".tgrp");
+    if (grp) {
+      const active = grp.dataset.filter === tgrpRow.dataset.tgrpTool;
+      rebuildToolGroup(grp, { filter: active ? "" : tgrpRow.dataset.tgrpTool, open: !active });
+    }
+    return;
+  }
   const head = e.target.closest?.("[data-subs-toggle]");
   if (head) {
     e.preventDefault();

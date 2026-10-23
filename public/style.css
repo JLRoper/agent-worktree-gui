@@ -576,7 +576,11 @@ button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241
 .tgrp { margin: 3px 0 6px; padding-left: 8px; border-left: 2px solid #2c3542; white-space: normal; }
 .tgrp .jl { white-space: pre-wrap; }
 .tgrp-head { display: flex; flex-direction: column; gap: 1px; }
-.tgrp-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.tgrp-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; cursor: pointer; border-radius: 3px; }
+.tgrp-row:hover { background: rgba(255, 255, 255, .035); }
+.tgrp-row.is-active { background: rgba(200, 166, 255, .10); }
+.tgrp-row.is-active .tgrp-name { color: #ecd9ff; }
+.tgrp-row:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
 .tgrp-g { flex: none; width: 15px; }
 .tgrp-name { flex: none; color: #c8a6ff; }
 .tgrp-n { flex: none; color: var(--dim); }
