@@ -103,9 +103,26 @@ async function loadConfig() {
   cfg.threads = Number(cfg.threads) || Math.max(1, Math.min(4, cpus().length - 1));
   cfg.projects = Array.isArray(cfg.projects) ? cfg.projects : [];
   if (!cfg.defaultCwd) cfg.defaultCwd = cfg.projects[0]?.path || process.cwd();
+  // "all": keep every project fresh, whether or not anyone is looking at it. "visible": the page reports which
+  // project sections are on screen and only those are re-read - with ~100 projects that is most of the git work
+  // the board does. The setting lives in this file so it survives a restart and applies to every browser.
+  cfg.scanMode = String(cfg.scanMode || "all").toLowerCase() === "visible" ? "visible" : "all";
   // Keyed off the config's own directory, so a PANEL_CONFIG sandbox keeps its own registry.
   if (!cfg.jobsFile) cfg.jobsFile = path.join(path.dirname(CONFIG_PATH), "logs", "jobs.json");
   return cfg;
+}
+
+// Write one setting into the panel's own config.json, leaving every other key exactly as it was. Only the key being
+// changed is written: dumping the in-memory config would bake computed defaults into the file.
+async function patchPanelConfig(patch) {
+  let raw = {};
+  try {
+    raw = JSON.parse(await readFile(CONFIG_PATH, "utf8"));
+  } catch {
+    raw = {};
+  }
+  Object.assign(raw, patch);
+  await writeFile(CONFIG_PATH, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
 }
 
 const gzip = (buf) => zlibGzipSync(buf, { level: 6 });
@@ -265,6 +282,8 @@ const settingsOut = () => ({
   host: config.host,
   defaultCwd: config.defaultCwd,
   worktreeSource: String(config.discovery?.worktreeSource || "git").toLowerCase(),
+  scanMode: config.scanMode === "visible" ? "visible" : "all",
+  scanVisible: scheduler ? scheduler.visibilityReport() : null,
   spawnEnabled: true,
 });
 
@@ -999,6 +1018,39 @@ const server = createServer(async (req, res) => {
     if (route === "/api/refresh" && req.method === "POST") {
       await scheduler.fastPass();
       return sendJson(res, 200, { ok: true });
+    }
+
+    // Which project sections the page can see right now. Sent when the set changes and as a heartbeat; in
+    // scanMode "visible" it is what the scheduler reads instead of the whole fleet. Cheap and read-only, so it
+    // needs no token.
+    if (route === "/api/visible" && req.method === "POST") {
+      const body = await readBody(req).catch(() => ({}));
+      const known = new Set(registry.projects.map((p) => p.name));
+      const names = (Array.isArray(body.projects) ? body.projects : [])
+        .map((n) => String(n || "").trim())
+        .filter((n) => known.has(n));
+      scheduler.noteVisible(names);
+      return sendJson(res, 200, { ok: true, visible: names.length, mode: config.scanMode });
+    }
+
+    // Refresh everything, or only what is on screen. Server-side: the scans happen here, so the choice has to
+    // outlive a tab and apply to whichever browser is open.
+    if (route === "/api/settings/scan" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const mode = String(body.mode || "").toLowerCase() === "visible" ? "visible" : "all";
+      try {
+        await patchPanelConfig({ scanMode: mode });
+      } catch (e) {
+        return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
+      }
+      config.scanMode = mode;
+      scheduler.cfg.scanMode = mode;
+      // Switching back to "all" must not wait for the visibility heartbeat to lapse.
+      if (mode === "all") scheduler.noteVisible(null);
+      log(`scan mode: ${mode}`);
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, { ok: true, mode, settings: settingsOut() });
     }
 
     // Open a link from an agent's console in the OS default browser. Only http(s) gets through: this

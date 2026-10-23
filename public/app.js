@@ -6796,7 +6796,8 @@ function paintConfigLine() {
   const cfg = state.settings || {};
   if (cfg.host === undefined) return;
   const n = state.projects.size || (Array.isArray(cfg.projects) ? cfg.projects.length : 0);
-  $("config-line").textContent = `${cfg.version ? `v${cfg.version} · ` : ""}${n} project(s) · cheap fields every ${cfg.worktreeSeconds}s · verdict/PR every ${cfg.slowSeconds}s · ${cfg.threads} scan threads · ${cfg.host}`;
+  const scope = cfg.scanMode === "visible" ? " · refresh on screen only" : "";
+  $("config-line").textContent = `${cfg.version ? `v${cfg.version} · ` : ""}${n} project(s) · cheap fields every ${cfg.worktreeSeconds}s · verdict/PR every ${cfg.slowSeconds}s · ${cfg.threads} scan threads · ${cfg.host}${scope}`;
 }
 
 function renderAll() {
@@ -9575,6 +9576,25 @@ $("event-flash")?.addEventListener("change", (e) => {
   saveAnchorFlag(EVENT_FLASH_KEY, state.eventFlash);
 });
 
+// Refresh everything, or only what is on screen. The scans happen in the server, so this is a server setting: it is
+// written to the panel's config.json and applies to whichever browser is open.
+$("scan-mode")?.addEventListener("change", async (e) => {
+  const before = state.settings?.scanMode === "visible" ? "visible" : "all";
+  const mode = e.target.value === "visible" ? "visible" : "all";
+  try {
+    const r = await apiFetch("/api/settings/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }) }, { timeoutMs: 10000 });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    state.settings.scanMode = d.mode || mode;
+    paintConfigLine();
+    showBanner(mode === "visible" ? "refresh: only the projects on screen" : "refresh: every project");
+    reportVisibility({ force: true });
+  } catch (err) {
+    e.target.value = before;
+    showBanner(`could not change the refresh mode: ${err.message}`);
+  }
+});
+
 // ---- the anchor's two signals: hover and last touched, each switched and timed on its own ----------
 function paintAnchorSettings() {
   const hover = $("anchor-hover");
@@ -9583,12 +9603,14 @@ function paintAnchorSettings() {
   const touchSeconds = $("anchor-touch-seconds");
   const flash = $("flash-time");
   const eventFlash = $("event-flash");
+  const scanMode = $("scan-mode");
   if (hover) hover.checked = state.anchorHover;
   if (hoverSeconds) hoverSeconds.value = String(state.anchorHoverSeconds);
   if (touch) touch.checked = state.anchorTouch;
   if (touchSeconds) touchSeconds.value = String(state.anchorTouchSeconds);
   if (flash) flash.value = String(state.flashSeconds);
   if (eventFlash) eventFlash.checked = state.eventFlash;
+  if (scanMode) scanMode.value = state.settings?.scanMode === "visible" ? "visible" : "all";
   applyFlashTime();
 }
 
@@ -9736,6 +9758,62 @@ paintReorderSetting();
 // Reflect the remembered collapse state of the two fixed cards before the first paint of them.
 for (const id of ["newagent", "agents"]) applyFixedCollapse(id);
 
+// ---- what the page can see ---------------------------------------------------------------------------------
+// In "on screen" mode the scheduler re-reads only the projects in view. Half a screen above and below counts too,
+// so scrolling to the next project finds it already read instead of blank for a second. The report is a heartbeat:
+// the server believes it for 45s, so a closed tab stops pinning the fleet to nothing.
+const VISIBLE_MARGIN = 0.5;
+let visibleSentAt = 0;
+// The last list actually sent, and the last one merely sampled. A sample taken while the board is being rebuilt is
+// not the truth: collapsed sections are ~60px tall, so a mid-repaint reading says half the fleet is on screen. Only
+// a list that comes up the same twice in a row is sent.
+let visibleKey = "";
+let visibleSampleKey = "";
+let visibleTimer = 0;
+
+function visibleProjects() {
+  const margin = window.innerHeight * VISIBLE_MARGIN;
+  const names = [];
+  for (const sec of document.querySelectorAll("#projects section.project[data-project]")) {
+    const r = sec.getBoundingClientRect();
+    if (r.height < 1) continue;
+    if (r.bottom >= -margin && r.top <= window.innerHeight + margin) names.push(sec.dataset.project);
+  }
+  return names;
+}
+
+function reportVisibility({ force = false } = {}) {
+  if (state.settings?.scanMode !== "visible") return;
+  const names = visibleProjects();
+  const key = names.join("|");
+  const stable = key === visibleSampleKey;
+  visibleSampleKey = key;
+  if (!stable && !force) return; // still settling: the next sample decides
+  const now = Date.now();
+  if (!force && key === visibleKey && now - visibleSentAt < 15000) return;
+  visibleKey = key;
+  visibleSentAt = now;
+  apiFetch("/api/visible", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projects: names }) }, { timeoutMs: 5000 }).catch(() => {
+    /* a missed heartbeat only means the server falls back to reading everything for a while */
+  });
+}
+
+function startVisibilityReporting() {
+  const nudge = () => {
+    clearTimeout(visibleTimer);
+    // Two samples a beat apart: the first may catch a repaint, the second decides.
+    visibleTimer = setTimeout(() => reportVisibility(), 260);
+  };
+  window.addEventListener("scroll", () => { visibleKey = ""; nudge(); }, { passive: true });
+  window.addEventListener("resize", () => { visibleKey = ""; nudge(); });
+  // Sampled often, sent rarely: a stable list is posted when it changes and as a 15s heartbeat (the server believes
+  // a report for 45s, so a closed tab stops pinning the fleet after a few missed beats).
+  setInterval(() => reportVisibility(), 3000);
+  setInterval(() => reportVisibility({ force: Date.now() - visibleSentAt > 15000 }), 5000);
+}
+
+startVisibilityReporting();
+
 (async function boot() {
   try {
     const cfg = await apiFetch("/api/config").then((r) => r.json());
@@ -9753,6 +9831,9 @@ for (const id of ["newagent", "agents"]) applyFixedCollapse(id);
     startAnchorObserver();
     updateColorsRow();
     paintAnchorSettings();
+    // "On screen" mode: say what is visible before the first paint settles, so the rows in front of the reader are
+    // the first thing the scheduler reads.
+    reportVisibility({ force: true });
     state.eventsAt = Date.now();
   } catch (e) {
     setStream("offline", "bad");

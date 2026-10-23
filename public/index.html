@@ -143,6 +143,14 @@
           <span>Flash on events <span class="settings-info">ⓘ</span></span>
           <input id="event-flash" type="checkbox" checked>
         </label>
+
+        <label class="settings-row settings-gap" for="scan-mode" title="Which projects the panel re-reads. &quot;Everything&quot; keeps all of them fresh whether or not you are looking. &quot;On screen&quot; reads only the projects in the window (plus half a screen either side) — with a hundred repos the board stops spawning git for projects you cannot see, and scrolling to a stale one reads it at once. With no page open in that mode nothing is read at all. Saved in this panel's config.json, so it survives a restart and applies to every browser.">
+          <span>Refresh <span class="settings-info">ⓘ</span></span>
+          <select id="scan-mode">
+            <option value="all">everything</option>
+            <option value="visible">only on screen</option>
+          </select>
+        </label>
       </div>
 
       <div class="settings-group">
