@@ -5170,6 +5170,15 @@ function sweepStaleBoard() {
       if (state.detailEls.get(key) === d) state.detailEls.delete(key);
       continue;
     }
+    // One row, one detail. The registered element wins; any other copy for the same key is a stray from a
+    // render whose cache entry had gone stale, and two details under one row is exactly the duplicated
+    // MERGE STATE / LIVENESS block the reader saw.
+    const registered = state.detailEls.get(key);
+    if (registered && registered !== d && registered.isConnected) {
+      d.remove();
+      continue;
+    }
+    if (!registered) state.detailEls.set(key, d);
     // The row is still there and the detail still belongs to it - the row just moved (rows sort by newest
     // life, so a worktree that gains life is re-ordered). Moving the detail with its row keeps the open
     // cards on the page; removing it instead dropped the agent card the reader was reading out of the DOM
@@ -5840,7 +5849,11 @@ function placeRow(project, row, { flash = false } = {}) {
     refreshChips(project);
     return;
   }
-  const oldDetail = state.detailEls.get(key);
+  const cachedDetail = state.detailEls.get(key);
+  // Ask the DOM, not just the cache: a rebuild can leave `detailEls` pointing at a detached detail while a
+  // different one for the same key is on screen. Removing the cached one then added a second detail under the
+  // row - the duplicated MERGE STATE / LIVENESS EVIDENCE block.
+  const oldDetail = document.querySelector(`tr.detail[data-detail="${CSS.escape(key)}"]`) || cachedDetail;
   const oldCards = new Map();
   if (oldDetail) for (const card of oldDetail.querySelectorAll(".job[data-thread]")) oldCards.set(card.dataset.thread, card);
   const typing = oldDetail ? captureTyping(oldDetail) : null;
@@ -5852,6 +5865,8 @@ function placeRow(project, row, { flash = false } = {}) {
       }))
     : [];
   if (oldDetail) oldDetail.remove();
+  // Any other copy for this key is a stray from an earlier render: one row, one detail.
+  for (const stray of document.querySelectorAll(`tr.detail[data-detail="${CSS.escape(key)}"]`)) stray.remove();
   state.detailEls.delete(key);
   if (old) old.replaceWith(newTr);
   else tbody.appendChild(newTr);
