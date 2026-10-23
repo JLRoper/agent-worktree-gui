@@ -86,6 +86,12 @@ const state = {
   // localStorage). Nothing else uses a hue, so a themed project is recognisable at a glance while the
   // verdict colours inside it keep their meaning.
   projectHues: loadProjectHues(),
+  // The reader's attention, tracked beside the geometry: the card under a moving pointer, and the card last
+  // clicked / focused / typed in. Either one, while it is on screen and recent, wins over the reading line.
+  hoverThread: null,
+  hoverAt: 0,
+  touchThread: null,
+  touchAt: 0,
   cloneStatus: {},
   approvals: new Map(),
   scanRoots: [],
@@ -5101,12 +5107,50 @@ function nearestReadingLine(nodes, top) {
   return best;
 }
 
-// pinned card > card at the reading line > open row at it > project section at it > nothing.
+// A card only counts as the reader's intent while it is actually on screen: an anchor that has scrolled away
+// cannot hold anything, and following it would drag the page back.
+function anchorVisible(el) {
+  if (!el || !el.isConnected) return false;
+  const r = el.getBoundingClientRect();
+  return r.height > 8 && r.bottom > readingTop() && r.top < window.innerHeight;
+}
+
+function anchorCardFor(thread) {
+  if (!thread) return null;
+  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+  return anchorVisible(card) ? card : null;
+}
+
+// Where the reader's attention is, beyond the geometry of the reading line:
+//   * the card under the pointer, while the pointer is actually moving over it (a mouse parked on a card from
+//     two minutes ago says nothing about what is being read now),
+//   * the card last interacted with - clicked, focused, typed in - for a couple of minutes, which is the
+//     "last panel I touched is where I am thinking" case.
+const HOVER_MS = 3000;
+const TOUCH_MS = 120_000;
+
+function intentAnchorCard() {
+  const now = Date.now();
+  if (state.hoverThread && now - state.hoverAt < HOVER_MS) {
+    const hovered = anchorCardFor(state.hoverThread);
+    if (hovered) return hovered;
+  }
+  if (state.touchThread && now - state.touchAt < TOUCH_MS) {
+    const touched = anchorCardFor(state.touchThread);
+    if (touched) return touched;
+  }
+  return null;
+}
+
+// pinned card > card under the pointer / last touched > card at the reading line > open row at it > project
+// section at it > nothing.
 function readingAnchor() {
   if (state.anchorThread) {
     const pinned = document.querySelector(`.job[data-thread="${CSS.escape(state.anchorThread)}"]`);
     if (pinned) return { el: pinned, pinned: true };
   }
+  const intent = intentAnchorCard();
+  if (intent) return { el: intent, pinned: false, intent: true };
   const top = readingTop();
   const card = nearestReadingLine(document.querySelectorAll(".job[data-thread]"), top);
   if (card) return { el: card, pinned: false };
@@ -5180,6 +5224,52 @@ function compensateAnchor() {
 
 let anchorObserver = null;
 
+// Pointer + interaction tracking for the anchor. pointermove's own target is the element under the cursor, so
+// this costs one closest() per move and nothing when the cursor stays still.
+function trackAnchorIntent() {
+  const note = (thread, kind) => {
+    if (kind === "hover") {
+      if (thread === state.hoverThread) return;
+      state.hoverThread = thread;
+      state.hoverAt = Date.now();
+      refreshAnchorBaseline();
+      return;
+    }
+    if (!thread) return;
+    const changed = thread !== state.touchThread;
+    state.touchThread = thread;
+    state.touchAt = Date.now();
+    if (changed) refreshAnchorBaseline();
+  };
+  document.addEventListener(
+    "pointermove",
+    (e) => {
+      if (e.pointerType !== "mouse") return; // a touch is an interaction, not a hover
+      const card = e.target?.closest?.(".job[data-thread]");
+      const thread = card?.dataset.thread || null;
+      if (thread) {
+        note(thread, "hover");
+        return;
+      }
+      // Off every card: the hover stops being an answer, but the last touch still stands.
+      if (state.hoverThread) {
+        state.hoverThread = null;
+        state.hoverAt = 0;
+        refreshAnchorBaseline();
+      }
+    },
+    { passive: true },
+  );
+  const touched = (e) => {
+    const card = e.target?.closest?.(".job[data-thread]");
+    if (card) note(card.dataset.thread, "touch");
+  };
+  document.addEventListener("pointerdown", touched, { passive: true, capture: true });
+  document.addEventListener("focusin", touched, { passive: true, capture: true });
+  document.addEventListener("keydown", touched, { passive: true, capture: true });
+  document.addEventListener("input", touched, { passive: true, capture: true });
+}
+
 function startAnchorObserver() {
   if (anchorObserver || typeof ResizeObserver !== "function") return;
   anchorObserver = new ResizeObserver(() => scheduleAnchorCompensation());
@@ -5208,6 +5298,7 @@ function startAnchorObserver() {
     clearTimeout(anchorRepickTimer);
     anchorRepickTimer = setTimeout(refreshAnchorBaseline, 160);
   });
+  trackAnchorIntent();
   refreshAnchorBaseline();
 }
 
@@ -5228,11 +5319,11 @@ let boardAnchor = null;
 function captureBoardAnchor() {
   if (window.scrollY <= 0) return null; // at the top of the page: nothing to hold
   const top = readingTop();
-  // The card under the reading line first: that is what the reader is looking at, and holding it survives a
-  // rebuild (it is looked up by thread) AND a reorder - the row it belongs to may be promoted to the top of
-  // the board while the card itself must not move on screen.
-  const card = nearestReadingLine(document.querySelectorAll(".job[data-thread]"), top);
-  if (card) return { thread: card.dataset.thread, offset: Math.round(card.getBoundingClientRect().top - top), y: Math.round(window.scrollY) };
+  // The same chain the anchor uses - pinned, then the card under the pointer or last touched, then the card at
+  // the reading line - so a rebuild holds whatever the reader is thinking about, not just what happens to sit
+  // under the topbar. Held by thread: that survives a rebuild AND a reorder.
+  const want = intentAnchorCard() || nearestReadingLine(document.querySelectorAll(".job[data-thread]"), top);
+  if (want) return { thread: want.dataset.thread, offset: Math.round(want.getBoundingClientRect().top - top), y: Math.round(window.scrollY) };
   // Rows are only a stand-in for "somewhere in this worktree". Their index is recorded because rows are
   // sorted newest-life-first: a row that gains life is promoted, and following it is exactly the bounce this
   // anchor used to cause - the page chased a promoted worktree up to the top of the board.
