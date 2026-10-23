@@ -2834,9 +2834,23 @@ async function reviveSession(btn) {
     if (d.job) updateJob(d.job, { scroll: true });
     await resync();
   } catch (e) {
+    const why = String(e.message || e);
+    // 409 on this route is not a permission answer: it means the thread already has a card. The row's session
+    // list is drawn from the last scan, so a session revived a moment ago (or one whose card lives in the
+    // unattached panel, or under another row) is still offered here. Show that card instead of a dead end.
+    if (/already (has a card|on the board)/i.test(why)) {
+      const existing = [...state.jobs.values()].find((j) => (j.thread || j.id) === sessionId);
+      if (existing) {
+        btn.disabled = false;
+        btn.textContent = was;
+        showNote("that session is already on the board — showing its card");
+        revealSpawnedAgent(existing);
+        return;
+      }
+    }
     btn.disabled = false;
     btn.textContent = was;
-    showBanner(`revive ${sessionId}: ${e.message}`);
+    showBanner(`revive ${sessionId}: ${why}`);
   }
 }
 
