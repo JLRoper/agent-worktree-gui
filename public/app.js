@@ -798,6 +798,14 @@ function inflightToolIndex(lines) {
   return (started.get(lastName) || 0) > (finished.get(lastName) || 0) ? lastIdx : -1;
 }
 
+// The name of the call that has started and not come back - the reason a steer can sit undelivered for minutes.
+function inflightToolName(lines) {
+  const i = inflightToolIndex(lines);
+  if (i < 0) return null;
+  const m = TOOL_START_RE.exec(String(lines[i].text || ""));
+  return m ? m[1] : null;
+}
+
 function liveLabel(secs) {
   const n = Math.max(0, Math.floor(secs));
   return ` · running ${n < 60 ? `${n}s` : `${Math.floor(n / 60)}m${String(n % 60).padStart(2, "0")}s`}`;
@@ -1389,6 +1397,20 @@ function conversationHtml(conv) {
   const maximized = state.maximized === thread;
   const homeless = isHomelessConv(conv);
   const runningTurn = turns.find((t) => t.status === "running" || t.status === "starting");
+  // A steer that missed its turn is offered back as an unsent draft: seed the box once, so the reader can send it,
+  // edit it, or ignore it. Seeding is keyed on the steer itself, so a re-render cannot refill a box they cleared.
+  const pendingSteer = latest.pendingSteer && typeof latest.pendingSteer.text === "string" ? latest.pendingSteer : null;
+  if (pendingSteer) {
+    const key = `${thread}|${pendingSteer.at || 0}`;
+    const seeded = state.seededSteer || (state.seededSteer = new Set());
+    if (!state.replyDrafts[thread] && !seeded.has(key)) {
+      seeded.add(key);
+      state.replyDrafts[thread] = pendingSteer.text;
+    }
+  }
+  // Steering while the agent sits inside delegate_task waits for that call to return. Say so at the moment it
+  // matters, instead of promising a boundary the turn may never reach.
+  const inDelegate = runningTurn ? inflightToolName(jobLines(runningTurn.id)) === "delegate_task" : false;
   const running = Boolean(runningTurn);
   const queue = state.replyQueue.get(thread) || [];
   const queued = queue.length;
@@ -1501,10 +1523,10 @@ function conversationHtml(conv) {
         <div class="reply-wrap">
           <div class="attach-chips" data-chips="${esc(thread)}">${attachmentChipsHtml(thread)}</div>
           <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"
-            placeholder="${running ? "a turn is running — Enter steers it; Queue reply holds yours for the next turn" : "Reply to this agent — continues the same Hermes thread, Enter to send"}"></textarea>
+            placeholder="${running ? (inDelegate ? "a subagent is out — a steer lands when delegate_task returns; Queue reply holds yours for the next turn" : "a turn is running — Enter steers it; Queue reply holds yours for the next turn") : "Reply to this agent — continues the same Hermes thread, Enter to send"}"></textarea>
           <div class="reply-actions">
             ${running
-              ? `<button class="btn-reply btn-steer-primary" data-steer="${esc(runningTurn.id)}" type="button" title="send this into the running turn — the agent reads it at its next tool boundary and the turn carries on">Steer turn</button>`
+              ? `<button class="btn-reply btn-steer-primary" data-steer="${esc(runningTurn.id)}" type="button" title="${inDelegate ? "send this into the running turn — it waits for delegate_task to return, and if the turn ends first it comes back to this box unsent" : "send this into the running turn — the agent reads it at its next tool boundary and the turn carries on"}">Steer turn</button>`
               : `<button class="btn-reply" data-thread="${esc(thread)}" type="button" title="send this as the next turn (Enter)">Send reply</button>`}
             ${running ? `<button class="btn-queue" data-queue-reply="${esc(thread)}" type="button" title="hold this reply and send it the moment the current turn finishes">Queue reply</button>` : ""}
             ${queued ? `<span class="queue-note mono" title="${esc(queuedTitle)}">${queued} queued</span>` : ""}
@@ -1512,6 +1534,9 @@ function conversationHtml(conv) {
           </div>
         </div>
         ${latest.stats ? `<div class="job-stats-row">${statsLine(latest.stats, latest.model || modelsState?.defaultModel || null)}</div>` : ""}
+        ${pendingSteer
+          ? `<div class="reply-note mono" data-pending-steer="${esc(thread)}" title="the turn ended before the gateway could read your steer at a tool boundary. It is in the box above, unsent — send it to continue on the same thread.">⇢ that steer missed the turn — it is in the box, unsent</div>`
+          : ""}
         <div class="reply-row">
           <span class="warnline" data-reply-warn="${esc(thread)}"></span>
         </div>
@@ -1883,7 +1908,14 @@ async function steerTurn(thread, id, text, btn = null) {
     clearAttachments(thread);
     const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
     if (box) box.value = "";
-    if (warn) warn.textContent = "steered — the agent reads this at its next tool boundary";
+    if (warn) {
+      // A steer only lands at a tool boundary, and `delegate_task` is one call that can run for minutes: say what
+      // it is waiting for, and what happens if the wait outlasts the turn.
+      const waitingOn = inflightToolName(jobLines(id));
+      warn.textContent = waitingOn === "delegate_task"
+        ? "steered — it waits for delegate_task to return; if the turn ends first it comes back to this box unsent"
+        : "steered — the agent reads this at its next tool boundary";
+    }
     focusReplyBox(thread);
     return true;
   } catch (err) {
@@ -2265,6 +2297,9 @@ function conversationSignature(conv) {
     l.worktree || "",
     l.existing ? "e" : "",
     l.tokens?.total || "",
+    // A steer the turn never read comes back as a note in the reply area: without it here the card would not
+    // repaint, and the note would only appear whenever something unrelated forced a rebuild.
+    l.pendingSteer ? `s${l.pendingSteer.at || 1}` : "",
     // The stats row lives in the foot of the card: a new reading must repaint it, or the numbers
     // stay as they were until some unrelated event rebuilds the conversation.
     JSON.stringify(l.stats || null),

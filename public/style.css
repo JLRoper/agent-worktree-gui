@@ -470,6 +470,8 @@ button.chip:active { transform: translateY(1px); }
    these rows are what the children are actually doing, read from their own sessions in the store. */
 /* Under the console of the turn that delegated, aligned with it rather than with the card's head. */
 .subagents { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px 0; font-size: 11px; color: var(--dim); }
+/* A steer the turn never read: offered back, unsent, rather than sent as a second turn. */
+.reply-note { color: #c8a6ff; font-size: 11px; margin: 6px 0 0 2px; }
 .subagents[hidden] { display: none; }
 .subagents .sub-head { color: #c8a6ff; font-size: 10.5px; letter-spacing: .03em; }
 .subagents .sub-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding-left: 12px; }
