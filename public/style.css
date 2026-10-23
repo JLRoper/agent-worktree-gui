@@ -414,9 +414,13 @@ button.chip:active { transform: translateY(1px); }
    last field, not carry 29px of reserved height and two flex gaps for text that may never come. */
 #spawn-warn:empty, #spawn-msg:empty { display: none; }
 .warnline { color: #ff9c94; font: 11.5px/1.4 var(--mono); min-height: 14px; }
+/* The reply row's warnline reserved a line of height even when it had nothing to say, so every card ended in
+   14px of nothing plus a flex gap. It only needs that height once it holds a message. */
+.reply-row .warnline:empty { min-height: 0; }
+.reply-row:has(.warnline:empty) { display: none; }
 
 /* ---- jobs ---- */
-.job { border-bottom: 1px solid #1d222b; padding: 9px 14px 12px; overflow-anchor: none; }
+.job { border-bottom: 1px solid #1d222b; padding: 9px 14px 7px; overflow-anchor: none; }
 /* A card that draws its own box ends the list with a line: the last card in a worktree's agents block and
    a maximized card both lost their bottom edge here and faded into the background. Slightly stronger than
    the hairlines between cards, so the group reads as closed rather than cut off. */
@@ -695,7 +699,7 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
    shrink and pushes the buttons that follow it onto a second row. */
 .job-head .thread-name { min-width: 0; flex: 0 1 auto; }
 .reply {
-  margin: 8px 0 2px 18px;
+  margin: 8px 0 0 18px;
   padding-top: 8px;
   border-top: 1px solid #1d222b;
   display: flex;
