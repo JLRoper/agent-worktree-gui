@@ -2376,6 +2376,10 @@ function conversationSignature(conv) {
     pinned,
     open,
     l.label || "",
+    // The session's own name, which Hermes writes a moment after the first turn: a card created here can be
+    // repainted by its title landing, so the title belongs in the signature even though nothing else changes.
+    l.title || "",
+    l.lastActiveAt || "",
     // Queued replies show as a note next to the buttons; a change must repaint the card.
     (state.replyQueue.get(conv.thread) || []).length,
     state.collapsedJobs.has(conv.thread) ? "c" : "o",
