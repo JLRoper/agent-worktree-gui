@@ -2790,6 +2790,35 @@ async function clearThread(btn) {
   }
 }
 
+// Answer an approval a run is parked on. Kept as a function so both the click and the pointerup path reach the
+// same place; `approvalSent` makes the second of the two a no-op.
+async function answerRunApproval(approveBtn) {
+  const id = approveBtn.dataset.approve;
+  const choice = approveBtn.dataset.choice;
+  if (approvalAlreadySent(id, choice)) return;
+  noteApprovalSent(id, choice);
+  const card = approveBtn.closest(".job");
+  const warn = card ? card.querySelector("[data-reply-warn]") : null;
+  approveBtn.disabled = true;
+  try {
+    const res = await apiFetch("/api/jobs/approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, choice, requestId: approveBtn.dataset.request || null }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) {
+      if (warn) warn.textContent = out.error || `approval failed (HTTP ${res.status})`;
+      approveBtn.disabled = false;
+      approvalSent.delete(approvalKey(id, choice));
+    }
+  } catch (err) {
+    if (warn) warn.textContent = `approval failed: ${err.message}`;
+    approveBtn.disabled = false;
+    approvalSent.delete(approvalKey(id, choice));
+  }
+}
+
 // ---- approvals ------------------------------------------------------------------
 // Requests arrive from the Hermes approval-transport plugin (~/.hermes/plugins/worktree-panel).
 // This only records the human's choice: Hermes owns the policy, the timeout and the fail-closed
@@ -2836,7 +2865,33 @@ function tickApprovals() {
 }
 setInterval(tickApprovals, 1000);
 
+// A background repaint can replace the button between the press and the release, and a click is only delivered
+// when both land on the same node - so a parked run that keeps emitting events made its own approval buttons
+// unclickable. Both answer paths are therefore driven from pointerup (the element under the cursor at release,
+// even a freshly rebuilt one), and this records the choice so the click that sometimes follows does not send it
+// twice.
+const approvalSent = new Map(); // `${id}|${choice}` -> when it was sent
+
+function approvalKey(id, choice) {
+  return `${id || ""}|${choice || ""}`;
+}
+
+function approvalAlreadySent(id, choice) {
+  const at = approvalSent.get(approvalKey(id, choice));
+  return Boolean(at && Date.now() - at < 4000);
+}
+
+function noteApprovalSent(id, choice) {
+  approvalSent.set(approvalKey(id, choice), Date.now());
+  if (approvalSent.size > 40) {
+    const cut = Date.now() - 60000;
+    for (const [k, at] of approvalSent) if (at < cut) approvalSent.delete(k);
+  }
+}
+
 async function answerApproval(id, choice, btn) {
+  if (approvalAlreadySent(id, choice)) return;
+  noteApprovalSent(id, choice);
   const card = btn?.closest(".approval");
   const err = card?.querySelector(".ap-err");
   card?.querySelectorAll("button").forEach((b) => (b.disabled = true));
@@ -2851,10 +2906,13 @@ async function answerApproval(id, choice, btn) {
     if (!res.ok) {
       if (err) err.textContent = j.error || `HTTP ${res.status}`;
       card?.querySelectorAll("button").forEach((b) => (b.disabled = false));
+      // Nothing was accepted, so the same choice may be pressed again at once.
+      approvalSent.delete(approvalKey(id, choice));
     }
   } catch (e) {
     if (err) err.textContent = e.message;
     card?.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    approvalSent.delete(approvalKey(id, choice));
   }
 }
 
@@ -3299,7 +3357,9 @@ function conversationSignature(conv) {
     l.yolo ? "y" : "",
     l.worktree || "",
     l.existing ? "e" : "",
-    l.tokens?.total || "",
+    // l.tokens.total is NOT here: it changes with every event of a running turn, and each rebuild replaced the
+    // card's buttons under the reader's cursor - which is what made an approval unclickable. The foot is repainted
+    // in place (paintCardMeta) and a finished turn repaints anyway when its status changes.
     // A steer the turn never read comes back as a note in the reply area: without it here the card would not
     // repaint, and the note would only appear whenever something unrelated forced a rebuild.
     l.pendingSteer ? `s${l.pendingSteer.at || 1}` : "",
@@ -6264,24 +6324,7 @@ document.addEventListener("click", async (e) => {
   if (approveBtn) {
     e.preventDefault();
     e.stopPropagation();
-    const card = approveBtn.closest(".job");
-    const warn = card ? card.querySelector("[data-reply-warn]") : null;
-    approveBtn.disabled = true;
-    try {
-      const res = await apiFetch("/api/jobs/approve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: approveBtn.dataset.approve, choice: approveBtn.dataset.choice, requestId: approveBtn.dataset.request || null }),
-      });
-      const out = await res.json().catch(() => ({}));
-      if (!res.ok || !out.ok) {
-        if (warn) warn.textContent = out.error || `approval failed (HTTP ${res.status})`;
-        approveBtn.disabled = false;
-      }
-    } catch (err) {
-      if (warn) warn.textContent = `approval failed: ${err.message}`;
-      approveBtn.disabled = false;
-    }
+    void answerRunApproval(approveBtn);
     return;
   }
   // Steer the turn that is running: the primary action while the agent is busy.
@@ -6498,6 +6541,24 @@ document.addEventListener("keydown", async (e) => {
     if (state.hot.on) hotAfterSend(thread);
   }
 });
+// Answering an approval happens on pointerup, not on click: a repaint between the press and the release replaces
+// the button, and the browser then delivers no click at all. The choices are explicit buttons, so the release is
+// the decision; `approvalSent` makes the click that sometimes still follows a no-op.
+document.addEventListener("pointerup", (e) => {
+  if (e.button !== 0) return;
+  const panelBtn = e.target.closest && e.target.closest("[data-approval-choice]");
+  if (panelBtn) {
+    e.preventDefault();
+    void answerApproval(panelBtn.dataset.approvalId, panelBtn.dataset.approvalChoice, panelBtn);
+    return;
+  }
+  const runBtn = e.target.closest && e.target.closest("[data-approve]");
+  if (runBtn) {
+    e.preventDefault();
+    void answerRunApproval(runBtn);
+  }
+});
+
 document.addEventListener("input", (e) => {
   const box = e.target.closest && e.target.closest(".reply-box");
   if (!box) return;
