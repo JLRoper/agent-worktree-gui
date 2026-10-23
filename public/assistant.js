@@ -510,7 +510,9 @@
           <label>approval waiting <input type="number" min="15" max="3600" data-as-set="approvalSeconds" value="${s.approvalSeconds}"> s</label></div>
         <div class="as-line"><label>context over <input type="number" min="50" max="100" data-as-set="contextPercent" value="${s.contextPercent}"> %</label>
           <label>wakes / hour <input type="number" min="0" max="60" data-as-set="maxWakesPerHour" value="${s.maxWakesPerHour}"></label></div>
-        <div class="as-help">A long build is silent too, which is why “no new output” only journals by default. Raise the repeat bar if “same call” is noisy on your agents.</div>
+        <div class="as-line"><label title="how recently a worker must have finished for work left in its tree to be worth a word">leftover work <input type="number" min="1" max="240" data-as-set="leftoverMinutes" value="${s.leftoverMinutes}"> min</label>
+          <label title="a delegated subagent that writes nothing for this long is worth flagging">child silent <input type="number" min="60" max="3600" data-as-set="childQuietSeconds" value="${s.childQuietSeconds}"> s</label></div>
+        <div class="as-help">A long build is silent too, which is why “no new output” only journals by default. Raise the repeat bar if “same call” is noisy on your agents. Leftover work and a silent child are both judged from what the board and the gateway already know — no extra git or sqlite pass.</div>
       </div>
       <div class="as-group">
         <h4>Per-rule escalation</h4>

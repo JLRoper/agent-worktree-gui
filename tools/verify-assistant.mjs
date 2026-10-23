@@ -322,6 +322,53 @@ console.log("a changed default reaches files written before it");
   eq(make({}, v1log).settings.rules.watch, "log", "a non-default value is never migrated");
 }
 
+console.log("work left in a finished tree");
+{
+  const rows = [
+    { path: "C:/work/left", branch: "wtgui/left", verdict: "AHEAD", ahead: 2, dirtyFiles: [{ code: " M", path: "a.md" }], untrackedFiles: [{ path: "b.md" }] },
+  ];
+  const a = make();
+  a.getRows = () => rows;
+  board = [job({ thread: "wtgui-left", status: "done", endedAt: iso(t0 - 60_000), worktreePath: "C:/work/left" })];
+  a.tick();
+  const al = a.state().alerts.find((x) => x.rule === "leftover");
+  ok(al && /work left in its tree/.test(al.title), "a finished worker with dirty files is reported", al?.title);
+  ok(al.evidence.some((e) => e.label === "left" && /modified/.test(e.value) && /untracked/.test(e.value)), "the alert says what is left", JSON.stringify(al?.evidence));
+  a.tick();
+  eq(a.state().alerts.filter((x) => x.rule === "leftover").length, 1, "it fires once for the same tree state");
+
+  const b = make();
+  b.getRows = () => [{ path: "C:/work/clean", branch: "wtgui/clean", verdict: "MERGED", ahead: 0, dirtyFiles: [], untrackedFiles: [] }];
+  board = [job({ thread: "wtgui-clean", status: "done", endedAt: iso(t0 - 60_000), worktreePath: "C:/work/clean" })];
+  b.tick();
+  eq(b.state().alerts.filter((x) => x.rule === "leftover").length, 0, "a clean, merged tree says nothing");
+
+  const c = make();
+  c.getRows = () => rows;
+  board = [job({ thread: "wtgui-old", status: "done", endedAt: iso(t0 - 3 * 3600_000), worktreePath: "C:/work/left" })];
+  c.tick();
+  eq(c.state().alerts.filter((x) => x.rule === "leftover").length, 0, "work that ended hours ago is not re-raised");
+}
+
+console.log("a delegated child that has gone quiet");
+{
+  const a = make();
+  a.getChildren = () => ({
+    "wtgui-parent": [
+      { id: "kid-1", title: "write the docs", running: true, lastSeen: t0 - 10 * 60_000, msgs: 4, preview: "patch · README.md" },
+      { id: "kid-2", title: "a child that finished", running: false, lastSeen: t0 - 10 * 60_000, msgs: 9 },
+    ],
+  });
+  board = [job({ thread: "wtgui-parent", status: "running", label: "the parent", lines: [line("tool", "🔀 delegate_task · x")] })];
+  a.tick();
+  const al = a.state().alerts.find((x) => x.rule === "child");
+  ok(al && /produced nothing/.test(al.title), "a silent running child is reported", al?.title);
+  ok(al.evidence.some((e) => e.label === "silent"), "with how long it has been quiet", JSON.stringify(al?.evidence));
+  ok(!/hung/i.test(`${al?.title} ${al?.detail}`), "the wording is no-activity, never hung");
+  a.tick();
+  eq(a.state().alerts.filter((x) => x.rule === "child").length, 1, "one alert per child, not one per tick");
+}
+
 console.log("the action grammar");
 {
   const acts = parseActions("hello\nTO abc-1: do x\nWATCH abc-1: deploy | 15\nNOTE: remembered");
