@@ -332,16 +332,17 @@ console.log("work left in a finished tree");
   board = [job({ thread: "wtgui-left", status: "done", endedAt: iso(t0 - 60_000), worktreePath: "C:/work/left" })];
   a.tick();
   const al = a.state().alerts.find((x) => x.rule === "leftover");
-  ok(al && /work left in its tree/.test(al.title), "a finished worker with dirty files is reported", al?.title);
+  ok(al && /uncommitted work/.test(al.title), "a finished worker with dirty files is reported", al?.title);
   ok(al.evidence.some((e) => e.label === "left" && /modified/.test(e.value) && /untracked/.test(e.value)), "the alert says what is left", JSON.stringify(al?.evidence));
   a.tick();
   eq(a.state().alerts.filter((x) => x.rule === "leftover").length, 1, "it fires once for the same tree state");
 
   const b = make();
-  b.getRows = () => [{ path: "C:/work/clean", branch: "wtgui/clean", verdict: "MERGED", ahead: 0, dirtyFiles: [], untrackedFiles: [] }];
+  // Three commits ahead of main and nothing uncommitted: the normal state of an agent branch, not a leftover.
+  b.getRows = () => [{ path: "C:/work/clean", branch: "wtgui/clean", verdict: "AHEAD", ahead: 3, dirtyFiles: [], untrackedFiles: [] }];
   board = [job({ thread: "wtgui-clean", status: "done", endedAt: iso(t0 - 60_000), worktreePath: "C:/work/clean" })];
   b.tick();
-  eq(b.state().alerts.filter((x) => x.rule === "leftover").length, 0, "a clean, merged tree says nothing");
+  eq(b.state().alerts.filter((x) => x.rule === "leftover").length, 0, "a clean tree with unmerged commits says nothing");
 
   const c = make();
   c.getRows = () => rows;

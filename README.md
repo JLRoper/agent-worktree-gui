@@ -373,7 +373,9 @@ size are remembered; `Ctrl+Shift+A` toggles it, `Esc` closes it when the caret i
   ended on a question), `noevidence` (an implementation-sounding turn that touched no file and left no
   deliverable), `collision` (two live turns in one tree), `context` (near the context ceiling), `watch`
   (a watch finished or missed its deadline), `leftover` (a worker ended and its tree still holds modified or
-  untracked files, or commits that are not on main — read from the scanner's own row, never a second git pass)
+  untracked files — read from the scanner's own row, never a second git pass; commits that are not on main are the
+  normal state of an agent's branch until you merge them, so they are named on the alert as context rather than
+  being a trigger)
   and `child` (a delegated subagent that has written nothing for `childQuietSeconds` — the wording is "no
   activity for 6m", never "hung": a long tool call looks the same; read from the gateway's session store, and
   only for threads this board is showing). Every alert carries the evidence it was built from — counts,
