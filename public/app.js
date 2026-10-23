@@ -16,6 +16,9 @@ const state = {
   // Hot Agent: the rotation through agents that are waiting for input. `stack` is the visit history (so
   // Alt+Left can walk back), `cursor` points at the one on screen.
   hot: { on: false, stack: [], cursor: -1 },
+  // The amber flash is held here, not only on the DOM node: opening a project or a row repaints the card, and a
+  // class added to the old element dies with it. The renderer re-applies it until the window closes.
+  hotFlash: { thread: null, until: 0 },
   projects: new Map(),
   // Handle for the board-reorder clock, which the settings row can re-arm at another cadence.
   reorderTimer: null,
@@ -1338,7 +1341,8 @@ function conversationHtml(conv) {
     : "";
   const jumped = state.jumpThread && state.jumpThread.thread === thread && Date.now() < state.jumpThread.until ? " jump" : "";
   const zoom = state.consoleZoom.get(thread);
-  return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}${jumped}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}"${zoom ? ` style="--out-size:${zoom}px"` : ""}>
+  const hotFlash = state.hotFlash.thread === thread && Date.now() < state.hotFlash.until;
+  return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}${jumped}${hotFlash ? " hot-flash" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}"${zoom ? ` style="--out-size:${zoom}px"` : ""}>
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
       <span class="agent-glyph" title="a Hermes agent session — ⧉ marks an agent row">\u29c9</span>
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
@@ -5374,13 +5378,19 @@ function hotStillWaiting(thread) {
 
 // The whole card flashes, not just the box: the rotation moves the reader's attention to a panel, and a ring
 // around the panel is what says "this one". The caret still lands in the reply box.
-function flashHotCard(card) {
+function flashHotCard(thread) {
+  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
   if (!card) return;
+  const until = Date.now() + 1300;
+  state.hotFlash = { thread, until };
   card.classList.remove("hot-flash");
   void card.offsetWidth; // restart it even when the last flash is still fading
   card.classList.add("hot-flash");
-  clearTimeout(card._hotFlashT);
-  card._hotFlashT = setTimeout(() => card.classList.remove("hot-flash"), 1300);
+  clearTimeout(state.hotFlashTimer);
+  state.hotFlashTimer = setTimeout(() => {
+    state.hotFlash = { thread: null, until: 0 };
+    document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)?.classList.remove("hot-flash");
+  }, 1300);
 }
 
 function paintHotButton() {
@@ -5394,17 +5404,41 @@ function paintHotButton() {
     : "Hot Agent — step through the agents that are waiting on you: each one is opened, its reply box focused and flashed amber. Enter sends and moves on; Alt+Right skips; Alt+Left goes back.";
 }
 
-function hotFocus(thread) {
-  const row = hotRowFor(thread);
-  if (!row) return false;
-  if (!state.expandedProjects.has(row.project)) toggleProject(row.project);
-  const key = keyOf(row.project, row.path);
+// Open exactly the path to one card and close everything else: after Collapse all the project is only "open"
+// in state, and the folder holding it is still shut - an open project inside a closed folder is not on screen,
+// which is why the counter moved and nothing appeared. The rotation keeps one project visible at a time.
+function hotOpenPath(row) {
+  const project = row.project;
+  for (const name of [...state.expandedProjects]) {
+    if (name !== project) toggleProject(name);
+  }
+  const sec = document.querySelector(`section.project[data-project="${CSS.escape(project)}"]`);
+  const root = sec?.closest("section.root-group")?.dataset.root;
+  if (root && state.collapsedRoots.has(root)) {
+    state.collapsedRoots.delete(root);
+    saveCollapsedRoots();
+    applyRootCollapse(root);
+    paintCollapseAll();
+  }
+  if (!state.expandedProjects.has(project)) toggleProject(project);
+  const key = keyOf(project, row.path);
   if (!state.expanded.has(key)) {
     document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
   }
-  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+}
+
+function hotFocus(thread) {
+  const row = hotRowFor(thread);
+  if (!row) return false;
+  hotOpenPath(row);
+  let card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
   if (!card) return false;
-  if (card.classList.contains("collapsed")) card.querySelector(".job-head")?.click();
+  if (card.classList.contains("collapsed")) {
+    // Unfolding repaints the card, so the node we clicked is replaced: re-query or every step after this
+    // (scroll, focus, flash) runs against a detached element and does nothing visible.
+    card.querySelector(".job-head")?.click();
+    card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`) || card;
+  }
   scrollCardUnderBar(card);
   const box = card.querySelector(".reply-box");
   if (box) {
@@ -5416,7 +5450,7 @@ function hotFocus(thread) {
     const end = box.value.length;
     if (box.setSelectionRange) box.setSelectionRange(end, end);
   }
-  flashHotCard(card);
+  flashHotCard(thread);
   return true;
 }
 
