@@ -20,6 +20,7 @@ import { Approvals } from "./lib/approvals.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
   sessionSettings, writeSessionListLimit, SESSION_LIST_MIN, SESSION_LIST_MAX,
+  providerState, writeProviderSettings,
 } from "./lib/hermes-config.js";
 import { hermesSessionTail } from "./lib/activity.js";
 import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./lib/subagents.js";
@@ -464,6 +465,38 @@ const server = createServer(async (req, res) => {
         // so the next prompt uses the new window without restarting the gateway.
         note: "saved",
       });
+    }
+
+    // The provider endpoint every run talks to: OpenRouter's URL and the key it authenticates with. The
+    // key itself never leaves this process - GET reports whether one is set, where it came from and its
+    // last four characters; POST writes into config.yaml's model block (the file the gateway re-reads).
+    if (route === "/api/settings/provider" && req.method === "GET") {
+      return sendJson(res, 200, providerState());
+    }
+
+    if (route === "/api/settings/provider" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const state = providerState();
+      if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
+      try {
+        const wrote = writeProviderSettings({
+          baseUrl: body.baseUrl,
+          apiKey: body.apiKey,
+          clearKey: Boolean(body.clearKey),
+        });
+        const what = [wrote.wroteUrl ? "model.base_url" : null, wrote.wroteKey ? "model.api_key" : null, wrote.clearedKey ? "model.api_key removed" : null]
+          .filter(Boolean)
+          .join(", ");
+        log(`${what || "provider settings"} written to ${wrote.configPath}`);
+        return sendJson(res, 200, {
+          ...providerState(),
+          written: true,
+          note: "saved — the next run uses it; a run already in flight keeps the endpoint and key it started with",
+        });
+      } catch (e) {
+        return sendJson(res, 400, { ...providerState(), error: String((e && e.message) || e) });
+      }
     }
 
     // The models the New-agent form offers. Read from the gateway home, not from the run stream: the

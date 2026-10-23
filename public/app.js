@@ -7538,6 +7538,121 @@ function toggleSettings(open = null) {
   // panel is not the owner of that value.
   void loadApprovalSetting();
   void loadSessionSetting();
+  void loadProviderSetting();
+}
+
+// ---- the provider endpoint every run talks to ------------------------------------------------
+// model.base_url and model.api_key in config.yaml. The key never comes back from the server: the box
+// shows whether one is set, where it came from and its last four characters, and typing replaces it.
+let providerStateCache = null;
+
+function paintProviderSetting(error = null) {
+  const url = $("provider-url");
+  const key = $("provider-key");
+  const preview = $("provider-preview");
+  const save = $("btn-provider-save");
+  const clear = $("btn-provider-clear");
+  const s = providerStateCache;
+  if (!preview) return;
+  if (!s) {
+    preview.textContent = "could not read the provider settings";
+    preview.classList.add("bad");
+    return;
+  }
+  if (url && document.activeElement !== url) url.value = s.baseUrl || "";
+  if (url) url.placeholder = s.defaultBaseUrl || "https://openrouter.ai/api/v1";
+  if (key) {
+    const where = s.key.inConfig ? "in config.yaml" : s.key.envName ? `from ${s.key.envName}` : null;
+    key.placeholder = s.key.set ? `${s.key.masked}${where ? ` ${where}` : ""} — type to replace` : "(not set — runs have no key)";
+    if (error) key.value = "";
+  }
+  if (save) save.disabled = !s.editable;
+  if (clear) clear.disabled = !s.editable || !s.key.inConfig;
+  const urlText = s.baseUrl || `${s.defaultBaseUrl} (default)`;
+  const keyText = s.key.set ? `${s.key.masked}${s.key.inConfig ? " in config.yaml" : s.key.envName ? ` from ${s.key.envName}` : ""}` : "not set";
+  preview.textContent = error
+    ? `NOT SAVED — ${error}`
+    : `${s.provider} · ${urlText} · key ${keyText}`;
+  preview.classList.toggle("bad", Boolean(error) || !s.editable);
+  preview.title = s.editable ? s.configPath : s.reason || s.configPath;
+}
+
+async function loadProviderSetting() {
+  try {
+    const r = await apiFetch("/api/settings/provider");
+    providerStateCache = await r.json();
+    paintProviderSetting();
+  } catch (e) {
+    providerStateCache = null;
+    paintProviderSetting(e.message);
+  }
+}
+
+async function saveProviderSetting() {
+  const url = $("provider-url");
+  const key = $("provider-key");
+  if (!providerStateCache?.editable) return;
+  const preview = $("provider-preview");
+  if (preview) {
+    preview.textContent = "saving…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch("/api/settings/provider", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baseUrl: url?.value || "", apiKey: key?.value || "" }),
+    });
+    const d = await r.json();
+    providerStateCache = d;
+    if (!r.ok) {
+      paintProviderSetting(d.error || `HTTP ${r.status}`);
+      return;
+    }
+    if (key) key.value = "";
+    paintProviderSetting();
+    showBanner(d.note || "provider settings saved");
+  } catch (e) {
+    paintProviderSetting(e.message);
+  }
+}
+
+// Two clicks: the first only arms the button, so a stray one cannot take the key out of config.yaml.
+async function clearProviderKey(btn) {
+  if (!btn || !providerStateCache?.editable) return;
+  if (btn.dataset.armed !== "1") {
+    btn.dataset.armed = "1";
+    btn.textContent = "clear key?";
+    btn.classList.add("dirty");
+    clearTimeout(btn._disarm);
+    btn._disarm = setTimeout(() => {
+      btn.dataset.armed = "";
+      btn.textContent = "clear key";
+      btn.classList.remove("dirty");
+    }, 4000);
+    return;
+  }
+  clearTimeout(btn._disarm);
+  btn.dataset.armed = "";
+  btn.textContent = "clear key";
+  btn.classList.remove("dirty");
+  try {
+    const r = await apiFetch("/api/settings/provider", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clearKey: true }),
+    });
+    const d = await r.json();
+    providerStateCache = d;
+    if (!r.ok) {
+      paintProviderSetting(d.error || `HTTP ${r.status}`);
+      return;
+    }
+    paintProviderSetting();
+    showBanner(d.key?.set ? "model.api_key removed — the .env key is used again" : "model.api_key removed — runs now have no key from config.yaml");
+  } catch (e) {
+    paintProviderSetting(e.message);
+  }
 }
 
 // ---- the approval window -------------------------------------------------------------------
@@ -7828,6 +7943,12 @@ $("term-weight-select")?.addEventListener("change", (e) => applyTermStyle({ save
 // user's global Hermes config, so it takes a deliberate second one.
 $("btn-approval-save")?.addEventListener("click", () => void saveApprovalSetting());
 $("btn-session-limit-save")?.addEventListener("click", () => void saveSessionSetting());
+$("btn-provider-save")?.addEventListener("click", () => void saveProviderSetting());
+$("btn-provider-clear")?.addEventListener("click", (e) => void clearProviderKey(e.currentTarget));
+$("btn-provider-default-url")?.addEventListener("click", () => {
+  const url = $("provider-url");
+  if (url) url.value = url.placeholder || "https://openrouter.ai/api/v1";
+});
 $("session-limit")?.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   e.preventDefault();

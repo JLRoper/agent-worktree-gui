@@ -154,6 +154,8 @@ button.primary:hover { background: #24466a; }
    an explicit Save rather than a picker that applies on change. */
 .settings-sep { height: 1px; margin: 14px 0 12px; background: var(--line); }
 .settings-row input[type="number"] { width: 74px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
+.settings-row input[type="url"], .settings-row input[type="password"] { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
+.settings-row input[type="url"]::placeholder, .settings-row input[type="password"]::placeholder { color: var(--dimmer); }
 .settings-row input[type="number"]:disabled { color: var(--dimmer); background: #0e1218; }
 .settings-unit { font-size: 11px; color: var(--dimmer); }
 .settings-row button { padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
