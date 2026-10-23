@@ -7284,7 +7284,7 @@ function removeRow(project, p) {
 }
 
 // Paint one project's rows into its (possibly just replaced) tbody.
-function renderProjectRows(name) {
+function renderProjectRows(name, { typing = null } = {}) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
   // The rebuild below replaces every row of this project, and it must not walk the reader up the page. Emptying the
@@ -7364,6 +7364,10 @@ function renderProjectRows(name) {
     const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
     window.scrollTo({ top: Math.min(pageY, maxY) });
   }
+  // A caller that replaced the project's section before calling us has already detached the box the reader was
+  // typing in, so there was nothing left here to capture: it hands the caret in instead, and this puts it back into
+  // the box we just rebuilt.
+  if (typing) restoreTyping(tbody, typing);
   restoreScrolls(tbody, prevScrolls);
   applyStoredScrolls(tbody);
   restoreCardSelection(heldSelection);
@@ -7392,6 +7396,9 @@ function renderAll() {
   // happens while part of the board is missing clamps a reader parked near the bottom up the page, and the height
   // coming back does not bring their scroll with it.
   const pageY = window.scrollY;
+  // The replacement takes every card off the page, so the caret is read here, before it is gone, and put back at the
+  // end - a snapshot repaint must not end a sentence the reader is in the middle of.
+  const typingBoard = captureTyping($("projects"));
   invalidatePanelMap();
   const projects = sortedProjects();
   for (const id of [...state.expandedProjects]) if (!state.projects.has(id)) state.expandedProjects.delete(id);
@@ -7444,6 +7451,8 @@ function renderAll() {
     renderProjectRows(p.name);
     refreshChips(p.name);
   }
+  // The caret read before the replacement: put it back in the box this rebuild made for it.
+  if (typingBoard) restoreTyping($("projects"), typingBoard);
   paintConfigLine();
   paintCollapseAll();
   if (window.scrollY !== pageY) {
@@ -7615,6 +7624,10 @@ function connect() {
     // Read the page position BEFORE anything leaves the document. Reading scrollY forces a layout, and a layout with
     // this project's rows detached is exactly what clamps the reader upward when they are near the bottom of the page.
     const pageY = window.scrollY;
+    // And the caret, for the same reason: this section is about to leave the page, taking the reply box the reader
+    // is typing in with it. Once it is detached there is no focus left to capture, so it is read here and handed to
+    // the row repaint below, which puts it back in the box it rebuilds.
+    const typing = captureTyping(sec);
     const oldBody = sec.querySelector(`[data-tbody="${CSS.escape(evt.project.name)}"]`);
     const oldRows = oldBody ? [...oldBody.childNodes] : [];
     const holder = document.createElement("div");
@@ -7638,7 +7651,7 @@ function connect() {
       const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
       window.scrollTo({ top: Math.min(pageY, maxY) });
     }
-    renderProjectRows(evt.project.name);
+    renderProjectRows(evt.project.name, { typing });
     // A project whose rows really did grow or shrink moves the document. This handler is one synchronous step, so a
     // scroll that moved under it is a clamp, not the reader: put them back before the board re-sorts under them.
     if (window.scrollY !== pageY) {
