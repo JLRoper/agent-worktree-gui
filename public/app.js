@@ -23,6 +23,7 @@ const ANCHOR_TOUCH_SECONDS_KEY = "wm.anchorTouchSeconds"; // was wm.anchorFollow
 const ANCHOR_TOUCH_SECONDS_DEFAULT = 30;
 const FLASH_TIME_KEY = "wm.flashSeconds";
 const FLASH_TIME_DEFAULT = 0.9;   // seconds; the row flash the panel has always used
+const EVENT_FLASH_KEY = "wm.eventFlash";   // flash a row when an event of its own arrives (on by default)
 
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
@@ -105,6 +106,16 @@ const state = {
   // { open, filter }. Kept here rather than in the DOM because every snapshot rebuild replaces the console's
   // markup - the block was opening and then snapping shut the next time a line arrived.
   toolGroupOpen: new Map(),
+  // Events are life. A line arriving in an agent's console, a job starting or ending, an approval: each one proves
+  // the worktree that owns that agent is being worked in right now, without waiting for the next scan to notice.
+  // Key = worktree row key -> ms of the newest event seen for it.
+  eventLife: new Map(),
+  // One green pulse per second per row, not one per line: a streaming turn emits dozens of lines a second, and
+  // re-adding the class for each of them is a style pass each and a row that never stops being green.
+  lastEventFlashAt: new Map(),
+  // Whether an arriving event flashes the row and its project. The life clock and the ring restart happen either
+  // way; this only decides whether the board says it out loud. Settings > Board.
+  eventFlash: loadAnchorFlag(EVENT_FLASH_KEY, true),
   // The reader's attention, tracked beside the geometry: the card under a moving pointer, and the card last
   // clicked / focused / typed in. Either one, while it is on screen and recent, wins over the reading line.
   hoverThread: null,
@@ -4843,11 +4854,14 @@ function panelMap() {
 function invalidatePanelMap() {
   panelMapCache = null;
   agentsByPathCache = null;
+  threadRowKeyCache = null;
 }
 
 // Agents grouped by the worktree that OWNS them (set when the agent was created), so a row can
 // list its own agents. Conversations with no owner are "homeless" and stay in the Agents panel.
 let agentsByPathCache = null;
+// thread -> worktree row key, for turning an event into life on a row. Rebuilt with the panel maps.
+let threadRowKeyCache = null;
 function agentsByPath() {
   if (agentsByPathCache) return agentsByPathCache;
   const map = new Map();
@@ -5225,9 +5239,23 @@ function noteScan(row) {
   state.lastScanAt.set(key, t);
 }
 
+// The newest moment anything told us this worktree is alive: what the last scan found, or an event we received
+// that belongs to one of its agents. An event is a fresh look at the tree, so it also restarts the ring.
+function eventLifeAt(row) {
+  return state.eventLife.get(keyOf(row.project, row.path)) || 0;
+}
+
+function lifeAtFor(row) {
+  return Math.max(eventLifeAt(row), Date.parse(row.lastAliveAt || "") || 0);
+}
+
 function ringState(row) {
   const now = Date.now();
-  const scanned = Date.parse(row.scannedAt || "");
+  const scannedRaw = Date.parse(row.scannedAt || "");
+  const fromEvent = eventLifeAt(row);
+  // The ring counts toward the NEXT READ. An event we just received says the tree is busy now, so the count starts
+  // again from it - which is the "reset the donut" the reader asked for. Where neither is known, leave it unknown.
+  const scanned = Number.isFinite(scannedRaw) ? Math.max(scannedRaw, fromEvent) : fromEvent || scannedRaw;
   const configured = Math.max(1, Number(row.pollSeconds || state.settings.worktreeSeconds || 5));
   const observed = state.pollGap.get(keyOf(row.project, row.path)) || 0;
   // Never shorter than the configured cadence, never more than 10x it (a stuck row must not turn
@@ -5255,7 +5283,7 @@ function ringStroke(st) {
 }
 
 function ageCellHtml(row) {
-  const alive = Date.parse(row.lastAliveAt || "");
+  const alive = lifeAtFor(row) || NaN;
   const label = Number.isFinite(alive) ? fmtDur(Date.now() - alive) : "never live";
   const st = ringState(row);
   return `<td class="age nowrap" data-key="${esc(keyOf(row.project, row.path))}">
@@ -5276,9 +5304,11 @@ function paintAgeCell(cell, row) {
     if (arc.getAttribute("stroke-dashoffset") !== off) arc.setAttribute("stroke-dashoffset", off);
     if (arc.getAttribute("stroke") !== stroke) arc.setAttribute("stroke", stroke);
   }
-  // A running panel agent IS life, observed by us, whatever the last scan said.
+  // A running panel agent IS life, observed by us, whatever the last scan said - and so is any event we have
+  // received about this worktree since.
   const running = panelFor(row)?.running;
-  const alive = running ? st.now : Date.parse(row.lastAliveAt || "");
+  const fromEvent = eventLifeAt(row);
+  const alive = running ? st.now : lifeAtFor(row) || NaN;
   const live = Number.isFinite(alive);
   const num = cell.querySelector(".age-num");
   if (num) {
@@ -5286,10 +5316,83 @@ function paintAgeCell(cell, row) {
     num.classList.toggle("dimmer", !live);
   }
   const cadence = st.every === st.configured ? `every ${st.every}s` : `every ${st.every}s, observed (configured ${st.configured}s)`;
+  const why = running
+    ? " (a panel agent is running here now)"
+    : fromEvent && fromEvent >= (Date.parse(row.lastAliveAt || "") || 0)
+      ? " (an event we received for this worktree)"
+      : "";
   const title =
-    `last life ${live ? `${fmtDur(st.now - alive)} ago${running ? " (a panel agent is running here now)" : ""}` : "never seen"} · polled ${relTime(row.scannedAt)} ago · ` +
+    `last life ${live ? `${fmtDur(st.now - alive)} ago${why}` : "never seen"} · polled ${relTime(row.scannedAt)} ago · ` +
     `next read ${st.remain > 0 ? `in ${Math.ceil(st.remain / 1000)}s` : `due now${st.overdue > st.total ? ` (overdue ${fmtDur(st.overdue)})` : ""}`} (${cadence})`;
   if (cell.title !== title) cell.title = title;
+}
+
+// The worktree row an agent's thread belongs to, if it has one: the owner path on its newest turn. An agent with no
+// owner sits in the unattached panel, so there is no row on the board to light up for it.
+// Cached per render generation: this is asked once per streamed line, and a turn emits hundreds of them. The cache
+// dies with the rest of the panel maps, which is whenever a row or an owner changes.
+function rowKeyForThread(thread) {
+  if (!thread) return null;
+  if (!threadRowKeyCache) threadRowKeyCache = new Map();
+  if (threadRowKeyCache.has(thread)) return threadRowKeyCache.get(thread);
+  const conv = conversations().find((c) => c.thread === thread);
+  const owner = conv?.latest?.ownerPath || conv?.first?.ownerPath || "";
+  let key = null;
+  if (owner) {
+    const p = normPath(owner).toLowerCase();
+    for (const [k, row] of state.rows) {
+      if (normPath(row.path).toLowerCase() === p) {
+        key = k;
+        break;
+      }
+    }
+  }
+  threadRowKeyCache.set(thread, key);
+  return key;
+}
+
+// The green pulse a row gets when the scanner finds life - reused here, so an event and a scan say the same thing.
+function pulseRow(key) {
+  const tr = document.querySelector(`#projects tr.row[data-key="${CSS.escape(key)}"]`);
+  if (!tr) return;
+  tr.classList.remove("flash", "flash-idle");
+  void tr.offsetWidth; // restart the animation rather than let one already running expire under the new class
+  tr.classList.add("flash");
+  clearTimeout(tr._flashT);
+  tr._flashT = setTimeout(() => tr.classList.remove("flash"), flashRowMs() + 40);
+}
+
+function pulseProject(project) {
+  if (!project) return;
+  const sec = document.querySelector(`section.project[data-project="${CSS.escape(project)}"]`);
+  if (!sec) return;
+  sec.classList.remove("flash");
+  void sec.offsetWidth;
+  sec.classList.add("flash");
+  clearTimeout(sec._flashT);
+  sec._flashT = setTimeout(() => sec.classList.remove("flash"), flashProjectMs() + 40);
+}
+
+// An event about a worktree is a sign of life in its own right: the age number starts again, the ring (which counts
+// toward the next read) restarts from now, and the row and its project take the green pulse - unless the reader has
+// switched that pulse off. Returns true when the event belonged to a row, so a caller can tell the difference.
+function noteEventLife(thread) {
+  const key = rowKeyForThread(thread);
+  if (!key) return false;
+  const now = Date.now();
+  if (now > (state.eventLife.get(key) || 0)) state.eventLife.set(key, now);
+  const row = state.rows.get(key);
+  const cell = document.querySelector(`td.age[data-key="${CSS.escape(key)}"]`);
+  if (cell && row) paintAgeCell(cell, row);
+  if (state.eventFlash) {
+    const last = state.lastEventFlashAt.get(key) || 0;
+    if (now - last >= 900) {
+      state.lastEventFlashAt.set(key, now);
+      pulseRow(key);
+      pulseProject(row?.project);
+    }
+  }
+  return true;
 }
 
 // Move each live card into the slot the freshly built detail made for it. A card that is not on the board yet is
@@ -6936,23 +7039,38 @@ function connect() {
   });
   es.addEventListener("job", (e) => {
     state.lastEventAt = Date.now();
-    updateJob(JSON.parse(e.data).job);
+    const job = JSON.parse(e.data).job;
+    updateJob(job);
+    // A job being created, re-statused or finished is news about the worktree that owns it.
+    if (job) noteEventLife(job.thread || job.id);
   });
-  es.addEventListener("jobline", (e) => appendJobLine(JSON.parse(e.data)));
+  es.addEventListener("jobline", (e) => {
+    const evt = JSON.parse(e.data);
+    appendJobLine(evt);
+    // Every line an agent writes is proof that its worktree is being worked in right now - the freshest sign of
+    // life there is, and one the scanner only finds out about on its next pass.
+    noteEventLife(state.jobs.get(evt.id)?.thread || evt.thread || evt.id);
+  });
   es.addEventListener("approval", (e) => {
     const r = JSON.parse(e.data).request;
     if (!r || !r.id) return;
     state.approvals.set(r.id, r);
     renderApprovals();
     // The agent that is blocked now says "waiting on you" instead of just "running".
-    if (r.thread) renderConversation(r.thread);
+    if (r.thread) {
+      noteEventLife(r.thread);
+      renderConversation(r.thread);
+    }
   });
   es.addEventListener("approval-answered", (e) => {
     const evt = JSON.parse(e.data);
     const r = state.approvals.get(evt.id);
     state.approvals.delete(evt.id);
     renderApprovals();
-    if (r && r.thread) renderConversation(r.thread);
+    if (r && r.thread) {
+      noteEventLife(r.thread);
+      renderConversation(r.thread);
+    }
   });
   es.addEventListener("jobs", (e) => {
     state.lastEventAt = Date.now();
@@ -9452,6 +9570,10 @@ $("font-select")?.addEventListener("change", (e) => applyFont("ui", e.target.val
 $("term-select")?.addEventListener("change", (e) => applyFont("term", e.target.value));
 $("term-size-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, size: e.target.value }));
 $("grey-flash")?.addEventListener("change", (e) => applyGreyFlash(Boolean(e.target.checked)));
+$("event-flash")?.addEventListener("change", (e) => {
+  state.eventFlash = Boolean(e.target.checked);
+  saveAnchorFlag(EVENT_FLASH_KEY, state.eventFlash);
+});
 
 // ---- the anchor's two signals: hover and last touched, each switched and timed on its own ----------
 function paintAnchorSettings() {
@@ -9460,11 +9582,13 @@ function paintAnchorSettings() {
   const touch = $("anchor-touch");
   const touchSeconds = $("anchor-touch-seconds");
   const flash = $("flash-time");
+  const eventFlash = $("event-flash");
   if (hover) hover.checked = state.anchorHover;
   if (hoverSeconds) hoverSeconds.value = String(state.anchorHoverSeconds);
   if (touch) touch.checked = state.anchorTouch;
   if (touchSeconds) touchSeconds.value = String(state.anchorTouchSeconds);
   if (flash) flash.value = String(state.flashSeconds);
+  if (eventFlash) eventFlash.checked = state.eventFlash;
   applyFlashTime();
 }
 
