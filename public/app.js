@@ -4341,18 +4341,39 @@ function renderJobs() {
   for (const t of [...state.turnPage.keys()]) if (!threads.has(t)) state.turnPage.delete(t);
   // The list is rebuilt wholesale, so remember where every open transcript was and put it back:
   // a `jobs` event must not cost the reader their place in an agent they are reading.
+  //
+  // This panel sits ABOVE the board, so its height is in front of everything the reader is looking at: a wholesale
+  // rebuild that changes it (or a page that shrinks under a reader parked at the bottom) clamps their scroll and the
+  // content above is gone for good. Hold the page position across the rebuild, and hand the sweep an anchor so the
+  // board below follows it like it does for every other render path.
+  const pageY = window.scrollY;
+  const anchor = captureBoardAnchor();
   const prevScrolls = captureScrolls($("jobs"));
   // These cards are rebuilt from scratch, so a selection standing in one is recorded and put back on the new nodes.
   const heldSelection = captureCardSelection();
+  // And so is the caret: without this, typing in an unattached card's reply box ended the moment anything about the
+  // job list changed - the box was replaced under the reader and focus fell to the page.
+  const typing = captureTyping($("jobs"));
   $("jobs").innerHTML = convs.length
     ? convs.map(conversationHtml).join("")
     : `<p class="empty">No unattached agents${nested ? ` — ${nested} agent${nested === 1 ? "" : "s"} listed under their worktree rows` : ""}.</p>`;
+  restoreTyping($("jobs"), typing);
+  // The panel above the board just changed height. This rebuild is one synchronous step, so a moved scroll is the
+  // browser clamping the page (a shorter document pulls a reader parked at the bottom upward), never the reader
+  // scrolling: put it back, then let the sweep hold the board's own anchor.
+  if (window.scrollY !== pageY) {
+    const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
+    window.scrollTo({ top: Math.min(pageY, maxY) });
+  }
   restoreScrolls($("jobs"), prevScrolls);
   applyStoredScrolls($("jobs"));
   restoreThinkBodies($("jobs"));
   for (const c of convs) restoreReplyDraft(c.thread);
+  // After the drafts are back in their boxes, put the caret back in the one the reader was typing in - with
+  // preventScroll, so a restore never drags the page to the box.
+  restoreTyping($("jobs"), typing);
   restoreCardSelection(heldSelection);
-  scheduleBoardSweep();
+  scheduleBoardSweep(anchor);
   const running = convs.filter((c) => c.turns.some((t) => turnLive(t))).length;
   const folded = convs.filter((c) => state.collapsedJobs.has(c.thread)).length;
   const turns = [...state.jobs.values()].length;
@@ -7132,6 +7153,11 @@ function placeRow(project, row, { flash = false } = {}) {
   row.project = project;
   const key = keyOf(project, row.path);
   const prevRow = state.rows.get(key) || null;
+  // This path takes the row's detail out of the document and puts a new one back. Anything that measures meanwhile
+  // lays the page out with that detail missing, and near the bottom of the page a shorter document clamps the
+  // reader's scroll upward for good. Hold the position, and give the sweep the anchor to hold afterwards.
+  const pageY = window.scrollY;
+  const rowAnchor = captureBoardAnchor();
   // Decided before the new row overwrites the old one, and outside the flash branch: it also decides
   // whether a refresh that found nothing gets the quiet grey pulse.
   const onMain = isMainWorktree(project, row);
@@ -7231,16 +7257,29 @@ function placeRow(project, row, { flash = false } = {}) {
   }
   reorder(project);
   refreshChips(project);
-  scheduleBoardSweep();
+  // The rebuild is one synchronous step, so a moved scroll is the browser clamping rather than the reader leaving:
+  // put the page back before the sweep re-measures the anchor.
+  if (window.scrollY !== pageY) {
+    const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
+    window.scrollTo({ top: Math.min(pageY, maxY) });
+  }
+  scheduleBoardSweep(rowAnchor);
 }
 
 function removeRow(project, p) {
   const key = keyOf(project, p);
+  // A row and its detail leaving the page shortens the document. A reader parked at the bottom would be clamped
+  // upward by however tall it was, and the height does not come back with their scroll - hold the position.
+  const pageY = window.scrollY;
   state.rowEls.get(key)?.remove();
   state.detailEls.get(key)?.remove();
   state.rowEls.delete(key);
   state.detailEls.delete(key);
   state.rows.delete(key);
+  if (window.scrollY !== pageY) {
+    const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
+    window.scrollTo({ top: Math.min(pageY, maxY) });
+  }
   refreshChips(project);
 }
 
@@ -7248,6 +7287,12 @@ function removeRow(project, p) {
 function renderProjectRows(name) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
+  // The rebuild below replaces every row of this project, and it must not walk the reader up the page. Emptying the
+  // tbody and appending row by row laid the page out with part of the project missing - the reply box measures
+  // itself (scrollHeight) while a draft is restored, which forces that layout - and at the bottom of the page ANY
+  // shrink clamps the reader's scroll upward for good: the height comes back, the scroll position does not. So the
+  // rows are built off the document and swapped in one operation, and the page position is held across the swap.
+  const pageY = window.scrollY;
   // Open rows carry agent transcripts; a rebuild must not throw the reader to the top of one.
   const prevScrolls = captureScrolls(tbody);
   const heldSelection = captureCardSelection();
@@ -7266,39 +7311,58 @@ function renderProjectRows(name) {
     prevCards.set(k, cards);
     prevTyping.set(k, captureTyping(dEl));
   }
-  tbody.innerHTML = "";
   // A collapsed project shows nothing, so building its rows would be pure waste — with 94
   // projects that was ~110 invisible rows and most of the render cost of a snapshot.
-  if (!state.expandedProjects.has(name)) {
+  const expanded = state.expandedProjects.has(name);
+  const frag = document.createDocumentFragment();
+  const built = [];
+  if (expanded) {
+    for (const row of orderRows([...state.rows.values()].filter((r) => r.project === name))) {
+      const key = keyOf(name, row.path);
+      const holder = document.createElement("tbody");
+      holder.innerHTML = rowHtml(row);
+      const tr = holder.firstElementChild;
+      frag.appendChild(tr);
+      let dEl = null;
+      if (state.expanded.has(key)) {
+        const h2 = document.createElement("tbody");
+        h2.innerHTML = detailHtml(row);
+        dEl = h2.firstElementChild;
+        frag.appendChild(dEl);
+      }
+      built.push({ key, tr, dEl });
+    }
+  }
+  // One swap: the old rows leave as the new ones arrive, so the document never lays out half-built.
+  tbody.replaceChildren(frag);
+  if (!expanded) {
     for (const k of [...state.rowEls.keys()]) if (state.rows.get(k)?.project === name) state.rowEls.delete(k);
     for (const k of [...state.detailEls.keys()]) if (state.rows.get(k)?.project === name) state.detailEls.delete(k);
     return;
   }
-  const rows = orderRows([...state.rows.values()].filter((r) => r.project === name));
-  for (const row of rows) {
-    const key = keyOf(name, row.path);
-    const holder = document.createElement("tbody");
-    holder.innerHTML = rowHtml(row);
-    const tr = holder.firstElementChild;
-    tbody.appendChild(tr);
+  const live = new Set(built.map((b) => b.key));
+  for (const k of [...state.rowEls.keys()]) if (state.rows.get(k)?.project === name && !live.has(k)) state.rowEls.delete(k);
+  // Only now, with the rows in the document, put the cards into the slots the rebuilt detail made for them and the
+  // reader's draft and caret back into the reply box: a detached box cannot measure itself against its own text.
+  for (const { key, tr, dEl } of built) {
     state.rowEls.set(key, tr);
-    if (state.expanded.has(key)) {
-      const h2 = document.createElement("tbody");
-      h2.innerHTML = detailHtml(row);
-      const dEl = h2.firstElementChild;
-      tr.after(dEl);
-      state.detailEls.set(key, dEl);
-      // Put the cards back into the slots the rebuilt detail made for them, and the reader's draft and caret
-      // back into the reply box.
-      fillAgentSlots(dEl, prevCards.get(key) || new Map());
-      restoreTyping(dEl, prevTyping.get(key) || null);
-      restoreAddAgent(dEl);
-    }
+    if (!dEl) continue;
+    state.detailEls.set(key, dEl);
+    fillAgentSlots(dEl, prevCards.get(key) || new Map());
+    restoreTyping(dEl, prevTyping.get(key) || null);
+    restoreAddAgent(dEl);
   }
   // A row that no longer exists must not leave a dead detail element remembered.
   for (const k of [...state.detailEls.keys()]) {
     if (state.rows.get(k)?.project !== name) state.detailEls.delete(k);
     else if (!state.expanded.has(k)) state.detailEls.delete(k);
+  }
+  // The swap can still change the document's height - a row that really did appear or go away. This whole rebuild is
+  // one synchronous step, so a scroll that moved under it is the browser clamping (near the bottom, a shorter page
+  // pulls the reader up), never the reader scrolling away: put the page back where it was.
+  if (window.scrollY !== pageY) {
+    const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
+    window.scrollTo({ top: Math.min(pageY, maxY) });
   }
   restoreScrolls(tbody, prevScrolls);
   applyStoredScrolls(tbody);
@@ -7324,6 +7388,10 @@ function paintConfigLine() {
 function renderAll() {
   // A full re-render rebuilds the chips from scratch; the job list is the freshest input.
   const anchor = captureBoardAnchor();
+  // The whole board is replaced below, one project tbody at a time. Hold the page position across it: a layout that
+  // happens while part of the board is missing clamps a reader parked near the bottom up the page, and the height
+  // coming back does not bring their scroll with it.
+  const pageY = window.scrollY;
   invalidatePanelMap();
   const projects = sortedProjects();
   for (const id of [...state.expandedProjects]) if (!state.projects.has(id)) state.expandedProjects.delete(id);
@@ -7378,6 +7446,10 @@ function renderAll() {
   }
   paintConfigLine();
   paintCollapseAll();
+  if (window.scrollY !== pageY) {
+    const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
+    window.scrollTo({ top: Math.min(pageY, maxY) });
+  }
   scheduleBoardSweep(anchor);
   refreshAnchorBaseline();
   // A rebuild recreates the sections, so every folder's filter has to be re-applied to the new nodes.
@@ -7540,6 +7612,11 @@ function connect() {
     // Replace only the section's own markup, then immediately repaint its rows: swapping the
     // whole section used to leave an empty <tbody> behind until the next full re-render,
     // which is what made the worktree table vanish for seconds at a time.
+    // Read the page position BEFORE anything leaves the document. Reading scrollY forces a layout, and a layout with
+    // this project's rows detached is exactly what clamps the reader upward when they are near the bottom of the page.
+    const pageY = window.scrollY;
+    const oldBody = sec.querySelector(`[data-tbody="${CSS.escape(evt.project.name)}"]`);
+    const oldRows = oldBody ? [...oldBody.childNodes] : [];
     const holder = document.createElement("div");
     holder.innerHTML = projectSection(evt.project.name);
     const freshHolder = holder.firstElementChild;
@@ -7551,8 +7628,23 @@ function connect() {
       freshHolder._flashT = setTimeout(() => freshHolder.classList.remove("flash"), flashProjectMs() + 40);
     }
     sec.replaceWith(freshHolder);
-    state.tbodyEls.set(evt.project.name, freshHolder.querySelector(`[data-tbody="${CSS.escape(evt.project.name)}"]`));
+    // The fresh section arrives with an empty tbody. Put the rows that were on screen straight back into it, before
+    // anything measures, so the document never lays out with the project missing: the swap takes the section out and
+    // the rows back in between two statements, and nothing in between reads the layout.
+    const newBody = freshHolder.querySelector(`[data-tbody="${CSS.escape(evt.project.name)}"]`);
+    if (oldRows.length && newBody) newBody.replaceChildren(...oldRows);
+    state.tbodyEls.set(evt.project.name, newBody);
+    if (window.scrollY !== pageY) {
+      const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
+      window.scrollTo({ top: Math.min(pageY, maxY) });
+    }
     renderProjectRows(evt.project.name);
+    // A project whose rows really did grow or shrink moves the document. This handler is one synchronous step, so a
+    // scroll that moved under it is a clamp, not the reader: put them back before the board re-sorts under them.
+    if (window.scrollY !== pageY) {
+      const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
+      window.scrollTo({ top: Math.min(pageY, maxY) });
+    }
     reorderProjects();
   });
   es.addEventListener("drop", (e) => {
