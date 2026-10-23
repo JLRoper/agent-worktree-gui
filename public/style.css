@@ -502,6 +502,14 @@ button.chip:active { transform: translateY(1px); }
 .chip-x:hover { color: var(--red); background: var(--red-bg); }
 
 /* The one-click fix offered beside an unborn-HEAD refusal in the New agent form. */
+/* Same pill as "make the first commit": a one-click answer to an error that can be answered. */
+button.btn-retry {
+  margin-left: 6px; padding: 0 8px; border: 1px solid #2f5a7a; border-radius: 999px;
+  background: var(--blue-bg); color: #9ecbff; font-size: 10.5px; line-height: 1.7; cursor: pointer;
+}
+button.btn-retry:hover { background: #16202c; border-color: #3d78a3; }
+button.btn-retry:disabled { color: var(--dimmer); border-color: var(--line); cursor: default; }
+
 .btn-fix-first {
   margin-left: 6px; padding: 1px 8px; border: 1px solid #2f5a7a; border-radius: 999px;
   background: var(--blue-bg); color: #9ecbff; font-size: 11px; line-height: 1.6; cursor: pointer;

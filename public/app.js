@@ -1243,6 +1243,15 @@ function statsLine(stats, model = null) {
   return `<span class="job-stats mono" title="${esc(title)}">${body}</span>`;
 }
 
+// A failed turn can be asked again, but it is not a "retry" in the strict sense: the run is over, and re-sending
+// the prompt starts a NEW turn in the same thread. The button says so in its tooltip rather than pretending the
+// failed one will resume.
+function turnRetryHtml(latest, thread) {
+  if (!latest?.error || !retryableError(latest.error)) return "";
+  if (latest.status === "running" || latest.status === "starting") return "";
+  return ` <button type="button" class="btn-retry" data-retry-turn="${esc(thread)}" title="send this turn's prompt again as a NEW turn — the failed turn's edits are already on disk">retry</button>`;
+}
+
 function conversationHtml(conv) {
   const { thread, turns, latest } = conv;
   const collapsed = state.collapsedJobs.has(thread);
@@ -1296,7 +1305,7 @@ function conversationHtml(conv) {
       // Rebuilt from the gateway's session store, so there was never a process here: "exit ?" and
       // "0s" would both describe a run that did not happen in this panel. Say when it was last used.
       ? `<span class="mono dim">revived · last active ${esc(relTime(latest.startedAt))} ago</span>`
-      : `<span class="mono dim">${esc(outcome)} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${latest.tokens.total}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>`;
+      : `<span class="mono dim">${esc(outcome)} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${latest.tokens.total}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>${turnRetryHtml(latest, thread)}`;
   const artifacts = artifactsFor(conv);
   const blocks = (() => {
     const offset = turnPageOffset(thread, turns.length);
@@ -2257,6 +2266,30 @@ function appendJobLine(evt) {
   refreshJobPreview(evt.id);
 }
 
+async function retrySpawn() {
+  const attempt = lastSpawnAttempt;
+  if (!attempt) return;
+  const btn = document.querySelector("[data-retry-spawn]");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "retrying…";
+  }
+  try {
+    const r = await apiFetch("/api/agents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(attempt.body) }, { timeoutMs: 60000 });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    lastSpawnAttempt = null;
+    $("spawn-msg").textContent = `spawned ${d.job.id}${d.job.runId ? ` · run ${String(d.job.runId).replace(/^run_/, "").slice(0, 8)}` : ""}${d.job.worktreePath ? ` · ${d.job.worktreePath}` : ""}`;
+    $("job-prompt").value = "";
+    clearAttachments("spawn");
+    updateJob(d.job, { scroll: true });
+    revealSpawnedAgent(d.job);
+  } catch (e) {
+    const why = String(e.message || e);
+    $("spawn-msg").innerHTML = spawnMsgHtml(why);
+  }
+}
+
 // The companion to the timeout above: a spawn whose answer never arrived still owns a card. Re-read the
 // board once and, if a turn exists with this prompt from the last three minutes, treat the spawn as
 // done — clear the box, say it started, and walk the reader to the card exactly as a normal spawn does.
@@ -2280,6 +2313,29 @@ async function recoverSpawnAfterTimeout(body) {
   }
 }
 
+// ---- retry ---------------------------------------------------------------------------------
+// A retry button is only worth having when the same request could plausibly work now. Retrying a missing API
+// key, an unknown project or an unborn HEAD just loops, and those already have their own fix ("make the first
+// commit") or their own cause to repair. So the errors are split: transient (offer retry) and everything else
+// (offer nothing, which is honest).
+function retryableError(message) {
+  const s = String(message || "");
+  if (!s) return false;
+  if (/did not answer within|timed out|timeout|ECONNRESET|ECONNREFUSED|EPIPE|socket hang up|network error|EAI_AGAIN|gateway accepted the request but returned no run_id/i.test(s)) return true;
+  const http = /HTTP (\d{3})/.exec(s);
+  if (http) return Number(http[1]) >= 500 || Number(http[1]) === 429;
+  if (/rate limit|rate-limited|429|overloaded|temporarily unavailable/i.test(s)) return true;
+  return false;
+}
+
+// The last spawn that failed. Re-sent as-is: re-reading the form would let the reader's later edits silently
+// change what the retry means, and it is their prompt, not ours to rewrite.
+let lastSpawnAttempt = null;
+
+function spawnMsgHtml(why) {
+  return `${esc(`spawn failed: ${why}`)}${retryableError(why) ? ` <button type="button" class="btn-retry" data-retry-spawn="1" title="send the same spawn request again — the failed attempt created nothing">retry</button>` : ""}`;
+}
+
 async function spawnAgent() {
   const body = formValues();
   const typed = String(body.prompt || "").trim();
@@ -2292,10 +2348,12 @@ async function spawnAgent() {
   // The same list rides along as data, so the turn's card can list what it was given.
   body.attachments = attachmentsFor("spawn");
   $("btn-spawn").disabled = true;
+  lastSpawnAttempt = { body: { ...body } };
   try {
     const r = await apiFetch("/api/agents", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, { timeoutMs: 60000 });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    lastSpawnAttempt = null;
     $("spawn-msg").textContent = `spawned ${d.job.id}${d.job.runId ? ` · run ${String(d.job.runId).replace(/^run_/, "").slice(0, 8)}` : ""}${d.job.worktreePath ? ` · ${d.job.worktreePath}` : ""}`;
     // The prompt now belongs to an agent: clear the box so the next one starts blank, and keep it in
     // history so a single Up brings it straight back. A REFUSED spawn keeps the text for editing.
@@ -2314,7 +2372,7 @@ async function spawnAgent() {
       const dir = body.cwd || $("job-cwd").value.trim() || "";
       $("spawn-msg").innerHTML = `${esc(`spawn failed: ${why}`)} <button type="button" class="btn-fix-first" data-first-commit="${esc(dir)}" data-first-commit-run="1" title="create an empty initial commit in that repository — local only, nothing is pushed">make the first commit</button>`;
     } else {
-      $("spawn-msg").textContent = `spawn failed: ${why}`;
+      $("spawn-msg").innerHTML = spawnMsgHtml(why);
     }
     // A lost reply does not mean a lost turn: the gateway can die after the run was created, and the
     // card then arrives on its own while the form still holds the text — which reads exactly like a
@@ -4115,6 +4173,26 @@ $("job-create").addEventListener("change", () => {
   updateSpawnNote();
 });
 $("btn-spawn").addEventListener("click", spawnAgent);
+// Retry, in the two places an error is posted: the spawn card and a settled turn's foot.
+document.addEventListener("click", (e) => {
+  const spawn = e.target.closest ? e.target.closest("[data-retry-spawn]") : null;
+  if (spawn) {
+    e.preventDefault();
+    void retrySpawn();
+    return;
+  }
+  const turn = e.target.closest ? e.target.closest("[data-retry-turn]") : null;
+  if (!turn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const thread = turn.dataset.retryTurn;
+  const conv = conversations().find((c) => c.thread === thread);
+  const last = conv?.turns?.[conv.turns.length - 1];
+  const text = String(last?.prompt || "").trim();
+  if (!text) return;
+  turn.disabled = true;
+  void sendReply(thread, text);
+});
 $("btn-clear-jobs").addEventListener("click", () => post("/api/jobs/clear"));
 $("btn-fold-jobs").addEventListener("click", () => {
   const convs = conversations();
