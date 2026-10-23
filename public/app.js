@@ -1280,11 +1280,23 @@ function turnRetryHtml(latest, thread) {
 // query covers every card, which matters because a child can still be working after the turn that started it has
 // finished - exactly when a reader most wants to know.
 const subagentFallback = new Map(); // thread -> rows
+const subagentLive = new Map(); // thread -> how many of those rows were running at the last poll
 let subagentRosterAt = 0;
 
 function fmtSeconds(s) {
   const n = Math.max(0, Math.round(Number(s) || 0));
   return n < 60 ? `${n}s` : `${Math.floor(n / 60)}m ${String(n % 60).padStart(2, "0")}s`;
+}
+
+// A child's own console, drawn in the card's transcript idiom. The panel cannot stream a child (its tools run on its
+// own session), so this is a read of its messages - a poll while it is open and the child is still out.
+function subConsoleHtml(id) {
+  const c = state.subConsoles.get(id);
+  if (!c || c.loading) return `<pre class="sub-console mono jl-dim">reading this subagent…</pre>`;
+  if (!c.lines.length) return `<pre class="sub-console mono jl-dim">nothing on its console yet</pre>`;
+  return `<pre class="sub-console mono">${c.lines
+    .map((l) => `<div class="jl jl-${esc(l.kind || "raw")}">${linkifyText(l.text)}</div>`)
+    .join("")}</pre>`;
 }
 
 function subagentsHtml(list, key = "") {
@@ -1293,15 +1305,18 @@ function subagentsHtml(list, key = "") {
   const running = subs.filter((s) => s.running).length;
   const head = `\u29c9 ${subs.length} subagent${subs.length === 1 ? "" : "s"} \u00b7 ${running ? `${running} running` : "all done"}`;
   return `<div class="subagents mono" data-subs-turn="${esc(key)}">
-    <span class="sub-head" title="agents this run delegated. Their tools run on their own sessions, so only their start and finish reach this card.">${esc(head)}</span>
+    <span class="sub-head" title="agents this run delegated. Their tools run on their own sessions, so only their start and finish reach this card. click a line for its console.">${esc(head)}</span>
     ${subs
-      .map(
-        (s) => `<div class="sub-row${s.running ? " is-running" : ""}">
+      .map((s) => {
+        const id = s.id || "";
+        const open = Boolean(id) && state.openSubConsole.has(id);
+        return `<div class="sub-row${s.running ? " is-running" : ""}${open ? " is-open" : ""}"${id ? ` role="button" tabindex="0" data-sub-console="${esc(id)}" title="${esc(`${s.goal || "subagent"} — click for its console`)}"` : ""}>
+      <span class="sub-caret">${id ? (open ? "\u25be" : "\u25b8") : ""}</span>
       <span class="sub-dot"></span>
-      <span class="sub-title" title="${esc(s.goal || "")}">${esc(s.goal || "subagent")}</span>
+      <span class="sub-title">${esc(s.goal || "subagent")}</span>
       <span class="sub-meta mono">${s.running ? "running" : esc(s.status || "done")}${!s.running && s.duration ? ` · ${fmtSeconds(s.duration)}` : ""}</span>
-    </div>`,
-      )
+    </div>${open ? subConsoleHtml(id) : ""}`;
+      })
       .join("")}
   </div>`;
 }
@@ -1356,7 +1371,7 @@ function paintSubagents() {
       }
       continue;
     }
-    const sig = subagentsSig(rows);
+    const sig = `${subagentsSig(rows)}|${[...state.openSubConsole].join(",")}|${state.subConsoleVersion || 0}`;
     if (!box.hidden && box.dataset.sig === sig) continue;
     box.outerHTML = subagentsHtml(rows, key);
     const fresh = document.querySelector(`[data-subs-turn="${CSS.escape(key)}"]`);
@@ -1377,6 +1392,7 @@ async function refreshSubagentRoster() {
   subagentFallback.clear();
   for (const [thread, rows] of Object.entries(roster)) {
     subagentFallback.set(thread, rows.map((k) => ({
+      id: k.id,
       goal: k.title,
       running: k.running,
       status: k.running ? "running" : "done",
@@ -1385,6 +1401,61 @@ async function refreshSubagentRoster() {
     })));
   }
   subagentRosterAt = Date.now();
+  paintSubagents();
+  // The card's own pill says RUNNING while a child is out, so a flip in that answer is a card repaint, not just a
+  // strip repaint. Only on a flip: re-rendering every card every 5s would fight the reader's scroll.
+  for (const thread of new Set([...subagentLive.keys(), ...subagentFallback.keys()])) {
+    const was = (subagentLive.get(thread) || 0) > 0;
+    const now = (subagentFallback.get(thread) || []).some((s) => s.running);
+    if (was !== now) renderConversation(thread);
+  }
+  subagentLive.clear();
+  for (const thread of subagentFallback.keys()) {
+    subagentLive.set(thread, subagentFallback.get(thread).filter((s) => s.running).length);
+  }
+  // An open console of a child that is still working has to keep moving; a finished one is a record.
+  const liveOpen = [...state.openSubConsole].filter((id) => state.subConsoles.get(id)?.running);
+  for (const id of liveOpen) void loadSubConsole(id);
+}
+
+// Which subagent lines are expanded, and their console text. Kept here so a roster repaint (which rebuilds the strip)
+// does not close what the reader opened.
+state.openSubConsole = state.openSubConsole || new Set();
+state.subConsoles = state.subConsoles || new Map();
+state.subConsoleVersion = state.subConsoleVersion || 0;
+
+async function loadSubConsole(id) {
+  let entry = { lines: [], running: true, loading: false };
+  try {
+    const r = await apiFetch(`/api/subagents/console?session=${encodeURIComponent(id)}`);
+    if (r.ok) {
+      const d = await r.json();
+      entry = { lines: Array.isArray(d.lines) ? d.lines : [], running: Boolean(d.running), loading: false };
+    } else {
+      entry.lines = [{ kind: "dim", text: "could not read this subagent's session" }];
+    }
+  } catch {
+    entry.lines = [{ kind: "dim", text: "could not read this subagent's session" }];
+  }
+  state.subConsoles.set(id, entry);
+  state.subConsoleVersion += 1;
+  paintSubagents();
+}
+
+async function toggleSubConsole(id) {
+  if (!id) return;
+  if (state.openSubConsole.has(id)) {
+    state.openSubConsole.delete(id);
+    state.subConsoles.delete(id);
+  } else {
+    state.openSubConsole.add(id);
+    state.subConsoles.set(id, { lines: [], running: true, loading: true });
+    state.subConsoleVersion += 1;
+    paintSubagents();
+    await loadSubConsole(id);
+    return;
+  }
+  state.subConsoleVersion += 1;
   paintSubagents();
 }
 
@@ -1415,7 +1486,12 @@ function conversationHtml(conv) {
   const queue = state.replyQueue.get(thread) || [];
   const queued = queue.length;
   const queuedTitle = queue.map((q, i) => `${i + 1}. ${q.text}`).join("\n");
-  const runningNow = running;
+  // A turn can end while the children it delegated are still working. The card's state is what is happening, not what
+  // the parent's turn did, so RUNNING outlives the turn for as long as something it started is still going.
+  const liveSubs =
+    turns.flatMap((t) => t.subagents || []).some((s) => s.running) ||
+    (subagentFallback.get(thread) || []).some((s) => s.running);
+  const runningNow = running || liveSubs;
   // A pending approval for this conversation means the agent is not thinking, it is waiting on you.
   const waitingApproval = [...state.approvals.values()].find((a) => a && a.thread && a.thread === thread) || null;
   // A run parks its own approval inside the turn (the Runs API path): same message, different
@@ -1492,7 +1568,13 @@ function conversationHtml(conv) {
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
       <span class="agent-glyph" title="a Hermes agent session — ⧉ marks an agent row">\u29c9</span>
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
-      <span class="pill ${runningNow ? "pill-running" : `pill-notrunning${latest.status === "failed" ? " is-failed" : ""}`}" title="${esc(runningNow ? `running ${elapsed(latest)}` : `${latest.status} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""}`)}">${runningNow ? "running" : latest.status === "failed" ? "exited" : "not-running"}</span>
+      <span class="pill ${runningNow ? "pill-running" : `pill-notrunning${latest.status === "failed" ? " is-failed" : ""}`}" title="${esc(
+        runningNow
+          ? running
+            ? `running ${elapsed(latest)}`
+            : `this turn is ${latest.status}, but subagents it started are still running`
+          : `${latest.status} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""}`,
+      )}">${runningNow ? "running" : latest.status === "failed" ? "exited" : "not-running"}</span>
       ${whenHtml}
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       ${runApproval && !waitingApproval ? `<span class="sig sig-approval" title="this run is parked on a flagged command — answer it in the card below">waiting on approval</span>` : ""}
@@ -2303,6 +2385,11 @@ function conversationSignature(conv) {
     // A steer the turn never read comes back as a note in the reply area: without it here the card would not
     // repaint, and the note would only appear whenever something unrelated forced a rebuild.
     l.pendingSteer ? `s${l.pendingSteer.at || 1}` : "",
+    // A card stays RUNNING while children it delegated are out, so that answer belongs in the signature.
+    (subagentFallback.get(conv.thread) || []).some((s) => s.running) ||
+    conv.turns.some((t) => (t.subagents || []).some((s) => s.running))
+      ? "r"
+      : "-",
     // The stats row lives in the foot of the card: a new reading must repaint it, or the numbers
     // stay as they were until some unrelated event rebuilds the conversation.
     JSON.stringify(l.stats || null),
@@ -5190,6 +5277,13 @@ document.addEventListener("click", async (e) => {
     return;
   }
   // Steer the turn that is running: the primary action while the agent is busy.
+  const subRow = e.target.closest("[data-sub-console]");
+  if (subRow) {
+    e.preventDefault();
+    e.stopPropagation();
+    await toggleSubConsole(subRow.dataset.subConsole);
+    return;
+  }
   const steerBtn = e.target.closest("[data-steer]");
   if (steerBtn) {
     e.preventDefault();
@@ -5211,6 +5305,15 @@ document.addEventListener("click", async (e) => {
 });
 
 // Reply affordances are re-created on every render, so they are handled at document level.
+// A subagent line is focusable, so Enter or Space has to do what a click does.
+document.addEventListener("keydown", async (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const row = e.target.closest?.("[data-sub-console]");
+  if (!row) return;
+  e.preventDefault();
+  await toggleSubConsole(row.dataset.subConsole);
+});
+
 document.addEventListener("keydown", async (e) => {
   // Any key means the reader is working: stop chasing a spawn's reply box (Esc is exempt — it closes
   // things and never means "I am typing").

@@ -479,6 +479,14 @@ button.chip:active { transform: translateY(1px); }
 .subagents .sub-row.is-running .sub-dot { background: #c8a6ff; box-shadow: 0 0 0 3px rgba(200, 166, 255, .16); animation: subpulse 1.6s ease-in-out infinite; }
 .subagents .sub-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .subagents .sub-meta { flex: none; color: var(--dimmer); font-size: 10.5px; }
+/* A subagent line is a door: click it for that child's own console, click it again to close. */
+.subagents .sub-row { cursor: pointer; border-radius: 4px; }
+.subagents .sub-row:hover { background: rgba(255, 255, 255, .035); }
+.subagents .sub-row:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.subagents .sub-caret { flex: none; width: 9px; color: var(--dimmer); }
+.subagents .sub-row.is-open { background: rgba(255, 255, 255, .02); }
+.sub-console { margin: 4px 0 8px 21px; padding: 6px 9px; max-height: 220px; overflow: auto; background: var(--console); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; line-height: 1.45; color: var(--text); white-space: pre-wrap; }
+.sub-console .jl { font: inherit; white-space: pre-wrap; word-break: break-word; }
 @keyframes subpulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 .pill {
   font-size: 10.5px;

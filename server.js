@@ -22,7 +22,7 @@ import {
   sessionSettings, writeSessionListLimit, SESSION_LIST_MIN, SESSION_LIST_MAX,
 } from "./lib/hermes-config.js";
 import { hermesSessionTail } from "./lib/activity.js";
-import { subagentsFor, subagentRoster } from "./lib/subagents.js";
+import { childTranscript, subagentsFor, subagentRoster } from "./lib/subagents.js";
 import { modelCatalogue } from "./lib/hermes-models.js";
 
 // A file an agent produced is meant to be OPENED, and the shell association may hand a .md to a
@@ -718,6 +718,16 @@ const server = createServer(async (req, res) => {
     // click. These turn that claim into a list, and put ONE back on the board when the reader picks
     // it — never automatically, because a tree accumulates every session ever run in it and the
     // board must not refill with all of them at once.
+    if (route === "/api/subagents/console" && req.method === "GET") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const session = String(url.searchParams.get("session") || "").trim();
+      if (!session) return sendJson(res, 400, { error: "session is required" });
+      const { hermesHome } = await import("./lib/jobs.js");
+      const out = childTranscript(session, { dbPath: path.join(hermesHome(), "state.db") });
+      if (!out) return sendJson(res, 404, { error: "no such session" });
+      return sendJson(res, 200, out);
+    }
+
     if (route === "/api/subagents" && req.method === "GET") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const thread = String(url.searchParams.get("thread") || "").trim();
