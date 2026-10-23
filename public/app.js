@@ -94,6 +94,10 @@ const state = {
   // localStorage). Nothing else uses a hue, so a themed project is recognisable at a glance while the
   // verdict colours inside it keep their meaning.
   projectHues: loadProjectHues(),
+  // Tool output the live stream did not carry (its `tool.completed` preview is often empty): the stored result,
+  // fetched on demand when the reader opens a call. Key "<turnId>|<tool>" -> array of { text }.
+  toolStore: new Map(),
+  toolStorePending: new Set(),
   // The reader's attention, tracked beside the geometry: the card under a moving pointer, and the card last
   // clicked / focused / typed in. Either one, while it is on screen and recent, wins over the reading line.
   hoverThread: null,
@@ -1015,6 +1019,36 @@ function groupLines(grp) {
   }));
 }
 
+// Ask the panel server for this turn's stored results for one tool. The live stream's preview is often empty,
+// so this is where "↳ write_file" turns into the thing the tool actually returned.
+async function fetchToolStore(turnId, tool, grp = null) {
+  const cacheKey = `${turnId}|${tool}`;
+  if (!turnId || !tool || !state.jobs.has(turnId)) return;
+  if (state.toolStore.has(cacheKey) || state.toolStorePending.has(cacheKey)) return;
+  const job = state.jobs.get(turnId);
+  state.toolStorePending.add(cacheKey);
+  try {
+    const q = new URLSearchParams({
+      thread: job.thread || job.id,
+      tool,
+      from: String(Date.parse(job.startedAt || "") || 0),
+      to: String(Date.parse(job.endedAt || "") || 0),
+    });
+    const r = await apiFetch(`/api/tool-results?${q}`, {}, { timeoutMs: 15000 });
+    const d = await r.json();
+    state.toolStore.set(cacheKey, Array.isArray(d.results) ? d.results : []);
+  } catch {
+    state.toolStore.set(cacheKey, []);
+  } finally {
+    state.toolStorePending.delete(cacheKey);
+  }
+  const live = grp && grp.isConnected ? grp : document.querySelector(`.tgrp[data-tgrp="${CSS.escape(`${turnId}#0`)}"]`);
+  if (live) {
+    const bodyEl = live.querySelector(".tgrp-body");
+    rebuildToolGroup(live, { filter: live.dataset.filter || tool, open: bodyEl ? !bodyEl.hidden : true });
+  }
+}
+
 function rebuildToolGroup(grp, { filter = "", open = false } = {}) {
   const key = grp.dataset.tgrp || "";
   const lines = groupLines(grp);
@@ -1044,10 +1078,20 @@ function toolGroupHtml(lines, key, filter = "", openBody = false) {
     })
     .join("");
   const segments = burstSegments(lines).filter((s) => !filter || s.tool === filter);
+  const turnId = String(key).split("#")[0];
+  const stored = filter ? state.toolStore.get(`${turnId}|${filter}`) : null;
   const bodyLines = segments.flatMap((s) => s.lines);
+  // The live stream only carries a preview of a tool result, and often an empty one. When the reader opens a call
+  // that came back empty, the stored result is what they came to see - it is fetched on the first open and kept.
+  const storeHtml = (seg, i) => {
+    const got = stored?.[i];
+    if (!got) return "";
+    const lines = String(got.text || "").replace(/\r/g, "").split("\n").slice(0, 60);
+    return `<div class="jl jl-store-cap">↳ stored output${got.truncated ? " (cut)" : ""}</div>` + lines.map((l) => `<div class="jl jl-store">${linkifyText(l)}</div>`).join("");
+  };
   const body =
     bodyLines.length > 0
-      ? bodyLines.map((l) => lineHtml(l)).join("")
+      ? segments.map((seg, i) => seg.lines.map((l) => lineHtml(l)).join("") + storeHtml(seg, i)).join("")
       : `<div class="jl jl-dim">this run recorded nothing for ${esc(filter)}</div>`;
   const label = filter ? `all ${lines.length}` : `${lines.length} line${lines.length === 1 ? "" : "s"}`;
   return `<div class="tgrp" data-tgrp="${esc(key)}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
@@ -7589,8 +7633,19 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     const grp = tgrpRow.closest(".tgrp");
     if (grp) {
-      const active = grp.dataset.filter === tgrpRow.dataset.tgrpTool;
-      rebuildToolGroup(grp, { filter: active ? "" : tgrpRow.dataset.tgrpTool, open: !active });
+      const tool = tgrpRow.dataset.tgrpTool;
+      const active = grp.dataset.filter === tool;
+      const key = grp.dataset.tgrp || "";
+      rebuildToolGroup(grp, { filter: active ? "" : tool, open: !active });
+      if (!active) {
+        // Opening a call: when the live stream carried no output for it, the stored result is what the reader
+        // came to see, so fetch it now rather than making them click a second time.
+        const fresh = document.querySelector(`.tgrp[data-tgrp="${CSS.escape(key)}"]`);
+        const hasOut = fresh
+          ? [...fresh.querySelectorAll(".tgrp-body .jl-tool-out")].some((el) => !el.textContent.trim().startsWith("↳"))
+          : false;
+        if (!hasOut) void fetchToolStore(String(key).split("#")[0], tool, fresh);
+      }
     }
     return;
   }
@@ -7768,8 +7823,19 @@ document.addEventListener("keydown", async (e) => {
     e.preventDefault();
     const grp = tgrpRow.closest(".tgrp");
     if (grp) {
-      const active = grp.dataset.filter === tgrpRow.dataset.tgrpTool;
-      rebuildToolGroup(grp, { filter: active ? "" : tgrpRow.dataset.tgrpTool, open: !active });
+      const tool = tgrpRow.dataset.tgrpTool;
+      const active = grp.dataset.filter === tool;
+      const key = grp.dataset.tgrp || "";
+      rebuildToolGroup(grp, { filter: active ? "" : tool, open: !active });
+      if (!active) {
+        // Opening a call: when the live stream carried no output for it, the stored result is what the reader
+        // came to see, so fetch it now rather than making them click a second time.
+        const fresh = document.querySelector(`.tgrp[data-tgrp="${CSS.escape(key)}"]`);
+        const hasOut = fresh
+          ? [...fresh.querySelectorAll(".tgrp-body .jl-tool-out")].some((el) => !el.textContent.trim().startsWith("↳"))
+          : false;
+        if (!hasOut) void fetchToolStore(String(key).split("#")[0], tool, fresh);
+      }
     }
     return;
   }

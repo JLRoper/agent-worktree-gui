@@ -816,6 +816,19 @@ const server = createServer(async (req, res) => {
       });
     }
 
+    if (route === "/api/tool-results" && req.method === "GET") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const thread = String(url.searchParams.get("thread") || "").trim();
+      const tool = String(url.searchParams.get("tool") || "").trim();
+      const from = Number(url.searchParams.get("from")) || 0;
+      const to = Number(url.searchParams.get("to")) || 0;
+      if (!thread || !tool) return sendJson(res, 400, { error: "thread and tool are required" });
+      const { hermesHome } = await import("./lib/jobs.js");
+      const { toolResults } = await import("./lib/tool-results.js");
+      const results = toolResults({ dbPath: path.join(hermesHome(), "state.db"), sessionId: thread, tool, from, to });
+      return sendJson(res, 200, { thread, tool, results });
+    }
+
     if (route === "/api/subagents/collect" && req.method === "GET") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const thread = String(url.searchParams.get("thread") || "").trim();
