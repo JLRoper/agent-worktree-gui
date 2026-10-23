@@ -6,6 +6,7 @@
      scale: 0% flattens them into a single neutral, 100% pushes the page to near-black and the raised
      surfaces light. These values are the resting palette before that runs. */
   --surface: #12161d;
+  --card: #151a22;
   --console: #0c0f14;
   --hover: #1a2029;
   --band: #171d27;
@@ -90,7 +91,7 @@ button, select, input, textarea { font-family: var(--ui); }
 @keyframes hotflash {
   0% { border-color: #ffb545; box-shadow: 0 0 0 2px rgba(255, 181, 69, .55), 0 0 20px rgba(255, 181, 69, .18); background: rgba(255, 181, 69, .055); }
   65% { border-color: #ffb545; box-shadow: 0 0 0 2px rgba(255, 181, 69, .28), 0 0 12px rgba(255, 181, 69, .09); background: rgba(255, 181, 69, .03); }
-  100% { border-color: var(--line); box-shadow: none; background: rgba(255, 255, 255, .012); }
+  100% { border-color: var(--line); box-shadow: none; background: var(--card); }
 }
 .job.hot-flash { animation: hotflash 1.25s ease-out; }
 .zoom button { padding: 2px 7px; font-size: 13px; line-height: 1.15; border: none; background: transparent; color: var(--dim); }
@@ -285,7 +286,10 @@ td.age .age-num.dimmer { color: var(--dimmer); }
    cutting between the cards and the sessions. */
 .agents-block:has(+ .sessions-block) { border-bottom: 0; padding-bottom: 2px; }
 .agents-block h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .03em; color: var(--dim); font-weight: 600; }
-.agents-block .job { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: rgba(255, 255, 255, .012); }
+/* A session panel is its own layer, not a tint of the detail row it sits in: at 1.2% white it read as the same
+   surface as its parent, which is what made the nesting flatten out. `--card` is one step lighter and moves with
+   the contrast slider like every other layer. */
+.agents-block .job { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; background: var(--card); }
 .agents-block .job:last-child { margin-bottom: 0; }
 .agents-block .job-out { max-height: 320px; }
 /* Sessions the row knows about but the board has no card for. The gateway still has the
