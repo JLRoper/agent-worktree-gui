@@ -2730,6 +2730,7 @@ function conversationHtml(conv) {
             : `this turn is ${latest.status}, but subagents it started are still running`
           : `${latest.status} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""}`,
       )}">${runningNow ? "running" : latest.status === "failed" ? "exited" : "not-running"}</span>
+      ${runningNow ? "" : `<button class="btn-continue" data-continue-thread="${esc(thread)}" type="button" title="send this agent &quot;${esc(CONTINUE_TEXT)}&quot; and start its next turn — the one-click way to pick a stopped agent back up">▶ continue</button>`}
       ${whenHtml}
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       ${runApproval && !waitingApproval ? `<span class="sig sig-approval" title="this run is parked on a flagged command — answer it in the card below">waiting on approval</span>` : ""}
@@ -3208,11 +3209,33 @@ function recallReply(box, step) {
   state.replyDrafts[thread] = value;
 }
 
+// What the "▶ continue" button on a stopped card sends. One sentence, on purpose: the agent decides for itself
+// whether there is work left, and an agent whose task is done is told plainly that exiting is allowed.
+const CONTINUE_TEXT = "Continue if you can, exit if you are done";
+
+// The "▶ continue" button: one click sends that nudge and starts the next turn, so a stopped agent can be picked up
+// without typing anything. Failures land in the card's own warning line, where a reply failure already goes.
+async function continueThread(thread, btn = null) {
+  if (!thread) return;
+  if (btn && btn.isConnected) {
+    btn.disabled = true;
+    btn.textContent = "starting…";
+  }
+  const started = await sendReply(thread, CONTINUE_TEXT);
+  // The card's own warning line is easy to miss when the card is folded, so a failed nudge also says it out loud.
+  if (!started) showBanner(`could not continue that agent — see the card's reply line for why`);
+  // The card is usually rebuilt by the reply, so this node may be gone; only touch it if it is still on the page.
+  if (btn && btn.isConnected) {
+    btn.disabled = false;
+    btn.textContent = "▶ continue";
+  }
+}
+
 async function sendReply(thread, preset = null) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   const typed = String(preset ?? box?.value ?? "").trim();
   const attached = attachmentBlock(thread);
-  if (!typed && !attached) return;
+  if (!typed && !attached) return false;
   const text = typed + attached;
   // The typed part only: the attachment block is panel-added, and recalling it would duplicate the files.
   rememberReply(thread, typed);
@@ -3247,9 +3270,11 @@ async function sendReply(thread, preset = null) {
     focusReplyBox(thread);
     setTimeout(() => focusReplyBox(thread), 0);
     setTimeout(() => focusReplyBox(thread), 80);
+    return true;
   } catch (err) {
     const warn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
     if (warn) warn.textContent = `reply failed: ${err.message}`;
+    return false;
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -8072,6 +8097,14 @@ document.addEventListener("click", async (e) => {
   }
   // A click on anything interactive inside the head belongs to that control, never to the fold:
   // attach, clear, maximize, cancel, the attach picker and its select all live in the head row.
+  // The "▶ continue" button on a stopped card: send the canned nudge and start the next turn.
+  const continueBtn = e.target.closest("[data-continue-thread]");
+  if (continueBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    void continueThread(continueBtn.dataset.continueThread || "", continueBtn);
+    return;
+  }
   const head = e.target.closest(".job-head");
   // A minimized card is one row plus its preview line, and both are the handle: clicking the preview (or
   // any empty part of the row) expands it. Buttons inside the head keep their own behaviour, and an open

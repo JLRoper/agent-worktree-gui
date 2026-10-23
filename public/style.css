@@ -677,6 +677,16 @@ button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241
 .pill.pill-running { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
 .pill.pill-notrunning { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
 .pill.pill-notrunning.is-failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
+/* "▶ continue" sits right after the not-running pill: one click sends the canned nudge and starts the next turn.
+   Green and quiet — it is the action that picks the agent back up, not a status. */
+.btn-continue {
+  flex: none; align-self: center;
+  font: 11px/1.5 var(--ui); color: #b9f6c2;
+  background: #14301c; border: 1px solid #2c5a37; border-radius: 999px;
+  padding: 0 8px; cursor: pointer;
+}
+.btn-continue:hover { background: #1c3f26; color: #e6ffe9; border-color: #3d7a4c; }
+.btn-continue:disabled { color: var(--dim); border-color: var(--line); background: transparent; cursor: progress; }
 .pill.done { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
 .pill.failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .pill.cancelled, .pill.interrupted { color: var(--dim); background: #20242c; }
