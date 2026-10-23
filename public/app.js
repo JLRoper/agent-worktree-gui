@@ -73,6 +73,10 @@ const state = {
   // The reply box that should take the caret once its card exists (set by a spawn or a jump, cleared
   // by itself the moment focus lands or the reader types somewhere else).
   pendingFocus: null,
+  // The green + bar a reader has turned into a text field, by row key: { key, path, name, project, value, start,
+  // end, focused }. One at a time - it is a quick start, not a form - and kept here so a board repaint mid-sentence
+  // does not eat the draft.
+  addAgent: null,
   // Replies typed while the agent is still working, in the order they were written. They go out one
   // at a time as each turn finishes: Hermes refuses a second session on a thread already running.
   replyQueue: new Map(),
@@ -2918,6 +2922,25 @@ function restoreTyping(root, typing) {
   }
 }
 
+// After a repaint: the inline add-agent field comes back with its draft, and its caret and focus if the reader was
+// typing in it. The row's detail is rebuilt on every scan, so without this a prompt could not be typed across one.
+function restoreAddAgent(root) {
+  const a = state.addAgent;
+  if (!a) return;
+  const input = root.querySelector(`.add-agent-input[data-add-agent-key="${CSS.escape(a.key)}"]`);
+  if (!input) return;
+  if (input.value !== a.value) input.value = a.value;
+  if (!a.focused) return;
+  // preventScroll for the same reason the reply box uses it: this runs on every repaint, and a bare focus() would
+  // pull the page back to this box every few seconds while the reader had scrolled away.
+  input.focus({ preventScroll: true });
+  try {
+    input.setSelectionRange(a.start, a.end);
+  } catch {
+    /* a node that is no longer a text field: nothing to restore */
+  }
+}
+
 // Renaming a session is a panel-side display name only: the Hermes thread id is identity (it is what
 // resumes the conversation), so the label is kept beside the job store and never rewrites the id.
 function beginRename(thread) {
@@ -3298,23 +3321,184 @@ async function probeWorktreeAgents(path, btn = null) {
   showBanner(`probed ${ok} not-running agent${ok === 1 ? "" : "s"} in this worktree${failed ? ` · ${failed} failed to send` : ""}`);
 }
 
-// The + bar's action: aim the New agent card at this worktree - what the row's ▶ used to do. Another agent in the same
-// tree is allowed, but they share the working tree, so that is said once.
-function startAgentInWorktree(btn) {
-  const path = btn.dataset.addAgentPath || "";
-  const name = btn.dataset.addAgentName || "";
-  const mine = agentsByPath().get(normPath(path).toLowerCase()) || [];
+// The add-agent control, in both shapes: the green + bar, and the text field it turns into. One builder, because the
+// row is rebuilt on every scan and the open field has to come back identical - value, attributes and all.
+function addAgentBarHtml({ key = "", path = "", name = "", project = "", value = null }) {
+  const attrs = `data-add-agent-key="${esc(key)}" data-add-agent-path="${esc(path)}" data-add-agent-name="${esc(name)}" data-add-agent-project="${esc(project)}"`;
+  if (value === null) {
+    return `<button type="button" class="btn-add-agent" ${attrs} title="start a Hermes agent in this worktree — click, type the first turn, Enter starts it (it runs here, no new worktree)"><span aria-hidden="true">+</span></button>`;
+  }
+  return (
+    `<div class="add-agent-form">` +
+    `<input class="add-agent-input" type="text" ${attrs} value="${esc(value)}" spellcheck="false" autocomplete="off" data-form-type="other" data-1p-ignore data-bwignore data-lpignore="true"` +
+    ` placeholder="what should this agent do here?  Enter starts it · Esc puts the + back">` +
+    `</div>`
+  );
+}
+
+// Same key in, same key out: the field replaces the bar in place so the row does not change height.
+function swapAddAgentBox(key, html) {
+  const sel = `[data-add-agent-key="${CSS.escape(key)}"]`;
+  const input = document.querySelector(`input${sel}`);
+  const form = input?.closest(".add-agent-form") || null;
+  const btn = document.querySelector(`button${sel}`);
+  const current = form || btn;
+  if (!current) return null;
+  current.insertAdjacentHTML("afterend", html);
+  const fresh = current.nextElementSibling;
+  current.remove();
+  return fresh;
+}
+
+// Clicking the + does not send the reader to the New agent card any more: it turns the bar into a field here. The
+// prompt is handed to that card only on submit, aimed at this worktree with the panel's defaults, and started.
+function openAddAgent(btn) {
+  const key = btn.dataset.addAgentKey || keyOf(btn.dataset.addAgentProject || "", btn.dataset.addAgentPath || "");
+  const a = {
+    key,
+    path: btn.dataset.addAgentPath || "",
+    name: btn.dataset.addAgentName || "",
+    project: btn.dataset.addAgentProject || "",
+    value: "",
+    start: 0,
+    end: 0,
+    focused: true,
+  };
+  // One field at a time: an open box on another row becomes a + again.
+  const prev = state.addAgent;
+  if (prev && prev.key !== key) swapAddAgentBox(prev.key, addAgentBarHtml({ ...prev, value: null }));
+  state.addAgent = a;
+  const fresh = swapAddAgentBox(key, addAgentBarHtml({ ...a, value: "" }));
+  fresh?.querySelector("input")?.focus({ preventScroll: true });
+}
+
+// Esc, an empty blur, or a run that has started: the + comes back.
+function closeAddAgent() {
+  const a = state.addAgent;
+  if (!a) return;
+  state.addAgent = null;
+  swapAddAgentBox(a.key, addAgentBarHtml({ ...a, value: null }));
+}
+
+// Enter in the field: hand the prompt to the New agent card, aimed at this worktree, with the panel's defaults, and
+// start it there - the card is where a run is built, so the field is a shortcut into that same path rather than a
+// second spawn implementation.
+async function submitAddAgent(input) {
+  const a = state.addAgent;
+  if (!a) return;
+  const typed = String(input?.value ?? a.value ?? "").trim();
+  if (!typed) {
+    input?.focus();
+    return;
+  }
+  // Agents in one worktree share it. Say so once before a second one starts editing the same files; the text stays
+  // in the box if the reader says no.
+  const mine = agentsByPath().get(normPath(a.path).toLowerCase()) || [];
   if (mine.length) {
     const running = agentsRunning(mine);
     const ok = window.confirm(
-      `${mine.length} agent${mine.length === 1 ? " already works" : "s already work"} in ${name}` +
+      `${mine.length} agent${mine.length === 1 ? " already works" : "s already work"} in ${a.name}` +
         `${running ? ` (${running} running now)` : ""}.\n\n` +
         `They share the same working tree: commits can collide (index.lock), and each sees the other's edits as its own dirty files.\n\n` +
         `Start another agent here anyway?`,
     );
-    if (!ok) return;
+    if (!ok) {
+      input?.focus();
+      return;
+    }
   }
-  focusSpawnForWorktree(path, name, btn.dataset.addAgentProject || "");
+  a.value = typed;
+  aimSpawnAtWorktree(a.path, a.name, a.project);
+  resetSpawnDefaults();
+  const box = $("job-prompt");
+  if (box) {
+    box.value = typed;
+    growReplyBox(box);
+  }
+  state.addAgent = null;
+  swapAddAgentBox(a.key, addAgentBarHtml({ ...a, value: null }));
+  await spawnAgent({ promptFocus: false });
+  // spawnAgent clears the prompt on success and leaves it on a refusal, which is the only signal it gives back.
+  if (String($("job-prompt")?.value || "").trim()) {
+    const why = String($("spawn-msg")?.textContent || "").trim();
+    showBanner(`could not start that agent — ${why || "the New agent card says why"}`);
+  }
+}
+
+// ---- the inline add-agent field's own events ------------------------------------------------------
+// The field lives inside a row that is rebuilt on every scan, so what the reader types is remembered by input, not by
+// node: the draft, the caret, and whether they were in it. Escape and Enter are handled in the capture phase so the
+// board's own Escape (close the maximized card) does not fire behind them.
+const addAgentFieldOf = (e) => (e.target && e.target.closest ? e.target.closest(".add-agent-input") : null);
+
+document.addEventListener(
+  "keydown",
+  (e) => {
+    const input = addAgentFieldOf(e);
+    if (!input) return;
+    if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      void submitAddAgent(input);
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      closeAddAgent();
+      return;
+    }
+    rememberAddAgentCaret(input);
+  },
+  true,
+);
+
+document.addEventListener("input", (e) => {
+  const input = addAgentFieldOf(e);
+  if (!input || !state.addAgent) return;
+  state.addAgent.value = input.value;
+  rememberAddAgentCaret(input);
+});
+
+document.addEventListener("keyup", (e) => {
+  const input = addAgentFieldOf(e);
+  if (input) rememberAddAgentCaret(input);
+});
+document.addEventListener("click", (e) => {
+  const input = addAgentFieldOf(e);
+  if (input) rememberAddAgentCaret(input);
+});
+
+document.addEventListener("focusin", (e) => {
+  const input = addAgentFieldOf(e);
+  if (!input || !state.addAgent) return;
+  state.addAgent.focused = true;
+  rememberAddAgentCaret(input);
+});
+
+document.addEventListener("focusout", (e) => {
+  const input = addAgentFieldOf(e);
+  if (!input || !state.addAgent) return;
+  state.addAgent.focused = false;
+  rememberAddAgentCaret(input);
+  // An empty box that the reader left puts the + back. Deferred, and skipped when the node was removed: a repaint
+  // also fires focusout, and that is not the reader walking away from an empty field.
+  setTimeout(() => {
+    if (!input.isConnected) return;
+    if (state.addAgent && !String(state.addAgent.value || "").trim()) closeAddAgent();
+  }, 0);
+});
+
+function rememberAddAgentCaret(input) {
+  const a = state.addAgent;
+  if (!a || !input) return;
+  a.value = input.value;
+  try {
+    a.start = input.selectionStart ?? a.value.length;
+    a.end = input.selectionEnd ?? a.value.length;
+  } catch {
+    /* not a text field any more */
+  }
 }
 
 async function sendReply(thread, preset = null) {
@@ -4568,7 +4752,10 @@ function spawnMsgHtml(why) {
   return `${esc(`spawn failed: ${why}`)}${retryableError(why) ? ` <button type="button" class="btn-retry" data-retry-spawn="1" title="send the same spawn request again — the failed attempt created nothing">retry</button>` : ""}`;
 }
 
-async function spawnAgent() {
+// `promptFocus` is the card's own behaviour: after a spawn it puts the caret back in the prompt for the next run. A
+// spawn started from a row asks for it off - the reader is working somewhere on the board, and a bare focus() scrolls
+// the page up to that box, which is exactly the jump this path exists to avoid.
+async function spawnAgent({ promptFocus = true } = {}) {
   const body = formValues();
   const typed = String(body.prompt || "").trim();
   if (!typed) {
@@ -4592,7 +4779,7 @@ async function spawnAgent() {
     rememberSpawnPrompt(typed);
     $("job-prompt").value = "";
     clearAttachments("spawn");
-    $("job-prompt").focus();
+    if (promptFocus) $("job-prompt").focus();
     updateJob(d.job, { scroll: true });
     // Take the reader to the new agent: unfold folder/project/worktree and scroll to its card.
     revealSpawnedAgent(d.job);
@@ -4765,24 +4952,32 @@ function focusPromptWithoutScrolling() {
   }
 }
 
-function focusSpawnForWorktree(path, name, projectName = "") {
-  revealCard("newagent");
+// Point the New agent card at one existing worktree, without touching the page: the row's green + starts a run from
+// where the reader is, and the card is only the thing that builds it.
+function aimSpawnAtWorktree(path, name, projectName = "") {
   $("job-cwd").value = path;
   // The picker has to follow the row, not stay wherever it was: a run created with a stale project is filed, blocked
   // and re-used against that project, and the next change to the picker drags the location field with it.
   if (projectName) {
     const sel = $("job-project");
-    if ([...sel.options].some((o) => o.value === projectName)) sel.value = projectName;
+    if (sel && [...sel.options].some((o) => o.value === projectName)) sel.value = projectName;
   }
   // Aiming at a worktree that exists means "run here": no new workspace.
   $("job-create").checked = false;
   state.spawnTarget = name || null;
   updateSpawnNote();
-  const card = $("newagent");
-  card.classList.add("armed");
-  setTimeout(() => card.classList.remove("armed"), 1400);
-  scrollCardUnderBar(card);
-  focusPromptWithoutScrolling();
+}
+
+// A run started from a row is the "just start it" path: no per-run choice carries over from the last spawn in the
+// card - model, budget and turn cap go back to the form's own defaults. Explicit values the reader set in the card
+// are for runs they start there.
+function resetSpawnDefaults() {
+  const model = $("job-model");
+  if (model) model.value = "";
+  const budget = $("job-budget");
+  if (budget) budget.value = "1800";
+  const turns = $("job-maxTurns");
+  if (turns) turns.value = "";
 }
 
 // The green "+": aim the spawn card at that project and put the cursor in the prompt.
@@ -6297,8 +6492,17 @@ function detailHtml(row) {
   // and every rebuild is a chance for a scroll position to be lost.
   // The add-agent bar sits under the cards: the full width of an agent card, half its height, a white + in the middle.
   // It is what the row's green ▶ used to do, because the ▶ now probes the agents the worktree already has. It stays
-  // when the row has no agents at all - that is exactly when it is needed.
-  const addBar = `<button type="button" class="btn-add-agent" data-add-agent-path="${esc(row.path)}" data-add-agent-name="${esc(row.name)}" data-add-agent-project="${esc(row.project)}" title="start a Hermes agent in this worktree — it runs here (no new worktree)"><span aria-hidden="true">+</span></button>`;
+  // when the row has no agents at all - that is exactly when it is needed. Clicking it turns the bar into the text
+  // field below (same footprint, so the row does not move), and Enter starts the run from there.
+  const addKey = keyOf(row.project, row.path);
+  const addOpen = state.addAgent && state.addAgent.key === addKey;
+  const addBar = addAgentBarHtml({
+    key: addKey,
+    path: row.path,
+    name: row.name,
+    project: row.project,
+    value: addOpen ? state.addAgent.value : null,
+  });
   const agentsHtml = `<div class="agents-block">${agents.map((c) => `<div class="agent-slot" data-agent-slot="${esc(c.thread)}"></div>`).join("")}${addBar}</div>`;
   // Sessions the row says are here but that have no card: the conversation lives in the gateway, and
   // the panel's job store is what held the card. Reviving one puts a card back you can reply to —
@@ -6884,6 +7088,7 @@ function placeRow(project, row, { flash = false } = {}) {
     // Put the reader back: the reply they were typing, where the caret was, and how far each
     // transcript had been scrolled.
     restoreTyping(dEl, typing);
+    restoreAddAgent(dEl);
     const scrollMap = new Map(outs.map((o) => [o.id, { top: o.top, atBottom: o.atBottom }]));
     restoreScrolls(dEl, scrollMap);
     applyStoredScrolls(dEl);
@@ -6961,6 +7166,7 @@ function renderProjectRows(name) {
       // back into the reply box.
       fillAgentSlots(dEl, prevCards.get(key) || new Map());
       restoreTyping(dEl, prevTyping.get(key) || null);
+      restoreAddAgent(dEl);
     }
   }
   // A row that no longer exists must not leave a dead detail element remembered.
@@ -7910,11 +8116,13 @@ document.addEventListener("click", async (e) => {
     return;
   }
   // The + bar under a row's agents: start a new agent in this worktree. This is what the ▶ used to do.
-  const addAgent = e.target.closest("[data-add-agent-path]");
+  // The green + bar: it becomes a text field in place. The field itself carries the same data attributes, so this
+  // matches the button only - a click inside the input must not re-open it.
+  const addAgent = e.target.closest("button.btn-add-agent");
   if (addAgent) {
     e.stopPropagation();
     e.preventDefault();
-    startAgentInWorktree(addAgent);
+    openAddAgent(addAgent);
     return;
   }
   // The row's agent badge: open the row so the agents block is visible.

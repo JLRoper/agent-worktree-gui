@@ -1494,6 +1494,21 @@ button.btn-row-agent.is-probing { opacity: .55; cursor: progress; }
 .btn-add-agent:hover { background: var(--addbar-hover, #27723f); border-color: var(--addbar-hover-edge, #319051); }
 .btn-add-agent:active { background: var(--addbar-active, #1b502d); }
 .btn-add-agent > span { transform: translateY(-1px); }
+/* Clicking the bar turns it into this field, in place: same 47px box and the same green, so the row does not move and
+   the reader keeps reading the row they were on. The prompt goes to the New agent card on Enter - the field is a
+   shortcut into that path, not a second spawn form. */
+.add-agent-form { display: flex; width: 100%; margin: 8px 0 2px; }
+.add-agent-input {
+  width: 100%; height: 47px; padding: 0 14px;
+  background: var(--addbar, #215f35); color: #fff;
+  border: 1px solid var(--addbar-edge, #2c8148); border-radius: 6px;
+  box-shadow: inset 0 1px 0 #ffffff1f;
+  font: 500 13.5px/47px var(--mono);
+  outline: none;
+}
+.add-agent-input::placeholder { color: #ffffffa6; }
+.add-agent-input:focus { border-color: var(--addbar-hover-edge, #319051); box-shadow: inset 0 0 0 2px #ffffff2e; }
+.add-agent-input:disabled { opacity: .7; cursor: progress; }
 .branch { color: #c8d1dc; }
 .dim { color: var(--dim); }
 .dimmer { color: var(--dimmer); }
