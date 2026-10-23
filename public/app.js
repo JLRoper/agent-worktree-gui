@@ -686,6 +686,8 @@ function scrollThreadToBottom(thread) {
   const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
   if (!card) return;
   const outs = [...card.querySelectorAll("pre.job-out")];
+  // Sending asked for this turn: follow it even if the reader had scrolled up in an older one.
+  for (const o of outs) pinConsole(o.dataset.out);
   const out = outs[outs.length - 1];
   if (out) out.scrollTop = out.scrollHeight;
   const body = card.querySelector(".job-body");
@@ -2187,6 +2189,35 @@ async function answerApproval(id, choice, btn) {
 
 // Every output pane's position, so a rebuild can put the reader back where they were instead of
 // dropping them at the first line of an hour-old transcript.
+// A console follows its newest line unless the reader has deliberately gone back to read something older. This is the
+// default the panel promises, and it has to survive three things that used to fight over scrollTop: a card rebuild, a
+// row rebuild (every few seconds) and the browser clamping the position while the node is replaced. Anything the panel
+// moves itself must not count as the reader scrolling away, hence `selfScrolled`.
+state.outPinned = state.outPinned || {}; // out id -> false only after a deliberate scroll upwards
+let lastInputAt = 0; // last wheel / key / click anywhere: the only window in which a scroll is the reader's
+for (const ev of ["wheel", "mousedown", "keydown", "touchstart"]) {
+  document.addEventListener(ev, () => {
+    lastInputAt = Date.now();
+  }, { capture: true, passive: true });
+}
+const selfScrolled = new WeakSet();
+
+function consolePinned(id) {
+  return state.outPinned[id] !== false;
+}
+
+function pinConsole(id) {
+  if (id) state.outPinned[id] = true;
+}
+
+function stickConsole(pre) {
+  if (!pre || !pre.dataset || !consolePinned(pre.dataset.out)) return;
+  const max = pre.scrollHeight - pre.clientHeight;
+  if (max <= 0 || Math.abs(pre.scrollTop - max) <= 1) return;
+  selfScrolled.add(pre);
+  pre.scrollTop = max;
+}
+
 function captureScrolls(root) {
   const map = new Map();
   if (!root) return map;
@@ -2204,7 +2235,7 @@ function restoreScrolls(root, map) {
   for (const o of root.querySelectorAll("pre.job-out")) {
     const was = map.get(o.dataset.out);
     if (!was) continue;
-    o.scrollTop = was.atBottom ? o.scrollHeight : Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight));
+    o.scrollTop = consolePinned(o.dataset.out) || was.atBottom ? o.scrollHeight : Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight));
   }
 }
 
@@ -2215,7 +2246,7 @@ function applyStoredScrolls(root) {
   for (const o of root.querySelectorAll("pre.job-out")) {
     const was = state.outScrolls[o.dataset.out];
     if (!was) continue;
-    o.scrollTop = was.atBottom ? o.scrollHeight : Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight));
+    o.scrollTop = consolePinned(o.dataset.out) || was.atBottom ? o.scrollHeight : Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight));
   }
 }
 
@@ -2440,7 +2471,7 @@ function renderConversation(thread, { scroll = false } = {}) {
   }
   for (const o of fresh.querySelectorAll("pre.job-out")) {
     const was = prev.find((p) => p.id === o.dataset.out);
-    const follow = scroll || (was ? was.atBottom : conv.latest.status === "running");
+    const follow = scroll || consolePinned(o.dataset.out) || (was ? was.atBottom : conv.latest.status === "running");
     if (follow) o.scrollTop = o.scrollHeight;
     else if (was) o.scrollTop = Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight));
   }
@@ -2519,7 +2550,7 @@ function appendJobLine(evt) {
   for (const out of outs) {
     // Streamed lines follow the newest output only for a reader who is already at the bottom; someone
     // scrolled up to read stays where they are.
-    const stick = out.scrollHeight - out.scrollTop - out.clientHeight < 40;
+    const stick = consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
     if (out.firstElementChild?.classList.contains("jl-dim")) out.innerHTML = "";
     const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
     if (line.mode === "set" && existing) {
@@ -5442,12 +5473,35 @@ document.addEventListener(
   (e) => {
     const pre = e.target;
     if (!pre || pre.tagName !== "PRE" || !pre.classList || !pre.classList.contains("job-out") || !pre.dataset.out) return;
-    state.outScrolls[pre.dataset.out] = {
-      top: pre.scrollTop,
-      atBottom: pre.scrollHeight - pre.scrollTop - pre.clientHeight < 32,
-    };
+    // A scroll the panel caused itself (restoring a position, following new lines) is not the reader leaving the
+    // bottom, so it must not unpin the console.
+    if (selfScrolled.has(pre)) {
+      selfScrolled.delete(pre);
+      return;
+    }
+    const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 32;
+    // Only a reader's own input decides the pin. Without this, a clamp that happens while a card is rebuilt looks
+    // exactly like someone scrolling up, and the console sticks at the top until they notice.
+    if (Date.now() - lastInputAt < 1200) state.outPinned[pre.dataset.out] = atBottom;
+    state.outScrolls[pre.dataset.out] = { top: pre.scrollTop, atBottom };
   },
   true,
+);
+
+// Whatever moved a pinned console off its newest line - a rebuild, the browser clamping a replaced node, a resize -
+// is corrected here within a frame or two. Only pinned consoles are touched, so reading history is never interrupted.
+setInterval(() => {
+  for (const pre of document.querySelectorAll("pre.job-out")) stickConsole(pre);
+}, 400);
+
+// A wheel up is the reader leaving the bottom on purpose; coming back down re-pins in the scroll handler.
+document.addEventListener(
+  "wheel",
+  (e) => {
+    const pre = e.target && e.target.closest && e.target.closest("pre.job-out");
+    if (pre && e.deltaY < 0) state.outPinned[pre.dataset.out] = false;
+  },
+  { capture: true, passive: true },
 );
 
 $("projects").addEventListener("click", (e) => {
