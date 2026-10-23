@@ -1236,6 +1236,15 @@ function baseNameOf(p) {
   return String(p || "").split(/[\\/]/).pop();
 }
 
+// Files and links are two different things to act on: a file opens in an editor and can be deleted from
+// disk, a link opens in the browser and can only be dropped from the list. One button each.
+function splitArtifacts(list) {
+  return {
+    files: list.filter((a) => a.kind !== "url"),
+    urls: list.filter((a) => a.kind === "url"),
+  };
+}
+
 function closeArtifactPops() {
   state.openArtifacts.clear();
   for (const pop of document.querySelectorAll("[data-artifacts-pop]")) pop.hidden = true;
@@ -1328,26 +1337,36 @@ function artifactRowsHtml(list) {
     .join("");
 }
 
-function artifactsPopHtml(thread, list, openAt) {
+function artifactsPopHtml(thread, list, openAt, kind) {
   const position = openAt ? ` style="left:${openAt.left}px; top:${openAt.top}px"` : "";
   const hidden = openAt ? "" : " hidden";
-  return `<div class="artifacts-pop" data-artifacts-pop="${esc(thread)}"${hidden}${position}>
-      <div class="ap-head mono dimmer">${list.length} deliverable${list.length === 1 ? "" : "s"} — newest last</div>
+  const what = kind === "url" ? "link" : "file";
+  return `<div class="artifacts-pop" data-artifacts-pop="${esc(thread)}" data-artifacts-kind="${esc(kind)}"${hidden}${position}>
+      <div class="ap-head mono dimmer">${list.length} ${what}${list.length === 1 ? "" : "s"} — newest last</div>
       ${artifactRowsHtml(list)}
     </div>`;
 }
 
 // Rebuild one popup in place (after a delete, or a confirmation was cancelled) without touching the card.
 function renderArtifactsPop(thread) {
-  const pop = document.querySelector(`[data-artifacts-pop="${CSS.escape(thread)}"]`);
   const conv = conversations().find((c) => c.thread === thread);
-  if (!pop || !conv) return;
-  const list = artifactsFor(conv);
-  if (!list.length) {
-    closeArtifactPops();
-    return;
+  if (!conv) return;
+  const { files, urls } = splitArtifacts(artifactsFor(conv));
+  for (const [kind, list] of [["file", files], ["url", urls]]) {
+    const pop = document.querySelector(
+      `[data-artifacts-pop="${CSS.escape(thread)}"][data-artifacts-kind="${kind}"]`,
+    );
+    if (!pop) continue;
+    if (!list.length) {
+      pop.hidden = true;
+      pop.innerHTML = "";
+      continue;
+    }
+    const what = kind === "url" ? "link" : "file";
+    pop.innerHTML = `<div class="ap-head mono dimmer">${list.length} ${what}${list.length === 1 ? "" : "s"} — newest last</div>${artifactRowsHtml(list)}`;
   }
-  pop.innerHTML = `<div class="ap-head mono dimmer">${list.length} deliverable${list.length === 1 ? "" : "s"} — newest last</div>${artifactRowsHtml(list)}`;
+  // The buttons carry the counts, so the card itself has to be redrawn for them to move down.
+  renderConversation(thread);
 }
 
 // --- the stats row above an agent's reply box ------------------------------------------------
@@ -2174,6 +2193,7 @@ function conversationHtml(conv) {
       ? `<span class="mono dim">revived · last active ${esc(relTime(latest.startedAt))} ago</span>`
       : `<span class="mono dim">${esc(outcome)} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${latest.tokens.total}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>${turnRetryHtml(latest, thread)}`;
   const artifacts = artifactsFor(conv);
+  const artSplit = splitArtifacts(artifacts);
   const blocks = (() => {
     const offset = turnPageOffset(thread, turns.length);
     const end = turns.length - offset * TURNS_PER_PAGE;
@@ -2216,7 +2236,8 @@ function conversationHtml(conv) {
       ${runApproval && !waitingApproval ? `<span class="sig sig-approval" title="this run is parked on a flagged command — answer it in the card below">waiting on approval</span>` : ""}
       ${titleHtml}
       ${meta ? `<span class="mono dim">${esc(meta)}</span>` : ""}
-      ${artifacts.length ? `<button type="button" class="btn-artifacts" data-artifacts="${esc(thread)}" title="${artifacts.length} deliverable(s) from this agent — click to open, copy or delete them">\u{1F4C4} ${artifacts.length}</button>` : ""}
+      ${artSplit.files.length ? `<button type="button" class="btn-artifacts" data-artifacts="${esc(thread)}" data-artifacts-kind="file" title="${artSplit.files.length} file deliverable(s) from this agent — click to open in an editor, copy the path or delete the file">\u{1F4C4} ${artSplit.files.length}</button>` : ""}
+      ${artSplit.urls.length ? `<button type="button" class="btn-artifacts" data-artifacts="${esc(thread)}" data-artifacts-kind="url" title="${artSplit.urls.length} URL(s) / endpoint(s) this agent printed — click to open one in your browser, copy it or remove it from the list">\u{1F517} ${artSplit.urls.length}</button>` : ""}
       ${pager}
       <span class="spacer"></span>
       ${latest.yolo ? '<span class="pill yolo" title="this run was started with the --yolo flag (auto-approve, no prompts). The panel does not send it: approvals still come to this card.">yolo</span>' : ""}
@@ -2233,7 +2254,8 @@ function conversationHtml(conv) {
       <select data-attach-path="${esc(thread)}"></select>
       <button class="btn-attach-go" data-attach-go="${esc(thread)}" type="button">Attach</button>
     </div>` : ""}
-    ${artifacts.length ? artifactsPopHtml(thread, artifacts, state.openArtifacts.get(thread)) : ""}
+    ${artSplit.files.length ? artifactsPopHtml(thread, artSplit.files, state.openArtifacts.get(thread)?.kind !== "url" ? state.openArtifacts.get(thread) : null, "file") : ""}
+    ${artSplit.urls.length ? artifactsPopHtml(thread, artSplit.urls, state.openArtifacts.get(thread)?.kind === "url" ? state.openArtifacts.get(thread) : null, "url") : ""}
     <div class="job-body">
       ${pinnedHtml}
       ${blocks.html}
@@ -3412,7 +3434,9 @@ function updateJob(j, { scroll = false } = {}) {
 // What the card actually draws. If none of this changed, the DOM does not need rebuilding — and
 // rebuilding is what used to throw the reader back to the top of a chat mid-read.
 function conversationSignature(conv) {
-  const turns = conv.turns.map((t) => `${t.id}:${t.status}:${t.exitCode ?? ""}:${t.error ? 1 : 0}`).join(",");
+  const turns = conv.turns
+    .map((t) => `${t.id}:${t.status}:${t.exitCode ?? ""}:${t.error ? 1 : 0}:${(t.artifacts || []).length}`)
+    .join(",");
   // A run's approval lives on the TURN (Runs API), not in state.approvals. Without it here, a prompt
   // arriving mid-turn changes nothing in the signature, so the card is not repainted and the approval
   // box only appears whenever some unrelated event forces a rebuild (observed: ~20 s later).
@@ -6000,7 +6024,10 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     const thread = artBtn.dataset.artifacts;
-    const pop = document.querySelector(`[data-artifacts-pop="${CSS.escape(thread)}"]`);
+    const kind = artBtn.dataset.artifactsKind === "url" ? "url" : "file";
+    const pop = document.querySelector(
+      `[data-artifacts-pop="${CSS.escape(thread)}"][data-artifacts-kind="${kind}"]`,
+    );
     if (pop) {
       const wasHidden = pop.hidden;
       closeArtifactPops();
@@ -6014,7 +6041,7 @@ document.addEventListener("click", async (e) => {
         const top = r.bottom + 6;
         pop.style.left = `${left}px`;
         pop.style.top = `${top}px`;
-        state.openArtifacts.set(thread, { left, top });
+        state.openArtifacts.set(thread, { left, top, kind });
       }
     }
     return;
