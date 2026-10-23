@@ -324,6 +324,15 @@ Three pieces have to line up, and each one alone is a silent no-op:
 The gateway also appends a messaging-only `Reply "skip" to skip this question.` line to the question;
 the panel strips it, because a card has its own controls.
 
+How the box looks is a browser preference, in Settings > Display: **Question tint** (five signal colours,
+light purple by default — none of them the approval's amber, so the two parked states stay distinct;
+`--q-*` variables on `:root`, one class per tint), **Question size** (11–18 px, clamped on entry),
+**Compact answers** (tighter row padding and gaps) and **Typed answer box** (off hides the free-text row
+for questions that have choices; an open-ended question always keeps it, and a multi-select question
+keeps its Send button). The row sits under a live sample — the real markup with the real classes, so the
+preview is the setting. On a wide card the box is a centred 900 px column under the full-width console,
+and the tool's `(Recommended)` suffix is drawn as a leading chip so it never floats away from the text.
+
 #### Credentials
 
 A run executes inside the gateway process, so the provider key is whatever that gateway is configured

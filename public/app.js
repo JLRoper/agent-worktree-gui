@@ -1369,10 +1369,85 @@ const questionDrafts = new Map(); // `${turnId}${copy}` -> typed answer
 const questionSending = new Set(); // `${turnId}` while a POST is in flight
 const RECOMMENDED_RE = /^(.*?)\s*\(Recommended\)$/;
 
+// The tool marks its best choice by suffixing the label; the card draws that as a chip. The chip goes BEFORE
+// the label, not after it: on a wide card the text block stops at a readable measure, and a trailing chip
+// then floats in the empty right-hand space looking like it belongs to nothing. Leading, it is part of the
+// label's first line and stays next to what it marks at any width.
 function questionHead(choice) {
   const m = RECOMMENDED_RE.exec(String(choice));
   if (!m) return `<span class="tq-text">${esc(choice)}</span>`;
-  return `<span class="tq-text">${esc(m[1])}</span><span class="tq-rec">recommended</span>`;
+  return `<span class="tq-rec">recommended</span><span class="tq-text">${esc(m[1])}</span>`;
+}
+
+// ---- the question box's look (Settings > Display) ------------------------------------------------
+// The box is a signal, so how it reads is the reader's: tint, type size, how tightly the answer rows are
+// packed, and whether the typed answer box is offered at all. All of it lives in this browser like every
+// other Display row. The tint is a CLASS on :root (one rule set per hue in style.css), the size is one
+// variable — so the Settings sample and a live card are literally the same rules, not a drawing of them.
+const Q_LOOK_KEY = "wm.qLook";
+const Q_TINTS = ["violet", "sky", "mint", "rose", "slate"];
+const Q_SIZE_MIN = 11;
+const Q_SIZE_MAX = 18;
+const Q_SIZE_DEFAULT = 13;
+
+function qLook() {
+  const out = { tint: "violet", size: Q_SIZE_DEFAULT, compact: false, typed: true };
+  let raw = null;
+  try {
+    raw = JSON.parse(localStorage.getItem(Q_LOOK_KEY) || "null");
+  } catch {
+    raw = null;
+  }
+  if (raw && typeof raw === "object") {
+    if (Q_TINTS.includes(raw.tint)) out.tint = raw.tint;
+    const size = Number(raw.size);
+    if (Number.isFinite(size)) out.size = Math.min(Q_SIZE_MAX, Math.max(Q_SIZE_MIN, size));
+    if (typeof raw.compact === "boolean") out.compact = raw.compact;
+    if (typeof raw.typed === "boolean") out.typed = raw.typed;
+  }
+  return out;
+}
+
+// Read once, so a card rendered before anyone opens Settings still uses the saved look.
+let qLookState = qLook();
+
+function paintQLook(look = qLookState) {
+  const size = $("q-size");
+  // Never rewrite the box the reader is typing into: a clamp lands on `change`, not on every keystroke.
+  if (size && document.activeElement !== size) size.value = String(look.size);
+  const compact = $("q-compact");
+  if (compact) compact.checked = look.compact;
+  const typed = $("q-typed");
+  if (typed) typed.checked = look.typed;
+  for (const btn of document.querySelectorAll("[data-q-tint]")) {
+    btn.classList.toggle("on", btn.dataset.qTint === look.tint);
+    btn.setAttribute("aria-pressed", btn.dataset.qTint === look.tint ? "true" : "false");
+  }
+}
+
+function applyQLook(next = {}, { save = true } = {}) {
+  const look = { ...qLookState, ...next };
+  if (!Q_TINTS.includes(look.tint)) look.tint = "violet";
+  const n = Number(look.size);
+  look.size = Math.min(Q_SIZE_MAX, Math.max(Q_SIZE_MIN, Number.isFinite(n) && n > 0 ? n : Q_SIZE_DEFAULT));
+  look.compact = Boolean(look.compact);
+  look.typed = Boolean(look.typed);
+  qLookState = look;
+  const root = document.documentElement;
+  for (const tint of Q_TINTS) root.classList.toggle(`q-tint-${tint}`, tint === look.tint);
+  root.classList.toggle("q-compact", look.compact);
+  // Purely for the Settings sample, which has its typed row in its markup; a live card omits the row.
+  root.classList.toggle("q-no-typed", !look.typed);
+  root.style.setProperty("--q-size", `${look.size}px`);
+  paintQLook(look);
+  if (save) {
+    try {
+      localStorage.setItem(Q_LOOK_KEY, JSON.stringify(look));
+    } catch {
+      /* private mode: the look still applies for this page */
+    }
+  }
+  return look;
 }
 
 function questionPrompt(turn, copy = "") {
@@ -1396,20 +1471,34 @@ function questionPrompt(turn, copy = "") {
       <span class="tq-box" aria-hidden="true"></span>${questionHead(c)}</button>`,
     )
     .join("");
-  const note = multi
-    ? "tick any that apply, then Send answer · a typed answer replaces the ticks"
-    : choices.length
-      ? "click a choice above, or type your own answer · Enter sends"
-      : "type your answer · Enter sends, Shift+Enter adds a line";
+  // A question with no choices has nothing to answer with except words, so the typed box always stays for
+  // it; with choices, Settings can take the box away, and a multi-select question then keeps a bare Send
+  // button (it would otherwise be unanswerable).
+  const showTyped = qLookState.typed || choices.length === 0;
+  const note = !showTyped
+    ? multi
+      ? "tick any that apply, then Send answer"
+      : "click a choice above"
+    : multi
+      ? "tick any that apply, then Send answer · a typed answer replaces the ticks"
+      : choices.length
+        ? "click a choice above, or type your own answer · Enter sends"
+        : "type your answer · Enter sends, Shift+Enter adds a line";
+  const sendBtn = `<button type="button" class="tq-send" data-qsend="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qrequest="${esc(q.requestId || "")}"${questionSending.has(turn.id) ? " disabled" : ""}>Send answer</button>`;
+  const answerRow = showTyped
+    ? `<div class="tq-other-row">
+      <textarea class="tq-other" data-qother="${esc(turn.id)}" data-qcopy="${esc(copy)}" rows="2" placeholder="or type your own answer" title="anything you type here is sent as your answer, in your own words">${esc(draft)}</textarea>
+      ${sendBtn}
+    </div>`
+    : multi
+      ? `<div class="tq-other-row is-send-only">${sendBtn}</div>`
+      : "";
   return `<div class="turn-question" data-question-for="${esc(turn.id)}${esc(copy)}">
     <div class="tq-head mono">❓ waiting on you — the agent is parked until you answer</div>
     <div class="tq-question">${esc(q.question || "(no question text)")}</div>
     ${rows ? `<div class="tq-choices${multi ? " is-multi" : ""}">${rows}</div>` : ""}
     <div class="tq-note mono">${esc(note)}</div>
-    <div class="tq-other-row">
-      <textarea class="tq-other" data-qother="${esc(turn.id)}" data-qcopy="${esc(copy)}" rows="2" placeholder="or type your own answer" title="anything you type here is sent as your answer, in your own words">${esc(draft)}</textarea>
-      <button type="button" class="tq-send" data-qsend="${esc(turn.id)}" data-qcopy="${esc(copy)}" data-qrequest="${esc(q.requestId || "")}"${questionSending.has(turn.id) ? " disabled" : ""}>Send answer</button>
-    </div>
+    ${answerRow}
     <div class="tq-warn mono" data-qwarn="${esc(turn.id)}${esc(copy)}"></div>
   </div>`;
 }
@@ -9657,6 +9746,9 @@ function toggleSettings(open = null) {
     sel.value = currentFontId("ui");
     sel.focus();
   }
+  // The browser-owned rows are read at boot; painting them again here just means the panel always opens on
+  // what is in effect, even if another tab changed it.
+  paintQLook();
   // Read the gateway's window every time the panel opens: it can be changed from a CLI, and the
   // panel is not the owner of that value.
   void loadApprovalSetting();
@@ -10021,6 +10113,11 @@ function initFonts() {
   applyTermStyle({ save: false });
 }
 
+// Paint the saved question-box look before the first card is drawn.
+function initQLook() {
+  applyQLook({}, { save: false });
+}
+
 $("btn-settings")?.addEventListener("click", (e) => {
   e.stopPropagation();
   toggleSettings();
@@ -10034,6 +10131,26 @@ $("title-settings")?.addEventListener("click", (e) => {
 $("font-select")?.addEventListener("change", (e) => applyFont("ui", e.target.value));
 $("term-select")?.addEventListener("change", (e) => applyFont("term", e.target.value));
 $("term-size-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, size: e.target.value }));
+
+// ---- the question box's look: tint, size, density, and whether the typed answer is offered --------
+for (const btn of document.querySelectorAll("[data-q-tint]")) {
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    applyQLook({ tint: btn.dataset.qTint });
+  });
+}
+$("q-size")?.addEventListener("change", (e) => {
+  const n = Number(e.target.value);
+  const look = applyQLook({ size: Number.isFinite(n) && n > 0 ? n : Q_SIZE_DEFAULT });
+  // Show the clamped value: typing 40 lands on 18, and the box must say so rather than silently disagree.
+  e.target.value = String(look.size);
+});
+$("q-compact")?.addEventListener("change", (e) => applyQLook({ compact: Boolean(e.target.checked) }));
+$("q-typed")?.addEventListener("change", (e) => {
+  applyQLook({ typed: Boolean(e.target.checked) });
+  // The typed row is markup, not only CSS: an open question has to be redrawn to gain or lose it.
+  renderJobs();
+});
 $("grey-flash")?.addEventListener("change", (e) => applyGreyFlash(Boolean(e.target.checked)));
 $("event-flash")?.addEventListener("change", (e) => {
   state.eventFlash = Boolean(e.target.checked);
@@ -10192,6 +10309,7 @@ document.addEventListener("click", (e) => {
 });
 
 initFonts();
+initQLook();
 applyGreyFlash(greyFlashOn());
 applyContrast(contrastSetting(), { save: false });
 applyAddBarBrightness(addBarBrightnessSetting(), { save: false });

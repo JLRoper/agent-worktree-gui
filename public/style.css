@@ -1138,38 +1138,107 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
 .turn-approval-done.is-deny { color: #ff9c9c; border-left-color: #6b2a2a; background: rgba(107,42,42,.10); }
 /* The agent's own question: the approval box's place in the flow, in light purple instead of amber, and sized for
    sentences rather than a command. A choice is a full-width row so a long label wraps inside its own control
-   instead of stretching the box; the typed "Other" answer and the send button share the row under them. */
-.turn-question { margin: 8px 2px 6px; border: 1px solid #55407a; border-radius: 8px; background: linear-gradient(180deg, rgba(42,32,68,.72), rgba(30,24,46,.72)); box-shadow: 0 6px 18px rgba(0,0,0,.35); padding: 10px 12px; }
-.tq-head { font-size: 11.5px; color: #ecd9ff; letter-spacing: .01em; }
-.tq-question { margin: 8px 0 9px; font: 13px/1.5 var(--ui); color: #f4efff; white-space: pre-wrap; word-break: break-word; }
+   instead of stretching the box; the typed "Other" answer and the send button share the row under them.
+
+   Every colour here is a variable because Settings > Display retints the box, sizes its text and packs its rows:
+   the tints are SIGNAL colours (the way the approval's amber is), not panel surfaces, so the contrast slider
+   leaves them alone and a tint only ever changes this box. */
+:root {
+  --q-line: #55407a; --q-head: #ecd9ff; --q-question: #f4efff;
+  --q-bg-a: rgba(42, 32, 68, .72); --q-bg-b: rgba(30, 24, 46, .72);
+  --q-choice-bg: rgba(26, 20, 40, .55); --q-choice-line: #4a3a6b; --q-choice-text: #e7dcff;
+  --q-choice-hover: #352a52; --q-choice-hover-line: #66509a;
+  --q-choice-on: #3b2e5c; --q-choice-on-line: #8a6fc0;
+  --q-accent: #8a6fc0; --q-box: #66509a; --q-tick: #ecd9ff; --q-note: #b6a3d6;
+  --q-size: 13px;
+}
+:root.q-tint-sky {
+  --q-line: #33628c; --q-head: #dceeff; --q-question: #f2f8ff;
+  --q-bg-a: rgba(28, 44, 62, .72); --q-bg-b: rgba(20, 32, 46, .72);
+  --q-choice-bg: rgba(18, 30, 42, .55); --q-choice-line: #3d6081; --q-choice-text: #dceeff;
+  --q-choice-hover: #2a4258; --q-choice-hover-line: #5b86ab;
+  --q-choice-on: #2f4d68; --q-choice-on-line: #7fb0d4;
+  --q-accent: #7fb0d4; --q-box: #5b86ab; --q-tick: #dceeff; --q-note: #9dc2dd;
+}
+:root.q-tint-mint {
+  --q-line: #2f6249; --q-head: #d8ffe9; --q-question: #effff6;
+  --q-bg-a: rgba(24, 50, 40, .72); --q-bg-b: rgba(18, 36, 30, .72);
+  --q-choice-bg: rgba(14, 32, 25, .55); --q-choice-line: #3a6f56; --q-choice-text: #d8ffe9;
+  --q-choice-hover: #264a3a; --q-choice-hover-line: #5a9a78;
+  --q-choice-on: #2b5442; --q-choice-on-line: #6fbf95;
+  --q-accent: #6fbf95; --q-box: #5a9a78; --q-tick: #d8ffe9; --q-note: #96c9b1;
+}
+:root.q-tint-rose {
+  --q-line: #7a3a52; --q-head: #ffd9e6; --q-question: #fff2f6;
+  --q-bg-a: rgba(62, 26, 40, .72); --q-bg-b: rgba(44, 20, 30, .72);
+  --q-choice-bg: rgba(40, 18, 26, .55); --q-choice-line: #7f4560; --q-choice-text: #ffd9e6;
+  --q-choice-hover: #5c2f42; --q-choice-hover-line: #b06a8b;
+  --q-choice-on: #6b3a4f; --q-choice-on-line: #d98fb0;
+  --q-accent: #d98fb0; --q-box: #b06a8b; --q-tick: #ffd9e6; --q-note: #d9a9bf;
+}
+:root.q-tint-slate {
+  --q-line: #4a5462; --q-head: #e2e8f0; --q-question: #f2f5f9;
+  --q-bg-a: rgba(34, 40, 48, .72); --q-bg-b: rgba(24, 28, 34, .72);
+  --q-choice-bg: rgba(22, 26, 32, .55); --q-choice-line: #485262; --q-choice-text: #dfe6ee;
+  --q-choice-hover: #333c48; --q-choice-hover-line: #647085;
+  --q-choice-on: #3a4452; --q-choice-on-line: #8a97ab;
+  --q-accent: #8a97ab; --q-box: #647085; --q-tick: #e2e8f0; --q-note: #a3adbb;
+}
+/* The box sits in a centred column instead of running the full width of a wide card: at 2000px the answer
+   rows used to be long empty bands with the chip stranded somewhere in the middle. The console above stays
+   full width — the question is the thing being read, so it is the thing that gets the measure. */
+.turn-question { max-width: 900px; margin: 8px auto 6px; border: 1px solid var(--q-line); border-radius: 8px; background: linear-gradient(180deg, var(--q-bg-a), var(--q-bg-b)); box-shadow: 0 6px 18px rgba(0,0,0,.35); padding: 10px 12px; }
+.tq-head { font-size: 11.5px; color: var(--q-head); letter-spacing: .01em; }
+.tq-question { margin: 8px 0 9px; font: var(--q-size, 13px)/1.5 var(--ui); color: var(--q-question); white-space: pre-wrap; word-break: break-word; }
 .tq-choices { display: flex; flex-direction: column; gap: 6px; }
-.tq-choice { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; padding: 7px 10px; border: 1px solid #4a3a6b; border-radius: 6px; background: rgba(26,20,40,.55); color: #e7dcff; font: 12.5px/1.45 var(--ui); white-space: pre-wrap; word-break: break-word; cursor: pointer; }
-button.tq-choice:hover { background: #352a52; border-color: #66509a; }
+.tq-choice { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; padding: 7px 10px; border: 1px solid var(--q-choice-line); border-radius: 6px; background: var(--q-choice-bg); color: var(--q-choice-text); font: calc(var(--q-size, 13px) - 0.5px)/1.45 var(--ui); white-space: pre-wrap; word-break: break-word; cursor: pointer; }
+button.tq-choice:hover { background: var(--q-choice-hover); border-color: var(--q-choice-hover-line); }
 label.tq-choice { position: relative; }
-label.tq-choice:hover { background: #2f2549; }
-label.tq-choice.on { border-color: #8a6fc0; background: #3b2e5c; }
-.tq-choice:focus-within { border-color: #8a6fc0; }
+label.tq-choice:hover { background: var(--q-choice-hover); }
+label.tq-choice.on { border-color: var(--q-choice-on-line); background: var(--q-choice-on); }
+.tq-choice:focus-within { border-color: var(--q-accent); }
+/* Compact answers: the same rows with less air, for a reader who wants the question to take less room. */
+:root.q-compact .tq-choice { padding: 3px 8px; }
+:root.q-compact .tq-choices { gap: 3px; }
+:root.q-compact .tq-question { margin: 5px 0 6px; }
+:root.q-compact .tq-other { min-height: 28px; }
 /* The tick is drawn by .tq-box, so the native control is present (focusable, clickable) but invisible. */
 .tq-choice.is-multi input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.tq-box { flex: none; width: 13px; height: 13px; margin-top: 2px; border: 1px solid #66509a; border-radius: 50%; background: rgba(0,0,0,.35); }
+.tq-box { flex: none; width: 13px; height: 13px; margin-top: 2px; border: 1px solid var(--q-box); border-radius: 50%; background: rgba(0,0,0,.35); }
 .tq-choice.is-multi .tq-box { border-radius: 4px; }
-.tq-choice.is-multi.on .tq-box { background: #ecd9ff; border-color: #ecd9ff; box-shadow: inset 0 0 0 2px #2a2044; }
+.tq-choice.is-multi.on .tq-box { background: var(--q-tick); border-color: var(--q-tick); box-shadow: inset 0 0 0 2px var(--q-bg-b); }
 /* A long sentence on a 1300px row reads as one wall of text; the row stays full-width (it is the click
    target) and the measure inside it is held to about a hundred characters. */
 .tq-text { min-width: 0; max-width: 100ch; }
-.tq-rec { flex: none; margin-left: 6px; padding: 0 6px; border-radius: 999px; border: 1px solid #8a6fc0; color: #ecd9ff; font: 10px/1.7 var(--ui); letter-spacing: .04em; white-space: nowrap; }
+.tq-rec { flex: none; margin-right: 7px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--q-accent); color: var(--q-head); font: 10px/1.7 var(--ui); letter-spacing: .04em; white-space: nowrap; }
 .tq-other-row { display: flex; align-items: stretch; gap: 8px; margin-top: 9px; }
-.tq-other { flex: 1; min-width: 0; min-height: 34px; max-height: 160px; resize: vertical; padding: 6px 9px; border: 1px solid #4a3a6b; border-radius: 6px; background: rgba(0,0,0,.34); color: #f4efff; font: 12.5px/1.45 var(--ui); }
-.tq-other:focus { outline: none; border-color: #8a6fc0; }
-button.tq-send { flex: none; align-self: flex-end; padding: 4px 14px; font-size: 11.5px; background: #3b2e5c; border-color: #66509a; color: #ecd9ff; }
-button.tq-send:hover { background: #473767; }
+.tq-other { flex: 1; min-width: 0; min-height: 34px; max-height: 160px; resize: vertical; padding: 6px 9px; border: 1px solid var(--q-choice-line); border-radius: 6px; background: rgba(0,0,0,.34); color: var(--q-question); font: calc(var(--q-size, 13px) - 0.5px)/1.45 var(--ui); }
+.tq-other:focus { outline: none; border-color: var(--q-accent); }
+button.tq-send { flex: none; align-self: flex-end; padding: 4px 14px; font-size: 11.5px; background: var(--q-choice-on); border-color: var(--q-box); color: var(--q-head); }
+button.tq-send:hover { background: var(--q-choice-hover); }
 button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: default; }
-.tq-note { margin: 9px 0 5px; font-size: 10.5px; color: #b6a3d6; }
+.tq-note { margin: 9px 0 5px; font-size: 10.5px; color: var(--q-note); }
 .tq-warn { margin-top: 4px; font-size: 11px; color: #ff9c9c; }
 .tq-warn:empty { display: none; }
 .turn-question.jump { animation: jumpflash var(--flash-ring, 1700ms) ease-out; }
+/* The Settings sample is the real markup with the real classes, so the preview IS the setting. It is inert
+   (no data-* attributes, so no handler claims a click) and merely smaller than a card's box. */
+.settings-preview.q-sample { padding: 0; border-style: solid; background: var(--surface); }
+.settings-preview.q-sample .turn-question { margin: 0; border-radius: 6px; box-shadow: none; }
+.settings-preview.q-sample .tq-other { pointer-events: none; }
+:root.q-no-typed .settings-preview.q-sample .tq-other-row { display: none; }
+/* With the typed box off, a multi-select question keeps only its Send button. */
+.tq-other-row.is-send-only { justify-content: flex-end; }
+.q-swatches { display: flex; gap: 6px; margin-left: auto; }
+.q-swatches button { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid var(--line); }
+.q-swatches button.on { box-shadow: 0 0 0 2px var(--text); }
+.q-swatches button[data-q-tint="violet"] { background: #55407a; }
+.q-swatches button[data-q-tint="sky"] { background: #33628c; }
+.q-swatches button[data-q-tint="mint"] { background: #2f6249; }
+.q-swatches button[data-q-tint="rose"] { background: #7a3a52; }
+.q-swatches button[data-q-tint="slate"] { background: #4a5462; }
 /* …and once answered, the same one-line record the approval leaves. */
-.turn-question-done { margin: 6px 2px 2px; padding: 3px 9px; font-size: 11px; color: #cdb6ef; border-left: 2px solid #55407a; background: rgba(85,64,122,.14); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.turn-question-done { max-width: 900px; margin: 6px auto 2px; padding: 3px 9px; font-size: 11px; color: var(--q-head); border-left: 2px solid var(--q-line); background: rgba(255,255,255,.05); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .turn-question-done.is-quiet { color: var(--dimmer); }
 .queue-note { font-size: 11px; color: #ffd479; }
 /* A reply waiting to be sent, drawn where it will land but visibly not sent yet: dashed, dimmed, italic. */

@@ -87,6 +87,45 @@
           <button id="btn-reset-colors" type="button" title="clear the theme colour from every project">reset colours</button>
         </div>
 
+        <div class="settings-row settings-gap" id="q-tint-row" title="The tint of the light-purple box an agent's question arrives in. These are signal colours, not panel surfaces: none of them is the approval's amber, so a question and an allow-this never read as the same interruption. Saved in this browser.">
+          <span>Question tint <span class="settings-info">ⓘ</span></span>
+          <span class="q-swatches">
+            <button type="button" data-q-tint="violet" title="light purple — the default"></button>
+            <button type="button" data-q-tint="sky" title="sky blue"></button>
+            <button type="button" data-q-tint="mint" title="mint green"></button>
+            <button type="button" data-q-tint="rose" title="rose"></button>
+            <button type="button" data-q-tint="slate" title="slate — the quietest, nearly neutral"></button>
+          </span>
+        </div>
+        <div class="settings-preview q-sample" id="q-preview" title="a sample of the question box as it is drawn on a card">
+          <div class="turn-question">
+            <div class="tq-head mono">❓ waiting on you — the agent is parked until you answer</div>
+            <div class="tq-question">Which sections should the summary of this repo include?</div>
+            <div class="tq-choices">
+              <div class="tq-choice"><span class="tq-box"></span><span class="tq-text">An architecture overview that maps the module layout, entry points, and how the parts talk to each other at runtime.</span><span class="tq-rec">recommended</span></div>
+              <div class="tq-choice on"><span class="tq-box"></span><span class="tq-text">A build and setup section with the commands a new developer has to run.</span></div>
+            </div>
+            <div class="tq-other-row"><div class="tq-other">or type your own answer</div><button type="button" class="tq-send">Send answer</button></div>
+            <div class="tq-note mono">click a choice above, or type your own answer · Enter sends</div>
+          </div>
+        </div>
+
+        <label class="settings-row settings-gap" for="q-size" title="Type size of the question and its answers (the choices are half a point smaller). Saved in this browser.">
+          <span>Question size <span class="settings-info">ⓘ</span></span>
+          <input id="q-size" type="number" inputmode="numeric" step="0.5" min="11" max="18">
+          <span class="settings-unit mono">px</span>
+        </label>
+
+        <label class="settings-row" for="q-compact" title="Pack the answer rows tighter: less padding and less gap between them, so a question takes less room in a card. The text size is separate. Saved in this browser.">
+          <span>Compact answers <span class="settings-info">ⓘ</span></span>
+          <input id="q-compact" type="checkbox">
+        </label>
+
+        <label class="settings-row" for="q-typed" title="Show the free-text box under the choices, for an answer in your own words. An open-ended question (one with no choices) always keeps it, or there would be nothing to answer with. Saved in this browser.">
+          <span>Typed answer box <span class="settings-info">ⓘ</span></span>
+          <input id="q-typed" type="checkbox" checked>
+        </label>
+
       </div>
 
       <div class="settings-group">
