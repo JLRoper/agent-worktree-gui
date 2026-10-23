@@ -1072,6 +1072,18 @@ button.sig:hover { filter: brightness(1.25); }
 }
 
 tr.detail td { background: #12161d; border-bottom: 1px solid var(--line); padding: 10px 14px; }
+/* MERGE STATE and LIVENESS EVIDENCE lead the worktree block again, but folded to two one-line strips: they are
+   reference material, read rarely, and as full blocks above the agents they cost more height than they earned.
+   The pair is closed off by one hairline, and the agents follow under it. */
+tr.detail > td > .git-block, tr.detail > td > .live-block { margin: 0; }
+tr.detail > td > .git-block .git-head,
+tr.detail > td > .live-block .live-head { padding: 0; line-height: 1.5; }
+tr.detail > td > .git-block .git-head .chev,
+tr.detail > td > .live-block .live-head .chev { font-size: 13px; width: 13px; }
+tr.detail > td > .git-block h4,
+tr.detail > td > .live-block h4 { margin: 0; font-size: 10.5px; }
+tr.detail > td > .git-summary, tr.detail > td > .live-first { font-size: 11px; }
+tr.detail > td > .live-block { padding-bottom: 6px; border-bottom: 1px solid #262f3c; margin-bottom: 8px; }
 tr.detail h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
 tr.detail ul { margin: 0 0 12px; padding-left: 18px; }
 tr.detail li { font-family: var(--mono); font-size: 12px; color: #c8d1dc; }
