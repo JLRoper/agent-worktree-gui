@@ -420,7 +420,10 @@ restart re-emits the same job, and re-reading its lines would otherwise start a 
 `watches`, persisted `alerts` (so a restart does not shout twice) and a capped `journal`. It is written
 through a temp file + rename, and a second panel instance with its own `jobsFile` keeps its own.
 The panel's **Scratchpad** tab edits the notes and rules; **Watches** adds and removes watches; **Alerts**
-dismisses one, hands it to the assistant, or opens the agent.
+dismisses one, hands it to the assistant, or opens the agent. A watch with a deadline carries a live countdown
+(`29:48 left`, repainted once a second in place rather than by re-rendering the pane) and a bar that empties as the
+deadline approaches — the last fifth turns amber, then red, and past zero it reads `overdue` in the same place.
+Watches without a deadline, and finished ones, say so instead.
 
 ## Config (`config.json`)
 
