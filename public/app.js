@@ -4220,27 +4220,46 @@ $("job-prompt").addEventListener("input", () => updateSpawnNote());
 // at, and the page zoom is only suppressed while the pointer is actually over a console.
 const CONSOLE_ZOOM_MIN = 7;
 const CONSOLE_ZOOM_MAX = 24;
-document.addEventListener(
-  "wheel",
-  (e) => {
-    if (!e.ctrlKey) return;
-    const out = e.target && e.target.closest ? e.target.closest(".job-out") : null;
-    if (!out) return;
-    e.preventDefault();
-    const card = out.closest(".job");
-    const thread = card && card.dataset.thread;
-    if (!thread) return;
-    const base = Number(state.consoleZoom.get(thread)) || parseFloat(getComputedStyle(out).fontSize) || 11.5;
-    const step = e.deltaY < 0 ? 1 : -1;
-    // Half-pixel steps: the console's default size is 11.5px, and rounding to whole pixels made the first tick
-    // jump 1.5px while every tick after it moved 1.
-    const next = Math.min(CONSOLE_ZOOM_MAX, Math.max(CONSOLE_ZOOM_MIN, Math.round((base + step) * 2) / 2));
-    state.consoleZoom.set(thread, next);
-    card.style.setProperty("--out-size", `${next}px`);
-    out.style.fontSize = `${next}px`;
-  },
-  { passive: false },
-);
+
+function zoomConsole(out, step) {
+  const card = out.closest(".job");
+  const thread = card && card.dataset.thread;
+  if (!thread) return;
+  const base = Number(state.consoleZoom.get(thread)) || parseFloat(getComputedStyle(out).fontSize) || 11.5;
+  // Half-pixel steps: the console's default size is 11.5px, and rounding to whole pixels made the first tick
+  // jump 1.5px while every tick after it moved 1.
+  const next = Math.min(CONSOLE_ZOOM_MAX, Math.max(CONSOLE_ZOOM_MIN, Math.round((base + step) * 2) / 2));
+  state.consoleZoom.set(thread, next);
+  card.style.setProperty("--out-size", `${next}px`);
+  out.style.fontSize = `${next}px`;
+}
+
+// Ctrl+wheel over a console must not ALSO zoom the window. Cancel it at the earliest point in the event's path
+// (capture on window) and stop it there, so neither the page's own listeners nor anything above them sees a
+// cancellable wheel: a passive listener anywhere in the path - the panel has one on document for pendingFocus -
+// can otherwise leave the browser free to run its zoom gesture.
+const onConsoleWheel = (e) => {
+  if (!e.ctrlKey) return;
+  const out = e.target && e.target.closest ? e.target.closest(".job-out") : null;
+  if (!out) return;
+  if (e.cancelable) e.preventDefault();
+  e.stopPropagation();
+  zoomConsole(out, e.deltaY < 0 ? 1 : -1);
+};
+window.addEventListener("wheel", onConsoleWheel, { passive: false, capture: true });
+// Trackpad pinch arrives as a gesture in Safari, not as a ctrl+wheel, and would zoom the page under the pointer.
+for (const type of ["gesturestart", "gesturechange"]) {
+  window.addEventListener(
+    type,
+    (e) => {
+      const out = e.target && e.target.closest ? e.target.closest(".job-out") : null;
+      if (!out) return;
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+    },
+    { passive: false, capture: true },
+  );
+}
 
 // The console resizes like the reply box, but its max-height is what stops it eating the card — and a
 // max-height also stops the drag dead. The handle lives in the bottom-right 16px corner, so grabbing
