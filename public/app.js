@@ -3231,6 +3231,57 @@ async function continueThread(thread, btn = null) {
   }
 }
 
+// The green ▶ on a worktree row: ask every agent in that worktree that is NOT running to carry on. One sentence each,
+// sent together; a running agent is left alone - a reply to it would queue behind its turn, which is not probing.
+async function probeWorktreeAgents(path, btn = null) {
+  const mine = agentsByPath().get(normPath(path).toLowerCase()) || [];
+  if (!mine.length) {
+    showBanner("no agents in this worktree yet — the + under the agents starts one");
+    return;
+  }
+  const stopped = mine.filter((c) => !convLive(c));
+  if (!stopped.length) {
+    showBanner(`all ${mine.length} agent${mine.length === 1 ? "" : "s"} in this worktree are already running`);
+    return;
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add("is-probing");
+  }
+  let ok = 0;
+  let failed = 0;
+  await Promise.all(
+    stopped.map(async (c) => {
+      if (await sendReply(c.thread, CONTINUE_TEXT)) ok += 1;
+      else failed += 1;
+    }),
+  );
+  if (btn && btn.isConnected) {
+    btn.disabled = false;
+    btn.classList.remove("is-probing");
+  }
+  showBanner(`probed ${ok} not-running agent${ok === 1 ? "" : "s"} in this worktree${failed ? ` · ${failed} failed to send` : ""}`);
+}
+
+// The + bar's action: aim the New agent card at this worktree - what the row's ▶ used to do. Another agent in the same
+// tree is allowed, but they share the working tree, so that is said once.
+function startAgentInWorktree(btn) {
+  const path = btn.dataset.addAgentPath || "";
+  const name = btn.dataset.addAgentName || "";
+  const mine = agentsByPath().get(normPath(path).toLowerCase()) || [];
+  if (mine.length) {
+    const running = agentsRunning(mine);
+    const ok = window.confirm(
+      `${mine.length} agent${mine.length === 1 ? " already works" : "s already work"} in ${name}` +
+        `${running ? ` (${running} running now)` : ""}.\n\n` +
+        `They share the same working tree: commits can collide (index.lock), and each sees the other's edits as its own dirty files.\n\n` +
+        `Start another agent here anyway?`,
+    );
+    if (!ok) return;
+  }
+  focusSpawnForWorktree(path, name, btn.dataset.addAgentProject || "");
+}
+
 async function sendReply(thread, preset = null) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   const typed = String(preset ?? box?.value ?? "").trim();
@@ -5295,7 +5346,7 @@ function rowHtml(row) {
   const isProjectRoot = projectRoot && normPath(projectRoot).toLowerCase() === normPath(row.path).toLowerCase();
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     <td class="name"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="start a Hermes agent in this worktree — it runs here (no new worktree)">\u25b6</button> <span>${esc(row.name)}</span> ${agentBadgeHtml(row)}</td>
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button> <span>${esc(row.name)}</span> ${agentBadgeHtml(row)}</td>
     <td class="mono branch">${esc(row.branch || "—")}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
@@ -6208,9 +6259,11 @@ function detailHtml(row) {
   // A slot per card, not a copy of it: placeRow() moves the card that is already on the board into its slot.
   // Rebuilding the cards here destroyed their consoles on every scan - several times a second while a turn ran -
   // and every rebuild is a chance for a scroll position to be lost.
-  const agentsHtml = agents.length
-    ? `<div class="agents-block">${agents.map((c) => `<div class="agent-slot" data-agent-slot="${esc(c.thread)}"></div>`).join("")}</div>`
-    : "";
+  // The add-agent bar sits under the cards: the full width of an agent card, half its height, a white + in the middle.
+  // It is what the row's green ▶ used to do, because the ▶ now probes the agents the worktree already has. It stays
+  // when the row has no agents at all - that is exactly when it is needed.
+  const addBar = `<button type="button" class="btn-add-agent" data-add-agent-path="${esc(row.path)}" data-add-agent-name="${esc(row.name)}" data-add-agent-project="${esc(row.project)}" title="start a Hermes agent in this worktree — it runs here (no new worktree)"><span aria-hidden="true">+</span></button>`;
+  const agentsHtml = `<div class="agents-block">${agents.map((c) => `<div class="agent-slot" data-agent-slot="${esc(c.thread)}"></div>`).join("")}${addBar}</div>`;
   // Sessions the row says are here but that have no card: the conversation lives in the gateway, and
   // the panel's job store is what held the card. Reviving one puts a card back you can reply to —
   // offered one at a time, because a tree collects every session ever run in it.
@@ -7808,25 +7861,20 @@ document.addEventListener("click", async (e) => {
     keepInPlace(() => document.querySelector(`[data-toggle-fixed="${CSS.escape(id)}"]`), () => toggleFixed(id));
     return;
   }
+  // The row's green ▶: probe every NOT-RUNNING agent in that worktree with the continue sentence.
   const rowAgent = e.target.closest(".btn-row-agent");
   if (rowAgent) {
     e.stopPropagation();
     e.preventDefault();
-    // Another agent in the same tree is allowed, but it is a shared working tree: say so once.
-    const path = rowAgent.dataset.agentPath;
-    const name = rowAgent.dataset.agentName;
-    const mine = agentsByPath().get(normPath(path).toLowerCase()) || [];
-    if (mine.length) {
-      const running = agentsRunning(mine);
-      const ok = window.confirm(
-        `${mine.length} agent${mine.length === 1 ? " already works" : "s already work"} in ${name}` +
-          `${running ? ` (${running} running now)` : ""}.\n\n` +
-          `They share the same working tree: commits can collide (index.lock), and each sees the other's edits as its own dirty files.\n\n` +
-          `Start another agent here anyway?`,
-      );
-      if (!ok) return;
-    }
-    focusSpawnForWorktree(path, name, rowAgent.dataset.agentProject || "");
+    void probeWorktreeAgents(rowAgent.dataset.agentPath || "", rowAgent);
+    return;
+  }
+  // The + bar under a row's agents: start a new agent in this worktree. This is what the ▶ used to do.
+  const addAgent = e.target.closest("[data-add-agent-path]");
+  if (addAgent) {
+    e.stopPropagation();
+    e.preventDefault();
+    startAgentInWorktree(addAgent);
     return;
   }
   // The row's agent badge: open the row so the agents block is visible.
