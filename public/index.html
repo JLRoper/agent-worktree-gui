@@ -111,6 +111,12 @@
       <input id="show-thinking" type="checkbox" title="what an agent thought before it acted, read from its session store as a block above each turn's console">
       <span class="settings-unit mono">default for cards</span>
     </label>
+    <div class="settings-sep"></div>
+    <label class="settings-row" for="auto-collect">
+      <span>Collect subagent results</span>
+      <input id="auto-collect" type="checkbox" checked title="when a turn ends while the subagents it delegated are still running, Hermes cannot hand their results back to it. The panel then sends the parent one more turn with what they produced, once they are all done.">
+    </label>
+    <p class="settings-note">A delegation joins its children and re-enters the parent — but only while that parent is still live. When a run's turn ends first, the children finish into nothing. With this on, the panel waits for them and gives the parent their results as one more turn, once per turn, only when the parent left early.</p>
     <p class="settings-note">Thinking is the agent's own reasoning, read from the session — a block above the turn it belongs to, folded until you open it. It is 1–2 KB a block, which is why it is off by default: the 🧠 on a card turns it on for that one session, and that choice wins over this switch.</p>
     <div class="settings-sep"></div>
     <label class="settings-row" for="contrast">

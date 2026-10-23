@@ -1444,20 +1444,30 @@ function subagentsHtml(list, key = "") {
   const running = subs.filter((s) => s.running).length;
   const collapsed = state.collapsedSubs.has(key);
   const head = `\u29c9 ${subs.length} subagent${subs.length === 1 ? "" : "s"} \u00b7 ${running ? `${running} running` : "all done"}`;
-  return `<div class="subagents mono${running ? "" : " is-done"}${collapsed ? " is-collapsed" : ""}" data-subs-turn="${esc(key)}">
-    <span class="sub-head" role="button" tabindex="0" data-subs-toggle="${esc(key)}" title="agents this run delegated. Their tools run on their own sessions, so only their start and finish reach this card. click a line for its console; click this line to ${collapsed ? "show" : "hide"} them."><span class="sub-chev">${collapsed ? "\u25b8" : "\u25be"}</span> ${esc(head)}</span>
-    ${subs
-      .map((s) => {
-        const id = s.id || "";
-        const open = Boolean(id) && state.openSubConsole.has(id);
-        return `<div class="sub-row${s.running ? " is-running" : ""}${open ? " is-open" : ""}"${id ? ` role="button" tabindex="0" data-sub-console="${esc(id)}" title="${esc(`${s.goal || "subagent"} — click for its console`)}"` : ""}>
+  const collect = running === 0
+    ? ` <button type="button" class="subs-collect" data-subs-collect="${esc(key)}" title="send this turn's agent one more turn with what these subagents produced, so it can aggregate them">collect</button>`
+    : "";
+  const rows = subs
+    .map((s) => {
+      const id = s.id || "";
+      const open = Boolean(id) && state.openSubConsole.has(id);
+      const quiet = s.running && s.hung ? Math.max(0, (Date.now() - (s.lastSeen || Date.now())) / 1000) : 0;
+      const meta = s.running
+        ? quiet
+          ? `no activity ${fmtSeconds(quiet)}`
+          : "running"
+        : `${esc(s.status || "done")}${s.duration ? ` · ${fmtSeconds(s.duration)}` : ""}`;
+      return `<div class="sub-row${s.running ? " is-running" : ""}${s.hung ? " is-hung" : ""}${open ? " is-open" : ""}"${id ? ` role="button" tabindex="0" data-sub-console="${esc(id)}" title="${esc(quiet ? `${s.goal || "subagent"} — nothing written for ${fmtSeconds(quiet)}, possibly hung` : `${s.goal || "subagent"} — click for its console`)}"` : ""}>
       <span class="sub-caret sub-chev">${id ? (open ? "\u25be" : "\u25b8") : ""}</span>
       <span class="sub-dot"></span>
       <span class="sub-title">${esc(s.goal || "subagent")}</span>
-      <span class="sub-meta mono">${s.running ? "running" : esc(s.status || "done")}${!s.running && s.duration ? ` · ${fmtSeconds(s.duration)}` : ""}</span>
+      <span class="sub-meta mono">${meta}</span>
     </div>${open ? subConsoleHtml(id) : ""}`;
-      })
-      .join("")}
+    })
+    .join("");
+  return `<div class="subagents mono${running ? "" : " is-done"}${collapsed ? " is-collapsed" : ""}" data-subs-turn="${esc(key)}">
+    <span class="sub-head" role="button" tabindex="0" data-subs-toggle="${esc(key)}" title="agents this run delegated. Their tools run on their own sessions, so only their start and finish reach this card. click a line for its console; click this line to ${collapsed ? "show" : "hide"} them."><span class="sub-chev">${collapsed ? "\u25b8" : "\u25be"}</span> ${esc(head)}${collect}</span>
+    ${rows}
   </div>`;
 }
 
@@ -1510,6 +1520,76 @@ function subagentsCompactHtml(turn, copy = "") {
   const live = rows.filter((r) => r.running).length;
   const cls = live ? "" : " is-done";
   return `<div class="subagents mono is-compact${cls}" data-subs-compact="${esc(key)}">\u29c9 ${rows.length} subagent${rows.length === 1 ? "" : "s"} \u00b7 ${live ? `${live} running` : "all done"}</div>`;
+}
+
+// ---- collecting results ---------------------------------------------------------------------
+// Hermes joins a delegation and re-enters the parent with the results, but only while that parent is live. A one-shot
+// run ends with its turn and its children finish into nothing, so the panel hands the parent the results itself, as
+// one more turn on the same thread. Once per turn, and (by default) only when the parent left before its children.
+const AUTO_COLLECT_KEY = "wtgui.autoCollect";
+state.collecting = state.collecting || new Set();
+
+function autoCollectOn() {
+  try {
+    return localStorage.getItem(AUTO_COLLECT_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function collectedIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem("wtgui.collected") || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function markCollected(id) {
+  try {
+    const ids = [...collectedIds()].slice(-80);
+    ids.push(id);
+    localStorage.setItem("wtgui.collected", JSON.stringify(ids));
+  } catch {
+    /* private mode: it may collect twice after a reload, nothing worse */
+  }
+}
+
+async function collectThread(turn) {
+  const thread = turn?.thread || turn?.id;
+  if (!thread || !turn?.id || state.collecting.has(turn.id) || collectedIds().has(turn.id)) return;
+  state.collecting.add(turn.id);
+  try {
+    const from = Date.parse(turn.startedAt || "") || 0;
+    const to = Date.parse(turn.endedAt || "") || Date.now();
+    const r = await apiFetch(
+      `/api/subagents/collect?thread=${encodeURIComponent(thread)}&from=${from}&to=${to}`,
+    );
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d.prompt) return;
+    const sent = await apiFetch("/api/agents/reply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ thread, text: d.prompt }),
+    });
+    if (!sent.ok) return;
+    markCollected(turn.id);
+    showBanner(`collecting ${d.items.length} subagent result${d.items.length === 1 ? "" : "s"} into a new turn`);
+  } catch {
+    /* a failed collect is not worth a banner: the button is still there */
+  } finally {
+    state.collecting.delete(turn.id);
+  }
+}
+
+// The parent left early: its turn ended before the children it started, so nobody was there to receive them.
+function parentLeftEarly(turn, rows) {
+  if (!rows.length || rows.some((r) => r.running)) return false;
+  const ended = Date.parse(turn.endedAt || "") || 0;
+  if (!ended) return false;
+  const lastChild = Math.max(...rows.map((r) => r.endedAt || 0));
+  return lastChild - ended > 1500;
 }
 
 function subagentsSig(rows) {
@@ -1572,6 +1652,10 @@ async function refreshSubagentRoster() {
       status: k.running ? "running" : "done",
       duration: null,
       startedAt: k.startedAt,
+      endedAt: k.endedAt,
+      lastSeen: k.lastSeen,
+      hung: Boolean(k.hung),
+      msgs: k.msgs,
     })));
   }
   subagentRosterAt = Date.now();
@@ -1590,6 +1674,13 @@ async function refreshSubagentRoster() {
   // An open console of a child that is still working has to keep moving; a finished one is a record.
   const liveOpen = [...state.openSubConsole].filter((id) => state.subConsoles.get(id)?.running);
   for (const id of liveOpen) void loadSubConsole(id);
+  // ...and once the children are all back, give the parent what it never got.
+  if (autoCollectOn()) {
+    for (const job of state.jobs.values()) {
+      const rows = subagentsForTurn(job);
+      if (parentLeftEarly(job, rows)) void collectThread(job);
+    }
+  }
 }
 
 // Which subagent lines are expanded, and their console text. Kept here so a roster repaint (which rebuilds the strip)
@@ -5715,6 +5806,14 @@ document.addEventListener("click", async (e) => {
     setThinking(thread, !thinkingOn(thread));
     return;
   }
+  const subsCollect = e.target.closest("[data-subs-collect]");
+  if (subsCollect) {
+    e.preventDefault();
+    e.stopPropagation();
+    const turn = [...state.jobs.values()].find((j) => j.id === subsCollect.dataset.subsCollect);
+    if (turn) void collectThread(turn);
+    return;
+  }
   const subsHead = e.target.closest("[data-subs-toggle]");
   if (subsHead) {
     e.preventDefault();
@@ -6814,6 +6913,13 @@ $("term-select")?.addEventListener("change", (e) => applyFont("term", e.target.v
 $("term-size-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, size: e.target.value }));
 $("grey-flash")?.addEventListener("change", (e) => applyGreyFlash(Boolean(e.target.checked)));
 $("contrast")?.addEventListener("input", (e) => applyContrast(Number(e.target.value)));
+$("auto-collect")?.addEventListener("change", (e) => {
+  try {
+    localStorage.setItem(AUTO_COLLECT_KEY, e.target.checked ? "1" : "0");
+  } catch {
+    /* private mode */
+  }
+});
 $("show-thinking")?.addEventListener("change", (e) => {
   try {
     localStorage.setItem(THINK_KEY, e.target.checked ? "1" : "0");
@@ -6875,6 +6981,7 @@ initFonts();
 applyGreyFlash(greyFlashOn());
 applyContrast(contrastSetting(), { save: false });
 if ($("show-thinking")) $("show-thinking").checked = thinkDefault();
+if ($("auto-collect")) $("auto-collect").checked = autoCollectOn();
 void refreshSubagentRoster();
 // The model menu is filled once at start-up from the gateway's own provider list; a failure leaves
 // the "(gateway default)" entry, which is what a spawn sends anyway.

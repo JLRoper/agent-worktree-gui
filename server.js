@@ -22,7 +22,7 @@ import {
   sessionSettings, writeSessionListLimit, SESSION_LIST_MIN, SESSION_LIST_MAX,
 } from "./lib/hermes-config.js";
 import { hermesSessionTail } from "./lib/activity.js";
-import { childTranscript, subagentsFor, subagentRoster } from "./lib/subagents.js";
+import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./lib/subagents.js";
 import { thinkingFor } from "./lib/thinking.js";
 import { modelCatalogue } from "./lib/hermes-models.js";
 
@@ -754,6 +754,22 @@ const server = createServer(async (req, res) => {
           to: Number.isFinite(to) && to > 0 ? to : null,
         }),
       });
+    }
+
+    if (route === "/api/subagents/collect" && req.method === "GET") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const thread = String(url.searchParams.get("thread") || "").trim();
+      if (!thread) return sendJson(res, 400, { error: "thread is required" });
+      const from = Number(url.searchParams.get("from"));
+      const to = Number(url.searchParams.get("to"));
+      const { hermesHome } = await import("./lib/jobs.js");
+      const out = collectPrompt(thread, {
+        dbPath: path.join(hermesHome(), "state.db"),
+        from: Number.isFinite(from) ? from : 0,
+        to: Number.isFinite(to) ? to : 0,
+      });
+      if (!out) return sendJson(res, 404, { error: "could not read that session's subagents" });
+      return sendJson(res, 200, out);
     }
 
     if (route === "/api/subagents/console" && req.method === "GET") {
