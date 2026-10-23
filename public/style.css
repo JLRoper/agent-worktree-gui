@@ -1010,7 +1010,10 @@ tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: 
    explicit, and the column header steps back so it stops reading as another band of projects. */
 #projects section.project { border-left: 3px solid #33405a; }
 #projects section.project > table {
-  width: calc(100% - 26px);
+  /* The rail inset on the left and a matching buffer on the right. It used to be 24px on the left and 2px on the
+     right, so the last column (the row's ✕) sat against the panel's rounded corner and the table header bled into
+     it - the right edge read as a seam where the left read as a margin. */
+  width: calc(100% - 48px);
   margin-left: 24px;
   border-left: 1px solid #2b3644;
 }

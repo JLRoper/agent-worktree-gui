@@ -3462,7 +3462,10 @@ function detailHtml(row) {
     : "";
   // Merge state and liveness evidence lead the block again, but as two folded one-line strips: they are
   // reference material and were taking a block's worth of height above the agents when they sat open here.
-  return `<tr class="detail" data-detail="${esc(key)}"><td colspan="9">
+  // Ten columns, not nine: the row-actions cell is the tenth, and a colspan of 9 left the card area short of the
+  // table's right edge by that column, so the expanded agent section ended in a bare strip of panel on the right
+  // while the left was flush. (The delete confirmation row below already spans 10.)
+  return `<tr class="detail" data-detail="${esc(key)}"><td colspan="10">
     <div class="git-block${gitOpen ? "" : " collapsed"}" data-git-block="${esc(key)}">
       <div class="git-head" data-toggle-git="${esc(key)}" title="${gitOpen ? "fold" : "unfold"} the merge state, commit and diff detail">
         <span class="chev">${gitOpen ? "\u25be" : "\u25b8"}</span>
