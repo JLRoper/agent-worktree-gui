@@ -31,103 +31,117 @@
       <span class="spacer"></span>
       <button id="btn-settings-close" type="button" title="close (Esc)">✕</button>
     </div>
-    <div class="settings-row" title="page zoom — Ctrl+wheel, Ctrl + / Ctrl − , Ctrl 0 resets">
-      <span>Page zoom</span>
-      <span class="zoom">
-        <button id="btn-zoom-out" type="button" title="zoom out (Ctrl −)">−</button>
-        <span class="mono" id="zoom-pct">100%</span>
-        <button id="btn-zoom-in" type="button" title="zoom in (Ctrl +)">+</button>
-      </span>
+    <div class="settings-body">
+
+      <div class="settings-group">
+        <h3 class="settings-group-head" title="How the board and the agent's output look. Panel font covers the headings, labels, buttons and whatever you type; terminal font, size and weight cover the console and the tool lines inside it. All of it is saved in this browser.">Display</h3>
+
+        <div class="settings-row" title="page zoom — Ctrl+wheel, Ctrl + / Ctrl − , Ctrl 0 resets. Saved in this browser.">
+          <span>Page zoom <span class="settings-info">ⓘ</span></span>
+          <span class="zoom">
+            <button id="btn-zoom-out" type="button" title="zoom out (Ctrl −)">−</button>
+            <span class="mono" id="zoom-pct">100%</span>
+            <button id="btn-zoom-in" type="button" title="zoom in (Ctrl +)">+</button>
+          </span>
+        </div>
+
+        <label class="settings-row" title="The panel's own typeface: headings, labels, buttons, and the text you type (the prompt you sent, the reply box, a queued reply). Saved in this browser.">
+          <span>Panel font <span class="settings-info">ⓘ</span></span>
+          <select id="font-select"></select>
+        </label>
+        <div class="settings-preview" id="font-preview">The quick brown fox · 0123456789 · UNMERGED (3 commits)</div>
+
+        <label class="settings-row settings-gap" title="The agent's console typeface — its output and the tool lines inside it. Saved in this browser.">
+          <span>Terminal font <span class="settings-info">ⓘ</span></span>
+          <select id="term-select"></select>
+        </label>
+        <div class="settings-preview" id="term-preview">tool · read_file · exit 0 · +169 −265</div>
+
+        <label class="settings-row settings-gap" title="Type size inside the console and the tool lines. Saved in this browser.">
+          <span>Console size <span class="settings-info">ⓘ</span></span>
+          <select id="term-size-select"></select>
+        </label>
+
+        <label class="settings-row" title="Console type weight — a little heavier reads better on a projector, a little lighter quiets a long transcript. Saved in this browser.">
+          <span>Console weight <span class="settings-info">ⓘ</span></span>
+          <select id="term-weight-select"></select>
+        </label>
+
+        <label class="settings-row settings-gap" for="contrast" title="How far apart the layered panels sit: 0% makes every layer one neutral, 100% pushes the page to near-black and lifts the panels.">
+          <span>Panel contrast <span class="settings-info">ⓘ</span></span>
+          <input id="contrast" type="range" min="0" max="100" step="5" value="15">
+          <span class="settings-unit mono" id="contrast-pct">15%</span>
+        </label>
+        <div class="settings-preview contrast" id="contrast-preview" title="the layers this controls, darkest to lightest">
+          <span style="background: var(--console)"></span><span style="background: var(--bg)"></span><span style="background: var(--surface)"></span><span style="background: var(--panel)"></span><span style="background: var(--card)"></span><span style="background: var(--band)"></span><span style="background: var(--panel-2)"></span>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <h3 class="settings-group-head" title="What a card shows and does for you.">Agent cards</h3>
+
+        <label class="settings-row" for="show-thinking" title="The agent's own reasoning, read from its session store, as a block above each turn's console — folded until you open it. It is 1–2 KB a block, which is why it is off by default. The brain button on a card turns it on for that one session, and that choice wins over this switch.">
+          <span>Show thinking <span class="settings-info">ⓘ</span></span>
+          <input id="show-thinking" type="checkbox">
+          <span class="settings-unit mono">default for cards</span>
+        </label>
+
+        <label class="settings-row" for="auto-collect" title="A delegation joins its children and re-enters the parent — but only while that parent is still live. When a run's turn ends first the children finish into nothing. With this on, the panel waits for them and hands the parent their results as one more turn, once per turn, only when the parent left early.">
+          <span>Collect subagent results <span class="settings-info">ⓘ</span></span>
+          <input id="auto-collect" type="checkbox" checked>
+        </label>
+      </div>
+
+      <div class="settings-group">
+        <h3 class="settings-group-head" title="How the board behaves while you are reading it.">Board</h3>
+
+        <label class="settings-row" for="reorder-every" title="How often the closed folders and projects re-sort themselves. A project you have open — and the folder holding it — keeps its slot whatever this is set to, so this only ever moves what you are not reading. Saved in this browser and applied at once.">
+          <span>Board reorder <span class="settings-info">ⓘ</span></span>
+          <input id="reorder-every" type="number" inputmode="numeric" step="5" min="0" max="600">
+          <span class="settings-unit mono">s</span>
+        </label>
+        <div class="settings-presets">
+          <button type="button" data-reorder-set="0">off</button>
+          <button type="button" data-reorder-set="5">5 s</button>
+          <button type="button" data-reorder-set="15">15 s</button>
+          <button type="button" data-reorder-set="30">30 s</button>
+          <button type="button" data-reorder-set="60">1 min</button>
+        </div>
+        <div class="settings-preview mono" id="reorder-preview">…</div>
+
+        <label class="settings-row settings-gap" for="grey-flash" title="Grey is the quiet one: the row was re-read and nothing had moved. Green — a sign of life, an agent doing something — always flashes. Off, a refreshed row just stays as it is.">
+          <span>Grey flash <span class="settings-info">ⓘ</span></span>
+          <input id="grey-flash" type="checkbox" checked>
+        </label>
+      </div>
+
+      <div class="settings-group">
+        <h3 class="settings-group-head" title="Written to the gateway's config.yaml, not this browser. It re-reads them, so the next prompt or session list uses the new number without a restart.">Gateway</h3>
+
+        <label class="settings-row" for="approval-timeout" id="approval-row" title="How long a permission prompt waits for you before it fails closed — if it expires, nothing runs.">
+          <span>Approval window <span class="settings-info">ⓘ</span></span>
+          <input id="approval-timeout" type="number" inputmode="numeric" step="15">
+          <span class="settings-unit mono">s</span>
+          <button id="btn-approval-save" type="button" title="write approvals.timeout into the gateway's config.yaml">Save</button>
+        </label>
+        <div class="settings-presets">
+          <button type="button" data-approval-set="120">2 min</button>
+          <button type="button" data-approval-set="300">5 min</button>
+          <button type="button" data-approval-set="600">10 min</button>
+          <button type="button" data-approval-set="1800">30 min</button>
+          <button type="button" data-approval-set="3600">1 h</button>
+        </div>
+        <div class="settings-preview mono" id="approval-preview">…</div>
+
+        <label class="settings-row settings-gap" for="session-limit" id="session-row" title="How many sessions the CLI's /sessions and /resume browser list at once. The store keeps every session — nothing is deleted at ten; this only changes how many you can see.">
+          <span>CLI session list <span class="settings-info">ⓘ</span></span>
+          <input id="session-limit" type="number" inputmode="numeric" step="5">
+          <button id="btn-session-limit-save" type="button" title="write sessions.list_limit into the gateway's config.yaml">Save</button>
+        </label>
+        <div class="settings-preview mono" id="session-preview">…</div>
+      </div>
+
     </div>
-    <p class="settings-note">Ctrl+wheel, Ctrl + / Ctrl −, and Ctrl 0 resets. Saved in this browser.</p>
-    <div class="settings-sep"></div>
-    <label class="settings-row">
-      <span>Panel font</span>
-      <select id="font-select"></select>
-    </label>
-    <div class="settings-preview" id="font-preview">The quick brown fox · 0123456789 · UNMERGED (3 commits)</div>
-    <label class="settings-row settings-gap">
-      <span>Terminal font</span>
-      <select id="term-select"></select>
-    </label>
-    <div class="settings-preview" id="term-preview">tool · read_file · exit 0 · +169 −265</div>
-    <label class="settings-row settings-gap">
-      <span>Console size</span>
-      <select id="term-size-select"></select>
-    </label>
-    <label class="settings-row">
-      <span>Console weight</span>
-      <select id="term-weight-select"></select>
-    </label>
-    <p class="settings-note">Panel font covers the headings, labels, buttons — and whatever you type: the prompt you sent for a turn, the reply box and a queued reply. Terminal font, size and weight cover the agent's own output console and the tool lines inside it. All of it is saved in this browser.</p>
-    <div class="settings-sep"></div>
-    <label class="settings-row" for="approval-timeout">
-      <span>Approval window</span>
-      <input id="approval-timeout" type="number" inputmode="numeric" step="15" title="how long a permission prompt waits for you before it fails closed">
-      <span class="settings-unit mono">s</span>
-      <button id="btn-approval-save" type="button" title="write approvals.timeout into the gateway's config.yaml">Save</button>
-    </label>
-    <div class="settings-presets">
-      <button type="button" data-approval-set="120">2 min</button>
-      <button type="button" data-approval-set="300">5 min</button>
-      <button type="button" data-approval-set="600">10 min</button>
-      <button type="button" data-approval-set="1800">30 min</button>
-      <button type="button" data-approval-set="3600">1 h</button>
-    </div>
-    <div class="settings-preview mono" id="approval-preview">…</div>
-    <p class="settings-note" id="approval-note">How long a permission prompt waits for you before it fails closed — if it expires, nothing runs. This is the gateway's own setting, saved to its config.yaml rather than this browser, and the next prompt uses it without a restart.</p>
-    <div class="settings-sep"></div>
-    <label class="settings-row" for="session-limit">
-      <span>CLI session list</span>
-      <input id="session-limit" type="number" inputmode="numeric" step="5" title="how many sessions the CLI's /sessions and /resume picker list at once">
-      <button id="btn-session-limit-save" type="button" title="write sessions.list_limit into the gateway's config.yaml">Save</button>
-    </label>
-    <div class="settings-preview mono" id="session-preview">…</div>
-    <p class="settings-note" id="session-note">How many sessions the CLI's /sessions and /resume browser list at once. The store keeps every session — nothing is deleted at ten; this only changes how many you can see.</p>
-    <div class="settings-sep"></div>
-    <label class="settings-row" for="reorder-every">
-      <span>Board reorder</span>
-      <input id="reorder-every" type="number" inputmode="numeric" step="5" min="0" max="600" title="how often the closed folders and projects re-sort themselves — 0 turns it off">
-      <span class="settings-unit mono">s</span>
-    </label>
-    <div class="settings-presets">
-      <button type="button" data-reorder-set="0">off</button>
-      <button type="button" data-reorder-set="5">5 s</button>
-      <button type="button" data-reorder-set="15">15 s</button>
-      <button type="button" data-reorder-set="30">30 s</button>
-      <button type="button" data-reorder-set="60">1 min</button>
-    </div>
-    <div class="settings-preview mono" id="reorder-preview">…</div>
-    <p class="settings-note" id="reorder-note">How often the closed folders and projects re-sort themselves. A project you have open — and the folder holding it — keeps its slot whatever this is set to, so this only ever moves what you are not reading. Saved in this browser, and it takes effect at once.</p>
-    <div class="settings-sep"></div>
-    <label class="settings-row" for="grey-flash">
-      <span>Grey flash</span>
-      <input id="grey-flash" type="checkbox" checked title="flash a row grey when a refresh found nothing new (no signs of life). The green flash, for a row where something actually moved, stays on either way.">
-    </label>
-    <p class="settings-note">Grey is the quiet one: the row was re-read and nothing had moved. Green — a sign of life, an agent doing something — always flashes. Off, a refreshed row just stays as it is.</p>
-    <div class="settings-sep"></div>
-    <label class="settings-row" for="show-thinking">
-      <span>Show thinking</span>
-      <input id="show-thinking" type="checkbox" title="what an agent thought before it acted, read from its session store as a block above each turn's console">
-      <span class="settings-unit mono">default for cards</span>
-    </label>
-    <div class="settings-sep"></div>
-    <label class="settings-row" for="auto-collect">
-      <span>Collect subagent results</span>
-      <input id="auto-collect" type="checkbox" checked title="when a turn ends while the subagents it delegated are still running, Hermes cannot hand their results back to it. The panel then sends the parent one more turn with what they produced, once they are all done.">
-    </label>
-    <p class="settings-note">A delegation joins its children and re-enters the parent — but only while that parent is still live. When a run's turn ends first, the children finish into nothing. With this on, the panel waits for them and gives the parent their results as one more turn, once per turn, only when the parent left early.</p>
-    <p class="settings-note">Thinking is the agent's own reasoning, read from the session — a block above the turn it belongs to, folded until you open it. It is 1–2 KB a block, which is why it is off by default: the 🧠 on a card turns it on for that one session, and that choice wins over this switch.</p>
-    <div class="settings-sep"></div>
-    <label class="settings-row" for="contrast">
-      <span>Panel contrast</span>
-      <input id="contrast" type="range" min="0" max="100" step="5" value="15" title="how far apart the layered panels sit: 0% makes every layer one neutral, 100% pushes the page to near-black and lifts the panels">
-      <span class="settings-unit mono" id="contrast-pct">15%</span>
-    </label>
-    <div class="settings-preview contrast" id="contrast-preview" title="the layers this controls, darkest to lightest">
-      <span style="background: var(--console)"></span><span style="background: var(--bg)"></span><span style="background: var(--surface)"></span><span style="background: var(--panel)"></span><span style="background: var(--card)"></span><span style="background: var(--band)"></span><span style="background: var(--panel-2)"></span>
-    </div>
-    <p class="settings-note">The board is a stack of greys: the page, the detail row, the card, its header and the row under the cursor. This is the distance between them. 0% collapses the stack into one neutral; higher separates them further, and 100% takes the page to near-black under much lighter panels.</p>
   </div>
 
   <div id="banner" class="banner hidden"></div>

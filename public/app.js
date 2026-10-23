@@ -7587,11 +7587,14 @@ function paintApprovalSetting(note = "", bad = false) {
     preview.classList.toggle("bad", bad);
     preview.title = s.configPath;
   }
-  const noteEl = $("approval-note");
-  if (noteEl) {
-    noteEl.textContent = s.editable
-      ? `How long a permission prompt waits for you before it fails closed — if it expires, nothing runs. Written to ${s.configPath}, which the gateway re-reads, so the next prompt uses it without a restart.`
-      : `${s.reason || "this window cannot be changed from here"} — nothing is written.`;
+  // The description lives on the row as a tooltip now; this keeps the live half of it (where the number is
+  // written, or why it cannot be written here) in the same place.
+  const rowEl = $("approval-row");
+  if (rowEl) {
+    const base = "How long a permission prompt waits for you before it fails closed — if it expires, nothing runs.";
+    rowEl.title = s.editable
+      ? `${base} Written to ${s.configPath}, which the gateway re-reads, so the next prompt uses it without a restart.`
+      : `${base} ${s.reason || "This window cannot be changed from here"} — nothing is written.`;
   }
 }
 
@@ -7706,12 +7709,12 @@ function paintSessionSetting(note = "", bad = false) {
     preview.classList.toggle("bad", bad || s.patched === false);
     preview.title = s.configPath;
   }
-  const noteEl = $("session-note");
-  if (noteEl) {
+  const rowEl = $("session-row");
+  if (rowEl) {
     const store = s.store
       ? `The store holds ${s.store.sessions} sessions and ${s.store.messages.toLocaleString()} messages — nothing deletes at ten. `
       : "The store could not be read. ";
-    noteEl.textContent =
+    rowEl.title =
       s.patched === false
         ? `${store}That number is written to config.yaml, but the installed CLI has no patch to read it (a hermes update replaces hermes_cli/*.py) — re-apply docs/hermes-cli-session-limit.diff.`
         : `${store}This only changes how many the CLI's /sessions and /resume browser list at once.`;

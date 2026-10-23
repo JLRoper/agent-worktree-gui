@@ -119,8 +119,23 @@ button.primary:hover { background: #24466a; }
 .banner { margin: 10px 16px 0; padding: 8px 12px; border-radius: 6px; background: var(--red-bg); border: 1px solid #57262a; color: #ffb4ae; font-size: 13px; }
 .banner.ok { background: var(--green-bg); border-color: #1f4a2a; color: #b7f7c1; }
 /* settings panel: a small popover under the top bar */
-.settings { position: fixed; right: 16px; top: 74px; z-index: 120; width: 340px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 14px 34px #0009; }
-.settings-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+/* A fixed panel with a scrolling body: the head stays put (and the close button with it) however far down the
+   reader is. The body owns the scrollbar so the rounded border is never clipped by it. */
+.settings { position: fixed; right: 16px; top: 74px; z-index: 120; width: 340px; max-height: calc(100vh - 90px); display: flex; flex-direction: column; padding: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 14px 34px #0009; overflow: hidden; }
+/* The body owns the scrollbar. Both spellings are set: Chrome 121+ honours scrollbar-width/color and ignores the
+   ::-webkit- rules, older Chromium is the other way round, and Firefox only knows the standard pair. */
+.settings-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 14px 14px; scrollbar-width: thin; scrollbar-color: #39424f var(--panel); }
+.settings-body::-webkit-scrollbar { width: 10px; }
+.settings-body::-webkit-scrollbar-track { background: var(--panel); }
+.settings-body::-webkit-scrollbar-thumb { background: #39424f; border: 2px solid var(--panel); border-radius: 999px; }
+.settings-body::-webkit-scrollbar-thumb:hover { background: #4b5666; }
+.settings-head { display: flex; align-items: center; gap: 8px; flex: none; margin: 0; padding: 12px 14px 9px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.settings-group { padding-top: 10px; }
+.settings-group + .settings-group { margin-top: 10px; border-top: 1px solid var(--line); }
+.settings-group-head { margin: 0 0 8px; font: 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dimmer); cursor: help; }
+.settings-group-head:hover { color: var(--dim); }
+.settings-info { margin-left: 2px; font-size: 10px; color: #46505f; cursor: help; }
+.settings-row:hover .settings-info { color: var(--dim); }
 .settings-head h2 { margin: 0; font-size: 13px; font-family: var(--mono); }
 .settings-head .spacer { flex: 1; }
 .settings-head button { padding: 1px 6px; font-size: 11px; }
@@ -133,7 +148,7 @@ button.primary:hover { background: #24466a; }
 .settings-row input[type="range"] { flex: 1; min-width: 0; height: 18px; accent-color: #4a90d9; }
 .settings-preview.contrast { display: flex; padding: 0; height: 24px; overflow: hidden; border-style: solid; }
 .settings-preview.contrast span { flex: 1; }
-.settings-note { margin: 8px 0 0; font-size: 11px; color: var(--dimmer); line-height: 1.4; }
+.settings-note { display: none; }
 /* The approval window is the one setting in here that is not a browser preference: it is the
    gateway's own approvals.timeout, written to its config.yaml, so it is styled as a form field with
    an explicit Save rather than a picker that applies on change. */
