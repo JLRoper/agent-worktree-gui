@@ -940,6 +940,8 @@ body.modal-open { overflow: hidden; }
 /* The card's own title, set like the revive row: the name carries the weight, its age stays quiet. */
 .job-head .job-title { font-weight: 600; color: var(--text); max-width: 52ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-head .job-when { flex: none; font-size: 10.5px; color: var(--dimmer); }
+/* The staleness counter follows the state pill, so it hugs it: the head's 12px gap made the two read as unrelated. */
+.job-head .pill + .job-when { margin-left: -4px; }
 
 /* Dragging across worktree rows should pick up the names and branches and nothing else. The head hash, the
    ahead/behind and cherry counts, the PR cell, the dirty counts, the age and the verdict badge are read, never
