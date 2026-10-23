@@ -466,10 +466,7 @@ button.chip:active { transform: translateY(1px); }
 .pill.cancelled, .pill.interrupted { color: var(--dim); background: #20242c; }
 .pill.interrupted { border-style: dashed; }
 .pill.yolo { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
-.job-prompt { margin: 7px 0 5px; font-size: 13px; color: #dbe3ec; font-family: var(--ui); }
 /* A turn's prompt line folds the turn, exactly like the "turn 1 · done" head above it. */
-.turn > .job-prompt { cursor: pointer; }
-.turn > .job-prompt:hover { color: #eef2f8; }
 .job-cmd { font-size: 11px; word-break: break-all; margin-bottom: 6px; font-family: var(--term); }
 .job-out {
   margin: 0;
@@ -897,10 +894,9 @@ body.modal-open { overflow: hidden; }
 .job.maximized .job-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
 .job.maximized .turn { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .job.maximized .turn.folded { display: block; flex: 0 0 auto; }
-.job.maximized .job-prompt { flex: none; }
 .job.maximized .job-out { max-height: none; flex: 1; min-height: 0; }
 .job.maximized .reply-box { min-height: 46px; }
-.job-prompt, .job-cmd, .job-out, .job-foot { margin-left: 18px; }
+.job-cmd, .job-out, .job-foot { margin-left: 18px; }
 /* The usage readout sits directly under the reply box, not above it and not at the foot of the card: it
    starts where the box starts and ends its line. No left margin of its own; the send/steer buttons are
    pinned inside the box itself, so this must NOT live between the textarea and them. */

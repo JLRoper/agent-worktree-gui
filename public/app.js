@@ -1045,10 +1045,10 @@ function turnBlock(conv, turn, index, copy = "") {
     return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy, true)}` +
       `${peekHtml(turn)}${turnAttachmentsHtml(turn)}</div>`;
   }
-  return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy)}` +
-    // The prompt line toggles too, so the whole header area behaves the same whether the turn is open
-    // or folded: click the text to fold, click it again to unfold.
-    `<div class="job-prompt" data-toggle-turn="${esc(tkey)}" title="collapse this turn${turn.prompt ? ` — ${esc(displayPrompt(turn.prompt).slice(0, 120))}` : ""}">${esc(displayPrompt(turn.prompt) || "")}</div>${turnAttachmentsHtml(turn)}${turnBody(turn, copy)}</div>`;
+  return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy, true)}` +
+    // The request stays on the head line whether the turn is open or folded: it is the turn's title either
+    // way, and the open form used to drop it onto its own row, which pushed the transcript down for nothing.
+    `${turnAttachmentsHtml(turn)}${turnBody(turn, copy)}</div>`;
 }
 
 // Every deliverable this conversation produced — files and URLs — in the order they were delivered.
