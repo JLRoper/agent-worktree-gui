@@ -511,6 +511,7 @@ button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241
 /* A child that has gone quiet is not "working": say so, and stop pretending with the pulse. */
 .subagents .sub-row.is-hung .sub-dot { background: #f0c674; box-shadow: 0 0 0 3px rgba(240, 198, 116, .16); animation: none; }
 .subagents .sub-row.is-hung .sub-meta { color: #f0c674; }
+.subs-collected { margin-left: 8px; color: var(--dimmer); font-size: 10px; }
 .subs-collect { margin-left: 8px; background: none; border: 1px solid #3d3350; border-radius: 4px; color: #c8a6ff; font: 10px/1.5 var(--mono); padding: 0 6px; cursor: pointer; }
 .subs-collect:hover { color: #ecd9ff; border-color: #55407a; background: #241d33; }
 .subagents .sub-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
@@ -673,6 +674,8 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
   user-select: none;
 }
 .turn-head .chev { color: var(--dimmer); font-size: 18px; line-height: 1; display: inline-block; width: 16px; vertical-align: -3px; }
+/* A turn that answers a subagent delivery: the attribution rides on the turn head, not in the transcript. */
+.turn-origin { flex: none; white-space: nowrap; color: #c8a6ff; border: 1px solid #3d3350; background: #241d33; border-radius: 4px; padding: 0 5px; font-size: 10.5px; }
 .turn-head:hover { color: var(--text); }
 .turn-head:hover .chev { color: var(--text); }
 .job-body > .turn:first-child > .turn-head { margin-top: 4px; border-top: none; }

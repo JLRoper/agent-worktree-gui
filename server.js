@@ -690,10 +690,13 @@ const server = createServer(async (req, res) => {
           /* gone: fall back to the project */
         }
       }
+      const origin = body.origin && typeof body.origin === "object" ? body.origin : null;
       const job = await jobs.create({
         prompt: text,
         thread: first.thread,
         reply: true,
+        // Set when the panel is delivering subagent results: the card says what caused this turn.
+        origin,
         resumeDir: dir,
         cwd: dir,
         model: body.model ?? first.model,
@@ -703,6 +706,8 @@ const server = createServer(async (req, res) => {
         // A reply continues the SAME agent, so it keeps the tree that agent was created for.
         ownerPath: first.ownerPath || null,
       });
+      // A delivery turn closes the offer on the turn it answers, for every reader and every reload.
+      if (origin && origin.fromTurn) jobs.markCollected(origin.fromTurn, job.id);
       return sendJson(res, 202, { job });
     }
 

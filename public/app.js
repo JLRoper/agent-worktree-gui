@@ -1073,6 +1073,21 @@ function turnPageOffset(thread, turnCount) {
 
 // `inline` puts the turn's request on the head line itself — the folded form is two rows: the head with
 // the request, then one line saying what the turn is doing (or, once done, what it concluded).
+// A turn the reader did not start: it answers a delivery, and the head should say which. One child names itself;
+// several are listed in the tooltip, in the same order the collect prompt numbered them.
+function originHtml(turn) {
+  const o = turn.origin;
+  if (!o || o.kind !== "subagent-delivery") return "";
+  const subs = Array.isArray(o.subagents) ? o.subagents : [];
+  const one = subs.length === 1 ? subs[0] : null;
+  const list = subs.map((s) => `#${s.index} ${s.title || "(untitled)"}`).join("\n");
+  const text = one ? `from subagent #${one.index} · ${one.title || "untitled"}` : `from ${subs.length} subagents`;
+  const title = subs.length
+    ? `this turn was started by the delivery of:\n${list}`
+    : "this turn was started by a subagent delivery";
+  return ` <span class="turn-origin mono" title="${esc(title)}">\u21b3 ${esc(text)}</span>`;
+}
+
 function turnHead(turn, index, open, copy = "", inline = false) {
   const label = `turn ${turn.turn || index + 1}`;
   const pinned = state.pinnedTurns.has(turn.id);
@@ -1083,7 +1098,7 @@ function turnHead(turn, index, open, copy = "", inline = false) {
     : turn.status === "running" || turn.status === "starting"
       ? `running ${elapsed(turn)}`
       : `${turn.status} · ${elapsed(turn)}${turn.tokens?.total ? ` · ${turn.tokens.total} tok` : ""}`;
-  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> <span class="turn-text">${esc(label)} · ${esc(state_)}</span>${inlinePrompt(turn, inline)}</div>`;
+  return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> <span class="turn-text">${esc(label)} · ${esc(state_)}</span>${originHtml(turn)}${inlinePrompt(turn, inline)}</div>`;
 }
 
 function inlinePrompt(turn, inline) {
@@ -1438,15 +1453,18 @@ function subConsoleHtml(id) {
     .join("")}</pre>`;
 }
 
-function subagentsHtml(list, key = "") {
+function subagentsHtml(list, key = "", collected = false) {
   const subs = Array.isArray(list) ? list : [];
   if (!subs.length) return "";
   const running = subs.filter((s) => s.running).length;
   const collapsed = state.collapsedSubs.has(key);
   const head = `\u29c9 ${subs.length} subagent${subs.length === 1 ? "" : "s"} \u00b7 ${running ? `${running} running` : "all done"}`;
-  const collect = running === 0
-    ? ` <button type="button" class="subs-collect" data-subs-collect="${esc(key)}" title="send this turn's agent one more turn with what these subagents produced, so it can aggregate them">collect</button>`
-    : "";
+  const collect =
+    running > 0
+      ? ""
+      : collected
+        ? ` <span class="subs-collected mono" title="these results were already sent back to this turn">\u2713 collected</span>`
+        : ` <button type="button" class="subs-collect" data-subs-collect="${esc(key)}" title="send this turn's agent one more turn with what these subagents produced, so it can aggregate them">collect</button>`;
   const rows = subs
     .map((s) => {
       const id = s.id || "";
@@ -1508,7 +1526,7 @@ function turnSubagentsHtml(turn, copy = "") {
   if (!rows.length) return `<div class="subagents mono" data-subs-turn="${esc(key)}" hidden></div>`;
   // A finished set stays on the card, greyed: the work it did is part of the turn, and its console is still worth
   // opening. The header collapses it away for anyone who does not want it.
-  return subagentsHtml(rows, key);
+  return subagentsHtml(rows, key, Boolean(turn.collected));
 }
 
 // On a folded turn the strip shrinks to its tally: enough to say "this is where the agents came from" without
@@ -1557,7 +1575,9 @@ function markCollected(id) {
 
 async function collectThread(turn) {
   const thread = turn?.thread || turn?.id;
-  if (!thread || !turn?.id || state.collecting.has(turn.id) || collectedIds().has(turn.id)) return;
+  if (!thread || !turn?.id || turn.collected || state.collecting.has(turn.id) || collectedIds().has(turn.id)) return;
+  // One turn per session at a time: a delivery must not race a turn that is already running.
+  if ([...state.jobs.values()].some((j) => (j.thread || j.id) === thread && (j.status === "running" || j.status === "starting"))) return;
   state.collecting.add(turn.id);
   try {
     const from = Date.parse(turn.startedAt || "") || 0;
@@ -1571,7 +1591,15 @@ async function collectThread(turn) {
     const sent = await apiFetch("/api/agents/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ thread, text: d.prompt }),
+      body: JSON.stringify({
+        thread,
+        text: d.prompt,
+        origin: {
+          kind: "subagent-delivery",
+          fromTurn: turn.id,
+          subagents: (d.items || []).map((it, i) => ({ index: i + 1, id: it.id, title: it.goal })),
+        },
+      }),
     });
     if (!sent.ok) return;
     markCollected(turn.id);
@@ -1626,7 +1654,7 @@ function paintSubagents() {
     }
     const sig = `${subagentsSig(rows)}|${[...state.openSubConsole].join(",")}|${state.subConsoleVersion || 0}|${state.collapsedSubs.has(key) ? "c" : "e"}`;
     if (!box.hidden && box.dataset.sig === sig) continue;
-    box.outerHTML = subagentsHtml(rows, key);
+    box.outerHTML = subagentsHtml(rows, key, Boolean(job.collected));
     const fresh = document.querySelector(`[data-subs-turn="${CSS.escape(key)}"]`);
     if (fresh) fresh.dataset.sig = sig;
   }
@@ -1678,7 +1706,7 @@ async function refreshSubagentRoster() {
   if (autoCollectOn()) {
     for (const job of state.jobs.values()) {
       const rows = subagentsForTurn(job);
-      if (parentLeftEarly(job, rows)) void collectThread(job);
+      if (!job.collected && parentLeftEarly(job, rows)) void collectThread(job);
     }
   }
 }
@@ -2854,6 +2882,7 @@ function conversationSignature(conv) {
     // A steer the turn never read comes back as a note in the reply area: without it here the card would not
     // repaint, and the note would only appear whenever something unrelated forced a rebuild.
     l.pendingSteer ? `s${l.pendingSteer.at || 1}` : "",
+    conv.turns.map((x) => `${x.origin ? `o${x.id}` : ""}${x.collected ? "c" : ""}`).join(""),
     thinkingOn(conv.thread) ? "t" : "-",
     // A card stays RUNNING while children it delegated are out, so that answer belongs in the signature.
     (subagentFallback.get(conv.thread) || []).some((s) => s.running) ||
