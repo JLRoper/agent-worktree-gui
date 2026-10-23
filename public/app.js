@@ -5372,10 +5372,17 @@ function anchorTouchMs() {
 // the worktree's tbody, so holding "that thing" has to be a lookup, not a stored node: the node the click landed
 // on is gone by the time the observer measures the layout.
 function anchorNodeFor(target) {
-  if (!target || !target.id) return null;
+  if (!target) return null;
+  // A plain element was claimed by the click itself (a button, a chip, a line of text). There is no stable name to
+  // look it up by, so the node is the anchor: valid while it stays in the document, dropped when a rebuild
+  // replaces it.
+  if (target.kind === "el") return target.el && target.el.isConnected ? target.el : null;
+  if (!target.id) return null;
   if (target.kind === "card") return document.querySelector(`.job[data-thread="${CSS.escape(target.id)}"]`);
   // A project is held by its section, not just the head: the section is what grows, and its top is the bar.
   if (target.kind === "project") return document.querySelector(`section.project[data-project="${CSS.escape(target.id)}"]`);
+  if (target.kind === "fixed") return document.getElementById(target.id);
+  if (target.kind === "turn") return document.querySelector(`[data-turn-head="${CSS.escape(target.id)}"]`);
   if (target.kind === "row") return document.querySelector(`#projects tr.row[data-key="${CSS.escape(target.id)}"]`);
   if (target.kind === "root") return document.querySelector(`.root-head[data-toggle-root="${CSS.escape(target.id)}"]`);
   return null;
@@ -5389,22 +5396,35 @@ function boardTargetOf(el) {
   if (card) return { kind: "card", id: card.dataset.thread };
   const phead = el.closest(".project-head[data-toggle-project]");
   if (phead) return { kind: "project", id: phead.dataset.toggleProject };
+  const fhead = el.closest("[data-toggle-fixed]");
+  if (fhead) return { kind: "fixed", id: fhead.dataset.toggleFixed };
+  const turn = el.closest("[data-turn-head]");
+  if (turn) return { kind: "turn", id: turn.dataset.turnHead };
   const row = el.closest("#projects tr.row[data-key]");
   if (row) return { kind: "row", id: row.dataset.key };
   const rhead = el.closest(".root-head[data-toggle-root]");
   if (rhead) return { kind: "root", id: rhead.dataset.toggleRoot };
+  // Anything else the click landed on: a button, a chip, a badge, a paragraph. The element itself is the anchor.
+  // The page background and the scroll containers are not - there is nothing there to hold, and claiming them
+  // would fight the reader's own scroll.
+  if (el === document.body || el === document.documentElement || el === document.scrollingElement) return null;
+  if (el.closest("#settings, .settings")) return { kind: "el", el };
+  if (el.closest("main") && el.tagName !== "MAIN" && el.tagName !== "BODY") return { kind: "el", el };
+  if (el.closest(".topbar")) return { kind: "el", el };
   return null;
 }
 
 function sameAnchorTarget(a, b) {
-  return !!a && !!b && a.kind === b.kind && a.id === b.id;
+  if (!a || !b || a.kind !== b.kind) return false;
+  if (a.kind === "el") return a.el === b.el;
+  return a.id === b.id;
 }
 
 // A project was claimed by its bar, so its bar is what has to still be on screen: the section it belongs to can be
 // taller than the window, and once the bar has scrolled away the reader is somewhere else inside the project -
 // the card at the reading line is then the better anchor.
 function projectBarVisible(section) {
-  const bar = section?.querySelector?.(".project-head[data-toggle-project]");
+  const bar = section?.querySelector?.(".project-head[data-toggle-project], .project-head[data-toggle-fixed]");
   return bar ? anchorVisible(bar) : false;
 }
 
@@ -5416,9 +5436,12 @@ function intentAnchorNode() {
   }
   if (state.anchorTouch && state.touchTarget && now - state.touchAt < anchorTouchMs()) {
     const el = anchorNodeFor(state.touchTarget);
-    if (anchorVisible(el) && (state.touchTarget.kind !== "project" || projectBarVisible(el))) {
-      return { el, target: state.touchTarget };
-    }
+    const kind = state.touchTarget.kind;
+    // A whole project or a whole fixed card is held by its bar: once that bar has scrolled away the reader is
+    // somewhere else in it, and the card at the reading line is the better answer. A plain element is only an
+    // answer while it is still on screen.
+    const head = kind === "project" || kind === "fixed" ? projectBarVisible(el) : true;
+    if (anchorVisible(el) && head) return { el, target: state.touchTarget };
   }
   return null;
 }
@@ -5529,14 +5552,12 @@ function trackAnchorIntent() {
     refreshAnchorBaseline();
   };
   const noteTouch = (target) => {
-    if (!target) return;
-    // Claim first, then let the click that follows rearrange the board: the baseline is measured before the
-    // growth, so the observer holds the thing the reader clicked rather than an agent somewhere else. A second
-    // click on the same thing still re-stamps the window.
-    const changed = !sameAnchorTarget(target, state.touchTarget);
+    // A click claims what it landed on, at once: the baseline is measured here, before the click handler grows
+    // anything, so the observer holds THIS element rather than whatever happened to sit at the reading line. A
+    // click on nothing (the page background) clears the claim and leaves the geometry in charge.
     state.touchTarget = target;
-    state.touchAt = Date.now();
-    if (changed) refreshAnchorBaseline();
+    state.touchAt = target ? Date.now() : 0;
+    refreshAnchorBaseline();
   };
   document.addEventListener(
     "pointermove",
