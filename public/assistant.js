@@ -348,14 +348,26 @@
     if (!force && typingInside("#as-watches")) return;
     const watches = state.assistant.watches || [];
     const rows = watches
-      .map(
-        (w) => `<div class="as-row${w.state === "done" ? " is-done" : ""}">
+      .map((w) => {
+        // A watch with a deadline carries a live clock, not a fixed "deadline 30m": the number that matters is
+        // how long is left, and the bar is that number running out. Both are painted in place by
+        // paintWatchClocks() once a second — a re-render per tick would take the reader's scroll and selection.
+        const clock =
+          w.state === "done"
+            ? `<span class="as-until">done</span>`
+            : w.minutes
+              ? `<span class="as-watch-timer" data-watch-timer="${esc(w.id)}" data-watch-at="${esc(w.at || "")}" data-watch-min="${esc(w.minutes)}">
+                   <span class="as-watch-left" data-watch-left>…</span>
+                   <span class="as-bar"><i data-watch-bar style="width:100%"></i></span>
+                 </span>`
+              : `<span class="as-until">no deadline</span>`;
+        return `<div class="as-row${w.state === "done" ? " is-done" : ""}">
           <button class="as-thread" data-as-open="${esc(w.thread)}" type="button">${esc(assistantThreadName(w.thread))}</button>
           <span class="as-what">${esc(w.title)}${w.doneWhen ? `<span class="as-hint"> · done when ${esc(w.doneWhen)}</span>` : ""}</span>
-          <span class="as-until">${w.state === "done" ? "done" : w.state === "alerted" ? "overdue" : w.minutes ? `deadline ${w.minutes}m` : "no deadline"}</span>
+          ${clock}
           <button type="button" data-as-unwatch="${esc(w.id)}" title="stop watching this">✕</button>
-        </div>`,
-      )
+        </div>`;
+      })
       .join("");
     const options = conversations()
       .map((c) => `<option value="${esc(c.thread)}">${esc(String(c.latest.label || c.latest.title || c.thread).slice(0, 60))}</option>`)
@@ -373,6 +385,47 @@
         </div>
         <span class="as-err" id="as-w-err"></span>
       </div>`;
+    paintWatchClocks();
+  }
+
+  // "18:42" under an hour, "2h 05m" above it: a countdown is read at a glance, so it is the clock's own shape
+  // rather than the panel's precise 18m42s duration.
+  function leftText(ms) {
+    const s = Math.max(0, Math.ceil(ms / 1000));
+    if (s < 3600) return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+    return `${Math.floor(s / 3600)}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
+  }
+
+  // The countdown and its reverse bar, painted once a second in place. Deliberately not a re-render: this pane
+  // holds a form the reader may be typing into, and rebuilding it on every tick would take the caret, the scroll
+  // and the selection with it. The bar is the fraction of the deadline still to run, so it empties as time goes.
+  function paintWatchClocks() {
+    if (!state.assistantOpen || state.assistantTab !== "watches") return;
+    const host = as$("as-watches");
+    if (!host) return;
+    const now = Date.now();
+    for (const el of host.querySelectorAll("[data-watch-timer]")) {
+      const at = Date.parse(el.dataset.watchAt || "");
+      const mins = Number(el.dataset.watchMin);
+      if (!Number.isFinite(at) || !Number.isFinite(mins) || mins <= 0) continue;
+      const total = mins * 60_000;
+      const left = at + total - now;
+      const over = left <= 0;
+      const frac = over ? 0 : Math.max(0, Math.min(1, left / total));
+      const deadline = new Date(at + total);
+      el.classList.toggle("is-over", over);
+      const label = el.querySelector("[data-watch-left]");
+      if (label) {
+        label.textContent = over ? "overdue" : `${leftText(left)} left`;
+        label.title = `${over ? "deadline passed" : "deadline"} ${deadline.toLocaleString()}`;
+      }
+      const bar = el.querySelector("[data-watch-bar]");
+      if (bar) {
+        bar.style.width = `${Math.round(frac * 100)}%`;
+        bar.className = frac <= 0.2 ? "is-low" : frac <= 0.5 ? "is-mid" : "";
+      }
+      el.title = `${over ? "past its deadline" : "counting down"} · deadline ${deadline.toLocaleString()}`;
+    }
   }
 
   // ---- scratchpad -----------------------------------------------------------------------------
@@ -743,6 +796,10 @@
       }
     }
   });
+
+  // The watch countdown: one tick a second, painting only the clocks on screen. It returns immediately when the
+  // panel is closed or another tab is showing, so a board of quiet cards pays nothing for it.
+  setInterval(paintWatchClocks, 1000);
 
   // ---- drag and resize -------------------------------------------------------------------------
 

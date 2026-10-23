@@ -1643,6 +1643,19 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-row .as-thread { max-width: 40%; }
 .as-row .as-what { flex: 1; min-width: 0; }
 .as-row .as-until { font-family: var(--mono); font-size: 10px; color: var(--dimmer); }
+/* A watch's deadline: how long is left, over a bar that empties as it runs out. The bar is the same fact as the
+   number, read at a glance from across the desk; the last fifth turns amber, then red. */
+.as-watch-timer { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex: 0 0 auto; min-width: 78px; }
+.as-watch-left { font-family: var(--mono); font-size: 10px; color: var(--dim); white-space: nowrap; }
+.as-bar { width: 78px; height: 4px; border-radius: 2px; background: #2a3240; overflow: hidden; }
+.as-bar i {
+  display: block; height: 100%; width: 100%; border-radius: 2px; background: var(--blue);
+  transition: width .95s linear, background-color .3s;
+}
+.as-bar i.is-mid { background: var(--amber); }
+.as-bar i.is-low { background: var(--red); }
+.as-watch-timer.is-over .as-watch-left { color: var(--amber); }
+.as-watch-timer.is-over .as-bar i { background: var(--red); }
 .as-row.is-done { opacity: .55; }
 .as-form { display: flex; flex-direction: column; gap: 6px; padding: 9px; border: 1px dashed var(--line); border-radius: 7px; margin-top: 4px; }
 .as-form .as-line { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
