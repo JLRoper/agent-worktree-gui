@@ -70,6 +70,9 @@ const state = {
   collapsedFixed: loadCollapsedFixed(),
   collapsedRoots: loadCollapsedRoots(),
   recentRoots: loadRecentRoots(),
+  // Per-folder project search ("root" -> query). Not persisted: a filter is a moment's narrowing, and a
+  // reload that came back with ninety projects hidden would look like the board had lost them.
+  rootFilter: new Map(),
   cloneStatus: {},
   approvals: new Map(),
   scanRoots: [],
@@ -399,6 +402,48 @@ function applyRootCollapse(root) {
   }
 }
 
+// ---- filter one folder's projects ---------------------------------------------
+// A folder can hold ninety projects. The box in its header narrows the list to those whose name or path
+// contains the query. Sections are hidden in place rather than re-rendered, so typing keeps the caret and
+// clearing the box brings back exactly the projects (and the open ones) that were there before.
+function rootFilterValue(root) {
+  return String(state.rootFilter.get(root) || "");
+}
+
+function applyRootFilter(root) {
+  const sec = document.querySelector(`section.root-group[data-root="${CSS.escape(root)}"]`);
+  if (!sec) return;
+  const q = rootFilterValue(root).trim().toLowerCase();
+  const sections = [...sec.querySelectorAll(".root-body section.project")];
+  let shown = 0;
+  for (const s of sections) {
+    const p = state.projects.get(s.dataset.project) || { name: s.dataset.project };
+    const hay = `${p.name || ""} ${p.path || ""}`.toLowerCase();
+    const hit = !q || hay.includes(q);
+    s.classList.toggle("is-filtered-out", !hit);
+    if (hit) shown += 1;
+  }
+  const count = sec.querySelector("[data-root-count]");
+  if (count) {
+    count.textContent = q ? `${shown}/${sections.length}` : "";
+    count.classList.toggle("on", Boolean(q));
+  }
+  const empty = sec.querySelector("[data-root-empty]");
+  if (empty) {
+    empty.classList.toggle("is-on", Boolean(q) && shown === 0);
+    empty.textContent = q ? `no project in this folder matches \u201c${rootFilterValue(root).trim()}\u201d` : "";
+  }
+  const clear = sec.querySelector("[data-root-search-clear]");
+  if (clear) clear.classList.toggle("is-on", Boolean(q));
+}
+
+function setRootFilter(root, value) {
+  const v = String(value ?? "");
+  if (v.trim()) state.rootFilter.set(root, v);
+  else state.rootFilter.delete(root);
+  applyRootFilter(root);
+}
+
 // ---- collapse-all inside one folder -------------------------------------------
 // One button per folder that opens or closes every project section it holds, without touching
 // the folder itself. The label follows what is actually on screen: "Collapse all" while any
@@ -458,6 +503,7 @@ function renderRoot(root) {
   // Same count means this was a re-rank, not a filter change: say which projects moved. Flipping All
   // / 7d changes the set, and flashing every survivor of that would be noise.
   pinOpenProjects(fresh.querySelector(".root-body"), prevKeys);
+  applyRootFilter(root);
   const nextSections = [...fresh.querySelectorAll(".root-body section.project")];
   if (prevKeys.length === nextSections.length) flashMovedByKey(prevKeys, nextSections, fresh);
 }
@@ -5104,6 +5150,12 @@ function rootSection(root, allProjects) {
       <h2>${esc(labelRoot(root))}</h2>
       <div class="chips">${rootChips(projects, hidden)}</div>
       <span class="spacer"></span>
+      <span class="root-filter" title="filter the projects in this folder by name or path — Escape clears it">
+        <input class="root-search mono" data-root-search="${esc(root)}" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false"
+          placeholder="filter ${allProjects.length}&hellip;" value="${esc(rootFilterValue(root))}">
+        <button type="button" class="root-search-clear${rootFilterValue(root) ? " is-on" : ""}" data-root-search-clear="${esc(root)}" title="clear the filter">\u2715</button>
+        <span class="root-count mono${rootFilterValue(root) ? " on" : ""}" data-root-count></span>
+      </span>
       <button type="button" class="btn-root-recent${recentOnly ? " on" : ""}" data-root-recent="${esc(root)}" title="${esc(recentTitle)}">${recentOnly ? `${RECENT_DAYS}d` : "All"}</button>
       <button type="button" class="btn-root-collapse" data-root-collapse="${esc(root)}" title="${anyOpen ? "collapse" : "expand"} every project in ${esc(labelRoot(root))} (${projects.length})">${anyOpen ? "Collapse all" : "Expand all"}</button>
       <button type="button" class="btn-root-clone" data-root-clone="${esc(root)}" title="clone a GitHub repo over ssh into ${esc(labelRoot(root))}">+</button>
@@ -5114,6 +5166,7 @@ function rootSection(root, allProjects) {
       <span class="mono dim${state.cloneStatus[root]?.kind === "err" ? " clone-err" : ""}" data-clone-msg="${esc(root)}">${esc(state.cloneStatus[root]?.text || "")}</span>
     </div>
     <div class="root-body">
+      <p class="root-empty" data-root-empty></p>
 ${projects.map((p) => projectSection(p.name)).join("\n")}
     </div>
   </section>`;
@@ -5484,6 +5537,8 @@ function renderAll() {
   }
   paintConfigLine();
   paintCollapseAll();
+  // A rebuild recreates the sections, so every folder's filter has to be re-applied to the new nodes.
+  for (const g of $("projects").querySelectorAll("section.root-group")) applyRootFilter(g.dataset.root);
   // A full rebuild reorders the sections too: same test as renderRoot — a re-rank flashes, a filter
   // change (different set) does not.
   for (const g of $("projects").querySelectorAll("section.root-group")) {
@@ -6224,6 +6279,23 @@ document.addEventListener("click", async (e) => {
     void cloneIntoRoot(rgo.dataset.cloneGo);
     return;
   }
+  // The clear button inside the folder search box: restore the full list and put the caret back.
+  const searchClear = e.target.closest?.("[data-root-search-clear]");
+  if (searchClear) {
+    e.preventDefault();
+    e.stopPropagation();
+    const root = searchClear.dataset.rootSearchClear;
+    const box = document.querySelector(`[data-root-search="${CSS.escape(root)}"]`);
+    if (box) {
+      box.value = "";
+      box.focus();
+    }
+    setRootFilter(root, "");
+    return;
+  }
+  // The search box lives in the folder head; a click in it is the reader typing, not a request to fold
+  // the folder under the caret.
+  if (e.target.closest?.(".root-filter")) return;
   const rhead = e.target.closest(".root-head[data-toggle-root]");
   if (rhead) {
     const root = rhead.dataset.toggleRoot;
@@ -6650,6 +6722,34 @@ document.addEventListener("dblclick", (e) => {
   e.stopPropagation();
   void openModelPop(btn.dataset.modelPick, btn);
 });
+
+// Typing in a folder's search box filters that folder in place: no re-render, so the caret and the
+// hidden projects' open state survive. Escape clears it and gives the keyboard back to the page.
+document.addEventListener("input", (e) => {
+  const box = e.target.closest?.("[data-root-search]");
+  if (!box) return;
+  setRootFilter(box.dataset.rootSearch, box.value);
+});
+document.addEventListener(
+  "keydown",
+  (e) => {
+    const box = e.target.closest?.("[data-root-search]");
+    if (!box) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      const root = box.dataset.rootSearch;
+      box.value = "";
+      setRootFilter(root, "");
+      box.blur();
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      box.blur();
+    }
+  },
+  true,
+);
 
 // The context readout is a one-click control: each click moves to the next size in the ladder. The full list
 // (and a typed size) is still there on right-click, which no ordinary click can trigger by accident.

@@ -231,6 +231,30 @@ section.project.collapsed .legend { display: none; }
 .root-head:hover .chev { color: var(--text); }
 .root-head .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .root-head .spacer { flex: 1; }
+/* The folder's own project filter, in its header. Quiet until there is something in it — the folder
+   header is a summary first, a tool second. */
+.root-filter { display: flex; align-items: center; gap: 4px; flex: 0 1 230px; min-width: 120px; cursor: default; }
+.root-search {
+  flex: 1 1 auto; min-width: 0; width: 100%;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 3px 7px; font: 11.5px var(--mono); outline: none;
+}
+.root-search::placeholder { color: var(--dimmer); }
+.root-search:focus { border-color: #4a5a72; background: var(--panel); }
+.root-search:not(:placeholder-shown) { border-color: #3f4b5e; color: var(--text); }
+.root-search-clear {
+  display: none; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 999px;
+  background: none; color: var(--dimmer); font-size: 11px; line-height: 1; cursor: pointer;
+}
+.root-search-clear.is-on { display: inline-block; }
+.root-search-clear:hover { color: var(--text); background: var(--panel-2); }
+.root-count { font-size: 10.5px; color: var(--dimmer); min-width: 0; }
+.root-count.on { color: var(--dim); }
+/* A filtered-out project is hidden outright; `hidden` alone loses to `section.project`'s own display. */
+section.project.is-filtered-out { display: none; }
+.root-empty { display: none; margin: 10px 14px 14px; font: 11.5px var(--mono); color: var(--dimmer); }
+.root-empty.is-on { display: block; }
 button.btn-root-collapse { padding: 3px 9px; font-size: 11px; }
 button.btn-root-collapse:hover { background: #232936; }
 /* all projects / last 7 days — a view toggle, so it uses a neutral accent, not a category colour */
