@@ -468,7 +468,8 @@ button.chip:active { transform: translateY(1px); }
 .job-head .spacer { flex: 1; }
 /* Subagents a run delegated, under the card's head. The parent's own stream carries a single delegate_task call;
    these rows are what the children are actually doing, read from their own sessions in the store. */
-.subagents { display: flex; flex-direction: column; gap: 2px; margin: 2px 0 6px 18px; font-size: 11px; color: var(--dim); }
+/* Under the console of the turn that delegated, aligned with it rather than with the card's head. */
+.subagents { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px 0; font-size: 11px; color: var(--dim); }
 .subagents[hidden] { display: none; }
 .subagents .sub-head { color: #c8a6ff; font-size: 10.5px; letter-spacing: .03em; }
 .subagents .sub-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding-left: 12px; }

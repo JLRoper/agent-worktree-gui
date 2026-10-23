@@ -842,6 +842,10 @@ function turnBody(turn, copy = "") {
     })
     .join("") || '<div class="jl jl-dim">waiting for output…</div>';
   return `<pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>` +
+    // The subagents this turn spawned, right under the console they ran beside: the delegation is the turn's own
+    // work, not the card's, and a card with several turns would otherwise show the newest one's children under all
+    // of them.
+    turnSubagentsHtml(turn, copy) +
     approvalPrompt(turn, copy) + approvalDecided(turn);
 }
 
@@ -1275,12 +1279,12 @@ function fmtSeconds(s) {
   return n < 60 ? `${n}s` : `${Math.floor(n / 60)}m ${String(n % 60).padStart(2, "0")}s`;
 }
 
-function subagentsHtml(list, thread = "") {
+function subagentsHtml(list, key = "") {
   const subs = Array.isArray(list) ? list : [];
   if (!subs.length) return "";
   const running = subs.filter((s) => s.running).length;
   const head = `\u29c9 ${subs.length} subagent${subs.length === 1 ? "" : "s"} \u00b7 ${running ? `${running} running` : "all done"}`;
-  return `<div class="subagents mono" data-subagents="${esc(thread)}">
+  return `<div class="subagents mono" data-subs-turn="${esc(key)}">
     <span class="sub-head" title="agents this run delegated. Their tools run on their own sessions, so only their start and finish reach this card.">${esc(head)}</span>
     ${subs
       .map(
@@ -1294,19 +1298,61 @@ function subagentsHtml(list, thread = "") {
   </div>`;
 }
 
+// Which children this turn spawned. The stream knows exactly (they are on the job); the store only knows the parent
+// thread, so a row is attributed to the turn whose window contains the moment it started.
+function subagentsForTurn(turn) {
+  if (Array.isArray(turn.subagents) && turn.subagents.length) return turn.subagents;
+  const thread = turn.thread || turn.id;
+  const all = subagentFallback.get(thread) || [];
+  if (!all.length) return [];
+  const start = Date.parse(turn.startedAt || "") || 0;
+  const end = Date.parse(turn.endedAt || "") || Date.now();
+  const mine = all.filter((k) => k.startedAt && k.startedAt >= start - 3000 && k.startedAt <= end + 3000);
+  if (mine.length) return mine;
+  // A child that outlived its turn's window, or a panel that joined late: only the newest turn may claim the rest.
+  const turns = [...state.jobs.values()].filter((j) => (j.thread || j.id) === thread);
+  const newest = turns.sort((a, b) => String(b.startedAt || "").localeCompare(String(a.startedAt || "")))[0];
+  return newest && newest.id === turn.id ? all : [];
+}
+
+// Under the console of the turn that delegated: while a child is out, and while the turn itself is still going, so
+// a finished child does not vanish mid-turn without a trace. A finished turn with finished children keeps nothing.
+function turnSubagentsHtml(turn, copy = "") {
+  const key = turnKey(turn, copy);
+  const rows = subagentsForTurn(turn);
+  const live = rows.filter((r) => r.running).length;
+  const running = turn.status === "running" || turn.status === "starting" || turn.status === "waiting_for_approval";
+  if (!rows.length || (!live && !running)) return `<div class="subagents mono" data-subs-turn="${esc(key)}" hidden></div>`;
+  return subagentsHtml(rows, key);
+}
+
+function subagentsSig(rows) {
+  return rows.map((r) => `${r.goal}:${r.running ? 1 : 0}`).join("|");
+}
+
 // Repaint every strip already on the page, in place: a roster poll must not re-render cards (that would move the
 // reader's scroll) and must not need a card to be re-rendered before it can show a child.
 function paintSubagents() {
-  for (const [thread, rows] of subagentFallback) {
-    const box = document.querySelector(`[data-subagents="${CSS.escape(thread)}"]`);
+  for (const job of state.jobs.values()) {
+    const key = job.id;
+    const box = document.querySelector(`[data-subs-turn="${CSS.escape(key)}"]`);
     if (!box) continue;
-    const running = rows.filter((r) => r.running);
-    if (!running.length) {
-      box.hidden = true;
-      box.innerHTML = "";
+    const rows = subagentsForTurn(job);
+    const live = rows.filter((r) => r.running).length;
+    const running = job.status === "running" || job.status === "starting" || job.status === "waiting_for_approval";
+    if (!rows.length || (!live && !running)) {
+      if (!box.hidden) {
+        box.hidden = true;
+        box.innerHTML = "";
+        delete box.dataset.sig;
+      }
       continue;
     }
-    box.outerHTML = subagentsHtml(rows, thread);
+    const sig = subagentsSig(rows);
+    if (!box.hidden && box.dataset.sig === sig) continue;
+    box.outerHTML = subagentsHtml(rows, key);
+    const fresh = document.querySelector(`[data-subs-turn="${CSS.escape(key)}"]`);
+    if (fresh) fresh.dataset.sig = sig;
   }
 }
 
@@ -1327,6 +1373,7 @@ async function refreshSubagentRoster() {
       running: k.running,
       status: k.running ? "running" : "done",
       duration: null,
+      startedAt: k.startedAt,
     })));
   }
   subagentRosterAt = Date.now();
@@ -1342,11 +1389,6 @@ function conversationHtml(conv) {
   const maximized = state.maximized === thread;
   const homeless = isHomelessConv(conv);
   const runningTurn = turns.find((t) => t.status === "running" || t.status === "starting");
-  // Children any of this card's turns delegated. The run's own events are the live source; `subagentFallback` holds
-  // the store lookup for a card whose start events went by before the panel was watching (the gateway's durable
-  // admission path does not relay them at all).
-  const streamedSubs = turns.flatMap((t) => t.subagents || []);
-  const subs = streamedSubs.length ? streamedSubs : subagentFallback.get(thread) || [];
   const running = Boolean(runningTurn);
   const queue = state.replyQueue.get(thread) || [];
   const queued = queue.length;
@@ -1441,11 +1483,6 @@ function conversationHtml(conv) {
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
       <button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>
     </div>
-    ${
-      subs.length && (subs.some((s) => s.running) || latest.status === "running" || latest.status === "starting" || latest.status === "waiting_for_approval")
-        ? subagentsHtml(subs, thread)
-        : `<div class="subagents mono" data-subagents="${esc(thread)}" hidden></div>`
-    }
     ${collapsed ? `<div class="job-preview mono" data-preview="${esc(thread)}">${esc(jobPreview(latest))}</div>` : ""}
     ${homeless ? `<div class="attach-row" data-attach-row="${esc(thread)}" hidden>
       <span class="dimmer mono">attach to</span>
