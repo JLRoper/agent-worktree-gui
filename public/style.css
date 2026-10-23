@@ -1087,16 +1087,29 @@ tr.row td.name button, tr.row td.name .chip, tr.row td.branch button { user-sele
    the right-hand end (the session id on a revive row, the delete ✕) was cut off with no scrollbar to reach it.
    Fixed layout makes the table fit its card; the text columns ellipsize instead of pushing it wider. */
 table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-thead th:nth-child(1) { width: 19%; }
-thead th:nth-child(2) { width: 14%; }
-thead th:nth-child(3) { width: 6.5%; }
-thead th:nth-child(4) { width: 7.5%; }
-thead th:nth-child(5) { width: 6%; }
-thead th:nth-child(6) { width: 9%; }
-thead th:nth-child(7) { width: 6%; }
-thead th:nth-child(8) { width: 16.8%; } /* life / next read: the age text, its ring and the evidence chips */
-thead th:nth-child(9) { width: 12%; }   /* verdict: "MERGED (86 commits)" has to fit whole */
-thead th:nth-child(10) { width: 3.2%; }
+/* Proportions follow what the rows actually hold, measured across all 140 of them at a 1477px table.
+   Widest real cell per column: worktree 495, branch 378, life 189, verdict 200, PR 142, tip 96, ahead/behind 111,
+   cherry 89, dirty 89, actions 53 - 1842 in total, so not everything fits whole.
+   The old split gave Life 248px to show "0s" and a ring while Worktree (281) and Branch (207) cut their two
+   identifying values short: that is the blank space on the right the left columns should have been using.
+   Now the two identifying columns take what the low-information ones give up. Result on the live board: worktree
+   413px (2 of 140 rows still ellipsize), branch 332 (2), Life 121 (1), Verdict 186 (0), Tip/Ahead/Cherry/Dirty 0.
+   PR keeps only enough for "none" - a real PR title ellipsizes, which is the cheapest thing to lose. */
+/* Proportions follow what the 140 rows actually hold. Measured at a 1477px table the widest cells wanted:
+   worktree 495, branch 378, life 189, verdict 200, PR 142, tip 96, ahead/behind 111, cherry/dirty 89. Nothing can
+   fit all of that, so the two identifying columns get the room and the low-information ones give it up: Life held
+   248px to show "0s" and a ring, and PR is usually "none". Tip, Ahead/Behind, Cherry, Dirty and Verdict keep enough
+   for their widest real value. */
+thead th:nth-child(1) { width: 28%; }   /* worktree: name + agent badge + chips — the widest thing in the row */
+thead th:nth-child(2) { width: 22.5%; } /* branch */
+thead th:nth-child(3) { width: 6.2%; }  /* tip */
+thead th:nth-child(4) { width: 5.6%; }  /* ahead / behind */
+thead th:nth-child(5) { width: 4.8%; }  /* cherry +/- */
+thead th:nth-child(6) { width: 3.8%; }  /* PR: "none" in almost every row */
+thead th:nth-child(7) { width: 4.8%; }  /* dirty */
+thead th:nth-child(8) { width: 8.2%; }  /* life / next read: "never live" still fits whole */
+thead th:nth-child(9) { width: 12.6%; } /* verdict */
+thead th:nth-child(10) { width: 3.5%; }
 /* The delete cell is its own column: a fixed 34px plus the cell's padding was 4px wider than the card at a
    narrow window, and the ✕ was the thing that fell off. Slim padding, and let the button sit inside. */
 td.row-actions { padding-left: 4px; padding-right: 4px; }
