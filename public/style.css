@@ -420,7 +420,7 @@ button.chip:active { transform: translateY(1px); }
 .reply-row:has(.warnline:empty) { display: none; }
 
 /* ---- jobs ---- */
-.job { border-bottom: 1px solid #1d222b; padding: 9px 14px 7px; overflow-anchor: none; }
+.job { border-bottom: 1px solid #1d222b; padding: 9px 14px 17px; overflow-anchor: none; }
 /* A card that draws its own box ends the list with a line: the last card in a worktree's agents block and
    a maximized card both lost their bottom edge here and faded into the background. Slightly stronger than
    the hairlines between cards, so the group reads as closed rather than cut off. */
