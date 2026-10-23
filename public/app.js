@@ -3756,6 +3756,38 @@ function selectionIn(el) {
   return false;
 }
 
+// A board rebuild detaches every card and puts it back in the rebuilt detail, and the browser drops the highlight on
+// the way through: the nodes come back, the selection does not (measured — a range over the figures, nine text nodes
+// untouched and connected, and `getSelection()` anchored on the tbody a second later). That is what made the figures
+// unselectable in practice: any row repaint under a reader copying them took the selection with it. Record the ranges
+// that stand inside a card before the rebuild and put them back after it; the card's own nodes are reused, so a saved
+// range still points at the same text.
+function captureCardSelection() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+  const ranges = [];
+  for (let i = 0; i < sel.rangeCount; i++) {
+    const r = sel.getRangeAt(i);
+    const start = r.startContainer.nodeType === 1 ? r.startContainer : r.startContainer.parentElement;
+    if (!start?.closest?.(".job[data-thread]")) continue;
+    if (!r.collapsed) ranges.push(r.cloneRange());
+  }
+  return ranges.length ? ranges : null;
+}
+
+function restoreCardSelection(ranges) {
+  if (!ranges) return;
+  const sel = window.getSelection();
+  if (!sel) return;
+  // Only when nothing else is selected now, and only onto nodes that came back: a full re-render builds new ones, and
+  // restoring a range into the old copies would leave an invisible selection standing.
+  if (sel.rangeCount && !sel.isCollapsed) return;
+  const live = ranges.filter((r) => r.startContainer.isConnected && r.endContainer.isConnected);
+  if (!live.length) return;
+  sel.removeAllRanges();
+  for (const r of live) sel.addRange(r);
+}
+
 // The two things on a card that move without changing its markup: when it was last used, and its usage figures.
 // Writing them where they stand is what keeps a streaming turn from rebuilding (and resetting) its own console.
 function paintCardMeta(el, conv) {
@@ -5253,6 +5285,8 @@ function scheduleBoardSweep(anchor = null) {
 }
 
 function sweepStaleBoard() {
+  // This pass moves details back under their rows, which takes the cards out of the DOM and puts them back.
+  const heldSelection = captureCardSelection();
   // A detail whose row is gone, or which no longer follows its own row.
   for (const d of [...document.querySelectorAll("tr.detail[data-detail]")]) {
     const key = d.dataset.detail;
@@ -5311,6 +5345,7 @@ function sweepStaleBoard() {
       card.remove();
     }
   }
+  restoreCardSelection(heldSelection);
 }
 
 function fillAgentSlots(root, reuse) {
@@ -5950,6 +5985,8 @@ function placeRow(project, row, { flash = false } = {}) {
   const oldCards = new Map();
   if (oldDetail) for (const card of oldDetail.querySelectorAll(".job[data-thread]")) oldCards.set(card.dataset.thread, card);
   const typing = oldDetail ? captureTyping(oldDetail) : null;
+  // The details below come down and their cards go into new ones; a selection in a card has to come back with them.
+  const heldSelection = captureCardSelection();
   const outs = oldDetail
     ? [...oldDetail.querySelectorAll("pre.job-out")].map((o) => ({
         id: o.dataset.out,
@@ -5982,6 +6019,8 @@ function placeRow(project, row, { flash = false } = {}) {
     applyStoredScrolls(dEl);
     settleScrolls(dEl);
   }
+  // After restoreTyping, which focuses the reply box and would take the document selection with it.
+  restoreCardSelection(heldSelection);
   if (flash && old) {
     // Green when an agent moved in this row; a quiet grey when the refresh ran and found nothing new.
     // Two outcomes, two colours — one colour for both made every 5s tick look like progress.
@@ -6010,6 +6049,7 @@ function renderProjectRows(name) {
   if (!tbody) return;
   // Open rows carry agent transcripts; a rebuild must not throw the reader to the top of one.
   const prevScrolls = captureScrolls(tbody);
+  const heldSelection = captureCardSelection();
   const anchor = captureBoardAnchor();
   const prevRowKeys = [...tbody.children].filter((el) => el.classList.contains("row")).map((el) => el.dataset.key);
   // The cards and the typing inside each open row live in its detail element, and this path replaces the whole
@@ -6060,6 +6100,7 @@ function renderProjectRows(name) {
   }
   restoreScrolls(tbody, prevScrolls);
   applyStoredScrolls(tbody);
+  restoreCardSelection(heldSelection);
   scheduleBoardSweep(anchor);
   refreshAnchorBaseline();
   // This path rebuilds the table in ranked order, which is how a row most often changes place (a
