@@ -106,6 +106,9 @@ const state = {
   // { open, filter }. Kept here rather than in the DOM because every snapshot rebuild replaces the console's
   // markup - the block was opening and then snapping shut the next time a line arrived.
   toolGroupOpen: new Map(),
+  // The individual calls behind a collapsed "+ N commands" batch, once the reader has asked for them:
+  // "<burst id>|<tool>" -> [{ name, summary }] read from the session transcript.
+  batchCalls: new Map(),
   // Events are life. A line arriving in an agent's console, a job starting or ending, an approval: each one proves
   // the worktree that owns that agent is being worked in right now, without waiting for the next scan to notice.
   // Key = worktree row key -> ms of the newest event seen for it.
@@ -1078,6 +1081,47 @@ async function fetchToolStore(turnId, tool, grp = null) {
   }
 }
 
+// The calls behind a "+ N commands" batch: the run stream only carries the gateway's summary of a parallel batch, so
+// this asks the panel server to read the session transcript and then re-renders the burst open with them in it.
+async function loadBatchCalls(btn) {
+  const grp = btn.closest(".tgrp");
+  if (!grp) return;
+  const gkey = btn.dataset.batchKey || grp.dataset.gstate || "";
+  const tool = btn.dataset.batchTool || "";
+  const want = Number(btn.dataset.batchN) || 4;
+  const key = grp.dataset.tgrp || "";
+  const turnId = String(key).split("#")[0];
+  // The card's thread, so the server can find the session whose transcript holds the batch - and the turn's own
+  // start, so it reads THAT turn's batch rather than the newest one in the session.
+  const job = state.jobs.get(turnId);
+  const thread = job?.thread || turnId;
+  const since = job?.startedAt ? Date.parse(job.startedAt) || 0 : 0;
+  btn.disabled = true;
+  btn.textContent = "reading the transcript…";
+  let calls = [];
+  try {
+    // The summary prints the calls it did NOT show, so the batch ran want+1 of them: that count is what picks the
+    // right message out of the transcript.
+    const first = btn.dataset.batchFirst || "";
+    const q = new URLSearchParams({ thread, tool, n: String(Math.max(2, want + 1)), want: String(want + 1), since: String(since), first });
+    const r = await apiFetch(`/api/tool-calls?${q}`, {}, { timeoutMs: 15000 });
+    const d = await r.json().catch(() => ({}));
+    calls = Array.isArray(d.calls) ? d.calls : [];
+    if (!r.ok && d.error) throw new Error(d.error);
+  } catch (e) {
+    showBanner(`could not read the batch: ${e.message}`);
+  }
+  if (calls.length) {
+    state.batchCalls.set(`${gkey}|${tool}`, calls);
+    // One entry per burst the reader opened; a long-lived tab should not keep every one of them forever.
+    while (state.batchCalls.size > 300) state.batchCalls.delete(state.batchCalls.keys().next().value);
+  } else {
+    showBanner(`the session transcript has no record of this ${tool} batch yet`);
+  }
+  const live = document.querySelector(`.tgrp[data-gstate="${CSS.escape(gkey)}"]`) || grp;
+  if (live?.isConnected) rebuildToolGroup(live, { filter: live.dataset.filter || "", open: true });
+}
+
 function rebuildToolGroup(grp, { filter = "", open = false } = {}) {
   const key = grp.dataset.tgrp || "";
   const lines = groupLines(grp);
@@ -1122,6 +1166,22 @@ function rememberToolGroup(grp) {
   while (state.toolGroupOpen.size > 500) state.toolGroupOpen.delete(state.toolGroupOpen.keys().next().value);
 }
 
+// The gateway folds a parallel batch into one line - "first command + 3 commands" - because the run stream carries a
+// summary of the batch, not each call. The other calls are in the session transcript, so the tail becomes a button
+// that reads them back; what it finds is remembered per burst, so a repaint keeps them on screen.
+const BATCH_TAIL_RE = /^(.*?)\s*\+\s*(\d+)\s+commands?\s*$/i;
+
+function linkBatchTail(text, tool, gkey) {
+  const m = BATCH_TAIL_RE.exec(String(text || ""));
+  const n = m ? Number(m[2]) || 0 : 0;
+  if (!n) return esc(text);
+  const title = `one summary line stands in for ${n + 1} calls run as a batch — click to list all ${n + 1} from the session transcript`;
+  // The printed call text travels with the button: it is how the transcript lookup finds THIS batch rather than a
+  // newer one in the same turn.
+  const first = m[1].trim().slice(0, 110);
+  return `${esc(m[1])} <button type="button" class="tgrp-batch" data-batch-tool="${esc(tool)}" data-batch-n="${n}" data-batch-key="${esc(gkey)}" data-batch-first="${esc(first)}" title="${esc(title)}">+ ${n} command${n === 1 ? "" : "s"}</button>`;
+}
+
 function toolGroupHtml(lines, key, filter = "", openBody = false) {
   const rows = toolBurstRows(lines);
   // No recognisable call lines (a result whose start was trimmed away): show the plain lines rather than an empty box.
@@ -1141,7 +1201,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false) {
         : r.duration != null
           ? `<span class="tgrp-state">${r.duration.toFixed(2)}s</span>`
           : "";
-      const last = r.last ? `<span class="tgrp-last mono" title="${esc(r.last)}">${esc(r.last)}</span>` : "";
+      const last = r.last ? `<span class="tgrp-last mono" title="${esc(r.last)}">${linkBatchTail(r.last, r.name, gkey)}</span>` : "";
       const active = filter === r.name ? " is-active" : "";
       return `<div class="tgrp-row${active}" role="button" tabindex="0" data-tgrp-tool="${esc(r.name)}" title="show the ${r.count} call${r.count === 1 ? "" : "s"} this run made to ${esc(r.name)}${r.count === 1 ? "" : ", with their output"}"><span class="tgrp-g">${esc(r.glyph)}</span><span class="tgrp-name">${esc(r.name)}</span><span class="tgrp-n">×${r.count}</span>${last}${state}</div>`;
     })
@@ -1158,10 +1218,21 @@ function toolGroupHtml(lines, key, filter = "", openBody = false) {
     const lines = String(got.text || "").replace(/\r/g, "").split("\n").slice(0, 60);
     return `<div class="jl jl-store-cap">↳ stored output${got.truncated ? " (cut)" : ""}</div>` + lines.map((l) => `<div class="jl jl-store">${linkifyText(l)}</div>`).join("");
   };
+  // A batch the reader has opened: the calls behind its "+ N commands", oldest first.
+  const batchBlocks = rows
+    .map((r) => {
+      const calls = state.batchCalls.get(`${gkey}|${r.name}`);
+      if (!calls || !calls.length) return "";
+      return (
+        `<div class="jl jl-dim">↳ the ${calls.length} call${calls.length === 1 ? "" : "s"} in this batch (${esc(r.name)})</div>` +
+        calls.map((c) => `<div class="jl jl-tool-out">${esc(c.summary)}</div>`).join("")
+      );
+    })
+    .join("");
   const body =
-    bodyLines.length > 0
+    (bodyLines.length > 0
       ? segments.map((seg, i) => seg.lines.map((l) => lineHtml(l)).join("") + storeHtml(seg, i)).join("")
-      : `<div class="jl jl-dim">this run recorded nothing for ${esc(filter)}</div>`;
+      : `<div class="jl jl-dim">this run recorded nothing for ${esc(filter)}</div>`) + batchBlocks;
   const label = filter ? `all ${lines.length}` : `${lines.length} line${lines.length === 1 ? "" : "s"}`;
   return `<div class="tgrp" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
       <div class="tgrp-head">${head}<button type="button" class="tgrp-more${filter ? " is-open" : ""}" data-tgrp-more="${esc(key)}" title="${filter ? "show every tool in this run, not just this one" : "show every call in this run of tools, with its output"}">${label}</button></div>
@@ -8066,6 +8137,14 @@ document.addEventListener("click", async (e) => {
     void answerRunQuestion(turnId, picked, qSend.dataset.qrequest, box);
     return;
   }
+  // The "+ N commands" tail of a batch: before the row handler, because the button lives inside that row.
+  const batchBtn = e.target.closest("[data-batch-tool]");
+  if (batchBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    void loadBatchCalls(batchBtn);
+    return;
+  }
   // Steer the turn that is running: the primary action while the agent is busy.
   const tgrpRow = e.target.closest("[data-tgrp-tool]");
   if (tgrpRow) {
@@ -8258,6 +8337,12 @@ window.addEventListener("resize", () => positionModelPop());
 // A subagent line is focusable, so Enter or Space has to do what a click does.
 document.addEventListener("keydown", async (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
+  const batchKey = e.target.closest?.("[data-batch-tool]");
+  if (batchKey) {
+    e.preventDefault();
+    void loadBatchCalls(batchKey);
+    return;
+  }
   const tgrpRow = e.target.closest?.("[data-tgrp-tool]");
   if (tgrpRow) {
     e.preventDefault();

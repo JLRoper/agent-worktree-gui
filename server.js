@@ -884,6 +884,42 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, out);
     }
 
+    // The calls behind a "+ N commands" batch. The run stream only carries the gateway's summary of a parallel
+    // batch; each call and its arguments are in the session transcript, so they are read back on demand - only
+    // when the reader actually asks what the other commands were.
+    if (route === "/api/tool-calls" && req.method === "GET") {
+      // Same rule as the child-console read: this returns transcript text, so it is behind the panel token when one
+      // is configured.
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const thread = String(url.searchParams.get("thread") || "").trim();
+      const tool = String(url.searchParams.get("tool") || "").trim();
+      const limit = Math.max(1, Math.min(20, Number(url.searchParams.get("n")) || 8));
+      // "+ 3 commands" is four calls: the count is how the right batch is found among the session's messages.
+      const want = Math.max(0, Math.min(40, Number(url.searchParams.get("want")) || 0));
+      // The turn's start, in ms: the batch belongs to that turn, not to whichever one ran most recently. `first` is
+      // the call the summary printed, which pins the search to this batch inside the turn.
+      const sinceMs = Number(url.searchParams.get("since")) || 0;
+      const first = String(url.searchParams.get("first") || "").slice(0, 120);
+      if (!thread || !tool) return sendJson(res, 400, { error: "thread and tool are required" });
+      const job = jobs.firstOfThread(thread);
+      const sessionId = job && job.sessionId;
+      if (!sessionId) return sendJson(res, 404, { error: `no session recorded for ${thread}`, calls: [] });
+      const { hermesHome } = await import("./lib/jobs.js");
+      const { recentToolCalls } = await import("./lib/tool-calls.js");
+      const calls = recentToolCalls({
+        dbPath: path.join(hermesHome(), "state.db"),
+        sessionId,
+        tool,
+        limit,
+        want,
+        first,
+        // Whole seconds, with a minute of slack: a turn's first message can be written a moment before the panel's
+        // own startedAt stamp.
+        since: sinceMs ? Math.max(0, Math.floor(sinceMs / 1000) - 60) : 0,
+      });
+      return sendJson(res, 200, { thread, session: sessionId, tool, calls });
+    }
+
     if (route === "/api/subagents" && req.method === "GET") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const thread = String(url.searchParams.get("thread") || "").trim();
