@@ -3165,7 +3165,9 @@ function detailHtml(row) {
     row.diffSummary || null,
     row.lastCommit ? `last commit ${relTime(row.lastCommit)} ago` : null,
   ].filter(Boolean).join(" · ");
-  const meta = [
+  // Each of these was a fragment of one long "·"-joined line, so the reader had to hunt for "cherry" inside it.
+  // They are list items now, and the head's summary joins them as the first item while the block is open.
+  const metaItems = [
     row.isAncestor === true ? "ancestor of remote main" : row.isAncestor === false ? "not an ancestor" : null,
     `cherry +${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}`,
     row.reflogEntries ? `branch reflog: ${row.reflogEntries} distinct commit(s)` : null,
@@ -3177,7 +3179,7 @@ function detailHtml(row) {
     `remote branch: ${esc(row.remoteBranch || "?")}`,
     row.lastCommit ? `last commit ${relTime(row.lastCommit)} ago` : null,
     row.error ? `error: ${esc(row.error)}` : null,
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean);
   const agents = agentsFor(row);
   // No heading: the row's own badge already says how many agents it owns and how many are running, and the
   // cards are the first thing under the row - a title above them only pushed them down.
@@ -3218,7 +3220,10 @@ function detailHtml(row) {
         <span class="git-summary mono">${esc(gitSummary)}</span>
       </div>
       <div class="git-body">
-        ${meta ? `<div class="codelist">${meta}</div>` : ""}
+        <ul class="git-list">
+          <li class="git-summary-line">${esc(gitSummary)}</li>
+          ${metaItems.map((m) => `<li>${m}</li>`).join("")}
+        </ul>
         ${parts.length ? `<div class="cols">${parts.join("")}</div>` : ""}
       </div>
     </div>
