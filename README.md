@@ -366,13 +366,16 @@ for the approval window — agent processes are not spawned from here any more.
 size are remembered; `Ctrl+Shift+A` toggles it, `Esc` closes it when the caret is in it). It is two things:
 
 - **A sentry** that runs in the panel's own process, on `settings.seconds` (default 5 s), over the same job
-  summaries the cards are drawn from. It costs no tokens and it is always awake. Eleven rules:
+  summaries the cards are drawn from. It costs no tokens and it is always awake. Twelve rules:
   `loop` (the same tool with the same input N times, read-only helpers held to a higher bar), `errorloop`
   (identical failing output), `quiet` (a running turn with no new output — a long build looks exactly like
   this, so it only journals by default), `approval` (parked longer than the threshold), `question` (a turn
   ended on a question), `noevidence` (an implementation-sounding turn that touched no file and left no
   deliverable), `collision` (two live turns in one tree), `context` (near the context ceiling), `watch`
-  (a watch finished or missed its deadline), `leftover` (a worker ended and its tree still holds modified or
+  (a watch finished or missed its deadline), `repeat` (the same failure in consecutive turns of one thread — the
+  failure is the call that produced it plus the failing line with its numbers masked, so "npm test, 3 failures" in
+  three replies is one alert and a clean turn breaks the streak; a tool the gateway marks only in its result header
+  — `↳ terminal · error` — counts too), `leftover` (a worker ended and its tree still holds modified or
   untracked files — read from the scanner's own row, never a second git pass; commits that are not on main are the
   normal state of an agent's branch until you merge them, so they are named on the alert as context rather than
   being a trigger)
