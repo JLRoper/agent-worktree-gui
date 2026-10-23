@@ -194,6 +194,8 @@
       <ul>
         <li>“What is going on?” — a digest of the live agents.</li>
         <li>“Keep an eye on the deploy one, and tell me if it stalls.”</li>
+        <li>“Create a worktree for the docs and have an agent write them.” — it proposes the worker, and you
+        confirm with one click.</li>
         <li>It answers a worker only when your standing rules cover the question; otherwise it drafts and waits
         for your click.</li>
       </ul>
@@ -285,7 +287,19 @@
   function alertHtml(a) {
     const draft = a.draft && a.draft.thread ? a.draft : null;
     const conf = draft?.confidence || "";
-    return `<div class="as-alert is-${esc(a.severity || "warn")}" data-alert="${esc(a.id)}">
+    const spawn = a.spawn && typeof a.spawn.prompt === "string" ? a.spawn : null;
+    // A spawn card is the one alert with a real side effect: one button, and it cuts a worktree. It gets its
+    // own action row so "Dismiss" cannot be mistaken for "not now, but keep the prompt".
+    const actions = spawn
+      ? `<button type="button" class="primary" data-as-spawn="${esc(a.id)}">${spawn.existing ? "Start worker there" : "Create worktree &amp; start"}</button>
+         <button type="button" data-as-action="dismiss" data-id="${esc(a.id)}">Discard</button>
+         <span class="as-err" data-as-err="${esc(a.id)}"></span>`
+      : `${draft ? `<button type="button" class="primary" data-as-send="${esc(a.id)}" data-thread="${esc(draft.thread)}"${draft.text ? "" : " disabled"}>Send reply</button>` : ""}
+         <button type="button" data-as-action="ask" data-id="${esc(a.id)}" title="hand this to the assistant with a digest — one turn, rate limited">Ask assistant</button>
+         ${a.thread ? `<button type="button" data-as-open="${esc(a.thread)}">Open agent</button>` : ""}
+         <button type="button" data-as-action="dismiss" data-id="${esc(a.id)}">Dismiss</button>
+         <span class="as-err" data-as-err="${esc(a.id)}"></span>`;
+    return `<div class="as-alert is-${esc(a.severity || "warn")}${spawn ? " is-spawn" : ""}" data-alert="${esc(a.id)}">
       <div class="as-alert-head">
         <span class="as-rule is-${esc(a.severity || "warn")}">${esc(a.rule)}</span>
         ${a.thread ? `<button class="as-thread" data-as-open="${esc(a.thread)}" type="button" title="open that agent's card">${esc(assistantThreadName(a.thread))}</button>` : ""}
@@ -298,13 +312,7 @@
         <textarea class="as-draft" data-as-draft="${esc(a.id)}" rows="3" placeholder="${conf === "none" ? "No confident answer — write one, or leave it for later" : ""}">${esc(draft.text || "")}</textarea>
         <div class="as-draft-meta${conf === "none" ? " is-none" : ""}">${conf === "none" ? "no standing rule covers this" : `drafted from ${esc(draft.source || conf)}`} · goes into ${esc(assistantThreadName(draft.thread))} as a reply</div>
       </div>` : ""}
-      <div class="as-actions">
-        ${draft ? `<button type="button" class="primary" data-as-send="${esc(a.id)}" data-thread="${esc(draft.thread)}"${draft.text ? "" : " disabled"}>Send reply</button>` : ""}
-        <button type="button" data-as-action="ask" data-id="${esc(a.id)}" title="hand this to the assistant with a digest — one turn, rate limited">Ask assistant</button>
-        ${a.thread ? `<button type="button" data-as-open="${esc(a.thread)}">Open agent</button>` : ""}
-        <button type="button" data-as-action="dismiss" data-id="${esc(a.id)}">Dismiss</button>
-        <span class="as-err" data-as-err="${esc(a.id)}"></span>
-      </div>
+      <div class="as-actions">${actions}</div>
     </div>`;
   }
 
@@ -437,8 +445,9 @@
           <label>watching <input type="checkbox" data-as-set="enabled"${s.enabled ? " checked" : ""}></label>
           <label>autonomy <select data-as-set="autonomy">${autonomy.map((v) => `<option value="${v}"${s.autonomy === v ? " selected" : ""}>${esc(autonomyLabel[v] || v)}</option>`).join("")}</select></label>
         </div>
+        <div class="as-line"><label>create worktrees <select data-as-set="spawn" title="whether the assistant may cut a worktree and start a worker — ask keeps a one-click card between it and git">${(a.spawnModes || ["off", "ask", "auto"]).map((v) => `<option value="${v}"${s.spawn === v ? " selected" : ""}>${v === "off" ? "off — it may not start workers" : v === "ask" ? "ask me first" : "start immediately"}</option>`).join("")}</select></label></div>
         <div class="as-line"><label>model <select data-as-set="model" title="the assistant's own model — pick something small and fast; the board digest is the whole input">${modelOptionsHtml(s.model || "")}</select></label></div>
-        <div class="as-help">Draft-only is the default: a reply reaches a worker only when you press Send on it. Auto-safe sends a reply the assistant itself wrote with a TO line; auto also sends anything a standing rule drafted. An approval is never answered from here at any setting.</div>
+        <div class="as-help">Draft-only is the default: a reply reaches a worker only when you press Send on it. Auto-safe sends a reply the assistant itself wrote with a TO line; auto also sends anything a standing rule drafted. Creating a worktree has its own switch: <b>ask me first</b> turns a SPAWN line into a card, and nothing runs until you press it. An approval is never answered from here at any setting.</div>
       </div>
       <div class="as-group">
         <h4>Thresholds</h4>
@@ -475,12 +484,18 @@
 
   // ---- talking to the server -------------------------------------------------------------------
 
-  async function asPost(route, body = {}) {
-    const r = await apiFetch(route, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+  async function asPost(route, body = {}, { timeoutMs } = {}) {
+    // A spawn includes `git worktree add`, which is slower than any other call here; the default 20 s would
+    // read as a failure while the tree was still being cut.
+    const r = await apiFetch(
+      route,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      timeoutMs ? { timeoutMs } : {},
+    );
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     if (d.assistant) applyAssistant(d.assistant);
@@ -554,6 +569,26 @@
       } catch (err) {
         const slot = document.querySelector(`[data-as-err="${CSS.escape(t.dataset.id || "")}"]`);
         if (slot) slot.textContent = err.message;
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.dataset.asSpawn) {
+      const id = t.dataset.asSpawn;
+      t.disabled = true;
+      const was = t.textContent;
+      t.textContent = "cutting the worktree…";
+      try {
+        const d = await asPost("/api/assistant/spawn", { id }, { timeoutMs: 150_000 });
+        showNote(`worker started · ${d.job?.thread || d.job?.id || ""}`);
+        renderAssistantAlerts(true);
+        renderAssistant();
+      } catch (err) {
+        const slot = document.querySelector(`[data-as-err="${CSS.escape(id)}"]`);
+        if (slot) slot.textContent = err.message;
+        t.textContent = was;
       } finally {
         t.disabled = false;
       }

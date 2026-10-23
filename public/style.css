@@ -1784,6 +1784,8 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-alert.is-warn { border-left-color: var(--amber); }
 .as-alert.is-bad { border-left-color: var(--red); }
 .as-alert.is-info { border-left-color: var(--blue); }
+/* A spawn card is the only alert whose button changes the repository, so it does not look like a notice. */
+.as-alert.is-spawn { border-left-color: var(--violet); background: linear-gradient(180deg, #1c1828, var(--card)); }
 .as-alert-head { display: flex; align-items: center; gap: 7px; font-size: 10.5px; }
 .as-rule { font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em; color: #8fb8ff; }
 .as-rule.is-warn { color: var(--amber); }

@@ -1672,6 +1672,10 @@ function originHtml(turn) {
   if (o && o.kind === "assistant-wake") {
     return ` <span class="turn-origin mono" title="${esc(o.reason || "the assistant woke itself")}">\u21b3 assistant woke itself</span>`;
   }
+  if (o && o.kind === "assistant-spawn") {
+    const where = o.project ? `a worktree cut in ${o.project}` : "a directory that already existed";
+    return ` <span class="turn-origin mono" title="${esc(where)}">\u21b3 started by the assistant</span>`;
+  }
   if (!o || o.kind !== "subagent-delivery") return "";
   const subs = Array.isArray(o.subagents) ? o.subagents : [];
   const one = subs.length === 1 ? subs[0] : null;
