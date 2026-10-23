@@ -206,6 +206,31 @@ main { padding: 14px 16px 40px; }
   overflow: hidden;
 }
 
+/* ---- a themed project box (Ctrl+click its title row) -----------------------------------------
+   One hue, applied to the surfaces that belong to the project and nothing else: the box outline, its
+   title row, the column header and the legend. The verdict badges, the chips and the text inside the
+   rows keep their own colours - the theme says WHICH project you are looking at, never what a row
+   means. Saturation and lightness are fixed here so any hue reads on the dark palette. */
+section.project.has-hue { border-color: hsl(var(--proj-hue) 40% 34%); background: hsl(var(--proj-hue) 20% 10%); }
+section.project.has-hue > .project-head[data-toggle-project] {
+  background: linear-gradient(180deg, hsl(var(--proj-hue) 34% 17%), hsl(var(--proj-hue) 30% 13%));
+  border-bottom-color: hsl(var(--proj-hue) 36% 27%);
+}
+section.project.has-hue > .project-head[data-toggle-project] h2 { color: hsl(var(--proj-hue) 75% 80%); }
+section.project.has-hue > .project-head[data-toggle-project] .chev { color: hsl(var(--proj-hue) 55% 62%); }
+section.project.has-hue > .project-head[data-toggle-project] .path { color: hsl(var(--proj-hue) 25% 60%); }
+section.project.has-hue > .project-head.meta-line {
+  background: hsl(var(--proj-hue) 26% 12%);
+  border-bottom-color: hsl(var(--proj-hue) 32% 24%);
+}
+section.project.has-hue > table > thead > tr > th {
+  background: hsl(var(--proj-hue) 30% 14%);
+  border-bottom-color: hsl(var(--proj-hue) 30% 24%);
+  color: hsl(var(--proj-hue) 20% 70%);
+}
+section.project.has-hue > table > tbody > tr.row:hover { background: hsl(var(--proj-hue) 28% 14%); }
+section.project.has-hue > .legend { background: hsl(var(--proj-hue) 22% 11%); border-top-color: hsl(var(--proj-hue) 30% 22%); }
+
 .project-head {
   display: flex;
   align-items: baseline;

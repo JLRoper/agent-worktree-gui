@@ -9,6 +9,13 @@
 const SPAWN_HISTORY_KEY = "wm.spawnHistory";
 const SPAWN_HISTORY_MAX = 50;
 
+// Both loaders below run while `state` is being built. Their keys have to be initialised by then: a `const`
+// declared further down is in its temporal dead zone at this point, and the ReferenceError would be swallowed
+// by the loader's own try/catch (which is exactly how the saved project colour and the anchor pin came back
+// empty after every reload).
+const PROJECT_HUE_KEY = "wm.projectHues";
+const ANCHOR_THREAD_KEY = "wm.anchorThread";
+
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
   // "Console size" stays the baseline for every card. Kept in memory so a repaint does not undo it.
@@ -75,6 +82,10 @@ const state = {
   rootFilter: new Map(),
   // The card the reader pinned to hold its place, if any (one at a time, remembered between reloads).
   anchorThread: loadAnchorThread(),
+  // Ctrl+click a project's title row to give that whole project box a theme colour (a hue, kept in
+  // localStorage). Nothing else uses a hue, so a themed project is recognisable at a glance while the
+  // verdict colours inside it keep their meaning.
+  projectHues: loadProjectHues(),
   cloneStatus: {},
   approvals: new Map(),
   scanRoots: [],
@@ -4919,7 +4930,60 @@ function paintAgeCell(cell, row) {
 // a console that starts streaming, a thinking block opening, a row arriving - each changes the height above
 // whatever the reader is looking at, and the page used to creep out from under them. This holds the viewport:
 // the element under the reading line stays under it while things above it grow.
-const ANCHOR_THREAD_KEY = "wm.anchorThread";
+
+function loadProjectHues() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PROJECT_HUE_KEY) || "{}");
+    const map = new Map();
+    for (const [name, hue] of Object.entries(raw || {})) {
+      const h = Number(hue);
+      if (Number.isFinite(h)) map.set(name, ((h % 360) + 360) % 360);
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+function saveProjectHues() {
+  try {
+    localStorage.setItem(PROJECT_HUE_KEY, JSON.stringify(Object.fromEntries(state.projectHues)));
+  } catch {
+    /* no storage: the colour lasts this tab only */
+  }
+}
+
+// A random hue that is not the one already there: re-rolling must change what you see.
+function rollProjectHue(name) {
+  const prev = state.projectHues.get(name);
+  let hue = Math.floor(Math.random() * 360);
+  if (prev != null && Math.abs(hue - prev) < 45) hue = (hue + 150) % 360;
+  state.projectHues.set(name, hue);
+  saveProjectHues();
+  return hue;
+}
+
+// Paint a project box in the hue it was given (or take the colour away). The section is rebuilt on every
+// render, and projectSection() carries the class and the variable, so this only has to touch what is on
+// screen right now.
+function applyProjectHue(name) {
+  const hue = state.projectHues.get(name);
+  const sec = document.querySelector(`section.project[data-project="${CSS.escape(name)}"]`);
+  if (sec) {
+    sec.classList.toggle("has-hue", hue != null);
+    if (hue != null) sec.style.setProperty("--proj-hue", String(hue));
+    else sec.style.removeProperty("--proj-hue");
+  }
+  const head = sec?.querySelector(".project-head[data-toggle-project]");
+  if (head) head.title = headTitle(name);
+}
+
+function headTitle(name) {
+  const open = state.expandedProjects.has(name);
+  return `${open ? "minimize" : "expand"} ${name} — Ctrl+click to colour this project, Ctrl+Shift+click to clear it`;
+}
+
+// ANCHOR_THREAD_KEY is declared near the top of the file: loadAnchorThread() runs while `state` is built.
 
 function loadAnchorThread() {
   try {
@@ -5677,8 +5741,9 @@ function projectSection(name) {
   const tip = p.remoteTip
     ? `<span class="mono dim">${esc(p.remoteRef || "")} <code>${esc(p.remoteTip)}</code> ${esc(String(p.remoteTipSubject || "").slice(0, 60))} · ${relTime(p.remoteTipDate)} ago</span>`
     : "";
-  return `<section class="project${open ? "" : " collapsed"}" data-project="${esc(name)}">
-    <div class="project-head" data-toggle-project="${esc(name)}" title="${open ? "minimize" : "expand"} ${esc(name)}">
+  const hue = state.projectHues.get(name);
+  return `<section class="project${open ? "" : " collapsed"}${hue == null ? "" : " has-hue"}" data-project="${esc(name)}"${hue == null ? "" : ` style="--proj-hue:${Number(hue)}"`}>
+    <div class="project-head" data-toggle-project="${esc(name)}" title="${esc(headTitle(name))}">
       <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
       <h2>${esc(name)}</h2>
       <button class="btn-plus" data-spawn-project="${esc(name)}" title="start a Hermes agent, worktree and branch in ${esc(name)}">+</button>
@@ -6820,6 +6885,23 @@ document.addEventListener("click", async (e) => {
   const phead = e.target.closest(".project-head[data-toggle-project]");
   if (phead) {
     const name = phead.dataset.toggleProject;
+    // Ctrl+click themes the box instead of folding it, so a colour is one gesture away and cannot be
+    // mistaken for the open/close click. Shift drops the colour again.
+    if ((e.ctrlKey || e.metaKey) && !e.target.closest("button, input, select, textarea, a, label")) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.shiftKey) {
+        state.projectHues.delete(name);
+        saveProjectHues();
+        applyProjectHue(name);
+        showBanner(`${name}: colour cleared`);
+      } else {
+        const hue = rollProjectHue(name);
+        applyProjectHue(name);
+        showBanner(`${name}: themed hue ${hue}° — Ctrl+click again for another, Ctrl+Shift+click to clear`);
+      }
+      return;
+    }
     keepInPlace(() => document.querySelector(`.project-head[data-toggle-project="${CSS.escape(name)}"]`), () => toggleProject(name));
     return;
   }
