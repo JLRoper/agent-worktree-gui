@@ -105,14 +105,14 @@ button, select, input, textarea { font-family: var(--ui); }
 /* zoom control: the page owns a scale factor so Ctrl +/- keeps working inside a host that
    swallows the browser's own zoom shortcuts */
 .zoom { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 6px; padding: 1px; }
-/* Hot Agent: a caution light, because it takes the window and the caret from wherever they were. Off it is a
+/* NOT-RUNNING: a caution light, because it takes the window and the caret from wherever they were. Off it is a
    quiet button; on it is amber and says where in the rotation you are. */
 #btn-hot { border-color: #6b4d16; background: #241d10; color: #ffd479; }
 #btn-hot:hover { border-color: #8a611c; background: #2c2312; }
 #btn-hot.on { background: #ffb545; border-color: #ffb545; color: #241a05; font-weight: 700; box-shadow: 0 0 0 2px rgba(255, 181, 69, .28); }
 #btn-hot.on:hover { background: #ffc163; border-color: #ffc163; }
 
-/* The whole card flashes amber when Hot Agent lands on it, and fades back to the panel it always was. Amber,
+/* The whole card flashes amber when NOT-RUNNING lands on it, and fades back to the panel it always was. Amber,
    not the green a jump uses: this is a prompt to answer, not a confirmation. The last frame matches the card's
    resting border and background, so it settles instead of snapping. */
 @keyframes hotflash {

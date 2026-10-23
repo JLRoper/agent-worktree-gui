@@ -7857,7 +7857,7 @@ document.addEventListener(
   { passive: false },
 );
 
-// ---- Hot Agent ---------------------------------------------------------------------------
+// ---- NOT-RUNNING (the hot-agent rotation) --------------------------------------------------
 // A rotation through the agents that are waiting on you: a card whose latest turn is NOT running has said what
 // it wanted and is sitting there. Turning this on opens the first one, puts the caret in its reply box and
 // flashes that box amber; Enter sends and moves to the next, Alt+Right skips one, Alt+Left steps back. The box
@@ -7918,10 +7918,10 @@ function paintHotButton() {
   if (!btn) return;
   const h = state.hot;
   btn.classList.toggle("on", h.on);
-  btn.textContent = h.on ? `Hot Agent ${Math.min(h.cursor + 1, h.stack.length)}/${h.stack.length}` : "Hot Agent";
+  btn.textContent = h.on ? `NOT-RUNNING ${Math.min(h.cursor + 1, h.stack.length)}/${h.stack.length}` : "NOT-RUNNING";
   btn.title = h.on
-    ? "Hot Agent is on — Enter sends and moves to the next waiting agent, Alt+Right skips, Alt+Left goes back. Click to stop."
-    : "Hot Agent — step through the agents that are waiting on you: each one is opened, its reply box focused and flashed amber. Enter sends and moves on; Alt+Right skips; Alt+Left goes back.";
+    ? "NOT-RUNNING is on — Enter sends and moves to the next agent that is waiting on you, Alt+Right skips, Alt+Left goes back. Click to stop."
+    : "NOT-RUNNING — step through the agents that are not running and are waiting on you: each one is opened, its reply box focused and flashed amber. Enter sends and moves on; Alt+Right skips; Alt+Left goes back.";
 }
 
 // Open exactly the path to one card and close everything else: after Collapse all the project is only "open"
@@ -7989,7 +7989,7 @@ function hotStep(dir) {
     }
     const next = hotCandidates().find((t) => !h.stack.includes(t));
     if (!next) {
-      showBanner("Hot Agent: no agents are waiting for input");
+      showBanner("NOT-RUNNING: no agents are waiting for input");
       return;
     }
     h.stack.push(next);
@@ -8022,7 +8022,7 @@ function hotToggle() {
   if (!list.length) {
     h.on = false;
     paintHotButton();
-    showBanner("Hot Agent: no agents are waiting for input");
+    showBanner("NOT-RUNNING: no agents are waiting for input");
     return;
   }
   h.stack = [list[0]];
