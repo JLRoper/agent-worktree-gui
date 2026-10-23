@@ -278,9 +278,67 @@ const jobs = new Jobs({
 const approvals = new Approvals({ onEvent: broadcast });
 
 // The sentry + the assistant's own thread. It reads the same job summaries the page does, so nothing
-// here can see more than the board shows; its own clock is `settings.seconds`.
-assistant = new Assistant({ config, jobs, onEvent: broadcast, onLog: log });
+// here can see more than the board shows; its own clock is `settings.seconds`. `spawner` is the one act it
+// can perform beyond talk: a worker, in a worktree the panel cuts, exactly the way the New-agent card does.
+assistant = new Assistant({
+  config,
+  jobs,
+  getProjects: () => registry.projects,
+  spawner: assistantSpawnRun,
+  onEvent: broadcast,
+  onLog: log,
+});
 assistant.start();
+
+// Start a worker on the assistant's behalf. Deliberately the same mechanics as the New-agent card —
+// registry for the project, gateway probe before anything is promised, `git rev-parse`/`worktree add` in
+// lib/jobs.js — but with no dry run and no model field, so the worker runs on the gateway default rather
+// than on the small model the assistant itself uses.
+async function assistantSpawnRun(spec = {}) {
+  const prompt = String(spec.prompt || "").trim();
+  if (!prompt) throw new Error("a spawn needs a prompt");
+  const transport = await jobs.probe();
+  if (!transport.reachable || !transport.capabilities?.runs) {
+    throw new Error(`the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}`);
+  }
+  const target = spec.project
+    ? registry.projects.find((p) => p.name === spec.project)
+    : projectForPath(spec.target);
+  if (spec.existing) {
+    // An agent in a directory that already exists: no tree is cut, and the card attaches to the git top level.
+    const cwd = path.resolve(String(spec.target || target?.path || ""));
+    try {
+      if (!(await stat(cwd)).isDirectory()) throw new Error("not a directory");
+    } catch {
+      throw new Error(`${cwd} does not exist or is not a directory`);
+    }
+    const blocked = await spawnBlocker(cwd, null);
+    const top = await gitIn(cwd, ["rev-parse", "--show-toplevel"]);
+    const ownerPath = top.ok && top.out ? top.out : cwd;
+    const norm = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    return jobs.create({
+      prompt,
+      cwd,
+      existing: true,
+      ownerPath,
+      ownerPending: false,
+      baseCheckout: Boolean(target && norm(ownerPath) === norm(target.path)),
+      origin: { kind: "assistant-spawn", where: "existing" },
+    });
+  }
+  if (!target) throw new Error(`unknown project: ${spec.target || spec.project || "(none)"}`);
+  const blocked = await spawnBlocker(target.path, target);
+  if (blocked) throw new Error(blocked);
+  return jobs.create({
+    prompt,
+    cwd: target.path,
+    project: target.name,
+    existing: false,
+    // The worktree appears a moment later; adoptFromJob files the card under its own row when it does.
+    ownerPending: true,
+    origin: { kind: "assistant-spawn", project: target.name },
+  });
+}
 
 const settingsOut = () => ({
   version: VERSION,
@@ -592,6 +650,23 @@ const server = createServer(async (req, res) => {
           source: "reader",
           alertId: body.alertId ? String(body.alertId) : null,
         });
+        return sendJson(res, 202, { job, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
+    }
+
+    // Create a worktree (or use a directory that already exists) and start a worker. `{id}` confirms a spawn
+    // card the assistant proposed; the spec form is the same act without a card. Both go through the one
+    // spawner, so neither can skip the gateway probe or the unborn-HEAD refusal.
+    if (route === "/api/assistant/spawn" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const spec = body.id ? assistant.pendingSpawn(String(body.id)) : body;
+        if (!spec) throw new Error(`no pending spawn with id ${body.id}`);
+        const job = await assistant.startSpawn(spec, { alertId: body.id ? String(body.id) : null });
+        broadcast({ type: "jobs", jobs: jobs.list() });
         return sendJson(res, 202, { job, assistant: assistant.state() });
       } catch (e) {
         return sendJson(res, 400, { error: String((e && e.message) || e) });

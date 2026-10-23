@@ -208,7 +208,7 @@ console.log("the assistant's own actions: draft by default, sent only when allow
   board = [job({ thread: "wtgui-worker-b", label: "worker b" })];
   const answer = "I read it as the second option.\nTO wtgui-worker-b: Go with option two — the QA target.\nNOTE: worker b prefers option two.\nWATCH wtgui-worker-b: the deploy finishes | 20";
   a.settings.autonomy = "draft";
-  a.harvest({ thread: ASSISTANT_THREAD, lines: [line("text", answer)] });
+  a.harvest({ id: "asst-turn-1", thread: ASSISTANT_THREAD, lines: [line("text", answer)] });
   const st = a.state();
   const draft = st.alerts.find((x) => x.title === "the assistant drafted a reply");
   ok(draft && draft.draft.text.includes("option two"), "draft mode turns a TO line into a draft alert, not a reply", JSON.stringify(draft?.draft));
@@ -216,10 +216,57 @@ console.log("the assistant's own actions: draft by default, sent only when allow
   ok(st.notes.includes("option two") && st.watches.some((w) => w.thread === "wtgui-worker-b"), "NOTE and WATCH lines were carried out");
 
   a.settings.autonomy = "auto-safe";
-  a.harvest({ thread: ASSISTANT_THREAD, lines: [line("text", "TO wtgui-worker-b: second option.")] });
+  a.harvest({ id: "asst-turn-2", thread: ASSISTANT_THREAD, lines: [line("text", "TO wtgui-worker-b: second option.")] });
   await new Promise((r) => setTimeout(r, 20));
   eq(created.length, 1, "auto-safe sends the assistant's own reply");
   ok(created[0].origin?.kind === "assistant-reply" && created[0].thread === "wtgui-worker-b", "the reply is tagged as the assistant's", JSON.stringify(created[0]?.origin));
+}
+
+console.log("creating worktrees: ask, auto and off");
+{
+  const projects = [{ name: "agent-worktree-gui", path: "C:/ProjectDevelopment/agent-worktree-gui" }];
+  const spawned = [];
+  const a = make();
+  a.getProjects = () => projects;
+  a.spawner = async (spec) => {
+    spawned.push(spec);
+    return { id: "job-spawn", thread: "wtgui-docs-1" };
+  };
+
+  const acts = parseActions("SPAWN agent-worktree-gui | write the docs");
+  eq(acts.spawn.length, 1, "a SPAWN line is an action");
+  eq(acts.spawn[0], { target: "agent-worktree-gui", existing: false, prompt: "write the docs" }, "SPAWN <project> | <prompt>");
+  const inTree = parseActions("SPAWN IN C:/ProjectDevelopment/agent-worktree-gui/.worktrees/x | fix the tests");
+  eq(inTree.spawn[0].existing, true, "SPAWN IN marks an existing tree");
+  eq(inTree.spawn[0].target, "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/x", "a Windows path survives the pipe split");
+  ok(parseActions("SPAWN: no pipe").spawn.length === 0, "a SPAWN line with no pipe is not an action");
+
+  a.settings.spawn = "ask";
+  a.harvest({ id: "spawn-turn-1", thread: ASSISTANT_THREAD, lines: [line("text", "SPAWN agent-worktree-gui | write .md documentation for the main gui page")] });
+  const alert = a.state().alerts.find((x) => x.rule === "spawn");
+  ok(alert && alert.spawn?.project === "agent-worktree-gui" && /documentation/.test(alert.spawn.prompt), "ask mode leaves a spawn card", JSON.stringify(alert?.spawn));
+  ok(alert?.evidence?.some((e) => e.label === "where" && /new worktree/.test(e.value)), "the card says a worktree would be cut", JSON.stringify(alert?.evidence));
+  eq(spawned.length, 0, "ask mode starts nothing by itself");
+  await a.startSpawn(a.pendingSpawn(alert.id), { alertId: alert.id });
+  eq(spawned.length, 1, "confirming the card starts the worker");
+  ok(spawned[0].project === "agent-worktree-gui" && spawned[0].existing === false, "the spawner got the resolved project", JSON.stringify(spawned[0]));
+  ok(!a.state().alerts.some((x) => x.id === alert.id), "the card closes once it has started");
+  ok(a.state().journal.some((j) => j.kind === "spawned"), "the journal records it");
+  ok(a.state().watches.some((w) => w.thread === "wtgui-docs-1" && /spawned:/.test(w.title)), "the worker it started is watched from then on", JSON.stringify(a.state().watches));
+  // The same finished turn is re-emitted on every title sweep and every reload; its SPAWN must not come back.
+  a.harvest({ id: "spawn-turn-1", thread: ASSISTANT_THREAD, lines: [line("text", "SPAWN agent-worktree-gui | write .md documentation for the main gui page")] });
+  eq(a.state().alerts.filter((x) => x.rule === "spawn").length, 0, "a turn is harvested exactly once");
+
+  a.settings.spawn = "auto";
+  a.harvest({ id: "spawn-turn-2", thread: ASSISTANT_THREAD, lines: [line("text", "SPAWN agent-worktree-gui | second worker")] });
+  await new Promise((r) => setTimeout(r, 20));
+  eq(spawned.length, 2, "auto starts at once");
+
+  a.settings.spawn = "off";
+  a.harvest({ id: "spawn-turn-3", thread: ASSISTANT_THREAD, lines: [line("text", "SPAWN agent-worktree-gui | third worker")] });
+  await new Promise((r) => setTimeout(r, 20));
+  eq(spawned.length, 2, "off starts nothing");
+  ok(a.state().journal.some((j) => j.kind === "spawn-skipped"), "off is journaled, not silently dropped");
 }
 
 console.log("the action grammar");

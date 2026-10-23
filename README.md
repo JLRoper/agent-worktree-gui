@@ -369,11 +369,25 @@ Per-rule escalation decides what happens when a rule fires: `log` (journal only)
 `act` (wake, and let it send when autonomy allows). An approval is never answerable from the panel at any
 setting — that boundary belongs to the gateway and the agent's own card.
 
+**It can create worktrees.** `assistant.spawn` (also in its Settings tab) has its own ladder, because cutting a
+tree is a bigger act than writing a reply: `ask` (default) turns a SPAWN line into a card showing the project,
+where the tree goes, the exact prompt and the model — nothing runs until you press **Create worktree & start**;
+`auto` starts it at once; `off` means it may not propose one and is told to say so. A confirmed spawn goes through
+the same gate as the New-agent card: the gateway probe, the unborn-HEAD refusal, `git worktree add -b wtgui/…`,
+then the run. The worker gets the gateway default model (the assistant's small model is for triage, not for the
+work), the card is tagged `↳ started by the assistant`, and the new thread is put on the watchlist automatically
+so "spawned" later reads as "and here is how it ended".
+
 The assistant acts by writing plain lines at the end of a reply, and only those lines are read:
 
     TO <thread>: the reply to that worker
     WATCH <thread>: what to watch for | 30        (minutes, optional)
     NOTE: something to remember
+    SPAWN <project> | what the new worker should do
+    SPAWN IN <directory> | what the worker should do in that tree       (no new worktree)
+
+Each finished turn is harvested exactly once (keyed by turn id, persisted): a turn's title landing or a panel
+restart re-emits the same job, and re-reading its lines would otherwise start a second worker.
 
 **The scratchpad** is one JSON file beside the job store (`assistantFile`, default
 `logs/assistant.json`): `settings`, `notes` (freeform, read every turn), `rules` (standing answers),
@@ -395,7 +409,7 @@ dismisses one, hands it to the assistant, or opens the agent.
 | `apiServer` | `{"url":"http://127.0.0.1:8642"}` | `url` of the gateway's api_server, and optionally `key` (else `API_SERVER_KEY` from `$HERMES_HOME/.env`) |
 | `jobMaxRuntimeSeconds` | 3600 | hard cap on a spawned job |
 | `assistantFile` | `logs/assistant.json` | the assistant's scratchpad: settings, notes, standing rules, watches, alerts and journal |
-| `assistant` | `{}` | starting knobs for the assistant: `enabled`, `autonomy` (`draft`/`auto-safe`/`auto`), `model`, `seconds`, `repeatLimit`, `quietSeconds`, `approvalSeconds`, `contextPercent`, `maxWakesPerHour`, `rearmSeconds`, `rules:{id: log\|alert\|wake\|act}`. The panel writes changes back to `assistantFile`, so this is the first-run default |
+| `assistant` | `{}` | starting knobs for the assistant: `enabled`, `autonomy` (`draft`/`auto-safe`/`auto`), `spawn` (`off`/`ask`/`auto`), `model`, `seconds`, `repeatLimit`, `quietSeconds`, `approvalSeconds`, `contextPercent`, `maxWakesPerHour`, `rearmSeconds`, `rules:{id: log\|alert\|wake\|act}`. The panel writes changes back to `assistantFile`, so this is the first-run default |
 | `liveSeconds` | 5 | how often liveness evidence is re-read for every row (no git) |
 | `worktreeSeconds` / `dormantSeconds` | 5 / 30 | active-row / dormant-row git scan cadence |
 | `slowSeconds` | 60 | project meta, discovery, and expensive per-row fields |
@@ -433,6 +447,7 @@ dismisses one, hands it to the assistant, or opens the agent.
 | POST | `/api/assistant/settings` | `{autonomy, model, seconds, repeatLimit, quietSeconds, approvalSeconds, contextPercent, maxWakesPerHour, rules:{id: escalation}}` — applied immediately, saved in the scratchpad |
 | POST | `/api/assistant/alert` | `{id, action:"dismiss"\|"ask"}` — `ask` wakes the assistant with that alert's digest |
 | POST | `/api/assistant/answer` | `{thread, text, alertId?}` — post a reply into a worker's thread from the panel (the only route that does it on your behalf) |
+| POST | `/api/assistant/spawn` | `{id}` confirms a spawn card the assistant proposed, or `{project\|target, prompt, existing?}` does the same without a card: cut a worktree in that project (or run in an existing directory) and start a worker. Same refusals as `/api/agents` — gateway unreachable **400**, unborn HEAD **400** |
 | POST | `/api/assistant/watch` · `/api/assistant/watch/remove` | add `{thread, title, doneWhen?, minutes?}` / remove `{id}` |
 | POST | `/api/assistant/rule` · `/api/assistant/rule/remove` | add `{text}` / remove `{id}` — the assistant's standing answers |
 | POST | `/api/assistant/notes` | `{text}` — the freeform scratchpad, read on every turn |
