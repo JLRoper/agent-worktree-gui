@@ -13,7 +13,7 @@ import { Pool } from "./lib/pool.js";
 import { Store } from "./lib/store.js";
 import { Scheduler } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
-import { Jobs, makeThreadName, previewRequest } from "./lib/jobs.js";
+import { Jobs, hermesHome, makeThreadName, previewRequest } from "./lib/jobs.js";
 import { gitIn } from "./lib/scan.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
 import { Approvals } from "./lib/approvals.js";
@@ -284,6 +284,10 @@ assistant = new Assistant({
   config,
   jobs,
   getProjects: () => registry.projects,
+  // The rows the scanner already produced (dirty files, commits ahead, verdict) — no second git pass — and the
+  // delegated children the gateway keeps in `state.db`, which never reach a parent's run stream.
+  getRows: () => [...store.rows.values()],
+  getChildren: () => subagentRoster({ dbPath: path.join(hermesHome(), "state.db") }),
   spawner: assistantSpawnRun,
   onEvent: broadcast,
   onLog: log,
