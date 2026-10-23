@@ -5082,28 +5082,49 @@ let boardSweepQueued = false;
 let boardAnchor = null;
 
 function captureBoardAnchor() {
-  const bar = document.querySelector(".topbar");
-  const top = bar ? bar.getBoundingClientRect().bottom : 0;
   if (window.scrollY <= 0) return null; // at the top of the page: nothing to hold
-  for (const tr of document.querySelectorAll("#projects tr.row[data-key]")) {
-    const r = tr.getBoundingClientRect();
-    if (r.bottom > top + 1) return { key: tr.dataset.key, offset: Math.round(r.top - top - (bar ? 0 : 0)) };
-  }
-  return null;
+  const top = readingTop();
+  // The card under the reading line first: that is what the reader is looking at, and holding it survives a
+  // rebuild (it is looked up by thread) AND a reorder - the row it belongs to may be promoted to the top of
+  // the board while the card itself must not move on screen.
+  const card = nearestReadingLine(document.querySelectorAll(".job[data-thread]"), top);
+  if (card) return { thread: card.dataset.thread, offset: Math.round(card.getBoundingClientRect().top - top), y: Math.round(window.scrollY) };
+  // Rows are only a stand-in for "somewhere in this worktree". Their index is recorded because rows are
+  // sorted newest-life-first: a row that gains life is promoted, and following it is exactly the bounce this
+  // anchor used to cause - the page chased a promoted worktree up to the top of the board.
+  const rows = [...document.querySelectorAll("#projects tr.row[data-key]")];
+  const row = rows.find((tr) => tr.getBoundingClientRect().bottom > top + 1);
+  if (!row) return null;
+  return { key: row.dataset.key, index: rows.indexOf(row), offset: Math.round(row.getBoundingClientRect().top - top), y: Math.round(window.scrollY) };
 }
 
-function restoreBoardAnchor(anchor) {
+// Put the held element back where the reader had it, and keep putting it back for the next few frames: a single
+// correction measured too early - before the promoted row's detail had been re-placed, before a card had been
+// rebuilt - left the reader half-way to wherever the render was going to put them (observed: a card asked to stay
+// at 40px ended at -498px). Four frames is enough for the layout to settle and short enough to be invisible.
+function holdAnchor(anchor, attempt = 0) {
   if (!anchor) return;
-  const tr = document.querySelector(`#projects tr.row[data-key="${CSS.escape(anchor.key)}"]`);
-  if (!tr) return;
-  const bar = document.querySelector(".topbar");
-  const top = bar ? bar.getBoundingClientRect().bottom : 0;
-  const now = Math.round(tr.getBoundingClientRect().top - top);
-  const delta = now - anchor.offset;
+  // The reader scrolled between the capture and this hold: the page is theirs now.
+  if (attempt === 0 && anchor.y != null && Math.abs(Math.round(window.scrollY) - anchor.y) > 6) return;
+  const top = readingTop();
+  let el = null;
+  if (anchor.thread) {
+    el = document.querySelector(`.job[data-thread="${CSS.escape(anchor.thread)}"]`);
+  } else {
+    const rows = [...document.querySelectorAll("#projects tr.row[data-key]")];
+    const tr = rows.find((r) => r.dataset.key === anchor.key);
+    // Reordered, not resized: leave the page alone. The green flash already says something moved; dragging the
+    // reader to wherever the sort sent the row is not a way to tell them.
+    if (tr && rows.indexOf(tr) === anchor.index) el = tr;
+  }
+  if (!el) return;
+  const delta = Math.round(el.getBoundingClientRect().top - top) - anchor.offset;
   if (Math.abs(delta) > 2) {
     programmaticScroll();
     window.scrollBy(0, delta);
+    refreshAnchorBaseline();
   }
+  if (attempt < 4 && Math.abs(delta) > 2) requestAnimationFrame(() => holdAnchor(anchor, attempt + 1));
 }
 
 function scheduleBoardSweep(anchor = null) {
@@ -5115,7 +5136,7 @@ function scheduleBoardSweep(anchor = null) {
     sweepStaleBoard();
     const held = boardAnchor;
     boardAnchor = null;
-    restoreBoardAnchor(held);
+    holdAnchor(held);
   });
 }
 
@@ -5124,10 +5145,16 @@ function sweepStaleBoard() {
   for (const d of [...document.querySelectorAll("tr.detail[data-detail]")]) {
     const key = d.dataset.detail;
     const ownRow = state.rowEls.get(key) || null;
-    const stale = !state.rows.has(key) || (ownRow && d.previousElementSibling !== ownRow);
-    if (!stale) continue;
-    d.remove();
-    if (state.detailEls.get(key) === d) state.detailEls.delete(key);
+    if (!state.rows.has(key)) {
+      d.remove();
+      if (state.detailEls.get(key) === d) state.detailEls.delete(key);
+      continue;
+    }
+    // The row is still there and the detail still belongs to it - the row just moved (rows sort by newest
+    // life, so a worktree that gains life is re-ordered). Moving the detail with its row keeps the open
+    // cards on the page; removing it instead dropped the agent card the reader was reading out of the DOM
+    // until some later render rebuilt it.
+    if (ownRow && d.previousElementSibling !== ownRow) ownRow.after(d);
   }
   // A row the server no longer lists.
   for (const tr of [...document.querySelectorAll("tr.row[data-key]")]) {
@@ -5905,7 +5932,6 @@ function renderProjectRows(name) {
   }
   restoreScrolls(tbody, prevScrolls);
   applyStoredScrolls(tbody);
-  restoreBoardAnchor(anchor);
   scheduleBoardSweep(anchor);
   refreshAnchorBaseline();
   // This path rebuilds the table in ranked order, which is how a row most often changes place (a
@@ -5980,7 +6006,6 @@ function renderAll() {
   }
   paintConfigLine();
   paintCollapseAll();
-  restoreBoardAnchor(anchor);
   scheduleBoardSweep(anchor);
   refreshAnchorBaseline();
   // A rebuild recreates the sections, so every folder's filter has to be re-applied to the new nodes.
