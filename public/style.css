@@ -207,6 +207,7 @@ button.primary:hover { background: #24466a; }
 .settings-presets { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .settings-presets button { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--dim); font: 10.5px/1.7 var(--mono); cursor: pointer; }
 .settings-presets button:hover { color: var(--text); border-color: #3b4757; }
+.settings-presets button.on { border-color: var(--q-line); color: var(--q-head); background: var(--surface); }
 .settings-preview.bad { border-color: #57262a; color: #ff9c94; }
 .hidden { display: none; }
 
@@ -1184,10 +1185,15 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
   --q-choice-on: #3a4452; --q-choice-on-line: #8a97ab;
   --q-accent: #8a97ab; --q-box: #647085; --q-tick: #e2e8f0; --q-note: #a3adbb;
 }
-/* The box sits in a centred column instead of running the full width of a wide card: at 2000px the answer
-   rows used to be long empty bands with the chip stranded somewhere in the middle. The console above stays
-   full width — the question is the thing being read, so it is the thing that gets the measure. */
-.turn-question { max-width: 900px; margin: 8px auto 6px; border: 1px solid var(--q-line); border-radius: 8px; background: linear-gradient(180deg, var(--q-bg-a), var(--q-bg-b)); box-shadow: 0 6px 18px rgba(0,0,0,.35); padding: 10px 12px; }
+/* The box is the console's box: the same 18px inset the console wrapper carries (`out-tab`, inside the turn's
+   11px rail padding) and the same right edge, so the question lines up with the output it follows. The inset is
+   on the wrapper, so a change there has to be mirrored here. Settings > Display > Question width can narrow it
+   to a fixed number of pixels, which then centres it under the console instead of following the console's edges. */
+.turn-question { max-width: none; margin: 8px 0 6px 18px; border: 1px solid var(--q-line); border-radius: 8px; background: linear-gradient(180deg, var(--q-bg-a), var(--q-bg-b)); box-shadow: 0 6px 18px rgba(0,0,0,.35); padding: 10px 12px; }
+/* A set width centres the box under the console, and the 18px keeps it inside the console's own span when the
+   number is larger than the card — otherwise the cap stops binding and the box would start 18px left of the
+   console it is supposed to sit under. */
+:root.q-width-set .turn-question { margin: 8px auto 6px; max-width: min(var(--q-width, 900px), calc(100% - 18px)); }
 .tq-head { font-size: 11.5px; color: var(--q-head); letter-spacing: .01em; }
 .tq-question { margin: 8px 0 9px; font: var(--q-size, 13px)/1.5 var(--ui); color: var(--q-question); white-space: pre-wrap; word-break: break-word; }
 .tq-choices { display: flex; flex-direction: column; gap: 6px; }
@@ -1207,9 +1213,10 @@ label.tq-choice.on { border-color: var(--q-choice-on-line); background: var(--q-
 .tq-box { flex: none; width: 13px; height: 13px; margin-top: 2px; border: 1px solid var(--q-box); border-radius: 50%; background: rgba(0,0,0,.35); }
 .tq-choice.is-multi .tq-box { border-radius: 4px; }
 .tq-choice.is-multi.on .tq-box { background: var(--q-tick); border-color: var(--q-tick); box-shadow: inset 0 0 0 2px var(--q-bg-b); }
-/* A long sentence on a 1300px row reads as one wall of text; the row stays full-width (it is the click
-   target) and the measure inside it is held to about a hundred characters. */
-.tq-text { min-width: 0; max-width: 100ch; }
+/* The label fills its row (the row itself is the click target, and a choice that runs the same width as the
+   console above reads as one list). No character cap: a capped measure left dead space at the end of every
+   row, which is what the reading line used to report as "everything off to the left". */
+.tq-text { min-width: 0; flex: 1 1 auto; }
 .tq-rec { flex: none; margin-right: 7px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--q-accent); color: var(--q-head); font: 10px/1.7 var(--ui); letter-spacing: .04em; white-space: nowrap; }
 .tq-other-row { display: flex; align-items: stretch; gap: 8px; margin-top: 9px; }
 .tq-other { flex: 1; min-width: 0; min-height: 34px; max-height: 160px; resize: vertical; padding: 6px 9px; border: 1px solid var(--q-choice-line); border-radius: 6px; background: rgba(0,0,0,.34); color: var(--q-question); font: calc(var(--q-size, 13px) - 0.5px)/1.45 var(--ui); }
@@ -1238,7 +1245,8 @@ button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: defau
 .q-swatches button[data-q-tint="rose"] { background: #7a3a52; }
 .q-swatches button[data-q-tint="slate"] { background: #4a5462; }
 /* …and once answered, the same one-line record the approval leaves. */
-.turn-question-done { max-width: 900px; margin: 6px auto 2px; padding: 3px 9px; font-size: 11px; color: var(--q-head); border-left: 2px solid var(--q-line); background: rgba(255,255,255,.05); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.turn-question-done { margin: 6px 0 2px 18px; padding: 3px 9px; font-size: 11px; color: var(--q-head); border-left: 2px solid var(--q-line); background: rgba(255,255,255,.05); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:root.q-width-set .turn-question-done { margin: 6px auto 2px; max-width: min(var(--q-width, 900px), calc(100% - 18px)); }
 .turn-question-done.is-quiet { color: var(--dimmer); }
 .queue-note { font-size: 11px; color: #ffd479; }
 /* A reply waiting to be sent, drawn where it will land but visibly not sent yet: dashed, dimmed, italic. */

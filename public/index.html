@@ -97,12 +97,25 @@
             <button type="button" data-q-tint="slate" title="slate — the quietest, nearly neutral"></button>
           </span>
         </div>
+        <label class="settings-row settings-gap" for="q-width" title="How wide the question box is. 'console' (0, the default) means it matches the output console above it — the same 18px inset and the same right edge, so the question lines up with the output it follows. A number narrows the box to that many pixels and centres it under the console. Saved in this browser; the sample below is narrower than the panel, so width shows itself on a card.">
+          <span>Question width <span class="settings-info">ⓘ</span></span>
+          <input id="q-width" type="number" inputmode="numeric" step="50" min="0" max="2400">
+          <span class="settings-unit mono">px · 0 = console</span>
+        </label>
+        <div class="settings-presets">
+          <button type="button" data-q-width-set="0">console</button>
+          <button type="button" data-q-width-set="1400">1400</button>
+          <button type="button" data-q-width-set="1100">1100</button>
+          <button type="button" data-q-width-set="900">900</button>
+          <button type="button" data-q-width-set="700">700</button>
+        </div>
+
         <div class="settings-preview q-sample" id="q-preview" title="a sample of the question box as it is drawn on a card">
           <div class="turn-question">
             <div class="tq-head mono">❓ waiting on you — the agent is parked until you answer</div>
             <div class="tq-question">Which sections should the summary of this repo include?</div>
             <div class="tq-choices">
-              <div class="tq-choice"><span class="tq-box"></span><span class="tq-text">An architecture overview that maps the module layout, entry points, and how the parts talk to each other at runtime.</span><span class="tq-rec">recommended</span></div>
+              <div class="tq-choice"><span class="tq-box"></span><span class="tq-rec">recommended</span><span class="tq-text">An architecture overview that maps the module layout, entry points, and how the parts talk to each other at runtime.</span></div>
               <div class="tq-choice on"><span class="tq-box"></span><span class="tq-text">A build and setup section with the commands a new developer has to run.</span></div>
             </div>
             <div class="tq-other-row"><div class="tq-other">or type your own answer</div><button type="button" class="tq-send">Send answer</button></div>

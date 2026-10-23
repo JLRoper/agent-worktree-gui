@@ -1389,9 +1389,12 @@ const Q_TINTS = ["violet", "sky", "mint", "rose", "slate"];
 const Q_SIZE_MIN = 11;
 const Q_SIZE_MAX = 18;
 const Q_SIZE_DEFAULT = 13;
+// Question width: 0 means "the console's own box" (the default), any other value is a pixel cap.
+const Q_WIDTH_MIN = 0;
+const Q_WIDTH_MAX = 2400;
 
 function qLook() {
-  const out = { tint: "violet", size: Q_SIZE_DEFAULT, compact: false, typed: true };
+  const out = { tint: "violet", size: Q_SIZE_DEFAULT, width: 0, compact: false, typed: true };
   let raw = null;
   try {
     raw = JSON.parse(localStorage.getItem(Q_LOOK_KEY) || "null");
@@ -1402,6 +1405,8 @@ function qLook() {
     if (Q_TINTS.includes(raw.tint)) out.tint = raw.tint;
     const size = Number(raw.size);
     if (Number.isFinite(size)) out.size = Math.min(Q_SIZE_MAX, Math.max(Q_SIZE_MIN, size));
+    const width = Number(raw.width);
+    if (Number.isFinite(width)) out.width = Math.min(Q_WIDTH_MAX, Math.max(Q_WIDTH_MIN, width));
     if (typeof raw.compact === "boolean") out.compact = raw.compact;
     if (typeof raw.typed === "boolean") out.typed = raw.typed;
   }
@@ -1415,6 +1420,11 @@ function paintQLook(look = qLookState) {
   const size = $("q-size");
   // Never rewrite the box the reader is typing into: a clamp lands on `change`, not on every keystroke.
   if (size && document.activeElement !== size) size.value = String(look.size);
+  const width = $("q-width");
+  if (width && document.activeElement !== width) width.value = String(look.width);
+  for (const btn of document.querySelectorAll("[data-q-width-set]")) {
+    btn.classList.toggle("on", (Number(btn.dataset.qWidthSet) || 0) === look.width);
+  }
   const compact = $("q-compact");
   if (compact) compact.checked = look.compact;
   const typed = $("q-typed");
@@ -1430,6 +1440,8 @@ function applyQLook(next = {}, { save = true } = {}) {
   if (!Q_TINTS.includes(look.tint)) look.tint = "violet";
   const n = Number(look.size);
   look.size = Math.min(Q_SIZE_MAX, Math.max(Q_SIZE_MIN, Number.isFinite(n) && n > 0 ? n : Q_SIZE_DEFAULT));
+  const w = Number(look.width);
+  look.width = Math.min(Q_WIDTH_MAX, Math.max(Q_WIDTH_MIN, Number.isFinite(w) && w > 0 ? w : 0));
   look.compact = Boolean(look.compact);
   look.typed = Boolean(look.typed);
   qLookState = look;
@@ -1439,6 +1451,10 @@ function applyQLook(next = {}, { save = true } = {}) {
   // Purely for the Settings sample, which has its typed row in its markup; a live card omits the row.
   root.classList.toggle("q-no-typed", !look.typed);
   root.style.setProperty("--q-size", `${look.size}px`);
+  // 0 is not a width: it means "take the console's box", so no cap and no centring.
+  root.classList.toggle("q-width-set", look.width > 0);
+  if (look.width > 0) root.style.setProperty("--q-width", `${look.width}px`);
+  else root.style.removeProperty("--q-width");
   paintQLook(look);
   if (save) {
     try {
@@ -10287,6 +10303,17 @@ $("q-size")?.addEventListener("change", (e) => {
   // Show the clamped value: typing 40 lands on 18, and the box must say so rather than silently disagree.
   e.target.value = String(look.size);
 });
+$("q-width")?.addEventListener("change", (e) => {
+  const n = Number(e.target.value);
+  const look = applyQLook({ width: Number.isFinite(n) && n > 0 ? n : 0 });
+  e.target.value = String(look.width);
+});
+for (const btn of document.querySelectorAll("[data-q-width-set]")) {
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    applyQLook({ width: Number(btn.dataset.qWidthSet) || 0 });
+  });
+}
 $("q-compact")?.addEventListener("change", (e) => applyQLook({ compact: Boolean(e.target.checked) }));
 $("q-typed")?.addEventListener("change", (e) => {
   applyQLook({ typed: Boolean(e.target.checked) });
