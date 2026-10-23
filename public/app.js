@@ -1969,6 +1969,11 @@ async function refreshSubagentRoster() {
   }
   subagentRosterAt = Date.now();
   paintSubagents();
+  // Children that have just finished are the moment a held reply can go: drain anything queued on a thread that
+  // is no longer waiting for them (drainReplyQueue checks both the turn and the children).
+  for (const thread of new Set([...subagentFallback.keys(), ...state.replyQueue.keys()])) {
+    if (!childrenOut(thread)) void drainReplyQueue(thread);
+  }
   // The card's own pill says RUNNING while a child is out, so a flip in that answer is a card repaint, not just a
   // strip repaint. Only on a flip: re-rendering every card every 5s would fight the reader's scroll.
   for (const thread of new Set([...subagentLive.keys(), ...subagentFallback.keys()])) {
@@ -2245,7 +2250,9 @@ function conversationHtml(conv) {
             ${running
               ? `<button class="btn-reply btn-steer-primary" data-steer="${esc(runningTurn.id)}" type="button" title="${inDelegate ? "send this into the running turn — it waits for delegate_task to return, and if the turn ends first it comes back to this box unsent" : "send this into the running turn — the agent reads it at its next tool boundary and the turn carries on"}">Steer turn</button>`
               : `<button class="btn-reply" data-thread="${esc(thread)}" type="button" title="send this as the next turn (Enter)">Send reply</button>`}
-            ${running ? `<button class="btn-queue" data-queue-reply="${esc(thread)}" type="button" title="hold this reply and send it the moment the current turn finishes">Queue reply</button>` : ""}
+            ${running || childrenOut(thread)
+              ? `<button class="btn-queue" data-queue-reply="${esc(thread)}" type="button" title="${running ? "hold this reply and send it the moment the current turn finishes" : "hold this reply until the subagents this thread started have finished, so the parent is not talking over them"}">Queue reply</button>`
+              : ""}
             ${queued ? `<span class="queue-note mono" title="${esc(queuedTitle)}">${queued} queued</span>` : ""}
             ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button" title="cancel the run this agent is in the middle of">Cancel turn</button>` : ""}
           </div>
@@ -2503,6 +2510,17 @@ function replyQueued(thread) {
   return state.replyQueue.get(thread) || [];
 }
 
+// Children this thread started that are still working. A finished parent turn with children out is not "busy"
+// in the run sense, but a reply sent then races them: the parent starts a new turn while its own children are
+// still writing. So the queue waits for them too.
+function childrenOut(thread) {
+  if (!thread) return false;
+  if ((subagentFallback.get(thread) || []).some((s) => s && s.running)) return true;
+  return [...state.jobs.values()].some(
+    (j) => (j.thread || j.id) === thread && (j.subagents || []).some((s) => s && s.running),
+  );
+}
+
 function threadBusy(thread) {
   return [...state.jobs.values()].some(
     (j) => (j.thread || j.id) === thread && (j.status === "running" || j.status === "starting"),
@@ -2511,7 +2529,7 @@ function threadBusy(thread) {
 
 async function drainReplyQueue(thread) {
   const q = replyQueued(thread);
-  if (!q.length || threadBusy(thread)) return;
+  if (!q.length || threadBusy(thread) || childrenOut(thread)) return;
   const text = q.shift().text;
   if (!q.length) state.replyQueue.delete(thread);
   else state.replyQueue.set(thread, q);
@@ -2671,6 +2689,21 @@ async function steerTurn(thread, id, text, btn = null) {
     });
     const out = await res.json().catch(() => ({}));
     if (!res.ok || !out.ok) {
+      // A run parked inside delegate_task, or one whose live agent the gateway's authority cannot hand a steer
+      // to, answers 409 rather than swallowing the text. Queue it instead of handing it back: the reader's
+      // instruction is still what they want next, and Queue is the action that survives this state.
+      const code = String(out.code || "");
+      const refused = res.status === 409 && (!code || code === "run_not_accepting_steer" || code === "steer_not_accepted");
+      if (refused) {
+        queueReply(thread, body);
+        state.replyDrafts[thread] = "";
+        clearAttachments(thread);
+        const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+        if (box) box.value = "";
+        if (warn) warn.textContent = "this turn cannot take a steer right now — queued; it sends when the turn and its subagents are done";
+        if (btn) btn.disabled = false;
+        return true;
+      }
       if (warn) warn.textContent = out.error || `steer refused (HTTP ${res.status})`;
       if (btn) btn.disabled = false;
       return false;
