@@ -81,6 +81,10 @@ const state = {
   pollGap: new Map(), // key -> observed seconds between that row's scans, smoothed
   lastScanAt: new Map(), // key -> ms of the previous scan we rendered
   turnOpen: new Map(), // job id -> whether that turn's body is expanded (default: only the newest)
+  // Turns that were showing their body when the reader sent the next one: they keep their answer and last tool
+  // line, and lose the thinking block and the tool chatter. Not folded all the way to a one-line peek - that
+  // shrink is what used to drag the reply box out from under the reader's hands.
+  turnCompact: new Set(),
   turnPage: new Map(), // thread -> how many pages of turns back from the newest (0 = newest page)
   gitOpen: new Set(), // row key -> the git/commit/diff accordion is unfolded
   pinnedTurns: new Set(), // turn id -> starred, so it also shows above the paged turns
@@ -1102,6 +1106,7 @@ function toggleTurn(key) {
   if (!conv) return;
   const copy = pinnedCopy ? "@pin" : "";
   state.turnOpen.set(key, !turnIsOpen(conv, turn, copy));
+  state.turnCompact.delete(key);
   renderConversation(conv.thread);
   // A turn that was just opened should show its newest lines, not its first line.
   if (turnIsOpen(conv, turn, copy)) {
@@ -1230,6 +1235,35 @@ function turnPeekLine(turn) {
   return null;
 }
 
+// A compacted turn: what it concluded, and the last tool it used. Thinking blocks and the run of tool calls -
+// usually several hundred pixels of scrollback the reader has already read - are dropped, not merely folded.
+function compactHtml(turn, copy = "") {
+  const lines = jobLines(turn.id).filter((l) => !isBookkeeping(l));
+  let lastTool = -1;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const k = lines[i] && lines[i].kind;
+    if (k === "tool" || k === "tool-out") {
+      lastTool = i;
+      break;
+    }
+  }
+  const texts = (from) =>
+    lines
+      .slice(from)
+      .filter((l) => l && l.kind === "text" && String(l.text || "").trim())
+      .map((l) => String(l.text).trim());
+  // The answer is what it said after its last tool call; a turn that ended on a tool still has words somewhere.
+  const said = texts(lastTool + 1);
+  const answer = (said.length ? said : texts(0)).join("\n\n");
+  const tool = lastTool >= 0 ? lines[lastTool] : null;
+  const hidden = lines.filter((l) => l.kind === "tool" || l.kind === "tool-out" || l.kind === "dim").length;
+  return `<div class="turn-compact" data-compact-turn="${esc(turn.id)}${esc(copy)}">${
+    tool ? `<div class="tc-tool mono" title="${esc(String(tool.text || ""))}">${linkifyText(String(tool.text || ""))}</div>` : ""
+  }${answer ? `<div class="tc-answer">${linkifyText(answer)}</div>` : ""}<div class="tc-more dimmer mono">${
+    hidden ? `${hidden} tool line${hidden === 1 ? "" : "s"} folded` : "thinking folded"
+  } · open for the whole turn</div></div>`;
+}
+
 function peekHtml(turn) {
   const peek = turnPeekLine(turn);
   if (!peek) return `<div class="turn-peek" data-peek-turn="${esc(turn.id)}" hidden></div>`;
@@ -1255,7 +1289,12 @@ function turnBlock(conv, turn, index, copy = "") {
   // The rail down the turns' left edge is violet while a turn is executing, slate otherwise, so `is-running`
   // is the only state the CSS needs from here.
   const running = turnLive(turn);
-  const cls = `turn${open ? "" : " folded"}${running ? " is-running" : ""}`;
+  const compact = !open && state.turnCompact.has(tkey);
+  const cls = `turn${open ? "" : " folded"}${compact ? " compact" : ""}${running ? " is-running" : ""}`;
+  if (compact) {
+    return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy, true)}` +
+      `${turnAttachmentsHtml(turn)}${compactHtml(turn, copy)}${subagentsCompactHtml(turn, copy)}</div>`;
+  }
   if (!open) {
     // Two rows: the head carries the request, the peek carries what the turn is doing or concluded - and a turn that
     // delegated something keeps saying so as it ages up the list, rather than handing its children to the newest turn.
@@ -2921,15 +2960,42 @@ function jobHtml(j) {
 // older turns (their default is "folded" once they are no longer the newest) and the new turn is
 // pinned open, so a reply lands with the previous turn collapsed to its request line.
 function focusNewTurn(thread, turnId) {
+  // The reply box is where the reader's hands are. Folding a turn shortens the card above it, and the box
+  // used to travel up by exactly that much; measure it first, put it back after.
+  const boxBefore = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+  const yBefore = boxBefore ? Math.round(boxBefore.getBoundingClientRect().top) : null;
+  const conv = conversations().find((c) => c.thread === thread);
+  const at = conv ? conv.turns.findIndex((t) => t.id === turnId) : -1;
+  const previous = conv && at > 0 ? conv.turns[at - 1] : null;
   // A new turn means the reader is back at the newest page.
   state.turnPage.delete(thread);
   for (const j of state.jobs.values()) {
     if ((j.thread || j.id) !== thread) continue;
-    if (j.id === turnId) state.turnOpen.set(j.id, true);
-    else state.turnOpen.delete(j.id);
+    if (j.id === turnId) {
+      state.turnOpen.set(j.id, true);
+      state.turnCompact.delete(j.id);
+    } else {
+      // What was on screen keeps a readable summary instead of collapsing to one line: the turn just finished,
+      // and any turn the reader had opened by hand. Turns that were already folded stay folded - they were not
+      // taking up room.
+      const showing = j.id === previous?.id || state.turnOpen.get(j.id) === true;
+      state.turnOpen.delete(j.id);
+      if (showing) state.turnCompact.add(j.id);
+    }
   }
   renderConversation(thread);
   scrollThreadToBottom(thread);
+  // Put the composer back under the reader's hands (the page clamps at its own ends; a clamped correction just
+  // leaves the box where the layout put it).
+  const boxAfter = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+  if (yBefore != null && boxAfter) {
+    const delta = Math.round(boxAfter.getBoundingClientRect().top) - yBefore;
+    if (Math.abs(delta) > 1 && Math.abs(delta) < window.innerHeight * 0.9) {
+      programmaticScroll();
+      window.scrollBy(0, delta);
+      refreshAnchorBaseline();
+    }
+  }
 }
 
 // The worktree an agent's directory belongs to: an exact match on the row path, or the deepest row
@@ -3479,7 +3545,10 @@ function renderJobs() {
   const live = new Set([...state.jobs.keys()]);
   for (const id of [...state.turnOpen.keys()]) {
     // Pinned copies share the turn id with a `pin:` prefix; prune on the turn they belong to.
-    if (!live.has(id.startsWith("pin:") ? id.slice(4) : id)) state.turnOpen.delete(id);
+    if (!live.has(id.startsWith("pin:") ? id.slice(4) : id)) {
+      state.turnOpen.delete(id);
+      state.turnCompact.delete(id);
+    }
   }
   // Same for a cleared thread's remembered page.
   const threads = new Set([...state.jobs.values()].map((j) => j.thread || j.id));

@@ -795,6 +795,14 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 /* A running turn's peek is a tool call in flight: quieter than an answer, which is worth reading. */
 .turn-peek.is-tool { color: #7f8b9b; font-style: italic; }
 .turn-peek[hidden] { display: none; }
+/* A compacted turn: the answer it ended on, the last tool it used, and one line saying what went away. The
+   thinking block and the run of tool calls are gone, so this is a fraction of the body it replaces - but it
+   still says what the turn concluded, which a one-line peek could not. */
+.turn.compact { padding-bottom: 3px; }
+.turn-compact { margin: 2px 0 4px 27px; }
+.turn-compact .tc-tool { font-size: 11px; line-height: 1.5; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.turn-compact .tc-answer { margin-top: 2px; font: 12.5px/1.5 var(--ui); color: var(--text); white-space: pre-wrap; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; }
+.turn-compact .tc-more { margin-top: 3px; font-size: 10.5px; color: var(--dimmer); }
 .turn-prompt {
   margin: 1px 0 1px 27px;
   font: 12.5px/1.5 var(--ui);
