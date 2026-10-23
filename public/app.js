@@ -4976,6 +4976,17 @@ function applyProjectHue(name) {
   }
   const head = sec?.querySelector(".project-head[data-toggle-project]");
   if (head) head.title = headTitle(name);
+  updateColorsRow();
+}
+
+// The settings row says how many projects carry a colour right now, so "reset" is never a blind button.
+function updateColorsRow() {
+  const row = document.getElementById("colors-row");
+  if (!row) return;
+  const n = state.projectHues.size;
+  row.title = n
+    ? `${n} project${n === 1 ? "" : "s"} carr${n === 1 ? "ies" : "y"} a theme colour (Ctrl+click a project's title row to set one, Ctrl+Shift+click to drop it). Reset clears them all — this browser only.`
+    : "No project has a theme colour. Ctrl+click a project's title row to give it one; reset clears every colour at once.";
 }
 
 function headTitle(name) {
@@ -6339,6 +6350,19 @@ async function post(route) {
 }
 
 $("btn-refresh").addEventListener("click", () => post("/api/refresh"));
+$("btn-reset-colors").addEventListener("click", () => {
+  const n = state.projectHues.size;
+  state.projectHues.clear();
+  saveProjectHues();
+  for (const sec of document.querySelectorAll("section.project.has-hue")) {
+    sec.classList.remove("has-hue");
+    sec.style.removeProperty("--proj-hue");
+    const head = sec.querySelector(".project-head[data-toggle-project]");
+    if (head) head.title = headTitle(sec.dataset.project);
+  }
+  updateColorsRow();
+  showBanner(n ? `project colours cleared (${n} project${n === 1 ? "" : "s"})` : "no project colours to clear");
+});
 $("btn-collapse-all").addEventListener("click", () => toggleEverything());
 
 // Ctrl+[ folds the whole board, Ctrl+] opens it — the square brackets point the way (in, then out).
@@ -8764,6 +8788,7 @@ for (const id of ["newagent", "agents"]) applyFixedCollapse(id);
     await resync();
     connect();
     startAnchorObserver();
+    updateColorsRow();
     state.eventsAt = Date.now();
   } catch (e) {
     setStream("offline", "bad");
