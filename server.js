@@ -23,6 +23,7 @@ import {
   providerState, writeProviderSettings,
 } from "./lib/hermes-config.js";
 import { hermesSessionTail } from "./lib/activity.js";
+import { Assistant, ASSISTANT_THREAD } from "./lib/assistant.js";
 import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./lib/subagents.js";
 import { thinkingFor } from "./lib/thinking.js";
 import { modelCatalogue } from "./lib/hermes-models.js";
@@ -109,6 +110,10 @@ async function loadConfig() {
   cfg.scanMode = String(cfg.scanMode || "all").toLowerCase() === "visible" ? "visible" : "all";
   // Keyed off the config's own directory, so a PANEL_CONFIG sandbox keeps its own registry.
   if (!cfg.jobsFile) cfg.jobsFile = path.join(path.dirname(CONFIG_PATH), "logs", "jobs.json");
+  // The assistant's scratchpad lives beside the job store; `assistant` is an optional block of knobs
+  // (mode, model, rule escalations) that the page can also change at runtime.
+  cfg.assistant = cfg.assistant && typeof cfg.assistant === "object" ? cfg.assistant : {};
+  if (!cfg.assistantFile) cfg.assistantFile = path.join(path.dirname(cfg.jobsFile), "assistant.json");
   return cfg;
 }
 
@@ -256,17 +261,26 @@ function adoptFromJob(evt) {
   if (!project) return;
   void scheduler.adoptWorktree(project.name, j.worktreePath).catch(() => {});
 }
+// Declared before the job stream that feeds it: a job event arrives on the same tick as construction,
+// and the observer is optional until the assistant exists.
+let assistant = null;
 const jobs = new Jobs({
   config,
   onEvent: (evt) => {
     broadcast(evt);
     adoptFromJob(evt);
+    assistant?.observe(evt);
   },
   onLog: log,
 });
 // Human side of the Hermes approval-transport contract: the plugin presents, the panel answers,
 // the host decides. Nothing here can approve anything by itself.
 const approvals = new Approvals({ onEvent: broadcast });
+
+// The sentry + the assistant's own thread. It reads the same job summaries the page does, so nothing
+// here can see more than the board shows; its own clock is `settings.seconds`.
+assistant = new Assistant({ config, jobs, onEvent: broadcast, onLog: log });
+assistant.start();
 
 const settingsOut = () => ({
   version: VERSION,
@@ -344,6 +358,9 @@ function snapshot() {
     ...store.snapshot({ settings: settingsOut() }),
     jobs: jobs.list(),
     approvals: approvals.list(),
+    // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
+    // thread id, so a reload comes back to the same conversation and the same watches.
+    assistant: assistant.state(),
     skipped: registry.skipped,
     scanRoots: config.scanRoots || [],
     spawn: {
@@ -523,6 +540,108 @@ const server = createServer(async (req, res) => {
     // than presented as truth.
     if (route === "/api/models" && req.method === "GET") {
       return sendJson(res, 200, modelCatalogue());
+    }
+
+    // ---- the assistant: a sentry over this board, and one thread the reader talks to ----------------
+    // Every read is free of side effects; every write is authorised like the rest of the panel and
+    // returns the whole assistant state so the float repaints from one answer instead of guessing.
+    if (route === "/api/assistant" && req.method === "GET") {
+      return sendJson(res, 200, assistant.state());
+    }
+
+    // A message from the reader. The board digest and the scratchpad are attached to the run's input by
+    // the module, so the card shows the sentence the reader typed.
+    if (route === "/api/assistant/say" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const text = String(body.text || "").trim();
+      if (!text) return sendJson(res, 400, { error: "text is required" });
+      try {
+        const job = await assistant.say(text);
+        return sendJson(res, 202, { job, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, 409, { error: String((e && e.message) || e) });
+      }
+    }
+
+    if (route === "/api/assistant/settings" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      return sendJson(res, 200, { settings: assistant.setSettings(body), assistant: assistant.state() });
+    }
+
+    // Dismiss an alert, or hand it to the assistant (one digest, rate limited). Nothing here answers an
+    // approval: that stays on the agent's own card, where the gateway validates the choice.
+    if (route === "/api/assistant/alert" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const alert = assistant.alertAction(String(body.id || ""), String(body.action || ""));
+        return sendJson(res, 200, { alert, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
+    }
+
+    // The reader pressing Send on a draft: the one path that posts into a worker's thread by hand.
+    if (route === "/api/assistant/answer" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const job = await assistant.answerThread(String(body.thread || ""), body.text, {
+          source: "reader",
+          alertId: body.alertId ? String(body.alertId) : null,
+        });
+        return sendJson(res, 202, { job, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
+    }
+
+    if (route === "/api/assistant/watch" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const watch = assistant.addWatch(body, "reader");
+        return sendJson(res, 201, { watch, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
+    }
+    if (route === "/api/assistant/watch/remove" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      return sendJson(res, 200, { watches: assistant.removeWatch(String(body.id || "")), assistant: assistant.state() });
+    }
+
+    if (route === "/api/assistant/rule" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const rules = assistant.addRule(body.text);
+        return sendJson(res, 201, { rules, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
+    }
+    if (route === "/api/assistant/rule/remove" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      return sendJson(res, 200, { rules: assistant.removeRule(String(body.id || "")), assistant: assistant.state() });
+    }
+
+    if (route === "/api/assistant/notes" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      return sendJson(res, 200, { notes: assistant.setNotes(body.text), assistant: assistant.state() });
+    }
+
+    // One sentry pass on demand. Used by the page after a change that should be judged at once, and by
+    // the verification probes instead of waiting for the clock.
+    if (route === "/api/assistant/check" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      assistant.tick();
+      return sendJson(res, 200, { assistant: assistant.state() });
     }
 
     if (route === "/api/state" || route === "/api/audit") {
@@ -750,6 +869,11 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const text = String(body.text || "").trim();
       if (!text) return sendJson(res, 400, { error: "reply text is required" });
+      // The assistant's thread is answered through its own route: the scratchpad and the board digest ride
+      // with the turn, and a plain reply here would start a turn that has neither.
+      if (String(body.thread || "") === ASSISTANT_THREAD) {
+        return sendJson(res, 400, { error: "the assistant's thread is answered through /api/assistant/say" });
+      }
       const first = jobs.firstOfThread(String(body.thread || ""));
       if (!first) return sendJson(res, 404, { error: `unknown thread: ${body.thread}` });
 
