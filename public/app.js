@@ -2537,6 +2537,7 @@ async function answerApproval(id, choice, btn) {
 const THINK_KEY = "wtgui.think"; // global default, "1" when a card without its own answer should show thinking
 state.thinkCache = state.thinkCache || new Map(); // turn key -> { blocks, at }
 state.thinkOpen = state.thinkOpen || new Set(); // turn keys whose block is expanded
+state.thinkPinned = state.thinkPinned || new Map(); // block key -> false once the reader scrolls it up
 state.thinkClosed = state.thinkClosed || new Set(); // turn keys the reader folded on purpose
 state.thinkLoading = state.thinkLoading || new Set();
 
@@ -2596,6 +2597,18 @@ async function loadThinking(turn, copy = "") {
 // would be remembered as a choice and the block would never fold again after the turn ends.
 const thinkAutoOpened = new WeakSet();
 
+// The block scrolls like a console: new thinking keeps the newest line in view unless the reader has gone back up.
+// Without this every repaint (every couple of seconds while a turn runs) put the body back at its first line.
+function stickThinkBody(body) {
+  if (!body || !body.isConnected) return;
+  const key = body.closest("details.think")?.dataset.thinkTurn || "";
+  if (state.thinkPinned.get(key) === false) return;
+  const max = body.scrollHeight - body.clientHeight;
+  if (max <= 0 || Math.abs(body.scrollTop - max) <= 1) return;
+  selfScrolled.add(body);
+  body.scrollTop = max;
+}
+
 function paintThink(turn, copy = "") {
   const key = turnKey(turn, copy);
   const el = document.querySelector(`details.think[data-think-turn="${CSS.escape(key)}"]`);
@@ -2610,6 +2623,7 @@ function paintThink(turn, copy = "") {
     thinkAutoOpened.add(fresh);
   }
   el.replaceWith(fresh);
+  stickThinkBody(fresh.querySelector(".think-body"));
 }
 
 // While a turn is running its block is open and re-read, which is what the separate live reasoning line used to do; once
@@ -6005,6 +6019,17 @@ document.addEventListener(
   "scroll",
   (e) => {
     const pre = e.target;
+    if (pre && pre.classList && pre.classList.contains("think-body")) {
+      const key = pre.closest("details.think")?.dataset.thinkTurn || "";
+      if (selfScrolled.has(pre)) {
+        selfScrolled.delete(pre);
+        return;
+      }
+      if (Date.now() - lastInputAt < 1200) {
+        state.thinkPinned.set(key, pre.scrollHeight - pre.scrollTop - pre.clientHeight < 24);
+      }
+      return;
+    }
     if (!pre || pre.tagName !== "PRE" || !pre.classList || !pre.classList.contains("job-out") || !pre.dataset.out) return;
     // A scroll the panel caused itself (restoring a position, following new lines) is not the reader leaving the
     // bottom, so it must not unpin the console.
@@ -6025,6 +6050,7 @@ document.addEventListener(
 // is corrected here within a frame or two. Only pinned consoles are touched, so reading history is never interrupted.
 setInterval(() => {
   for (const pre of document.querySelectorAll("pre.job-out")) stickConsole(pre);
+  for (const body of document.querySelectorAll(".think-body")) stickThinkBody(body);
 }, 400);
 
 // A wheel up is the reader leaving the bottom on purpose; coming back down re-pins in the scroll handler.
@@ -6033,6 +6059,11 @@ document.addEventListener(
   (e) => {
     const pre = e.target && e.target.closest && e.target.closest("pre.job-out");
     if (pre && e.deltaY < 0) state.outPinned[pre.dataset.out] = false;
+    const body = e.target && e.target.closest && e.target.closest(".think-body");
+    if (body && e.deltaY < 0) {
+      const key = body.closest("details.think")?.dataset.thinkTurn || "";
+      state.thinkPinned.set(key, false);
+    }
   },
   { capture: true, passive: true },
 );
