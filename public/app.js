@@ -1455,10 +1455,40 @@ function statsLine(stats, model = null, thread = "", contextLimit = null) {
 // Double-click the model on a card: a search-as-you-type list of everything the provider advertises, with the
 // session's current choice marked. The pick is stored per thread (beside the labels) and the next turn uses it.
 let modelPop = null;
+// What the open popover belongs to, so a repaint can put it back under the same control instead of closing it.
+// A refresh moves the card's DOM around; the reader's picker has no business disappearing because of that.
+let modelPopTarget = null;
 
 function closeModelPop() {
   modelPop?.remove();
   modelPop = null;
+  modelPopTarget = null;
+}
+
+function popAnchor(thread, kind) {
+  if (!thread) return null;
+  const attr = kind === "context" ? "data-context-pick" : "data-model-pick";
+  return document.querySelector(`[${attr}="${CSS.escape(thread)}"]`);
+}
+
+// Put the panel under whatever the reader double-clicked, clamped to the window. Called after opening and again
+// after every repaint that could have moved the control.
+function positionModelPop() {
+  if (!modelPop || !modelPopTarget) return true;
+  const btn = popAnchor(modelPopTarget.thread, modelPopTarget.kind);
+  if (!btn || !btn.isConnected) {
+    closeModelPop();
+    return false;
+  }
+  const r = btn.getBoundingClientRect();
+  // Gone from the page, or scrolled out of it: there is nothing left to point at.
+  if ((r.width === 0 && r.height === 0) || r.bottom < 0 || r.top > window.innerHeight) {
+    closeModelPop();
+    return false;
+  }
+  modelPop.style.left = `${Math.max(8, Math.min(window.innerWidth - 380, r.left))}px`;
+  modelPop.style.top = `${Math.max(8, Math.min(window.innerHeight - (modelPop.offsetHeight || 300) - 8, r.bottom + 4))}px`;
+  return true;
 }
 
 function modelChoices() {
@@ -1477,10 +1507,9 @@ function openModelPop(thread, anchor) {
   pop.innerHTML = `<input class="model-search mono" data-1p-ignore autocomplete="off" spellcheck="false" placeholder="search ${modelChoices().length - 1} models…" />
     <div class="model-list mono"></div>`;
   document.body.appendChild(pop);
-  const r = anchor.getBoundingClientRect();
-  pop.style.left = `${Math.max(8, Math.min(window.innerWidth - 380, r.left))}px`;
-  pop.style.top = `${Math.max(8, Math.min(window.innerHeight - 340, r.bottom + 4))}px`;
   modelPop = pop;
+  modelPopTarget = { kind: "model", thread };
+  positionModelPop();
   const search = pop.querySelector(".model-search");
   const list = pop.querySelector(".model-list");
   const current = [...state.jobs.values()].find((j) => (j.thread || j.id) === thread)?.effectiveModel || "";
@@ -1575,10 +1604,10 @@ function openContextPop(thread, anchor) {
       placeholder="ceiling: 200k, 1m, blank = the model's window" />
     <div class="model-list mono"></div>`;
   document.body.appendChild(pop);
-  const r = anchor.getBoundingClientRect();
-  pop.style.left = `${Math.max(8, Math.min(window.innerWidth - 360, r.left))}px`;
-  pop.style.top = `${Math.max(8, Math.min(window.innerHeight - 300, r.bottom + 4))}px`;
   modelPop = pop;
+  modelPopTarget = { kind: "context", thread };
+  positionModelPop();
+  positionModelPop();
   const input = pop.querySelector(".model-search");
   const list = pop.querySelector(".model-list");
   list.innerHTML =
@@ -2839,6 +2868,7 @@ const THINK_KEY = "wtgui.think"; // global default, "1" when a card without its 
 state.thinkCache = state.thinkCache || new Map(); // turn key -> { blocks, at }
 state.thinkOpen = state.thinkOpen || new Set(); // turn keys whose block is expanded
 state.thinkPinned = state.thinkPinned || new Map(); // block key -> false once the reader scrolls it up
+state.thinkScroll = state.thinkScroll || new Map(); // block key -> where the reader left it, for a rebuild to restore
 state.thinkClosed = state.thinkClosed || new Set(); // turn keys the reader folded on purpose
 state.thinkLoading = state.thinkLoading || new Set();
 
@@ -2925,6 +2955,10 @@ function paintThink(turn, copy = "") {
   const el = document.querySelector(`details.think[data-think-turn="${CSS.escape(key)}"]`);
   if (!el) return;
   const open = el.open;
+  const was = el.querySelector(".think-body");
+  // A re-read replaces the node, and a new node starts at its first line. Remember where the reader was (and what
+  // the panel last put there, so the scroll event the move causes is not read as the reader scrolling).
+  const keep = was ? { top: was.scrollTop, selfTop: was._selfTop } : null;
   const holder = document.createElement("div");
   holder.innerHTML = thinkHtml(turn, copy);
   const fresh = holder.firstElementChild;
@@ -2934,7 +2968,10 @@ function paintThink(turn, copy = "") {
     thinkAutoOpened.add(fresh);
   }
   el.replaceWith(fresh);
-  stickThinkBody(fresh.querySelector(".think-body"));
+  const body = fresh.querySelector(".think-body");
+  if (!body) return;
+  if (keep && state.thinkPinned.get(key) === false) setScroll(body, Math.min(keep.top, Math.max(0, body.scrollHeight - body.clientHeight)));
+  else stickThinkBody(body);
 }
 
 // While a turn is running its block is open and re-read, which is what the separate live reasoning line used to do; once
@@ -3008,14 +3045,37 @@ function setScroll(el, top) {
 // Rebuilds land before the browser has finished laying the new nodes out, so a "go to the bottom" can be clamped
 // to a shorter height than the console ends up with. Once the frame is done, put the pinned ones back on their
 // newest line - and only those, so a console the reader took control of is never moved.
+// The synchronous half of settleScrolls: run it right after a rebuild inserts nodes, so nothing is ever painted at
+// the first line before the frame-based pass gets to it. That one-frame flash is what read as the block "jumping".
+function restoreThinkBodies(root) {
+  if (!root) return;
+  for (const b of root.querySelectorAll(".think-body")) restoreThinkBody(b);
+}
+
 function settleScrolls(root) {
   const run = () => {
     if (!root || !root.isConnected) return;
     for (const o of root.querySelectorAll("pre.job-out")) stickConsole(o);
-    for (const b of root.querySelectorAll(".think-body")) stickThinkBody(b);
+    for (const b of root.querySelectorAll(".think-body")) restoreThinkBody(b);
     for (const s of root.querySelectorAll(".sub-console")) stickSubConsole(s);
+    // A repaint can move the card under an open picker; put the panel back under its control.
+    positionModelPop();
   };
   requestAnimationFrame(() => requestAnimationFrame(run));
+}
+
+// A thinking block in a rebuilt card is a fresh node at its first line. Pinned follows the newest line (as the
+// live block does); one the reader took control of returns to where they had it.
+function restoreThinkBody(body) {
+  if (!body || !body.isConnected) return;
+  const key = body.closest("details.think")?.dataset.thinkTurn || "";
+  if (state.thinkPinned.get(key) !== false) {
+    stickThinkBody(body);
+    return;
+  }
+  const was = state.thinkScroll.get(key);
+  if (!was) return;
+  setScroll(body, Math.min(was.top, Math.max(0, body.scrollHeight - body.clientHeight)));
 }
 
 function stickConsole(pre) {
@@ -3108,6 +3168,7 @@ function renderJobs() {
     : `<p class="empty">No unattached agents${nested ? ` — ${nested} agent${nested === 1 ? "" : "s"} listed under their worktree rows` : ""}.</p>`;
   restoreScrolls($("jobs"), prevScrolls);
   applyStoredScrolls($("jobs"));
+  restoreThinkBodies($("jobs"));
   for (const c of convs) restoreReplyDraft(c.thread);
   const running = convs.filter((c) => c.turns.some((t) => t.status === "running" || t.status === "starting")).length;
   const folded = convs.filter((c) => state.collapsedJobs.has(c.thread)).length;
@@ -3128,6 +3189,9 @@ function renderJobs() {
     if (!prevScrolls.has(c.latest.id)) scrollThreadToBottom(c.thread);
   }
   paintAgentBadges();
+  // The cards here are rebuilt from nothing, so their thinking blocks and any open picker have to be put back the
+  // way the row path does it: the blocks where the reader had them, the picker under its control.
+  settleScrolls($("jobs"));
   // The cards were just rebuilt from nothing, so a pending spawn target has to be re-applied here
   // too — renderConversation bails out to renderJobs() whenever the card did not exist yet.
   applyPendingFocus();
@@ -3299,6 +3363,7 @@ function renderConversation(thread, { scroll = false } = {}) {
   const fresh = holder.firstElementChild;
   fresh.dataset.sig = sig;
   el.replaceWith(fresh);
+  restoreThinkBodies(fresh);
   restoreTyping(fresh, typing);
   if (window.scrollY !== pageY) {
     const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
@@ -5018,6 +5083,7 @@ function placeRow(project, row, { flash = false } = {}) {
     // The cards move across before anything is measured, so "where was this console" is answered by the node
     // that is actually going to stay on screen.
     fillAgentSlots(dEl, oldCards);
+    restoreThinkBodies(dEl);
     // Put the reader back: the reply they were typing, where the caret was, and how far each
     // transcript had been scrolled.
     restoreTyping(dEl, typing);
@@ -6324,10 +6390,11 @@ document.addEventListener(
 window.addEventListener(
   "scroll",
   (e) => {
-    if (e.target === document) closeModelPop();
+    if (e.target === document) positionModelPop();
   },
   true,
 );
+window.addEventListener("resize", () => positionModelPop());
 
 // A subagent line is focusable, so Enter or Space has to do what a click does.
 document.addEventListener("keydown", async (e) => {
@@ -6479,6 +6546,9 @@ document.addEventListener(
       }
       if (Date.now() - lastInputAt < 1200) {
         state.thinkPinned.set(key, pre.scrollHeight - pre.scrollTop - pre.clientHeight < 24);
+        // Kept for the next repaint: the block is replaced whenever its text is re-read, and this is where the
+        // reader was when they took it over.
+        state.thinkScroll.set(key, { top: pre.scrollTop });
       }
       return;
     }
