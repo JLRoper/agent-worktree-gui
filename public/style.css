@@ -470,6 +470,24 @@ button.chip:active { transform: translateY(1px); }
    these rows are what the children are actually doing, read from their own sessions in the store. */
 /* Under the console of the turn that delegated, aligned with it rather than with the card's head. */
 .subagents { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px 0; font-size: 11px; color: var(--dim); }
+/* Thinking: a block above the turn's console, folded until opened, deliberately quieter than the output - it is
+   how the agent got there, not what it produced. */
+.think { margin: 6px 0 8px; padding-left: 10px; border-left: 2px solid #3a4152; }
+.think > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 8px; user-select: none; }
+.think > summary::-webkit-details-marker { display: none; }
+.think > summary::before { content: "\25b8"; color: var(--dimmer); font-family: var(--ui); font-size: 9px; }
+.think[open] > summary::before { content: "\25be"; }
+.think-title { font-size: 10.5px; letter-spacing: .03em; color: #9db4d0; }
+.think-meta { font-size: 10.5px; color: var(--dimmer); }
+.think-body { margin: 6px 0 2px; max-height: 260px; overflow: auto; }
+.think-block { white-space: pre-wrap; word-break: break-word; font-size: 11.5px; line-height: 1.5; font-style: italic; color: var(--dim); margin: 0 0 8px; }
+.think-block:last-child { margin-bottom: 0; }
+.think-empty { color: var(--dimmer); font-style: normal; }
+/* The card's own switch. Off is a quiet glyph; on is visibly live, because the block it controls is easy to miss. */
+button.btn-think { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dimmer); font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; }
+button.btn-think:hover { color: var(--text); border-color: var(--line); }
+button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241d33; }
+
 /* A steer the turn never read: offered back, unsent, rather than sent as a second turn. */
 .reply-note { color: #c8a6ff; font-size: 11px; margin: 6px 0 0 2px; }
 .subagents[hidden] { display: none; }

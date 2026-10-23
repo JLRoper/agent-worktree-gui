@@ -106,6 +106,13 @@
     </label>
     <p class="settings-note">Grey is the quiet one: the row was re-read and nothing had moved. Green — a sign of life, an agent doing something — always flashes. Off, a refreshed row just stays as it is.</p>
     <div class="settings-sep"></div>
+    <label class="settings-row" for="show-thinking">
+      <span>Show thinking</span>
+      <input id="show-thinking" type="checkbox" title="what an agent thought before it acted, read from its session store as a block above each turn's console">
+      <span class="settings-unit mono">default for cards</span>
+    </label>
+    <p class="settings-note">Thinking is the agent's own reasoning, read from the session — a block above the turn it belongs to, folded until you open it. It is 1–2 KB a block, which is why it is off by default: the 🧠 on a card turns it on for that one session, and that choice wins over this switch.</p>
+    <div class="settings-sep"></div>
     <label class="settings-row" for="contrast">
       <span>Panel contrast</span>
       <input id="contrast" type="range" min="0" max="100" step="5" value="15" title="how far apart the layered panels sit: 0% makes every layer one neutral, 100% pushes the page to near-black and lifts the panels">

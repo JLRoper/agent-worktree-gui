@@ -851,7 +851,8 @@ function turnBody(turn, copy = "") {
       return `<div class="jl jl-${esc(l.kind || "raw")}" data-lid="${esc(l.lid ?? "")}">${linkifyText(l.text)}${live}</div>`;
     })
     .join("") || '<div class="jl jl-dim">waiting for output…</div>';
-  return `<pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>` +
+  return thinkHtml(turn, copy) +
+    `<pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>` +
     // The subagents this turn spawned, right under the console they ran beside: the delegation is the turn's own
     // work, not the card's, and a card with several turns would otherwise show the newest one's children under all
     // of them.
@@ -1472,6 +1473,35 @@ async function toggleSubConsole(id) {
 // 5s: one small request for the whole board, and well inside the time it takes to read a card.
 setInterval(refreshSubagentRoster, 5000);
 
+// A card with thinking on reads its turns from the store: once for a finished turn, and again every few seconds while
+// one is still running (the store is the only live source - the stream's copy is a preview, and not delivered here).
+function sweepThinking() {
+  for (const card of document.querySelectorAll(".job[data-thread]")) {
+    const thread = card.dataset.thread;
+    if (!thread || !thinkingOn(thread)) continue;
+    const conv = conversations().find((c) => c.thread === thread);
+    if (!conv) continue;
+    for (const turn of conv.turns) {
+      const entry = state.thinkCache.get(turn.id);
+      const live = turn.status === "running" || turn.status === "starting";
+      if (!entry || (live && Date.now() - (entry.at || 0) > 4000)) void loadThinking(turn, "");
+    }
+  }
+}
+setInterval(sweepThinking, 3000);
+
+// The block's own open/closed state belongs to the reader; a repaint puts it back.
+document.addEventListener(
+  "toggle",
+  (e) => {
+    const d = e.target;
+    if (!d || !d.matches || !d.matches("details.think")) return;
+    if (d.open) state.thinkOpen.add(d.dataset.thinkTurn);
+    else state.thinkOpen.delete(d.dataset.thinkTurn);
+  },
+  true,
+);
+
 function conversationHtml(conv) {
   const { thread, turns, latest } = conv;
   const collapsed = state.collapsedJobs.has(thread);
@@ -1596,6 +1626,7 @@ function conversationHtml(conv) {
       ${latest.yolo ? '<span class="pill yolo" title="this run was started with the --yolo flag (auto-approve, no prompts). The panel does not send it: approvals still come to this card.">yolo</span>' : ""}
       ${homeless ? `<button class="btn-attach" data-attach-toggle="${esc(thread)}" type="button" title="attach this agent to a worktree — it then lives under that row">\u2935 attach</button>` : ""}
       <span class="mono dimmer thread-name" data-thread-name="${esc(thread)}" data-label="${esc(latest.label || "")}" title="${latest.label ? esc(`${latest.label} — Hermes thread ${thread}`) : "Hermes session thread — continue it any time"}">${esc(latest.label || thread)}</span>
+      <button class="btn-think${thinkingOn(thread) ? " is-on" : ""}" data-think-thread="${esc(thread)}" type="button" title="${thinkingOn(thread) ? "showing what this agent thought — click to hide it" : "show what this agent thought before it acted (read from the session store)"}">🧠</button>
       <button class="btn-rename" data-rename-thread="${esc(thread)}" type="button" title="rename this session — a label for the panel only; the Hermes thread id never changes">\u270e</button>
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
       <button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>
@@ -2189,6 +2220,97 @@ async function answerApproval(id, choice, btn) {
 
 // Every output pane's position, so a rebuild can put the reader back where they were instead of
 // dropping them at the first line of an hour-old transcript.
+// ---- thinking -----------------------------------------------------------------------------
+// What the agent thought before it acted. The runs stream only carries a 500-char preview (and not at all on the
+// durable path), so this is read from the store per turn. It is a per-session preference with a global default:
+// thinking is 1-2 KB per block, which is the whole point on one agent and noise across forty cards.
+const THINK_KEY = "wtgui.think"; // global default, "1" when a card without its own answer should show thinking
+state.thinkCache = state.thinkCache || new Map(); // turn key -> { blocks, at }
+state.thinkOpen = state.thinkOpen || new Set(); // turn keys whose block is expanded
+state.thinkLoading = state.thinkLoading || new Set();
+
+function thinkDefault() {
+  try {
+    return localStorage.getItem(THINK_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function thinkingOn(thread) {
+  try {
+    const own = localStorage.getItem(`wtgui.think.${thread}`);
+    if (own === "1") return true;
+    if (own === "0") return false;
+  } catch {
+    /* private mode: fall through to the default */
+  }
+  return thinkDefault();
+}
+
+function setThinking(thread, on) {
+  try {
+    localStorage.setItem(`wtgui.think.${thread}`, on ? "1" : "0");
+  } catch {
+    /* the choice just will not persist */
+  }
+  renderConversation(thread);
+}
+
+// One turn's thoughts, from the store, bounded by the turn's own clock.
+async function loadThinking(turn, copy = "") {
+  const key = turnKey(turn, copy);
+  if (state.thinkLoading.has(turn.id)) return;
+  state.thinkLoading.add(turn.id);
+  let blocks = [];
+  try {
+    const from = Date.parse(turn.startedAt || "") || 0;
+    const to = Date.parse(turn.endedAt || "") || Date.now();
+    const r = await apiFetch(
+      `/api/thinking?thread=${encodeURIComponent(turn.thread || turn.id)}&from=${from}&to=${to}`,
+    );
+    if (r.ok) blocks = (await r.json()).blocks || [];
+  } catch {
+    /* an unreadable store is not worth a banner: the block just says nothing was recorded */
+  } finally {
+    state.thinkLoading.delete(turn.id);
+  }
+  state.thinkCache.set(turn.id, { blocks, at: Date.now() });
+  paintThink(turn, "");
+  if (document.querySelector(`details.think[data-think-turn="${CSS.escape(turnKey(turn, "@pin"))}"]`)) paintThink(turn, "@pin");
+}
+
+// Repaint just the block, so a read landing mid-turn does not rebuild the card under the reader.
+function paintThink(turn, copy = "") {
+  const key = turnKey(turn, copy);
+  const el = document.querySelector(`details.think[data-think-turn="${CSS.escape(key)}"]`);
+  if (!el) return;
+  const open = el.open;
+  const holder = document.createElement("div");
+  holder.innerHTML = thinkHtml(turn, copy);
+  const fresh = holder.firstElementChild;
+  if (!fresh) return;
+  fresh.open = open;
+  el.replaceWith(fresh);
+}
+
+function thinkHtml(turn, copy = "") {
+  const key = turnKey(turn, copy);
+  if (!thinkingOn(turn.thread || turn.id)) return "";
+  const entry = state.thinkCache.get(turn.id);
+  const blocks = entry?.blocks || [];
+  const open = state.thinkOpen.has(key);
+  const meta = !entry ? "reading…" : blocks.length ? `${blocks.length} block${blocks.length === 1 ? "" : "s"}` : "none recorded";
+  return `<details class="think" data-think-turn="${esc(key)}"${open ? " open" : ""}>
+    <summary><span class="think-title">🧠 thinking</span> <span class="think-meta mono">${esc(meta)}</span></summary>
+    <div class="think-body">${
+      blocks.length
+        ? blocks.map((b) => `<div class="think-block mono">${linkifyText(b.text)}</div>`).join("")
+        : `<div class="think-block mono think-empty">${entry ? "this turn recorded no thinking" : "reading the store…"}</div>`
+    }</div>
+  </details>`;
+}
+
 // A console follows its newest line unless the reader has deliberately gone back to read something older. This is the
 // default the panel promises, and it has to survive three things that used to fight over scrollTop: a card rebuild, a
 // row rebuild (every few seconds) and the browser clamping the position while the node is replaced. Anything the panel
@@ -2428,6 +2550,7 @@ function conversationSignature(conv) {
     // A steer the turn never read comes back as a note in the reply area: without it here the card would not
     // repaint, and the note would only appear whenever something unrelated forced a rebuild.
     l.pendingSteer ? `s${l.pendingSteer.at || 1}` : "",
+    thinkingOn(conv.thread) ? "t" : "-",
     // A card stays RUNNING while children it delegated are out, so that answer belongs in the signature.
     (subagentFallback.get(conv.thread) || []).some((s) => s.running) ||
     conv.turns.some((t) => (t.subagents || []).some((s) => s.running))
@@ -5320,6 +5443,14 @@ document.addEventListener("click", async (e) => {
     return;
   }
   // Steer the turn that is running: the primary action while the agent is busy.
+  const thinkBtn = e.target.closest("[data-think-thread]");
+  if (thinkBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const thread = thinkBtn.dataset.thinkThread;
+    setThinking(thread, !thinkingOn(thread));
+    return;
+  }
   const subsHead = e.target.closest("[data-subs-toggle]");
   if (subsHead) {
     e.preventDefault();
@@ -6409,6 +6540,23 @@ $("term-select")?.addEventListener("change", (e) => applyFont("term", e.target.v
 $("term-size-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, size: e.target.value }));
 $("grey-flash")?.addEventListener("change", (e) => applyGreyFlash(Boolean(e.target.checked)));
 $("contrast")?.addEventListener("input", (e) => applyContrast(Number(e.target.value)));
+$("show-thinking")?.addEventListener("change", (e) => {
+  try {
+    localStorage.setItem(THINK_KEY, e.target.checked ? "1" : "0");
+  } catch {
+    /* private mode: the default just will not persist */
+  }
+  // Only cards that have no answer of their own follow this.
+  for (const c of conversations()) {
+    let own = null;
+    try {
+      own = localStorage.getItem(`wtgui.think.${c.thread}`);
+    } catch {
+      /* ignore */
+    }
+    if (own === null) renderConversation(c.thread);
+  }
+});
 $("term-weight-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, weight: e.target.value }));
 
 // The approval window. A preset only fills the box and lights Save: one click here rewrites the
@@ -6452,6 +6600,7 @@ document.addEventListener("click", (e) => {
 initFonts();
 applyGreyFlash(greyFlashOn());
 applyContrast(contrastSetting(), { save: false });
+if ($("show-thinking")) $("show-thinking").checked = thinkDefault();
 void refreshSubagentRoster();
 // The model menu is filled once at start-up from the gateway's own provider list; a failure leaves
 // the "(gateway default)" entry, which is what a spawn sends anyway.
