@@ -5363,13 +5363,15 @@ function hotStillWaiting(thread) {
   return t.status !== "running" && t.status !== "starting";
 }
 
-function flashHotBox(box) {
-  if (!box) return;
-  box.classList.remove("hot-flash");
-  void box.offsetWidth; // restart it even when the last flash is still fading
-  box.classList.add("hot-flash");
-  clearTimeout(box._hotFlashT);
-  box._hotFlashT = setTimeout(() => box.classList.remove("hot-flash"), 1300);
+// The whole card flashes, not just the box: the rotation moves the reader's attention to a panel, and a ring
+// around the panel is what says "this one". The caret still lands in the reply box.
+function flashHotCard(card) {
+  if (!card) return;
+  card.classList.remove("hot-flash");
+  void card.offsetWidth; // restart it even when the last flash is still fading
+  card.classList.add("hot-flash");
+  clearTimeout(card._hotFlashT);
+  card._hotFlashT = setTimeout(() => card.classList.remove("hot-flash"), 1300);
 }
 
 function paintHotButton() {
@@ -5404,8 +5406,8 @@ function hotFocus(thread) {
     }
     const end = box.value.length;
     if (box.setSelectionRange) box.setSelectionRange(end, end);
-    flashHotBox(box);
   }
+  flashHotCard(card);
   return true;
 }
 

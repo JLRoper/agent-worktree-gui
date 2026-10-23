@@ -77,14 +77,15 @@ button, select, input, textarea { font-family: var(--ui); }
 #btn-hot.on { background: #ffb545; border-color: #ffb545; color: #241a05; font-weight: 700; box-shadow: 0 0 0 2px rgba(255, 181, 69, .28); }
 #btn-hot.on:hover { background: #ffc163; border-color: #ffc163; }
 
-/* The reply box flashes amber when Hot Agent lands on it, and fades back to the box it always was. Amber, not
-   the green a jump uses: this is a prompt to answer, not a confirmation. */
+/* The whole card flashes amber when Hot Agent lands on it, and fades back to the panel it always was. Amber,
+   not the green a jump uses: this is a prompt to answer, not a confirmation. The last frame matches the card's
+   resting border and background, so it settles instead of snapping. */
 @keyframes hotflash {
-  0% { border-color: #ffb545; box-shadow: 0 0 0 3px rgba(255, 181, 69, .38), inset 0 0 0 1px rgba(255, 181, 69, .45); background: rgba(255, 181, 69, .07); }
-  65% { border-color: #ffb545; box-shadow: 0 0 0 2px rgba(255, 181, 69, .2), inset 0 0 0 1px rgba(255, 181, 69, .22); background: rgba(255, 181, 69, .03); }
-  100% { border-color: var(--line); box-shadow: none; background: #12161d; }
+  0% { border-color: #ffb545; box-shadow: 0 0 0 2px rgba(255, 181, 69, .55), 0 0 20px rgba(255, 181, 69, .18); background: rgba(255, 181, 69, .055); }
+  65% { border-color: #ffb545; box-shadow: 0 0 0 2px rgba(255, 181, 69, .28), 0 0 12px rgba(255, 181, 69, .09); background: rgba(255, 181, 69, .03); }
+  100% { border-color: var(--line); box-shadow: none; background: rgba(255, 255, 255, .012); }
 }
-.reply-box.hot-flash { animation: hotflash 1.25s ease-out; }
+.job.hot-flash { animation: hotflash 1.25s ease-out; }
 .zoom button { padding: 2px 7px; font-size: 13px; line-height: 1.15; border: none; background: transparent; color: var(--dim); }
 .zoom button:hover { background: var(--panel-2); color: var(--text); }
 .zoom #zoom-pct { min-width: 42px; text-align: center; font-size: 11px; color: var(--dim); }
