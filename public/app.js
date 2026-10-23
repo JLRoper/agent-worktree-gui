@@ -717,7 +717,7 @@ function jobPreview(j) {
     if (!fallback) fallback = t.slice(-150);
   }
   if (fallback) return fallback;
-  return j.status === "running" || j.status === "starting" ? "starting…" : "no output";
+  return turnLive(j) ? "starting…" : "no output";
 }
 
 function refreshJobPreview(id) {
@@ -972,7 +972,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false) {
 
 function turnBody(turn, copy = "") {
   const lines = jobLines(turn.id).filter((l) => !isBookkeeping(l)).slice(-300);
-  const running = turn.status === "running" || turn.status === "starting";
+  const running = turnLive(turn);
   // Which started tool call has no result yet. Parallel calls interleave, so count starts and
   // completions per tool name instead of assuming "the last line is the running one".
   const busy = running ? inflightToolIndex(lines) : -1;
@@ -1006,7 +1006,7 @@ function approvalPrompt(turn, copy = "") {
   // run errors, is cancelled, or its stream simply ends while the request is still attached — and a box
   // offering "Allow once" for a turn that is already dead is worse than no box. The terminal state of
   // the turn wins, and the error line left in its console is the record of what happened.
-  const live = turn.status === "running" || turn.status === "starting";
+  const live = turnLive(turn);
   if (!live || turn.approvalDone) return "";
   const choices = Array.isArray(approval.choices) && approval.choices.length ? approval.choices : ["once", "deny"];
   const label = { once: "Allow once", session: "Allow for this session", always: "Always allow", deny: "Deny" };
@@ -1095,7 +1095,7 @@ function turnHead(turn, index, open, copy = "", inline = false) {
     // Rebuilt from the gateway's store: there is no duration to report, and "done · 0s" claims a run
     // of zero seconds that never happened here.
     ? "revived"
-    : turn.status === "running" || turn.status === "starting"
+    : turnLive(turn)
       ? `running ${elapsed(turn)}`
       : `${turn.status} · ${elapsed(turn)}${turn.tokens?.total ? ` · ${turn.tokens.total} tok` : ""}`;
   return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> <span class="turn-text">${esc(label)} · ${esc(state_)}</span>${originHtml(turn)}${inlinePrompt(turn, inline)}</div>`;
@@ -1144,7 +1144,7 @@ function firstSentence(text) {
 function turnPeekLine(turn) {
   const lines = state.jobLines.get(turn.id) || turn.lines || [];
   if (!lines.length) return null;
-  const running = turn.status === "running" || turn.status === "starting";
+  const running = turnLive(turn);
   if (running) {
     // What it is doing right now: the newest tool CALL, drawn exactly as the console draws it. The
     // completion line ("↳ terminal") is skipped while a call exists — swapping to it for two seconds
@@ -1206,7 +1206,7 @@ function turnBlock(conv, turn, index, copy = "") {
   const tkey = turnKey(turn, copy);
   // The rail down the turns' left edge is violet while a turn is executing, slate otherwise, so `is-running`
   // is the only state the CSS needs from here.
-  const running = turn.status === "running" || turn.status === "starting";
+  const running = turnLive(turn);
   const cls = `turn${open ? "" : " folded"}${running ? " is-running" : ""}`;
   if (!open) {
     // Two rows: the head carries the request, the peek carries what the turn is doing or concluded - and a turn that
@@ -1691,7 +1691,7 @@ async function pickModel(thread, model) {
 // failed one will resume.
 function turnRetryHtml(latest, thread) {
   if (!latest?.error || !retryableError(latest.error)) return "";
-  if (latest.status === "running" || latest.status === "starting") return "";
+  if (turnLive(latest)) return "";
   return ` <button type="button" class="btn-retry" data-retry-turn="${esc(thread)}" title="send this turn's prompt again as a NEW turn — the failed turn's edits are already on disk">retry</button>`;
 }
 
@@ -1856,7 +1856,7 @@ async function collectThread(turn) {
   const thread = turn?.thread || turn?.id;
   if (!thread || !turn?.id || turn.collected || state.collecting.has(turn.id) || collectedIds().has(turn.id)) return;
   // One turn per session at a time: a delivery must not race a turn that is already running.
-  if ([...state.jobs.values()].some((j) => (j.thread || j.id) === thread && (j.status === "running" || j.status === "starting"))) return;
+  if ([...state.jobs.values()].some((j) => (j.thread || j.id) === thread && (turnLive(j)))) return;
   state.collecting.add(turn.id);
   try {
     const from = Date.parse(turn.startedAt || "") || 0;
@@ -2060,7 +2060,7 @@ function sweepThinking() {
     if (!conv) continue;
     for (const turn of conv.turns) {
       const entry = state.thinkCache.get(turn.id);
-      const live = turn.status === "running" || turn.status === "starting";
+      const live = turnLive(turn);
       if (!entry || (live && Date.now() - (entry.at || 0) > 2000)) void loadThinking(turn, "");
       // A block that was open because its turn was running folds once it is not - unless the reader opened it.
       if (!live) {
@@ -2103,7 +2103,7 @@ function conversationHtml(conv) {
   const collapsed = state.collapsedJobs.has(thread);
   const maximized = state.maximized === thread;
   const homeless = isHomelessConv(conv);
-  const runningTurn = turns.find((t) => t.status === "running" || t.status === "starting");
+  const runningTurn = turns.find(turnLive);
   // A steer that missed its turn is offered back as an unsent draft: seed the box once, so the reader can send it,
   // edit it, or ignore it. Seeding is keyed on the steer itself, so a re-render cannot refill a box they cleared.
   const pendingSteer = latest.pendingSteer && typeof latest.pendingSteer.text === "string" ? latest.pendingSteer : null;
@@ -2166,7 +2166,7 @@ function conversationHtml(conv) {
     : `exit ${latest.exitCode ?? "?"}`;
   // No clock here while a turn runs: the turn head already says "turn 2 - running 12s", and a second
   // counter a few lines above the reply box only pushed the box down.
-  const foot = latest.status === "running" || latest.status === "starting"
+  const foot = turnLive(latest)
     ? ""
     : latest.revived
       // Rebuilt from the gateway's session store, so there was never a process here: "exit ?" and
@@ -2535,9 +2535,7 @@ function childrenOut(thread) {
 }
 
 function threadBusy(thread) {
-  return [...state.jobs.values()].some(
-    (j) => (j.thread || j.id) === thread && (j.status === "running" || j.status === "starting"),
-  );
+  return [...state.jobs.values()].some((j) => (j.thread || j.id) === thread && turnLive(j));
 }
 
 async function drainReplyQueue(thread) {
@@ -3137,7 +3135,7 @@ function paintThink(turn, copy = "") {
 function thinkOpenFor(turn, key) {
   if (state.thinkOpen.has(key)) return true;
   if (state.thinkClosed.has(key)) return false;
-  return turn.status === "running" || turn.status === "starting";
+  return turnLive(turn);
 }
 
 function thinkHtml(turn, copy = "") {
@@ -3154,7 +3152,7 @@ function thinkHtml(turn, copy = "") {
         ? blocks.map((b) => `<div class="think-block mono">${linkifyText(b.text)}</div>`).join("")
         : `<div class="think-block mono think-empty">${
             entry
-              ? turn.status === "running" || turn.status === "starting"
+              ? turnLive(turn)
                 ? "nothing yet — it will appear here as the agent thinks"
                 : "this turn recorded no thinking"
               : "reading the store…"
@@ -3328,7 +3326,7 @@ function renderJobs() {
   applyStoredScrolls($("jobs"));
   restoreThinkBodies($("jobs"));
   for (const c of convs) restoreReplyDraft(c.thread);
-  const running = convs.filter((c) => c.turns.some((t) => t.status === "running" || t.status === "starting")).length;
+  const running = convs.filter((c) => c.turns.some((t) => turnLive(t))).length;
   const folded = convs.filter((c) => state.collapsedJobs.has(c.thread)).length;
   const turns = [...state.jobs.values()].length;
   $("agents-chips").innerHTML =
@@ -3980,7 +3978,7 @@ function panelAgentsByPath() {
     const k = norm(p);
     const cur = map.get(k) || { running: 0, total: 0, threads: [] };
     cur.total += 1;
-    if (j.status === "running" || j.status === "starting") cur.running += 1;
+    if (turnLive(j)) cur.running += 1;
     if (!cur.threads.includes(j.thread)) cur.threads.push(j.thread);
     map.set(k, cur);
   };
@@ -4026,10 +4024,10 @@ function jumpToPanelAgent(projectName, { running = false } = {}) {
   for (const r of rowsInBoardOrder(projectName)) {
     const agents = agentsFor(r);
     const pick = running
-      ? agents.find((c) => (c.turns || []).some((x) => x.status === "running" || x.status === "starting"))
+      ? agents.find(convLive)
       : topAgentOf(r);
     if (!pick) continue;
-    const turn = (pick.turns || []).find((x) => x.status === "running" || x.status === "starting") || (pick.turns || []).at(-1);
+    const turn = (pick.turns || []).find(turnLive) || (pick.turns || []).at(-1);
     found = { row: r, thread: pick.thread, turnId: turn ? turn.id : null };
     break;
   }
@@ -4232,12 +4230,31 @@ async function reviveSession(btn) {
   }
 }
 
+// A turn is live while it runs - and a turn parked on an approval is still live: the agent is inside the turn,
+// waiting on the reader, not finished with it. Counting a parked turn as done is what let a worktree badge say
+// "2 awaiting approval" and show no running count at all.
+const LIVE_STATUS = new Set(["running", "starting", "waiting_for_approval", "queued"]);
+
+function turnLive(t) {
+  if (!t) return false;
+  if (t.status && LIVE_STATUS.has(String(t.status))) return true;
+  return Boolean(t.approval && !t.approvalDone);
+}
+
+// A conversation is live if any of its turns is - not just the newest one. A parked turn can sit behind a newer
+// finished one, and asking only `latest` reported such an agent as not running.
+function convLive(c) {
+  if (!c) return false;
+  if (turnLive(c.latest)) return true;
+  return (c.turns || []).some(turnLive);
+}
+
 function agentsRunning(list) {
-  return list.filter((c) => c.latest.status === "running" || c.latest.status === "starting").length;
+  return list.filter(convLive).length;
 }
 
 function isAgentRunning(conv) {
-  return conv.latest.status === "running" || conv.latest.status === "starting";
+  return convLive(conv);
 }
 
 function isHomelessConv(conv) {
@@ -4345,9 +4362,7 @@ function agentBadgeHtml(row) {
   const running = agentsRunning(mine);
   // A parked approval is the one state that needs the reader, and it used to be invisible the moment
   // the row was collapsed — the badge only ever said "running".
-  const waiting = mine.filter((c) =>
-    (c.turns || []).some((t) => t.approval && (t.status === "running" || t.status === "starting")),
-  ).length;
+  const waiting = mine.filter((c) => (c.turns || []).some((t) => t.approval && !t.approvalDone && turnLive(t))).length;
   const cls = waiting ? "sig-approval" : running ? "sig-panel" : "sig-panel-done";
   const bits = [waiting ? `${waiting} awaiting approval` : null, running ? `${running} running` : null].filter(Boolean);
   return `<button class="sig ${cls}" data-open-row="${esc(keyOf(row.project, row.path))}" title="${mine.length} agent${mine.length === 1 ? "" : "s"} owned by this worktree${waiting ? `, ${waiting} parked on a permission request — click to answer it` : running ? `, ${running} running` : ""} — click to open the row and its agents">⧉ ${mine.length}${bits.length ? ` · ${bits.join(" · ")}` : ""}</button>`;
@@ -4755,9 +4770,7 @@ function chipsHtml(name) {
   // soon as they are all idle, because "a live panel" is only true when something is actually running.
   const panelAgents = rows.flatMap((r) => agentsFor(r));
   const panelAgentCount = panelAgents.length;
-  const panelRunningCount = panelAgents.filter((c) =>
-    c.turns.some((t) => t.status === "running" || t.status === "starting"),
-  ).length;
+  const panelRunningCount = panelAgents.filter(convLive).length;
   const stale = rows.filter((r) => r.verdictStale).length;
   const out = [`<span class="chip">${rows.length} worktrees</span>`];
   if (merged) out.push(`<span class="chip good">${merged} merged</span>`);
@@ -4810,7 +4823,7 @@ function chipsHtml(name) {
   // Amber and loud: an agent parked on a permission request is the one thing here that is waiting for
   // a human, and it must be visible with the project collapsed.
   const panelWaiting = panelAgents.filter((c) =>
-    (c.turns || []).some((t) => t.approval && (t.status === "running" || t.status === "starting")),
+    (c.turns || []).some((t) => t.approval && !t.approvalDone && turnLive(t)),
   ).length;
   if (panelWaiting) {
     out.push(
@@ -6673,7 +6686,7 @@ document.addEventListener("keydown", async (e) => {
     if (threadBusy(thread)) {
       if (!text) return;
       const running = [...state.jobs.values()].find(
-        (j) => (j.thread || j.id) === thread && (j.status === "running" || j.status === "starting"),
+        (j) => (j.thread || j.id) === thread && (turnLive(j)),
       );
       if (running) {
         await steerTurn(thread, running.id, text);
@@ -6915,7 +6928,7 @@ setInterval(() => {
   if (state.pool) bits.push(`pool ${state.pool.inFlight}/${state.settings.threads || "?"}`);
   if (state.jobs.size) {
     const convs = conversations();
-    const running = convs.filter((c) => c.turns.some((t) => t.status === "running")).length;
+    const running = convs.filter(convLive).length;
     bits.push(`${convs.length} conversation${convs.length === 1 ? "" : "s"}${running ? ` · ${running} running` : ""}`);
   }
   if (state.lastEventAt) {
