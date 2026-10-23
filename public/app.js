@@ -2283,6 +2283,11 @@ function captureTyping(root) {
   return { thread: el.dataset.reply, value: el.value, start: el.selectionStart, end: el.selectionEnd };
 }
 
+// What this thread's box just sent, and when: a repaint during the POST can capture the text before the reply
+// is cleared, and restoring that snapshot would put the sent instruction back in the box. Kept briefly, and only
+// for the exact text that went out.
+state.justSent = state.justSent || new Map(); // thread -> { text, at }
+
 function restoreTyping(root, typing) {
   for (const box of root.querySelectorAll(".reply-box[data-reply]")) {
     const draft = state.replyDrafts[box.dataset.reply];
@@ -2291,8 +2296,16 @@ function restoreTyping(root, typing) {
   if (!typing) return;
   const box = root.querySelector(`.reply-box[data-reply="${CSS.escape(typing.thread)}"]`);
   if (!box) return;
-  box.value = typing.value;
-  state.replyDrafts[typing.thread] = typing.value;
+  const sent = state.justSent.get(typing.thread);
+  const stale = Boolean(sent && Date.now() - sent.at < 20000 && typing.value.trim() === sent.text);
+  if (stale) {
+    // The text in this snapshot is the text that was just sent: the box comes back empty, not refilled.
+    box.value = "";
+    state.replyDrafts[typing.thread] = "";
+  } else {
+    box.value = typing.value;
+    state.replyDrafts[typing.thread] = typing.value;
+  }
   box.focus();
   try {
     box.setSelectionRange(typing.start, typing.end);
@@ -2649,8 +2662,13 @@ async function sendReply(thread, preset = null) {
     clearAttachments(thread);
     // A sent reply ends the history walk: the next Up starts from the newest prompt again.
     state.replyNav.delete(thread);
-    // A queued reply must not wipe something the reader has since typed into the box.
-    if (box && (preset == null || !box.value.trim())) box.value = "";
+    state.justSent.set(thread, { text: typed, at: Date.now() });
+    // The captured node may already have been replaced by a repaint that landed while the POST was in flight,
+    // so clear the box that is on the page now, not the one this function started with. A queued reply must not
+    // wipe something the reader has since typed, hence the preset guard.
+    const live = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+    if (live && (preset == null || !live.value.trim() || live.value.trim() === typed)) live.value = "";
+    if (box && box !== live && (preset == null || !box.value.trim())) box.value = "";
     updateJob(d.job, { scroll: true });
     // Sending a reply is you switching to the new turn: fold everything before it, including turns
     // you had opened by hand, so the card shows one full chat — the one you are now in — instead of
@@ -6695,6 +6713,8 @@ document.addEventListener("input", (e) => {
   if (nav && nav.current !== undefined && box.value !== nav.current) {
     state.replyNav.set(thread, { back: 0, stash: box.value });
   }
+  const sent = state.justSent.get(thread);
+  if (sent && box.value.trim() !== sent.text) state.justSent.delete(thread);
 });
 
 // A link in agent output is opened by the panel, not by navigating: capture phase, so the row and agent
