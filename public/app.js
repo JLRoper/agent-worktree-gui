@@ -2425,7 +2425,10 @@ function restoreTyping(root, typing) {
     box.value = typing.value;
     state.replyDrafts[typing.thread] = typing.value;
   }
-  box.focus();
+  // preventScroll is the whole point here: this runs on every repaint, and a plain focus() scrolls the box
+  // into view - which pulled the page back up to the reader's caret every few seconds while they had
+  // scrolled away to read something lower on the board.
+  box.focus({ preventScroll: true });
   try {
     box.setSelectionRange(typing.start, typing.end);
   } catch {
@@ -3685,12 +3688,16 @@ function applyPendingFocus() {
   // The jump needs the same treatment as the caret: a smooth scroll is cancelled when the card is
   // rebuilt mid-animation, and that is why the page only sometimes followed the new agent. Keep the
   // card in view for a few seconds, and only until the reader takes over.
-  if (Date.now() < (pending.scrollUntil || 0)) {
+  if (!pending.placed && Date.now() < (pending.scrollUntil || 0)) {
     const card = document.querySelector(`.job[data-thread="${CSS.escape(pending.thread)}"]`);
     if (card) {
       const r = card.getBoundingClientRect();
       const outOfView = r.top < 48 || r.bottom > window.innerHeight - 48;
-      if (outOfView) card.scrollIntoView({ block: "center", behavior: "auto" });
+      pending.placed = true; // once is a welcome; repeating it is the page fighting the reader
+      if (outOfView) {
+        pendingScrollAt = Date.now();
+        card.scrollIntoView({ block: "center", behavior: "auto" });
+      }
     }
   }
 }
@@ -3700,15 +3707,18 @@ function applyPendingFocus() {
 // repaint through any of several paths. A cheap watch re-applies the caret while the target stands.
 setInterval(applyPendingFocus, 250);
 
-// Scrolling with the wheel is the reader taking over just as much as a click is: stop pulling the
-// page back to the spawned agent.
-document.addEventListener(
-  "wheel",
-  () => {
-    if (state.pendingFocus) state.pendingFocus = null;
-  },
-  { passive: true }
-);
+// Scrolling at all is the reader taking over just as much as a click is: stop pulling the page back to
+// the spawned agent. The wheel was the only gesture watched, so a scrollbar drag, Page Down or a
+// trackpad fling still got yanked back a moment later - which is the "it pops me back up to the box"
+// report. pendingScrollAt stamps our own one-time jump so it is not read as the reader scrolling.
+let pendingScrollAt = 0;
+const endFollowOnScroll = () => {
+  if (Date.now() - pendingScrollAt < 400) return;
+  if (state.pendingFocus) state.pendingFocus = null;
+};
+document.addEventListener("wheel", endFollowOnScroll, { passive: true });
+document.addEventListener("scroll", endFollowOnScroll, { passive: true, capture: true });
+document.addEventListener("touchmove", endFollowOnScroll, { passive: true });
 
 function appendJobLine(evt) {
   const line = evt.line || {};
