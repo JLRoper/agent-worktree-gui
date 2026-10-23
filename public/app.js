@@ -842,11 +842,47 @@ function jobPreview(j) {
   return turnLive(j) ? "starting…" : "no output";
 }
 
+// A minimized card is a head and one line, and the head's pill only says whether the agent is LIVE - not how its
+// last turn ended. The line under it carries the outcome: the same status word the turn's own head shows (done,
+// failed, interrupted, cancelled, running), how long the turn ran, and then either the reason it died or the last
+// thing it printed. A reason beats the last output: "the panel restarted while this was running" is what a reader
+// needs, and it was only visible with the card open.
+function jobStatusWord(j) {
+  // A turn rebuilt from the gateway's store never ran here: "done · 0s" would be a claim about a duration this panel
+  // never measured, so it says "revived", the same word the turn's own head uses.
+  if (j.revived) return "revived";
+  if (turnLive(j)) return "running";
+  return String(j.status || "").trim() || "unknown";
+}
+
+function jobStatusClass(j) {
+  const s = jobStatusWord(j);
+  if (s === "failed") return "failed";
+  // Interrupted means the run outlived something - the panel restarting, a stream dying. That is the one a folded
+  // card has to say out loud, because the gateway may still be working on it.
+  if (s === "interrupted") return "interrupted";
+  if (s === "running") return "run";
+  return "quiet";
+}
+
+function jobPreviewHtml(j) {
+  const word = jobStatusWord(j);
+  const cls = jobStatusClass(j);
+  const why = String(j.error || "").replace(/\s+/g, " ").trim();
+  const dur = turnLive(j) || j.revived ? "" : elapsed(j);
+  const text = why || jobPreview(j);
+  return (
+    `<span class="pv-status is-${esc(cls)}" title="${esc(`${word}${dur ? ` · ${dur}` : ""}${why ? ` · ${why}` : ""}`)}">${esc(word)}</span>` +
+    (dur ? `<span class="pv-meta">${esc(dur)}</span>` : "") +
+    `<span class="pv-text" title="${esc(text)}">${esc(text)}</span>`
+  );
+}
+
 function refreshJobPreview(id) {
   const j = state.jobs.get(id);
   if (!j) return;
   const el = document.querySelector(`[data-preview="${CSS.escape(j.thread || j.id)}"]`);
-  if (el) el.textContent = jobPreview(j);
+  if (el) el.innerHTML = jobPreviewHtml(j);
 }
 
 // ---- conversations ------------------------------------------------------------
@@ -2747,7 +2783,7 @@ function conversationHtml(conv) {
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
       <button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>
     </div>
-    ${collapsed ? `<div class="job-preview mono" data-preview="${esc(thread)}">${esc(jobPreview(latest))}</div>` : ""}
+    ${collapsed ? `<div class="job-preview mono" data-preview="${esc(thread)}">${jobPreviewHtml(latest)}</div>` : ""}
     ${homeless ? `<div class="attach-row" data-attach-row="${esc(thread)}" hidden>
       <span class="dimmer mono">attach to</span>
       <select data-attach-path="${esc(thread)}"></select>

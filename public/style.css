@@ -1311,15 +1311,28 @@ tr.row td.name button, tr.row td.name .chip, tr.row td.branch button { user-sele
 .job.collapsed, .job.collapsed .job-preview { cursor: pointer; }
 .job.collapsed { padding-bottom: 9px; }
 .job.collapsed .job-body { display: none; }
+/* The minimized row's one line: the outcome first (the word the turn's own head uses), the duration, then either
+   the last thing the turn printed or why it died. The chip is what a folded card was missing - the head's pill only
+   says whether the agent is live. Laid out fixed so a long line ellipsizes inside .pv-text and never pushes the
+   status word out of the row. */
 .job.collapsed .job-preview {
-  display: block;
+  display: flex; align-items: baseline; gap: 7px;
   margin: 5px 0 0 18px;
   color: var(--dim);
   font: 11.5px/1.4 var(--term);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: 0;
 }
+.pv-status {
+  flex: none;
+  font: 700 10px/1.5 var(--mono); letter-spacing: .05em; text-transform: uppercase;
+  padding: 0 6px; border-radius: 999px; border: 1px solid var(--line);
+  color: var(--dim); background: #20242c;
+}
+.pv-status.is-run { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
+.pv-status.is-failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
+.pv-status.is-interrupted { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+.pv-meta { flex: none; color: var(--dimmer); }
+.pv-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Fixed layout, because auto layout let the columns size themselves from their content: one project with long
    branch names and a long verdict grew to 1714px inside a 1468px card, and `.project` clips its children - so
