@@ -2,6 +2,13 @@
   --bg: #0f1115;
   --panel: #161a21;
   --panel-2: #1b2029;
+  /* Layered surfaces. Settings > Panel contrast rewrites all of these (and --bg/--panel/--panel-2) from one
+     scale: 0% flattens them into a single neutral, 100% pushes the page to near-black and the raised
+     surfaces light. These values are the resting palette before that runs. */
+  --surface: #12161d;
+  --console: #0c0f14;
+  --hover: #1a2029;
+  --band: #171d27;
   --line: #262c37;
   --text: #e6e9ef;
   --dim: #9aa4b2;
@@ -118,22 +125,27 @@ button.primary:hover { background: #24466a; }
 .settings-head button { padding: 1px 6px; font-size: 11px; }
 .settings-row { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--dim); }
 .settings-row.settings-gap { margin-top: 12px; }
-.settings-row select { flex: 1; min-width: 0; background: #12161d; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
+.settings-row select { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
 .settings-preview { margin-top: 10px; padding: 9px 10px; border: 1px dashed var(--line); border-radius: 6px; font-size: 13px; color: var(--text); }
+/* The contrast slider, and a strip of the six layers it moves - each swatch reads the variable it changes, so
+   the preview is the setting, not a drawing of it. */
+.settings-row input[type="range"] { flex: 1; min-width: 0; height: 18px; accent-color: #4a90d9; }
+.settings-preview.contrast { display: flex; padding: 0; height: 24px; overflow: hidden; border-style: solid; }
+.settings-preview.contrast span { flex: 1; }
 .settings-note { margin: 8px 0 0; font-size: 11px; color: var(--dimmer); line-height: 1.4; }
 /* The approval window is the one setting in here that is not a browser preference: it is the
    gateway's own approvals.timeout, written to its config.yaml, so it is styled as a form field with
    an explicit Save rather than a picker that applies on change. */
 .settings-sep { height: 1px; margin: 14px 0 12px; background: var(--line); }
-.settings-row input[type="number"] { width: 74px; background: #12161d; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
+.settings-row input[type="number"] { width: 74px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
 .settings-row input[type="number"]:disabled { color: var(--dimmer); background: #0e1218; }
 .settings-unit { font-size: 11px; color: var(--dimmer); }
-.settings-row button { padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: #12161d; color: var(--text); font: 11px var(--mono); cursor: pointer; }
+.settings-row button { padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
 .settings-row button:hover { border-color: #3b4757; }
 .settings-row button:disabled { color: var(--dimmer); cursor: default; }
 .settings-row button.dirty { border-color: #6b4d16; background: var(--amber-bg); color: #ffd479; }
 .settings-presets { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-.settings-presets button { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; background: #12161d; color: var(--dim); font: 10.5px/1.7 var(--mono); cursor: pointer; }
+.settings-presets button { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--dim); font: 10.5px/1.7 var(--mono); cursor: pointer; }
 .settings-presets button:hover { color: var(--text); border-color: #3b4757; }
 .settings-preview.bad { border-color: #57262a; color: #ff9c94; }
 .hidden { display: none; }
@@ -231,7 +243,7 @@ button.btn-root-clone:hover { background: #1f4a2a; color: #d6ffe0; border-color:
   flex: 1;
   min-width: 260px;
   max-width: 560px;
-  background: #12161d;
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 5px;
@@ -286,7 +298,7 @@ td.age .age-num.dimmer { color: var(--dimmer); }
    column and with the metrics of a status pill — but grey glyph (no card) and a blue pill (an action, not
    a state). The 15px is the card's 1px border plus its 14px padding, so the two glyphs line up exactly. */
 .session-row { display: flex; align-items: center; gap: 8px; padding: 3px 6px 3px 15px; border-radius: 6px; font-size: 12px; }
-.session-row:hover { background: #171d27; }
+.session-row:hover { background: var(--band); }
 .session-row .agent-glyph { flex: 0 0 auto; color: var(--dimmer); font-size: 13px; line-height: 1; }
 .session-row .chev { color: var(--dimmer); font-size: 13px; line-height: 1; width: 18px; display: inline-block; flex: 0 0 auto; }
 .session-row:hover .agent-glyph, .session-row:hover .chev { color: var(--dim); }
@@ -318,7 +330,7 @@ td.age .age-num.dimmer { color: var(--dimmer); }
 .ap-cmd {
   margin: 6px 0 4px;
   padding: 8px 10px;
-  background: #12161d;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 6px;
   font-size: 12px;
@@ -350,7 +362,7 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 }
 .form label.cwd { font-family: var(--mono); }
 .form select {
-  background: #12161d;
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 5px;
@@ -399,7 +411,7 @@ button.chip:active { transform: translateY(1px); }
 .form { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
 .form textarea {
   width: 100%;
-  background: #12161d;
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -410,7 +422,7 @@ button.chip:active { transform: translateY(1px); }
 .form .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .form label { color: var(--dim); font-size: 11.5px; display: flex; gap: 5px; align-items: center; font-family: var(--mono); }
 .form input[type="text"], .form input:not([type]) {
-  background: #12161d;
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 5px;
@@ -418,13 +430,13 @@ button.chip:active { transform: translateY(1px); }
   font: 12px var(--mono);
   width: 130px;
 }
-.form input[type="number"] { background: #12161d; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 7px; font: 12px var(--mono); width: 90px; }
+.form input[type="number"] { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 7px; font: 12px var(--mono); width: 90px; }
 .form label.chk { color: var(--dim); }
 .form label.chk code { background: #20242c; padding: 1px 4px; border-radius: 3px; }
 .cmd {
   white-space: pre-wrap;
   word-break: break-all;
-  background: #10141a;
+  background: var(--console);
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 7px 10px;
@@ -482,7 +494,7 @@ button.chip:active { transform: translateY(1px); }
   min-height: 34px;
   resize: vertical;
   overflow: auto;
-  background: #0c0f14;
+  background: var(--console);
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 8px 10px;
@@ -506,7 +518,7 @@ button.chip:active { transform: translateY(1px); }
 .attach-chip {
   display: inline-flex; align-items: center; gap: 2px;
   padding: 1px 4px 1px 7px; border: 1px solid #3b4757; border-radius: 5px;
-  background: #12161d; color: #9ecbff; font-size: 11px; line-height: 1.5;
+  background: var(--surface); color: #9ecbff; font-size: 11px; line-height: 1.5;
 }
 .attach-chip[data-open-path] { cursor: pointer; }
 .attach-chip:hover { border-color: #2f5a7a; }
@@ -514,7 +526,7 @@ button.chip:active { transform: translateY(1px); }
    happened, and taking the file off the record afterwards would be a lie. */
 .turn-attachments { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 4px 18px; }
 .turn-attach {
-  padding: 1px 7px; border: 1px solid #2c3644; border-radius: 5px; background: #10141a;
+  padding: 1px 7px; border: 1px solid #2c3644; border-radius: 5px; background: var(--console);
   color: #8fb8dd; font-size: 11px; line-height: 1.5; cursor: pointer;
 }
 .turn-attach:hover { border-color: #2f5a7a; color: #b9d9f5; background: #141b24; }
@@ -693,7 +705,7 @@ tr.row-confirm .btn-del-yes:hover { background: #3a1d22; }
 }
 .artifacts-pop .ap-head { padding: 3px 6px 6px; font-size: 11px; }
 .artifacts-pop .ap-row { display: flex; align-items: center; gap: 7px; padding: 3px 6px; border-radius: 6px; }
-.artifacts-pop .ap-row:hover { background: #171d27; }
+.artifacts-pop .ap-row:hover { background: var(--band); }
 .artifacts-pop .ap-kind { flex: none; font-size: 11px; opacity: .75; }
 .artifacts-pop .ap-name {
   flex: 1 1 auto;
@@ -747,7 +759,7 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
 }
 .reply-box {
   width: 100%;
-  background: #12161d;
+  background: var(--surface);
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -868,14 +880,14 @@ button.btn-clear-thread.armed { font-weight: 700; }
 /* rename a session: sits right after its name, at the end of the head */
 button.btn-rename { padding: 1px 6px; font-size: 11px; line-height: 1.2; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
 button.btn-rename:hover { color: var(--text); border-color: #2b5480; background: #232936; }
-input.rename-input { width: 200px; max-width: 42vw; background: #12161d; color: var(--text); border: 1px solid #2b5480; border-radius: 5px; padding: 1px 6px; font: 11.5px var(--mono); }
+input.rename-input { width: 200px; max-width: 42vw; background: var(--surface); color: var(--text); border: 1px solid #2b5480; border-radius: 5px; padding: 1px 6px; font: 11.5px var(--mono); }
 input.rename-input:focus { outline: none; border-color: #3c6f9e; }
 /* attach an unattached agent to a worktree */
 button.btn-attach { padding: 2px 8px; font-size: 11px; line-height: 1.3; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; }
 button.btn-attach:hover { color: var(--text); background: #232936; }
 .attach-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px 18px; font-size: 11.5px; }
 .attach-row[hidden] { display: none; }
-.attach-row select { max-width: 560px; background: #12161d; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: 11.5px var(--mono); }
+.attach-row select { max-width: 560px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: 11.5px var(--mono); }
 button.btn-attach-go { padding: 2px 8px; font-size: 11px; }
 button.btn-attach-go:hover { background: #24466a; }
 body.modal-open { overflow: hidden; }
@@ -998,8 +1010,8 @@ tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: 
   font-size: 10px; color: #66717f; letter-spacing: .07em; border-bottom-color: #1b222c;
 }
 tbody tr.row { cursor: pointer; }
-tbody tr.row:hover { background: #1a2029; }
-tbody tr.row.expanded { background: #1a2029; }
+tbody tr.row:hover { background: var(--hover); }
+tbody tr.row.expanded { background: var(--hover); }
 
 @keyframes flashrow {
   from { background: #1f3a2a; }
@@ -1116,7 +1128,7 @@ button.sig:hover { filter: brightness(1.25); }
   border-top: 1px solid #1d222b;
 }
 
-tr.detail td { background: #12161d; border-bottom: 1px solid var(--line); padding: 10px 14px; }
+tr.detail td { background: var(--surface); border-bottom: 1px solid var(--line); padding: 10px 14px; }
 /* MERGE STATE and LIVENESS EVIDENCE lead the worktree block again, but folded to two one-line strips: they are
    reference material, read rarely, and as full blocks above the agents they cost more height than they earned.
    The pair is closed off by one hairline, and the agents follow under it. */

@@ -105,6 +105,16 @@
       <input id="grey-flash" type="checkbox" checked title="flash a row grey when a refresh found nothing new (no signs of life). The green flash, for a row where something actually moved, stays on either way.">
     </label>
     <p class="settings-note">Grey is the quiet one: the row was re-read and nothing had moved. Green — a sign of life, an agent doing something — always flashes. Off, a refreshed row just stays as it is.</p>
+    <div class="settings-sep"></div>
+    <label class="settings-row" for="contrast">
+      <span>Panel contrast</span>
+      <input id="contrast" type="range" min="0" max="100" step="5" value="15" title="how far apart the layered panels sit: 0% makes every layer one neutral, 100% pushes the page to near-black and lifts the panels">
+      <span class="settings-unit mono" id="contrast-pct">15%</span>
+    </label>
+    <div class="settings-preview contrast" id="contrast-preview" title="the layers this controls, darkest to lightest">
+      <span style="background: var(--console)"></span><span style="background: var(--bg)"></span><span style="background: var(--surface)"></span><span style="background: var(--panel)"></span><span style="background: var(--band)"></span><span style="background: var(--panel-2)"></span>
+    </div>
+    <p class="settings-note">The board is a stack of greys: the page, the detail row, the card, its header and the row under the cursor. This is the distance between them. 0% collapses the stack into one neutral; higher separates them further, and 100% takes the page to near-black under much lighter panels.</p>
   </div>
 
   <div id="banner" class="banner hidden"></div>

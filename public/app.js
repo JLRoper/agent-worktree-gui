@@ -5716,6 +5716,59 @@ function applyTermStyle({ save = false, size = null, weight = null } = {}) {
   }
 }
 
+// ---- panel contrast -----------------------------------------------------------------------
+// The board is a stack of greys - page, detail row, card, card header, hovered row - and each layer is a CSS
+// variable. One slider places the whole stack on a scale: at 0% every layer is the same neutral (a flat board),
+// at 100% the page is near black and the raised surfaces are much lighter. Colours are interpolated here rather
+// than in CSS because a single scale has to move six independent variables together.
+const CONTRAST_KEY = "wtgui.contrast";
+// The flat point is today's most common surface, so the slider's resting position is where the board already
+// was. Targets are what each layer becomes at 100%.
+const CONTRAST_FLAT = [18, 22, 29]; // #12161d
+const CONTRAST_MAX = {
+  "--console": [0, 0, 0],
+  "--bg": [5, 7, 11],
+  "--surface": [26, 32, 43],
+  "--panel": [52, 62, 76],
+  "--band": [64, 76, 92],
+  "--hover": [74, 86, 104],
+  "--panel-2": [92, 106, 124],
+  "--line": [120, 136, 156],
+};
+
+function contrastColor(target, k) {
+  const c = target.map((v, i) => Math.round(CONTRAST_FLAT[i] + (v - CONTRAST_FLAT[i]) * k));
+  return `rgb(${c.join(" ")})`;
+}
+
+function applyContrast(pct, { save = true } = {}) {
+  const p = Math.max(0, Math.min(100, Math.round(Number(pct)) || 0));
+  const k = p / 100;
+  const root = document.documentElement.style;
+  for (const [name, target] of Object.entries(CONTRAST_MAX)) root.setProperty(name, contrastColor(target, k));
+  const input = $("contrast");
+  if (input && Number(input.value) !== p) input.value = String(p);
+  const label = $("contrast-pct");
+  if (label) label.textContent = `${p}%`;
+  if (save) {
+    try {
+      localStorage.setItem(CONTRAST_KEY, String(p));
+    } catch {
+      /* private mode: the choice just will not persist */
+    }
+  }
+}
+
+function contrastSetting() {
+  try {
+    const raw = localStorage.getItem(CONTRAST_KEY);
+    if (raw !== null && Number.isFinite(Number(raw))) return Math.max(0, Math.min(100, Number(raw)));
+  } catch {
+    /* private mode */
+  }
+  return 15;
+}
+
 // The grey flash says "re-read, nothing moved". It is useful when watching a row settle and noise when the board
 // is busy, so it can be switched off - while the green flash, which means something actually happened, cannot.
 // A body class is enough: the row still gets its class for 950ms, the animation just does not run.
@@ -6009,6 +6062,7 @@ $("font-select")?.addEventListener("change", (e) => applyFont("ui", e.target.val
 $("term-select")?.addEventListener("change", (e) => applyFont("term", e.target.value));
 $("term-size-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, size: e.target.value }));
 $("grey-flash")?.addEventListener("change", (e) => applyGreyFlash(Boolean(e.target.checked)));
+$("contrast")?.addEventListener("input", (e) => applyContrast(Number(e.target.value)));
 $("term-weight-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, weight: e.target.value }));
 
 // The approval window. A preset only fills the box and lights Save: one click here rewrites the
@@ -6051,6 +6105,7 @@ document.addEventListener("click", (e) => {
 
 initFonts();
 applyGreyFlash(greyFlashOn());
+applyContrast(contrastSetting(), { save: false });
 // The model menu is filled once at start-up from the gateway's own provider list; a failure leaves
 // the "(gateway default)" entry, which is what a spawn sends anyway.
 void loadModels();
