@@ -77,16 +77,24 @@ The dim line under the card title is the promise: **run · new worktree under `�
 workspace will be created, or **runs IN `…` (no new worktree); edits land in that tree** when it will not. That is
 the line to read before clicking.
 
-### Two ways to aim the card
+### Aiming the card, and starting in place
 
 - **The green + on a project** — "start work in this project": points **start in** at that project, ticks **create
-  workspace**, and puts the caret in the prompt. A fresh worktree under `.worktrees/` will be cut.
-- **The green ▶ on a worktree row** — "run an agent in this tree": fills **start in** with that worktree, selects its
-  project, and **unticks** create workspace, because the tree already exists. The card says `runs IN …`.
-  If agents already work in that tree, a dialog warns that they share it (index locks and each other's edits) before
-  aiming.
-
-Both gestures scroll the card into view and flash its border, so a filled-in form is never out of sight.
+  workspace**, puts the caret in the prompt, scrolls the card into view and flashes its border. A fresh worktree
+  under `.worktrees/` will be cut.
+- **The + bar under a worktree's agents** — start an agent in that tree as it is, without leaving the row. Clicking
+  the bar goes nowhere: it becomes a text field of the same footprint, so the row does not move. Type the first turn
+  and press `Enter`; `Esc`, or leaving the field empty, puts the `+` back. The prompt is handed to the New agent card
+  aimed at this worktree with **create workspace** unticked, and the run starts from there, so the card says
+  `runs IN …`. The bar sits under the cards and is drawn even when the row has none — which is exactly when it is
+  needed. If agents already work in that tree a dialog warns that they share it (index locks, and each sees the
+  other's edits as its own dirty files); saying no keeps the text you typed.
+- **The green ▶ beside a worktree's name probes; it does not start anything.** It sends
+  `Continue if you can, exit if you are done` to every agent in that worktree that is not running, all at once, and
+  the banner reports `probed N not-running agents in this worktree` (plus `· N failed to send` when some could not be
+  reached). An agent that is mid-turn is skipped on purpose: a reply to it would queue behind its turn instead of
+  arriving as a probe. With no agents in the tree, or with every one of them already running, it says so and sends
+  nothing.
 
 The two chips at the right of the New-agent header are the gateway's state: `api: up · steer` (hover for the address)
 or **api: down**, and the gateway's `host:port`. A spawn is refused with a reason rather than leaving a card that
@@ -169,7 +177,7 @@ opens and closes the project. Settings → Display → **Project colours** shows
 
 | Column | Meaning |
 | --- | --- |
-| **Worktree** | The directory name, a green **▶** to start an agent in it, and the `⧉ N` badge for agents this panel has in it (with `running` / `awaiting approval` when they are busy). Clicking the badge opens the row and its cards. |
+| **Worktree** | The directory name, a green **▶** that **probes** the agents already in it (see below), and the `⧉ N` badge for agents this panel has in it (with `running` / `awaiting approval` when they are busy). Clicking the badge opens the row and its cards; the **+** bar under them starts a new agent there. |
 | **Branch** | The checked-out branch. |
 | **Tip** | Short SHA of the branch tip. |
 | **Ahead / Behind** | Commits the branch has that the project's base ref (remote main) does not, and commits main has that it does not. `—` when there is no base ref yet. |
@@ -215,7 +223,7 @@ Click a row to expand it. The detail is built not to bury the agents:
 - **Liveness evidence** — folded, with its strongest line still visible on the header. Open it to see why the row is
   live, or why it is not.
 - **Agents** — the cards owned by this worktree, each moved into place rather than rebuilt, so a running console keeps
-  its scroll.
+  its scroll. The **+** bar under them starts another agent in this tree; it is drawn even when the row has no cards.
 - **Sessions with revive** — Hermes sessions attributed to this worktree that have no card, one row each (glyph, when
   it was last used, its name) with **revive**. Reviving writes a card whose reply box continues that session. It is
   one at a time on purpose: a worktree collects every session ever run in it, and auto-attaching would refill the
@@ -240,7 +248,7 @@ that directory the request is refused (409); stop the run first. A directory tha
 | Element | Meaning |
 | --- | --- |
 | `⧉` and the chevron | An agent session. Click the head to fold or unfold the card. |
-| Pill | `running` (hover for its clock), `not-running`, or `exited` (failed). A turn that ended while the subagents it started are still working still reads `running`. |
+| Pill | `running` (hover for its clock, `· 12s`). While the agent is stopped the pill is a **button**: `not-running`, or `exited` in red after a failure, with a `↻` on its right — clicking anywhere on it sends `Continue if you can, exit if you are done` and starts the next turn. The `↻` turns while the nudge is out, and the label does not become `starting…`, because the panel cannot see that yet. A turn that ended while the subagents it started are still working still reads `running`. |
 | `just now` / `2m` | How long since the thread was last used. |
 | `waiting on you →` | The run is parked on a permission request — click to jump to the box. `waiting on your answer →` is the agent's own question. |
 | Title | The Hermes session's name, with the worktree, run id and turn count beside it in dim text. |
@@ -254,6 +262,12 @@ that directory the request is refused (409); stop the run first. A directory tha
 | `✕` | Forget this session: the first click arms it (`✕ sure?`), the second removes its turns and transcript from the panel. The worktree it made stays on disk. |
 
 A `yolo` pill appears only if a run was started with that flag elsewhere; the panel never sends it.
+
+Folded, the card keeps one line under its head: a status chip in the turn's own words — `done`, `failed`,
+`interrupted`, `cancelled`, `running`, or `revived` for a turn rebuilt from the session store (which has no duration
+this panel measured) — then how long it ran, then **the error when there is one**; otherwise the last thing the turn
+said. `interrupted` is the one to read twice: the panel stopped tracking that run (a restart, a dead stream) and the
+gateway may still be working on it, so the line says so instead of pretending the turn ended.
 
 ### Turns
 
@@ -277,8 +291,13 @@ Opening a specific tool can fetch the stored result from the session store.
 
 **A run of tool calls is condensed.** Consecutive calls between two pieces of prose become one group, one row per
 tool name: `💻 terminal ×11 curl …` with the last input and either a duration or a live clock. Click a row to filter
-the group to that one tool; the button then reads **all N** and clears the filter. **`N lines`** opens every call and
-its output in that group. Text ends a group, so the next call starts a fresh tally.
+the group to that one tool; the button then reads **all N** and clears the filter. **`N lines`** opens the whole
+group — every call with its output — and the N is the number of console lines it holds. Text ends a group, so the
+next call starts a fresh tally.
+
+The gateway folds a parallel batch into one summary line — `first command + 3 commands` — so that tail is a button:
+click **`+ 3 commands`** to read all four calls out of the session transcript, listed under the group with the call
+that stood in for them. It is a lookup, not a re-run.
 
 ### Approvals and questions
 
@@ -287,10 +306,15 @@ saying `⚠ waiting on you — this turn is parked until you answer`, the comman
 offered (`Allow once`, `Allow for this session`, `Always allow`, `Deny` on a standard host). Answering collapses it to
 one line: `✓ approved once: <command>`, or a red `✕ denied: <command>`. The panel never widens the choice list.
 
-An agent's **own question** (the `clarify` tool) is the same kind of control in a light-purple box: each choice is a
-full-width row, the recommended one is marked, multi-select choices are ticked and sent together, and a box under
-them takes a typed answer (`Enter` sends, `Shift+Enter` adds a line). Answered, it reads `✓ answered: …`; a question
-answered elsewhere, withdrawn or expired leaves `· question closed without an answer here`.
+An agent's **own question** (the `clarify` tool) is the same kind of control in a light-purple box, drawn as a
+centred 900px column under the console rather than a full-width band: each choice is a full-width row, the
+recommended one is marked by a leading `recommended` chip, multi-select choices are ticked and sent together, and a
+box under them takes a typed answer (`Enter` sends, `Shift+Enter` adds a line). The look lives in Settings → Display:
+**Question tint** (light purple by default; the five are signal colours, never the approval's amber, so the two
+parked states stay distinct), **Question size**, **Compact answers**, and **Typed answer box** (off hides the
+free-text row for questions that offer choices; an open-ended question always keeps it, and a multi-select question
+keeps its **Send answer** button). Answered, it reads `✓ answered: …`; a question answered elsewhere, withdrawn or
+expired leaves `· question closed without an answer here`.
 
 **The dock.** Approvals that do not come over a run's own stream (a selected approval transport, the legacy CLI
 contract) land in a stack pinned bottom-right: `⚠ waiting on you`, a count chip, a `▾` to fold it, and one card per
@@ -308,7 +332,8 @@ refreshed while a turn runs, folded once it ends. It is off by default because e
 A turn that delegated shows a strip under its console: `⧉ N subagents · N running` (or `all done`). Open it for each
 child's goal, its status and how long it ran, with the last line it wrote — click a child for its console. Status is
 the point; the full child transcript is one click further. A folded turn keeps the one-line tally so you can see where
-the agents came from.
+the agents came from. A child is filed under **the turn that started it** — the turn whose window contains its start —
+so a delegation made in a later turn is never shown under the card's first one.
 
 If a parent's turn ended before its children finished, Settings → Agent cards → **Collect subagent results** (on by
 default) hands the parent their results as one more turn, once per turn, so a delegation is not left finishing into
@@ -382,7 +407,12 @@ setting):
 | Display | Panel font | Headings, labels, buttons and the text you type. |
 | Display | Terminal font · Console size · Console weight | The console and the tool lines inside it. |
 | Display | Panel contrast | How far apart the layered surfaces sit: 0% flattens them, 100% pushes the page to near-black and lifts the panels. The swatch strip below previews the layers. |
+| Display | Add-agent bar | The green of the **+** bar under a worktree's agents, 0% (deep and quiet) to 100% (vivid). Lightness and saturation move together; the swatch below the row is the bar itself, so the preview cannot disagree with the button. |
 | Display | Project colours | Count in the tooltip, **reset colours** clears every project's hue. |
+| Display | Question tint | The colour of the agent's question box: light purple (the default), sky, mint, rose or slate. Signal colours, never the approval's amber. |
+| Display | Question size | Type size of the question and its choices, 11–18px (the choices are half a point smaller). A typed value is clamped when you leave the field. |
+| Display | Compact answers | Tighter padding and gaps between the answer rows, so a question takes less room in a card. The type size is separate. |
+| Display | Typed answer box | Shows the free-text row under the choices. An open-ended question keeps it whatever this says, or there would be nothing to answer with. |
 | Agent cards | Show thinking | The default for cards' `🧠`; a card's own toggle wins. |
 | Agent cards | Collect subagent results | Hand a parent the results of children that outlived its turn, once per turn. |
 | Board | Board reorder | Seconds between re-sorts of closed folders and projects (`off`/5/15/30/60 presets). A project you have open keeps its slot. |
@@ -428,6 +458,9 @@ only its own line so your comments and formatting survive.
 | `Ctrl+Shift+click` | Project title | Clear its theme colour. |
 | Click | Row's `⧉ N` badge | Open the row and jump to its agents. |
 | Click | Row's ring | Read that worktree now. |
+| Click | Row's green ▶ | Probe every agent in that worktree that is not running, all at once. |
+| Click | **+** bar under a row's agents | Turn it into a field; `Enter` starts the agent there, `Esc` puts the `+` back. |
+| Click | Not-running pill on a card | Send `Continue if you can, exit if you are done` and start the next turn. |
 | Double-click | Model on the usage strip | Model picker. |
 | Click / right-click | `used/ceiling⌄` | Cycle the context ceiling / open the full picker. |
 | Click | `📄 N` / `🔗 N` | Open the file or link list. |
@@ -449,7 +482,9 @@ only its own line so your comments and formatting survive.
 | Client resync | Full snapshot fallback (also every 30 s if the stream goes quiet) | every 30 s |
 
 Rows flash when something moved: green for a sign of life or a row that moved up the order, grey for a re-read with
-nothing new. The number in **Life / next read** is time since the last evidence; the ring fills toward the next read
+nothing new. A **collapsed** project's outline and title bar flash green along with the row inside it; an open
+project does not, because its rows are already on screen saying what happened. The number in **Life / next read** is
+time since the last evidence; the ring fills toward the next read
 and turns amber/red if a row is overdue — a long ring usually means the panel is busy, not that the row is stuck.
 
 With Settings → Board → **Refresh: only on screen**, those cadences apply only to projects in view: off-screen
