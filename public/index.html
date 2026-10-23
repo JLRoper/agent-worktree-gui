@@ -123,10 +123,11 @@
         <textarea id="job-prompt" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" rows="3" placeholder="What should the agent do? (this becomes the first turn)"></textarea>
         <div class="row">
           <label class="cwd">start in <input id="job-cwd" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" list="project-paths" spellcheck="false" placeholder="(project path — the green + on a project fills this in)" /></label>
+          <label class="proj">project <select id="job-project" title="which project the agent starts in"></select></label>
         </div>
         <datalist id="project-paths"></datalist>
         <div class="row">
-          <label class="proj">project <select id="job-project" title="which project the agent starts in"></select></label>
+          <button id="btn-spawn" type="button" class="primary">Spawn agent</button>
           <label class="model">model <select id="job-model" title="which model this run uses — (default) is the gateway's configured model"></select></label>
           <label>budget s <input id="job-budget" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" value="1800" min="30" /></label>
           <label>max turns <input id="job-maxTurns" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" placeholder="(default)" /></label>
@@ -138,7 +139,6 @@
             <input id="job-create" type="checkbox" checked /> create workspace
           </label>
           <span class="spacer"></span>
-          <button id="btn-spawn" type="button" class="primary">Spawn agent</button>
         </div>
         <div id="spawn-warn" class="warnline"></div>
         <div id="spawn-msg" class="dimmer mono"></div>
