@@ -1194,9 +1194,10 @@ function turnBlock(conv, turn, index, copy = "") {
   const running = turn.status === "running" || turn.status === "starting";
   const cls = `turn${open ? "" : " folded"}${running ? " is-running" : ""}`;
   if (!open) {
-    // Two rows: the head carries the request, the peek carries what the turn is doing or concluded.
+    // Two rows: the head carries the request, the peek carries what the turn is doing or concluded - and a turn that
+    // delegated something keeps saying so as it ages up the list, rather than handing its children to the newest turn.
     return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy, true)}` +
-      `${peekHtml(turn)}${turnAttachmentsHtml(turn)}</div>`;
+      `${peekHtml(turn)}${turnAttachmentsHtml(turn)}${subagentsCompactHtml(turn, copy)}</div>`;
   }
   return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy, true)}` +
     // The request stays on the head line whether the turn is open or folded: it is the turn's title either
@@ -1467,14 +1468,26 @@ function subagentsForTurn(turn) {
   const thread = turn.thread || turn.id;
   const all = subagentFallback.get(thread) || [];
   if (!all.length) return [];
-  const start = Date.parse(turn.startedAt || "") || 0;
-  const end = Date.parse(turn.endedAt || "") || Date.now();
-  const mine = all.filter((k) => k.startedAt && k.startedAt >= start - 3000 && k.startedAt <= end + 3000);
-  if (mine.length) return mine;
-  // A child that outlived its turn's window, or a panel that joined late: only the newest turn may claim the rest.
-  const turns = [...state.jobs.values()].filter((j) => (j.thread || j.id) === thread);
-  const newest = turns.sort((a, b) => String(b.startedAt || "").localeCompare(String(a.startedAt || "")))[0];
-  return newest && newest.id === turn.id ? all : [];
+  const turns = [...state.jobs.values()]
+    .filter((j) => (j.thread || j.id) === thread)
+    .sort((a, b) => String(a.startedAt || "").localeCompare(String(b.startedAt || "")));
+  if (!turns.length) return [];
+  const rows = [];
+  for (const k of all) {
+    if (!k.startedAt) continue;
+    const startOf = (t) => Date.parse(t.startedAt || "") || 0;
+    const endOf = (t) => Date.parse(t.endedAt || "") || Date.now();
+    // The turn whose window contains the moment the child started...
+    let owner = turns.find((t) => k.startedAt >= startOf(t) - 3000 && k.startedAt <= endOf(t) + 3000);
+    // ...or, for a child that started after its turn finished, the last turn that had begun by then. A child never
+    // belongs to a turn that started after it, which is what put every old child under the newest console.
+    if (!owner) {
+      for (const t of turns) if (startOf(t) <= k.startedAt) owner = t;
+    }
+    if (!owner) owner = turns[0];
+    if (owner && owner.id === turn.id) rows.push(k);
+  }
+  return rows;
 }
 
 // Under the console of the turn that delegated: while a child is out, and while the turn itself is still going, so
@@ -1488,6 +1501,17 @@ function turnSubagentsHtml(turn, copy = "") {
   return subagentsHtml(rows, key);
 }
 
+// On a folded turn the strip shrinks to its tally: enough to say "this is where the agents came from" without
+// reopening a transcript to show one line.
+function subagentsCompactHtml(turn, copy = "") {
+  const key = turnKey(turn, copy);
+  const rows = subagentsForTurn(turn);
+  if (!rows.length) return "";
+  const live = rows.filter((r) => r.running).length;
+  const cls = live ? "" : " is-done";
+  return `<div class="subagents mono is-compact${cls}" data-subs-compact="${esc(key)}">\u29c9 ${rows.length} subagent${rows.length === 1 ? "" : "s"} \u00b7 ${live ? `${live} running` : "all done"}</div>`;
+}
+
 function subagentsSig(rows) {
   return rows.map((r) => `${r.goal}:${r.running ? 1 : 0}`).join("|");
 }
@@ -1497,9 +1521,21 @@ function subagentsSig(rows) {
 function paintSubagents() {
   for (const job of state.jobs.values()) {
     const key = job.id;
+    const rows = subagentsForTurn(job);
+    const compact = document.querySelector(`[data-subs-compact="${CSS.escape(key)}"]`);
+    // A folded turn carries the tally only; it has no rows to paint, but the count still has to move.
+    if (compact) {
+      if (!rows.length) {
+        compact.remove();
+        continue;
+      }
+      const live = rows.filter((r) => r.running).length;
+      compact.innerHTML = `\u29c9 ${rows.length} subagent${rows.length === 1 ? "" : "s"} \u00b7 ${live ? `${live} running` : "all done"}`;
+      compact.classList.toggle("is-done", live === 0);
+      continue;
+    }
     const box = document.querySelector(`[data-subs-turn="${CSS.escape(key)}"]`);
     if (!box) continue;
-    const rows = subagentsForTurn(job);
     if (!rows.length) {
       if (!box.hidden) {
         box.hidden = true;
@@ -1515,6 +1551,7 @@ function paintSubagents() {
     if (fresh) fresh.dataset.sig = sig;
   }
 }
+
 
 async function refreshSubagentRoster() {
   if (document.hidden) return;

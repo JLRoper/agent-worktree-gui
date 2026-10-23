@@ -500,6 +500,9 @@ button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241
 .subagents.is-done .sub-meta { color: var(--dimmer); }
 .subagents.is-done .sub-dot { background: #46505f; box-shadow: none; }
 .subagents.is-done .sub-row:hover .sub-title { color: var(--text); }
+/* Folded turn: the tally stays with it, small enough not to reopen the transcript. */
+.subagents.is-compact { margin: 2px 0 4px 18px; font-size: 10.5px; color: #c8a6ff; }
+.subagents.is-compact.is-done { color: var(--dimmer); }
 .subagents.is-collapsed .sub-row,
 .subagents.is-collapsed .sub-console { display: none; }
 .subagents .sub-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding-left: 12px; }
