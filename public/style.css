@@ -426,7 +426,7 @@ button.chip:active { transform: translateY(1px); }
    the hairlines between cards, so the group reads as closed rather than cut off. */
 .job:last-child { border-bottom: none; }
 .agents-block .job:last-child { border-bottom: 1px solid #2f3947; }
-.job-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.job-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding-bottom: 6px; }
 .job-head .spacer { flex: 1; }
 .pill {
   font-size: 10.5px;
@@ -530,6 +530,11 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 
 /* a conversation: turns stacked top to bottom, reply box at the bottom */
 .turn { margin: 0; }
+/* The turns hang off a 2px rail under the card's title, so the transcript reads as content nested under the
+   head rather than a sibling of it — the head is a title, the rail says where the body starts. It carries the
+   run's state: violet while a turn is executing, slate when nothing is. */
+.job-body > .turn { box-shadow: inset 2px 0 0 #46536b; margin-left: 3px; padding-left: 11px; }
+.job-body > .turn.is-running { box-shadow: inset 2px 0 0 #7a5cc0; }
 .turn-head {
   margin: 8px 0 2px 18px;
   padding-top: 6px;

@@ -1030,12 +1030,16 @@ function refreshTurnPeek(turn) {
 function turnBlock(conv, turn, index, copy = "") {
   const open = turnIsOpen(conv, turn, copy);
   const tkey = turnKey(turn, copy);
+  // The rail down the turns' left edge is violet while a turn is executing, slate otherwise, so `is-running`
+  // is the only state the CSS needs from here.
+  const running = turn.status === "running" || turn.status === "starting";
+  const cls = `turn${open ? "" : " folded"}${running ? " is-running" : ""}`;
   if (!open) {
     // Two rows: the head carries the request, the peek carries what the turn is doing or concluded.
-    return `<div class="turn folded" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy, true)}` +
+    return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, false, copy, true)}` +
       `${peekHtml(turn)}${turnAttachmentsHtml(turn)}</div>`;
   }
-  return `<div class="turn" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy)}` +
+  return `<div class="${cls}" data-turn="${esc(turn.id)}">${turnHead(turn, index, true, copy)}` +
     // The prompt line toggles too, so the whole header area behaves the same whether the turn is open
     // or folded: click the text to fold, click it again to unfold.
     `<div class="job-prompt" data-toggle-turn="${esc(tkey)}" title="collapse this turn${turn.prompt ? ` — ${esc(displayPrompt(turn.prompt).slice(0, 120))}` : ""}">${esc(displayPrompt(turn.prompt) || "")}</div>${turnAttachmentsHtml(turn)}${turnBody(turn, copy)}</div>`;
