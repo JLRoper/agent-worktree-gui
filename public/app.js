@@ -73,6 +73,8 @@ const state = {
   // Per-folder project search ("root" -> query). Not persisted: a filter is a moment's narrowing, and a
   // reload that came back with ninety projects hidden would look like the board had lost them.
   rootFilter: new Map(),
+  // The card the reader pinned to hold its place, if any (one at a time, remembered between reloads).
+  anchorThread: loadAnchorThread(),
   cloneStatus: {},
   approvals: new Map(),
   scanRoots: [],
@@ -2337,6 +2339,7 @@ function conversationHtml(conv) {
       ${latest.yolo ? '<span class="pill yolo" title="this run was started with the --yolo flag (auto-approve, no prompts). The panel does not send it: approvals still come to this card.">yolo</span>' : ""}
       ${homeless ? `<button class="btn-attach" data-attach-toggle="${esc(thread)}" type="button" title="attach this agent to a worktree — it then lives under that row">\u2935 attach</button>` : ""}
       <span class="mono dimmer thread-name" data-thread-name="${esc(thread)}" data-label="${esc(latest.label || "")}" title="${latest.label ? esc(`${latest.label} — Hermes thread ${thread}`) : "Hermes session thread — continue it any time"}">${esc(latest.label || thread)}</span>
+      <button class="btn-pin${state.anchorThread === thread ? " is-on" : ""}" data-pin-thread="${esc(thread)}" type="button" title="${state.anchorThread === thread ? "this card holds its place while anything above it grows — click to release" : "pin this card: hold its place on screen while other cards above it grow (one pin at a time)"}">\u{1F4CC}</button>
       <button class="btn-think${thinkingOn(thread) ? " is-on" : ""}" data-think-thread="${esc(thread)}" type="button" title="${thinkingOn(thread) ? "showing this session's reasoning — open live while a turn runs, folded afterwards. click to hide it" : "show this session's reasoning: live and open while a turn runs, folded per turn afterwards (read from the session store)"}">🧠</button>
       <button class="btn-rename" data-rename-thread="${esc(thread)}" type="button" title="rename this session — a label for the panel only; the Hermes thread id never changes">\u270e</button>
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
@@ -2950,6 +2953,8 @@ async function clearThread(btn) {
       state.jobLines.delete(id);
     }
     state.collapsedJobs.delete(thread);
+    // A pin is a promise about a card that exists; forgetting the thread releases it.
+    if (state.anchorThread === thread) setAnchorThread(null);
     if (state.maximized === thread) setMaximized(null);
     renderJobs();
     repaintAgentState();
@@ -4729,6 +4734,155 @@ function paintAgeCell(cell, row) {
 // Move each live card into the slot the freshly built detail made for it. A card that is not on the board yet is
 // built here; one that is keeps its DOM, so its console, its open turns and its scroll position all survive a
 // row repaint. Insertion order follows the slots, so the agents stay in the order the row ranks them.
+// ---- the reading anchor ------------------------------------------------------------------------
+// Order is already held (reorder/pinOpenProjects): nobody jumps over an open row or project. Height is not:
+// a console that starts streaming, a thinking block opening, a row arriving - each changes the height above
+// whatever the reader is looking at, and the page used to creep out from under them. This holds the viewport:
+// the element under the reading line stays under it while things above it grow.
+const ANCHOR_THREAD_KEY = "wm.anchorThread";
+
+function loadAnchorThread() {
+  try {
+    return localStorage.getItem(ANCHOR_THREAD_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+function saveAnchorThread(thread) {
+  try {
+    if (thread) localStorage.setItem(ANCHOR_THREAD_KEY, thread);
+    else localStorage.removeItem(ANCHOR_THREAD_KEY);
+  } catch {
+    /* no storage: the pin lasts this tab only */
+  }
+}
+
+function setAnchorThread(thread) {
+  state.anchorThread = thread ? String(thread) : null;
+  saveAnchorThread(state.anchorThread);
+  for (const b of document.querySelectorAll("[data-pin-thread]")) {
+    const on = b.dataset.pinThread === state.anchorThread;
+    b.classList.toggle("is-on", on);
+    b.title = on
+      ? "this card holds its place while anything above it grows — click to release"
+      : "pin this card: hold its place on screen while other cards above it grow (one pin at a time)";
+  }
+  refreshAnchorBaseline();
+}
+
+function toggleAnchorPin(thread) {
+  setAnchorThread(state.anchorThread === thread ? null : thread);
+}
+
+function readingTop() {
+  const bar = document.querySelector(".topbar");
+  return bar ? Math.round(bar.getBoundingClientRect().bottom) : 0;
+}
+
+// The element the reading line sits on: a card straddling it first, then the first one below it.
+function nearestReadingLine(nodes, top) {
+  let best = null;
+  let bestScore = Infinity;
+  for (const el of nodes) {
+    const r = el.getBoundingClientRect();
+    if (r.height < 8) continue;
+    if (r.bottom < top - 40 || r.top > window.innerHeight) continue;
+    const score = r.top <= top && r.bottom > top ? top - r.top : 400 + Math.abs(r.top - top);
+    if (score < bestScore) {
+      bestScore = score;
+      best = el;
+    }
+  }
+  return best;
+}
+
+// pinned card > card at the reading line > open row at it > project section at it > nothing.
+function readingAnchor() {
+  if (state.anchorThread) {
+    const pinned = document.querySelector(`.job[data-thread="${CSS.escape(state.anchorThread)}"]`);
+    if (pinned) return { el: pinned, pinned: true };
+  }
+  const top = readingTop();
+  const card = nearestReadingLine(document.querySelectorAll(".job[data-thread]"), top);
+  if (card) return { el: card, pinned: false };
+  const row = nearestReadingLine(document.querySelectorAll("#projects tr.row.expanded"), top);
+  if (row) return { el: row, pinned: false };
+  const sec = nearestReadingLine(document.querySelectorAll("#projects section.project"), top);
+  return sec ? { el: sec, pinned: false } : null;
+}
+
+let anchorState = null;       // { el, top, height, pinned }
+let lastAnchorScrollAt = 0;   // our own scrollBy, so it is not read as the reader moving
+let anchorRepickTimer = 0;
+let anchorFrame = 0;
+
+function refreshAnchorBaseline() {
+  const a = readingAnchor();
+  if (!a) {
+    anchorState = null;
+    return;
+  }
+  const r = a.el.getBoundingClientRect();
+  anchorState = { el: a.el, top: Math.round(r.top), height: Math.round(r.height), pinned: a.pinned };
+}
+
+// One correction per frame. Called from the ResizeObserver on the two containers that can change height.
+function scheduleAnchorCompensation() {
+  if (anchorFrame) return;
+  const flush = () => {
+    anchorFrame = 0;
+    compensateAnchor();
+  };
+  if (document.hidden) return flush();
+  anchorFrame = requestAnimationFrame(flush);
+}
+
+function compensateAnchor() {
+  if (!anchorState) return;
+  if (!anchorState.el.isConnected) {
+    refreshAnchorBaseline();
+    return;
+  }
+  const r = anchorState.el.getBoundingClientRect();
+  const delta = Math.round(r.top) - anchorState.top;
+  const grewSelf = Math.abs(r.height - anchorState.height) > 1;
+  // Something above the anchor changed the layout: put the anchor back where the reader had it. Growth
+  // inside the anchor itself is the reader watching it expand - never compensated.
+  if (!grewSelf && Math.abs(delta) > 1 && window.scrollY > 0) {
+    lastAnchorScrollAt = Date.now();
+    window.scrollBy(0, delta);
+  }
+  const after = anchorState.el.getBoundingClientRect();
+  anchorState.top = Math.round(after.top);
+  anchorState.height = Math.round(after.height);
+}
+
+let anchorObserver = null;
+
+function startAnchorObserver() {
+  if (anchorObserver || typeof ResizeObserver !== "function") return;
+  anchorObserver = new ResizeObserver(() => scheduleAnchorCompensation());
+  for (const el of [document.getElementById("projects"), document.getElementById("jobs"), document.getElementById("approvals")]) {
+    if (el) anchorObserver.observe(el);
+  }
+  // A real scroll re-picks the anchor; our own compensation must not.
+  document.addEventListener(
+    "scroll",
+    () => {
+      if (Date.now() - lastAnchorScrollAt < 250) return;
+      clearTimeout(anchorRepickTimer);
+      anchorRepickTimer = setTimeout(refreshAnchorBaseline, 160);
+    },
+    { passive: true },
+  );
+  window.addEventListener("resize", () => {
+    clearTimeout(anchorRepickTimer);
+    anchorRepickTimer = setTimeout(refreshAnchorBaseline, 160);
+  });
+  refreshAnchorBaseline();
+}
+
 // ---- board hygiene ----------------------------------------------------------------------------
 // A card and the detail block it sits in can outlive the row they belong to. When a row's key changes
 // under it - a nested worktree adopted by its own project, a path re-cased by discovery - the old
@@ -5566,6 +5720,7 @@ function renderProjectRows(name) {
   applyStoredScrolls(tbody);
   restoreBoardAnchor(anchor);
   scheduleBoardSweep(anchor);
+  refreshAnchorBaseline();
   // This path rebuilds the table in ranked order, which is how a row most often changes place (a
   // project event or a snapshot). Without this the move was silent — the node was new, so nothing
   // remembered where it used to be.
@@ -5640,6 +5795,7 @@ function renderAll() {
   paintCollapseAll();
   restoreBoardAnchor(anchor);
   scheduleBoardSweep(anchor);
+  refreshAnchorBaseline();
   // A rebuild recreates the sections, so every folder's filter has to be re-applied to the new nodes.
   for (const g of $("projects").querySelectorAll("section.root-group")) applyRootFilter(g.dataset.root);
   // A full rebuild reorders the sections too: same test as renderRoot — a re-rank flashes, a filter
@@ -6764,6 +6920,13 @@ document.addEventListener("click", async (e) => {
       const bodyEl = grp.querySelector(".tgrp-body");
       rebuildToolGroup(grp, { filter: "", open: filtered || Boolean(bodyEl && bodyEl.hidden) });
     }
+    return;
+  }
+  const pinBtn = e.target.closest("[data-pin-thread]");
+  if (pinBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleAnchorPin(pinBtn.dataset.pinThread);
     return;
   }
   const thinkBtn = e.target.closest("[data-think-thread]");
@@ -8258,6 +8421,7 @@ for (const id of ["newagent", "agents"]) applyFixedCollapse(id);
     // not have it). The first snapshot paints the real set.
     await resync();
     connect();
+    startAnchorObserver();
     state.eventsAt = Date.now();
   } catch (e) {
     setStream("offline", "bad");
