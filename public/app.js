@@ -932,7 +932,7 @@ function turnBody(turn, copy = "") {
       })
       .join("") || '<div class="jl jl-dim">waiting for output…</div>';
   return thinkHtml(turn, copy) +
-    `<pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>` +
+    `<pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}${reasoningLiveHtml(turn)}</pre>` +
     // The subagents this turn spawned, right under the console they ran beside: the delegation is the turn's own
     // work, not the card's, and a card with several turns would otherwise show the newest one's children under all
     // of them.
@@ -1706,6 +1706,7 @@ function conversationHtml(conv) {
       ${latest.yolo ? '<span class="pill yolo" title="this run was started with the --yolo flag (auto-approve, no prompts). The panel does not send it: approvals still come to this card.">yolo</span>' : ""}
       ${homeless ? `<button class="btn-attach" data-attach-toggle="${esc(thread)}" type="button" title="attach this agent to a worktree — it then lives under that row">\u2935 attach</button>` : ""}
       <span class="mono dimmer thread-name" data-thread-name="${esc(thread)}" data-label="${esc(latest.label || "")}" title="${latest.label ? esc(`${latest.label} — Hermes thread ${thread}`) : "Hermes session thread — continue it any time"}">${esc(latest.label || thread)}</span>
+      <button class="btn-think${reasoningOn(thread) ? " is-on" : ""}" data-reasoning-thread="${esc(thread)}" type="button" title="${reasoningOn(thread) ? "showing this agent's reasoning live — click to stop" : "show this agent's reasoning while it works, as the CLI does"}">💭</button>
       <button class="btn-think${thinkingOn(thread) ? " is-on" : ""}" data-think-thread="${esc(thread)}" type="button" title="${thinkingOn(thread) ? "showing what this agent thought — click to hide it" : "show what this agent thought before it acted (read from the session store)"}">🧠</button>
       <button class="btn-rename" data-rename-thread="${esc(thread)}" type="button" title="rename this session — a label for the panel only; the Hermes thread id never changes">\u270e</button>
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
@@ -2309,6 +2310,88 @@ state.thinkCache = state.thinkCache || new Map(); // turn key -> { blocks, at }
 state.thinkOpen = state.thinkOpen || new Set(); // turn keys whose block is expanded
 state.thinkLoading = state.thinkLoading || new Set();
 
+// ---- reasoning ----------------------------------------------------------------------------
+// Hermes' own word for the agent's reasoning shown *while it works* (`display.show_reasoning`, /reasoning show|hide).
+// Thinking above is the per-turn record read afterwards; this is the live one: the current block, tailing the console
+// as it grows, cleared when the turn ends and the record takes over.
+const REASONING_KEY = "wtgui.reasoning";
+state.liveReasoning = state.liveReasoning || new Map(); // turn id -> { text, at }
+
+function reasoningOn(thread) {
+  try {
+    return localStorage.getItem(`${REASONING_KEY}.${thread}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setReasoning(thread, on) {
+  try {
+    localStorage.setItem(`${REASONING_KEY}.${thread}`, on ? "1" : "0");
+  } catch {
+    /* private mode */
+  }
+  if (!on) for (const id of [...state.liveReasoning.keys()]) state.liveReasoning.delete(id);
+  renderConversation(thread);
+}
+
+// The live line sits at the end of the console, where the newest output goes.
+function reasoningLiveHtml(turn) {
+  if (!reasoningOn(turn.thread || turn.id)) return "";
+  const entry = state.liveReasoning.get(turn.id);
+  if (!entry || !entry.text) return "";
+  return `<div class="jl jl-reasoning" data-reasoning-live="${esc(turn.id)}" title="the agent's reasoning, read from its session while it works">💭 ${linkifyText(entry.text)}</div>`;
+}
+
+function paintReasoningLive(turn) {
+  const pre = document.querySelector(`pre.job-out[data-out="${CSS.escape(turn.id)}"]`);
+  if (!pre) return;
+  const old = pre.querySelector(`[data-reasoning-live="${CSS.escape(turn.id)}"]`);
+  const html = reasoningLiveHtml(turn);
+  if (!html) {
+    if (old) old.remove();
+    return;
+  }
+  const holder = document.createElement("div");
+  holder.innerHTML = html;
+  const fresh = holder.firstElementChild;
+  if (old) old.replaceWith(fresh);
+  else pre.appendChild(fresh);
+}
+
+async function pollReasoning() {
+  for (const card of document.querySelectorAll(".job[data-thread]")) {
+    const thread = card.dataset.thread;
+    if (!thread || !reasoningOn(thread)) continue;
+    const conv = conversations().find((c) => c.thread === thread);
+    if (!conv) continue;
+    for (const turn of conv.turns) {
+      const live = turn.status === "running" || turn.status === "starting";
+      if (!live) {
+        if (state.liveReasoning.delete(turn.id)) paintReasoningLive(turn);
+        continue;
+      }
+      const from = Date.parse(turn.startedAt || "") || 0;
+      let blocks = [];
+      try {
+        const r = await apiFetch(
+          `/api/thinking?thread=${encodeURIComponent(thread)}&from=${from}&to=${Date.now()}`,
+        );
+        if (r.ok) blocks = (await r.json()).blocks || [];
+      } catch {
+        continue;
+      }
+      const last = blocks[blocks.length - 1];
+      if (!last || !last.text) continue;
+      const prev = state.liveReasoning.get(turn.id);
+      if (prev && prev.text === last.text) continue;
+      state.liveReasoning.set(turn.id, { text: last.text, at: Date.now() });
+      paintReasoningLive(turn);
+    }
+  }
+}
+setInterval(pollReasoning, 2500);
+
 function thinkDefault() {
   try {
     return localStorage.getItem(THINK_KEY) === "1";
@@ -2631,6 +2714,7 @@ function conversationSignature(conv) {
     // repaint, and the note would only appear whenever something unrelated forced a rebuild.
     l.pendingSteer ? `s${l.pendingSteer.at || 1}` : "",
     thinkingOn(conv.thread) ? "t" : "-",
+    reasoningOn(conv.thread) ? "r" : "-",
     // A card stays RUNNING while children it delegated are out, so that answer belongs in the signature.
     (subagentFallback.get(conv.thread) || []).some((s) => s.running) ||
     conv.turns.some((t) => (t.subagents || []).some((s) => s.running))
@@ -5555,6 +5639,14 @@ document.addEventListener("click", async (e) => {
       bodyEl.hidden = !bodyEl.hidden;
       tgrpMore.classList.toggle("is-open", !bodyEl.hidden);
     }
+    return;
+  }
+  const reasoningBtn = e.target.closest("[data-reasoning-thread]");
+  if (reasoningBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const thread = reasoningBtn.dataset.reasoningThread;
+    setReasoning(thread, !reasoningOn(thread));
     return;
   }
   const thinkBtn = e.target.closest("[data-think-thread]");
