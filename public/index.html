@@ -121,6 +121,12 @@
           <span class="settings-unit mono">s</span>
         </label>
 
+        <label class="settings-row settings-gap" for="flash-time" title="How long a row's green flash lasts (and the grey one under Grey flash). The project outline and the ring on a card that the panel just landed on scale with it, so one number controls the whole 'it moved / you are here' animation. 0 turns the flash off. Saved in this browser.">
+          <span>Flash time <span class="settings-info">ⓘ</span></span>
+          <input id="flash-time" type="number" inputmode="decimal" step="0.1" min="0" max="5">
+          <span class="settings-unit mono">s</span>
+        </label>
+
         <label class="settings-row" for="anchor-touch" title="The last-touched anchor: the card you last clicked, focused or typed in keeps its screen position for the seconds beside it after you stop touching it. On screen only — a card that has scrolled away never holds the anchor. Saved in this browser.">
           <span>Touched anchor <span class="settings-info">ⓘ</span></span>
           <input id="anchor-touch" type="checkbox" checked>

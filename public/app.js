@@ -21,6 +21,8 @@ const ANCHOR_HOVER_SECONDS_DEFAULT = 3;
 const ANCHOR_TOUCH_KEY = "wm.anchorTouch";          // was wm.anchorFollow
 const ANCHOR_TOUCH_SECONDS_KEY = "wm.anchorTouchSeconds"; // was wm.anchorFollowSeconds
 const ANCHOR_TOUCH_SECONDS_DEFAULT = 30;
+const FLASH_TIME_KEY = "wm.flashSeconds";
+const FLASH_TIME_DEFAULT = 0.9;   // seconds; the row flash the panel has always used
 
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
@@ -104,6 +106,9 @@ const state = {
   anchorHoverSeconds: loadAnchorSeconds(ANCHOR_HOVER_SECONDS_KEY, ANCHOR_HOVER_SECONDS_DEFAULT, 1),
   anchorTouch: loadAnchorFlag(ANCHOR_TOUCH_KEY, true, "wm.anchorFollow"),
   anchorTouchSeconds: loadAnchorSeconds(ANCHOR_TOUCH_SECONDS_KEY, ANCHOR_TOUCH_SECONDS_DEFAULT, 3, "wm.anchorFollowSeconds"),
+  // How long the green/grey row flash lasts. The project outline and the card ring keep their old
+  // proportions to it, so one number scales the whole "it moved / you are here" animation.
+  flashSeconds: loadFlashSeconds(),
   cloneStatus: {},
   approvals: new Map(),
   scanRoots: [],
@@ -4414,14 +4419,14 @@ function jumpToPanelAgent(projectName, { running = false } = {}) {
     programmaticScroll();
     card.scrollIntoView({ block: "center", behavior: "auto" });
     refreshAnchorBaseline();
-    state.jumpThread = { thread: found.thread, until: Date.now() + 1700 };
+    state.jumpThread = { thread: found.thread, until: Date.now() + flashRingMs() };
     card.classList.add("jump");
     setTimeout(() => {
       if (state.jumpThread && state.jumpThread.thread === found.thread) state.jumpThread = null;
       // Look the node up again: a running card is rebuilt on every job event, so the node captured here
       // may already be detached, and the class it carries is not part of the render signature.
       document.querySelector(`.job[data-thread="${CSS.escape(found.thread)}"]`)?.classList.remove("jump");
-    }, 1700);
+    }, flashRingMs());
     state.pendingFocus = { thread: found.thread, until: Date.now() + 20_000, scrollUntil: Date.now() + 6_000 };
     applyPendingFocus();
   };
@@ -4448,7 +4453,7 @@ function jumpToAgent(thread) {
   card.scrollIntoView({ block: "center", behavior: "smooth" });
   refreshAnchorBaseline();
   card.classList.add("jump");
-  setTimeout(() => card.classList.remove("jump"), 1700);
+  setTimeout(() => card.classList.remove("jump"), flashRingMs());
   // Remember the target so a repaint (which replaces this node) lands the caret back in it. The jump
   // keeps re-asserting itself for a few seconds: smooth scrolling dies when the card is rebuilt.
   state.pendingFocus = { thread, until: Date.now() + 20_000, scrollUntil: Date.now() + 6_000 };
@@ -4474,7 +4479,7 @@ function landOnSpawnedCard(thread) {
   card.classList.add("jump");
   setTimeout(() => {
     document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)?.classList.remove("jump");
-  }, 1700);
+  }, flashRingMs());
   // placed: true - this IS the centring; applyPendingFocus must not do it again on the next repaint.
   state.pendingFocus = { thread, until: Date.now() + 20_000, scrollUntil: Date.now() + 6_000, placed: true };
   applyPendingFocus();
@@ -5176,6 +5181,48 @@ function anchorCardFor(thread) {
 //     two minutes ago says nothing about what is being read now),
 //   * the card last interacted with - clicked, focused, typed in - for a couple of minutes, which is the
 //     "last panel I touched is where I am thinking" case.
+function loadFlashSeconds() {
+  try {
+    const raw = localStorage.getItem(FLASH_TIME_KEY);
+    const n = Number(raw);
+    return raw !== null && Number.isFinite(n) && n >= 0 && n <= 5 ? Math.round(n * 10) / 10 : FLASH_TIME_DEFAULT;
+  } catch {
+    return FLASH_TIME_DEFAULT;
+  }
+}
+
+function saveFlashSeconds(seconds) {
+  try {
+    localStorage.setItem(FLASH_TIME_KEY, String(seconds));
+  } catch {
+    /* no storage: this tab only */
+  }
+}
+
+// The three durations the flashes use, all scaled from the one setting (0.9s row : 1.1s project : 1.7s ring).
+const FLASH_BASE_SECONDS = 0.9;
+function flashScale() {
+  return Math.max(0, state.flashSeconds) / FLASH_BASE_SECONDS;
+}
+function flashRowMs() {
+  return Math.round(900 * flashScale());
+}
+function flashProjectMs() {
+  return Math.round(1100 * flashScale());
+}
+function flashRingMs() {
+  return Math.round(1700 * flashScale());
+}
+
+// CSS owns the animation, so the durations are handed over as variables; the class-removal timeouts below
+// use the same numbers, so a flash cannot keep a class after it has finished fading.
+function applyFlashTime() {
+  const root = document.documentElement;
+  root.style.setProperty("--flash-row", `${flashRowMs()}ms`);
+  root.style.setProperty("--flash-project", `${flashProjectMs()}ms`);
+  root.style.setProperty("--flash-ring", `${flashRingMs()}ms`);
+}
+
 function anchorHoverMs() {
   return state.anchorHoverSeconds * 1000;
 }
@@ -6045,7 +6092,7 @@ function flashMovedByKey(beforeKeys, afterEls, reflowHost, colorFor = null) {
     const kind = kinds.get(el);
     el.classList.add(kind);
     clearTimeout(el._flashT);
-    el._flashT = setTimeout(() => el.classList.remove(kind), 950);
+    el._flashT = setTimeout(() => el.classList.remove(kind), flashRowMs() + 40);
   }
 }
 
@@ -6491,7 +6538,7 @@ function connect() {
     if (sec.classList.contains("flash")) {
       freshHolder.classList.add("flash");
       clearTimeout(freshHolder._flashT);
-      freshHolder._flashT = setTimeout(() => freshHolder.classList.remove("flash"), 1150);
+      freshHolder._flashT = setTimeout(() => freshHolder.classList.remove("flash"), flashProjectMs() + 40);
     }
     sec.replaceWith(freshHolder);
     state.tbodyEls.set(evt.project.name, freshHolder.querySelector(`[data-tbody="${CSS.escape(evt.project.name)}"]`));
@@ -8881,11 +8928,22 @@ function paintAnchorSettings() {
   const hoverSeconds = $("anchor-hover-seconds");
   const touch = $("anchor-touch");
   const touchSeconds = $("anchor-touch-seconds");
+  const flash = $("flash-time");
   if (hover) hover.checked = state.anchorHover;
   if (hoverSeconds) hoverSeconds.value = String(state.anchorHoverSeconds);
   if (touch) touch.checked = state.anchorTouch;
   if (touchSeconds) touchSeconds.value = String(state.anchorTouchSeconds);
+  if (flash) flash.value = String(state.flashSeconds);
+  applyFlashTime();
 }
+
+$("flash-time")?.addEventListener("input", (e) => {
+  const raw = Number(e.target.value);
+  const n = Number.isFinite(raw) ? Math.max(0, Math.min(5, Math.round(raw * 10) / 10)) : FLASH_TIME_DEFAULT;
+  state.flashSeconds = n;
+  saveFlashSeconds(n);
+  applyFlashTime();
+});
 
 $("anchor-hover")?.addEventListener("change", (e) => {
   state.anchorHover = Boolean(e.target.checked);
