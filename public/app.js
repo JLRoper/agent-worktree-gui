@@ -1303,15 +1303,16 @@ function subagentsHtml(list, key = "") {
   const subs = Array.isArray(list) ? list : [];
   if (!subs.length) return "";
   const running = subs.filter((s) => s.running).length;
+  const collapsed = state.collapsedSubs.has(key);
   const head = `\u29c9 ${subs.length} subagent${subs.length === 1 ? "" : "s"} \u00b7 ${running ? `${running} running` : "all done"}`;
-  return `<div class="subagents mono" data-subs-turn="${esc(key)}">
-    <span class="sub-head" title="agents this run delegated. Their tools run on their own sessions, so only their start and finish reach this card. click a line for its console.">${esc(head)}</span>
+  return `<div class="subagents mono${running ? "" : " is-done"}${collapsed ? " is-collapsed" : ""}" data-subs-turn="${esc(key)}">
+    <span class="sub-head" role="button" tabindex="0" data-subs-toggle="${esc(key)}" title="agents this run delegated. Their tools run on their own sessions, so only their start and finish reach this card. click a line for its console; click this line to ${collapsed ? "show" : "hide"} them."><span class="sub-chev">${collapsed ? "\u25b8" : "\u25be"}</span> ${esc(head)}</span>
     ${subs
       .map((s) => {
         const id = s.id || "";
         const open = Boolean(id) && state.openSubConsole.has(id);
         return `<div class="sub-row${s.running ? " is-running" : ""}${open ? " is-open" : ""}"${id ? ` role="button" tabindex="0" data-sub-console="${esc(id)}" title="${esc(`${s.goal || "subagent"} — click for its console`)}"` : ""}>
-      <span class="sub-caret">${id ? (open ? "\u25be" : "\u25b8") : ""}</span>
+      <span class="sub-caret sub-chev">${id ? (open ? "\u25be" : "\u25b8") : ""}</span>
       <span class="sub-dot"></span>
       <span class="sub-title">${esc(s.goal || "subagent")}</span>
       <span class="sub-meta mono">${s.running ? "running" : esc(s.status || "done")}${!s.running && s.duration ? ` · ${fmtSeconds(s.duration)}` : ""}</span>
@@ -1343,9 +1344,9 @@ function subagentsForTurn(turn) {
 function turnSubagentsHtml(turn, copy = "") {
   const key = turnKey(turn, copy);
   const rows = subagentsForTurn(turn);
-  const live = rows.filter((r) => r.running).length;
-  const running = turn.status === "running" || turn.status === "starting" || turn.status === "waiting_for_approval";
-  if (!rows.length || (!live && !running)) return `<div class="subagents mono" data-subs-turn="${esc(key)}" hidden></div>`;
+  if (!rows.length) return `<div class="subagents mono" data-subs-turn="${esc(key)}" hidden></div>`;
+  // A finished set stays on the card, greyed: the work it did is part of the turn, and its console is still worth
+  // opening. The header collapses it away for anyone who does not want it.
   return subagentsHtml(rows, key);
 }
 
@@ -1361,9 +1362,7 @@ function paintSubagents() {
     const box = document.querySelector(`[data-subs-turn="${CSS.escape(key)}"]`);
     if (!box) continue;
     const rows = subagentsForTurn(job);
-    const live = rows.filter((r) => r.running).length;
-    const running = job.status === "running" || job.status === "starting" || job.status === "waiting_for_approval";
-    if (!rows.length || (!live && !running)) {
+    if (!rows.length) {
       if (!box.hidden) {
         box.hidden = true;
         box.innerHTML = "";
@@ -1371,7 +1370,7 @@ function paintSubagents() {
       }
       continue;
     }
-    const sig = `${subagentsSig(rows)}|${[...state.openSubConsole].join(",")}|${state.subConsoleVersion || 0}`;
+    const sig = `${subagentsSig(rows)}|${[...state.openSubConsole].join(",")}|${state.subConsoleVersion || 0}|${state.collapsedSubs.has(key) ? "c" : "e"}`;
     if (!box.hidden && box.dataset.sig === sig) continue;
     box.outerHTML = subagentsHtml(rows, key);
     const fresh = document.querySelector(`[data-subs-turn="${CSS.escape(key)}"]`);
@@ -1421,6 +1420,7 @@ async function refreshSubagentRoster() {
 // Which subagent lines are expanded, and their console text. Kept here so a roster repaint (which rebuilds the strip)
 // does not close what the reader opened.
 state.openSubConsole = state.openSubConsole || new Set();
+state.collapsedSubs = state.collapsedSubs || new Set();
 state.subConsoles = state.subConsoles || new Map();
 state.subConsoleVersion = state.subConsoleVersion || 0;
 
@@ -1438,6 +1438,14 @@ async function loadSubConsole(id) {
     entry.lines = [{ kind: "dim", text: "could not read this subagent's session" }];
   }
   state.subConsoles.set(id, entry);
+  state.subConsoleVersion += 1;
+  paintSubagents();
+}
+
+function toggleSubs(key) {
+  if (!key) return;
+  if (state.collapsedSubs.has(key)) state.collapsedSubs.delete(key);
+  else state.collapsedSubs.add(key);
   state.subConsoleVersion += 1;
   paintSubagents();
 }
@@ -5277,6 +5285,13 @@ document.addEventListener("click", async (e) => {
     return;
   }
   // Steer the turn that is running: the primary action while the agent is busy.
+  const subsHead = e.target.closest("[data-subs-toggle]");
+  if (subsHead) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleSubs(subsHead.dataset.subsToggle);
+    return;
+  }
   const subRow = e.target.closest("[data-sub-console]");
   if (subRow) {
     e.preventDefault();
@@ -5308,6 +5323,12 @@ document.addEventListener("click", async (e) => {
 // A subagent line is focusable, so Enter or Space has to do what a click does.
 document.addEventListener("keydown", async (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
+  const head = e.target.closest?.("[data-subs-toggle]");
+  if (head) {
+    e.preventDefault();
+    toggleSubs(head.dataset.subsToggle);
+    return;
+  }
   const row = e.target.closest?.("[data-sub-console]");
   if (!row) return;
   e.preventDefault();

@@ -473,7 +473,16 @@ button.chip:active { transform: translateY(1px); }
 /* A steer the turn never read: offered back, unsent, rather than sent as a second turn. */
 .reply-note { color: #c8a6ff; font-size: 11px; margin: 6px 0 0 2px; }
 .subagents[hidden] { display: none; }
-.subagents .sub-head { color: #c8a6ff; font-size: 10.5px; letter-spacing: .03em; }
+.subagents .sub-head { color: #c8a6ff; font-size: 10.5px; letter-spacing: .03em; cursor: pointer; user-select: none; }
+.subagents .sub-head:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+/* Finished children stay, greyed: they are part of the turn, and their consoles are still worth opening. */
+.subagents.is-done .sub-head,
+.subagents.is-done .sub-title,
+.subagents.is-done .sub-meta { color: var(--dimmer); }
+.subagents.is-done .sub-dot { background: #46505f; box-shadow: none; }
+.subagents.is-done .sub-row:hover .sub-title { color: var(--text); }
+.subagents.is-collapsed .sub-row,
+.subagents.is-collapsed .sub-console { display: none; }
 .subagents .sub-row { display: flex; align-items: baseline; gap: 8px; min-width: 0; padding-left: 12px; }
 .subagents .sub-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dimmer); }
 .subagents .sub-row.is-running .sub-dot { background: #c8a6ff; box-shadow: 0 0 0 3px rgba(200, 166, 255, .16); animation: subpulse 1.6s ease-in-out infinite; }
@@ -484,6 +493,8 @@ button.chip:active { transform: translateY(1px); }
 .subagents .sub-row:hover { background: rgba(255, 255, 255, .035); }
 .subagents .sub-row:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
 .subagents .sub-caret { flex: none; width: 9px; color: var(--dimmer); }
+/* The triangles come from the UI font: the monospace stack on Windows has no ▾/▸, so the caret vanished. */
+.subagents .sub-chev { font-family: var(--ui); font-size: 9px; line-height: 1; }
 .subagents .sub-row.is-open { background: rgba(255, 255, 255, .02); }
 .sub-console { margin: 4px 0 8px 21px; padding: 6px 9px; max-height: 220px; overflow: auto; background: var(--console); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; line-height: 1.45; color: var(--text); white-space: pre-wrap; }
 .sub-console .jl { font: inherit; white-space: pre-wrap; word-break: break-word; }
