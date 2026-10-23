@@ -324,12 +324,30 @@ td.age .age-num.dimmer { color: var(--dimmer); }
    here loses on source order and the badge renders grey instead of amber. */
 .approval.jump { box-shadow: 0 0 0 3px #d2992288; }
 
-/* ---- approvals ---- */
-#approvals { border-color: #6b4d16; }
-#approvals .project-head { background: var(--amber-bg); border-bottom-color: #4a3a17; }
+/* ---- approvals ----
+   A floating stack, not a section in the page: approvals are an interruption, and a card above the board both
+   pushed the agent list down and scrolled away from the agent it was about. Pinned bottom-right, it costs no
+   page height and is reachable wherever the reader has scrolled. */
+.approval-dock {
+  position: fixed; right: 16px; bottom: 16px; z-index: 45;
+  width: 400px; max-width: calc(100vw - 32px); max-height: min(62vh, 560px);
+  display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid #6b4d16; border-radius: 10px;
+  box-shadow: 0 14px 36px #000a; overflow: hidden;
+}
+.approval-dock[hidden] { display: none; }
+.ap-dock-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 12px; background: var(--amber-bg); border-bottom: 1px solid #4a3a17; }
+.ap-dock-head .spacer { flex: 1; }
+.ap-dock-head #btn-dock-approvals { border: 0; background: none; color: var(--amber); font-size: 15px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.ap-dock-head #btn-dock-approvals:hover { color: var(--text); }
+.approval-dock.is-folded #approval-list { display: none; }
+.approval-dock.is-folded .ap-dock-head { border-bottom: 0; }
+#approval-list { overflow: auto; }
 .approval { padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .approval:last-child { border-bottom: 0; }
 .ap-head { display: flex; align-items: center; gap: 10px; font-size: 11px; }
+/* The agent's name is the point of the head: one line, cut rather than wrapped. */
+.ap-head .ap-agent { flex: 0 1 auto; min-width: 0; max-width: 62%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
 .ap-head .spacer { flex: 1; }
 .ap-cmd {
   margin: 6px 0 4px;
@@ -515,7 +533,9 @@ button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241
 .subs-collect { margin-left: 8px; background: none; border: 1px solid #3d3350; border-radius: 4px; color: #c8a6ff; font: 10px/1.5 var(--mono); padding: 0 6px; cursor: pointer; }
 .subs-collect:hover { color: #ecd9ff; border-color: #55407a; background: #241d33; }
 .subagents .sub-title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
-.subagents .sub-meta { flex: none; color: var(--dimmer); font-size: 10.5px; }
+.subagents .sub-meta { flex: none; white-space: nowrap; color: var(--dimmer); font-size: 10.5px; }
+/* The clock on a running row reads as part of the status, not as another column. */
+.subagents .sub-meta [data-sub-elapsed] { color: var(--dim); font-variant-numeric: tabular-nums; }
 /* A folded running row keeps saying what is happening: the newest thing the child wrote, pushed to the right of the
    line and cut short when it is long. It takes the space the title leaves rather than shoving the status around. */
 .subagents .sub-preview { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; color: var(--dimmer); font-size: 10.5px; padding-left: 12px; }

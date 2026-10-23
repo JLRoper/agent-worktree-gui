@@ -168,16 +168,6 @@
       </div>
     </section>
 
-    <section class="project" id="approvals" hidden>
-      <div class="project-head">
-        <h2>Approvals</h2>
-        <span class="path">an agent is waiting on you — nothing runs until you choose</span>
-        <span class="spacer"></span>
-        <div class="chips" id="approval-chips"></div>
-      </div>
-      <div id="approval-list"></div>
-    </section>
-
     <section class="project" id="agents">
       <div class="project-head" data-toggle-fixed="agents" title="minimize this card">
         <span class="chev">▾</span>
@@ -194,6 +184,18 @@
     <div id="projects">
       <p class="empty">Scanning worktrees…</p>
     </div>
+
+    <!-- Approvals dock: a floating stack pinned bottom-right, over the board. It takes no page height and stays
+         reachable wherever the reader has scrolled; each card names the agent it belongs to. -->
+    <aside id="approvals" class="approval-dock" hidden aria-label="approvals waiting on you">
+      <div class="ap-dock-head">
+        <span class="mono">⚠ waiting on you</span>
+        <div class="chips" id="approval-chips"></div>
+        <span class="spacer"></span>
+        <button id="btn-dock-approvals" type="button" title="fold or unfold this stack">▾</button>
+      </div>
+      <div id="approval-list"></div>
+    </aside>
   </main>
 
   <footer class="foot">

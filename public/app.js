@@ -1741,17 +1741,24 @@ function subagentsHtml(list, key = "", collected = false) {
       const id = s.id || "";
       const open = Boolean(id) && state.openSubConsole.has(id);
       const quiet = s.running && s.hung ? Math.max(0, (Date.now() - (s.lastSeen || Date.now())) / 1000) : 0;
+      // A running child counts its own clock, the way the card's turn head does: the status stays where "done" sits,
+      // and the time it has been out follows it. The number is a span so the 1s tick can advance it without a
+      // repaint of the row (a repaint is what used to make these lines unreadable while they moved).
+      const started = Number(s.startedAt) || 0;
+      const elapsedSpan = started
+        ? ` · <span data-sub-elapsed="${started}">${esc(fmtSeconds((Date.now() - started) / 1000))}</span>`
+        : "";
       const meta = s.running
         ? quiet
           ? `no activity ${fmtSeconds(quiet)}`
-          : "running"
+          : `running${elapsedSpan}`
         : `${esc(s.status || "done")}${s.duration ? ` · ${fmtSeconds(s.duration)}` : ""}`;
       return `<div class="sub-row${s.running ? " is-running" : ""}${s.hung ? " is-hung" : ""}${open ? " is-open" : ""}"${id ? ` role="button" tabindex="0" data-sub-console="${esc(id)}" title="${esc(quiet ? `${s.goal || "subagent"} — nothing written for ${fmtSeconds(quiet)}, possibly hung` : `${s.goal || "subagent"} — click for its console`)}"` : ""}>
       <span class="sub-caret sub-chev">${id ? (open ? "\u25be" : "\u25b8") : ""}</span>
       <span class="sub-dot"></span>
       <span class="sub-title">${esc(s.goal || "subagent")}</span>
-      ${s.running && !open && s.preview ? `<span class="sub-preview mono" title="${esc(s.preview)}">${esc(s.preview)}</span>` : ""}
       <span class="sub-meta mono">${meta}</span>
+      ${s.running && !open && s.preview ? `<span class="sub-preview mono" title="${esc(s.preview)}">${esc(s.preview)}</span>` : ""}
     </div>${open ? subConsoleHtml(id) : ""}`;
     })
     .join("");
@@ -2825,6 +2832,38 @@ async function answerRunApproval(approveBtn) {
 // behaviour, and a request that expires here is denied there.
 const APPROVAL_LABEL = { once: "Allow once", session: "Allow for session", always: "Always allow", deny: "Deny" };
 
+// The dock is folded or not across reloads: it is a corner of the screen, and its state is the reader's.
+const APPROVALS_FOLDED_KEY = "wtgui.approvalsFolded";
+let approvalThreadsShown = new Set(); // threads that had an approval at the last render
+
+function approvalsFolded() {
+  try {
+    return localStorage.getItem(APPROVALS_FOLDED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function applyApprovalsFold(dock = $("approvals")) {
+  if (!dock) return;
+  const folded = approvalsFolded();
+  dock.classList.toggle("is-folded", folded);
+  const btn = $("btn-dock-approvals");
+  if (btn) btn.textContent = folded ? "\u25b8" : "\u25be";
+}
+
+// Which agent this request belongs to, by the name the reader knows it by: the card's title, else its label,
+// else the thread id. "agent" alone was the surface and said nothing about who was blocked.
+function approvalAgentName(r) {
+  const thread = r && r.thread ? String(r.thread) : "";
+  if (thread) {
+    const job = [...state.jobs.values()].find((j) => (j.thread || j.id) === thread);
+    if (job) return job.title || job.label || thread;
+    return thread;
+  }
+  return r && r.surface ? String(r.surface) : "agent";
+}
+
 function approvalCard(r) {
   const left = Math.max(0, Math.round(((r.deadline || 0) - Date.now()) / 1000));
   const buttons = (r.allowed || ["once", "deny"])
@@ -2834,7 +2873,7 @@ function approvalCard(r) {
     })
     .join("");
   return `<div class="approval" data-approval="${esc(r.id)}">
-    <div class="ap-head"><span class="mono dim">${esc(r.surface || "agent")}</span>${r.thread ? `<button class="sig sig-panel" data-agent-thread="${esc(r.thread)}" title="jump to the agent blocked on this approval">⧉ agent</button>` : ""}<span class="spacer"></span><span class="mono ${left < 20 ? "warn" : "dimmer"}" data-approval-left="${esc(r.id)}">expires in ${left}s</span></div>
+    <div class="ap-head"><span class="mono ap-agent" title="${esc(r.thread ? `blocked agent: ${r.thread}` : r.surface || "agent")}">${esc(approvalAgentName(r))}</span>${r.thread ? `<button class="sig sig-panel" data-agent-thread="${esc(r.thread)}" title="jump to the agent blocked on this approval">⧉ agent</button>` : ""}<span class="spacer"></span><span class="mono ${left < 20 ? "warn" : "dimmer"}" data-approval-left="${esc(r.id)}">expires in ${left}s</span></div>
     <pre class="ap-cmd mono">${esc(r.command || "(no command text)")}</pre>
     ${r.description ? `<div class="ap-desc dim">${esc(r.description)}</div>` : ""}
     <div class="ap-actions">${buttons}<span class="ap-err mono"></span></div>
@@ -2846,11 +2885,21 @@ function renderApprovals() {
   if (!sec) return;
   const list = [...state.approvals.values()].sort((a, b) => (a.deadline || 0) - (b.deadline || 0));
   sec.hidden = list.length === 0;
+  applyApprovalsFold(sec);
+  // The card that says "waiting on you →" is part of the same fact: repaint the threads whose answer changed,
+  // instead of leaving the chip on a stale card until the next job event happens to arrive.
+  const threadsNow = new Set(list.map((r) => r && r.thread).filter(Boolean));
+  for (const thread of new Set([...threadsNow, ...approvalThreadsShown])) {
+    if (threadsNow.has(thread) === approvalThreadsShown.has(thread)) continue;
+    if (document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)) renderConversation(thread);
+  }
+  approvalThreadsShown = threadsNow;
   if (!list.length) {
     $("approval-list").innerHTML = "";
+    $("approval-chips").innerHTML = "";
     return;
   }
-  $("approval-chips").innerHTML = `<span class="chip bad">${list.length} waiting</span>`;
+  $("approval-chips").innerHTML = `<span class="chip bad">${list.length}</span>`;
   $("approval-list").innerHTML = list.map(approvalCard).join("");
 }
 
@@ -6074,14 +6123,35 @@ document.addEventListener("click", async (e) => {
     void reviveSession(reviveBtn);
     return;
   }
-  // "waiting on you →" on an agent card: take the reader to the approval that is blocking it.
+  // The dock's own fold control.
+  const dockFold = e.target.closest("#btn-dock-approvals");
+  if (dockFold) {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      localStorage.setItem(APPROVALS_FOLDED_KEY, approvalsFolded() ? "0" : "1");
+    } catch {
+      /* private mode: the fold still works, it just does not survive a reload */
+    }
+    applyApprovalsFold();
+    return;
+  }
+  // "waiting on you →" on an agent card: take the reader to the approval that is blocking it. The dock is fixed,
+  // so this unfolds it and scrolls its own list — scrollIntoView on a fixed element only moves the page.
   const apJump = e.target.closest("[data-approval-jump]");
   if (apJump) {
     e.preventDefault();
     e.stopPropagation();
+    const dock = $("approvals");
+    try {
+      localStorage.setItem(APPROVALS_FOLDED_KEY, "0");
+    } catch {
+      /* the jump still happens */
+    }
+    applyApprovalsFold(dock);
     const card = document.querySelector(`.approval[data-approval="${CSS.escape(apJump.dataset.approvalJump)}"]`);
     if (card) {
-      card.scrollIntoView({ block: "center", behavior: "smooth" });
+      card.scrollIntoView({ block: "nearest", behavior: "smooth" });
       card.classList.add("jump");
       setTimeout(() => card.classList.remove("jump"), 1600);
     }
@@ -6736,6 +6806,12 @@ setInterval(() => {
     const row = state.rows.get(cell.dataset.key);
     if (!row) continue;
     paintAgeCell(cell, row);
+  }
+  // Subagent rows carry their own clock, like the turn head above them.
+  for (const el of document.querySelectorAll("[data-sub-elapsed]")) {
+    const started = Number(el.dataset.subElapsed) || 0;
+    const next = started ? fmtSeconds((Date.now() - started) / 1000) : "";
+    if (next && el.textContent !== next) el.textContent = next;
   }
   for (const j of state.jobs.values()) {
     if (j.status !== "running" && j.status !== "starting") continue;
