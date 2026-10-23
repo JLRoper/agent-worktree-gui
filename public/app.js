@@ -13,6 +13,9 @@ const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
   // "Console size" stays the baseline for every card. Kept in memory so a repaint does not undo it.
   consoleZoom: new Map(),
+  // Hot Agent: the rotation through agents that are waiting for input. `stack` is the visit history (so
+  // Alt+Left can walk back), `cursor` points at the one on screen.
+  hot: { on: false, stack: [], cursor: -1 },
   projects: new Map(),
   // Handle for the board-reorder clock, which the settings row can re-arm at another cadence.
   reorderTimer: null,
@@ -5085,6 +5088,7 @@ document.addEventListener("keydown", async (e) => {
       }
     }
     void sendReply(thread);
+    if (state.hot.on) hotAfterSend(thread);
   }
 });
 document.addEventListener("input", (e) => {
@@ -5319,6 +5323,171 @@ document.addEventListener(
   },
   { passive: false },
 );
+
+// ---- Hot Agent ---------------------------------------------------------------------------
+// A rotation through the agents that are waiting on you: a card whose latest turn is NOT running has said what
+// it wanted and is sitting there. Turning this on opens the first one, puts the caret in its reply box and
+// flashes that box amber; Enter sends and moves to the next, Alt+Right skips one, Alt+Left steps back. The box
+// flashes on every hop, not just the first, so the eye can follow the caret through the list.
+
+function hotWaiting() {
+  return conversations().filter((c) => {
+    const t = c.latest || {};
+    return t.status !== "running" && t.status !== "starting";
+  });
+}
+
+function hotCandidates() {
+  const waiting = hotWaiting();
+  // Visible cards first, in the order the board shows them, then everything else newest-first: a folded
+  // project has no cards in the DOM and those agents are just as waiting.
+  const rank = new Map([...document.querySelectorAll(".agents-block .job")].map((el, i) => [el.dataset.thread, i]));
+  const dom = waiting.filter((c) => rank.has(c.thread)).sort((a, b) => rank.get(a.thread) - rank.get(b.thread));
+  const rest = waiting
+    .filter((c) => !rank.has(c.thread))
+    .sort((a, b) => Date.parse(b.latest?.startedAt || 0) - Date.parse(a.latest?.startedAt || 0));
+  return [...dom, ...rest].map((c) => c.thread);
+}
+
+function hotRowFor(thread) {
+  for (const row of state.rows.values()) {
+    if (agentsFor(row).some((c) => c.thread === thread)) return row;
+  }
+  return null;
+}
+
+function hotStillWaiting(thread) {
+  const conv = conversations().find((c) => c.thread === thread);
+  if (!conv) return false;
+  const t = conv.latest || {};
+  return t.status !== "running" && t.status !== "starting";
+}
+
+function flashHotBox(box) {
+  if (!box) return;
+  box.classList.remove("hot-flash");
+  void box.offsetWidth; // restart it even when the last flash is still fading
+  box.classList.add("hot-flash");
+  clearTimeout(box._hotFlashT);
+  box._hotFlashT = setTimeout(() => box.classList.remove("hot-flash"), 1300);
+}
+
+function paintHotButton() {
+  const btn = $("btn-hot");
+  if (!btn) return;
+  const h = state.hot;
+  btn.classList.toggle("on", h.on);
+  btn.textContent = h.on ? `Hot Agent ${Math.min(h.cursor + 1, h.stack.length)}/${h.stack.length}` : "Hot Agent";
+  btn.title = h.on
+    ? "Hot Agent is on — Enter sends and moves to the next waiting agent, Alt+Right skips, Alt+Left goes back. Click to stop."
+    : "Hot Agent — step through the agents that are waiting on you: each one is opened, its reply box focused and flashed amber. Enter sends and moves on; Alt+Right skips; Alt+Left goes back.";
+}
+
+function hotFocus(thread) {
+  const row = hotRowFor(thread);
+  if (!row) return false;
+  if (!state.expandedProjects.has(row.project)) toggleProject(row.project);
+  const key = keyOf(row.project, row.path);
+  if (!state.expanded.has(key)) {
+    document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
+  }
+  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+  if (!card) return false;
+  if (card.classList.contains("collapsed")) card.querySelector(".job-head")?.click();
+  scrollCardUnderBar(card);
+  const box = card.querySelector(".reply-box");
+  if (box) {
+    try {
+      box.focus({ preventScroll: true });
+    } catch {
+      box.focus();
+    }
+    const end = box.value.length;
+    if (box.setSelectionRange) box.setSelectionRange(end, end);
+    flashHotBox(box);
+  }
+  return true;
+}
+
+function hotStep(dir) {
+  const h = state.hot;
+  if (!h.on) return;
+  if (dir > 0) {
+    let i = h.cursor;
+    while (i + 1 < h.stack.length) {
+      i += 1;
+      if (hotStillWaiting(h.stack[i]) && hotFocus(h.stack[i])) {
+        h.cursor = i;
+        paintHotButton();
+        return;
+      }
+    }
+    const next = hotCandidates().find((t) => !h.stack.includes(t));
+    if (!next) {
+      showBanner("Hot Agent: no agents are waiting for input");
+      return;
+    }
+    h.stack.push(next);
+    h.cursor = h.stack.length - 1;
+    hotFocus(next);
+    paintHotButton();
+    return;
+  }
+  let i = h.cursor;
+  while (i - 1 >= 0) {
+    i -= 1;
+    if (hotStillWaiting(h.stack[i]) && hotFocus(h.stack[i])) {
+      h.cursor = i;
+      paintHotButton();
+      return;
+    }
+  }
+}
+
+function hotToggle() {
+  const h = state.hot;
+  h.on = !h.on;
+  if (!h.on) {
+    h.stack = [];
+    h.cursor = -1;
+    paintHotButton();
+    return;
+  }
+  const list = hotCandidates();
+  if (!list.length) {
+    h.on = false;
+    paintHotButton();
+    showBanner("Hot Agent: no agents are waiting for input");
+    return;
+  }
+  h.stack = [list[0]];
+  h.cursor = 0;
+  paintHotButton();
+  hotFocus(list[0]);
+}
+
+// Enter in the hot card: the reply is on its way, so fold that project away and step on.
+function hotAfterSend(thread) {
+  if (!state.hot.on) return;
+  const row = hotRowFor(thread);
+  if (row && state.expandedProjects.has(row.project)) toggleProject(row.project);
+  hotStep(1);
+}
+
+$("btn-hot")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  hotToggle();
+});
+window.addEventListener("keydown", (e) => {
+  if (!state.hot.on || !e.altKey) return;
+  if (e.key === "ArrowRight") {
+    e.preventDefault();
+    hotStep(1);
+  } else if (e.key === "ArrowLeft") {
+    e.preventDefault();
+    hotStep(-1);
+  }
+});
 
 document.addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return;

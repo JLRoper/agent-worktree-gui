@@ -70,6 +70,21 @@ button, select, input, textarea { font-family: var(--ui); }
 /* zoom control: the page owns a scale factor so Ctrl +/- keeps working inside a host that
    swallows the browser's own zoom shortcuts */
 .zoom { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 6px; padding: 1px; }
+/* Hot Agent: a caution light, because it takes the window and the caret from wherever they were. Off it is a
+   quiet button; on it is amber and says where in the rotation you are. */
+#btn-hot { border-color: #6b4d16; background: #241d10; color: #ffd479; }
+#btn-hot:hover { border-color: #8a611c; background: #2c2312; }
+#btn-hot.on { background: #ffb545; border-color: #ffb545; color: #241a05; font-weight: 700; box-shadow: 0 0 0 2px rgba(255, 181, 69, .28); }
+#btn-hot.on:hover { background: #ffc163; border-color: #ffc163; }
+
+/* The reply box flashes amber when Hot Agent lands on it, and fades back to the box it always was. Amber, not
+   the green a jump uses: this is a prompt to answer, not a confirmation. */
+@keyframes hotflash {
+  0% { border-color: #ffb545; box-shadow: 0 0 0 3px rgba(255, 181, 69, .38), inset 0 0 0 1px rgba(255, 181, 69, .45); background: rgba(255, 181, 69, .07); }
+  65% { border-color: #ffb545; box-shadow: 0 0 0 2px rgba(255, 181, 69, .2), inset 0 0 0 1px rgba(255, 181, 69, .22); background: rgba(255, 181, 69, .03); }
+  100% { border-color: var(--line); box-shadow: none; background: #12161d; }
+}
+.reply-box.hot-flash { animation: hotflash 1.25s ease-out; }
 .zoom button { padding: 2px 7px; font-size: 13px; line-height: 1.15; border: none; background: transparent; color: var(--dim); }
 .zoom button:hover { background: var(--panel-2); color: var(--text); }
 .zoom #zoom-pct { min-width: 42px; text-align: center; font-size: 11px; color: var(--dim); }
