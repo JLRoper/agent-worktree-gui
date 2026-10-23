@@ -3744,6 +3744,18 @@ function conversationSignature(conv) {
   ].join("~");
 }
 
+// Is the reader's selection standing in this element? A non-collapsed range counts wherever it touches: a drag that
+// started before the readout and runs off its end has endpoints outside it and still owns the text between them.
+function selectionIn(el) {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return false;
+  for (let i = 0; i < sel.rangeCount; i++) {
+    const r = sel.getRangeAt(i);
+    if (el.contains(r.startContainer) || el.contains(r.endContainer) || r.intersectsNode(el)) return true;
+  }
+  return false;
+}
+
 // The two things on a card that move without changing its markup: when it was last used, and its usage figures.
 // Writing them where they stand is what keeps a streaming turn from rebuilding (and resetting) its own console.
 function paintCardMeta(el, conv) {
@@ -3757,7 +3769,12 @@ function paintCardMeta(el, conv) {
   const slot = el.querySelector("[data-stats]");
   if (slot) {
     const html = statsRowHtml(latest, conv.thread);
-    if (slot._html !== html) {
+    // The figures are the one part of a streaming card that rewrite themselves every poll, and a rewrite deletes
+    // whatever the reader had selected in them: a full row selected and copied came back empty within a second.
+    // Hold the markup while a selection stands inside it and let the first tick after they let go paint the current
+    // numbers — a stale reading under a live selection is the honest trade, and it is the only one that keeps the
+    // selection the reader just made.
+    if (slot._html !== html && !selectionIn(slot)) {
       slot.innerHTML = html;
       slot._html = html;
     }

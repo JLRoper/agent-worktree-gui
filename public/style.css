@@ -777,6 +777,12 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
   margin-left: 9px; padding-left: 9px; border-left: 1px solid var(--line);
   font-size: 11px; color: var(--dim); white-space: nowrap; vertical-align: baseline;
 }
+/* The readout is a measurement the reader may want to keep, so the figures select and copy like any other text on
+   the card. Its two controls do not: a drag that starts to their left used to run straight through them and leave a
+   highlight sitting on the model id and the ceiling, and a double-click on the model selected the word it was about
+   to open a picker for. `user-select` is a selection rule only — both are still ordinary buttons and take every
+   click (verified by the context ladder's own POST, not by the CSS). */
+.job-stats { user-select: text; }
 .job-stats .stat-sep { color: var(--line); }
 
 /* a conversation: turns stacked top to bottom, reply box at the bottom */
@@ -797,11 +803,11 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 }
 .turn-head .chev { color: var(--dimmer); font-size: 18px; line-height: 1; display: inline-block; width: 16px; vertical-align: -3px; }
 /* The model on the readout: a control by double-click, quiet enough to still read as part of the line. */
-.stat-model { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.stat-model { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; user-select: none; }
 .stat-model:hover { color: var(--text); text-decoration: underline dotted; text-underline-offset: 2px; }
 .stat-model.is-static { cursor: default; }
 /* The context reading is a control too: the ceiling it is measured against is the reader's call. */
-.stat-ctx { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.stat-ctx { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; user-select: none; }
 .stat-ctx:hover { color: var(--text); text-decoration: underline dotted; text-underline-offset: 2px; }
 .stat-ctx.is-over { color: #e8a33d; }
 /* The tiny chevron says "this cycles" without turning the readout into a form control. */
