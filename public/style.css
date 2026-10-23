@@ -673,6 +673,35 @@ button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241
 .pill.yolo { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 /* A turn's prompt line folds the turn, exactly like the "turn 1 · done" head above it. */
 .job-cmd { font-size: 11px; word-break: break-all; margin-bottom: 6px; font-family: var(--term); }
+/* The console and the thinking body live in a positioned wrapper so the "to the newest line" chip can sit in
+   the corner of the CONSOLE, not in the flow of its text. The chip is only visible while the reader is scrolled
+   away from the end; at the end there is nothing to jump to. */
+.out-wrap { position: relative; }
+.out-wrap > .to-bottom {
+  position: absolute;
+  right: 16px;
+  bottom: 9px;
+  z-index: 2;
+  width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--dim);
+  background: rgba(18, 22, 29, .92);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .45);
+  cursor: pointer;
+  transition: opacity .16s ease, color .16s ease, border-color .16s ease;
+}
+.out-wrap > .to-bottom:hover { color: var(--text); border-color: #3a4353; }
+.out-wrap > .to-bottom:active { transform: translateY(1px); }
+/* Scrolled to the newest line, or nothing to scroll: the chip fades out and stops taking clicks. */
+.out-wrap.is-at-end > .to-bottom { opacity: 0; pointer-events: none; }
+
 .job-out {
   margin: 0;
   /* Resizable like the reply box. The max-height is the cap the console always had — the drag lifts it

@@ -1056,6 +1056,21 @@ function toolGroupHtml(lines, key, filter = "", openBody = false) {
     </div>`;
 }
 
+// The chip that jumps a console back to its newest line. It sits beside the scrolled element inside a
+// positioned wrapper, so it stays in the corner of the console instead of travelling with the text; it is shown
+// only while the reader is scrolled away from the end.
+function toBottomBtnHtml() {
+  return `<button type="button" class="to-bottom" data-to-bottom="1" title="jump to the newest line and follow it again">\u2193</button>`;
+}
+
+function paintToBottom(box) {
+  const wrap = box?.closest?.(".out-wrap");
+  if (!wrap) return;
+  const overflowing = box.scrollHeight > box.clientHeight + 4;
+  const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight <= 24;
+  wrap.classList.toggle("is-at-end", !overflowing || atEnd);
+}
+
 function turnBody(turn, copy = "") {
   const lines = jobLines(turn.id).filter((l) => !isBookkeeping(l)).slice(-300);
   const running = turnLive(turn);
@@ -1073,7 +1088,7 @@ function turnBody(turn, copy = "") {
       })
       .join("") || '<div class="jl jl-dim">waiting for output…</div>';
   return thinkHtml(turn, copy) +
-    `<pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>` +
+    `<div class="out-wrap"><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${toBottomBtnHtml()}</div>` +
     // The subagents this turn spawned, right under the console they ran beside: the delegation is the turn's own
     // work, not the card's, and a card with several turns would otherwise show the newest one's children under all
     // of them.
@@ -3435,7 +3450,7 @@ function thinkHtml(turn, copy = "") {
   const meta = !entry ? "reading…" : blocks.length ? `${blocks.length} block${blocks.length === 1 ? "" : "s"}` : "none recorded";
   return `<details class="think" data-think-turn="${esc(key)}"${open ? " open" : ""}>
     <summary><span class="think-title">🧠 thinking</span> <span class="think-meta mono">${esc(meta)}</span></summary>
-    <div class="think-body">${
+    <div class="out-wrap"><div class="think-body">${
       blocks.length
         ? blocks.map((b) => `<div class="think-block mono">${linkifyText(b.text)}</div>`).join("")
         : `<div class="think-block mono think-empty">${
@@ -3445,7 +3460,7 @@ function thinkHtml(turn, copy = "") {
                 : "this turn recorded no thinking"
               : "reading the store…"
           }</div>`
-    }</div>
+    }</div>${toBottomBtnHtml()}</div>
   </details>`;
 }
 
@@ -7592,6 +7607,21 @@ document.addEventListener("click", async (e) => {
     }
     return;
   }
+  const toBottom = e.target.closest("[data-to-bottom]");
+  if (toBottom) {
+    e.preventDefault();
+    e.stopPropagation();
+    const box = toBottom.closest(".out-wrap")?.querySelector("pre.job-out, .think-body");
+    if (box) {
+      // Ask for the tail explicitly: the jump is the reader's, so the console must stop holding its old
+      // position and follow the newest line again.
+      if (box.matches("pre.job-out")) pinConsole(box.dataset.out);
+      else state.thinkPinned.set(box.closest("details.think")?.dataset.thinkTurn || "", true);
+      setScroll(box, box.scrollHeight);
+      paintToBottom(box);
+    }
+    return;
+  }
   const pinBtn = e.target.closest("[data-pin-thread]");
   if (pinBtn) {
     e.preventDefault();
@@ -7892,6 +7922,12 @@ document.addEventListener(
   "scroll",
   (e) => {
     const pre = e.target;
+    // The "to the newest line" chip follows the scroll as it happens, not on the 400ms sweep: the reader should
+    // see it the moment they take the console over. This also runs for the panel's own scrolls, which is right -
+    // a chip that is shown or hidden has no effect on where anything sits.
+    if (pre && pre.classList && (pre.classList.contains("job-out") || pre.classList.contains("think-body"))) {
+      paintToBottom(pre);
+    }
     if (pre && pre.classList && pre.classList.contains("think-body")) {
       const key = pre.closest("details.think")?.dataset.thinkTurn || "";
       if (selfScrolled.has(pre) || justPlaced(pre)) {
@@ -7936,8 +7972,14 @@ document.addEventListener(
 // Whatever moved a pinned console off its newest line - a rebuild, the browser clamping a replaced node, a resize -
 // is corrected here within a frame or two. Only pinned consoles are touched, so reading history is never interrupted.
 setInterval(() => {
-  for (const pre of document.querySelectorAll("pre.job-out")) stickConsole(pre);
-  for (const body of document.querySelectorAll(".think-body")) stickThinkBody(body);
+  for (const pre of document.querySelectorAll("pre.job-out")) {
+    stickConsole(pre);
+    paintToBottom(pre);
+  }
+  for (const body of document.querySelectorAll(".think-body")) {
+    stickThinkBody(body);
+    paintToBottom(body);
+  }
   for (const box of document.querySelectorAll(".sub-console")) stickSubConsole(box);
 }, 400);
 
