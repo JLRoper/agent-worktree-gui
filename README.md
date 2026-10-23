@@ -43,6 +43,10 @@ dark — everything else works.
 `node tools/verify-verdicts.mjs [project]` re-derives every row's merge verdict straight from git and
 diffs it against the panel (exit 1 on any mismatch) — useful after touching the scan logic.
 
+`node tools/verify-subagent-turns.mjs` runs the chip-attribution out of `public/app.js` against the
+card that mis-filed five reviewers, then the edges around it — useful after touching how a turn owns
+the subagents it delegated.
+
 ## Two halves
 
 ### Monitor (read-only)

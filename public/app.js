@@ -2410,33 +2410,69 @@ function subagentsHtml(list, key = "", collected = false) {
   </div>`;
 }
 
-// Which children this turn spawned. The stream knows exactly (they are on the job); the store only knows the parent
-// thread, so a row is attributed to the turn whose window contains the moment it started.
+// ---- subagents: attribution (pure, so tools/verify-subagent-turns.mjs can run it) --------------
+// A child's clock, and the turn it belongs to. A turn's window is its own run, and it stops when the next turn on
+// the thread began: an interrupted turn never writes an endedAt, and reading that as "still open until now" let the
+// card's first turn own every child a later turn delegated - five reviewers filed under the turn that only renamed
+// a branch.
+const CHILD_SLACK_MS = 3000;
+
+function turnWindow(turn, next) {
+  const from = Date.parse(turn.startedAt || "") || 0;
+  const ended = Date.parse(turn.endedAt || "") || 0;
+  const nextFrom = next ? Date.parse(next.startedAt || "") || 0 : 0;
+  let to = ended || Infinity;
+  if (nextFrom) to = Math.min(to, nextFrom);
+  return { id: turn.id, from, to };
+}
+
+// turn id -> the rows that started while it was running. The stream knows exactly (they are on the job); the store
+// only knows the parent thread, so it goes by the clock.
+function childOwner(children, turns) {
+  const ordered = [...turns].sort((a, b) => String(a.startedAt || "").localeCompare(String(b.startedAt || "")));
+  const windows = ordered.map((t, i) => turnWindow(t, ordered[i + 1]));
+  const owners = new Map();
+  for (const child of children) {
+    const at = Number(child.startedAt) || 0;
+    if (!at) continue;
+    // The window that holds the moment it started, taken as the newest such window: with a turn that never ended,
+    // the newest match is the one that was actually running.
+    let owner = null;
+    for (const w of windows) if (at >= w.from - CHILD_SLACK_MS && at <= w.to + CHILD_SLACK_MS) owner = w;
+    // ...or, for a child that started after its turn had finished, the last turn that had begun by then. A child
+    // never belongs to a turn that had not started yet, which is what put every old child under the newest console.
+    if (!owner) for (const w of windows) if (w.from <= at) owner = w;
+    if (!owner) owner = windows[0];
+    if (!owner) continue;
+    const rows = owners.get(owner.id) || [];
+    rows.push(child);
+    owners.set(owner.id, rows);
+  }
+  return owners;
+}
+// ---- end attribution ---------------------------------------------------------------------------
+
+// Which children this turn spawned, as one list in the order they started.
 function subagentsForTurn(turn) {
   if (Array.isArray(turn.subagents) && turn.subagents.length) return turn.subagents;
   const thread = turn.thread || turn.id;
   const all = subagentFallback.get(thread) || [];
   if (!all.length) return [];
+  const turns = [...state.jobs.values()].filter((j) => (j.thread || j.id) === thread);
+  if (!turns.length) return [];
+  return childOwner(all, turns).get(turn.id) || [];
+}
+
+// This turn's own window as a pair of epoch ms, so a store query (a collect, a thought read) stops where the turn
+// did instead of sweeping in everything that came after it.
+function turnBounds(turn) {
+  const thread = turn.thread || turn.id;
   const turns = [...state.jobs.values()]
     .filter((j) => (j.thread || j.id) === thread)
     .sort((a, b) => String(a.startedAt || "").localeCompare(String(b.startedAt || "")));
-  if (!turns.length) return [];
-  const rows = [];
-  for (const k of all) {
-    if (!k.startedAt) continue;
-    const startOf = (t) => Date.parse(t.startedAt || "") || 0;
-    const endOf = (t) => Date.parse(t.endedAt || "") || Date.now();
-    // The turn whose window contains the moment the child started...
-    let owner = turns.find((t) => k.startedAt >= startOf(t) - 3000 && k.startedAt <= endOf(t) + 3000);
-    // ...or, for a child that started after its turn finished, the last turn that had begun by then. A child never
-    // belongs to a turn that started after it, which is what put every old child under the newest console.
-    if (!owner) {
-      for (const t of turns) if (startOf(t) <= k.startedAt) owner = t;
-    }
-    if (!owner) owner = turns[0];
-    if (owner && owner.id === turn.id) rows.push(k);
-  }
-  return rows;
+  const i = turns.findIndex((t) => t.id === turn.id);
+  const w = turnWindow(turn, i >= 0 ? turns[i + 1] : null);
+  return { from: w.from, to: Number.isFinite(w.to) ? w.to : Date.now() };
 }
 
 // Under the console of the turn that delegated: while a child is out, and while the turn itself is still going, so
@@ -2501,8 +2537,9 @@ async function collectThread(turn) {
   if ([...state.jobs.values()].some((j) => (j.thread || j.id) === thread && (turnLive(j)))) return;
   state.collecting.add(turn.id);
   try {
-    const from = Date.parse(turn.startedAt || "") || 0;
-    const to = Date.parse(turn.endedAt || "") || Date.now();
+    // This turn's own window: an interrupted turn has no endedAt, and "to now" would hand the parent the children
+    // of every turn that came after it.
+    const { from, to } = turnBounds(turn);
     const r = await apiFetch(
       `/api/subagents/collect?thread=${encodeURIComponent(thread)}&from=${from}&to=${to}`,
     );
@@ -4046,8 +4083,8 @@ async function loadThinking(turn, copy = "") {
   state.thinkLoading.add(turn.id);
   let blocks = [];
   try {
-    const from = Date.parse(turn.startedAt || "") || 0;
-    const to = Date.parse(turn.endedAt || "") || Date.now();
+    // Bounded by the turn's own clock, which stops where the next turn began (an interrupted turn has no endedAt).
+    const { from, to } = turnBounds(turn);
     const r = await apiFetch(
       `/api/thinking?thread=${encodeURIComponent(turn.thread || turn.id)}&from=${from}&to=${to}`,
     );
