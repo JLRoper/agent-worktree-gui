@@ -3442,6 +3442,7 @@ function renderJobs() {
   applyStoredScrolls($("jobs"));
   restoreThinkBodies($("jobs"));
   for (const c of convs) restoreReplyDraft(c.thread);
+  scheduleBoardSweep();
   const running = convs.filter((c) => c.turns.some((t) => turnLive(t))).length;
   const folded = convs.filter((c) => state.collapsedJobs.has(c.thread)).length;
   const turns = [...state.jobs.values()].length;
@@ -4728,6 +4729,101 @@ function paintAgeCell(cell, row) {
 // Move each live card into the slot the freshly built detail made for it. A card that is not on the board yet is
 // built here; one that is keeps its DOM, so its console, its open turns and its scroll position all survive a
 // row repaint. Insertion order follows the slots, so the agents stay in the order the row ranks them.
+// ---- board hygiene ----------------------------------------------------------------------------
+// A card and the detail block it sits in can outlive the row they belong to. When a row's key changes
+// under it - a nested worktree adopted by its own project, a path re-cased by discovery - the old
+// tr/detail pair stays in the parent project's tbody, card and all, while the same conversation is
+// also rendered in the row that now owns it. A snapshot rebuilds one project at a time, so that pair
+// can sit there for a minute and then vanish: the board jumps and the same agent appears twice.
+// Every render ends with this sweep, which is the board's own invariant: one row per live key, one
+// detail per row, one card per thread - the copy in the owning row wins, the homeless panel is next.
+let boardSweepQueued = false;
+// The row the reader is looking at, when a rebuild starts. Restored afterwards: a card appearing, a
+// duplicate being swept or a re-rank can all change the height above the viewport, and the board used
+// to jump out from under the reader when that happened.
+let boardAnchor = null;
+
+function captureBoardAnchor() {
+  const bar = document.querySelector(".topbar");
+  const top = bar ? bar.getBoundingClientRect().bottom : 0;
+  if (window.scrollY <= 0) return null; // at the top of the page: nothing to hold
+  for (const tr of document.querySelectorAll("#projects tr.row[data-key]")) {
+    const r = tr.getBoundingClientRect();
+    if (r.bottom > top + 1) return { key: tr.dataset.key, offset: Math.round(r.top - top - (bar ? 0 : 0)) };
+  }
+  return null;
+}
+
+function restoreBoardAnchor(anchor) {
+  if (!anchor) return;
+  const tr = document.querySelector(`#projects tr.row[data-key="${CSS.escape(anchor.key)}"]`);
+  if (!tr) return;
+  const bar = document.querySelector(".topbar");
+  const top = bar ? bar.getBoundingClientRect().bottom : 0;
+  const now = Math.round(tr.getBoundingClientRect().top - top);
+  const delta = now - anchor.offset;
+  if (Math.abs(delta) > 2) window.scrollBy(0, delta);
+}
+
+function scheduleBoardSweep(anchor = null) {
+  if (anchor) boardAnchor = anchor;
+  if (boardSweepQueued) return;
+  boardSweepQueued = true;
+  requestAnimationFrame(() => {
+    boardSweepQueued = false;
+    sweepStaleBoard();
+    const held = boardAnchor;
+    boardAnchor = null;
+    restoreBoardAnchor(held);
+  });
+}
+
+function sweepStaleBoard() {
+  // A detail whose row is gone, or which no longer follows its own row.
+  for (const d of [...document.querySelectorAll("tr.detail[data-detail]")]) {
+    const key = d.dataset.detail;
+    const ownRow = state.rowEls.get(key) || null;
+    const stale = !state.rows.has(key) || (ownRow && d.previousElementSibling !== ownRow);
+    if (!stale) continue;
+    d.remove();
+    if (state.detailEls.get(key) === d) state.detailEls.delete(key);
+  }
+  // A row the server no longer lists.
+  for (const tr of [...document.querySelectorAll("tr.row[data-key]")]) {
+    if (!state.rows.has(tr.dataset.key)) tr.remove();
+  }
+  // One card per thread.
+  const byThread = new Map();
+  for (const card of document.querySelectorAll(".job[data-thread]")) {
+    const t = card.dataset.thread;
+    const list = byThread.get(t) || [];
+    list.push(card);
+    byThread.set(t, list);
+  }
+  for (const [thread, cards] of byThread) {
+    if (cards.length < 2) continue;
+    const conv = conversations().find((c) => c.thread === thread);
+    const owner = normPath(conv?.latest?.ownerPath || conv?.first?.ownerPath || "").toLowerCase();
+    const rank = (card) => {
+      const body = card.closest("tr.detail");
+      const key = body?.previousElementSibling?.dataset?.key || "";
+      const path = String(key).split("::").slice(1).join("::");
+      if (owner && normPath(path).toLowerCase() === owner) return 3;
+      if (card.closest("#jobs")) return 1;
+      return 2;
+    };
+    const keep = [...cards].sort((a, b) => rank(b) - rank(a))[0];
+    for (const card of cards) {
+      if (card === keep) continue;
+      const where = card.closest("#jobs")
+        ? "the Agents panel"
+        : card.closest("tr.detail")?.previousElementSibling?.dataset?.key || "a row";
+      console.warn(`panel: dropped a duplicate card for ${thread} (kept the copy in ${keep.closest("#jobs") ? "the Agents panel" : keep.closest("tr.detail")?.previousElementSibling?.dataset?.key || "a row"}, removed ${where})`);
+      card.remove();
+    }
+  }
+}
+
 function fillAgentSlots(root, reuse) {
   if (!root) return;
   for (const slot of [...root.querySelectorAll("[data-agent-slot]")]) {
@@ -5399,6 +5495,7 @@ function placeRow(project, row, { flash = false } = {}) {
   }
   reorder(project);
   refreshChips(project);
+  scheduleBoardSweep();
 }
 
 function removeRow(project, p) {
@@ -5417,6 +5514,7 @@ function renderProjectRows(name) {
   if (!tbody) return;
   // Open rows carry agent transcripts; a rebuild must not throw the reader to the top of one.
   const prevScrolls = captureScrolls(tbody);
+  const anchor = captureBoardAnchor();
   const prevRowKeys = [...tbody.children].filter((el) => el.classList.contains("row")).map((el) => el.dataset.key);
   // The cards and the typing inside each open row live in its detail element, and this path replaces the whole
   // tbody. Capture them by row key first: the detail is rebuilt from detailHtml() below, whose agent slots are
@@ -5466,6 +5564,8 @@ function renderProjectRows(name) {
   }
   restoreScrolls(tbody, prevScrolls);
   applyStoredScrolls(tbody);
+  restoreBoardAnchor(anchor);
+  scheduleBoardSweep(anchor);
   // This path rebuilds the table in ranked order, which is how a row most often changes place (a
   // project event or a snapshot). Without this the move was silent — the node was new, so nothing
   // remembered where it used to be.
@@ -5483,6 +5583,7 @@ function paintConfigLine() {
 
 function renderAll() {
   // A full re-render rebuilds the chips from scratch; the job list is the freshest input.
+  const anchor = captureBoardAnchor();
   invalidatePanelMap();
   const projects = sortedProjects();
   for (const id of [...state.expandedProjects]) if (!state.projects.has(id)) state.expandedProjects.delete(id);
@@ -5537,6 +5638,8 @@ function renderAll() {
   }
   paintConfigLine();
   paintCollapseAll();
+  restoreBoardAnchor(anchor);
+  scheduleBoardSweep(anchor);
   // A rebuild recreates the sections, so every folder's filter has to be re-applied to the new nodes.
   for (const g of $("projects").querySelectorAll("section.root-group")) applyRootFilter(g.dataset.root);
   // A full rebuild reorders the sections too: same test as renderRoot — a re-rank flashes, a filter
