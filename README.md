@@ -395,6 +395,14 @@ Per-rule escalation decides what happens when a rule fires: `log` (journal only)
 `act` (wake, and let it send when autonomy allows). An approval is never answerable from the panel at any
 setting — that boundary belongs to the gateway and the agent's own card.
 
+`watch` ships at **wake**: a watch is the reader explicitly asking to be told, and an alert on its own is a notice
+nobody reads. When a watch expires or its thread finishes, the assistant is woken with the watch, the deadline and
+the worker's state, and answers in its own thread — the measured example was a 5-minute watch on a docs worker that
+came back as *"the worker ended as interrupted after writing docs/using-the-board.md and updating README.md in its
+worktree … the uncommitted documentation changes are ready in `.worktrees/write-md-documentation-f-950b59`"*. Wakes
+fired by one sentry pass are collected for 150 ms and sent as one turn, so two watches on the same worker are one
+answer, not two. A scratchpad written before this default changed is migrated once (file `version: 2`).
+
 **It can create worktrees.** `assistant.spawn` (also in its Settings tab) has its own ladder, because cutting a
 tree is a bigger act than writing a reply: `ask` (default) turns a SPAWN line into a card showing the project,
 where the tree goes, the exact prompt and the model — nothing runs until you press **Create worktree & start**;
