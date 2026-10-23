@@ -33,11 +33,11 @@ cuts a worktree, a row's ✕ removes one, the folder **+** clones a repo). Every
 | --- | --- |
 | ● dot | Green while the live stream is healthy and snapshots apply. Amber on `reconnecting…`, red on `offline` (the panel server is unreachable). |
 | **Worktree Agent Monitor** | Click it for Settings — the same panel as ⚙ Settings, handy when the page is zoomed in. |
-| Config line | Version, how many projects are being watched, the two main cadences, scan threads, bind host. |
+| Config line | Version, how many projects are being watched, the two main cadences, scan threads, bind host — and `refresh on screen only` when that refresh mode is on. |
 | Stream readout | `pool 1/3 · 3 conversations · 29 events · 2.4/s`: scan workers busy, how many conversations, and the event rate arriving over SSE. |
 | **NOT-RUNNING** | Steps through the agents that are not running and are waiting on you. See below. |
 | **Collapse all** | Folds the whole tree — every folder, project, worktree row, card and turn. The button then reads **Expand all**. Same as `Ctrl+[` / `Ctrl+]`. |
-| **Refresh now** | Forces a fast scan of every project instead of waiting for the next tick. |
+| **Refresh now** | Forces a fast scan now instead of waiting for the next tick. With Settings → Board → **Refresh** set to "only on screen", it reads only the projects in view. |
 | **Fetch remotes** | Runs `git fetch <remote> --prune` in every project. The only routine gesture that touches git refs. |
 | **Pause** | Freezes the page: closes the live stream, so nothing updates. The button reads **Resume**, which reconnects and resyncs. |
 | **⚙ Settings** | The Settings panel (`Ctrl+,`). |
@@ -373,7 +373,8 @@ restart.
 `⚙ Settings`, the title, or `Ctrl+,`. `Esc`, the `✕`, or a click outside closes it. The head is fixed and the body
 scrolls; every explanation is the row's own tooltip on the `ⓘ`.
 
-**Stored in this browser** (per browser, not shared):
+**Stored in this browser** (per browser, not shared; the one exception is **Refresh**, which is the panel's own
+setting):
 
 | Group | Row | Meaning |
 | --- | --- | --- |
@@ -390,6 +391,7 @@ scrolls; every explanation is the row's own tooltip on the `ⓘ`.
 | Board | Flash time | How long the green (and grey) row flash, the project outline and the landing ring last. `0` turns them off. |
 | Board | Grey flash | A row that was re-read with nothing changed flashes grey. Green — a sign of life — always flashes. |
 | Board | Flash on events | An event about the worktree (a console line, a job starting or finishing, an approval) counts as life and flashes the row; off, the ring still restarts but the board does not pulse. |
+| Board | Refresh | Which projects the panel re-reads: **everything**, or **only on screen** (the window plus half a screen either side). In "only on screen" it reads nothing while no page is open, and scrolling a stale project into view reads it at once. Saved in this panel's `config.json`, so it applies to every browser and survives a restart. |
 
 **Written to the gateway's `config.yaml`** (the gateway re-reads them; a row whose file is not reachable from this
 machine is disabled, and its note gives the reason):
@@ -450,6 +452,10 @@ Rows flash when something moved: green for a sign of life or a row that moved up
 nothing new. The number in **Life / next read** is time since the last evidence; the ring fills toward the next read
 and turns amber/red if a row is overdue — a long ring usually means the panel is busy, not that the row is stuck.
 
+With Settings → Board → **Refresh: only on screen**, those cadences apply only to projects in view: off-screen
+projects are not scanned at all, nothing is scanned while no page is open, and a project scrolled into view is read
+immediately. The config line then ends with `refresh on screen only`.
+
 Configured in `config.json` (`liveSeconds`, `worktreeSeconds`, `dormantSeconds`, `slowSeconds`, `fetchSeconds`,
 `refreshSeconds`), and the footer prints the values in use.
 
@@ -464,6 +470,7 @@ Configured in `config.json` (`liveSeconds`, `worktreeSeconds`, `dormantSeconds`,
 | No usage strip above a reply box | Same missing patch: no `run.usage` events, so the panel shows nothing rather than zeros. |
 | A verdict badge stays empty (grey) | It is computed on the slow pass; **Refresh now** forces one. A dashed grey badge is a verdict being reclassified. |
 | Rows stop moving | The page may be paused, or the stream `reconnecting…`/`offline`. **Resume** or **Refresh now**. |
+| A project's numbers look old while it is off screen | With Settings → Board → Refresh: **only on screen**, off-screen projects are not read until you scroll them into view — and nothing is read at all while no page is open. |
 | A worktree will not delete | An agent run is live in it — stop the run first. |
 | `revive` is refused | That session already has a card on the board. |
 | A console result is cut short | The run stream carries a preview, not the full payload. See the README's troubleshooting section. |
