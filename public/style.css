@@ -684,16 +684,23 @@ button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241
 .pill.pill-running { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
 .pill.pill-notrunning { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
 .pill.pill-notrunning.is-failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
-/* "▶ continue" sits right after the not-running pill: one click sends the canned nudge and starts the next turn.
-   Green and quiet — it is the action that picks the agent back up, not a status. */
-.btn-continue {
+/* The not-running pill IS the continue button. The status and the action were the same thing, and a separate
+   "▶ continue" beside it said it twice. The word stays the status; the refresh glyph on its right is the only part
+   that says "this reacts to a click" - so a card can still be read at a glance without a second badge on the head. */
+button.pill-continue {
   flex: none; align-self: center;
-  font: 11px/1.5 var(--ui); color: #b9f6c2;
-  background: #14301c; border: 1px solid #2c5a37; border-radius: 999px;
-  padding: 0 8px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--ui); line-height: 1.5; cursor: pointer; vertical-align: middle;
 }
-.btn-continue:hover { background: #1c3f26; color: #e6ffe9; border-color: #3d7a4c; }
-.btn-continue:disabled { color: var(--dim); border-color: var(--line); background: transparent; cursor: progress; }
+button.pill-continue .pill-again { font-size: 12px; line-height: 1; opacity: .8; }
+button.pill-continue:hover { border-color: #6f5a1e; background: #33290f; }
+button.pill-continue:hover .pill-again { opacity: 1; }
+button.pill-continue.pill-notrunning.is-failed:hover { border-color: #7a3138; background: #341a1c; }
+button.pill-continue:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 1px; }
+button.pill-continue:disabled { cursor: progress; }
+/* While the nudge is being sent the glyph turns: "starting" without pretending to a status the panel does not know. */
+button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s linear infinite; }
+@keyframes pill-again-spin { to { transform: rotate(360deg); } }
 .pill.done { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
 .pill.failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .pill.cancelled, .pill.interrupted { color: var(--dim); background: #20242c; }

@@ -2723,14 +2723,11 @@ function conversationHtml(conv) {
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
       <span class="agent-glyph" title="a Hermes agent session — ⧉ marks an agent row">\u29c9</span>
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
-      <span class="pill ${runningNow ? "pill-running" : `pill-notrunning${latest.status === "failed" ? " is-failed" : ""}`}" title="${esc(
-        runningNow
-          ? running
-            ? `running ${elapsed(latest)}`
-            : `this turn is ${latest.status}, but subagents it started are still running`
-          : `${latest.status} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""}`,
-      )}">${runningNow ? "running" : latest.status === "failed" ? "exited" : "not-running"}</span>
-      ${runningNow ? "" : `<button class="btn-continue" data-continue-thread="${esc(thread)}" type="button" title="send this agent &quot;${esc(CONTINUE_TEXT)}&quot; and start its next turn — the one-click way to pick a stopped agent back up">▶ continue</button>`}
+      ${runningNow
+        ? `<span class="pill pill-running" title="${esc(running ? `running ${elapsed(latest)}` : `this turn is ${latest.status}, but subagents it started are still running`)}">running</span>`
+        : `<button class="pill pill-notrunning pill-continue${latest.status === "failed" ? " is-failed" : ""}" data-continue-thread="${esc(thread)}" type="button" title="${esc(
+            `${latest.status} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""} — click to send this agent "${CONTINUE_TEXT}" and start its next turn`,
+          )}">${latest.status === "failed" ? "exited" : "not-running"}<span class="pill-again" aria-hidden="true">\u21bb</span></button>`}
       ${whenHtml}
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       ${runApproval && !waitingApproval ? `<span class="sig sig-approval" title="this run is parked on a flagged command — answer it in the card below">waiting on approval</span>` : ""}
@@ -3213,13 +3210,15 @@ function recallReply(box, step) {
 // whether there is work left, and an agent whose task is done is told plainly that exiting is allowed.
 const CONTINUE_TEXT = "Continue if you can, exit if you are done";
 
-// The "▶ continue" button: one click sends that nudge and starts the next turn, so a stopped agent can be picked up
-// without typing anything. Failures land in the card's own warning line, where a reply failure already goes.
+// The not-running pill is this: one click sends that nudge and starts the next turn, so a stopped agent can be
+// picked up without typing anything. Failures land in the card's own warning line, where a reply failure already
+// goes. The button's text is the status, so "starting" is said with the refresh glyph turning, not by replacing the
+// word - a pill that reads STARTING… would be claiming a status the panel does not know yet.
 async function continueThread(thread, btn = null) {
   if (!thread) return;
   if (btn && btn.isConnected) {
     btn.disabled = true;
-    btn.textContent = "starting…";
+    btn.classList.add("is-starting");
   }
   const started = await sendReply(thread, CONTINUE_TEXT);
   // The card's own warning line is easy to miss when the card is folded, so a failed nudge also says it out loud.
@@ -3227,7 +3226,7 @@ async function continueThread(thread, btn = null) {
   // The card is usually rebuilt by the reply, so this node may be gone; only touch it if it is still on the page.
   if (btn && btn.isConnected) {
     btn.disabled = false;
-    btn.textContent = "▶ continue";
+    btn.classList.remove("is-starting");
   }
 }
 
@@ -8150,7 +8149,9 @@ document.addEventListener("click", async (e) => {
   }
   // A click on anything interactive inside the head belongs to that control, never to the fold:
   // attach, clear, maximize, cancel, the attach picker and its select all live in the head row.
-  // The "▶ continue" button on a stopped card: send the canned nudge and start the next turn.
+  // The not-running pill on a stopped card, which is the continue button: send the canned nudge and start the next
+  // turn. It is a <button>, so the fold handler below would leave it alone anyway - this stops the click at the
+  // control even if the pill is later drawn as something else.
   const continueBtn = e.target.closest("[data-continue-thread]");
   if (continueBtn) {
     e.preventDefault();
