@@ -2407,10 +2407,54 @@ function captureTyping(root) {
 // for the exact text that went out.
 state.justSent = state.justSent || new Map(); // thread -> { text, at }
 
+// ---- the box grows with its draft ----------------------------------------------------------------
+// The reply box starts two lines tall and the Send/Queue/Cancel row is drawn inside its bottom-left corner.
+// Past two lines the text scrolled underneath those buttons, so the end of a longer draft was being typed
+// blind. The box now grows downward a line at a time (the buttons ride its bottom edge, still inside it), and
+// shrinks back when the draft does. The cap keeps one long draft from swallowing the whole window; past it the
+// box scrolls, which is the only case where text can still reach the buttons.
+const REPLY_MAX_LINES = 18;
+const SPAWN_MAX_LINES = 14;
+
+function growBoxToDraft(box, maxLines) {
+  if (!box || box.tagName !== "TEXTAREA") return;
+  const cs = getComputedStyle(box);
+  const line = parseFloat(cs.lineHeight) || 18;
+  const border = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+  const chrome = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + border;
+  const rows = Math.max(2, Number(box.getAttribute("rows")) || 2);
+  const min = Math.round(rows * line + chrome);
+  const max = Math.max(min, Math.min(Math.round(line * maxLines + chrome), Math.round(window.innerHeight * 0.45)));
+  box.style.height = "auto"; // measure the content, not the box we are trying to size
+  const want = box.scrollHeight + border;
+  const h = Math.max(min, Math.min(want, max));
+  box.style.height = `${h}px`;
+  box.style.overflowY = want > max + 1 ? "auto" : "hidden";
+  box.dataset.grownFor = String(box.value.length);
+}
+
+// Grow without moving the page - unless the box is the one being typed in and it now runs off the bottom.
+function growReplyBox(box) {
+  if (!box || box.tagName !== "TEXTAREA") return;
+  const maxLines = box.id === "job-prompt" ? SPAWN_MAX_LINES : REPLY_MAX_LINES;
+  growBoxToDraft(box, maxLines);
+  if (document.activeElement !== box) return;
+  const r = box.getBoundingClientRect();
+  const room = window.innerHeight - 14;
+  if (r.bottom > room) {
+    programmaticScroll();
+    window.scrollBy(0, r.bottom - room);
+    refreshAnchorBaseline();
+  }
+}
+
 function restoreTyping(root, typing) {
   for (const box of root.querySelectorAll(".reply-box[data-reply]")) {
     const draft = state.replyDrafts[box.dataset.reply];
     if (draft) box.value = draft;
+    // A repaint builds the box at its default height: give a restored draft its room back. Keyed on length
+    // so a board of quiet cards is not re-measured on every tick.
+    if (box.value && box.dataset.grownFor !== String(box.value.length)) growBoxToDraft(box, REPLY_MAX_LINES);
   }
   if (!typing) return;
   const box = root.querySelector(`.reply-box[data-reply="${CSS.escape(typing.thread)}"]`);
@@ -4860,6 +4904,7 @@ function readingAnchor() {
 }
 
 let anchorState = null;       // { el, top, height, pinned }
+let anchorScrollY = 0;        // page scrollY at the moment the baseline was measured
 let lastAnchorScrollAt = 0;   // our own scrollBy, so it is not read as the reader moving
 let anchorRepickTimer = 0;
 let anchorFrame = 0;
@@ -4872,6 +4917,7 @@ function refreshAnchorBaseline() {
   }
   const r = a.el.getBoundingClientRect();
   anchorState = { el: a.el, top: Math.round(r.top), height: Math.round(r.height), pinned: a.pinned };
+  anchorScrollY = Math.round(window.scrollY);
 }
 
 // One correction per frame. Called from the ResizeObserver on the two containers that can change height.
@@ -4899,6 +4945,13 @@ function compensateAnchor() {
   }
   const r = anchorState.el.getBoundingClientRect();
   const delta = Math.round(r.top) - anchorState.top;
+  // A correction bigger than most of the screen is not growth - it is a baseline measured before the reader
+  // moved (or before the board was as tall as it is). Re-measure and leave the page alone: a stale baseline
+  // once threw this page 14,000px on a single keystroke.
+  if (Math.abs(delta) > window.innerHeight * 0.75) {
+    refreshAnchorBaseline();
+    return;
+  }
   const grewSelf = Math.abs(r.height - anchorState.height) > 1;
   // Something above the anchor changed the layout: put the anchor back where the reader had it. Growth
   // inside the anchor itself is the reader watching it expand - never compensated.
@@ -4920,10 +4973,18 @@ function startAnchorObserver() {
   for (const el of [document.getElementById("projects"), document.getElementById("jobs"), document.getElementById("approvals")]) {
     if (el) anchorObserver.observe(el);
   }
-  // A real scroll re-picks the anchor; our own compensation must not.
+  // Every page scroll moves the anchor's viewport position, and the baseline has to move with it or the next
+  // resize reads the reader's own scrolling as growth. Our own compensation is excepted: it measures the
+  // element again after scrolling. A quiet moment then re-picks which element the reading line sits on.
   document.addEventListener(
     "scroll",
-    () => {
+    (e) => {
+      const target = e.target;
+      const page = !target || target === document || target === document.scrollingElement || target === window;
+      if (!page) return;
+      const y = Math.round(window.scrollY);
+      if (anchorState && Date.now() - lastAnchorScrollAt > 120) anchorState.top += anchorScrollY - y;
+      anchorScrollY = y;
       if (Date.now() - lastAnchorScrollAt < 250) return;
       clearTimeout(anchorRepickTimer);
       anchorRepickTimer = setTimeout(refreshAnchorBaseline, 160);
@@ -7044,6 +7105,19 @@ document.addEventListener("dblclick", (e) => {
   e.preventDefault();
   e.stopPropagation();
   void openModelPop(btn.dataset.modelPick, btn);
+});
+
+// The reply and spawn boxes grow a line at a time as the draft gets longer.
+document.addEventListener("input", (e) => {
+  const box = e.target?.closest?.(".reply-box, #job-prompt");
+  if (box) growReplyBox(box);
+});
+
+// A narrower window means fewer characters per line and more wrapped lines: re-measure what has content.
+window.addEventListener("resize", () => {
+  for (const box of document.querySelectorAll(".reply-box, #job-prompt")) {
+    if (box.value) growBoxToDraft(box, box.id === "job-prompt" ? SPAWN_MAX_LINES : REPLY_MAX_LINES);
+  }
 });
 
 // Typing in a folder's search box filters that folder in place: no re-render, so the caret and the

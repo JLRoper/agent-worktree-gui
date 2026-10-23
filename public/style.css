@@ -951,7 +951,8 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
   border-radius: 6px;
   padding: 7px 9px;
   font: 12.5px/1.45 var(--ui);
-  resize: vertical;
+  /* It sizes itself from the draft (see growReplyBox): a drag handle would be overruled on the next keystroke. */
+  resize: none;
 }
 .reply-box:focus { outline: none; border-color: #2b5480; }
 /* Send sits inside the input, bottom left: the reply is one gesture, so the control lives in the box
