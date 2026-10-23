@@ -6,7 +6,7 @@
 // are about what the sentry decided: which alert fired, once, with which evidence, and whether a draft
 // was sent or only offered. The point is that the detection logic is testable at all - it reads the
 // board, so a fake board is a faithful input.
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Assistant, ASSISTANT_THREAD, parseActions, looksLikeQuestion, detectRepeat, detectCycle, detectErrorRepeat, matchRule } from "../lib/assistant.js";
@@ -175,6 +175,7 @@ console.log("a turn that sounds like work and left no trace");
 console.log("watches: finished and overdue");
 {
   const a = make();
+  a.settings.rules.watch = "alert"; // detection only here; the wake path is tested below
   board = [job({ thread: "wtgui-w", status: "running", startedAt: iso(t0 - 30 * 60_000) })];
   const w = a.addWatch({ thread: "wtgui-w", title: "the deploy finishes", minutes: 10 });
   // A watch that has been standing for longer than its own deadline: the clock is the watch's age, not
@@ -190,6 +191,14 @@ console.log("watches: finished and overdue");
   a.tick();
   const fin = a.state().alerts.find((x) => x.rule === "watch" && /finished/.test(x.title));
   ok(fin && a.state().watches.find((x) => x.thread === "wtgui-w2")?.state === "done", "a watch whose thread finishes closes itself", fin?.title);
+
+  // A restart mid-run leaves the job `interrupted` with no endedAt: still over, still a finish.
+  board = [job({ thread: "wtgui-w3", status: "interrupted", endedAt: null, startedAt: iso(t0 - 10 * 60_000), lines: [line("tool", "💻 terminal · x", t0 - 2 * 60_000)] })];
+  const w3 = a.addWatch({ thread: "wtgui-w3", title: "the interrupted one" });
+  w3.at = iso(t0 - 5 * 60_000);
+  a.tick();
+  const fin3 = a.state().alerts.find((x) => x.rule === "watch" && /interrupted one/.test(x.title || ""));
+  ok(fin3 && /interrupted/.test(fin3.detail || ""), "an interrupted turn closes its watch too", fin3?.detail);
 }
 
 console.log("escalation: log stays in the journal");
@@ -204,6 +213,7 @@ console.log("escalation: log stays in the journal");
 
 console.log("the assistant's own actions: draft by default, sent only when allowed");
 {
+  created.length = 0;
   const a = make();
   board = [job({ thread: "wtgui-worker-b", label: "worker b" })];
   const answer = "I read it as the second option.\nTO wtgui-worker-b: Go with option two — the QA target.\nNOTE: worker b prefers option two.\nWATCH wtgui-worker-b: the deploy finishes | 20";
@@ -269,6 +279,49 @@ console.log("creating worktrees: ask, auto and off");
   ok(a.state().journal.some((j) => j.kind === "spawn-skipped"), "off is journaled, not silently dropped");
 }
 
+console.log("a watch that expires wakes the assistant");
+{
+  created.length = 0;
+  const a = make(); // no override: the shipped default is that a watch wakes
+  board = [job({ thread: "wtgui-w9", status: "running", startedAt: iso(t0 - 30 * 60_000) })];
+  const w = a.addWatch({ thread: "wtgui-w9", title: "the deploy", minutes: 10 });
+  w.at = iso(t0 - 20 * 60_000);
+  a.tick();
+  await new Promise((r) => setTimeout(r, 300));
+  eq(created.length, 1, "the deadline starts an assistant turn");
+  const wake = created[0] || {};
+  ok(/needs a look/.test(wake.prompt || "") && /\[watch\]/.test(wake.prompt || ""), "the turn is the wake digest", (wake.prompt || "").slice(0, 160));
+  ok(/latest output/.test(wake.prompt || ""), "the wake asks the watch-specific question", (wake.prompt || "").slice(0, 320));
+  ok(wake.thread === ASSISTANT_THREAD && wake.origin?.kind === "assistant-wake", "it goes to the assistant's own thread as a wake", JSON.stringify(wake.origin));
+  ok(a.state().alerts.some((x) => x.rule === "watch" && /overdue/.test(x.title)), "the alert stays in the list beside the wake");
+
+  // Two reasons collected in one pass are one turn, not two.
+  created.length = 0;
+  a.wake("one thing", null, "watch");
+  a.wake("another thing", null, "watch");
+  await new Promise((r) => setTimeout(r, 300));
+  eq(created.length, 1, "two wakes in one pass are one turn");
+  ok(/one thing/.test(created[0].prompt) && /another thing/.test(created[0].prompt), "both reasons ride in that turn", (created[0].prompt || "").slice(0, 200));
+}
+
+console.log("a changed default reaches files written before it");
+{
+  const v1 = path.join(dir, "assistant-v1.json");
+  writeFileSync(v1, JSON.stringify({ version: 1, settings: { rules: { watch: "alert" } } }));
+  const a = make({}, v1);
+  eq(a.settings.rules.watch, "wake", "a v1 file carrying the old default moves to wake");
+  a.writeNow();
+  ok(JSON.parse(readFileSync(v1, "utf8")).version === 2, "the file is stamped v2");
+
+  const v2 = path.join(dir, "assistant-v2.json");
+  writeFileSync(v2, JSON.stringify({ version: 2, settings: { rules: { watch: "alert" } } }));
+  eq(make({}, v2).settings.rules.watch, "alert", "a v2 file keeps a deliberate alert");
+
+  const v1log = path.join(dir, "assistant-v1-log.json");
+  writeFileSync(v1log, JSON.stringify({ version: 1, settings: { rules: { watch: "log" } } }));
+  eq(make({}, v1log).settings.rules.watch, "log", "a non-default value is never migrated");
+}
+
 console.log("the action grammar");
 {
   const acts = parseActions("hello\nTO abc-1: do x\nWATCH abc-1: deploy | 15\nNOTE: remembered");
@@ -290,7 +343,7 @@ console.log("the scratchpad survives a restart");
   eq(b.state().rules.length, 1, "rules reload");
   eq(b.state().notes, "watching the deploy", "notes reload");
   eq(b.state().watches.length, 1, "watches reload");
-  ok(JSON.parse(readFileSync(shared, "utf8")).version === 1, "the file says its version");
+  ok(JSON.parse(readFileSync(shared, "utf8")).version === 2, "the file says its version");
 }
 
 rmSync(dir, { recursive: true, force: true });
