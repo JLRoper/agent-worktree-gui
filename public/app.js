@@ -105,7 +105,11 @@ const state = {
   // clicked / focused / typed in. Either one, while it is on screen and recent, wins over the reading line.
   hoverThread: null,
   hoverAt: 0,
-  touchThread: null,
+  // What the reader clicked / put the caret in, as { kind: "card" | "project" | "row" | "root", id }. A moving
+  // pointer can only claim a card (it passes over everything else), but a click claims the thing it landed on:
+  // the project header or the worktree row is then the anchor, so an accordion opening holds its own bar still
+  // instead of chasing an agent in another project.
+  touchTarget: null,
   touchAt: 0,
   // Whether the anchor follows the pointer / last touched card at all, and how long a touched card keeps it.
   // Off is the pure geometry of the reading line, which is what the panel did before any of this.
@@ -582,18 +586,25 @@ function keepInPlace(findEl, mutate) {
   const el = findEl();
   if (!el) return mutate();
   const before = el.getBoundingClientRect().top;
+  // This gesture owns the scroll until the layout has settled: the anchor observer would otherwise answer the
+  // same growth a frame later, in the other direction (measured: +169px then -169px on one click).
+  anchorMuteUntil = Date.now() + 250;
   mutate();
   const settle = () => {
     const after = findEl();
     if (!after) return;
     const delta = after.getBoundingClientRect().top - before;
     // A small correction only: a huge delta means the board really did rearrange, and yanking the page
-    // to chase it would be worse than letting it move.
+    // to chase it would be worse than letting it move. Near the end of the document the browser cannot give
+    // the whole delta back; the remainder is accepted rather than hunted frame after frame.
     if (Math.abs(delta) >= 1 && Math.abs(delta) < 600) window.scrollBy(0, delta);
   };
   settle();
   setTimeout(settle, 0);
-  setTimeout(settle, 80);
+  setTimeout(() => {
+    settle();
+    refreshAnchorBaseline();
+  }, 80);
 }
 
 function anythingOpen() {
@@ -5357,42 +5368,89 @@ function anchorTouchMs() {
   return state.anchorTouchSeconds * 1000;
 }
 
-function intentAnchorCard() {
+// The element a target names, looked up fresh every time. A rebuild replaces the project header, the row and
+// the worktree's tbody, so holding "that thing" has to be a lookup, not a stored node: the node the click landed
+// on is gone by the time the observer measures the layout.
+function anchorNodeFor(target) {
+  if (!target || !target.id) return null;
+  if (target.kind === "card") return document.querySelector(`.job[data-thread="${CSS.escape(target.id)}"]`);
+  // A project is held by its section, not just the head: the section is what grows, and its top is the bar.
+  if (target.kind === "project") return document.querySelector(`section.project[data-project="${CSS.escape(target.id)}"]`);
+  if (target.kind === "row") return document.querySelector(`#projects tr.row[data-key="${CSS.escape(target.id)}"]`);
+  if (target.kind === "root") return document.querySelector(`.root-head[data-toggle-root="${CSS.escape(target.id)}"]`);
+  return null;
+}
+
+// Which board element an event landed on. A card beats the row and the project containing it: the agent is the
+// specific thing, the accordions around it are scenery unless their own header was hit.
+function boardTargetOf(el) {
+  if (!el || !el.closest) return null;
+  const card = el.closest(".job[data-thread]");
+  if (card) return { kind: "card", id: card.dataset.thread };
+  const phead = el.closest(".project-head[data-toggle-project]");
+  if (phead) return { kind: "project", id: phead.dataset.toggleProject };
+  const row = el.closest("#projects tr.row[data-key]");
+  if (row) return { kind: "row", id: row.dataset.key };
+  const rhead = el.closest(".root-head[data-toggle-root]");
+  if (rhead) return { kind: "root", id: rhead.dataset.toggleRoot };
+  return null;
+}
+
+function sameAnchorTarget(a, b) {
+  return !!a && !!b && a.kind === b.kind && a.id === b.id;
+}
+
+// A project was claimed by its bar, so its bar is what has to still be on screen: the section it belongs to can be
+// taller than the window, and once the bar has scrolled away the reader is somewhere else inside the project -
+// the card at the reading line is then the better anchor.
+function projectBarVisible(section) {
+  const bar = section?.querySelector?.(".project-head[data-toggle-project]");
+  return bar ? anchorVisible(bar) : false;
+}
+
+function intentAnchorNode() {
   const now = Date.now();
   if (state.anchorHover && state.hoverThread && now - state.hoverAt < anchorHoverMs()) {
     const hovered = anchorCardFor(state.hoverThread);
-    if (hovered) return hovered;
+    if (hovered) return { el: hovered, target: { kind: "card", id: state.hoverThread } };
   }
-  if (state.anchorTouch && state.touchThread && now - state.touchAt < anchorTouchMs()) {
-    const touched = anchorCardFor(state.touchThread);
-    if (touched) return touched;
+  if (state.anchorTouch && state.touchTarget && now - state.touchAt < anchorTouchMs()) {
+    const el = anchorNodeFor(state.touchTarget);
+    if (anchorVisible(el) && (state.touchTarget.kind !== "project" || projectBarVisible(el))) {
+      return { el, target: state.touchTarget };
+    }
   }
   return null;
 }
 
-// pinned card > card under the pointer / last touched > card at the reading line > open row at it > project
-// section at it > nothing.
+// pinned card > card under the pointer / last touched thing > card at the reading line > open row at it >
+// project section at it > nothing. Every answer carries a target descriptor so it can be re-found after a
+// rebuild.
 function readingAnchor() {
   if (state.anchorThread) {
     const pinned = document.querySelector(`.job[data-thread="${CSS.escape(state.anchorThread)}"]`);
-    if (pinned) return { el: pinned, pinned: true };
+    if (pinned) return { el: pinned, pinned: true, target: { kind: "card", id: state.anchorThread } };
   }
-  const intent = intentAnchorCard();
-  if (intent) return { el: intent, pinned: false, intent: true };
+  const intent = intentAnchorNode();
+  if (intent) return { el: intent.el, pinned: false, intent: true, target: intent.target };
   const top = readingTop();
   const card = nearestReadingLine(document.querySelectorAll(".job[data-thread]"), top);
-  if (card) return { el: card, pinned: false };
+  if (card) return { el: card, pinned: false, target: { kind: "card", id: card.dataset.thread } };
   const row = nearestReadingLine(document.querySelectorAll("#projects tr.row.expanded"), top);
-  if (row) return { el: row, pinned: false };
+  if (row) return { el: row, pinned: false, target: { kind: "row", id: row.dataset.key } };
   const sec = nearestReadingLine(document.querySelectorAll("#projects section.project"), top);
-  return sec ? { el: sec, pinned: false } : null;
+  return sec ? { el: sec, pinned: false, target: { kind: "project", id: sec.dataset.project } } : null;
 }
 
-let anchorState = null;       // { el, top, height, pinned }
+let anchorState = null;       // { el, target, top, height, pinned }
 let anchorScrollY = 0;        // page scrollY at the moment the baseline was measured
 let lastAnchorScrollAt = 0;   // our own scrollBy, so it is not read as the reader moving
 let anchorRepickTimer = 0;
 let anchorFrame = 0;
+// Set while a click's own hand-keeps-the-bar-still pass (keepInPlace) is running. Both it and the observer
+// answer the same layout change, and two answers measured a frame apart scroll the page one way and then the
+// other: the page visibly twitches and the clicked bar can end up anywhere. One owner at a time.
+let anchorMuteUntil = 0;
 
 function refreshAnchorBaseline() {
   const a = readingAnchor();
@@ -5401,7 +5459,7 @@ function refreshAnchorBaseline() {
     return;
   }
   const r = a.el.getBoundingClientRect();
-  anchorState = { el: a.el, top: Math.round(r.top), height: Math.round(r.height), pinned: a.pinned };
+  anchorState = { el: a.el, target: a.target || null, top: Math.round(r.top), height: Math.round(r.height), pinned: a.pinned };
   anchorScrollY = Math.round(window.scrollY);
 }
 
@@ -5424,9 +5482,17 @@ function compensateAnchor() {
     return;
   }
   if (!anchorState) return;
+  if (Date.now() < anchorMuteUntil) return;
   if (!anchorState.el.isConnected) {
-    refreshAnchorBaseline();
-    return;
+    // The node was replaced (a snapshot rebuilt this project). Find the same thing again and keep the baseline
+    // measured before the change: re-picking here would compare the new layout with itself and let the page
+    // move under the reader.
+    const again = anchorNodeFor(anchorState.target);
+    if (again) anchorState.el = again;
+    else {
+      refreshAnchorBaseline();
+      return;
+    }
   }
   const r = anchorState.el.getBoundingClientRect();
   const delta = Math.round(r.top) - anchorState.top;
@@ -5455,17 +5521,20 @@ let anchorObserver = null;
 // Pointer + interaction tracking for the anchor. pointermove's own target is the element under the cursor, so
 // this costs one closest() per move and nothing when the cursor stays still.
 function trackAnchorIntent() {
-  const note = (thread, kind) => {
-    if (kind === "hover") {
-      if (thread === state.hoverThread) return;
-      state.hoverThread = thread;
-      state.hoverAt = Date.now();
-      refreshAnchorBaseline();
-      return;
-    }
-    if (!thread) return;
-    const changed = thread !== state.touchThread;
-    state.touchThread = thread;
+  const noteHover = (target) => {
+    const thread = target && target.kind === "card" ? target.id : null;
+    if (thread === state.hoverThread) return;
+    state.hoverThread = thread;
+    state.hoverAt = thread ? Date.now() : 0;
+    refreshAnchorBaseline();
+  };
+  const noteTouch = (target) => {
+    if (!target) return;
+    // Claim first, then let the click that follows rearrange the board: the baseline is measured before the
+    // growth, so the observer holds the thing the reader clicked rather than an agent somewhere else. A second
+    // click on the same thing still re-stamps the window.
+    const changed = !sameAnchorTarget(target, state.touchTarget);
+    state.touchTarget = target;
     state.touchAt = Date.now();
     if (changed) refreshAnchorBaseline();
   };
@@ -5473,25 +5542,12 @@ function trackAnchorIntent() {
     "pointermove",
     (e) => {
       if (e.pointerType !== "mouse") return; // a touch is an interaction, not a hover
-      const card = e.target?.closest?.(".job[data-thread]");
-      const thread = card?.dataset.thread || null;
-      if (thread) {
-        note(thread, "hover");
-        return;
-      }
-      // Off every card: the hover stops being an answer, but the last touch still stands.
-      if (state.hoverThread) {
-        state.hoverThread = null;
-        state.hoverAt = 0;
-        refreshAnchorBaseline();
-      }
+      // A moving pointer only claims cards: it crosses project headers and rows on its way somewhere else.
+      noteHover(boardTargetOf(e.target));
     },
     { passive: true },
   );
-  const touched = (e) => {
-    const card = e.target?.closest?.(".job[data-thread]");
-    if (card) note(card.dataset.thread, "touch");
-  };
+  const touched = (e) => noteTouch(boardTargetOf(e.target));
   document.addEventListener("pointerdown", touched, { passive: true, capture: true });
   document.addEventListener("focusin", touched, { passive: true, capture: true });
   document.addEventListener("keydown", touched, { passive: true, capture: true });
@@ -5501,7 +5557,12 @@ function trackAnchorIntent() {
 function startAnchorObserver() {
   if (anchorObserver || typeof ResizeObserver !== "function") return;
   anchorObserver = new ResizeObserver(() => scheduleAnchorCompensation());
-  for (const el of [document.getElementById("projects"), document.getElementById("jobs"), document.getElementById("approvals")]) {
+  // `main` is the whole scrollable board: the project list, the agent list, the two fixed cards above them and the
+  // approvals dock. Native scroll anchoring is switched off (see style.css), so this observer is the only thing
+  // that puts the reader's element back - it has to see every container that can grow, not just the two lists.
+  const watched = ["main", "projects", "jobs", "newagent", "agents", "approvals"];
+  for (const id of watched) {
+    const el = document.getElementById(id);
     if (el) anchorObserver.observe(el);
   }
   // Every page scroll moves the anchor's viewport position, and the baseline has to move with it or the next
@@ -5523,6 +5584,10 @@ function startAnchorObserver() {
     { passive: true },
   );
   window.addEventListener("resize", () => {
+    // A resize reflows the whole board, so every element's viewport position changes at once. Correcting against
+    // a baseline measured at the old width would scroll the page to chase a number that no longer means anything:
+    // stand down, then re-measure.
+    anchorMuteUntil = Date.now() + 250;
     clearTimeout(anchorRepickTimer);
     anchorRepickTimer = setTimeout(refreshAnchorBaseline, 160);
   });
@@ -5547,18 +5612,26 @@ let boardAnchor = null;
 function captureBoardAnchor() {
   if (window.scrollY <= 0) return null; // at the top of the page: nothing to hold
   const top = readingTop();
-  // The same chain the anchor uses - pinned, then the card under the pointer or last touched, then the card at
-  // the reading line - so a rebuild holds whatever the reader is thinking about, not just what happens to sit
-  // under the topbar. Held by thread: that survives a rebuild AND a reorder.
-  const want = intentAnchorCard() || nearestReadingLine(document.querySelectorAll(".job[data-thread]"), top);
-  if (want) return { thread: want.dataset.thread, offset: Math.round(want.getBoundingClientRect().top - top), y: Math.round(window.scrollY) };
+  // The same chain the anchor uses - pinned, then the card under the pointer or the thing last clicked, then the
+  // card at the reading line, then the row - so a rebuild holds whatever the reader is thinking about, not just
+  // what happens to sit under the topbar. Held by target: that survives a rebuild AND a reorder.
+  const a = readingAnchor();
+  if (a && a.target && a.el.isConnected) {
+    const rows = a.target.kind === "row" ? [...document.querySelectorAll("#projects tr.row[data-key]")] : null;
+    return {
+      target: a.target,
+      index: rows ? rows.indexOf(a.el) : -1,
+      offset: Math.round(a.el.getBoundingClientRect().top - top),
+      y: Math.round(window.scrollY),
+    };
+  }
   // Rows are only a stand-in for "somewhere in this worktree". Their index is recorded because rows are
   // sorted newest-life-first: a row that gains life is promoted, and following it is exactly the bounce this
   // anchor used to cause - the page chased a promoted worktree up to the top of the board.
   const rows = [...document.querySelectorAll("#projects tr.row[data-key]")];
   const row = rows.find((tr) => tr.getBoundingClientRect().bottom > top + 1);
   if (!row) return null;
-  return { key: row.dataset.key, index: rows.indexOf(row), offset: Math.round(row.getBoundingClientRect().top - top), y: Math.round(window.scrollY) };
+  return { target: { kind: "row", id: row.dataset.key }, index: rows.indexOf(row), offset: Math.round(row.getBoundingClientRect().top - top), y: Math.round(window.scrollY) };
 }
 
 // Put the held element back where the reader had it, and keep putting it back for the next few frames: a single
@@ -5570,19 +5643,17 @@ function holdAnchor(anchor, attempt = 0) {
   // The reader scrolled between the capture and this hold: the page is theirs now.
   if (attempt === 0 && anchor.y != null && Math.abs(Math.round(window.scrollY) - anchor.y) > 6) return;
   const top = readingTop();
-  let el = null;
-  if (anchor.thread) {
-    el = document.querySelector(`.job[data-thread="${CSS.escape(anchor.thread)}"]`);
-  } else {
+  let el = anchorNodeFor(anchor.target);
+  // Reordered, not resized: leave the page alone. The green flash already says something moved; dragging the
+  // reader to wherever the sort sent the row is not a way to tell them.
+  if (el && anchor.target.kind === "row" && anchor.index >= 0) {
     const rows = [...document.querySelectorAll("#projects tr.row[data-key]")];
-    const tr = rows.find((r) => r.dataset.key === anchor.key);
-    // Reordered, not resized: leave the page alone. The green flash already says something moved; dragging the
-    // reader to wherever the sort sent the row is not a way to tell them.
-    if (tr && rows.indexOf(tr) === anchor.index) el = tr;
+    if (rows.indexOf(el) !== anchor.index) el = null;
   }
   if (!el) return;
   const delta = Math.round(el.getBoundingClientRect().top - top) - anchor.offset;
   if (Math.abs(delta) > 2) {
+    anchorMuteUntil = Date.now() + 220; // this hold owns the correction; the observer answers it too otherwise
     programmaticScroll();
     window.scrollBy(0, delta);
     refreshAnchorBaseline();
@@ -9165,7 +9236,7 @@ $("anchor-touch")?.addEventListener("change", (e) => {
   state.anchorTouch = Boolean(e.target.checked);
   saveAnchorFlag(ANCHOR_TOUCH_KEY, state.anchorTouch);
   if (!state.anchorTouch) {
-    state.touchThread = null;
+    state.touchTarget = null;
     state.touchAt = 0;
   }
   refreshAnchorBaseline();

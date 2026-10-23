@@ -74,6 +74,12 @@ body {
   font: 14px/1.45 var(--ui);
 }
 
+/* The panel holds its own anchor: one element at the reading line, put back where the reader had it after
+   anything above it grows. The browser also does scroll anchoring, and it cannot be told which element the
+   reader is on - it picks one of its own - so every growth "above" got corrected twice and the held bar could
+   end up anywhere (observed: +200px then +200px for one 200px insertion). One owner: the JS anchor. */
+html { overflow-anchor: none; }
+
 button, select, input, textarea { font-family: var(--ui); }
 
 .topbar {
@@ -151,7 +157,9 @@ button.primary:hover { background: #24466a; }
 .settings { position: fixed; right: 16px; top: 74px; z-index: 120; width: 340px; max-height: calc(100vh - 90px); display: flex; flex-direction: column; padding: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 14px 34px #0009; overflow: hidden; }
 /* The body owns the scrollbar. Both spellings are set: Chrome 121+ honours scrollbar-width/color and ignores the
    ::-webkit- rules, older Chromium is the other way round, and Firefox only knows the standard pair. */
-.settings-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 14px 14px; }
+/* Its own scroll pane: nothing in Settings grows under the reader the way the board does, and native anchoring
+   would pick an element of its own and move the pane while the reader is setting a value. */
+.settings-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 14px 14px; overflow-anchor: none; }
 .settings-body::-webkit-scrollbar { width: 10px; }
 .settings-body::-webkit-scrollbar-track { background: var(--panel); }
 .settings-body::-webkit-scrollbar-thumb { background: #39424f; border: 2px solid var(--panel); border-radius: 999px; }
