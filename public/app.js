@@ -2393,14 +2393,65 @@ async function openInBrowser(url) {
   }
 }
 
-// Reply history: the prompts of this thread's earlier turns, oldest first. Up walks back through them,
-// Down walks forward and finally back to whatever you were typing.
+// Reply history: what the reader typed into this thread, oldest first. Up walks back through it, Down walks
+// forward and finally back to whatever you were typing.
+//
+// A turn's prompt is only the reader's when the reader wrote it. A collected subagent delivery is a prompt the
+// panel wrote ("The 2 subagents you delegated have finished. Aggregate their results..."), so walking the turn
+// prompts unfiltered put a paragraph about subagents in the box on the second Up. Those turns carry an `origin`,
+// and the text has a shape worth refusing even if an older job predates that field.
+const PANEL_PROMPT = /^The \d+ subagents? you delegated (?:has|have) finished\./i;
+
+// Everything the reader has sent on this thread, from this browser: replies, steers, and anything the queue
+// delivered. Kept per thread in localStorage, capped, so Up still walks text the panel no longer has a turn for.
+const REPLY_HISTORY_KEY = "wtgui.replyHistory";
+const REPLY_HISTORY_MAX = 60;
+
+function replyHistoryStore() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(REPLY_HISTORY_KEY) || "{}");
+    return raw && typeof raw === "object" ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberReply(thread, text) {
+  const s = String(text || "").trim();
+  if (!thread || !s) return;
+  try {
+    const all = replyHistoryStore();
+    const list = Array.isArray(all[thread]) ? all[thread] : [];
+    // Sending the same thing twice in a row is one entry in the history, not two.
+    if (list[list.length - 1] !== s) list.push(s);
+    all[thread] = list.slice(-REPLY_HISTORY_MAX);
+    localStorage.setItem(REPLY_HISTORY_KEY, JSON.stringify(all));
+  } catch {
+    /* private mode: history is a convenience, not state the panel needs */
+  }
+}
+
 function turnPrompts(thread) {
-  return [...state.jobs.values()]
+  const prompts = [...state.jobs.values()]
     .filter((j) => (j.thread || j.id) === thread)
+    .filter((j) => !j.origin)
     .sort((a, b) => (a.turn || 0) - (b.turn || 0))
-    .map((j) => String(j.prompt || "").trim())
-    .filter(Boolean);
+    // A prompt that carried attachments holds the panel's file block at the end; recalling it must not
+    // re-attach anything, so the block comes off and the words are what moves through the box.
+    .map((j) => String(j.prompt || "").replace(/(?:\n\n?Attachment: [^\n]*before answering\.)+$/g, "").trim())
+    .filter((text) => text && !PANEL_PROMPT.test(text));
+  const mine = replyHistoryStore()[thread];
+  const sent = Array.isArray(mine) ? mine.filter((x) => typeof x === "string" && x.trim() && !PANEL_PROMPT.test(x.trim())) : [];
+  // Older turns first, then what this browser sent (which is the only record of a steer), de-duplicated.
+  const seen = new Set();
+  const out = [];
+  for (const text of [...prompts, ...sent]) {
+    const key = text.trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(key);
+  }
+  return out;
 }
 
 // A reply typed while the agent is still working: hold it and start it the moment that turn ends, so
@@ -2509,7 +2560,9 @@ function recallReply(box, step) {
   // before it, and so on.
   const back = Math.max(0, Math.min(prompts.length, nav.back + step));
   const value = back === 0 ? nav.stash : prompts[prompts.length - back];
-  state.replyNav.set(thread, { back, stash: nav.stash });
+  // `current` is what the recall put there: it is how the next Up knows the box is showing history rather than
+  // the reader's own draft, so it may keep walking instead of only moving the caret.
+  state.replyNav.set(thread, { back, stash: nav.stash, current: value });
   box.value = value;
   const end = value.length;
   try {
@@ -2526,6 +2579,8 @@ async function sendReply(thread, preset = null) {
   const attached = attachmentBlock(thread);
   if (!typed && !attached) return;
   const text = typed + attached;
+  // The typed part only: the attachment block is panel-added, and recalling it would duplicate the files.
+  rememberReply(thread, typed);
   const btn = document.querySelector(`.btn-reply[data-thread="${CSS.escape(thread)}"]`);
   if (btn) btn.disabled = true;
   try {
@@ -2570,6 +2625,7 @@ async function steerTurn(thread, id, text, btn = null) {
     return false;
   }
   const body = typed + attached;
+  rememberReply(thread, typed);
   if (btn) btn.disabled = true;
   try {
     const res = await apiFetch("/api/jobs/steer", {
@@ -6333,12 +6389,19 @@ document.addEventListener("keydown", async (e) => {
   if (!box) return;
   // Up/Down walk the thread's previous prompts, shell style: only from the very start (Up) or the very
   // end (Down) of the text, so the arrows still move the caret inside a multi-line reply.
-  if (e.key === "ArrowUp" && !e.shiftKey && box.selectionStart === 0 && box.selectionEnd === 0) {
+  // A box still showing a recalled entry keeps walking, with the caret wherever the recall left it; a box the
+  // reader has typed into only steps at the very start (Up) or the very end (Down), so the arrows stay usable
+  // inside a multi-line reply.
+  const nav = state.replyNav.get(box.dataset.reply);
+  const recalled = Boolean(nav && nav.back > 0 && box.value === nav.current);
+  const atStart = box.selectionStart === 0 && box.selectionEnd === 0;
+  const atEnd = box.selectionStart === box.value.length && box.selectionEnd === box.value.length;
+  if (e.key === "ArrowUp" && !e.shiftKey && (atStart || (recalled && atEnd))) {
     e.preventDefault();
     recallReply(box, 1);
     return;
   }
-  if (e.key === "ArrowDown" && !e.shiftKey && box.selectionStart === box.value.length && box.selectionEnd === box.value.length) {
+  if (e.key === "ArrowDown" && !e.shiftKey && (atEnd || (recalled && atStart))) {
     e.preventDefault();
     recallReply(box, -1);
     return;
@@ -6370,7 +6433,15 @@ document.addEventListener("keydown", async (e) => {
 });
 document.addEventListener("input", (e) => {
   const box = e.target.closest && e.target.closest(".reply-box");
-  if (box) state.replyDrafts[box.dataset.reply] = box.value;
+  if (!box) return;
+  const thread = box.dataset.reply;
+  state.replyDrafts[thread] = box.value;
+  // Editing a recalled prompt ends the walk: what is in the box is now the reader's draft, and the next Up
+  // should start from the newest prompt again rather than from wherever the recall had got to.
+  const nav = state.replyNav.get(thread);
+  if (nav && nav.current !== undefined && box.value !== nav.current) {
+    state.replyNav.set(thread, { back: 0, stash: box.value });
+  }
 });
 
 // A link in agent output is opened by the panel, not by navigating: capture phase, so the row and agent
