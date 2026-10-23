@@ -1150,7 +1150,7 @@ function turnHead(turn, index, open, copy = "", inline = false) {
     ? "revived"
     : turnLive(turn)
       ? `running ${elapsed(turn)}`
-      : `${turn.status} · ${elapsed(turn)}${turn.tokens?.total ? ` · ${turn.tokens.total} tok` : ""}`;
+      : `${turn.status} · ${elapsed(turn)}${turn.tokens?.total ? ` · ${fmtTok(turn.tokens.total)} tok` : ""}`;
   return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> <span class="turn-text">${esc(label)} · ${esc(state_)}</span>${originHtml(turn)}${inlinePrompt(turn, inline)}</div>`;
 }
 
@@ -1470,6 +1470,26 @@ function fmtTokens(n) {
   const text = (scaled < 10 ? scaled.toFixed(2) : scaled < 100 ? scaled.toFixed(1) : scaled.toFixed(0))
     .replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
   return `${n < 0 ? "-" : ""}${text}${unit[1]}`;
+}
+
+// Token counts on a turn line, in three significant digits: 636,816 reads "636k tok", not "636816 tok".
+// Truncated, not rounded - 636,816 rounded to three places is 637k, which claims a figure the count does not
+// have, and these numbers only ever grow, so a turn that read 636k can never appear to fall back to 635k.
+function fmtTok(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return "";
+  const abs = Math.abs(v);
+  if (abs < 1e3) return String(Math.round(v));
+  const unit = abs >= 1e9 ? [1e9, "B"] : abs >= 1e6 ? [1e6, "M"] : [1e3, "k"];
+  const digits = abs / unit[0];
+  const places = digits >= 100 ? 0 : digits >= 10 ? 1 : 2;
+  const cut = Math.floor(digits * 10 ** places) / 10 ** places;
+  const text = cut
+    .toFixed(places)
+    .replace(/\.0+$/, "")
+    .replace(/(\.\d*?)0+$/, "$1")
+    .replace(/\.$/, "");
+  return `${v < 0 ? "-" : ""}${text}${unit[1]}`;
 }
 
 // A ten-cell meter whose tail cell is a partial block. Rounding to whole cells drew nothing at all
@@ -2326,7 +2346,7 @@ function conversationHtml(conv) {
       // Rebuilt from the gateway's session store, so there was never a process here: "exit ?" and
       // "0s" would both describe a run that did not happen in this panel. Say when it was last used.
       ? `<span class="mono dim">revived · last active ${esc(relTime(latest.startedAt))} ago</span>`
-      : `<span class="mono dim">${esc(outcome)} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${latest.tokens.total}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>${turnRetryHtml(latest, thread)}`;
+      : `<span class="mono dim">${esc(outcome)} · ${esc(elapsed(latest))}${latest.tokens?.total ? ` · tokens ${fmtTok(latest.tokens.total)}` : ""}${latest.error ? ` · ${esc(latest.error)}` : ""}</span>${turnRetryHtml(latest, thread)}`;
   const artifacts = artifactsFor(conv);
   const artSplit = splitArtifacts(artifacts);
   const blocks = (() => {
