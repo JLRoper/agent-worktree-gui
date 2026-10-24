@@ -6,7 +6,7 @@
 // are about what the sentry decided: which alert fired, once, with which evidence, and whether a draft
 // was sent or only offered. The point is that the detection logic is testable at all - it reads the
 // board, so a fake board is a faithful input.
-import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Assistant, ASSISTANT_THREAD, parseActions, looksLikeQuestion, detectRepeat, detectCycle, detectErrorRepeat, isFailureLine, matchRule } from "../lib/assistant.js";
@@ -510,12 +510,18 @@ console.log("the same failure across turns");
 
 console.log("work left in a finished tree");
 {
+  // Real directories: the leftover rule checks that the tree still exists before blaming it for anything.
+  const leftDir = path.join(dir, "w-left");
+  const cleanDir = path.join(dir, "w-clean");
+  const goneDir = path.join(dir, "w-gone");
+  mkdirSync(leftDir, { recursive: true });
+  mkdirSync(cleanDir, { recursive: true });
   const rows = [
-    { path: "C:/work/left", branch: "wtgui/left", verdict: "AHEAD", ahead: 2, dirtyFiles: [{ code: " M", path: "a.md" }], untrackedFiles: [{ path: "b.md" }] },
+    { path: leftDir, branch: "wtgui/left", verdict: "AHEAD", ahead: 2, dirtyFiles: [{ code: " M", path: "a.md" }], untrackedFiles: [{ path: "b.md" }] },
   ];
   const a = make();
   a.getRows = () => rows;
-  board = [job({ thread: "wtgui-left", status: "done", endedAt: iso(t0 - 60_000), worktreePath: "C:/work/left" })];
+  board = [job({ thread: "wtgui-left", status: "done", endedAt: iso(t0 - 60_000), worktreePath: leftDir })];
   a.tick();
   const al = a.state().alerts.find((x) => x.rule === "leftover");
   ok(al && /uncommitted work/.test(al.title), "a finished worker with dirty files is reported", al?.title);
@@ -525,16 +531,40 @@ console.log("work left in a finished tree");
 
   const b = make();
   // Three commits ahead of main and nothing uncommitted: the normal state of an agent branch, not a leftover.
-  b.getRows = () => [{ path: "C:/work/clean", branch: "wtgui/clean", verdict: "AHEAD", ahead: 3, dirtyFiles: [], untrackedFiles: [] }];
-  board = [job({ thread: "wtgui-clean", status: "done", endedAt: iso(t0 - 60_000), worktreePath: "C:/work/clean" })];
+  b.getRows = () => [{ path: cleanDir, branch: "wtgui/clean", verdict: "AHEAD", ahead: 3, dirtyFiles: [], untrackedFiles: [] }];
+  board = [job({ thread: "wtgui-clean", status: "done", endedAt: iso(t0 - 60_000), worktreePath: cleanDir })];
   b.tick();
   eq(b.state().alerts.filter((x) => x.rule === "leftover").length, 0, "a clean tree with unmerged commits says nothing");
 
   const c = make();
   c.getRows = () => rows;
-  board = [job({ thread: "wtgui-old", status: "done", endedAt: iso(t0 - 3 * 3600_000), worktreePath: "C:/work/left" })];
+  board = [job({ thread: "wtgui-old", status: "done", endedAt: iso(t0 - 3 * 3600_000), worktreePath: leftDir })];
   c.tick();
   eq(c.state().alerts.filter((x) => x.rule === "leftover").length, 0, "work that ended hours ago is not re-raised");
+
+  // A thread in the base checkout did not leave "its" work anywhere: that working copy is the reader's, and the
+  // files in it may be older than the turn. Measured live: two untracked files from the day before were reported
+  // as a worker's leftover work, twice.
+  const d = make();
+  d.getRows = () => [{ path: "C:/ProjectDevelopment/agent-worktree-gui", branch: "main", verdict: "ON MAIN", ahead: 0, dirtyFiles: [], untrackedFiles: ["CODE_REVIEW.md", "config.7330.json"] }];
+  board = [job({ thread: "wtgui-main", status: "done", endedAt: iso(t0 - 60_000), cwd: "C:/ProjectDevelopment/agent-worktree-gui", ownerPath: "C:/ProjectDevelopment/agent-worktree-gui", projectPath: "C:/ProjectDevelopment/agent-worktree-gui", worktreePath: null, baseCheckout: true })];
+  d.tick();
+  eq(d.state().alerts.filter((x) => x.rule === "leftover").length, 0, "a thread in the base checkout is not blamed for the reader's files");
+
+  // The same row and job, but the job has a worktree of its own: still a leftover.
+  const e = make();
+  e.getRows = () => rows;
+  board = [job({ thread: "wtgui-wt", status: "done", endedAt: iso(t0 - 60_000), worktreePath: leftDir, baseCheckout: false })];
+  e.tick();
+  eq(e.state().alerts.filter((x) => x.rule === "leftover").length, 1, "a worktree job with dirty files is still reported");
+
+  // A tree that no longer exists cannot be holding anything — and an empty leftover directory makes git answer
+  // for the parent repo, which is how the reader's untracked files were blamed on a worker.
+  const f = make();
+  f.getRows = () => [{ path: goneDir, branch: "main", verdict: "ON MAIN", ahead: 0, dirtyFiles: [], untrackedFiles: ["x.md"] }];
+  board = [job({ thread: "wtgui-gone", status: "done", endedAt: iso(t0 - 60_000), worktreePath: goneDir, baseCheckout: false })];
+  f.tick();
+  eq(f.state().alerts.filter((x) => x.rule === "leftover").length, 0, "a deleted worktree is not reported as holding work");
 }
 
 console.log("a delegated child that has gone quiet");
