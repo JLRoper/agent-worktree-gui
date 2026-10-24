@@ -89,9 +89,17 @@ async function apiFetch(url, opts = {}, { timeoutMs = 20000 } = {}) {
 
 async function resync() {
   try {
-    applySnapshot(await apiFetch("/api/state").then((r) => r.json()));
+    const r = await apiFetch("/api/state");
+    // The status decides, not the shape of the body. An error answer is `{error}` and carries no
+    // projects, so feeding it to applySnapshot painted an empty board with no message — a server fault
+    // that looked exactly like "you have no repos", which is the blank page this now says out loud.
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || `the panel answered ${r.status}`);
+    }
+    applySnapshot(await r.json());
   } catch (e) {
-    showBanner(`Cannot reach the server: ${e.message}`);
+    showBanner(`Cannot load the board: ${e.message}`);
     setStream("offline", "bad");
   }
 }
