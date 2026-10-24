@@ -51,6 +51,7 @@ const job = (over = {}) => ({
 
 const created = [];
 const answered = [];
+const stopped = [];
 let board = [];
 const jobs = {
   list: () => board,
@@ -62,6 +63,10 @@ const jobs = {
   },
   answerQuestion: async (id, answer, requestId) => {
     answered.push({ id, answer, requestId });
+    return { ok: true };
+  },
+  stop: async (id) => {
+    stopped.push(id);
     return { ok: true };
   },
 };
@@ -549,6 +554,62 @@ console.log("a delegated child that has gone quiet");
   ok(!/hung/i.test(`${al?.title} ${al?.detail}`), "the wording is no-activity, never hung");
   a.tick();
   eq(a.state().alerts.filter((x) => x.rule === "child").length, 1, "one alert per child, not one per tick");
+}
+
+console.log("a restart resumes an interrupted turn, and a watchdog repairs the clock");
+{
+  // `jobs.load()` turns a running job into `interrupted` — including the assistant's own turn — and the
+  // sentry only ever looks at worker threads. So the resume is the only thing that would pick it back up.
+  const a = make();
+  a.settings.enabled = true;
+  created.length = 0;
+  // The board lists newest first; the interrupted turn is first in the array and there is an older done turn
+  // after it. Picking by position resumed the oldest (done) turn and did nothing.
+  board = [
+    job({ id: "asst-1", thread: ASSISTANT_THREAD, status: "interrupted", startedAt: iso(t0 - 10 * 60_000), lines: [line("text", "half a thought")] }),
+    job({ id: "asst-0", thread: ASSISTANT_THREAD, status: "done", startedAt: iso(t0 - 60 * 60_000), endedAt: iso(t0 - 59 * 60_000) }),
+  ];
+  eq(a.resumeAfterRestart(), "asst-1", "the interrupted turn is the one it resumes, not the last in the list");
+  await new Promise((r) => setTimeout(r, 220));
+  eq(created.length, 1, "a restart that cut a turn in half wakes the assistant once");
+  ok(/restarted while your last turn/.test(created[0]?.prompt || ""), "the wake says why it is awake", created[0]?.prompt);
+  eq(a.resumeAfterRestart(), null, "a second call in the same process does nothing");
+
+  // A clean restart costs nothing: the last turn finished, so no speculative turn and no tokens.
+  const b = make();
+  created.length = 0;
+  board = [job({ id: "asst-2", thread: ASSISTANT_THREAD, status: "done", endedAt: iso(t0 - 60_000) })];
+  eq(b.resumeAfterRestart(), null, "a finished last turn is not resumed");
+  await new Promise((r) => setTimeout(r, 200));
+  eq(created.length, 0, "and nothing is spent");
+
+  // The clock that runs the sentry cannot report its own death; the server calls supervise() from outside.
+  const c = make();
+  ok(c.state().health.timerAlive === false, "no clock before start");
+  c.start();
+  ok(c.state().health.timerAlive === true, "the clock is reported running");
+  c.stop();
+  ok(c.state().health.timerAlive === false, "and reported stopped once stopped");
+  const h = c.supervise();
+  ok(h.restarted && c.state().health.timerAlive === true, "the watchdog restarts a dead clock", JSON.stringify(h));
+  c.stop();
+  c.lastTickAt = Date.now() - 60_000;
+  const h2 = c.supervise();
+  ok(h2.stale, "an old tick is reported stale", JSON.stringify(h2));
+  c.stop();
+
+  // Its own turn is invisible to the sentry and `assistantLive()` blocks every wake behind it, so a hung
+  // assistant turn is stopped by the watchdog rather than left to sit there.
+  const d = make();
+  d.settings.quietSeconds = 60;
+  stopped.length = 0;
+  board = [job({ id: "asst-hung", thread: ASSISTANT_THREAD, status: "running", startedAt: iso(t0 - 40 * 60_000), lines: [line("tool", "💻 terminal · x", t0 - 30 * 60_000)] })];
+  const h3 = d.supervise();
+  eq(h3.stalled, "asst-hung", "a silent assistant turn is reported stalled");
+  await new Promise((r) => setTimeout(r, 30));
+  eq(stopped[0], "asst-hung", "and it is stopped, not just noticed");
+  ok(d.state().journal.some((j) => j.kind === "stalled"), "the journal says why it was stopped");
+  d.stop();
 }
 
 console.log("the action grammar");

@@ -424,6 +424,15 @@ worktree … the uncommitted documentation changes are ready in `.worktrees/writ
 fired by one sentry pass are collected for 150 ms and sent as one turn, so two watches on the same worker are one
 answer, not two. A scratchpad written before this default changed is migrated once (file `version: 2`).
 
+**Something supervises the supervisor.** The sentry cannot report its own clock stopping, so the server runs a
+small watchdog outside it (every 10 s): a cleared timer is restarted, and a pass is run if the last one is older
+than three intervals. The same call handles the assistant's own turn, which the sentry deliberately never looks at
+— if it has produced no output for four quiet-windows (5 min minimum) it is stopped and the assistant is woken with
+that fact, because `assistantLive()` would otherwise hold every future wake behind a hung turn. On boot the panel
+also checks its own last turn: if the restart cut one in half (`jobs.load()` marks it `interrupted`), it is woken
+once to say where it got to; a clean restart costs nothing. **Settings → How it behaves** shows the clock, the last
+pass and whether that boot resumed anything.
+
 **It can create worktrees.** `assistant.spawn` (also in its Settings tab) has its own ladder, because cutting a
 tree is a bigger act than writing a reply: `ask` (default) turns a SPAWN line into a card showing the project,
 where the tree goes, the exact prompt and the model — nothing runs until you press **Create worktree & start**;

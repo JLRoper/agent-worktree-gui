@@ -298,6 +298,19 @@ assistant = new Assistant({
 });
 assistant.start();
 
+// The sentry cannot report its own clock stopping, and a restart leaves its last turn `interrupted` with
+// nobody to notice: both are the server's business. The watchdog repairs the timer from outside (its own
+// tick() only catches throws), and the resume wakes the assistant once if the restart cut a turn in half.
+assistant.resumeAfterRestart();
+setInterval(() => {
+  try {
+    const h = assistant.supervise();
+    if (h.restarted || h.stale) log(`assistant watchdog: ${h.restarted ? "timer restarted" : ""}${h.restarted && h.stale ? " · " : ""}${h.stale ? "stale pass ran" : ""}`);
+  } catch (err) {
+    log(`assistant watchdog: ${String((err && err.message) || err)}`);
+  }
+}, 10_000).unref?.();
+
 // Start a worker on the assistant's behalf. Deliberately the same mechanics as the New-agent card —
 // registry for the project, gateway probe before anything is promised, `git rev-parse`/`worktree add` in
 // lib/jobs.js — but with no dry run and no model field, so the worker runs on the gateway default rather
