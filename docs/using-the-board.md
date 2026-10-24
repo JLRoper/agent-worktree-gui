@@ -240,6 +240,12 @@ The row's ✕ asks in place: *Remove worktree `<name>` on `<branch>`? Its files 
 there) and git's record of it is pruned.* — **Cancel** then **Delete**, left to right. While any agent run is live in
 that directory the request is refused (409); stop the run first. A directory that is already gone counts as removed.
 
+**A merged, clean worktree does not ask.** When the row's verdict is `MERGED …`, nothing is modified or untracked, and
+the verdict is not stale, the ✕ deletes on the first click — there is nothing in that folder `main` does not already
+have. Those ✕ are drawn grey instead of red (hover says so in the tooltip). Everything else keeps the question:
+unmerged commits, any dirty or untracked file, a stale verdict, and `ON MAIN` / the project's own checkout, which is
+never deleted from this table.
+
 The files and git's record always go; whether the *folder* can go in the same click depends on what else is using it.
 Windows refuses to delete a directory that a process holds as its working directory, and a worktree often is one (the
 agent that built it, an editor, or a panel started from inside it). In that case the row still disappears at once and

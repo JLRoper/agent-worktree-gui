@@ -5801,8 +5801,26 @@ function agentBadgeHtml(row) {
 }
 
 // ---- removing a worktree ---------------------------------------------------------------------
+// A worktree whose work is already in main and which has nothing uncommitted is housekeeping: its ✕
+// deletes it without the in-place question, because there is nothing in that folder main does not
+// already have. Everything else keeps the question — unmerged commits, a stale verdict (the cheap pass
+// only knows what it last saw), any modified or untracked file, and the main branch itself, which is
+// never deleted from this table (the project's own checkout has no ✕ at all).
+function deletableWithoutAsking(key) {
+  const row = state.rows.get(key);
+  if (!row) return false;
+  if (row.verdictStale) return false;
+  if (row.dirty || row.untracked) return false;
+  const verdict = String(row.verdict || "");
+  if (verdict === "ON MAIN") return false;
+  const mainBranch = state.projects.get(row.project)?.mainBranch;
+  if (row.branch && mainBranch && row.branch === mainBranch) return false;
+  return verdict.startsWith("MERGED");
+}
+
 // The red ✕ opens an inline confirmation row under the tree: the question says where the files go
-// (Recycle Bin) rather than just "delete?", and nothing happens until the second click.
+// (Recycle Bin) rather than just "delete?", and nothing happens until the second click. The exception is
+// a merged, clean worktree, whose ✕ goes straight through (see deletableWithoutAsking).
 function showWorktreeConfirm(key) {
   for (const el of document.querySelectorAll("tr.row-confirm")) el.remove();
   state.confirmEls.clear();
@@ -6023,6 +6041,9 @@ function rowHtml(row) {
   const renameBtn = isProjectRoot
     ? ""
     : `<button class="btn-row-rename" data-rename-tree="${esc(keyOf(row.project, row.path))}" data-rename-project="${esc(row.project)}" data-rename-path="${esc(row.path)}" data-rename-name="${esc(row.name)}" data-rename-suggest="${esc(suggestName)}" title="name this worktree — renames its branch, and the directory when nothing is holding it${suggestName ? ` (offered: “${esc(suggestName)}”)` : ""}">\u270e</button>`;
+  // One ✕ per row, and whether it needs the question at all: merged + clean deletes straight away.
+  const delKey = keyOf(row.project, row.path);
+  const delDirect = !isProjectRoot && deletableWithoutAsking(delKey);
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     <td class="name"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
       title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button> <span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span> ${renameBtn} ${agentBadgeHtml(row)}</td>
@@ -6034,7 +6055,7 @@ function rowHtml(row) {
     <td class="mono nowrap">${dirty}</td>
     ${ageCellHtml(row)}
     <td>${badge}</td>
-    <td class="row-actions">${isProjectRoot ? "" : `<button class="btn-del-tree" data-del-tree="${esc(keyOf(row.project, row.path))}" title="remove this worktree — its files go to the Recycle Bin and git's record of it is pruned">✕</button>`}</td>
+    <td class="row-actions">${isProjectRoot ? "" : `<button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>
   </tr>`;
 }
 
@@ -8619,7 +8640,10 @@ document.addEventListener("click", async (e) => {
   if (delTree) {
     e.preventDefault();
     e.stopPropagation();
-    showWorktreeConfirm(delTree.dataset.delTree);
+    const key = delTree.dataset.delTree;
+    // Merged and clean: nothing here that main does not already have, so no question.
+    if (deletableWithoutAsking(key)) void confirmDeleteWorktree(key);
+    else showWorktreeConfirm(key);
     return;
   }
   const renameTree = e.target.closest("[data-rename-tree]");

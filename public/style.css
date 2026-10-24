@@ -1035,6 +1035,10 @@ tr.row:hover .btn-row-rename { opacity: .9; }
 }
 tr.row:hover .btn-del-tree { opacity: 1; }
 .btn-del-tree:hover { background: #2a1418; border-color: #57262a; color: #ff9c94; }
+/* A merged, clean worktree deletes without the question, so its x is drawn quieter than the one that
+   asks first: grey at rest, the same red on hover as every other delete. */
+.btn-del-tree.is-direct { border-color: var(--line); background: #15181e; color: var(--dim); }
+.btn-del-tree.is-direct:hover { background: #2a1418; border-color: #57262a; color: #ff9c94; }
 /* The confirmation is its own row under the tree, so the question has room to say what will happen. */
 tr.row-confirm td {
   padding: 6px 10px;
