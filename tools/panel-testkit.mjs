@@ -46,6 +46,11 @@ export async function startPanel({ token = null, config = {} } = {}) {
     projects: [],
     jobsFile: path.join(dir, "logs", "jobs.json"),
     assistantFile: path.join(dir, "logs", "assistant.json"),
+    // The discovery cache is a path, not a directory under jobsFile, and it defaults to
+    // cwd/logs/projects.json. Without this line the sandbox boots with the developer's own cache:
+    // "empty scan root" then still holds every project the real panel discovered, /api/fetch sweeps
+    // them over the network, and /api/reload resets the connection mid-sweep (ECONNRESET).
+    projectsCacheFile: path.join(dir, "logs", "projects.json"),
     ...(token ? { token } : {}),
     ...config,
   };
