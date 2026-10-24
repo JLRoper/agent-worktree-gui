@@ -928,11 +928,25 @@ function conversations() {
   }
   const out = [];
   for (const [thread, turns] of groups) {
-    turns.sort((a, b) => (a.turn || 1) - (b.turn || 1) || String(a.startedAt).localeCompare(String(b.startedAt)));
+    // By the clock, not by `turn`. That counter is `siblings.length + 1` over the jobs KEEP_JOBS still holds, so
+    // trimming old turns moves it BACKWARDS: the turn that resumed an interrupted thread got 7 while the dead turn
+    // it replaced was still 8, and the card drew "turn 7 · running" ABOVE "turn 8 · interrupted" — running on top
+    // of interrupted, which is exactly what a reader reads as a contradiction (measured live on 7473). The clock
+    // only moves forward, so it orders the list; the counter is the tiebreaker for one millisecond.
+    turns.sort((a, b) => (Date.parse(a.startedAt || "") || 0) - (Date.parse(b.startedAt || "") || 0) || (a.turn || 0) - (b.turn || 0));
     out.push({ thread, turns, first: turns[0], latest: turns[turns.length - 1] });
   }
   out.sort((a, b) => String(b.latest.startedAt).localeCompare(String(a.latest.startedAt)));
   return out;
+}
+
+// The number a turn is drawn under (see `turnHead`): its place in the thread by the clock. The one-second clock tick
+// rewrites a running head's text in place, so it has to agree with the render or the label jumps a second later.
+function turnSeqOf(j) {
+  const turns = [...state.jobs.values()].filter((x) => (x.thread || x.id) === (j.thread || j.id));
+  turns.sort((a, b) => (Date.parse(a.startedAt || "") || 0) - (Date.parse(b.startedAt || "") || 0) || (a.turn || 0) - (b.turn || 0));
+  const i = turns.findIndex((x) => x.id === j.id);
+  return i < 0 ? j.turn || "?" : i + 1;
 }
 
 // URLs in agent output become links. They are opened by the panel (POST /api/open-url) rather than by
@@ -1259,9 +1273,13 @@ function toolGroupHtml(lines, key, filter = "", openBody = false) {
     filter = saved.filter || filter;
     openBody = saved.open;
   }
+  // A burst is only in flight while its TURN is live: the bare counts kept a dead turn's last burst ticking. A turn
+  // the panel lost at a restart still drew "running 77m16s" an hour later, one line above the word "interrupted".
+  const turnJob = state.jobs.get(String(key).split("#")[0]);
+  const live = turnJob ? turnLive(turnJob) : false;
   const head = rows
     .map((r) => {
-      const running = r.count > r.done;
+      const running = r.count > r.done && live;
       const state = running
         ? `<span class="jl-live tgrp-state" data-live-from="${r.at || Date.now()}">${liveSuffix(r.at || Date.now())}</span>`
         : r.duration != null
@@ -1707,7 +1725,10 @@ function originHtml(turn) {
 }
 
 function turnHead(turn, index, open, copy = "", inline = false) {
-  const label = `turn ${turn.turn || index + 1}`;
+  // The number the reader counts down the thread. Not `turn.turn`: that counter is trimmed with the store and can
+  // repeat (a restarted board showed two "turn 6" and two "turn 7" in one card), while `index` is the turn's place in
+  // the clock-ordered list that the pager already counts ("turns 5–7 of 7").
+  const label = `turn ${index + 1}`;
   const pinned = state.pinnedTurns.has(turn.id);
   const state_ = turn.revived
     // Rebuilt from the gateway's store: there is no duration to report, and "done · 0s" claims a run
@@ -9789,7 +9810,7 @@ setInterval(() => {
     for (const head of heads) {
       const txt = head.querySelector(".turn-text");
       if (!txt) continue;
-      const next = `turn ${j.turn || "?"} · running ${elapsed(j)}`;
+      const next = `turn ${turnSeqOf(j)} · running ${elapsed(j)}`;
       if (txt.textContent !== next) txt.textContent = next;
     }
   }
