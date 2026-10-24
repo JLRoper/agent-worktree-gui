@@ -453,8 +453,15 @@ The assistant acts by writing plain lines at the end of a reply, and only those 
     TO <thread>: the reply to that worker
     WATCH <thread>: what to watch for | 30        (minutes, optional)
     NOTE: something to remember
+    RULE: a standing answer you are sure of
     SPAWN <project> | what the new worker should do
     SPAWN IN <directory> | what the worker should do in that tree       (no new worktree)
+
+`RULE:` lets the assistant maintain its own standing answers while it watches — the case that prompted it was
+"an interrupted agent gets exactly one continue". Such a rule is part of the normal rules list from then on, so
+it can answer a question (or, at `auto`, pick a choice) on the strength of it; the Scratchpad marks it
+**assistant**, and it is deletable there. A near-identical restatement refines the assistant's own earlier rule
+instead of adding a second; the reader's rules are never merged or edited by it.
 
 Each finished turn is harvested exactly once (keyed by turn id, persisted): a turn's title landing or a panel
 restart re-emits the same job, and re-reading its lines would otherwise start a second worker.

@@ -645,6 +645,37 @@ console.log("the assistant's own working directory");
   eq(created[1]?.cwd, used, "and the next turn still runs", created[1]?.cwd);
 }
 
+console.log("the assistant may add a standing rule");
+{
+  const a = make();
+  a.settings.autonomy = "draft";
+  board = [];
+  a.harvest({ id: "rule-turn-1", thread: ASSISTANT_THREAD, lines: [line("text", "Noted.\nRULE: An interrupted turn gets one continue, never a second.\nNOTE: kept")] });
+  const r = a.state().rules;
+  ok(r.length === 1 && /interrupted turn gets one continue/.test(r[0].text), "a RULE line becomes a rule", JSON.stringify(r));
+  eq(r[0]?.by, "assistant", "tagged as written by the assistant");
+  ok(a.state().journal.some((j) => j.kind === "rule" && /assistant wrote/.test(j.text)), "the journal says who wrote it");
+
+  const before = a.state().rules.length;
+  a.harvest({ id: "rule-turn-2", thread: ASSISTANT_THREAD, lines: [line("text", "RULE - An interrupted turn gets one continue, never a second.")] });
+  eq(a.state().rules.length, before, "the same rule is not added twice");
+
+  // Models restate a rule with a word changed; that is a refinement of its own rule, not a second one.
+  a.harvest({ id: "rule-turn-3", thread: ASSISTANT_THREAD, lines: [line("text", "RULE: An interrupted turn is given one continue, and never a second.")] });
+  eq(a.state().rules.filter((x) => x.by === "assistant").length, 1, "a near-identical restatement replaces the assistant's own rule");
+  ok(/is given one continue/.test(a.state().rules.find((x) => x.by === "assistant")?.text || ""), "and the newer wording wins");
+  eq(a.state().rules.filter((x) => x.by === "reader").length, 0, "the reader's rules are untouched by it");
+
+  // A model writes the separator three ways; all three are the same action.
+  const forms = parseActions("RULE: one\nRULE - two\nRULE three\nRULES are not this");
+  eq(forms.rule.length, 3, "colon, dash and bare forms all parse", JSON.stringify(forms.rule));
+  eq(parseActions("RULES are not this").rule.length, 0, "RULES is not RULE");
+
+  // The reader's own rules still come from the reader, and are marked as such.
+  a.addRule("Deploy to QA, never PROD");
+  eq(a.state().rules.find((x) => /Deploy to QA/.test(x.text))?.by, "reader", "a rule the reader adds is theirs");
+}
+
 console.log("the action grammar");
 {
   const acts = parseActions("hello\nTO abc-1: do x\nWATCH abc-1: deploy | 15\nNOTE: remembered");
