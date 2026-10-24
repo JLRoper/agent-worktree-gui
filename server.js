@@ -264,6 +264,19 @@ function broadcast(evt) {
   }
 }
 
+// One part of a job event's handling must not be able to take the rest down with it. `broadcast` writes to every
+// open SSE client, `adoptFromJob` reads the project registry and the assistant observer runs the finished turn's
+// actions — three unrelated jobs on one line, and a throw from any of them would land inside the job store's own
+// emit. Say which part failed and carry on.
+function guard(what, fn) {
+  try {
+    return fn();
+  } catch (err) {
+    log(`${what} failed: ${String((err && err.message) || err)}`);
+    return null;
+  }
+}
+
 store.onEvent(broadcast);
 
 // A `-w` agent's worktree exists a few seconds after spawn; adopt it into the board right then so the
@@ -291,12 +304,12 @@ let assistant = null;
 const jobs = new Jobs({
   config,
   onEvent: (evt) => {
-    broadcast(evt);
-    adoptFromJob(evt);
+    guard("event broadcast", () => broadcast(evt));
+    guard("worktree adopt", () => adoptFromJob(evt));
     // A turn that just ended is the first moment the session has a name of its own, and the tree is idle: give the
     // worktree that name. Swallowed on purpose - a rename is never worth failing a job event over.
     void autoNameWorktree(evt).catch(() => {});
-    assistant?.observe(evt);
+    guard("assistant observation", () => assistant?.observe(evt));
   },
   onLog: log,
   // Read per question, not once at boot: the file is small and the gateway re-reads it too, so a countdown
