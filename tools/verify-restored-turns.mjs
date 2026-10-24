@@ -9,7 +9,7 @@
 //
 // No gateway needed: a stub on an ephemeral port answers /v1/runs/{id} with the status each case is about.
 import { createServer } from "node:http";
-import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -122,5 +122,8 @@ const saved = JSON.parse(readFileSync(storePath, "utf8"));
 check("the store keeps the reconciled status", saved.jobs.find((j) => j.id === "j-done").status, "done");
 
 server.close();
+// The scratch store goes with the run: this script left one behind per invocation (12 of them had piled up in
+// %TEMP%), which is noise a reader has to clear by hand for no gain.
+rmSync(dir, { recursive: true, force: true });
 console.log(failed ? `RESULT: ${failed} FAILED` : "RESULT: ALL PASS");
 process.exit(failed ? 1 : 0);
