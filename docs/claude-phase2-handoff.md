@@ -13,18 +13,22 @@ proven, what is planned, and the one rule every step has to follow.
 
 ## The version rule
 
-While this plan is in progress (`Status: in progress` above), **every commit batch that goes up for review
-bumps the patch number** — the third number in `package.json`'s `version` — and the first two stay on the
-line named above (`0.2`). One bump per PR is enough; it must be strictly higher than the base branch's.
+The version is declared once, in `package.json`; the page header reads it from there. It moves **only when code
+changes**:
+
+- **Code** is `server.js`, `lib/` and `public/`. A PR that changes any of them bumps the patch number — the third
+  number of `version` — and stays on the line named above (`0.2`) while this plan is in progress
+  (`Status: in progress`). One bump per PR; it must be strictly higher than the base branch's.
+- **Everything else does not bump**: `docs/` (handoffs included), `tools/`, `README.md`, `SETUP.md`. A docs-only or
+  handoff-only PR leaves `version` exactly as it is.
 
     node tools/verify-version-bump.mjs --base <ref>      # default ref: origin/main
 
-The check fails if the version did not go up, or if it left the `Version line` while the plan is still in
-progress. The version is declared once, in `package.json`; the page header reads it from there, so there is
-nothing else to edit.
+The check looks at what changed against the base: it fails if code changed and the version did not go up (or left
+the `Version line` mid-plan), and it fails if the version moved when no code changed.
 
-When the last milestone lands, that PR sets `Status: complete` and takes the minor bump (`0.3.0`). From then
-on the check only requires the version to go up.
+When the last milestone lands, that PR sets `Status: complete` and takes the minor bump (`0.3.0`). From then on a
+code change only has to make the version go up.
 
 ## Spike 2a — what is proven (claude 2.1.310, Windows, haiku)
 
@@ -67,19 +71,20 @@ Things that will bite:
    is the only route to `bypassPermissions`. Localhost binding stays.
 7. UI: Hermes / Claude picker on the New-agent card, Claude model list, a cost readout, a "claude found" chip.
 
-## Milestones — one PR each, one patch bump each
+## Milestones — one PR each; a patch bump only where code changes
 
 | milestone | what | version |
 |---|---|---|
-| 2a | spike + this handoff + the version check | 0.2.1 |
-| 2b | transport split, no behaviour change (verify with a real Hermes run) | 0.2.2 |
-| 2c | Claude spawn, stream, stop | 0.2.3 |
-| 2d | reply (resume) and steer | 0.2.4 |
-| 2e | approvals | 0.2.5 |
-| 2f | dedup, UI picker, docs, `tools/verify-claude-transport.mjs` | 0.2.6 |
+| 2a | spike + this handoff + the version check (docs and tools only) | 0.2.0 (no bump) |
+| 2b | transport split, no behaviour change (verify with a real Hermes run) | 0.2.1 |
+| 2c | Claude spawn, stream, stop | 0.2.2 |
+| 2d | reply (resume) and steer | 0.2.3 |
+| 2e | approvals | 0.2.4 |
+| 2f | dedup, UI picker, docs, `tools/verify-claude-transport.mjs` | 0.2.5 |
 | done | `Status: complete` | 0.3.0 |
 
-If a milestone splits, it takes the next patch number; the table is a forecast, the rule is the contract.
+If a milestone splits and both halves change code, the second takes the next patch number; the table is a
+forecast, the rule is the contract.
 
 ## Open decisions
 
