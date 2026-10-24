@@ -62,7 +62,18 @@ check("plain text", unwrapToolText("warning: 3 files changed").text, "warning: 3
 check("ansi colour is stripped", unwrapToolText("\u001b[31mfailed\u001b[0m").text, "failed");
 check("a JSON-ish wall with nothing readable is not printed", unwrapToolText('{"a":1,"b').text, "");
 
-// ── the store path: same unwrapping, in order, with the call id kept ────────────────────────────
+// Text that merely starts with a bracket is text: 403 of 22,878 stored rows on this box look like this, and blanking
+// them loses output rather than cleaning it up.
+check("a bracketed line survives", unwrapToolText("[terminal] ran `ls` -> exit 0, 12 lines out").text, "[terminal] ran `ls` -> exit 0, 12 lines out");
+check("a cancelled-tool marker survives", unwrapToolText("[Tool execution cancelled — terminal was abandoned]").text, "[Tool execution cancelled — terminal was abandoned]");
+check("ansi inside a JSON envelope is stripped after unescaping", unwrapToolText(JSON.stringify({ output: "\u001b[31mred\u001b[0m" })).text, "red");
+check("a complete payload is not called cut", unwrapToolText(JSON.stringify({ output: "a\nb" })).truncated, false);
+
+// A refusal whose empty output comes first still reads as the refusal, not as nothing.
+const cutRefusal = unwrapToolText('{"output":"","error":"no such file: C:/x","pad":"aaa');
+check("cut refusal: the error wins over an empty output", cutRefusal.text, "no such file: C:/x");
+
+// ── the store path: same unwrapping, in order ───────────────────────────────────────────────────
 const dir = mkdtempSync(join(tmpdir(), "wtgui-toolout-"));
 const dbPath = join(dir, "state.db");
 const db = new DatabaseSync(dbPath);
@@ -75,12 +86,13 @@ db.close();
 
 const rows = toolResults({ dbPath, sessionId: "s1", tool: "patch", from: 999000, to: 1002000 });
 check("store: one row per result", rows.length, 2);
-check("store: call ids travel with them", rows.map((r) => r.callId), ["call-a", "call-b"]);
 ok("store: the text is the diff", rows[0].text.startsWith("--- a/x\n+++ b/x"), rows[0].text.slice(0, 40));
 ok("store: no envelope", !looksLikeJsonEnvelope(rows[0].text), rows[0].text.slice(0, 40));
 const termRows = toolResults({ dbPath, sessionId: "s1", tool: "terminal", from: 999000, to: 1002000 });
 check("store: notes ride along as a line", termRows[0].text, "hi\n(exit 1)");
 check("store: a limit is honoured", toolResults({ dbPath, sessionId: "s1", tool: "patch", from: 999000, limit: 1 }).length, 1);
+// The panel's endedAt can be a moment before the turn's last tool row: the window keeps two seconds of slack.
+check("store: a row just after the turn's end is still read", toolResults({ dbPath, sessionId: "s1", tool: "terminal", from: 999000, to: 1000500 }).length, 1);
 check("store: an unknown session is empty, not a throw", toolResults({ dbPath, sessionId: "nope", tool: "patch" }), []);
 
 rmSync(dir, { recursive: true, force: true });

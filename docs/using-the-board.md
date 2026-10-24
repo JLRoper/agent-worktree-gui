@@ -343,8 +343,10 @@ re-pins it. A tool result is a **preview** of what the tool returned, not the fu
 console ends it with `… result truncated by the gateway` (the gateway's `HERMES_RUN_PREVIEW_CHARS` raises the cap).
 When the preview was empty — routine for `patch` and `write_file` — the panel reads that call's result back out of
 the session store and draws it under the result line **as text**: a patch's diff, a terminal's output, never the JSON
-envelope it travelled in. A call the store has nothing for says `no output recorded for this call`, and a result held
-to 40 lines ends with `… N more line(s) of this result`.
+envelope it travelled in. Each burst in a turn pairs with its own results, so a second run of the same tool later in
+the turn shows its own output rather than the first run's. A call the store has nothing for says `no output recorded
+for this call` — or `no output in the session store yet` while the turn is still running — and a result held to 40
+lines ends with `… N more line(s) of this result`.
 
 **A run of tool calls is condensed.** Consecutive calls between two pieces of prose become one group, one row per
 tool name: `💻 terminal ×11 curl …` with the last input and either a duration or a live clock. Click a row to filter
