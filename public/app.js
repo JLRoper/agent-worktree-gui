@@ -7810,6 +7810,10 @@ function renderProjectRows(name, { typing = null } = {}) {
     if (!dEl) continue;
     state.detailEls.set(key, dEl);
     fillAgentSlots(dEl, prevCards.get(key) || new Map());
+    // The thinking block lives in the card and this path re-renders or re-inserts every card in the
+    // project. Without this the running turn's open block came back at its FIRST line on every project
+    // event, which is what read as the reasoning flickering while the tool calls scrolled out of view.
+    restoreThinkBodies(dEl);
     rememberAgentOrder(key, dEl);
     restoreTyping(dEl, prevTyping.get(key) || null);
     restoreAddAgent(dEl);
@@ -7833,6 +7837,7 @@ function renderProjectRows(name, { typing = null } = {}) {
   if (typing) restoreTyping(tbody, typing);
   restoreScrolls(tbody, prevScrolls);
   applyStoredScrolls(tbody);
+  settleScrolls(tbody);
   restoreCardSelection(heldSelection);
   scheduleBoardSweep(anchor);
   refreshAnchorBaseline();
