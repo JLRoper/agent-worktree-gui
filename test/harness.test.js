@@ -15,6 +15,9 @@ test("the project stays zero-dependency and ESM", () => {
 test("npm test is the node:test runner, not a framework", () => {
   assert.equal(typeof pkg.scripts?.test, "string", "package.json has a test script");
   assert.match(pkg.scripts.test, /node --test/, "the runner is Node's built-in, so no install is needed");
+  // A bare `node --test` discovers every matching file under the checkout, including a nested
+  // worktree's copy of this suite; scoping the target is what keeps one checkout to one run.
+  assert.match(pkg.scripts.test, /test\/\*\.test\.js/, "the target is this project's test directory, not a bare scan");
 });
 
 test("the harness boots a real server and can stop it", async (t) => {

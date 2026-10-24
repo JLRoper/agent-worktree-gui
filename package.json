@@ -10,7 +10,7 @@
     "dev": "node --watch server.js",
     "hooks:install": "git config core.hooksPath .githooks",
     "branches": "node tools/merged-branches.mjs",
-    "test": "node --test"
+    "test": "node --test test/*.test.js"
   },
   "engines": {
     "node": ">=22.5"

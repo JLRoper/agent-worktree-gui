@@ -11,8 +11,8 @@ back. The numbers are in "Evidence read back" at the end.
 
 ## 0.1 — `npm test` harness (review #10, partial)
 
-- [x] `package.json` gains `"test": "node --test"` — discovery-based, so no directory argument
-      is needed; no dependency is added.
+- [x] `package.json` gains `"test": "node --test test/*.test.js"` — scoped to this project's tests,
+      so a nested worktree's copy is not discovered; no dependency is added.
 - [x] `tools/panel-testkit.mjs` boots the real `server.js` as a child process against a
       throwaway `PANEL_CONFIG` (free port, empty scan root, its own `logs/`), waits for
       `/api/health`, and tears it down. This is what lets route behaviour be asserted instead of
