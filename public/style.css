@@ -600,6 +600,23 @@ button.chip:active { transform: translateY(1px); }
 .agents-block .job:last-child { border-bottom: 1px solid #2f3947; }
 .job-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding-bottom: 6px; }
 .job-head .spacer { flex: 1; }
+/* Where the agent runs: one dim line under the card's head, on every card. It answers "which tree is
+   this one in" at a glance, so it must stay legible but never compete with the head — smallest size,
+   dimmest ink, one line, the tail of the path only, and the full path in the tooltip. */
+.job-cwd {
+  display: flex; align-items: baseline; gap: 6px;
+  margin: 0 0 5px 26px;
+  min-width: 0;
+  font-size: 10.5px;
+  color: var(--dimmer);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.job-cwd .cwd-label { flex: none; letter-spacing: .04em; color: var(--dimmer); }
+.job-cwd .cwd-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
+.job-cwd .cwd-row { flex: none; color: var(--dimmer); border: 1px solid #2b3240; border-radius: 4px; padding: 0 5px; }
+.job-cwd:hover .cwd-path, .job-cwd:hover .cwd-row { color: var(--text); }
+.job.collapsed .job-cwd { margin-bottom: 3px; }
 /* Subagents a run delegated, under the card's head. The parent's own stream carries a single delegate_task call;
    these rows are what the children are actually doing, read from their own sessions in the store. */
 /* Under the console of the turn that delegated, aligned with it rather than with the card's head. */

@@ -195,6 +195,14 @@ const keyOf = (project, p) => `${project}::${p}`;
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+// A path as a card can afford to show it: forward slashes, and only the last few segments, prefixed
+// with an ellipsis when there is more. The whole path lives in the element's tooltip.
+function tailPath(p, keep = 3) {
+  const parts = normPath(p).split("/").filter(Boolean);
+  if (parts.length <= keep) return parts.join("/");
+  return `…/${parts.slice(-keep).join("/")}`;
+}
+
 function relTime(iso) {
   if (!iso) return "—";
   const t = Date.parse(iso);
@@ -2909,7 +2917,8 @@ function conversationHtml(conv) {
     ? `<span class="job-when mono" data-when="${esc(thread)}" title="last used ${esc(new Date(latest.lastActiveAt).toLocaleString())}">${esc(fmtAgo(latest.lastActiveAt))}</span>`
     : "";
   const meta = [
-    latest.title ? null : latest.cwd ? `cwd ${latest.cwd}` : null,
+    // cwd is no longer listed here: it has its own line under the card's head, on every card, titled
+    // or not.
     // Why this card is in the unattached panel: it has no worktree, or one that is not in the scan.
     homeless ? (latest.ownerPath ? `owner ${latest.ownerPath} (not in the scan)` : "no worktree") : null,
     // With usage figures present the model leads that strip instead (it is what the numbers belong to);
@@ -2922,6 +2931,27 @@ function conversationHtml(conv) {
     // instead of leading the line.
     latest.runId ? `run ${String(latest.runId).replace(/^run_/, "").slice(0, 8)}` : null,
   ].filter(Boolean).join(" · ");
+  // Where this agent is actually working — the top of every card, one quiet line. A card is re-read to
+  // answer "which tree is this one in", and that fact used to appear only on a card whose session never
+  // got a title. Only the last segments are drawn; the full path, and the row this agent is filed under
+  // when that is a different folder, are in the tooltip.
+  const cwdHere = normPath(latest.cwd);
+  const cwdRow = normPath(latest.ownerPath);
+  const cwdLine = cwdHere || cwdRow;
+  const cwdTitle = [
+    cwdHere ? `working directory: ${cwdHere}` : null,
+    cwdRow && cwdRow !== cwdHere ? `worktree row: ${cwdRow}` : null,
+    latest.worktree ? `worktree: ${latest.worktree}` : null,
+  ].filter(Boolean).join("\n");
+  const cwdHtml = cwdLine
+    ? `<div class="job-cwd" title="${esc(cwdTitle)}">` +
+      `<span class="cwd-label">cwd</span>` +
+      `<span class="cwd-path mono">${esc(tailPath(cwdLine))}</span>` +
+      (cwdRow && cwdHere && cwdRow !== cwdHere
+        ? `<span class="cwd-row mono" title="the worktree row this agent is filed under">row ${esc(tailPath(cwdRow, 2))}</span>`
+        : "") +
+      "</div>"
+    : "";
   // A run has no process to exit. The pool maps run status onto 0/1 so the old CLI card keeps
   // rendering, but printing "exit 0" for it reads as if a child process came and went — answer
   // "what happened" instead. A legacy CLI turn still has a real exit code worth showing.
@@ -2995,6 +3025,7 @@ function conversationHtml(conv) {
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
       <button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>
     </div>
+    ${cwdHtml}
     ${collapsed ? `<div class="job-preview mono" data-preview="${esc(thread)}">${jobPreviewHtml(latest)}</div>` : ""}
     ${homeless ? `<div class="attach-row" data-attach-row="${esc(thread)}" hidden>
       <span class="dimmer mono">attach to</span>
@@ -4629,6 +4660,8 @@ function conversationSignature(conv) {
     runQuestions,
     l.runId || "",
     l.cwd || "",
+    // The row this agent is filed under: the card's cwd line falls back to it, so a change must repaint.
+    l.ownerPath || "",
     l.model || "",
     l.yolo ? "y" : "",
     l.worktree || "",
@@ -5827,7 +5860,13 @@ async function confirmDeleteWorktree(key) {
     showBanner(
       d.alreadyGone
         ? `worktree row removed — the folder was already gone (${d.name || target})`
-        : `worktree removed to the Recycle Bin (${d.name || target})${d.branch ? ` on ${d.branch}` : ""}`,
+        : d.dirLeft
+          ? `worktree removed (${d.name || target}) — its files and git record are gone, but ${
+              d.panelHolds ? "this panel was started from that folder; restart it to release the folder" : "another process still holds the folder"
+            } — the panel will delete the empty folder as soon as it is released`
+          : d.recycled
+            ? `worktree removed to the Recycle Bin (${d.name || target})${d.branch ? ` on ${d.branch}` : ""}`
+            : `worktree deleted (${d.name || target})${d.branch ? ` on ${d.branch}` : ""} — the Recycle Bin declined it, so the files are gone permanently`,
     );
   } catch (e) {
     showBanner(`delete worktree: ${e.message}`);

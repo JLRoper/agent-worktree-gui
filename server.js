@@ -5,11 +5,12 @@ import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { gzipSync as zlibGzipSync } from "node:zlib";
-import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { cpus } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "./lib/pool.js";
+import { worktreeList } from "./lib/project.js";
 import { Store } from "./lib/store.js";
 import { Scheduler } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
@@ -489,6 +490,44 @@ function authorised(req) {
 }
 
 const cleanPath = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "");
+
+const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Remove a directory that something may still hold open. `force: true` makes a missing path a
+// success; anything left behind is a handle, not a missing file. Returns true when the path is gone.
+async function removeDirNow(target) {
+  try {
+    await rm(target, { recursive: true, force: true, maxRetries: 2, retryDelay: 100 });
+  } catch {
+    /* held open — the check below is the answer */
+  }
+  return !(await stat(target).then((s) => s.isDirectory()).catch(() => false));
+}
+
+// Windows refuses to delete (or rename) a directory that a process is using as its working directory,
+// and a worktree is exactly that whenever an agent, an editor, or a panel started from it is still
+// running. Nothing the panel can do makes the holder let go — it has to exit — so the cleanup keeps
+// trying after the response for minutes rather than leaving an empty folder on disk forever.
+function retryDirCleanup(target, { everyMs = 5_000, forMs = 10 * 60_000 } = {}) {
+  const until = Date.now() + forMs;
+  const tick = async () => {
+    if (await removeDirNow(target)) {
+      log(`worktree cleanup: removed the leftover folder ${target}`);
+      return;
+    }
+    if (Date.now() < until) setTimeout(tick, everyMs).unref();
+    else log(`worktree cleanup: gave up on ${target} — a process still holds it`);
+  };
+  setTimeout(tick, everyMs).unref();
+}
+
+// Is this path an ancestor of (or equal to) a process's working directory? A panel cannot delete the
+// folder it was started from, and saying so is more use to the reader than "another process".
+function holdsCwd(target, cwd) {
+  const a = cleanPath(target).toLowerCase();
+  const b = cleanPath(cwd).toLowerCase();
+  return Boolean(b) && (b === a || b.startsWith(`${a}/`));
+}
 
 // The Hermes sessions the scheduler attributes to one worktree row — the same attribution the row's
 // own "Hermes session open here but idle" claim is built from, so this list can never offer a session
@@ -1411,33 +1450,63 @@ const server = createServer(async (req, res) => {
       // directory or merely cleaned up the panel's record of one that was already gone.
       const hadDirectory = await stillThere();
       let recycled = false;
-      let removeError = null;
-      if (process.platform === "win32" && (await stillThere())) {
+      let recycleError = null;
+      if (process.platform === "win32" && hadDirectory) {
         try {
           await execP("powershell", ["-NoProfile", "-NonInteractive", "-Command", psCommand], { timeout: 90_000 });
           recycled = !(await stillThere());
-          if (!recycled) removeError = "the Recycle Bin refused it — the directory is still there";
+          if (!recycled) recycleError = "the Recycle Bin refused it — the directory is still there";
         } catch (e) {
-          removeError = String((e && e.message) || e);
+          recycleError = String((e && e.message) || e);
         }
       }
-      // What has to be true when this returns: no directory, no git record, no row. A step that finds
-      // its half already done is a SUCCESS, not a failure — the folder being gone (by any route) makes
-      // git say "is not a working tree", and treating that as an error used to abort the cleanup and
-      // leave the row on the board for a worktree that no longer existed.
+      // git's removal empties the tree and drops its own record. Its LAST step is the rmdir, and on
+      // Windows that fails whenever a process still has the folder as its working directory — which a
+      // worktree routinely is, because the agent that built it, an editor, or a panel started from it is
+      // still running. So `failed to delete …: Permission denied` does NOT mean the worktree survived: by
+      // then the files and the record are gone and only an EMPTY folder is left. Treating that error as
+      // a failure is what left the row on the board (re-read as a worktree with no branch) while the
+      // folder stayed on disk. What git still lists is the arbiter, below.
+      let gitError = null;
       if (await stillThere()) {
         try {
           await execP("git", ["-C", project.path, "worktree", "remove", "--force", target], { timeout: 90_000 });
         } catch (e) {
-          const msg = String((e && e.message) || e);
-          const alreadyGone = /not a working tree|is not a valid directory|No such file/i.test(msg);
-          if (!alreadyGone && (await stillThere())) {
-            return sendJson(res, 500, { error: `could not remove the worktree: ${msg || removeError}` });
-          }
-          removeError = removeError || msg;
+          gitError = String((e && e.message) || e);
         }
       }
       await execP("git", ["-C", project.path, "worktree", "prune"], { timeout: 30_000 }).catch(() => {});
+
+      const listing = await worktreeList(project.path).catch(() => null);
+      const stillRegistered = listing ? listing.some((w) => path.resolve(w.path) === target) : null;
+      if (stillRegistered === true) {
+        // git never let go of it: the worktree is still real, so the row has to stay and the caller has
+        // to hear a failure rather than a claim of deletion.
+        const why = String(gitError || "git still lists it").trim().split("\n").filter(Boolean).pop();
+        return sendJson(res, 500, { error: `could not remove the worktree: ${why}` });
+      }
+      const heldOpen = /failed to delete|Permission denied|being used by another process|EBUSY|EPERM/i.test(
+        String(gitError || ""),
+      );
+      if (stillRegistered === null && (await stillThere()) && gitError && !heldOpen) {
+        // git's listing could not be read AND its removal failed for some other reason: nothing here
+        // proves the worktree is gone, so do not pretend it is.
+        return sendJson(res, 500, { error: `could not remove the worktree: ${gitError}` });
+      }
+
+      // Only the folder can disagree now. An empty leftover goes at once; one a process still holds is
+      // retried here, then kept after the response until the holder exits — the row goes either way,
+      // because it describes a worktree git no longer has.
+      let dirLeft = await stillThere();
+      for (let i = 0; dirLeft && i < 4; i += 1) {
+        dirLeft = !(await removeDirNow(target));
+        if (dirLeft) await sleepMs(600);
+      }
+      if (dirLeft) retryDirCleanup(target);
+      // Whether the panel itself is what holds the folder: a panel started from this worktree cannot
+      // delete it while it runs, and "restart the panel" is the only useful thing to say.
+      const panelHolds = dirLeft && holdsCwd(target, process.cwd());
+
       // Drop by the path the STORE knows, not by `path.resolve(target)`: rows are keyed by the scanned
       // path with forward slashes, so a resolved Windows path is a different key and the row survived
       // its own deletion.
@@ -1449,6 +1518,13 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, {
         ok: true,
         recycled,
+        // The Recycle Bin is best effort: when it declined, say why and let the card say the files are
+        // gone permanently instead of promising recoverability that does not exist.
+        recycleError,
+        // Files deleted, git record pruned, row dropped — and the folder itself survived because a
+        // process holds it. The panel keeps trying in the background.
+        dirLeft,
+        panelHolds,
         path: target,
         name: row.name,
         branch: row.branch || null,
