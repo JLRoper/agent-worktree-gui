@@ -6544,6 +6544,10 @@ function scheduleBoardSweep(anchor = null) {
 function sweepStaleBoard() {
   // This pass moves details back under their rows, which takes the cards out of the DOM and puts them back.
   const heldSelection = captureCardSelection();
+  // A worktree that gains life is re-ranked, and its detail then follows the row - a move, which detaches the cards
+  // and blurs whatever the reader was typing in. That was the cursor going missing on a green flash: the flash itself
+  // touches no input, but the re-rank under it moved the box. Read the caret before any of it and put it back after.
+  const typing = $("projects") ? captureTyping($("projects")) : null;
   // A detail whose row is gone, or which no longer follows its own row.
   for (const d of [...document.querySelectorAll("tr.detail[data-detail]")]) {
     const key = d.dataset.detail;
@@ -6602,6 +6606,7 @@ function sweepStaleBoard() {
       card.remove();
     }
   }
+  if (typing) restoreTyping($("projects"), typing);
   restoreCardSelection(heldSelection);
 }
 
@@ -7107,6 +7112,10 @@ function reorder(name) {
   if (!tbody) return;
   // Re-appending a detail takes its cards out of the DOM on the way, which is enough to lose a selection.
   const heldSelection = captureCardSelection();
+  // And enough to lose the caret: a re-rank of some OTHER worktree re-appends every row in this project, including
+  // the open one the reader is typing in, and a detached box cannot keep focus. That is the cursor going missing
+  // when a row flashes green - the flash touches nothing, the re-sort under it moves everything.
+  const typing = $("projects") ? captureTyping($("projects")) : null;
   const mine = [...state.rows.values()].filter((r) => r.project === name);
   // The order if nothing were pinned: our running agents first, then everything by how recently it
   // showed life. This is what "latest movement at the top" means once all the accordions are closed.
@@ -7133,6 +7142,7 @@ function reorder(name) {
   const current = [...tbody.children];
   if (current.length === want.length && current.every((el, i) => el === want[i])) return;
   for (const el of want) tbody.appendChild(el);
+  if (typing) restoreTyping(tbody, typing);
   // Say which rows moved: the order is the panel's judgement about what to look at first, and a
   // silent shuffle leaves you guessing whether the row under the cursor is still the same row.
   // Green only where an agent actually moved in that row; a row that merely slid a slot because its
