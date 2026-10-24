@@ -503,12 +503,33 @@ that is not a directory when it is read back refuses too: this resolves a name, 
 409 guards that keep the panel's index honest (`already being read`, `already merging this worktree`, `already
 has commits`, `already exists`) are untouched by it.
 
+    RESTART gateway        (restart the Hermes gateway — queued until this turn has ended)
+    RESTART panel          (restart this panel — queued until this turn has ended)
 `RULE:` lets the assistant maintain its own standing answers while it watches — the case that prompted it was
 "an interrupted agent gets exactly one continue". Such a rule is part of the normal rules list from then on, so
 it can answer a question (or, at `auto`, pick a choice) on the strength of it; the Scratchpad marks it
 **assistant**, and it is deletable there. A near-identical restatement refines the assistant's own earlier rule
 instead of adding a second; the reader's rules are never merged or edited by it.
 
+**It can restart the thing that runs it.** `RESTART gateway` and `RESTART panel` map to `POST /api/restart`
+and neither runs inside the turn that wrote it: that turn *is* a run inside the gateway, so the request is
+queued and the action starts only once the assistant's thread has no turn running — a synchronous restart
+would kill the very answer that asked for it. Nothing is stopped before the provider key is verified in
+`$HERMES_HOME/.env`: a gateway that comes up without one binds its port, answers `/health`, and then dies on
+every run with `No LLM provider configured`. A refusal is journaled, not thrown at the model. Everything the
+restart will interrupt is given ONE terminal status first — `interrupted`, with the restart recorded as what
+ended it — so no card is left with neither a done nor an interrupted verdict. Once the new process answers it
+is proved with **one real turn through the gateway, never with its port**, and only then is the assistant woken
+once with the completion payload of everything the restart interrupted.
+
+A panel restart hands the port over: the outgoing process writes what was running into `restart.json` beside
+the job store, spawns a detached helper (`lib/panel-restart.cjs`) that waits for the old pid to exit and only
+then starts `server.js` (and writes `logs/server.pid`), and exits through the same path a signal uses. The
+replacement reads that record, proves the gateway and fires the single wake. The SAME wake covers a restart the
+panel did *not* ask for: if runs stop reporting while the panel is still up — the gateway was replaced and no
+longer knows their run ids — each lost run is marked interrupted once and the assistant is told once, with the
+same payload each time. A gateway restart is invisible from the outside (its port answers either way), which is
+why the sweep asks the runs themselves and why the proof is a real turn.
 Each finished turn is harvested exactly once (keyed by turn id, persisted): a turn's title landing or a panel
 restart re-emits the same job, and re-reading its lines would otherwise start a second worker.
 
@@ -581,6 +602,7 @@ Watches without a deadline, and finished ones, say so instead.
 | POST | `/api/assistant/check` | run one sentry pass now (used by the page after a change, and by probes instead of waiting for the clock) |
 | POST | `/api/jobs/cancel` | `{id}` → `POST /v1/runs/{id}/stop` (cooperative interrupt) |
 | POST | `/api/jobs/clear` | drop finished jobs from the list |
+| GET/POST | `/api/restart` | restart the gateway or this panel. GET reports the queue, the last action, the provider-key preflight (`$HERMES_HOME/.env`, or the `model.api_key` line of `config.yaml`) and where `restart.json` is written; POST `{target:"gateway"\|"panel", reason?, waitFor?}` **queues** the action and answers **202** at once. It runs when `waitFor` (default `panel-assistant`) has no turn running, gives every interrupted run one `interrupted` status, proves the new process with one real turn and wakes the assistant once with the payloads. **400** for another target, **409** when one is already queued/running or when no provider key is present |
 | POST | `/api/refresh` `/api/fetch` `/api/reload` | force a fast pass / fetch remotes / re-read config |
 
 ## Roadmap
@@ -614,4 +636,9 @@ Watches without a deadline, and finished ones, say so instead.
   Re-apply `docs/hermes-runs-api-knobs.diff` and restart the gateway.
 - **`fatal: cannot change to ...: No such file or directory`** — native git can't take MSYS
   `/c/...` paths; use `C:/...`.
+- **A restart is refused: `no provider key in <HERMES_HOME>/.env`** — that is the preflight, not a failure of the
+  route. A gateway started without a provider key binds its port, answers `/health`, and then every run it
+  dispatches dies with `No LLM provider configured`. Write the key where the gateway loads it —
+  `hermes config set OPENROUTER_API_KEY <key>` puts it in `$HERMES_HOME/.env` — and ask again. `GET /api/restart`
+  reports the same check, plus the queue and the last action, so a refused request is visible without reading a log.
 - **Port already in use** — `stop-background.cmd`, or `netstat -ano | grep 7331` and kill the PID.
