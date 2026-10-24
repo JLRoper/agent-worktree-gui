@@ -20,6 +20,7 @@ import { gitIn, scanWorktree } from "./lib/scan.js";
 import { resolveExistingTarget, resolutionNote } from "./lib/spawn-target.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
+import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
@@ -266,6 +267,10 @@ function adoptFromJob(evt) {
   if (!project) return;
   void scheduler.adoptWorktree(project.name, j.worktreePath).catch(() => {});
 }
+// The restart controller: the queue, the provider-key preflight, the one-terminal-status snapshot, the
+// real-turn proof and the single resume wake. Declared before the assistant because the assistant is
+// handed its `request` as the one act it cannot perform itself.
+let restart = null;
 // Declared before the job stream that feeds it: a job event arrives on the same tick as construction,
 // and the observer is optional until the assistant exists.
 let assistant = null;
@@ -300,6 +305,9 @@ assistant = new Assistant({
   getRows: () => [...store.rows.values()],
   getChildren: () => subagentRoster({ dbPath: path.join(hermesHome(), "state.db") }),
   spawner: assistantSpawnRun,
+  // The one act this module cannot perform itself: a RESTART line's gateway/panel restart, queued by
+  // the controller and run only once the turn that asked for it has ended.
+  onRestart: (spec) => restart.request(spec),
   onEvent: broadcast,
   onLog: log,
 });
@@ -309,6 +317,22 @@ assistant = new Assistant({
 log(`assistant cwd: ${assistant.ensureCwd()}`);
 assistant.start();
 
+// ---- restarting the gateway, or this panel ---------------------------------------------
+// Everything that touches the outside world is injectable (lib/restart.js), which is what lets
+// tools/verify-restart.mjs prove the queueing, the health wait and the resume without bouncing the
+// live gateway or the live panel.
+restart = new RestartController({
+  config,
+  jobs,
+  assistant,
+  home: hermesHome(),
+  hermesBin: config.hermesBin || null,
+  credentials: () => jobs.api,
+  log,
+  onState: (state) => broadcast({ type: "restart", restart: state }),
+  // A panel restart exits through the same path a signal uses, so the replacement can bind the port.
+  shutdown: (code) => shutdown(code),
+});
 // The sentry cannot report its own clock stopping, and a restart leaves its last turn `interrupted` with
 // nobody to notice: both are the server's business. The watchdog repairs the timer from outside (its own
 // tick() only catches throws), and the resume wakes the assistant once if the restart cut a turn in half.
@@ -321,6 +345,40 @@ setInterval(() => {
     log(`assistant watchdog: ${String((err && err.message) || err)}`);
   }
 }, 10_000).unref?.();
+
+// A panel restarted by its own restart action left a record: the replacement waits for the gateway,
+// proves it with ONE REAL TURN (never with the port), and only then wakes the assistant once with
+// the completion payload of everything the restart interrupted. A clean boot has no record and costs
+// nothing.
+setTimeout(() => {
+  void restart.resumePending().catch((e) => log(`restart resume failed: ${String((e && e.message) || e)}`));
+}, 3_000).unref?.();
+
+// A gateway restart nobody asked for. Runs stop reporting while the panel is still up: their streams
+// dropped and the gateway no longer knows the run ids. Every run it lost is given ONE terminal status
+// (interrupted, with the restart recorded as what ended it) and the same single resume wake the panel
+// fires for a restart it did ask for. Swept here rather than in the sentry: the sentry owns no network
+// call, and this is the only place that can see a run stop reporting.
+let sweepingOrphans = false;
+setInterval(() => {
+  if (sweepingOrphans || !assistant) return;
+  sweepingOrphans = true;
+  void jobs
+    .sweepOrphanedRuns()
+    .then((lost) => {
+      if (!lost.length) return;
+      log(`gateway restart detected: ${lost.length} run(s) stopped reporting (${lost.map((j) => j.id).join(", ")})`);
+      assistant.wakeAfterRestart(lost, {
+        target: "gateway",
+        detected: true,
+        reason: "the gateway was restarted and the panel did not ask for it",
+      });
+    })
+    .catch((e) => log(`orphan sweep failed: ${String((e && e.message) || e)}`))
+    .finally(() => {
+      sweepingOrphans = false;
+    });
+}, 15_000).unref?.();
 
 // Start a worker on the assistant's behalf. Deliberately the same mechanics as the New-agent card —
 // registry for the project, gateway probe before anything is promised, `git rev-parse`/`worktree add` in
@@ -1925,6 +1983,27 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, projects: config.projects.map((p) => p.name) });
     }
 
+    // ---- restarting the gateway or this panel --------------------------------------------
+    // An operator action, answerable from an assistant turn: the request returns at once and the action
+    // runs only once the requesting turn has ended, because restarting the gateway synchronously kills
+    // the very turn that asked for it. The preflight is synchronous, so a missing provider key is
+    // refused here rather than discovered after the new process is up and every run is dying.
+    if (route === "/api/restart" && req.method === "GET") {
+      return sendJson(res, 200, restart.state());
+    }
+
+    if (route === "/api/restart" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      try {
+        const record = restart.request({ target: body.target, reason: body.reason, waitFor: body.waitFor || body.thread });
+        log(`restart queued: ${record.target} (${record.id}) — it runs once ${record.thread} has no turn running`);
+        return sendJson(res, 202, { ok: true, restart: record, provider: record.provider, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, Number(e.status) || 400, { ok: false, error: String((e && e.message) || e), restart: restart.state() });
+      }
+    }
+
     if (route === "/api/stream") return handleStream(req, res);
 
     const rel = route === "/" ? "index.html" : route.replace(/^\/+/, "");
@@ -1984,13 +2063,25 @@ await scheduler.start();
 // first scan pass, and new projects simply appear when it lands.
 void registry.refresh().catch((e) => log(`project discovery failed: ${String((e && e.message) || e)}`));
 
-for (const sig of ["SIGINT", "SIGTERM"]) {
-  process.on(sig, () => {
-    log("shutting down");
+// The exit path, shared by a signal and a panel restart: the replacement has to be able to bind the
+// port, so nothing waits on the SSE clients beyond the same two seconds this always allowed.
+function shutdown(code = 0) {
+  log(`shutting down (exit ${code})`);
+  try {
     scheduler.stop();
-    clearInterval(heartbeat);
+  } catch {
+    /* an already-stopped scheduler is not a failure */
+  }
+  clearInterval(heartbeat);
+  try {
     pool.close();
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 2000);
-  });
+  } catch {
+    /* ...nor is a closed pool */
+  }
+  server.close(() => process.exit(code));
+  setTimeout(() => process.exit(code), 2000).unref?.();
+}
+
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.on(sig, () => shutdown(0));
 }
