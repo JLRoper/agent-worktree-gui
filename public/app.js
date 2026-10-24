@@ -48,6 +48,9 @@ const state = {
   expanded: new Set(),
   rowEls: new Map(),
   detailEls: new Map(),
+  // The open "remove this worktree?" row, by row key. It lives in the table between the row and its
+  // detail, so every path that moves or rebuilds rows has to carry it or it drifts to the top.
+  confirmEls: new Map(),
   tbodyEls: new Map(),
   settings: {},
   spawn: {},
@@ -5684,7 +5687,8 @@ function agentBadgeHtml(row) {
 // The red ✕ opens an inline confirmation row under the tree: the question says where the files go
 // (Recycle Bin) rather than just "delete?", and nothing happens until the second click.
 function showWorktreeConfirm(key) {
-  document.querySelectorAll("tr.row-confirm").forEach((el) => el.remove());
+  for (const el of document.querySelectorAll("tr.row-confirm")) el.remove();
+  state.confirmEls.clear();
   const rowEl = document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
   const row = state.rows.get(key);
   if (!rowEl || !row) return;
@@ -5702,6 +5706,7 @@ function showWorktreeConfirm(key) {
         <span class="rc-actions"><button class="btn-del-no" type="button" data-del-tree-no="${esc(key)}">Cancel</button><button class="btn-del-yes" type="button" data-del-tree-yes="${esc(key)}">Delete</button></span>
       </div>
     </td>`;
+  state.confirmEls.set(key, confirm);
   rowEl.after(confirm);
 }
 
@@ -5774,6 +5779,7 @@ async function confirmDeleteWorktree(key) {
     // the row back on screen for a folder that no longer exists.
     await waitForScanPass(baseline);
     confirmEl?.remove();
+    state.confirmEls.delete(key);
     // Drop it here too: the server broadcasts a `drop`, but a tab whose stream hiccuped would keep a
     // row for a worktree that is gone, and this is the tab that asked for the deletion.
     removeRow(project, d.rowPath || target);
@@ -5793,6 +5799,32 @@ async function confirmDeleteWorktree(key) {
       yes.textContent = "Delete";
     }
   }
+}
+
+// Cancel/Delete in the confirmation row are consequential, and they sit in a table the board re-ranks
+// under the cursor: a repaint between the press and the release replaces the button, the browser delivers
+// no click at all, and the reader reports "the delete does nothing" while both buttons are enabled and on
+// top. Both answers are therefore read on pointerup (the element under the cursor at release) and this
+// short guard makes the click that sometimes still follows a no-op.
+const rowConfirmSent = new Map(); // `${key}|${action}` -> when it was answered
+
+function answerRowConfirm(action, key) {
+  if (!key) return;
+  const id = `${key}|${action}`;
+  const at = rowConfirmSent.get(id);
+  if (at && Date.now() - at < 4000) return;
+  rowConfirmSent.set(id, Date.now());
+  if (rowConfirmSent.size > 40) {
+    const cut = Date.now() - 60000;
+    for (const [k, when] of rowConfirmSent) if (when < cut) rowConfirmSent.delete(k);
+  }
+  if (action === "yes") {
+    void confirmDeleteWorktree(key);
+    return;
+  }
+  const el = state.confirmEls.get(key) || document.querySelector(`tr.row-confirm[data-confirm-row="${CSS.escape(key)}"]`);
+  el?.remove();
+  state.confirmEls.delete(key);
 }
 
 function rowHtml(row) {
@@ -7176,8 +7208,20 @@ function reorder(name) {
   for (const k of orderedKeys) {
     const tr = state.rowEls.get(k);
     if (tr) want.push(tr);
+    // The confirmation is a child of its row inside the table, so a re-rank that re-appends only the
+    // rows leaves it behind at index 0 - the box "pops up the top" instead of staying under the tree
+    // it asks about. Carry it with its row, between the row and its detail.
+    const c = state.confirmEls.get(k);
+    if (c) want.push(c);
     const d = state.detailEls.get(k);
     if (d) want.push(d);
+  }
+  // A confirmation for a row that is gone must not survive its own row.
+  for (const [k, c] of [...state.confirmEls]) {
+    if (!state.rows.has(k)) {
+      c.remove();
+      state.confirmEls.delete(k);
+    }
   }
   // Only touch the DOM when the order really changed: this runs on every row event, and re-appending
   // identical nodes would fight the scroll position while someone is reading.
@@ -7389,8 +7433,10 @@ function removeRow(project, p) {
   const pageY = window.scrollY;
   state.rowEls.get(key)?.remove();
   state.detailEls.get(key)?.remove();
+  state.confirmEls.get(key)?.remove();
   state.rowEls.delete(key);
   state.detailEls.delete(key);
+  state.confirmEls.delete(key);
   state.rows.delete(key);
   if (window.scrollY !== pageY) {
     const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
@@ -7439,6 +7485,10 @@ function renderProjectRows(name, { typing = null } = {}) {
       holder.innerHTML = rowHtml(row);
       const tr = holder.firstElementChild;
       frag.appendChild(tr);
+      // An open confirmation belongs to its row, and this path rebuilds every row: carry the live node
+      // over so the question survives the repaint (and does not come back at the top of the table).
+      const confirmEl = state.confirmEls.get(key);
+      if (confirmEl) frag.appendChild(confirmEl);
       let dEl = null;
       if (state.expanded.has(key)) {
         const h2 = document.createElement("tbody");
@@ -7456,10 +7506,14 @@ function renderProjectRows(name, { typing = null } = {}) {
     for (const k of [...state.rowEls.keys()]) if (state.rows.get(k)?.project === name) state.rowEls.delete(k);
     for (const k of [...state.detailEls.keys()]) if (state.rows.get(k)?.project === name) state.detailEls.delete(k);
     endDomMove();
+    // Nothing of this project's is on screen any more, so its confirmation is gone with it.
+    for (const k of [...state.confirmEls.keys()]) if (state.rows.get(k)?.project === name) state.confirmEls.delete(k);
     return;
   }
   const live = new Set(built.map((b) => b.key));
   for (const k of [...state.rowEls.keys()]) if (state.rows.get(k)?.project === name && !live.has(k)) state.rowEls.delete(k);
+  // A confirmation whose row was not rebuilt is no longer on the page either.
+  for (const k of [...state.confirmEls.keys()]) if (state.rows.get(k)?.project === name && !live.has(k)) state.confirmEls.delete(k);
   // Only now, with the rows in the document, put the cards into the slots the rebuilt detail made for them and the
   // reader's draft and caret back into the reply box: a detached box cannot measure itself against its own text.
   for (const { key, tr, dEl } of built) {
@@ -7542,6 +7596,10 @@ function renderAll() {
       .sort((a, b) => projectActivity(b[1][0]) - projectActivity(a[1][0]) || a[0].localeCompare(b[0]))
       .map(([root, list]) => rootSection(root, list))
       .join("") || '<p class="empty">No git repos found under scanRoots.</p>';
+  // Every tbody on the page was just replaced, so an open confirmation row is detached now. Forget it
+  // here: renderProjectRows would otherwise re-insert the old node into a fresh table.
+  for (const el of state.confirmEls.values()) el.remove();
+  state.confirmEls.clear();
   // The rebuild sorted every folder by activity; put the open ones back in the slot they held.
   for (const g of $("projects").querySelectorAll("section.root-group")) {
     pinOpenProjects(g.querySelector(".root-body"), prevRoots.get(g.dataset.root));
@@ -8291,14 +8349,14 @@ document.addEventListener("click", async (e) => {
   if (delTreeYes) {
     e.preventDefault();
     e.stopPropagation();
-    void confirmDeleteWorktree(delTreeYes.dataset.delTreeYes);
+    answerRowConfirm("yes", delTreeYes.dataset.delTreeYes);
     return;
   }
   const delTreeNo = e.target.closest("[data-del-tree-no]");
   if (delTreeNo) {
     e.preventDefault();
     e.stopPropagation();
-    document.querySelector(`tr.row-confirm[data-confirm-row="${CSS.escape(delTreeNo.dataset.delTreeNo)}"]`)?.remove();
+    answerRowConfirm("no", delTreeNo.dataset.delTreeNo);
     return;
   }
   const delBtn = e.target.closest("[data-del-artifact]");
@@ -9167,6 +9225,14 @@ document.addEventListener("pointerup", (e) => {
   if (qChoice) {
     e.preventDefault();
     void answerRunQuestion(qChoice.dataset.qanswer, qChoice.dataset.qvalue, qChoice.dataset.qrequest, qChoice.closest(".turn-question"));
+  }
+  // Cancel/Delete on a worktree confirmation: the same failure as the approval buttons. The board re-ranks
+  // the table under the cursor, a repaint replaces the button, and the click is never delivered - the reader
+  // clicks Delete and nothing happens. Read at release, matched by data attribute, so a rebuilt button counts.
+  const delConfirm = e.target.closest && e.target.closest("[data-del-tree-yes], [data-del-tree-no]");
+  if (delConfirm) {
+    e.preventDefault();
+    answerRowConfirm(delConfirm.dataset.delTreeYes ? "yes" : "no", delConfirm.dataset.delTreeYes || delConfirm.dataset.delTreeNo);
   }
 });
 
