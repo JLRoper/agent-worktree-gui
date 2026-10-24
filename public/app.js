@@ -3112,13 +3112,23 @@ function restoreAddAgent(root) {
   if (!a) return;
   const input = root.querySelector(`.add-agent-input[data-add-agent-key="${CSS.escape(a.key)}"]`);
   if (!input) return;
+  // Read the caret before focusing. Focusing a freshly built field fires focusin synchronously, and that handler
+  // records the node's selection - which for a brand new field is 0 - so reading it afterwards put the caret at the
+  // start of the sentence every time the row was rebuilt.
+  const start = a.start;
+  const end = a.end;
   if (input.value !== a.value) input.value = a.value;
   if (!a.focused) return;
   // preventScroll for the same reason the reply box uses it: this runs on every repaint, and a bare focus() would
   // pull the page back to this box every few seconds while the reader had scrolled away.
   input.focus({ preventScroll: true });
+  const max = input.value.length;
+  const s = Math.min(Math.max(0, Number.isFinite(start) ? start : max), max);
+  const e = Math.min(Math.max(s, Number.isFinite(end) ? end : s), max);
   try {
-    input.setSelectionRange(a.start, a.end);
+    input.setSelectionRange(s, e);
+    a.start = s;
+    a.end = e;
   } catch {
     /* a node that is no longer a text field: nothing to restore */
   }
@@ -3662,8 +3672,12 @@ document.addEventListener("focusin", (e) => {
 document.addEventListener("focusout", (e) => {
   const input = addAgentFieldOf(e);
   if (!input || !state.addAgent) return;
-  state.addAgent.focused = false;
   rememberAddAgentCaret(input);
+  // A repaint takes this field out of the page and puts it back, which fires focusout with no reader behind it. Every
+  // such move is bracketed by beginDomMove()/endDomMove(); while one is open the reader still owns the caret, so the
+  // claim is not cleared and the restore at the end of the move re-focuses the box.
+  if (domMoveDepth > 0) return;
+  state.addAgent.focused = false;
   // An empty box that the reader left puts the + back. Deferred, and skipped when the node was removed: a repaint
   // also fires focusout, and that is not the reader walking away from an empty field.
   setTimeout(() => {
@@ -3672,9 +3686,27 @@ document.addEventListener("focusout", (e) => {
   }, 0);
 });
 
+// ---- moving nodes without letting go of the caret ------------------------------------------------
+// Almost every repaint here takes nodes out of the page and puts them back: a re-ranked row is re-appended, a detail
+// follows its row, a project section is swapped, the whole board is rebuilt. Detaching the node that holds a focused
+// field blurs it, and a blur cannot be told apart from the reader walking away - which is how the inline field used
+// to lose its claim (and the caret) several times a second on a busy board. One call brackets the move: while a move
+// is open a blur leaves the claim alone, and the restore that ends the move puts the caret back.
+let domMoveDepth = 0;
+function beginDomMove() {
+  domMoveDepth += 1;
+}
+function endDomMove() {
+  domMoveDepth = Math.max(0, domMoveDepth - 1);
+}
+
 function rememberAddAgentCaret(input) {
   const a = state.addAgent;
   if (!a || !input) return;
+  // A node taken out of the page reports its selection as 0, so a blur during a move would record the caret at the
+  // start of the text and the restore after the move would put it there. The value is already tracked by the input
+  // event; only a field that is still on the page can say where the caret is.
+  if (!input.isConnected) return;
   a.value = input.value;
   try {
     a.start = input.selectionStart ?? a.value.length;
@@ -6548,6 +6580,7 @@ function sweepStaleBoard() {
   // and blurs whatever the reader was typing in. That was the cursor going missing on a green flash: the flash itself
   // touches no input, but the re-rank under it moved the box. Read the caret before any of it and put it back after.
   const typing = $("projects") ? captureTyping($("projects")) : null;
+  beginDomMove();
   // A detail whose row is gone, or which no longer follows its own row.
   for (const d of [...document.querySelectorAll("tr.detail[data-detail]")]) {
     const key = d.dataset.detail;
@@ -6606,7 +6639,9 @@ function sweepStaleBoard() {
       card.remove();
     }
   }
+  endDomMove();
   if (typing) restoreTyping($("projects"), typing);
+  restoreAddAgent($("projects"));
   restoreCardSelection(heldSelection);
 }
 
@@ -6949,6 +6984,10 @@ function reorderProjects() {
   if (!host) return;
   // Moving a section or a folder moves the cards inside them, and that drops a selection standing in one.
   const heldSelection = captureCardSelection();
+  // It also drops the caret: re-appending a project section or a folder takes every card and the inline add-agent
+  // field inside it out of the page, and a detached field is blurred. Read both before the moves, put them back after.
+  const typing = captureTyping(host);
+  beginDomMove();
   const rank = projectRanks();
   const at = (n) => rank.get(n) || { tier: 2, activity: 0 };
   const cmp = (x, y) => {
@@ -7006,6 +7045,9 @@ function reorderProjects() {
   let gf = 0;
   groups.forEach((_, i) => wantGroups.push(pinnedGroups.has(i) ? pinnedGroups.get(i) : freeGroups[gf++]));
   if (!wantGroups.every((g, i) => g === groups[i])) for (const g of wantGroups) host.appendChild(g);
+  endDomMove();
+  if (typing) restoreTyping(host, typing);
+  restoreAddAgent(host);
   restoreCardSelection(heldSelection);
 }
 
@@ -7141,8 +7183,11 @@ function reorder(name) {
   // identical nodes would fight the scroll position while someone is reading.
   const current = [...tbody.children];
   if (current.length === want.length && current.every((el, i) => el === want[i])) return;
+  beginDomMove();
   for (const el of want) tbody.appendChild(el);
+  endDomMove();
   if (typing) restoreTyping(tbody, typing);
+  restoreAddAgent(tbody);
   // Say which rows moved: the order is the panel's judgement about what to look at first, and a
   // silent shuffle leaves you guessing whether the row under the cursor is still the same row.
   // Green only where an agent actually moved in that row; a row that merely slid a slot because its
@@ -7288,6 +7333,7 @@ function placeRow(project, row, { flash = false } = {}) {
         atBottom: o._selfTop == null || o.scrollHeight - o.scrollTop - o.clientHeight < 32,
       }))
     : [];
+  beginDomMove();
   if (oldDetail) oldDetail.remove();
   // Any other copy for this key is a stray from an earlier render: one row, one detail.
   for (const stray of document.querySelectorAll(`tr.detail[data-detail="${CSS.escape(key)}"]`)) stray.remove();
@@ -7314,6 +7360,8 @@ function placeRow(project, row, { flash = false } = {}) {
     applyStoredScrolls(dEl);
     settleScrolls(dEl);
   }
+  // The move is over for both shapes of row (a bare row rebuilds no detail but still replaces its <tr>).
+  endDomMove();
   // After restoreTyping, which focuses the reply box and would take the document selection with it.
   restoreCardSelection(heldSelection);
   if (flash && old) {
@@ -7402,10 +7450,12 @@ function renderProjectRows(name, { typing = null } = {}) {
     }
   }
   // One swap: the old rows leave as the new ones arrive, so the document never lays out half-built.
+  beginDomMove();
   tbody.replaceChildren(frag);
   if (!expanded) {
     for (const k of [...state.rowEls.keys()]) if (state.rows.get(k)?.project === name) state.rowEls.delete(k);
     for (const k of [...state.detailEls.keys()]) if (state.rows.get(k)?.project === name) state.detailEls.delete(k);
+    endDomMove();
     return;
   }
   const live = new Set(built.map((b) => b.key));
@@ -7420,6 +7470,7 @@ function renderProjectRows(name, { typing = null } = {}) {
     restoreTyping(dEl, prevTyping.get(key) || null);
     restoreAddAgent(dEl);
   }
+  endDomMove();
   // A row that no longer exists must not leave a dead detail element remembered.
   for (const k of [...state.detailEls.keys()]) {
     if (state.rows.get(k)?.project !== name) state.detailEls.delete(k);
@@ -7483,6 +7534,9 @@ function renderAll() {
   for (const g of $("projects").querySelectorAll("section.root-group")) {
     prevRoots.set(g.dataset.root, [...g.querySelectorAll(".root-body section.project")].map((s) => s.dataset.project));
   }
+  // Every card and the inline add-agent field leave the page here; bracketed so their blur is not read as the reader
+  // walking away. Both are put back below.
+  beginDomMove();
   $("projects").innerHTML =
     [...groups.entries()]
       .sort((a, b) => projectActivity(b[1][0]) - projectActivity(a[1][0]) || a[0].localeCompare(b[0]))
@@ -7521,6 +7575,8 @@ function renderAll() {
   }
   // The caret read before the replacement: put it back in the box this rebuild made for it.
   if (typingBoard) restoreTyping($("projects"), typingBoard);
+  restoreAddAgent($("projects"));
+  endDomMove();
   paintConfigLine();
   paintCollapseAll();
   if (window.scrollY !== pageY) {
@@ -7696,6 +7752,9 @@ function connect() {
     // is typing in with it. Once it is detached there is no focus left to capture, so it is read here and handed to
     // the row repaint below, which puts it back in the box it rebuilds.
     const typing = captureTyping(sec);
+    // The section swap below takes every card and the inline add-agent field out of the page for an instant; bracketed
+    // so their blur does not read as the reader leaving, and both are restored by the row repaint.
+    beginDomMove();
     const oldBody = sec.querySelector(`[data-tbody="${CSS.escape(evt.project.name)}"]`);
     const oldRows = oldBody ? [...oldBody.childNodes] : [];
     const holder = document.createElement("div");
@@ -7720,6 +7779,8 @@ function connect() {
       window.scrollTo({ top: Math.min(pageY, maxY) });
     }
     renderProjectRows(evt.project.name, { typing });
+    endDomMove();
+    restoreAddAgent(freshHolder);
     // A project whose rows really did grow or shrink moves the document. This handler is one synchronous step, so a
     // scroll that moved under it is a clamp, not the reader: put them back before the board re-sorts under them.
     if (window.scrollY !== pageY) {
