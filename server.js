@@ -419,7 +419,7 @@ function withLiveAgents(snap) {
         // A turn just finished. The row the scan wrote may still say live because the agent WAS
         // running then; drop that reason now and let the other signals decide.
         const s = row.signals || {};
-        const other = Boolean(s.hermes?.on || s.board?.on || s.ports?.on || s.files?.on);
+        const other = Boolean(s.hermes?.on || s.claude?.on || s.board?.on || s.ports?.on || s.files?.on);
         if (!other) {
           row.live = false;
           row.liveWhy = base || "no session, board entry, port or file edit";

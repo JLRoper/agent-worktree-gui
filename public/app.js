@@ -272,7 +272,8 @@ function movementKey(row, { onMain = false } = {}) {
   const s = row.signals || {};
   const h = s.hermes || {};
   const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-  const sessions = `${(h.titles || []).join("|")}#${num(h.running)}`;
+  const cl = s.claude || {};
+  const sessions = `${(h.titles || []).join("|")}#${num(h.running)}#${(cl.titles || []).join("|")}#${num(cl.running)}`;
   const idle = (h.idleList || []).map((x) => `${x.id}:${num(x.lastActivityAt)}`).join("|");
   const board = (s.board?.entries || []).map((e) => e.pid).join("|");
   const ports = (s.ports?.listening || []).join("|");
@@ -5663,6 +5664,12 @@ function sigChips(row) {
       : `Hermes session open here${s.hermes.matched === "work" ? " — placed by its newest tool calls, not its start directory" : ""}.`;
     out.push(`<span class="sig sig-hermes" title="${esc(hermesTitle(head, s.hermes.titles))}">⧉ hermes</span>`);
   }
+  if (s.claude?.on) {
+    const head = s.claude.running
+      ? "A Claude Code session external to this application is actively taking turns in this worktree."
+      : `Claude Code session open here${s.claude.matched === "work" ? " — placed by its newest tool calls, not its start directory" : ""}.`;
+    out.push(`<span class="sig sig-claude" title="${esc(hermesTitle(head, s.claude.titles))}">⧉ claude</span>`);
+  }
   if (s.board?.on) out.push(`<span class="sig sig-board" title="board entry, PID alive now: ${esc((s.board.entries || []).map((e) => e.pid).join(', '))}">● board</span>`);
   if (s.ports?.on) out.push(`<span class="sig sig-port" title="dev server listening: ${esc((s.ports.listening || []).join(', '))}">:${esc((s.ports.listening || []).join(' :'))}</span>`);
   if (s.files?.on) out.push(`<span class="sig sig-files" title="files edited ${relTime(s.files.at)} ago">✎ files</span>`);
@@ -5702,6 +5709,12 @@ function livenessLines(row) {
         (s.hermes.matched === "work" ? " — placed by its newest tool calls, not its start directory" : ""),
     );
   else if (s.hermes?.idle) lines.push(`Hermes session open here but idle (${s.hermes.idle})`);
+  if (s.claude?.on)
+    lines.push(
+      `Claude Code session active here${s.claude.running ? " (a turn is executing right now)" : ""}: ${(s.claude.titles || []).map((t) => `"${t}"`).join(" · ")}` +
+        (s.claude.matched === "work" ? " — placed by its newest tool calls, not its start directory" : ""),
+    );
+  else if (s.claude?.idle) lines.push(`Claude Code session open here but idle (${s.claude.idle})`);
   if (s.board?.on) lines.push(`Board: PID ${(s.board.entries || []).map((e) => e.pid).join(", ")} — alive now`);
   else if (s.board?.dead) lines.push(`Board: ${s.board.dead} entr${s.board.dead === 1 ? "y" : "ies"}, none with a live PID`);
   if (s.ports?.on) lines.push(`Dev server: :${(s.ports.listening || []).join(", ")} listening`);
@@ -6928,6 +6941,17 @@ function chipsHtml(name) {
       `<span class="chip hermes${busy ? " on" : ""}" title="${esc(hermesTitle(head, titles))}">${hermesTotal} hermes${tag}</span>`,
     );
   }
+  // Claude Code sessions, counted the same way as the Hermes ones above.
+  const claudeRunning = rows.reduce((n, r) => n + (Number(r.signals?.claude?.running) || 0), 0);
+  const claudeOpen = rows.reduce((n, r) => n + (r.signals?.claude?.on ? (r.signals.claude.titles || []).length : 0) + (Number(r.signals?.claude?.idle) || 0), 0);
+  if (claudeOpen) {
+    const busy = claudeRunning > 0;
+    const head = `${claudeOpen} Claude Code session${claudeOpen === 1 ? "" : "s"} from outside this panel in this project · ${busy ? `${claudeRunning} executing a turn right now` : "none executing right now"}`;
+    const titles = rows.flatMap((r) => r.signals?.claude?.titles || []).filter(Boolean);
+    out.push(
+      `<span class="chip claude${busy ? " on" : ""}" title="${esc(hermesTitle(head, titles))}">${claudeOpen} claude${busy ? ` · ${claudeRunning} running` : ""}</span>`,
+    );
+  }
   // The panel's own agents: how many cards, and how many of them are executing. The colour IS the state —
   // violet while something runs, grey while the panel is quiet — so a reader does not have to parse the
   // number to know whether anything is working.
@@ -7217,7 +7241,7 @@ function projectSection(name) {
       <th>Worktree</th><th>Branch</th><th>Tip</th><th>Ahead / Behind</th><th>Cherry</th>
       <th>PR</th><th>Dirty</th><th title="time since this worktree was last seen alive (any evidence firing) · the ring fills up to green as the row becomes due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited">Life / next read</th><th>Verdict</th><th title="remove a worktree (sent to the Recycle Bin)"></th>
     </tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
-    <div class="legend">liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read</div>
+    <div class="legend">liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read</div>
   </section>`;
 }
 
