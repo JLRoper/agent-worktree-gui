@@ -3469,8 +3469,20 @@ function saveTreeNames() {
   }
 }
 
-// The name the row shows: what the reader typed, else the agent's own title, else the directory.
+// The project's own checkout — the directory the project IS, and the parent of every worktree cut from it. Its name
+// is the folder's name and nothing else: an agent run in the checkout (a base-checkout run, no tree cut) has a title
+// of its own, and letting that title onto this row renames the project on the board after one agent's job.
+function isProjectRootRow(row) {
+  const root = state.projects.get(row.project)?.path;
+  if (!root || !row.path) return false;
+  return normPath(root).toLowerCase() === normPath(row.path).toLowerCase();
+}
+
+// The name the row shows: what the reader typed, else the agent's own title, else the directory. The project's own
+// checkout is exempt from both — it reads the folder's name, whatever agents have run in it and whatever was stored
+// against its key.
 function treeTitleOf(row) {
+  if (isProjectRootRow(row)) return "";
   const own = state.treeNames.get(keyOf(row.project, row.path));
   if (own) return own;
   const a = agentsFor(row)[0];
@@ -6024,9 +6036,8 @@ function rowHtml(row) {
       ? `<span class="dimmer">none · branch gone</span>`
       : `<span class="dimmer">none</span>`;
   const badge = `<span class="badge ${verdictClass(row.verdict)}${row.verdictStale ? " stale" : ""}">${esc(row.verdict)}</span>`;
-  // The project's own checkout is not a worktree anyone may delete from here.
-  const projectRoot = state.projects.get(row.project)?.path;
-  const isProjectRoot = projectRoot && normPath(projectRoot).toLowerCase() === normPath(row.path).toLowerCase();
+  // The project's own checkout is not a worktree anyone may delete or rename from here: it keeps the folder's name.
+  const isProjectRoot = isProjectRootRow(row);
   // A tree is named from the prompt, cut at 24 characters; the agent names itself better a moment later. The button
   // offers that name first and takes anything the reader types. The branch column already carries the real name, so
   // the row does not repeat it here.

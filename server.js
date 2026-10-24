@@ -407,12 +407,26 @@ function worktreeDirName(name, tag) {
   return slug ? `${slug}-${tag}` : "";
 }
 
+// The main checkout of a repository is the one whose git dir IS the repository (`.git`), not a link into another
+// tree's (`.git/worktrees/<name>`). Asked of git rather than inferred from a path, so a checkout reached by a
+// different spelling, or a project whose registry path is not the top of the repo, is still recognised as main.
+async function isMainCheckout(dir) {
+  const gitDir = await execP("git", ["-C", dir, "rev-parse", "--absolute-git-dir"], { timeout: 20_000 })
+    .then((r) => String(r.stdout || "").trim())
+    .catch(() => "");
+  return Boolean(gitDir) && normPathKey(path.dirname(gitDir)) === normPathKey(dir);
+}
+
 async function renameWorktree({ projectName, target, name }) {
   const project = scheduler.getProjects().find((p) => p.name === projectName);
   if (!project) return { error: `unknown project: ${projectName}`, status: 404 };
   const oldPath = path.resolve(String(target || ""));
-  if (path.resolve(project.path) === oldPath) {
-    return { error: "that is the project's own checkout, not a worktree", status: 400 };
+  // The project's own checkout is the parent of every tree cut from it and its name is the folder's name: renaming it
+  // would rename the project itself. Matched the way every other path comparison here is (case- and slash-insensitive,
+  // because the page, the registry and a scan spell the same directory differently), and again against git so a
+  // checkout reached by another spelling still cannot be moved.
+  if (normPathKey(oldPath) === normPathKey(project.path) || (await isMainCheckout(oldPath))) {
+    return { error: "that is the project's own checkout, not a worktree — its name is the project folder's", status: 400 };
   }
   const row = scheduler.store.rowsFor(projectName).find((r) => path.resolve(r.path) === oldPath);
   if (!row) return { error: `not a worktree row of ${projectName}: ${oldPath}`, status: 404 };
@@ -501,9 +515,16 @@ async function autoNameWorktree(evt) {
   if (evt?.type !== "job") return;
   const j = evt.job;
   if (!j || !j.worktreePath || j.existing || j.reply) return;
+  // A base-checkout run lives in the project's own checkout, whose name is the folder's name. It is never the
+  // agent's to take, even if a job ever carries a worktree path that resolves there.
+  if (j.baseCheckout) return;
   if (!["done", "failed", "cancelled", "interrupted"].includes(String(j.status))) return;
   const treeKey = normPathKey(j.worktreePath);
   if (autoNamedTrees.has(treeKey)) return;
+  const project = projectForPath(j.worktreePath);
+  if (!project) return;
+  // The project's own checkout is the parent of every tree cut from it and keeps the folder's name.
+  if (normPathKey(project.path) === treeKey) return;
   // Only when the tree is idle: moving a directory out from under a running turn is what git refuses.
   const busy = jobs
     .list()
@@ -512,8 +533,6 @@ async function autoNameWorktree(evt) {
   autoNamedTrees.add(treeKey);
   const title = jobs.sessionInfoFor(j.thread).title;
   if (!title) return;
-  const project = projectForPath(j.worktreePath);
-  if (!project) return;
   await renameWorktree({ projectName: project.name, target: j.worktreePath, name: title }).catch(() => {});
 }
 
