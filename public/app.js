@@ -1861,7 +1861,10 @@ function originHtml(turn) {
   }
   if (o && o.kind === "assistant-spawn") {
     const where = o.project ? `a worktree cut in ${o.project}` : "a directory that already existed";
-    return ` <span class="turn-origin mono" title="${esc(where)}">\u21b3 started by the assistant</span>`;
+    // A SPAWN IN name that had to be resolved to a real tree: the panel says which one it picked here, because
+    // a chip that only says "the assistant started this" hides the one fact that was in doubt.
+    const fit = o.resolvedPath ? ` — ${o.resolvedFrom} had been renamed, resolved to ${o.resolvedPath} (${o.resolvedHow || "matched"})` : "";
+    return ` <span class="turn-origin mono" title="${esc(where)}${esc(fit)}">\u21b3 started by the assistant</span>`;
   }
   if (!o || o.kind !== "subagent-delivery") return "";
   const subs = Array.isArray(o.subagents) ? o.subagents : [];
