@@ -1509,14 +1509,55 @@ function questionPrompt(turn, copy = "") {
     : multi
       ? `<div class="tq-other-row is-send-only">${sendBtn}</div>`
       : "";
+  // The countdown: the gateway stops waiting for this answer when the window it is configured with runs out.
+  // Rendered with its current width so the first paint is right, then driven by the page's one clock tick.
+  const deadline = Number(q.deadline) || 0;
+  const windowMs = (Number(q.timeoutSeconds) || 0) * 1000;
+  const leftMs = deadline - Date.now();
+  const pct = deadline && windowMs ? Math.max(0, Math.min(100, (leftMs / windowMs) * 100)).toFixed(2) : null;
+  const clock = pct === null
+    ? ""
+    : `<div class="tq-foot${pct <= 12 ? " is-low" : ""}" data-q-clock data-q-deadline="${deadline}" data-q-window="${windowMs}" title="time left before the gateway stops waiting for this answer — measured from when the question reached the panel, so it is a second or two optimistic">
+      <div class="tq-timer"><span style="width:${pct}%"></span></div>
+      <span class="tq-left mono">~${fmtLeft(leftMs)} left</span>
+    </div>`;
   return `<div class="turn-question" data-question-for="${esc(turn.id)}${esc(copy)}">
     <div class="tq-head mono">❓ waiting on you — the agent is parked until you answer</div>
     <div class="tq-question">${esc(q.question || "(no question text)")}</div>
     ${rows ? `<div class="tq-choices${multi ? " is-multi" : ""}">${rows}</div>` : ""}
     <div class="tq-note mono">${esc(note)}</div>
     ${answerRow}
+    ${clock}
     <div class="tq-warn mono" data-qwarn="${esc(turn.id)}${esc(copy)}"></div>
   </div>`;
+}
+
+// "~49m left", "~90s left": the countdown is an estimate, so it carries the panel's tilde.
+function fmtLeft(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+// One clock for the page, not one interval per card: every countdown already carries its deadline, so the
+// tick only repaints the bars that are on screen and a repaint or a board poll never has to drive it.
+function tickQuestionClocks() {
+  const now = Date.now();
+  for (const el of document.querySelectorAll("[data-q-clock]")) {
+    const deadline = Number(el.dataset.qDeadline) || 0;
+    const windowMs = Number(el.dataset.qWindow) || 0;
+    if (!deadline || !windowMs) continue;
+    const left = deadline - now;
+    const pct = Math.max(0, Math.min(100, (left / windowMs) * 100));
+    const fill = el.querySelector(".tq-timer > span");
+    if (fill) fill.style.width = `${pct.toFixed(2)}%`;
+    const label = el.querySelector(".tq-left");
+    if (label) label.textContent = left <= 0 ? "time is up" : `~${fmtLeft(left)} left`;
+    el.classList.toggle("is-low", pct <= 12);
+    el.classList.toggle("is-over", left <= 0);
+  }
 }
 
 // Once answered the box becomes one line: what the reader said, or the honest other case — the question
@@ -10510,6 +10551,8 @@ document.addEventListener("click", (e) => {
 
 initFonts();
 initQLook();
+// The question countdowns move on their own; nothing else in the panel needs a 1s clock.
+setInterval(tickQuestionClocks, 1000);
 applyGreyFlash(greyFlashOn());
 applyContrast(contrastSetting(), { save: false });
 applyAddBarBrightness(addBarBrightnessSetting(), { save: false });

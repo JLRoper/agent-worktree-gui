@@ -1232,6 +1232,15 @@ button.tq-send { flex: none; align-self: flex-end; padding: 4px 14px; font-size:
 button.tq-send:hover { background: var(--q-choice-hover); }
 button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: default; }
 .tq-note { margin: 9px 0 5px; font-size: 10.5px; color: var(--q-note); }
+/* How long the answer has left: a bar, not just a number, so "nearly out" is visible without reading. Purple
+   like the box, a shade lighter in the last eighth, red once the gateway's wait is over. */
+.tq-foot { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+.tq-timer { flex: 1; min-width: 0; height: 4px; border-radius: 999px; background: rgba(0,0,0,.4); overflow: hidden; }
+.tq-timer > span { display: block; height: 100%; border-radius: inherit; background: var(--q-accent); transition: width 1s linear, background .4s; }
+.tq-left { flex: none; font-size: 10.5px; color: var(--q-note); }
+.tq-foot.is-low .tq-timer > span { background: var(--q-head); }
+.tq-foot.is-over .tq-timer > span { background: #ff9c9c; }
+.tq-foot.is-over .tq-left { color: #ff9c9c; }
 .tq-warn { margin-top: 4px; font-size: 11px; color: #ff9c9c; }
 .tq-warn:empty { display: none; }
 .turn-question.jump { animation: jumpflash var(--flash-ring, 1700ms) ease-out; }

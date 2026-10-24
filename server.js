@@ -19,6 +19,7 @@ import { auditRepo } from "./lib/hermes-worktrees.js";
 import { Approvals } from "./lib/approvals.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
+  clarifyWindowSeconds,
   sessionSettings, writeSessionListLimit, SESSION_LIST_MIN, SESSION_LIST_MAX,
   providerState, writeProviderSettings,
 } from "./lib/hermes-config.js";
@@ -263,6 +264,9 @@ const jobs = new Jobs({
     adoptFromJob(evt);
   },
   onLog: log,
+  // Read per question, not once at boot: the file is small and the gateway re-reads it too, so a countdown
+  // matches the wait the gateway is actually enforcing.
+  clarifyWindow: () => clarifyWindowSeconds(),
 });
 // Human side of the Hermes approval-transport contract: the plugin presents, the panel answers,
 // the host decides. Nothing here can approve anything by itself.

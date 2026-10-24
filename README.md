@@ -342,6 +342,14 @@ By default the box is the console's box: the same 18 px inset the console wrappe
 offset inside the turn's rail) and the same right edge, so it lines up with the output it follows. The
 tool's `(Recommended)` suffix is drawn as a leading chip so it never floats away from the text.
 
+A parked question also carries a purple countdown bar with a `~57m left` label. The gateway's
+`clarify.request` names a timeout only for a local-viewer turn, so for an API run the panel measures the
+window the gateway is configured with — `clarify.timeout`, else `agent.clarify_timeout`, else one hour,
+and `0` means it waits indefinitely (then there is no bar). The deadline is counted from when the
+question reached the panel, which is why the label says `~`; the bar brightens in its last eighth and
+goes red reading `time is up` at zero. One page-wide 1 s ticker paints every countdown, so a repaint or a
+board poll never drives it.
+
 #### Credentials
 
 A run executes inside the gateway process, so the provider key is whatever that gateway is configured
