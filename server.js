@@ -1278,10 +1278,13 @@ const server = createServer(async (req, res) => {
       const tool = String(url.searchParams.get("tool") || "").trim();
       const from = Number(url.searchParams.get("from")) || 0;
       const to = Number(url.searchParams.get("to")) || 0;
+      // How many results the console is about to draw: a burst of six calls needs six, not a default of eight
+      // that silently stops halfway through a longer run.
+      const limit = Math.max(1, Math.min(60, Number(url.searchParams.get("n")) || 20));
       if (!thread || !tool) return sendJson(res, 400, { error: "thread and tool are required" });
       const { hermesHome } = await import("./lib/jobs.js");
       const { toolResults } = await import("./lib/tool-results.js");
-      const results = toolResults({ dbPath: path.join(hermesHome(), "state.db"), sessionId: thread, tool, from, to });
+      const results = toolResults({ dbPath: path.join(hermesHome(), "state.db"), sessionId: thread, tool, from, to, limit });
       return sendJson(res, 200, { thread, tool, results });
     }
 

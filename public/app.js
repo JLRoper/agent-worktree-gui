@@ -1125,41 +1125,95 @@ function burstSegments(lines) {
 // Every line of a group, from the live model when we have it and from the DOM when the group came from a full render.
 function groupLines(grp) {
   if (grp._burst) return grp._burst;
-  return [...grp.querySelectorAll(".tgrp-body .jl")].map((d) => ({
-    kind: (d.className.match(/jl-([a-z-]+)/) || [])[1] || "raw",
-    text: d.textContent,
-  }));
+  // Read the console lines back out of the DOM - but not the panel's own additions to a block: stored output and
+  // the "no output recorded" note are drawn UNDER a line, so counting them inflates the line tally and turns them
+  // into console lines of their own on the next rebuild.
+  return [...grp.querySelectorAll(".tgrp-body .jl")]
+    .filter((d) => !d.classList.contains("jl-store") && !d.classList.contains("jl-note"))
+    .map((d) => ({
+      kind: (d.className.match(/jl-([a-z-]+)/) || [])[1] || "raw",
+      text: d.textContent,
+    }));
+}
+
+// How many result blocks the console drew for one tool: each one is a call's output, and the session store has
+// one row for each of them, so this is also how many rows to ask for.
+function resultBlocksFor(lines, tool) {
+  return (lines || []).filter((l) => {
+    if (l.kind !== "tool-out") return false;
+    const m = TOOL_DONE_RE.exec(String(l.text || ""));
+    return Boolean(m) && m[1] === tool;
+  }).length;
+}
+
+// Rebuild the group the reader has open, wherever it is on the board: the element that asked for the results may
+// have been replaced by a repaint while the request was in flight, so aim by the group's stable state key.
+function repaintToolGroup(grp) {
+  if (!grp || !grp.dataset) return;
+  const key = grp.dataset.tgrp || "";
+  const gkey = grp.dataset.gstate || "";
+  // The group key is stable through a rebuild, the state key is what the reader's open/filter choice rides on;
+  // try both rather than repainting nothing when one of them moved.
+  const live =
+    (key && document.querySelector(`.tgrp[data-tgrp="${CSS.escape(key)}"]`)) ||
+    (gkey && document.querySelector(`.tgrp[data-gstate="${CSS.escape(gkey)}"]`));
+  if (!live) return;
+  const bodyEl = live.querySelector(".tgrp-body");
+  rebuildToolGroup(live, { filter: live.dataset.filter || "", open: bodyEl ? !bodyEl.hidden : true });
 }
 
 // Ask the panel server for this turn's stored results for one tool. The live stream's preview is often empty,
-// so this is where "↳ write_file" turns into the thing the tool actually returned.
-async function fetchToolStore(turnId, tool, grp = null) {
+// so this is where "↳ patch" turns into the thing the tool actually returned.
+//
+// A turn that is still running keeps producing results: a fetch taken when the reader opened the block saw one
+// patch while the burst ended with five, and every later call kept an empty header - so an entry cached while the
+// turn is live expires (five seconds) instead of answering for the rest of the turn. A finished turn's results
+// never change, so its entry is kept.
+async function ensureToolStore(turnId, tool, grp = null) {
   const cacheKey = `${turnId}|${tool}`;
   if (!turnId || !tool || !state.jobs.has(turnId)) return;
-  if (state.toolStore.has(cacheKey) || state.toolStorePending.has(cacheKey)) return;
+  if (state.toolStorePending.has(cacheKey)) return;
   const job = state.jobs.get(turnId);
+  const have = state.toolStore.get(cacheKey);
+  if (have && (!turnLive(job) || Date.now() - have.at < 5000)) return;
+  // Ask for as many rows as the console drew result blocks for, so a long burst is not cut at a default.
+  const drawn = grp && grp.isConnected ? resultBlocksFor(groupLines(grp), tool) : 0;
+  const n = Math.min(60, Math.max(4, drawn + 1));
   state.toolStorePending.add(cacheKey);
   try {
     const q = new URLSearchParams({
       thread: job.thread || job.id,
       tool,
+      n: String(n),
       from: String(Date.parse(job.startedAt || "") || 0),
       to: String(Date.parse(job.endedAt || "") || 0),
     });
     const r = await apiFetch(`/api/tool-results?${q}`, {}, { timeoutMs: 15000 });
     const d = await r.json();
-    state.toolStore.set(cacheKey, Array.isArray(d.results) ? d.results : []);
+    state.toolStore.set(cacheKey, { at: Date.now(), results: Array.isArray(d.results) ? d.results : [] });
   } catch {
-    state.toolStore.set(cacheKey, []);
+    // Left uncached on purpose: a failed read is not an answer, and the next open retries it.
   } finally {
     state.toolStorePending.delete(cacheKey);
   }
-  const live = grp && grp.isConnected ? grp : document.querySelector(`.tgrp[data-tgrp="${CSS.escape(`${turnId}#0`)}"]`);
-  if (live) {
-    const bodyEl = live.querySelector(".tgrp-body");
-    rebuildToolGroup(live, { filter: live.dataset.filter || tool, open: bodyEl ? !bodyEl.hidden : true });
-  }
+  repaintToolGroup(grp);
 }
+
+// A block the reader has open, on a turn that is still running, keeps its stored output current: the store gained
+// rows since it was opened, and a console that stops updating mid-run reads as "the output is missing". Only open
+// blocks are asked for, and ensureToolStore's own throttle bounds the requests.
+setInterval(() => {
+  for (const grp of document.querySelectorAll(".tgrp")) {
+    const bodyEl = grp.querySelector(".tgrp-body");
+    if (!bodyEl || bodyEl.hidden) continue;
+    const turnId = String(grp.dataset.tgrp || "").split("#")[0];
+    const job = state.jobs.get(turnId);
+    if (!job || !turnLive(job)) continue;
+    const lines = groupLines(grp);
+    const tools = grp.dataset.filter ? [grp.dataset.filter] : toolBurstRows(lines).map((r) => r.name);
+    for (const tool of tools) void ensureToolStore(turnId, tool, grp);
+  }
+}, 3000);
 
 // The calls behind a "+ N commands" batch: the run stream only carries the gateway's summary of a parallel batch, so
 // this asks the panel server to read the session transcript and then re-renders the burst open with them in it.
@@ -1205,13 +1259,17 @@ async function loadBatchCalls(btn) {
 function rebuildToolGroup(grp, { filter = "", open = false } = {}) {
   const key = grp.dataset.tgrp || "";
   const lines = groupLines(grp);
-  const gkey = grp.dataset.gstate || toolGroupStateKey(key, lines);
+  // The anchor is the burst's own identity and travels on the node: lines read back out of the DOM carry no
+  // timestamp, so without it a rebuild re-keyed the group from the first line's text and the reader's open
+  // state was remembered under one key while the next repaint looked it up under another.
+  const anchor = grp.dataset.gat || "";
+  const gkey = grp.dataset.gstate || toolGroupStateKey(key, lines, anchor);
   // The click is the new truth, so record it before rendering: toolGroupHtml prefers the remembered state, and
   // otherwise it would faithfully put back the state the reader just changed.
   if (!open && !filter) state.toolGroupOpen.delete(gkey);
   else state.toolGroupOpen.set(gkey, { open, filter });
   const holder = document.createElement("div");
-  holder.innerHTML = toolGroupHtml(lines, key, filter, open);
+  holder.innerHTML = toolGroupHtml(lines, key, filter, open, anchor);
   const fresh = holder.firstElementChild;
   if (!fresh) return;
   fresh._burst = lines;
@@ -1222,10 +1280,15 @@ function rebuildToolGroup(grp, { filter = "", open = false } = {}) {
 // A burst's identity, for remembering whether the reader opened it. The group's DOM key changes when the console
 // is rebuilt from the buffer (it is the group's index) and when the stream starts a new burst (it is a timestamp),
 // so the state is keyed by the turn plus the first line the burst holds - which is the same line in all three.
-function toolGroupStateKey(key, lines) {
+function toolGroupAnchor(lines) {
   const first = Array.isArray(lines) && lines.length ? lines[0] : null;
-  const anchor = first ? String(first.lid || first.at || first.text || "").slice(0, 40) : "";
-  return `${String(key || "").split("#")[0]}|${anchor}`;
+  return first ? String(first.lid || first.at || first.text || "").slice(0, 40) : "";
+}
+
+// `anchor` is the identity the node already carries (data-gat), which wins over re-deriving it from lines that were
+// read back out of the DOM and have lost their timestamp.
+function toolGroupStateKey(key, lines, anchor = "") {
+  return `${String(key || "").split("#")[0]}|${anchor || toolGroupAnchor(lines)}`;
 }
 
 // Record the reader's choice from a rendered group, so the next rebuild can put it back. An open block with no
@@ -1262,12 +1325,12 @@ function linkBatchTail(text, tool, gkey) {
   return `${esc(m[1])} <button type="button" class="tgrp-batch" data-batch-tool="${esc(tool)}" data-batch-n="${n}" data-batch-key="${esc(gkey)}" data-batch-first="${esc(first)}" title="${esc(title)}">+ ${n} command${n === 1 ? "" : "s"}</button>`;
 }
 
-function toolGroupHtml(lines, key, filter = "", openBody = false) {
+function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "") {
   const rows = toolBurstRows(lines);
   // No recognisable call lines (a result whose start was trimmed away): show the plain lines rather than an empty box.
   if (!rows.length) return lines.map((l) => lineHtml(l)).join("");
   // The reader's own choice wins over the caller's default: a rebuild is not the reader closing the block.
-  const gkey = toolGroupStateKey(key, lines);
+  const gkey = toolGroupStateKey(key, lines, anchor);
   const saved = state.toolGroupOpen.get(gkey);
   if (saved) {
     filter = saved.filter || filter;
@@ -1292,16 +1355,54 @@ function toolGroupHtml(lines, key, filter = "", openBody = false) {
     .join("");
   const segments = burstSegments(lines).filter((s) => !filter || s.tool === filter);
   const turnId = String(key).split("#")[0];
-  const stored = filter ? state.toolStore.get(`${turnId}|${filter}`) : null;
   const bodyLines = segments.flatMap((s) => s.lines);
-  // The live stream only carries a preview of a tool result, and often an empty one. When the reader opens a call
-  // that came back empty, the stored result is what they came to see - it is fetched on the first open and kept.
-  const storeHtml = (seg, i) => {
-    const got = stored?.[i];
-    if (!got) return "";
-    const lines = String(got.text || "").replace(/\r/g, "").split("\n").slice(0, 60);
-    return `<div class="jl jl-store-cap">↳ stored output${got.truncated ? " (cut)" : ""}</div>` + lines.map((l) => `<div class="jl jl-store">${linkifyText(l)}</div>`).join("");
+  // Each result block takes the next stored row for ITS tool: the console's result lines and the store's rows are
+  // both in the order the calls ran, so position pairs them. The segment index did not - a burst interleaves a call
+  // with the result it produced, which drew call #2's output under call #1's result line.
+  const LF = String.fromCharCode(10);
+  const STORE_LINES = 40;
+  const cursors = new Map();
+  const takeStored = (tool) => {
+    const rowsOut = state.toolStore.get(`${turnId}|${tool}`)?.results || null;
+    if (!rowsOut || !rowsOut.length) return null;
+    const i = cursors.get(tool) || 0;
+    cursors.set(tool, i + 1);
+    return rowsOut[i] || null;
   };
+  const storedHtml = (got) => {
+    const all = String(got.text || "").split(LF);
+    if (!all.some((l) => l.trim())) return "";
+    const shown = all.slice(0, STORE_LINES);
+    const more = all.length - shown.length;
+    return (
+      shown.map((l) => `<div class="jl jl-store">${linkifyText(l)}</div>`).join("") +
+      (more > 0 ? `<div class="jl jl-dim jl-note">… ${more} more line(s) of this result</div>` : "")
+    );
+  };
+  // A block that starts with a result header is a call's output; anything else is a call itself.
+  const resultHead = (seg) => (seg.lines[0] && seg.lines[0].kind === "tool-out" ? TOOL_DONE_RE.exec(String(seg.lines[0].text || "")) : null);
+  const bodyOf = (seg) => {
+    const out = seg.lines.map((l) => lineHtml(l)).join("");
+    if (!resultHead(seg)) return out;
+    // The live preview carried this result - it is the freshest copy, so the store is not repeated under it.
+    if (seg.lines.slice(1).some((l) => String(l.text || "").trim())) return out;
+    const got = takeStored(seg.tool);
+    return got ? out + storedHtml(got) : out + '<div class="jl jl-dim jl-note">  no output recorded for this call</div>';
+  };
+  // Rows the console drew no result block for (a burst trimmed to the last 300 lines, or a preview line the gateway
+  // dropped) would otherwise never be shown - the other half of "the output is missing".
+  const leftoverHtml = () =>
+    [...new Set(segments.map((s) => s.tool))]
+      .map((tool) => {
+        const all = state.toolStore.get(`${turnId}|${tool}`)?.results || [];
+        const rest = all.slice(cursors.get(tool) || 0);
+        if (!rest.length) return "";
+        return (
+          `<div class="jl jl-dim jl-note">↳ ${esc(tool)} · ${rest.length} more stored result${rest.length === 1 ? "" : "s"}</div>` +
+          rest.map((g) => storedHtml(g)).join("")
+        );
+      })
+      .join("");
   // A batch the reader has opened: the calls behind its "+ N commands", oldest first.
   const batchBlocks = rows
     .map((r) => {
@@ -1315,10 +1416,10 @@ function toolGroupHtml(lines, key, filter = "", openBody = false) {
     .join("");
   const body =
     (bodyLines.length > 0
-      ? segments.map((seg, i) => seg.lines.map((l) => lineHtml(l)).join("") + storeHtml(seg, i)).join("")
+      ? segments.map((seg) => bodyOf(seg)).join("") + leftoverHtml()
       : `<div class="jl jl-dim">this run recorded nothing for ${esc(filter)}</div>`) + batchBlocks;
   const label = filter ? `all ${lines.length}` : `${lines.length} line${lines.length === 1 ? "" : "s"}`;
-  return `<div class="tgrp" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
+  return `<div class="tgrp" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
       <div class="tgrp-head">${head}<button type="button" class="tgrp-more${filter ? " is-open" : ""}" data-tgrp-more="${esc(key)}" title="${filter ? "show every tool in this run, not just this one" : "show every call in this run of tools, with its output"}">${label}</button></div>
       <div class="tgrp-body"${openBody || filter ? "" : " hidden"}>${body}</div>
     </div>`;
@@ -9603,15 +9704,14 @@ document.addEventListener("click", async (e) => {
       const tool = tgrpRow.dataset.tgrpTool;
       const active = grp.dataset.filter === tool;
       const key = grp.dataset.tgrp || "";
+      // Read the identity BEFORE the rebuild: `grp` is detached by it, and the fresh node is what must be aimed at.
+      const gstate = grp.dataset.gstate || "";
       rebuildToolGroup(grp, { filter: active ? "" : tool, open: !active });
       if (!active) {
-        // Opening a call: when the live stream carried no output for it, the stored result is what the reader
-        // came to see, so fetch it now rather than making them click a second time.
-        const fresh = document.querySelector(`.tgrp[data-tgrp="${CSS.escape(key)}"]`);
-        const hasOut = fresh
-          ? [...fresh.querySelectorAll(".tgrp-body .jl-tool-out")].some((el) => !el.textContent.trim().startsWith("↳"))
-          : false;
-        if (!hasOut) void fetchToolStore(String(key).split("#")[0], tool, fresh);
+        // Opening a call asks for its stored output: the live stream's preview for this tool is routinely empty,
+        // and a bare "↳ patch" header is exactly the report.
+        const fresh = document.querySelector(`.tgrp[data-gstate="${CSS.escape(gstate)}"]`);
+        void ensureToolStore(String(key).split("#")[0], tool, fresh);
       }
     }
     return;
@@ -9625,7 +9725,16 @@ document.addEventListener("click", async (e) => {
       // "all N" while one tool is being shown clears the filter; otherwise it just folds the block.
       const filtered = Boolean(grp.dataset.filter);
       const bodyEl = grp.querySelector(".tgrp-body");
-      rebuildToolGroup(grp, { filter: "", open: filtered || Boolean(bodyEl && bodyEl.hidden) });
+      const open = filtered || Boolean(bodyEl && bodyEl.hidden);
+      const gstate = grp.dataset.gstate || "";
+      const turnId = String(grp.dataset.tgrp || "").split("#")[0];
+      rebuildToolGroup(grp, { filter: "", open });
+      // Opening the whole run asks every tool's store, not only the one that was filtered: the reader opened this
+      // to read what the calls returned.
+      if (open) {
+        const fresh = document.querySelector(`.tgrp[data-gstate="${CSS.escape(gstate)}"]`);
+        if (fresh) for (const r of toolBurstRows(groupLines(fresh))) void ensureToolStore(turnId, r.name, fresh);
+      }
     }
     return;
   }
@@ -9799,15 +9908,14 @@ document.addEventListener("keydown", async (e) => {
       const tool = tgrpRow.dataset.tgrpTool;
       const active = grp.dataset.filter === tool;
       const key = grp.dataset.tgrp || "";
+      // Read the identity BEFORE the rebuild: `grp` is detached by it, and the fresh node is what must be aimed at.
+      const gstate = grp.dataset.gstate || "";
       rebuildToolGroup(grp, { filter: active ? "" : tool, open: !active });
       if (!active) {
-        // Opening a call: when the live stream carried no output for it, the stored result is what the reader
-        // came to see, so fetch it now rather than making them click a second time.
-        const fresh = document.querySelector(`.tgrp[data-tgrp="${CSS.escape(key)}"]`);
-        const hasOut = fresh
-          ? [...fresh.querySelectorAll(".tgrp-body .jl-tool-out")].some((el) => !el.textContent.trim().startsWith("↳"))
-          : false;
-        if (!hasOut) void fetchToolStore(String(key).split("#")[0], tool, fresh);
+        // Opening a call asks for its stored output: the live stream's preview for this tool is routinely empty,
+        // and a bare "↳ patch" header is exactly the report.
+        const fresh = document.querySelector(`.tgrp[data-gstate="${CSS.escape(gstate)}"]`);
+        void ensureToolStore(String(key).split("#")[0], tool, fresh);
       }
     }
     return;
