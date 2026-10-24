@@ -54,6 +54,14 @@ directory name, the tag alone and a thread's slug — then checks both refusals 
 candidates, none keeps the old wording) and that the card says which tree was picked — useful after
 touching what a SPAWN IN line may name.
 
+`node tools/verify-action-harvest.mjs` drives three real assistant turns through a stub gateway whose stream
+carries the reply the way the live one does — one paragraph per text line — and then reads the job store and the
+journal back: one turn carrying SPAWN, SPAWN IN, TO, WATCH, NOTE and RULE must produce one job per run-creating
+action, a turn carrying a project that does not exist and a thread that is not on the board must journal each
+drop with its reason and still start the spawn written after them, and a thread lookup that throws inside the
+injected job store must cost only the line that touched it — useful after touching how a finished turn's lines
+are read.
+
 ## Two halves
 
 ### Monitor (read-only)
@@ -477,7 +485,7 @@ then the run. The worker gets the gateway default model (the assistant's small m
 work), the card is tagged `↳ started by the assistant`, and the new thread is put on the watchlist automatically
 so "spawned" later reads as "and here is how it ended".
 
-The assistant acts by writing plain lines at the end of a reply, and only those lines are read:
+The assistant acts by writing plain lines in a reply, and every such line in it is read — wherever it sits among the paragraphs, not only the one the reply ends on:
 
     TO <thread>: the reply to that worker
     WATCH <thread>: what to watch for | 30        (minutes, optional)
@@ -532,6 +540,15 @@ same payload each time. A gateway restart is invisible from the outside (its por
 why the sweep asks the runs themselves and why the proof is a real turn.
 Each finished turn is harvested exactly once (keyed by turn id, persisted): a turn's title landing or a panel
 restart re-emits the same job, and re-reading its lines would otherwise start a second worker.
+
+**Every action in that turn stands on its own.** The lines are read from the WHOLE reply (`turnProse`), because
+the run stream opens a text line per paragraph: reading only the last one carried out whatever the turn ended on
+and dropped everything above it with no job, no alert and no journal line (live, 2026-10-24: a SPAWN and a TO
+vanished for hours while the NOTE under them applied). Each line is then carried out inside its own try — a
+rejected promise and a synchronous throw are both caught — and a line that could not be carried out is journaled
+with the line and the reason (`spawn-failed`, `send-failed`, `watch-failed`, `rule-failed`, `note-failed`,
+`draft-skipped`, `watch-skipped`, `spawn-skipped`, `rule-skipped`). One failure never stops the others, and
+`observe` never throws into the job store, so the panel keeps seeing the jobs that follow.
 
 **The scratchpad** is one JSON file beside the job store (`assistantFile`, default
 `logs/assistant.json`): `settings`, `notes` (freeform, read every turn), `rules` (standing answers),
