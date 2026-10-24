@@ -544,6 +544,7 @@ button.chip:active { transform: translateY(1px); }
 /* External Hermes sessions: the same grey-to-violet rule as the panel chip, but in the darker violet, so the
    two never read as the same thing. */
 .chip.hermes.on { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
+.chip.claude.on { color: #f0a878; border-color: #5c3a22; background: #2a1c12; }
 
 /* ---- new-agent form ---- */
 .form { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
@@ -1676,6 +1677,8 @@ button.btn-row-agent.is-probing { opacity: .55; cursor: progress; }
   white-space: nowrap;
 }
 .sig-hermes { color: #c8a6ff; border-color: #3b2d5c; background: var(--violet-bg); }
+/* Claude Code sessions: warm orange, so they never read as the violet Hermes evidence. */
+.sig-claude { color: #f0a878; border-color: #5c3a22; background: #2a1c12; }
 button.sig { cursor: pointer; font-family: var(--mono); }
 button.sig:hover { filter: brightness(1.25); }
 /* The row's panel chip wears the same LIGHT lavender as the project's "⧉ n panels", so the two read as
