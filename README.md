@@ -429,11 +429,29 @@ merely *ended* on a question in prose, where a reply is the right shape.
 
 `watch` ships at **wake**: a watch is the reader explicitly asking to be told, and an alert on its own is a notice
 nobody reads. When a watch expires or its thread finishes, the assistant is woken with the watch, the deadline and
-the worker's state, and answers in its own thread — the measured example was a 5-minute watch on a docs worker that
-came back as *"the worker ended as interrupted after writing docs/using-the-board.md and updating README.md in its
-worktree … the uncommitted documentation changes are ready in `.worktrees/write-md-documentation-f-950b59`"*. Wakes
-fired by one sentry pass are collected for 150 ms and sent as one turn, so two watches on the same worker are one
-answer, not two. A scratchpad written before this default changed is migrated once (file `version: 2`).
+**the completion payload** — what the run actually produced, not just that it stopped: its own last words (or the
+last forty lines of the transcript when it published none), its exit status in three words (`normal`, `failed`, or
+`interrupted` when the panel's cap, a stop from the card or the gateway ended it — a killed run never reads `done`),
+how long it ran, the branch and worktree it worked in, whether that tree holds commits over the commit the turn
+started from, and the report a worker filed under `<repo>/.agentboard/settlers-reports/<thread>.md`. Rendered whole,
+that is what a wake looks like:
+
+    completion — wtgui-in-your-working-directory-ru-682d81 […], turn 1 ended normal
+      exit: 0 (from the run's completed result)
+      duration: 35s
+      branch: wtgui/in-your-working-director-cdc050 · worktree: …/.worktrees/in-your-working-director-cdc050 ·
+              left 1 commit not on 44a6a57c: 43bab99 feat: the payload worker's commit
+      the worker's final message:
+        PAYLOAD-SHOWCASE-OK
+      report …/.agentboard/settlers-reports/wtgui-in-your-working-directory-ru-682d81.md:
+        # Showcase report …
+
+A tree that could not be read says so ("commits not measured") rather than reporting zero, and its notice is held
+back one sentry pass until the measurement lands, so a reader never has to reopen the card to find out whether
+there was anything to merge. Wakes fired by one sentry pass are collected for 150 ms and sent as one turn, so two
+watches on the same worker are one answer, not two — and one finish is one wake however many rules notice it (a
+watch closing and a turn cut off mid-flight are the same terminal result; the second alert is filed, journaled as
+`wake-once`, not sent). A scratchpad written before this default changed is migrated once (file `version: 2`).
 
 **Something supervises the supervisor.** The sentry cannot report its own clock stopping, so the server runs a
 small watchdog outside it (every 10 s): a cleared timer is restarted, and a pass is run if the last one is older
