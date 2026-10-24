@@ -392,6 +392,12 @@ with it, and the composer stays at the foot. Only the turns scroll. It is two th
   preamble the card does not show: its standing rules, its scratchpad notes, the watches and a digest of
   the board. It runs on the gateway default until you pick a smaller model under **Settings → model**.
 
+Its turns run in a directory of its own (`assistant.cwd`, default `assistant-cwd` beside the job store,
+created on demand), not in a project checkout: the gateway refuses a run without an existing cwd, and a panel
+whose `defaultCwd` pointed at a deleted checkout refused every turn with `cwd is not an existing directory`.
+Set it under **Settings → working dir**; an unusable path is kept as written, logged, and the turn falls back
+to a directory that exists rather than failing.
+
 **Answers are drafts.** A question alert that a standing rule covers arrives with the rule's answer
 prefilled; one with no rule says so and leaves it to you. Nothing is posted into a worker's thread until you
 press **Send reply**. The autonomy ladder (per panel, in the assistant's Settings tab):
@@ -447,8 +453,15 @@ The assistant acts by writing plain lines at the end of a reply, and only those 
     TO <thread>: the reply to that worker
     WATCH <thread>: what to watch for | 30        (minutes, optional)
     NOTE: something to remember
+    RULE: a standing answer you are sure of
     SPAWN <project> | what the new worker should do
     SPAWN IN <directory> | what the worker should do in that tree       (no new worktree)
+
+`RULE:` lets the assistant maintain its own standing answers while it watches — the case that prompted it was
+"an interrupted agent gets exactly one continue". Such a rule is part of the normal rules list from then on, so
+it can answer a question (or, at `auto`, pick a choice) on the strength of it; the Scratchpad marks it
+**assistant**, and it is deletable there. A near-identical restatement refines the assistant's own earlier rule
+instead of adding a second; the reader's rules are never merged or edited by it.
 
 Each finished turn is harvested exactly once (keyed by turn id, persisted): a turn's title landing or a panel
 restart re-emits the same job, and re-reading its lines would otherwise start a second worker.
@@ -476,7 +489,7 @@ Watches without a deadline, and finished ones, say so instead.
 | `apiServer` | `{"url":"http://127.0.0.1:8642"}` | `url` of the gateway's api_server, and optionally `key` (else `API_SERVER_KEY` from `$HERMES_HOME/.env`) |
 | `jobMaxRuntimeSeconds` | 3600 | hard cap on a spawned job |
 | `assistantFile` | `logs/assistant.json` | the assistant's scratchpad: settings, notes, standing rules, watches, alerts and journal |
-| `assistant` | `{}` | starting knobs for the assistant: `enabled`, `autonomy` (`draft`/`auto-safe`/`auto`), `spawn` (`off`/`ask`/`auto`), `model`, `seconds`, `repeatLimit`, `quietSeconds`, `approvalSeconds`, `contextPercent`, `maxWakesPerHour`, `rearmSeconds`, `rules:{id: log\|alert\|wake\|act}`. The panel writes changes back to `assistantFile`, so this is the first-run default |
+| `assistant` | `{}` | starting knobs for the assistant: `enabled`, `autonomy` (`draft`/`auto-safe`/`auto`), `spawn` (`off`/`ask`/`auto`), `model`, `cwd` (its own working directory — created if missing; default `assistant-cwd` beside the job store), `seconds`, `repeatLimit`, `quietSeconds`, `approvalSeconds`, `contextPercent`, `maxWakesPerHour`, `rearmSeconds`, `rules:{id: log\|alert\|wake\|act}`. The panel writes changes back to `assistantFile`, so this is the first-run default |
 | `liveSeconds` | 5 | how often liveness evidence is re-read for every row (no git) |
 | `worktreeSeconds` / `dormantSeconds` | 5 / 30 | active-row / dormant-row git scan cadence |
 | `slowSeconds` | 60 | project meta, discovery, and expensive per-row fields |

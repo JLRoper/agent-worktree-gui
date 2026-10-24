@@ -240,6 +240,13 @@ The row's ✕ asks in place: *Remove worktree `<name>` on `<branch>`? Its files 
 there) and git's record of it is pruned.* — **Cancel** then **Delete**, left to right. While any agent run is live in
 that directory the request is refused (409); stop the run first. A directory that is already gone counts as removed.
 
+The files and git's record always go; whether the *folder* can go in the same click depends on what else is using it.
+Windows refuses to delete a directory that a process holds as its working directory, and a worktree often is one (the
+agent that built it, an editor, or a panel started from inside it). In that case the row still disappears at once and
+the banner says so, and the panel keeps retrying the empty folder in the background for ten minutes — it is removed
+as soon as the holder exits. A panel started from that very worktree is called out by name, because only a restart
+releases it.
+
 ---
 
 ## Reading an agent card
@@ -261,6 +268,10 @@ that directory the request is refused (409); stop the run first. A directory tha
 | `✎` | Rename the session **in the panel only**. The Hermes thread id never changes. |
 | `⤢` | Maximize the card to the window (`Esc` closes). |
 | `✕` | Forget this session: the first click arms it (`✕ sure?`), the second removes its turns and transcript from the panel. The worktree it made stays on disk. |
+
+Under every head — titled or not — is one dim line: `cwd …/project/.worktrees/<name>`, the directory the agent
+actually runs in (the last three segments; hover for the whole path). When the row it is filed under is a different
+folder, a `row …` chip follows it. It is a reference, not a heading: smallest size, dimmest ink.
 
 A `yolo` pill appears only if a run was started with that flag elsewhere; the panel never sends it.
 

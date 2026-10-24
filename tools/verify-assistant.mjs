@@ -6,7 +6,7 @@
 // are about what the sentry decided: which alert fired, once, with which evidence, and whether a draft
 // was sent or only offered. The point is that the detection logic is testable at all - it reads the
 // board, so a fake board is a faithful input.
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Assistant, ASSISTANT_THREAD, parseActions, looksLikeQuestion, detectRepeat, detectCycle, detectErrorRepeat, isFailureLine, matchRule } from "../lib/assistant.js";
@@ -510,12 +510,18 @@ console.log("the same failure across turns");
 
 console.log("work left in a finished tree");
 {
+  // Real directories: the leftover rule checks that the tree still exists before blaming it for anything.
+  const leftDir = path.join(dir, "w-left");
+  const cleanDir = path.join(dir, "w-clean");
+  const goneDir = path.join(dir, "w-gone");
+  mkdirSync(leftDir, { recursive: true });
+  mkdirSync(cleanDir, { recursive: true });
   const rows = [
-    { path: "C:/work/left", branch: "wtgui/left", verdict: "AHEAD", ahead: 2, dirtyFiles: [{ code: " M", path: "a.md" }], untrackedFiles: [{ path: "b.md" }] },
+    { path: leftDir, branch: "wtgui/left", verdict: "AHEAD", ahead: 2, dirtyFiles: [{ code: " M", path: "a.md" }], untrackedFiles: [{ path: "b.md" }] },
   ];
   const a = make();
   a.getRows = () => rows;
-  board = [job({ thread: "wtgui-left", status: "done", endedAt: iso(t0 - 60_000), worktreePath: "C:/work/left" })];
+  board = [job({ thread: "wtgui-left", status: "done", endedAt: iso(t0 - 60_000), worktreePath: leftDir })];
   a.tick();
   const al = a.state().alerts.find((x) => x.rule === "leftover");
   ok(al && /uncommitted work/.test(al.title), "a finished worker with dirty files is reported", al?.title);
@@ -525,16 +531,40 @@ console.log("work left in a finished tree");
 
   const b = make();
   // Three commits ahead of main and nothing uncommitted: the normal state of an agent branch, not a leftover.
-  b.getRows = () => [{ path: "C:/work/clean", branch: "wtgui/clean", verdict: "AHEAD", ahead: 3, dirtyFiles: [], untrackedFiles: [] }];
-  board = [job({ thread: "wtgui-clean", status: "done", endedAt: iso(t0 - 60_000), worktreePath: "C:/work/clean" })];
+  b.getRows = () => [{ path: cleanDir, branch: "wtgui/clean", verdict: "AHEAD", ahead: 3, dirtyFiles: [], untrackedFiles: [] }];
+  board = [job({ thread: "wtgui-clean", status: "done", endedAt: iso(t0 - 60_000), worktreePath: cleanDir })];
   b.tick();
   eq(b.state().alerts.filter((x) => x.rule === "leftover").length, 0, "a clean tree with unmerged commits says nothing");
 
   const c = make();
   c.getRows = () => rows;
-  board = [job({ thread: "wtgui-old", status: "done", endedAt: iso(t0 - 3 * 3600_000), worktreePath: "C:/work/left" })];
+  board = [job({ thread: "wtgui-old", status: "done", endedAt: iso(t0 - 3 * 3600_000), worktreePath: leftDir })];
   c.tick();
   eq(c.state().alerts.filter((x) => x.rule === "leftover").length, 0, "work that ended hours ago is not re-raised");
+
+  // A thread in the base checkout did not leave "its" work anywhere: that working copy is the reader's, and the
+  // files in it may be older than the turn. Measured live: two untracked files from the day before were reported
+  // as a worker's leftover work, twice.
+  const d = make();
+  d.getRows = () => [{ path: "C:/ProjectDevelopment/agent-worktree-gui", branch: "main", verdict: "ON MAIN", ahead: 0, dirtyFiles: [], untrackedFiles: ["CODE_REVIEW.md", "config.7330.json"] }];
+  board = [job({ thread: "wtgui-main", status: "done", endedAt: iso(t0 - 60_000), cwd: "C:/ProjectDevelopment/agent-worktree-gui", ownerPath: "C:/ProjectDevelopment/agent-worktree-gui", projectPath: "C:/ProjectDevelopment/agent-worktree-gui", worktreePath: null, baseCheckout: true })];
+  d.tick();
+  eq(d.state().alerts.filter((x) => x.rule === "leftover").length, 0, "a thread in the base checkout is not blamed for the reader's files");
+
+  // The same row and job, but the job has a worktree of its own: still a leftover.
+  const e = make();
+  e.getRows = () => rows;
+  board = [job({ thread: "wtgui-wt", status: "done", endedAt: iso(t0 - 60_000), worktreePath: leftDir, baseCheckout: false })];
+  e.tick();
+  eq(e.state().alerts.filter((x) => x.rule === "leftover").length, 1, "a worktree job with dirty files is still reported");
+
+  // A tree that no longer exists cannot be holding anything — and an empty leftover directory makes git answer
+  // for the parent repo, which is how the reader's untracked files were blamed on a worker.
+  const f = make();
+  f.getRows = () => [{ path: goneDir, branch: "main", verdict: "ON MAIN", ahead: 0, dirtyFiles: [], untrackedFiles: ["x.md"] }];
+  board = [job({ thread: "wtgui-gone", status: "done", endedAt: iso(t0 - 60_000), worktreePath: goneDir, baseCheckout: false })];
+  f.tick();
+  eq(f.state().alerts.filter((x) => x.rule === "leftover").length, 0, "a deleted worktree is not reported as holding work");
 }
 
 console.log("a delegated child that has gone quiet");
@@ -610,6 +640,70 @@ console.log("a restart resumes an interrupted turn, and a watchdog repairs the c
   eq(stopped[0], "asst-hung", "and it is stopped, not just noticed");
   ok(d.state().journal.some((j) => j.kind === "stalled"), "the journal says why it was stopped");
   d.stop();
+}
+
+console.log("the assistant's own working directory");
+{
+  // It does no file work, but the gateway refuses a run without an existing cwd. Borrowing a project
+  // checkout is what failed on a live panel once that checkout had been deleted, so it gets its own.
+  const a = make();
+  board = []; // the stall section left a live assistant turn on the fake board
+  const def = a.ensureCwd();
+  eq(def, path.join(dir, "assistant-cwd"), "the default is a folder beside the scratchpad");
+  ok(existsSync(def), "and it is created on demand");
+  eq(a.state().settings.cwd, "", "the setting stays empty until the reader picks one");
+
+  const custom = path.join(dir, "cwd-custom", "nested");
+  a.setSettings({ cwd: custom });
+  eq(a.state().settings.cwd, custom, "a chosen path is accepted as written");
+  ok(existsSync(custom), "and created when chosen, not on the first turn");
+
+  created.length = 0;
+  await a.say("hello");
+  eq(created[0]?.cwd, custom, "a turn runs in it");
+
+  // A path that cannot be created must not take every turn down with it: fall back to one that exists.
+  // It has to be under a real FILE, or mkdir -p happily makes it.
+  const blocker = path.join(dir, "not-a-dir.txt");
+  writeFileSync(blocker, "x");
+  const bad = path.join(blocker, "nested");
+  a.setSettings({ cwd: bad });
+  const used = a.ensureCwd();
+  ok(used !== bad && existsSync(used), "an unusable path falls back to one that exists", used);
+  eq(a.state().settings.cwd, bad, "the setting is kept as written, so the mistake is visible");
+  await a.say("hello again");
+  eq(created[1]?.cwd, used, "and the next turn still runs", created[1]?.cwd);
+}
+
+console.log("the assistant may add a standing rule");
+{
+  const a = make();
+  a.settings.autonomy = "draft";
+  board = [];
+  a.harvest({ id: "rule-turn-1", thread: ASSISTANT_THREAD, lines: [line("text", "Noted.\nRULE: An interrupted turn gets one continue, never a second.\nNOTE: kept")] });
+  const r = a.state().rules;
+  ok(r.length === 1 && /interrupted turn gets one continue/.test(r[0].text), "a RULE line becomes a rule", JSON.stringify(r));
+  eq(r[0]?.by, "assistant", "tagged as written by the assistant");
+  ok(a.state().journal.some((j) => j.kind === "rule" && /assistant wrote/.test(j.text)), "the journal says who wrote it");
+
+  const before = a.state().rules.length;
+  a.harvest({ id: "rule-turn-2", thread: ASSISTANT_THREAD, lines: [line("text", "RULE - An interrupted turn gets one continue, never a second.")] });
+  eq(a.state().rules.length, before, "the same rule is not added twice");
+
+  // Models restate a rule with a word changed; that is a refinement of its own rule, not a second one.
+  a.harvest({ id: "rule-turn-3", thread: ASSISTANT_THREAD, lines: [line("text", "RULE: An interrupted turn is given one continue, and never a second.")] });
+  eq(a.state().rules.filter((x) => x.by === "assistant").length, 1, "a near-identical restatement replaces the assistant's own rule");
+  ok(/is given one continue/.test(a.state().rules.find((x) => x.by === "assistant")?.text || ""), "and the newer wording wins");
+  eq(a.state().rules.filter((x) => x.by === "reader").length, 0, "the reader's rules are untouched by it");
+
+  // A model writes the separator three ways; all three are the same action.
+  const forms = parseActions("RULE: one\nRULE - two\nRULE three\nRULES are not this");
+  eq(forms.rule.length, 3, "colon, dash and bare forms all parse", JSON.stringify(forms.rule));
+  eq(parseActions("RULES are not this").rule.length, 0, "RULES is not RULE");
+
+  // The reader's own rules still come from the reader, and are marked as such.
+  a.addRule("Deploy to QA, never PROD");
+  eq(a.state().rules.find((x) => /Deploy to QA/.test(x.text))?.by, "reader", "a rule the reader adds is theirs");
 }
 
 console.log("the action grammar");

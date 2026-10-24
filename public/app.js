@@ -24,6 +24,10 @@ const ANCHOR_TOUCH_SECONDS_DEFAULT = 30;
 const FLASH_TIME_KEY = "wm.flashSeconds";
 const FLASH_TIME_DEFAULT = 0.9;   // seconds; the row flash the panel has always used
 const EVENT_FLASH_KEY = "wm.eventFlash";   // flash a row when an event of its own arrives (on by default)
+// Names typed onto a worktree, by row key. Declared up here because `state` reads it while it is being built, and a
+// const below `state` is still in its dead zone at that moment - the try/catch in the loader swallowed the error and
+// every reload came back with the agent's title instead of the name that was typed.
+const TREENAMES_KEY = "wtgui.treenames";
 
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
@@ -84,6 +88,9 @@ const state = {
   // while something in it is open, and this is the order it holds: without it a rebuild would fall back to
   // newest-turn-first and the frozen list would jump anyway.
   agentOrder: new Map(),
+  // Names typed onto a worktree, by row key. The directory is cut from the prompt, so the board reads the agent's own
+  // title instead (Hermes names the session from the work); this is the override on top of that.
+  treeNames: loadTreeNames(),
   // Replies typed while the agent is still working, in the order they were written. They go out one
   // at a time as each turn finishes: Hermes refuses a second session on a thread already running.
   replyQueue: new Map(),
@@ -194,6 +201,14 @@ const $ = (id) => document.getElementById(id);
 const keyOf = (project, p) => `${project}::${p}`;
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// A path as a card can afford to show it: forward slashes, and only the last few segments, prefixed
+// with an ellipsis when there is more. The whole path lives in the element's tooltip.
+function tailPath(p, keep = 3) {
+  const parts = normPath(p).split("/").filter(Boolean);
+  if (parts.length <= keep) return parts.join("/");
+  return `…/${parts.slice(-keep).join("/")}`;
+}
 
 function relTime(iso) {
   if (!iso) return "—";
@@ -2910,7 +2925,8 @@ function conversationHtml(conv) {
     ? `<span class="job-when mono" data-when="${esc(thread)}" title="last used ${esc(new Date(latest.lastActiveAt).toLocaleString())}">${esc(fmtAgo(latest.lastActiveAt))}</span>`
     : "";
   const meta = [
-    latest.title ? null : latest.cwd ? `cwd ${latest.cwd}` : null,
+    // cwd is no longer listed here: it has its own line under the card's head, on every card, titled
+    // or not.
     // Why this card is in the unattached panel: it has no worktree, or one that is not in the scan.
     homeless ? (latest.ownerPath ? `owner ${latest.ownerPath} (not in the scan)` : "no worktree") : null,
     // With usage figures present the model leads that strip instead (it is what the numbers belong to);
@@ -2923,6 +2939,27 @@ function conversationHtml(conv) {
     // instead of leading the line.
     latest.runId ? `run ${String(latest.runId).replace(/^run_/, "").slice(0, 8)}` : null,
   ].filter(Boolean).join(" · ");
+  // Where this agent is actually working — the top of every card, one quiet line. A card is re-read to
+  // answer "which tree is this one in", and that fact used to appear only on a card whose session never
+  // got a title. Only the last segments are drawn; the full path, and the row this agent is filed under
+  // when that is a different folder, are in the tooltip.
+  const cwdHere = normPath(latest.cwd);
+  const cwdRow = normPath(latest.ownerPath);
+  const cwdLine = cwdHere || cwdRow;
+  const cwdTitle = [
+    cwdHere ? `working directory: ${cwdHere}` : null,
+    cwdRow && cwdRow !== cwdHere ? `worktree row: ${cwdRow}` : null,
+    latest.worktree ? `worktree: ${latest.worktree}` : null,
+  ].filter(Boolean).join("\n");
+  const cwdHtml = cwdLine
+    ? `<div class="job-cwd" title="${esc(cwdTitle)}">` +
+      `<span class="cwd-label">cwd</span>` +
+      `<span class="cwd-path mono">${esc(tailPath(cwdLine))}</span>` +
+      (cwdRow && cwdHere && cwdRow !== cwdHere
+        ? `<span class="cwd-row mono" title="the worktree row this agent is filed under">row ${esc(tailPath(cwdRow, 2))}</span>`
+        : "") +
+      "</div>"
+    : "";
   // A run has no process to exit. The pool maps run status onto 0/1 so the old CLI card keeps
   // rendering, but printing "exit 0" for it reads as if a child process came and went — answer
   // "what happened" instead. A legacy CLI turn still has a real exit code worth showing.
@@ -2996,6 +3033,7 @@ function conversationHtml(conv) {
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
       <button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>
     </div>
+    ${cwdHtml}
     ${collapsed ? `<div class="job-preview mono" data-preview="${esc(thread)}">${jobPreviewHtml(latest)}</div>` : ""}
     ${homeless ? `<div class="attach-row" data-attach-row="${esc(thread)}" hidden>
       <span class="dimmer mono">attach to</span>
@@ -3403,6 +3441,42 @@ async function drainReplyQueue(thread) {
 // forward, and whatever you were part-way through typing is kept as the "draft" at the end (back 0).
 // Persisted, because the prompt worth reusing is usually from a previous session, not this one.
 // (SPAWN_HISTORY_KEY / SPAWN_HISTORY_MAX live at the top of the file, above `state`.)
+
+// ---- what a worktree is called on the board -------------------------------------------------
+// A tree is cut from the prompt, so its directory name is the prompt: 24 characters, usually mid-word. Hermes names
+// the session from the work itself a moment later ("Fix delete worktree button not removing directory"), and that is
+// the name the row should read. A name typed onto the row wins over both; the directory name stays visible beside it,
+// because that is what is on disk.
+function loadTreeNames() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(TREENAMES_KEY) || "{}");
+    const map = new Map();
+    for (const [k, v] of Object.entries(raw && typeof raw === "object" ? raw : {})) {
+      if (typeof v === "string" && v.trim()) map.set(k, v.trim().slice(0, 120));
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+function saveTreeNames() {
+  try {
+    const out = {};
+    for (const [k, v] of state.treeNames) out[k] = v;
+    localStorage.setItem(TREENAMES_KEY, JSON.stringify(out));
+  } catch {
+    /* storage full or blocked: the board keeps showing the name for this session */
+  }
+}
+
+// The name the row shows: what the reader typed, else the agent's own title, else the directory.
+function treeTitleOf(row) {
+  const own = state.treeNames.get(keyOf(row.project, row.path));
+  if (own) return own;
+  const a = agentsFor(row)[0];
+  return String(a?.latest?.title || a?.first?.title || "").trim();
+}
 
 function loadSpawnHistory() {
   try {
@@ -4630,6 +4704,8 @@ function conversationSignature(conv) {
     runQuestions,
     l.runId || "",
     l.cwd || "",
+    // The row this agent is filed under: the card's cwd line falls back to it, so a change must repaint.
+    l.ownerPath || "",
     l.model || "",
     l.yolo ? "y" : "",
     l.worktree || "",
@@ -5840,7 +5916,13 @@ async function confirmDeleteWorktree(key) {
     showBanner(
       d.alreadyGone
         ? `worktree row removed — the folder was already gone (${d.name || target})`
-        : `worktree removed to the Recycle Bin (${d.name || target})${d.branch ? ` on ${d.branch}` : ""}`,
+        : d.dirLeft
+          ? `worktree removed (${d.name || target}) — its files and git record are gone, but ${
+              d.panelHolds ? "this panel was started from that folder; restart it to release the folder" : "another process still holds the folder"
+            } — the panel will delete the empty folder as soon as it is released`
+          : d.recycled
+            ? `worktree removed to the Recycle Bin (${d.name || target})${d.branch ? ` on ${d.branch}` : ""}`
+            : `worktree deleted (${d.name || target})${d.branch ? ` on ${d.branch}` : ""} — the Recycle Bin declined it, so the files are gone permanently`,
     );
   } catch (e) {
     showBanner(`delete worktree: ${e.message}`);
@@ -5881,6 +5963,55 @@ function answerRowConfirm(action, key) {
   state.confirmEls.delete(key);
 }
 
+// A worktree carries the name of the prompt that cut it - 24 characters, usually mid-word - while the agent names
+// itself from what the work turned out to be a moment later. This puts a name on the row (at once, in this browser)
+// and asks the server to do the git half: the branch, and the directory when nothing is holding it open.
+async function renameWorktreePrompt(btn) {
+  const project = btn.dataset.renameProject || "";
+  const path = btn.dataset.renamePath || "";
+  const current = btn.dataset.renameName || String(path).split(/[\\/]/).filter(Boolean).pop() || "";
+  const suggested = String(btn.dataset.renameSuggest || "").trim() || current;
+  const name = window.prompt(
+    `name this worktree\n\ndirectory: ${current}\nbranch and directory name:`,
+    suggested,
+  );
+  if (name === null) return;
+  const clean = name.trim();
+  if (!clean) return;
+  const rowKey = btn.dataset.renameTree || keyOf(project, path);
+  // The board shows the new name immediately; the git half is best-effort and reports back below.
+  state.treeNames.set(rowKey, clean);
+  saveTreeNames();
+  if ($("projects")) renderProjectRows(project);
+  btn.disabled = true;
+  try {
+    const r = await apiFetch(
+      "/api/worktree/rename",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project, path, name: clean }) },
+      { timeoutMs: 120000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    // A moved directory is a moved row: the key, the open state and the name follow it.
+    if (d.path && d.path !== path) {
+      state.treeNames.delete(rowKey);
+      state.treeNames.set(keyOf(project, d.path), clean);
+      if (state.expanded.delete(rowKey)) state.expanded.add(keyOf(project, d.path));
+      saveTreeNames();
+    }
+    showBanner(
+      d.unchanged
+        ? `“${clean}” — already its name`
+        : `“${clean}” · branch ${d.branch || "unchanged"}${d.moved === false ? ` — the directory keeps its old name` : ""}`,
+    );
+    await resync();
+  } catch (err) {
+    showBanner(`named it “${clean}” here — the git half failed: ${err.message}`);
+  } finally {
+    if (btn.isConnected) btn.disabled = false;
+  }
+}
+
 function rowHtml(row) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   const dirty =
@@ -5896,9 +6027,18 @@ function rowHtml(row) {
   // The project's own checkout is not a worktree anyone may delete from here.
   const projectRoot = state.projects.get(row.project)?.path;
   const isProjectRoot = projectRoot && normPath(projectRoot).toLowerCase() === normPath(row.path).toLowerCase();
+  // A tree is named from the prompt, cut at 24 characters; the agent names itself better a moment later. The button
+  // offers that name first and takes anything the reader types. The branch column already carries the real name, so
+  // the row does not repeat it here.
+  const shownTitle = treeTitleOf(row);
+  const shownName = shownTitle || row.name;
+  const suggestName = shownTitle || "";
+  const renameBtn = isProjectRoot
+    ? ""
+    : `<button class="btn-row-rename" data-rename-tree="${esc(keyOf(row.project, row.path))}" data-rename-project="${esc(row.project)}" data-rename-path="${esc(row.path)}" data-rename-name="${esc(row.name)}" data-rename-suggest="${esc(suggestName)}" title="name this worktree — renames its branch, and the directory when nothing is holding it${suggestName ? ` (offered: “${esc(suggestName)}”)` : ""}">\u270e</button>`;
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     <td class="name"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button> <span>${esc(row.name)}</span> ${agentBadgeHtml(row)}</td>
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button> <span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span> ${renameBtn} ${agentBadgeHtml(row)}</td>
     <td class="mono branch">${esc(row.branch || "—")}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
@@ -8498,6 +8638,13 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     showWorktreeConfirm(delTree.dataset.delTree);
+    return;
+  }
+  const renameTree = e.target.closest("[data-rename-tree]");
+  if (renameTree) {
+    e.preventDefault();
+    e.stopPropagation();
+    void renameWorktreePrompt(renameTree);
     return;
   }
   const delTreeYes = e.target.closest("[data-del-tree-yes]");

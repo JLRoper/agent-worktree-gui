@@ -506,7 +506,7 @@
       </div>
       <div class="as-group">
         <h4>Standing rules — its only confident answers</h4>
-        ${rules.map((r) => `<div class="as-rule-row"><span class="as-rule-name">${esc(r.text)}</span><button type="button" data-as-unrule="${esc(r.id)}" title="remove this rule">✕</button></div>`).join("") || `<div class="as-help">None yet. A rule is an answer you have given once and do not want to give twice.</div>`}
+        ${rules.map((r) => `<div class="as-rule-row${r.by === "assistant" ? " is-by-assistant" : ""}"><span class="as-rule-name">${esc(r.text)}${r.by === "assistant" ? `<i class="as-rule-by" title="the assistant wrote this one; delete it if it is wrong">assistant</i>` : ""}</span><button type="button" data-as-unrule="${esc(r.id)}" title="remove this rule">✕</button></div>`).join("") || `<div class="as-help">None yet. A rule is an answer you have given once and do not want to give twice.</div>`}
         <div class="as-form">
           <div class="as-line">
             <input id="as-rule-text" class="as-grow" placeholder="e.g. Deploy to QA, never PROD, from a worktree agent" />
@@ -561,6 +561,7 @@
         </div>
         <div class="as-line"><label>create worktrees <select data-as-set="spawn" title="whether the assistant may cut a worktree and start a worker — ask keeps a one-click card between it and git">${(a.spawnModes || ["off", "ask", "auto"]).map((v) => `<option value="${v}"${s.spawn === v ? " selected" : ""}>${v === "off" ? "off — it may not start workers" : v === "ask" ? "ask me first" : "start immediately"}</option>`).join("")}</select></label></div>
         <div class="as-line"><label>model <select data-as-set="model" title="the assistant's own model — pick something small and fast; the board digest is the whole input">${modelOptionsHtml(s.model || "")}</select></label></div>
+        <div class="as-line"><label title="the assistant does no work here — the gateway just refuses a run without an existing cwd. It is created if missing; leave empty for a folder beside the job store.">working dir <input type="text" spellcheck="false" data-as-set="cwd" value="${esc(s.cwd || "")}" placeholder="default: beside the job store"></label></div>
         <div class="as-help">Draft-only is the default: a reply reaches a worker only when you press Send on it. Auto-safe sends a reply the assistant itself wrote with a TO line; auto also sends anything a standing rule drafted. Creating a worktree has its own switch: <b>ask me first</b> turns a SPAWN line into a card, and nothing runs until you press it. An approval is never answered from here at any setting.</div>
         <div class="as-help">sentry: ${hs ? `<b>${esc(hs)}</b> — the server watchdog restarts the clock and runs a missed pass` : "clock running"} · last pass ${esc(lastPass)} · every ${esc(String(health.everySeconds || s.seconds))}s${health.resumed ? " · resumed after a restart" : ""}</div>
       </div>
