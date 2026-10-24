@@ -3,7 +3,7 @@
 A local panel that watches every git worktree across one or more projects, and runs Hermes agents in
 their own worktrees — live output, mid-turn steering and approvals on the agent's card.
 
-Zero dependencies. No `npm install` needed: plain Node (`node >= 18`) + stdlib, plus HTML/CSS/JS
+Zero dependencies. No `npm install` needed: plain Node (`node >= 22.5`) + stdlib, plus HTML/CSS/JS
 served straight from `public/`.
 
     start.cmd              # foreground (Ctrl+C to stop)
@@ -25,7 +25,7 @@ other machine this:
 Make the repo public and the raw URL works by itself:
 https://raw.githubusercontent.com/JLRoper/agent-worktree-gui/main/SETUP.md
 
-By hand — Node 18+ and nothing else, no dependencies, no build step:
+By hand — Node 22.5+ and nothing else, no dependencies, no build step:
 
     gh repo clone JLRoper/agent-worktree-gui
     cd agent-worktree-gui
