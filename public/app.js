@@ -2206,6 +2206,57 @@ function positionModelPop() {
   return true;
 }
 
+// A model's price in USD per million tokens, when the repo has run tools/openrouter-prices.py.
+// Absent means "not looked up here" — the row stays clean rather than showing a guess.
+function modelPrice(id) {
+  return id ? modelsState?.prices?.[id] || null : null;
+}
+
+function fmtPrice(v) {
+  if (v == null) return "?";
+  if (v === 0) return "0";
+  if (v < 0.01) return String(+v.toFixed(4));
+  if (v < 1) return String(+v.toFixed(2));
+  return String(+v.toFixed(v < 10 ? 2 : 0));
+}
+
+function priceLabel(id) {
+  const p = modelPrice(id);
+  if (!p) return "";
+  if (p.variable) return "variable";
+  if (p.input == null && p.output == null) return "";
+  return `$${fmtPrice(p.input)}/$${fmtPrice(p.output)}`;
+}
+
+// A 0-10 quality rating from a public benchmark. Unrated is blank, not zero: a model nobody has
+// scored must not look like a model that scored badly.
+function modelRating(id) {
+  const p = modelPrice(id);
+  return p && typeof p.rating === "number" ? p.rating : null;
+}
+
+function ratingLabel(id) {
+  const r = modelRating(id);
+  return r == null ? "" : `★${Number(r.toFixed(1))}`;
+}
+
+function ratingTitle(id) {
+  const r = modelRating(id);
+  if (r == null) return "";
+  const p = modelPrice(id);
+  return ` — rated ${Number(r.toFixed(1))}/10 by Artificial Analysis${p?.ratingEstimated ? " (estimated)" : ""}`;
+}
+
+function priceTitle(id) {
+  const p = modelPrice(id);
+  if (!p) return "";
+  if (p.variable) return " — variable pricing (router)";
+  const bits = [`input $${fmtPrice(p.input)}/M`, `output $${fmtPrice(p.output)}/M`];
+  if (p.average != null) bits.push(`average $${fmtPrice(p.average)}/M`);
+  const at = modelsState?.pricesAt ? ` · fetched ${relTime(modelsState.pricesAt)} ago` : "";
+  return ` — ${bits.join(" · ")}${at}`;
+}
+
 function modelChoices() {
   const d = modelsState;
   const out = [{ id: "", label: `(default${d?.defaultModel ? `: ${String(d.defaultModel).split("/").pop()}` : ""})`, group: "" }];
@@ -2246,7 +2297,11 @@ function openModelPop(thread, anchor) {
         group = c.group || group;
         const win = c.id ? modelsState?.contexts?.[c.id] : null;
         const winText = win ? ` <span class="model-ctx-n">${esc(fmtTokens(win))}</span>` : "";
-        return `${head}<button type="button" class="model-item${i === 0 ? " is-sel" : ""}${c.id === current ? " is-current" : ""}" data-model="${esc(c.id)}" title="${esc(c.id || "gateway default")}${win ? ` — context window ${fmtTokens(win)}` : ""}">${esc(c.label)}${winText}${c.id === current ? " ✓" : ""}</button>`;
+        const price = priceLabel(c.id);
+        const priceText = price ? ` <span class="model-price${price === "variable" ? " is-variable" : ""}">${esc(price)}</span>` : "";
+        const rating = ratingLabel(c.id);
+        const ratingText = rating ? ` <span class="model-rating">${esc(rating)}</span>` : "";
+        return `${head}<button type="button" class="model-item${i === 0 ? " is-sel" : ""}${c.id === current ? " is-current" : ""}" data-model="${esc(c.id)}" title="${esc(c.id || "gateway default")}${win ? ` — context window ${fmtTokens(win)}` : ""}${esc(priceTitle(c.id))}${esc(ratingTitle(c.id))}">${esc(c.label)}${ratingText}${winText}${priceText}${c.id === current ? " ✓" : ""}</button>`;
       })
       .join("");
   };
@@ -5161,7 +5216,15 @@ function modelOptionHtml(d) {
   const out = [`<option value="">${esc(def ? `(default: ${def})` : "(gateway default)")}</option>`];
   for (const p of d?.providers || []) {
     out.push(`<optgroup label="${esc(p.label)}">`);
-    for (const m of p.models) out.push(`<option value="${esc(m)}">${esc(m)}</option>`);
+    for (const m of p.models) {
+      const rating = ratingLabel(m);
+      const price = priceLabel(m);
+      const bits = [];
+      if (rating) bits.push(rating);
+      if (price) bits.push(price === "variable" ? "variable" : `${price}/M`);
+      const suffix = bits.length ? ` · ${bits.join(" · ")}` : "";
+      out.push(`<option value="${esc(m)}">${esc(m)}${esc(suffix)}</option>`);
+    }
     out.push("</optgroup>");
   }
   return out.join("");

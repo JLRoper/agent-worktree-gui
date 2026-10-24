@@ -923,6 +923,13 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 .stat-caret { margin-left: 3px; font-size: 9px; opacity: .6; }
 .stat-ctx:hover .stat-caret { opacity: 1; }
 .model-ctx-n { color: var(--dimmer); font-size: 10.5px; padding-left: 6px; }
+/* USD per million tokens, in/out, from the fetched price file. Quiet: it informs the choice, it is
+   not the point of the row. `variable` marks a router whose price OpenRouter does not quote. */
+.model-price { color: #9a8a6a; font-size: 10.5px; padding-left: 6px; font-variant-numeric: tabular-nums; }
+.model-price.is-variable { font-style: italic; color: var(--dimmer); }
+/* 0-10 quality rating (Artificial Analysis). Gold to separate it from the price's sand tone; a
+   model with no rating shows nothing at all. */
+.model-rating { color: #c9a85c; font-size: 10.5px; padding-left: 6px; font-variant-numeric: tabular-nums; }
 .model-hint { font-size: 10.5px; padding: 4px 7px 6px; }
 .ctx-pop .model-item.is-current { color: #c8a6ff; }
 /* The picker: a search box and the list, floating under the readout. */
