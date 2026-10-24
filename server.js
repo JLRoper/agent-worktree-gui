@@ -2216,9 +2216,11 @@ const server = createServer(async (req, res) => {
     }
 
     // Which project sections the page can see right now. Sent when the set changes and as a heartbeat; in
-    // scanMode "visible" it is what the scheduler reads instead of the whole fleet. Cheap and read-only, so it
-    // needs no token.
+    // scanMode "visible" it is what the scheduler reads instead of the whole fleet. It writes the scheduler's
+    // visible set, so it is a write like any other: a route does not get to decide that the panel token does
+    // not apply to it.
     if (route === "/api/visible" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const known = new Set(registry.projects.map((p) => p.name));
       const names = (Array.isArray(body.projects) ? body.projects : [])
