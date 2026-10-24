@@ -1,6 +1,7 @@
 // Static + JSON + SSE server for the worktree monitor, plus Stage-1 agent spawning.
 // The HTTP layer never runs git: the scheduler scans in worker threads and the
 // store holds the results. Spawned agents go through lib/jobs.js.
+import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
@@ -271,6 +272,9 @@ const jobs = new Jobs({
   onEvent: (evt) => {
     broadcast(evt);
     adoptFromJob(evt);
+    // A turn that just ended is the first moment the session has a name of its own, and the tree is idle: give the
+    // worktree that name. Swallowed on purpose - a rename is never worth failing a job event over.
+    void autoNameWorktree(evt).catch(() => {});
     assistant?.observe(evt);
   },
   onLog: log,
@@ -386,6 +390,132 @@ const settingsOut = () => ({
 });
 
 const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+
+// ---- renaming a worktree ---------------------------------------------------------------------
+// A tree is cut from the prompt, so its name is the prompt: cut at 24 characters, usually mid-word, and about what the
+// reader typed rather than what the agent worked out it was doing. Renaming it is the directory and the branch plus
+// the panel's own bookkeeping - the jobs that ran there (a run's body carries its cwd), the store's row, and the row
+// the board draws.
+const WORKTREE_TAG_RE = /-([0-9a-f]{6})$/i;
+function worktreeDirName(name, tag) {
+  const slug = String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/, "");
+  return slug ? `${slug}-${tag}` : "";
+}
+
+async function renameWorktree({ projectName, target, name }) {
+  const project = scheduler.getProjects().find((p) => p.name === projectName);
+  if (!project) return { error: `unknown project: ${projectName}`, status: 404 };
+  const oldPath = path.resolve(String(target || ""));
+  if (path.resolve(project.path) === oldPath) {
+    return { error: "that is the project's own checkout, not a worktree", status: 400 };
+  }
+  const row = scheduler.store.rowsFor(projectName).find((r) => path.resolve(r.path) === oldPath);
+  if (!row) return { error: `not a worktree row of ${projectName}: ${oldPath}`, status: 404 };
+  const base = path.basename(oldPath);
+  // Keep the six-hex tag: it is what tells two trees named alike apart, and it makes a repeated rename a no-op
+  // instead of a second suffix.
+  const tag = ((WORKTREE_TAG_RE.exec(base) || [])[1] || randomUUID().slice(0, 6)).toLowerCase();
+  const wanted = String(name || "").trim().replace(new RegExp(`-${tag}$`, "i"), "");
+  const dirName = worktreeDirName(wanted, tag);
+  if (!dirName) return { error: "a name is required", status: 400 };
+  const newPath = path.join(project.path, ".worktrees", dirName);
+  if (path.resolve(newPath) === oldPath) {
+    return { ok: true, unchanged: true, path: oldPath.replace(/\\/g, "/"), branch: row.branch || null, jobs: 0 };
+  }
+  const taken = await stat(newPath)
+    .then((s) => s.isDirectory())
+    .catch(() => false);
+  if (taken) return { error: `${dirName} already exists`, status: 409 };
+  // A running agent holds the tree as its cwd, and git refuses to move a worktree something is standing in.
+  const busy = jobs
+    .list()
+    .find(
+      (j) =>
+        (j.status === "running" || j.status === "starting") &&
+        [j.cwd, j.ownerPath, j.worktreePath].filter(Boolean).some((p) => path.resolve(p) === oldPath),
+    );
+  if (busy) return { error: `an agent is running in that worktree (${busy.id}) — stop it first`, status: 409 };
+  // Windows will not rename a directory that any process has open, and an agent's shell lives in its tree long after
+  // its turn ends — so the directory move is best-effort and the branch rename is the part that always lands.
+  let moved = true;
+  let whyNot = "";
+  try {
+    await execP("git", ["-C", project.path, "worktree", "move", oldPath, newPath], { timeout: 90_000 });
+  } catch (e) {
+    moved = false;
+    whyNot = String((e && e.message) || e)
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .pop() || "the directory is held open";
+  }
+  // The branch the tree is actually on, not the store's copy of it: the store is a scan behind, and a second rename
+  // seconds later would otherwise try to move a branch that no longer exists.
+  const oldBranch = await execP("git", ["-C", oldPath, "symbolic-ref", "--short", "HEAD"], { timeout: 20_000 })
+    .then((r) => String(r.stdout || "").trim())
+    .catch(() => row.branch || null);
+  const newBranch = `wtgui/${dirName}`;
+  let branchRenamed = false;
+  if (oldBranch && oldBranch !== newBranch) {
+    // A scan running in a worker thread can hold a ref lock for a moment ("cannot lock ref"), and the whole point of
+    // this is a name: try again before giving up on the branch half.
+    for (let attempt = 0; attempt < 3 && !branchRenamed; attempt += 1) {
+      try {
+        await execP("git", ["-C", project.path, "branch", "-m", oldBranch, newBranch], { timeout: 30_000 });
+        branchRenamed = true;
+      } catch {
+        await new Promise((r) => setTimeout(r, 150));
+      }
+    }
+  }
+  const finalPath = moved ? newPath : oldPath;
+  const repointed = jobs.repointPath(oldPath, finalPath);
+  if (moved) {
+    scheduler.store.dropRow(projectName, row.path);
+    broadcast({ type: "drop", project: projectName, path: row.path });
+  }
+  // Read the renamed tree in now, not on its next scan: the store's branch name is what the next rename reads, and the
+  // board should show the new name in the same breath as the banner.
+  const scanned = await scheduler.scanOne(project, finalPath.replace(/\\/g, "/"), "full").catch(() => null);
+  return {
+    ok: true,
+    moved,
+    path: finalPath.replace(/\\/g, "/"),
+    branch: (scanned && scanned.branch) || (branchRenamed ? newBranch : oldBranch),
+    branchRenamed,
+    jobs: repointed,
+    warning: moved ? null : `the directory keeps its old name (${whyNot})`,
+  };
+}
+
+// A tree is named from the prompt, and Hermes names the session from the work itself a moment later ("Fix delete
+// worktree button not removing directory"). Once that name exists and the tree is idle, the tree takes it - the
+// agent's own name for the job beats the reader's first sentence cut at 24 characters. Once per tree.
+const autoNamedTrees = new Set();
+async function autoNameWorktree(evt) {
+  if (evt?.type !== "job") return;
+  const j = evt.job;
+  if (!j || !j.worktreePath || j.existing || j.reply) return;
+  if (!["done", "failed", "cancelled", "interrupted"].includes(String(j.status))) return;
+  const treeKey = normPathKey(j.worktreePath);
+  if (autoNamedTrees.has(treeKey)) return;
+  // Only when the tree is idle: moving a directory out from under a running turn is what git refuses.
+  const busy = jobs
+    .list()
+    .some((x) => (x.status === "running" || x.status === "starting") && normPathKey(x.ownerPath || x.cwd) === treeKey);
+  if (busy) return;
+  autoNamedTrees.add(treeKey);
+  const title = jobs.sessionInfoFor(j.thread).title;
+  if (!title) return;
+  const project = projectForPath(j.worktreePath);
+  if (!project) return;
+  await renameWorktree({ projectName: project.name, target: j.worktreePath, name: title }).catch(() => {});
+}
 
 // Which project a directory belongs to: the innermost project root that contains it (a project can be nested inside
 // another checkout), matched on a path boundary so `…/app-other` is not inside `…/app`.
@@ -1571,6 +1701,20 @@ const server = createServer(async (req, res) => {
       scheduler.lastFast.set(`${projectName}::${rowPath}`, Date.now());
       const merged = await scheduler.scanOne(project, rowPath, "full");
       return sendJson(res, 200, { ok: true, row: merged });
+    }
+
+    // Give a worktree a name of its own: the directory and its branch. The row is looked up by path, and the whole
+    // operation refuses while an agent is running in the tree - see renameWorktree().
+    if (route === "/api/worktree/rename" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const out = await renameWorktree({
+        projectName: String(body.project || "").trim(),
+        target: String(body.path || "").trim(),
+        name: String(body.name || "").trim(),
+      });
+      if (out.error) return sendJson(res, out.status || 500, { error: out.error });
+      return sendJson(res, 200, { ...out, name: path.basename(out.path) });
     }
 
     // Clone a GitHub repo over SSH into ONE of the configured scan roots — what the folder

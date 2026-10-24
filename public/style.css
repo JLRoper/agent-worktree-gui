@@ -1011,6 +1011,23 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
   cursor: pointer;
   opacity: .55;
 }
+/* Rename a worktree: quiet until the row is under the pointer, so a board of rows is not a board of buttons. */
+.btn-row-rename {
+  border: 1px solid transparent;
+  background: none;
+  color: var(--dim);
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 4px;
+  margin-left: 2px;
+  cursor: pointer;
+  opacity: .55;
+  vertical-align: 1px;
+}
+.btn-row-rename:hover { background: #232b3a; border-color: var(--line); color: var(--fg); opacity: 1; }
+.btn-row-rename:disabled { opacity: .3; cursor: progress; }
+tr.row:hover .btn-row-rename { opacity: .9; }
+
 /* A delete that has been accepted but has not finished scanning: the x stays put, greyed and click-proof,
    so the click is visibly registered and cannot be repeated. */
 .btn-del-tree.pending, .btn-del-tree:disabled {

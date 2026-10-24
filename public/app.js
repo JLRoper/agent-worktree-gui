@@ -24,6 +24,10 @@ const ANCHOR_TOUCH_SECONDS_DEFAULT = 30;
 const FLASH_TIME_KEY = "wm.flashSeconds";
 const FLASH_TIME_DEFAULT = 0.9;   // seconds; the row flash the panel has always used
 const EVENT_FLASH_KEY = "wm.eventFlash";   // flash a row when an event of its own arrives (on by default)
+// Names typed onto a worktree, by row key. Declared up here because `state` reads it while it is being built, and a
+// const below `state` is still in its dead zone at that moment - the try/catch in the loader swallowed the error and
+// every reload came back with the agent's title instead of the name that was typed.
+const TREENAMES_KEY = "wtgui.treenames";
 
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
@@ -84,6 +88,9 @@ const state = {
   // while something in it is open, and this is the order it holds: without it a rebuild would fall back to
   // newest-turn-first and the frozen list would jump anyway.
   agentOrder: new Map(),
+  // Names typed onto a worktree, by row key. The directory is cut from the prompt, so the board reads the agent's own
+  // title instead (Hermes names the session from the work); this is the override on top of that.
+  treeNames: loadTreeNames(),
   // Replies typed while the agent is still working, in the order they were written. They go out one
   // at a time as each turn finishes: Hermes refuses a second session on a thread already running.
   replyQueue: new Map(),
@@ -3434,6 +3441,42 @@ async function drainReplyQueue(thread) {
 // Persisted, because the prompt worth reusing is usually from a previous session, not this one.
 // (SPAWN_HISTORY_KEY / SPAWN_HISTORY_MAX live at the top of the file, above `state`.)
 
+// ---- what a worktree is called on the board -------------------------------------------------
+// A tree is cut from the prompt, so its directory name is the prompt: 24 characters, usually mid-word. Hermes names
+// the session from the work itself a moment later ("Fix delete worktree button not removing directory"), and that is
+// the name the row should read. A name typed onto the row wins over both; the directory name stays visible beside it,
+// because that is what is on disk.
+function loadTreeNames() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(TREENAMES_KEY) || "{}");
+    const map = new Map();
+    for (const [k, v] of Object.entries(raw && typeof raw === "object" ? raw : {})) {
+      if (typeof v === "string" && v.trim()) map.set(k, v.trim().slice(0, 120));
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+function saveTreeNames() {
+  try {
+    const out = {};
+    for (const [k, v] of state.treeNames) out[k] = v;
+    localStorage.setItem(TREENAMES_KEY, JSON.stringify(out));
+  } catch {
+    /* storage full or blocked: the board keeps showing the name for this session */
+  }
+}
+
+// The name the row shows: what the reader typed, else the agent's own title, else the directory.
+function treeTitleOf(row) {
+  const own = state.treeNames.get(keyOf(row.project, row.path));
+  if (own) return own;
+  const a = agentsFor(row)[0];
+  return String(a?.latest?.title || a?.first?.title || "").trim();
+}
+
 function loadSpawnHistory() {
   try {
     const raw = JSON.parse(localStorage.getItem(SPAWN_HISTORY_KEY) || "[]");
@@ -5907,6 +5950,55 @@ function answerRowConfirm(action, key) {
   state.confirmEls.delete(key);
 }
 
+// A worktree carries the name of the prompt that cut it - 24 characters, usually mid-word - while the agent names
+// itself from what the work turned out to be a moment later. This puts a name on the row (at once, in this browser)
+// and asks the server to do the git half: the branch, and the directory when nothing is holding it open.
+async function renameWorktreePrompt(btn) {
+  const project = btn.dataset.renameProject || "";
+  const path = btn.dataset.renamePath || "";
+  const current = btn.dataset.renameName || String(path).split(/[\\/]/).filter(Boolean).pop() || "";
+  const suggested = String(btn.dataset.renameSuggest || "").trim() || current;
+  const name = window.prompt(
+    `name this worktree\n\ndirectory: ${current}\nbranch and directory name:`,
+    suggested,
+  );
+  if (name === null) return;
+  const clean = name.trim();
+  if (!clean) return;
+  const rowKey = btn.dataset.renameTree || keyOf(project, path);
+  // The board shows the new name immediately; the git half is best-effort and reports back below.
+  state.treeNames.set(rowKey, clean);
+  saveTreeNames();
+  if ($("projects")) renderProjectRows(project);
+  btn.disabled = true;
+  try {
+    const r = await apiFetch(
+      "/api/worktree/rename",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project, path, name: clean }) },
+      { timeoutMs: 120000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    // A moved directory is a moved row: the key, the open state and the name follow it.
+    if (d.path && d.path !== path) {
+      state.treeNames.delete(rowKey);
+      state.treeNames.set(keyOf(project, d.path), clean);
+      if (state.expanded.delete(rowKey)) state.expanded.add(keyOf(project, d.path));
+      saveTreeNames();
+    }
+    showBanner(
+      d.unchanged
+        ? `“${clean}” — already its name`
+        : `“${clean}” · branch ${d.branch || "unchanged"}${d.moved === false ? ` — the directory keeps its old name` : ""}`,
+    );
+    await resync();
+  } catch (err) {
+    showBanner(`named it “${clean}” here — the git half failed: ${err.message}`);
+  } finally {
+    if (btn.isConnected) btn.disabled = false;
+  }
+}
+
 function rowHtml(row) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   const dirty =
@@ -5922,9 +6014,18 @@ function rowHtml(row) {
   // The project's own checkout is not a worktree anyone may delete from here.
   const projectRoot = state.projects.get(row.project)?.path;
   const isProjectRoot = projectRoot && normPath(projectRoot).toLowerCase() === normPath(row.path).toLowerCase();
+  // A tree is named from the prompt, cut at 24 characters; the agent names itself better a moment later. The button
+  // offers that name first and takes anything the reader types. The branch column already carries the real name, so
+  // the row does not repeat it here.
+  const shownTitle = treeTitleOf(row);
+  const shownName = shownTitle || row.name;
+  const suggestName = shownTitle || "";
+  const renameBtn = isProjectRoot
+    ? ""
+    : `<button class="btn-row-rename" data-rename-tree="${esc(keyOf(row.project, row.path))}" data-rename-project="${esc(row.project)}" data-rename-path="${esc(row.path)}" data-rename-name="${esc(row.name)}" data-rename-suggest="${esc(suggestName)}" title="name this worktree — renames its branch, and the directory when nothing is holding it${suggestName ? ` (offered: “${esc(suggestName)}”)` : ""}">\u270e</button>`;
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     <td class="name"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button> <span>${esc(row.name)}</span> ${agentBadgeHtml(row)}</td>
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button> <span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span> ${renameBtn} ${agentBadgeHtml(row)}</td>
     <td class="mono branch">${esc(row.branch || "—")}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
@@ -8513,6 +8614,13 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     showWorktreeConfirm(delTree.dataset.delTree);
+    return;
+  }
+  const renameTree = e.target.closest("[data-rename-tree]");
+  if (renameTree) {
+    e.preventDefault();
+    e.stopPropagation();
+    void renameWorktreePrompt(renameTree);
     return;
   }
   const delTreeYes = e.target.closest("[data-del-tree-yes]");
