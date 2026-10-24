@@ -129,3 +129,30 @@ npm test
 
 Two bullets in 0.1 name paths the implementation did not use; they now name what is on disk
 (`node --test`, `tools/panel-testkit.mjs`), and the counts are the ones the suite printed.
+
+### A running board and the blank-page fix, checked in a browser
+
+A sandbox panel (`PANEL_CONFIG` on 18935) scanning a scratch root with one repo and one worktree:
+
+```
+GET /api/health   -> {"ok":true,"projects":["alpha"],...}
+GET /api/state    -> projectCount: 1 (alpha), rows: 2
+                     alpha | master    | ON MAIN   | dirty 0
+                     beta  | wtgui/beta | NO COMMITS| dirty 0
+page (Chromium)   -> "#stream-state": "● live"; header "1 project(s)";
+                     folder "1 project 2 worktrees 1 dirty 2 live"; 2 tr.row nodes
+```
+
+The `resync()` line is the one change with no `npm test` assertion — it is browser behaviour, and
+the suite stays dependency-free. It was checked end to end with Playwright (the global install,
+not a repo dependency) by forcing `GET /api/state` to answer `500 {"error":"forced fault: state.db
+is locked"}` and aborting `/api/stream`:
+
+```
+before (app.js reverted): banner text ""        hidden true
+after                   : banner text "Cannot load the board: forced fault: state.db is locked"
+                          hidden false
+```
+
+That is the difference the fix is for: the same failing server, and one of the two pages says why
+it is empty.
