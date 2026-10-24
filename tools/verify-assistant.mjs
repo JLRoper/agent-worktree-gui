@@ -628,15 +628,24 @@ console.log("a turn cut off mid-flight");
   b.tick();
   eq(b.state().alerts.filter((x) => x.rule === "interrupted").length, 0, "an interrupted turn the thread has since moved past does not fire");
 
-  // The store's array order is a convenience, not the order of turns.
+  // `turn` is `siblings.length + 1` over the jobs the store still holds, so trimming old turns moves it backwards:
+  // a revive can carry turn 6 beside the interrupted turn 8 it replaced (measured live). The clock decides.
   const c = make();
   board = [
-    job({ id: "turn-order-3", thread: "wtgui-order", turn: 3, status: "interrupted", endedAt: iso(t0 - 2 * 60_000), startedAt: iso(t0 - 5 * 60_000) }),
-    job({ id: "turn-order-2", thread: "wtgui-order", turn: 2, status: "done", endedAt: iso(t0 - 8 * 60_000), startedAt: iso(t0 - 9 * 60_000) }),
+    job({ id: "turn-trim-9", thread: "wtgui-trim", turn: 9, status: "interrupted", endedAt: iso(t0 - 30 * 60_000), startedAt: iso(t0 - 40 * 60_000) }),
+    job({ id: "turn-trim-6", thread: "wtgui-trim", turn: 6, status: "running", startedAt: iso(t0 - 2 * 60_000) }),
   ];
   c.tick();
-  const latest = c.state().alerts.find((x) => x.rule === "interrupted");
-  ok(latest?.turnId === "turn-order-3", "the latest turn is read from its counter, not from its position", JSON.stringify(latest?.turnId));
+  eq(c.state().alerts.filter((x) => x.rule === "interrupted").length, 0, "a resumed turn wins even when a trimmed counter puts it below the dead turn");
+
+  // ...and when the interrupted turn really is the newest, its neighbour's counter cannot outrank it either.
+  const c2 = make();
+  board = [
+    job({ id: "turn-new-2", thread: "wtgui-newest", turn: 2, status: "interrupted", endedAt: iso(t0 - 2 * 60_000), startedAt: iso(t0 - 5 * 60_000) }),
+    job({ id: "turn-new-1", thread: "wtgui-newest", turn: 1, status: "done", endedAt: iso(t0 - 8 * 60_000), startedAt: iso(t0 - 9 * 60_000) }),
+  ];
+  c2.tick();
+  ok(c2.state().alerts.find((x) => x.rule === "interrupted")?.turnId === "turn-new-2", "the newest start is the turn being judged");
 
   // The escalation is wired through RULE_DEFS alone: pickRules keeps a rule only if RULE_DEFS has the key, so a
   // rule the page offers is a rule the server will store — no second whitelist to keep in step.
