@@ -6653,7 +6653,8 @@ function detailHtml(row) {
   // A slot per card, not a copy of it: placeRow() moves the card that is already on the board into its slot.
   // Rebuilding the cards here destroyed their consoles on every scan - several times a second while a turn ran -
   // and every rebuild is a chance for a scroll position to be lost.
-  // The add-agent bar sits under the cards: the full width of an agent card, half its height, a white + in the middle.
+  // The add-agent bar is the full width of an agent card, half its height, a white + in the middle. Its position is a
+  // setting (Settings > Display > Add-agent bar at top): above the cards when on, under them when off.
   // It is what the row's green ▶ used to do, because the ▶ now probes the agents the worktree already has. It stays
   // when the row has no agents at all - that is exactly when it is needed. Clicking it turns the bar into the text
   // field below (same footprint, so the row does not move), and Enter starts the run from there.
@@ -9871,6 +9872,35 @@ function addBarBrightnessSetting() {
   return ADDBAR_DEFAULT;
 }
 
+// ---- where the add-agent bar sits -----------------------------------------------------------
+// The + bar is the row's "start another agent here" control. Under the cards it closes the list; above them it is the
+// first thing in it. Which reads better depends on whether the reader is starting agents or reading them, so it is a
+// switch. CSS-only: one class on the body flips the stack, so nothing repaints and the open cards keep their scroll.
+const ADDBAR_TOP_KEY = "wtgui.addbarTop";
+function addBarAtTop() {
+  try {
+    const raw = localStorage.getItem(ADDBAR_TOP_KEY);
+    if (raw !== null) return raw !== "0";
+  } catch {
+    /* private mode */
+  }
+  return true; // above the cards: the reader asked for it there
+}
+
+function applyAddBarTop(on, { save = true } = {}) {
+  const top = Boolean(on);
+  document.body.classList.toggle("addbar-top", top);
+  const box = $("addbar-top");
+  if (box && box.checked !== top) box.checked = top;
+  if (save) {
+    try {
+      localStorage.setItem(ADDBAR_TOP_KEY, top ? "1" : "0");
+    } catch {
+      /* private mode: the choice just will not persist */
+    }
+  }
+}
+
 // The grey flash says "re-read, nothing moved". It is useful when watching a row settle and noise when the board
 // is busy, so it can be switched off - while the green flash, which means something actually happened, cannot.
 // A body class is enough: the row still gets its class for 950ms, the animation just does not run.
@@ -10407,6 +10437,7 @@ $("anchor-touch-seconds")?.addEventListener("input", (e) => {
 });
 $("contrast")?.addEventListener("input", (e) => applyContrast(Number(e.target.value)));
 $("addbar-bright")?.addEventListener("input", (e) => applyAddBarBrightness(Number(e.target.value)));
+$("addbar-top")?.addEventListener("change", (e) => applyAddBarTop(Boolean(e.target.checked)));
 $("auto-collect")?.addEventListener("change", (e) => {
   try {
     localStorage.setItem(AUTO_COLLECT_KEY, e.target.checked ? "1" : "0");
@@ -10482,6 +10513,7 @@ initQLook();
 applyGreyFlash(greyFlashOn());
 applyContrast(contrastSetting(), { save: false });
 applyAddBarBrightness(addBarBrightnessSetting(), { save: false });
+applyAddBarTop(addBarAtTop(), { save: false });
 if ($("show-thinking")) $("show-thinking").checked = thinkDefault();
 if ($("auto-collect")) $("auto-collect").checked = autoCollectOn();
 void refreshSubagentRoster();

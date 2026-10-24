@@ -82,7 +82,7 @@ the line to read before clicking.
 - **The green + on a project** — "start work in this project": points **start in** at that project, ticks **create
   workspace**, puts the caret in the prompt, scrolls the card into view and flashes its border. A fresh worktree
   under `.worktrees/` will be cut.
-- **The + bar under a worktree's agents** — start an agent in that tree as it is, without leaving the row. Clicking
+- **The + bar in a worktree's agents** — start an agent in that tree as it is, without leaving the row. Clicking
   the bar goes nowhere: it becomes a text field of the same footprint, so the row does not move. Type the first turn
   and press `Enter`; `Esc`, or leaving the field empty, puts the `+` back. The prompt is handed to the New agent card
   aimed at this worktree with **create workspace** unticked, and the run starts from there, so the card says
@@ -177,7 +177,7 @@ opens and closes the project. Settings → Display → **Project colours** shows
 
 | Column | Meaning |
 | --- | --- |
-| **Worktree** | The directory name, a green **▶** that **probes** the agents already in it (see below), and the `⧉ N` badge for agents this panel has in it (with `running` / `awaiting approval` when they are busy). Clicking the badge opens the row and its cards; the **+** bar under them starts a new agent there. |
+| **Worktree** | The directory name, a green **▶** that **probes** the agents already in it (see below), and the `⧉ N` badge for agents this panel has in it (with `running` / `awaiting approval` when they are busy). Clicking the badge opens the row and its cards; the **+** bar in the row starts a new agent there. |
 | **Branch** | The checked-out branch. |
 | **Tip** | Short SHA of the branch tip. |
 | **Ahead / Behind** | Commits the branch has that the project's base ref (remote main) does not, and commits main has that it does not. `—` when there is no base ref yet. |
@@ -223,7 +223,8 @@ Click a row to expand it. The detail is built not to bury the agents:
 - **Liveness evidence** — folded, with its strongest line still visible on the header. Open it to see why the row is
   live, or why it is not.
 - **Agents** — the cards owned by this worktree, each moved into place rather than rebuilt, so a running console keeps
-  its scroll. The **+** bar under them starts another agent in this tree; it is drawn even when the row has no cards.
+  its scroll. The **+** bar in the row starts another agent in this tree; it is drawn even when the row has no cards,
+  and it sits above the cards by default (Settings → Display → **Add-agent bar at top** moves it back under them).
 - **Sessions with revive** — Hermes sessions attributed to this worktree that have no card, one row each (glyph, when
   it was last used, its name) with **revive**. Reviving writes a card whose reply box continues that session. It is
   one at a time on purpose: a worktree collects every session ever run in it, and auto-attaching would refill the
@@ -407,7 +408,8 @@ setting):
 | Display | Panel font | Headings, labels, buttons and the text you type. |
 | Display | Terminal font · Console size · Console weight | The console and the tool lines inside it. |
 | Display | Panel contrast | How far apart the layered surfaces sit: 0% flattens them, 100% pushes the page to near-black and lifts the panels. The swatch strip below previews the layers. |
-| Display | Add-agent bar | The green of the **+** bar under a worktree's agents, 0% (deep and quiet) to 100% (vivid). Lightness and saturation move together; the swatch below the row is the bar itself, so the preview cannot disagree with the button. |
+| Display | Add-agent bar | The green of the **+** bar in a worktree's agents, 0% (deep and quiet) to 100% (vivid). Lightness and saturation move together; the swatch below the row is the bar itself, so the preview cannot disagree with the button. |
+| Display | Add-agent bar at top | Draw the **+** bar above a worktree's agent cards instead of under them. On by default; off restores the old position. |
 | Display | Project colours | Count in the tooltip, **reset colours** clears every project's hue. |
 | Display | Question tint | The colour of the agent's question box: light purple (the default), sky, mint, rose or slate. Signal colours, never the approval's amber. |
 | Display | Question size | Type size of the question and its choices, 11–18px (the choices are half a point smaller). A typed value is clamped when you leave the field. |
@@ -459,7 +461,7 @@ only its own line so your comments and formatting survive.
 | Click | Row's `⧉ N` badge | Open the row and jump to its agents. |
 | Click | Row's ring | Read that worktree now. |
 | Click | Row's green ▶ | Probe every agent in that worktree that is not running, all at once. |
-| Click | **+** bar under a row's agents | Turn it into a field; `Enter` starts the agent there, `Esc` puts the `+` back. |
+| Click | **+** bar in a row's agents | Turn it into a field; `Enter` starts the agent there, `Esc` puts the `+` back. |
 | Click | Not-running pill on a card | Send `Continue if you can, exit if you are done` and start the next turn. |
 | Double-click | Model on the usage strip | Model picker. |
 | Click / right-click | `used/ceiling⌄` | Cycle the context ceiling / open the full picker. |

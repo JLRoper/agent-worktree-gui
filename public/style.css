@@ -388,12 +388,19 @@ td.age .age-num { font-family: var(--mono); font-size: 12px; display: inline-blo
 td.age .age-num.dimmer { color: var(--dimmer); }
 
 /* agents owned by a worktree, listed inside that row's detail */
-/* The rule closes the agent list rather than opening it: it sits BELOW the cards, so the detail reads
-   "what this tree is doing", then a line, then the reference material. */
+/* The rule closes the agent list rather than opening it: the bar sits at the BOTTOM of the list when the setting
+   is off (above the cards by default), so the detail reads "what this tree is doing", then a line, then the
+   reference material. */
 .agents-block { margin-top: 4px; padding-top: 0; padding-bottom: 10px; border-bottom: 1px solid #1d222b; }
 /* With revivable sessions underneath, those belong to the same list: the line moves below them instead of
    cutting between the cards and the sessions. */
 .agents-block:has(+ .sessions-block) { border-bottom: 0; padding-bottom: 2px; }
+/* The add-agent bar's position is the reader's choice (Settings > Display > Add-agent bar at top). On, one class on
+   the body flips the stack: the bar is the first flex item, the cards follow it. Off, the block stays a plain stack
+   and the bar closes the list. CSS-only, so the toggle moves every open row at once without repainting a card. */
+body.addbar-top .agents-block { display: flex; flex-direction: column; }
+body.addbar-top .agents-block > .btn-add-agent,
+body.addbar-top .agents-block > .add-agent-form { order: -1; margin-top: 0; margin-bottom: 8px; }
 .agents-block h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .03em; color: var(--dim); font-weight: 600; }
 /* A session panel is its own layer, not a tint of the detail row it sits in: at 1.2% white it read as the same
    surface as its parent, which is what made the nesting flatten out. `--card` is one step lighter and moves with
