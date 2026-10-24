@@ -113,9 +113,12 @@ plus one load of the page through the front door. The numbers are recorded below
 
 ## Evidence read back (2026-10-24)
 
-Phase 0 is six commits on top of `efdb451` (the phase index, the harness, auth, open-url, the
-engines floor, then the error pass). `main` moved while this phase was being finished, so the six
-were rebased onto `efdb451` and the suite was re-run on the rebased tree.
+Phase 0's six fixes sit on top of `efdb451` (the phase index, the harness, auth, open-url, the
+engines floor, then the error pass); the commits after them record this evidence, give the sandbox
+its own discovery cache (the real checkout's `logs/projects.json` had been leaking 96 projects into
+it, which reset `/api/reload` mid-sweep), and record the browser check below. `main` moved while the
+phase was being finished, so the six were rebased onto `efdb451`, the suite was re-run there, and it
+was run again in the main checkout after the fast-forward.
 
 ```
 node --check server.js && node --check lib/*.js && node --check public/app.js
