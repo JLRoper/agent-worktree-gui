@@ -31,6 +31,7 @@ import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
 import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyLabel } from "./lib/remote-writes.js";
 import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
+import { safeUrl, openerFor } from "./lib/open-url.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
   clarifyWindowSeconds, approvalWindowSeconds,
@@ -2269,33 +2270,25 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, days, settings: settingsOut() });
     }
 
-    // Open a link from an agent's console in the OS default browser. Only http(s) gets through: this
-    // hands a string to the operating system, so nothing else may pass. execFile (no shell) means the
-    // URL can never become part of a command line.
+    // Open a link from an agent's console in the OS default browser. Only http(s) gets through, and the
+    // URL is handed to the opener as a single argv element: no shell, no `cmd.exe /c start`, so a query
+    // string cannot become a second command. See lib/open-url.js for what that cost before.
     if (route === "/api/open-url" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
-      let parsed;
+      const { url, error } = safeUrl(body.url);
+      if (!url) return sendJson(res, 400, { error });
+      const { bin, args } = openerFor(url);
       try {
-        parsed = new URL(String(body.url || "").trim());
-      } catch {
-        return sendJson(res, 400, { error: "not a URL" });
+        // Detached: the browser outlives this request, and its exit code says nothing about whether a
+        // page opened. A spawn failure is the only failure this route can honestly report.
+        const child = spawn(bin, args, { detached: true, stdio: "ignore", windowsHide: true });
+        child.on("error", (e) => log(`could not open ${url}: ${String((e && e.message) || e)}`));
+        child.unref();
+      } catch (e) {
+        return sendJson(res, 500, { error: String((e && e.message) || e) });
       }
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        return sendJson(res, 400, { error: "only http(s) links can be opened" });
-      }
-      const url = parsed.toString();
-      const [bin, args] =
-        process.platform === "win32"
-          ? ["cmd.exe", ["/c", "start", "", url]]
-          : process.platform === "darwin"
-            ? ["open", [url]]
-            : ["xdg-open", [url]];
-      execFile(bin, args, (err) => {
-        if (err) sendJson(res, 500, { error: err.message });
-        else sendJson(res, 200, { ok: true, url });
-      });
-      return;
+      return sendJson(res, 200, { ok: true, url });
     }
 
     // Delete a deliverable. The confirmation lives in the UI; this only acts on a path or URL the panel
