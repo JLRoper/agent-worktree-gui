@@ -4630,7 +4630,9 @@ function paintAgentBadges() {
   for (const row of state.rows.values()) {
     const tr = document.querySelector(`tr.row[data-key="${CSS.escape(keyOf(row.project, row.path))}"]`);
     if (!tr) continue;
-    const cell = tr.querySelector("td.name");
+    // Inside the name cell's own flex row: appended to the <td> it lands after that row and drops onto a second
+    // line, which made a row taller the moment an agent started in it.
+    const cell = tr.querySelector("td.name > .name-line") || tr.querySelector("td.name");
     const existing = cell?.querySelector("[data-open-row]");
     const html = agentBadgeHtml(row);
     if (existing && !html) {
@@ -4639,7 +4641,7 @@ function paintAgentBadges() {
     }
     if (!html) continue;
     if (existing) existing.outerHTML = html;
-    else cell?.insertAdjacentHTML("beforeend", ` ${html}`);
+    else cell?.insertAdjacentHTML("beforeend", html);
   }
 }
 
@@ -6072,8 +6074,8 @@ function rowHtml(row) {
   const delKey = keyOf(row.project, row.path);
   const delDirect = !isProjectRoot && deletableWithoutAsking(delKey);
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
-    <td class="name"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button> <span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span> ${renameBtn} ${agentBadgeHtml(row)}</td>
+    <td class="name"><div class="name-line"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${agentBadgeHtml(row)}</div></td>
     <td class="mono branch">${esc(row.branch || "—")}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
@@ -7420,6 +7422,254 @@ function refreshChips(name) {
   if (el) el.innerHTML = chipsHtml(name);
 }
 
+// ---- column widths: measured from the rows, draggable, remembered ----------------------------
+// The table is `table-layout: fixed` on purpose (auto layout let one long branch grow it past its card), so every
+// column width is a number somebody has to choose. Percentages chose badly: the verdict column held 12.6% of the
+// row to show "NO COMMITS", and the worktree column held 28% to carry a name, a rename ✎ and the agent chips -
+// exactly what the name alone used up, so the chips were the part that got clipped while the far side of the row
+// sat empty. The split is now measured: each column asks for its widest cell, the columns that read the same at any
+// width give their room up first when the table is narrower than that, and the spare room goes to the two text
+// columns. A drag on the edge between two headers sets those two by hand (remembered in this browser, shared by
+// every project table); a double-click on any edge hands the board back to the measurement.
+const WT_COLS = 10;
+// Floors, measured off the real cell text at the panel's own font sizes: the hash, `0 / 0`, `+0/−0`, `none`,
+// `clean`/`3 +1?`, `0s` with the ring and one chip, `NO COMMITS` and the row's ✕ each fit whole at these numbers.
+// A long branch or a long `MERGED (squash/rebase, 3 commits)` still ellipsizes - that is the cheapest thing to lose.
+const COL_MIN = [170, 110, 70, 58, 56, 62, 64, 120, 104, 32];
+// How readily a column gives width back when the content is wider than the table, per column: 1 is a column that
+// says little at any width (`+0/−0`, `none`), 0.15 is one that must not move (the row's ✕). A column only ever gives
+// up its own slack above its floor, so the numbers decide how the squeeze is shared, not who is cut to the bone.
+const COL_GIVE = [0.35, 0.45, 1, 1, 1.1, 1.1, 1, 0.5, 0.5, 0.15];
+const COL_WIDTHS_KEY = "wtgui.colWidths";
+
+function loadColWidths() {
+  const out = new Array(WT_COLS).fill(null);
+  try {
+    const raw = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY) || "[]");
+    if (Array.isArray(raw)) for (let i = 0; i < WT_COLS; i += 1) if (Number.isFinite(raw[i]) && raw[i] > 0) out[i] = Math.round(raw[i]);
+  } catch {
+    /* a corrupt value is the same as none */
+  }
+  return out;
+}
+let colWidths = loadColWidths();
+
+function saveColWidths() {
+  try {
+    localStorage.setItem(COL_WIDTHS_KEY, JSON.stringify(colWidths));
+  } catch {
+    /* private mode: the widths just do not persist */
+  }
+}
+
+function headerCells(table) {
+  return table?.tHead?.rows?.[0] ? [...table.tHead.rows[0].cells] : [];
+}
+
+// What each column would be with nothing constraining it: the header text and every cell below it, chips and
+// buttons included. Measured on the real table by letting it lay out at max-content for one synchronous step and
+// putting the fixed split back before the frame paints - no clone, no flicker.
+function naturalColumnWidths(table) {
+  const ths = headerCells(table);
+  const kept = ths.map((th) => th.style.width);
+  const layout = table.style.tableLayout;
+  const width = table.style.width;
+  table.style.tableLayout = "auto";
+  table.style.width = "max-content";
+  for (const th of ths) th.style.width = "";
+  const natural = ths.map((th) => Math.ceil(th.getBoundingClientRect().width));
+  table.style.tableLayout = layout;
+  table.style.width = width;
+  ths.forEach((th, i) => {
+    th.style.width = kept[i];
+  });
+  return natural;
+}
+
+// What the columns want turned into what they get, in px, adding up to the table's own width.
+function columnPlan(natural, total) {
+  const fixed = colWidths.map((w) => w != null);
+  const want = natural.map((n, i) => (fixed[i] ? colWidths[i] : Math.max(COL_MIN[i], n)));
+  const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+  let spare = total - sum(want);
+  if (spare > 0) {
+    // Spare room belongs to the columns whose text truncates: 70/30 worktree and branch. A column the reader sized
+    // by hand is a promise, so it is skipped; with both text columns hand-set the room is spread over the rest.
+    let pool = [0, 1].filter((i) => !fixed[i]);
+    if (!pool.length) pool = want.map((_, i) => i).filter((i) => !fixed[i]);
+    if (!pool.length) pool = [0, 1];
+    if (pool.length === 1) want[pool[0]] += spare;
+    else if (pool.includes(0) && pool.includes(1)) {
+      const toName = Math.round(spare * 0.7);
+      want[0] += toName;
+      want[1] += spare - toName;
+    } else for (const i of pool) want[i] += Math.floor(spare / pool.length);
+  } else if (spare < 0) {
+    // Too narrow for the content: every column gives up the same fraction of what it can spare above its floor,
+    // weighted by how little that costs it. Proportional rather than one column at a time - draining the first
+    // column to its floor left it clipped mid-word while its neighbour sat at its full natural width.
+    let over = -spare;
+    for (let pass = 0; pass < 4 && over > 0.5; pass += 1) {
+      const room = want.map((w, i) => (fixed[i] ? 0 : Math.max(0, w - COL_MIN[i]) * COL_GIVE[i]));
+      const avail = sum(room);
+      if (!avail) break;
+      const take = Math.min(over, avail);
+      for (let i = 0; i < want.length; i += 1) if (room[i]) want[i] -= (room[i] / avail) * take;
+      over -= take;
+    }
+    // Every column at its floor and still too wide (a very narrow window): scale instead of letting the table grow
+    // past its card, which is the bug `table-layout: fixed` exists to prevent.
+    if (over > 0) {
+      const scale = Math.min(1, total / sum(want));
+      for (let i = 0; i < want.length; i += 1) want[i] = Math.max(24, Math.floor(want[i] * scale));
+    }
+  }
+  // Integers that add up to the table's width exactly: rounding lands on the worktree column, the one with room.
+  want[0] = Math.max(24, want[0] + (total - sum(want)));
+  return want;
+}
+
+function applyColumnWidths(table, widths) {
+  headerCells(table).forEach((th, i) => {
+    th.style.width = `${Math.max(24, Math.round(widths[i]))}px`;
+  });
+}
+
+// Measurements are only good while the cells are: a repaint that changed no text should not pay for a layout.
+const columnSigs = new WeakMap();
+
+function columnSignature(tbody) {
+  let chips = 0;
+  for (const el of tbody.querySelectorAll(".sig, .chip")) chips += 1;
+  return `${tbody.children.length}:${tbody.textContent.length}:${chips}`;
+}
+
+function fitColumns(table) {
+  // A scan landing mid-drag must not fight the pointer for the pair being sized.
+  if (colDrag) return;
+  const ths = headerCells(table);
+  if (ths.length !== WT_COLS) return;
+  installColumnGrips(table);
+  // clientWidth is the table's own content box: the fixed split has to add up to exactly this or the table
+  // overflows its card.
+  const total = Math.floor(table.clientWidth);
+  const tbody = table.tBodies[0];
+  if (!total || !tbody) return;
+  const sig = columnSignature(tbody);
+  if (columnSigs.get(table) === sig && ths[0].style.width) return;
+  columnSigs.set(table, sig);
+  applyColumnWidths(table, columnPlan(naturalColumnWidths(table), total));
+}
+
+// One measurement per table per frame, however many rows arrived this tick.
+const pendingFits = new Set();
+let fitScheduled = false;
+
+function scheduleColumnFit(table) {
+  if (!table || !table.isConnected) return;
+  pendingFits.add(table);
+  if (fitScheduled) return;
+  fitScheduled = true;
+  requestAnimationFrame(() => {
+    fitScheduled = false;
+    const tables = [...pendingFits];
+    pendingFits.clear();
+    // A new split can re-wrap a chip strip and make a row taller. Near the bottom of the page that shortens (or
+    // lengthens) the document under the reader, so the position is held across the measurement like any rebuild.
+    const pageY = window.scrollY;
+    for (const t of tables) if (t.isConnected) fitColumns(t);
+    if (window.scrollY !== pageY) {
+      const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
+      window.scrollTo({ top: Math.min(pageY, maxY) });
+    }
+  });
+}
+
+function fitAllColumns() {
+  const slot = $("projects");
+  if (!slot) return;
+  for (const table of slot.querySelectorAll("section.project > table")) {
+    columnSigs.delete(table);
+    fitColumns(table);
+  }
+}
+
+// ---- dragging a column edge ------------------------------------------------------------------
+// Only the two columns on either side of the grip move, and they trade width rather than push the rest of the row
+// around: the sum of the pair is what stays put. Released, the pair is remembered for every project's table.
+let colDrag = null;
+
+function installColumnGrips(table) {
+  const ths = headerCells(table);
+  ths.forEach((th, i) => {
+    // Nothing sits to the right of the ✕ column, and one grip per header is enough however often this repaints.
+    if (i === ths.length - 1 || th.querySelector(".col-grip")) return;
+    const grip = document.createElement("span");
+    grip.className = "col-grip";
+    grip.dataset.col = String(i);
+    grip.title = "drag to set this column's width · double-click to fit every column to its content again";
+    grip.addEventListener("pointerdown", beginColumnDrag);
+    grip.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      colWidths = new Array(WT_COLS).fill(null);
+      saveColWidths();
+      fitAllColumns();
+    });
+    th.appendChild(grip);
+  });
+}
+
+function beginColumnDrag(e) {
+  if (e.button !== 0) return;
+  const grip = e.currentTarget;
+  const table = grip.closest("table");
+  const i = Number(grip.dataset.col);
+  const widths = headerCells(table).map((th) => th.getBoundingClientRect().width);
+  if (!widths.length || widths[i + 1] == null) return;
+  colDrag = { grip, table, i, x: e.clientX, widths, pair: widths[i] + widths[i + 1], left: null };
+  grip.classList.add("is-dragging");
+  document.body.classList.add("col-resizing");
+  e.preventDefault();
+  e.stopPropagation();
+  window.addEventListener("pointermove", dragColumn);
+  window.addEventListener("pointerup", endColumnDrag, { once: true });
+  window.addEventListener("pointercancel", endColumnDrag, { once: true });
+}
+
+function dragColumn(e) {
+  if (!colDrag) return;
+  const { table, i, x, widths, pair } = colDrag;
+  const ths = headerCells(table);
+  const left = Math.max(COL_MIN[i], Math.min(pair - COL_MIN[i + 1], Math.round(widths[i] + (e.clientX - x))));
+  colDrag.left = left;
+  colDrag.right = Math.round(pair - left);
+  ths[i].style.width = `${colDrag.left}px`;
+  ths[i + 1].style.width = `${colDrag.right}px`;
+}
+
+function endColumnDrag() {
+  if (!colDrag) return;
+  const { grip, i, left, right } = colDrag;
+  colDrag = null;
+  window.removeEventListener("pointermove", dragColumn);
+  grip.classList.remove("is-dragging");
+  document.body.classList.remove("col-resizing");
+  // A press with no movement is a click on the edge, not a decision about the width.
+  if (left == null) return;
+  colWidths[i] = left;
+  colWidths[i + 1] = right;
+  saveColWidths();
+  fitAllColumns();
+}
+
+// A narrower window means the same content in less room, so the measurement is redone. Resizing the window fires
+// this continuously, and each fit costs a layout, so it waits for the drag to settle.
+let columnFitTimer = 0;
+window.addEventListener("resize", () => {
+  clearTimeout(columnFitTimer);
+  columnFitTimer = setTimeout(fitAllColumns, 140);
+});
+
 // ---- stabilize reordering -------------------------------------------------------------------
 // A list that re-sorts while the reader has something open in it moves the thing they are reading. With this on, a
 // list freezes the moment one of its own elements is expanded: a project's worktree rows stop re-ranking while any of
@@ -7722,6 +7972,9 @@ function placeRow(project, row, { flash = false } = {}) {
   }
   reorder(project);
   refreshChips(project);
+  // This row's cells may hold more or less than they did (a longer verdict, a chip that appeared): re-measure, once
+  // per frame however many rows of this project arrived in the same tick.
+  scheduleColumnFit(tbody.closest("table"));
   // The rebuild is one synchronous step, so a moved scroll is the browser clamping rather than the reader leaving:
   // put the page back before the sweep re-measures the anchor.
   if (window.scrollY !== pageY) {
@@ -7748,6 +8001,8 @@ function removeRow(project, p) {
     window.scrollTo({ top: Math.min(pageY, maxY) });
   }
   refreshChips(project);
+  // A row leaving takes its width requirement with it, so the split is measured again - after this tick, not inside it.
+  scheduleColumnFit(state.tbodyEls.get(project)?.closest("table"));
 }
 
 // Paint one project's rows into its (possibly just replaced) tbody.
@@ -7824,6 +8079,9 @@ function renderProjectRows(name, { typing = null } = {}) {
     endDomMove();
     // Nothing of this project's is on screen any more, so its confirmation is gone with it.
     for (const k of [...state.confirmEls.keys()]) if (state.rows.get(k)?.project === name) state.confirmEls.delete(k);
+    // The header is still on screen and its rows are not: measure it anyway, so opening the project later does not
+    // start from the percentage fallback.
+    fitColumns(tbody.closest("table"));
     return;
   }
   const live = new Set(built.map((b) => b.key));
@@ -7851,6 +8109,10 @@ function renderProjectRows(name, { typing = null } = {}) {
     if (state.rows.get(k)?.project !== name) state.detailEls.delete(k);
     else if (!state.expanded.has(k)) state.detailEls.delete(k);
   }
+  // The rows this table holds have just changed, so what each column has to be wide enough for changed with them.
+  // Measured here, before the position below is restored: a new split can re-wrap a chip strip and make a row
+  // taller, and a height change after the restore is a clamp the reader keeps.
+  fitColumns(tbody.closest("table"));
   // The swap can still change the document's height - a row that really did appear or go away. This whole rebuild is
   // one synchronous step, so a scroll that moved under it is the browser clamping (near the bottom, a shorter page
   // pulls the reader up), never the reader scrolling away: put the page back where it was.

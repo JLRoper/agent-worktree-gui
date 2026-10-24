@@ -188,6 +188,16 @@ opens and closes the project. Settings → Display → **Project colours** shows
 | **Verdict** | See below. |
 | ✕ | Remove the worktree (not offered on the project's own checkout row). |
 
+**Column widths are measured, not fixed.** Each column is sized from the widest thing it actually holds — its
+header, the longest branch name, the chips on a row — so the columns that say little (`Cherry`'s `+0/−0`, `PR`'s
+`none`) stay narrow and the room they gave up goes to the two columns whose text truncates: **Worktree** and
+**Branch**. In the worktree cell the name is what ellipsizes; the agent badge and the evidence chips keep their
+whole width, so what a row is doing is never the part that gets cut.
+
+Drag the edge between two column headers to set those columns by hand: the pair trades width, so the rest of the
+row does not move. The choice is remembered in this browser and applies to every project. **Double-click** any
+column edge to hand the board back to the measurement.
+
 The evidence chips are the only definition of "live" the board uses:
 
 | Chip | Evidence |
@@ -526,6 +536,7 @@ Configured in `config.json` (`liveSeconds`, `worktreeSeconds`, `dormantSeconds`,
 | Rows stop moving | The page may be paused, or the stream `reconnecting…`/`offline`. **Resume** or **Refresh now**. |
 | A project's numbers look old while it is off screen | With Settings → Board → Refresh: **only on screen**, off-screen projects are not read until you scroll them into view — and nothing is read at all while no page is open. |
 | A worktree will not delete | An agent run is live in it — stop the run first. |
+| A column is too narrow or too wide | Drag the edge between two column headers (the pair trades width); **double-click** any edge to go back to the measured split. Widths are remembered in this browser, so a reset is per browser too. |
 | `revive` is refused | That session already has a card on the board. |
 | A console result is cut short | The run stream carries a preview, not the full payload. See the README's troubleshooting section. |
 
