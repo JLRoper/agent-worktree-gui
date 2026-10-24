@@ -6,7 +6,7 @@
 // are about what the sentry decided: which alert fired, once, with which evidence, and whether a draft
 // was sent or only offered. The point is that the detection logic is testable at all - it reads the
 // board, so a fake board is a faithful input.
-import { mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Assistant, ASSISTANT_THREAD, parseActions, looksLikeQuestion, detectRepeat, detectCycle, detectErrorRepeat, isFailureLine, matchRule } from "../lib/assistant.js";
@@ -610,6 +610,39 @@ console.log("a restart resumes an interrupted turn, and a watchdog repairs the c
   eq(stopped[0], "asst-hung", "and it is stopped, not just noticed");
   ok(d.state().journal.some((j) => j.kind === "stalled"), "the journal says why it was stopped");
   d.stop();
+}
+
+console.log("the assistant's own working directory");
+{
+  // It does no file work, but the gateway refuses a run without an existing cwd. Borrowing a project
+  // checkout is what failed on a live panel once that checkout had been deleted, so it gets its own.
+  const a = make();
+  board = []; // the stall section left a live assistant turn on the fake board
+  const def = a.ensureCwd();
+  eq(def, path.join(dir, "assistant-cwd"), "the default is a folder beside the scratchpad");
+  ok(existsSync(def), "and it is created on demand");
+  eq(a.state().settings.cwd, "", "the setting stays empty until the reader picks one");
+
+  const custom = path.join(dir, "cwd-custom", "nested");
+  a.setSettings({ cwd: custom });
+  eq(a.state().settings.cwd, custom, "a chosen path is accepted as written");
+  ok(existsSync(custom), "and created when chosen, not on the first turn");
+
+  created.length = 0;
+  await a.say("hello");
+  eq(created[0]?.cwd, custom, "a turn runs in it");
+
+  // A path that cannot be created must not take every turn down with it: fall back to one that exists.
+  // It has to be under a real FILE, or mkdir -p happily makes it.
+  const blocker = path.join(dir, "not-a-dir.txt");
+  writeFileSync(blocker, "x");
+  const bad = path.join(blocker, "nested");
+  a.setSettings({ cwd: bad });
+  const used = a.ensureCwd();
+  ok(used !== bad && existsSync(used), "an unusable path falls back to one that exists", used);
+  eq(a.state().settings.cwd, bad, "the setting is kept as written, so the mistake is visible");
+  await a.say("hello again");
+  eq(created[1]?.cwd, used, "and the next turn still runs", created[1]?.cwd);
 }
 
 console.log("the action grammar");

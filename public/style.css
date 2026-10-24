@@ -1838,6 +1838,8 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-group .as-line label { display: flex; gap: 6px; align-items: center; color: var(--dim); }
 .as-group select, .as-group input[type="number"] { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; font-size: 11.5px; }
 .as-group input[type="number"] { width: 74px; }
+/* The working-dir field is a path: monospace, and wide enough to read one without scrolling it. */
+.as-group input[type="text"] { font-family: var(--mono); font-size: 11px; min-width: 250px; flex: 1 1 250px; }
 .as-group .as-help { font-size: 10.5px; color: var(--dimmer); line-height: 1.4; }
 .as-rule-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px solid #20262f; font-size: 11.5px; }
 .as-rule-row:last-child { border-bottom: 0; }

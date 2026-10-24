@@ -296,6 +296,10 @@ assistant = new Assistant({
   onEvent: broadcast,
   onLog: log,
 });
+// The assistant's own working directory, created before the first turn so it cannot be refused by the
+// gateway: this thread does no file work, and borrowing a project checkout is what broke a live panel when
+// that checkout had been deleted. Logged once, so the path is never a mystery in the boot log.
+log(`assistant cwd: ${assistant.ensureCwd()}`);
 assistant.start();
 
 // The sentry cannot report its own clock stopping, and a restart leaves its last turn `interrupted` with
