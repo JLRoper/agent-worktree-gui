@@ -158,6 +158,16 @@
       : "assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (Ctrl+Shift+A)";
   }
 
+  // A sentry that has stopped is the one failure the panel would otherwise show as "nothing wrong": the
+  // header says so, and Settings repeats it with the numbers. The server's watchdog is what repairs it.
+  function sentryState(h) {
+    if (!h) return null;
+    if (!h.timerAlive) return "stopped";
+    const every = (h.everySeconds || 5) * 1000;
+    if (h.lastTickAt && Date.now() - h.lastTickAt > every * 3) return "stale";
+    return null;
+  }
+
   function renderAssistant() {
     const a = state.assistant;
     const mode = a?.settings?.autonomy || "draft";
@@ -174,6 +184,7 @@
       as$("as-chips").innerHTML = [
         a?.running ? `<span class="chip warn" title="its own turn is running">thinking</span>` : "",
         a && a.enabled === false ? `<span class="chip" title="the sentry is off — no rule is being evaluated">off</span>` : "",
+        sentryState(a?.health) ? `<span class="chip warn" title="the sentry's clock is not running or has not ticked — the server watchdog restarts it, and this goes green again">sentry ${sentryState(a?.health)}</span>` : "",
         a ? `<span class="chip" title="self-wakes in the last hour (a rule set to wake, or an alert handed to it)">${a.wakes?.lastHour ?? 0}/${a.wakes?.limit ?? 0} wakes</span>` : "",
       ].join("");
     }
@@ -538,6 +549,9 @@
       "auto-safe": "auto-safe — send what the assistant writes",
       auto: "auto — send any draft it has text for",
     };
+    const health = a.health || {};
+    const hs = sentryState(health);
+    const lastPass = health.lastTickAt ? `${Math.max(0, Math.round((Date.now() - health.lastTickAt) / 1000))}s ago` : "not yet";
     host.innerHTML = `
       <div class="as-group">
         <h4>How it behaves</h4>
@@ -548,6 +562,7 @@
         <div class="as-line"><label>create worktrees <select data-as-set="spawn" title="whether the assistant may cut a worktree and start a worker — ask keeps a one-click card between it and git">${(a.spawnModes || ["off", "ask", "auto"]).map((v) => `<option value="${v}"${s.spawn === v ? " selected" : ""}>${v === "off" ? "off — it may not start workers" : v === "ask" ? "ask me first" : "start immediately"}</option>`).join("")}</select></label></div>
         <div class="as-line"><label>model <select data-as-set="model" title="the assistant's own model — pick something small and fast; the board digest is the whole input">${modelOptionsHtml(s.model || "")}</select></label></div>
         <div class="as-help">Draft-only is the default: a reply reaches a worker only when you press Send on it. Auto-safe sends a reply the assistant itself wrote with a TO line; auto also sends anything a standing rule drafted. Creating a worktree has its own switch: <b>ask me first</b> turns a SPAWN line into a card, and nothing runs until you press it. An approval is never answered from here at any setting.</div>
+        <div class="as-help">sentry: ${hs ? `<b>${esc(hs)}</b> — the server watchdog restarts the clock and runs a missed pass` : "clock running"} · last pass ${esc(lastPass)} · every ${esc(String(health.everySeconds || s.seconds))}s${health.resumed ? " · resumed after a restart" : ""}</div>
       </div>
       <div class="as-group">
         <h4>Thresholds</h4>
