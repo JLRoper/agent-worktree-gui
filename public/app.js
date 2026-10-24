@@ -80,6 +80,10 @@ const state = {
   // end, focused }. One at a time - it is a quick start, not a form - and kept here so a board repaint mid-sentence
   // does not eat the draft.
   addAgent: null,
+  // The order each row's agent cards were last painted in, by row key. "Stabilize reordering" holds a list still
+  // while something in it is open, and this is the order it holds: without it a rebuild would fall back to
+  // newest-turn-first and the frozen list would jump anyway.
+  agentOrder: new Map(),
   // Replies typed while the agent is still working, in the order they were written. They go out one
   // at a time as each turn finishes: Hermes refuses a second session on a thread already running.
   replyQueue: new Map(),
@@ -6799,7 +6803,9 @@ function detailHtml(row) {
     row.lastCommit ? `last commit ${relTime(row.lastCommit)} ago` : null,
     row.error ? `error: ${esc(row.error)}` : null,
   ].filter(Boolean);
-  const agents = agentsFor(row);
+  // orderedAgents: with "Stabilize reordering" on and an open card in this row, the cards keep the slots they have on
+  // screen instead of sorting to newest-turn-first under the one the reader is reading.
+  const agents = orderedAgents(row, agentsFor(row));
   // No heading: the row's own badge already says how many agents it owns and how many are running, and the
   // cards are the first thing under the row - a title above them only pushed them down.
   // A slot per card, not a copy of it: placeRow() moves the card that is already on the board into its slot.
@@ -7220,9 +7226,74 @@ function refreshChips(name) {
   if (el) el.innerHTML = chipsHtml(name);
 }
 
+// ---- stabilize reordering -------------------------------------------------------------------
+// A list that re-sorts while the reader has something open in it moves the thing they are reading. With this on, a
+// list freezes the moment one of its own elements is expanded: a project's worktree rows stop re-ranking while any of
+// them is open, and the agent cards in one worktree stop re-ranking while any of those cards is open. Off, everything
+// sorts on every paint as it always did. Saved in this browser.
+const STABILIZE_KEY = "wtgui.stabilize";
+function stabilizeOn() {
+  try {
+    const raw = localStorage.getItem(STABILIZE_KEY);
+    // On by default: a board that shuffles under an open row is the surprise, not the absence of shuffling.
+    return raw === null ? true : raw !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function applyStabilize(on) {
+  const box = $("stabilize-reorder");
+  if (box) box.checked = on;
+  try {
+    localStorage.setItem(STABILIZE_KEY, on ? "1" : "0");
+  } catch {
+    /* private mode: the choice just will not persist */
+  }
+  // Turned on, the current order is the order worth keeping: take it before the next paint re-sorts anything.
+  rememberAgentOrders();
+  renderAll();
+  scheduleRenderJobs();
+}
+
+// Is anything open in this list? Rows of a project, and cards of a row.
+function projectHasOpenRow(name) {
+  for (const key of state.expanded) if (state.rows.get(key)?.project === name) return true;
+  return false;
+}
+
+function rowHasOpenCard(threads) {
+  return threads.some((t) => !state.collapsedJobs.has(t));
+}
+
+// The order the cards in one row were last painted in, with anything new appended. A frozen list keeps this; a list
+// that is free to sort ignores it.
+function orderedAgents(row, agents) {
+  const key = keyOf(row.project, row.path);
+  if (!stabilizeOn() || !rowHasOpenCard(agents.map((c) => c.thread))) return agents;
+  const last = state.agentOrder.get(key);
+  if (!last || !last.length) return agents;
+  const pos = new Map(last.map((t, i) => [t, i]));
+  return [...agents].sort((a, b) => (pos.get(a.thread) ?? last.length) - (pos.get(b.thread) ?? last.length));
+}
+
+// Remember what was just painted, so the next frozen paint has an order to keep.
+function rememberAgentOrder(key, detail) {
+  if (!detail) return;
+  const order = [...detail.querySelectorAll(".job[data-thread]")].map((c) => c.dataset.thread).filter(Boolean);
+  if (order.length) state.agentOrder.set(key, order);
+  else state.agentOrder.delete(key);
+}
+
+function rememberAgentOrders() {
+  for (const [key, detail] of state.detailEls) rememberAgentOrder(key, detail);
+}
+
 function reorder(name) {
   const tbody = state.tbodyEls.get(name);
   if (!tbody) return;
+  // Stabilized: while one row of this project is open, none of them re-ranks around it.
+  if (stabilizeOn() && projectHasOpenRow(name)) return;
   // Re-appending a detail takes its cards out of the DOM on the way, which is enough to lose a selection.
   const heldSelection = captureCardSelection();
   // And enough to lose the caret: a re-rank of some OTHER worktree re-appends every row in this project, including
@@ -7433,6 +7504,7 @@ function placeRow(project, row, { flash = false } = {}) {
     // The cards move across before anything is measured, so "where was this console" is answered by the node
     // that is actually going to stay on screen.
     fillAgentSlots(dEl, oldCards);
+    rememberAgentOrder(key, dEl);
     restoreThinkBodies(dEl);
     // Put the reader back: the reply they were typing, where the caret was, and how far each
     // transcript had been scrolled.
@@ -7517,8 +7589,19 @@ function renderProjectRows(name, { typing = null } = {}) {
   const expanded = state.expandedProjects.has(name);
   const frag = document.createDocumentFragment();
   const built = [];
+  // Stabilized: while a row of this project is open, the rows keep the order they are already in on screen (a row
+  // that is genuinely new goes last). Only the painting order changes - the ranking is still there for when the
+  // reader closes everything.
+  const rowsInOrder = orderRows([...state.rows.values()].filter((r) => r.project === name));
+  if (stabilizeOn() && projectHasOpenRow(name) && prevRowKeys.length) {
+    const pos = new Map(prevRowKeys.map((k, i) => [k, i]));
+    rowsInOrder.sort(
+      (a, b) =>
+        (pos.get(keyOf(name, a.path)) ?? prevRowKeys.length) - (pos.get(keyOf(name, b.path)) ?? prevRowKeys.length),
+    );
+  }
   if (expanded) {
-    for (const row of orderRows([...state.rows.values()].filter((r) => r.project === name))) {
+    for (const row of rowsInOrder) {
       const key = keyOf(name, row.path);
       const holder = document.createElement("tbody");
       holder.innerHTML = rowHtml(row);
@@ -7560,6 +7643,7 @@ function renderProjectRows(name, { typing = null } = {}) {
     if (!dEl) continue;
     state.detailEls.set(key, dEl);
     fillAgentSlots(dEl, prevCards.get(key) || new Map());
+    rememberAgentOrder(key, dEl);
     restoreTyping(dEl, prevTyping.get(key) || null);
     restoreAddAgent(dEl);
   }
@@ -10582,6 +10666,7 @@ $("event-flash")?.addEventListener("change", (e) => {
   state.eventFlash = Boolean(e.target.checked);
   saveAnchorFlag(EVENT_FLASH_KEY, state.eventFlash);
 });
+$("stabilize-reorder")?.addEventListener("change", (e) => applyStabilize(Boolean(e.target.checked)));
 
 // Refresh everything, or only what is on screen. The scans happen in the server, so this is a server setting: it is
 // written to the panel's config.json and applies to whichever browser is open.
@@ -10740,6 +10825,7 @@ initQLook();
 // The question countdowns move on their own; nothing else in the panel needs a 1s clock.
 setInterval(tickQuestionClocks, 1000);
 applyGreyFlash(greyFlashOn());
+if ($("stabilize-reorder")) $("stabilize-reorder").checked = stabilizeOn();
 applyContrast(contrastSetting(), { save: false });
 applyAddBarBrightness(addBarBrightnessSetting(), { save: false });
 applyAddBarTop(addBarAtTop(), { save: false });
