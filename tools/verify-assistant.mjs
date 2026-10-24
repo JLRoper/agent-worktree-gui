@@ -9,7 +9,7 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { Assistant, ASSISTANT_THREAD, parseActions, looksLikeQuestion, detectRepeat, detectCycle, detectErrorRepeat, isFailureLine, matchRule } from "../lib/assistant.js";
+import { Assistant, ASSISTANT_THREAD, RULE_DEFS, parseActions, looksLikeQuestion, detectRepeat, detectCycle, detectErrorRepeat, isFailureLine, matchRule } from "../lib/assistant.js";
 
 const dir = mkdtempSync(path.join(tmpdir(), "assistant-test-"));
 const file = path.join(dir, "assistant.json");
@@ -584,6 +584,65 @@ console.log("a delegated child that has gone quiet");
   ok(!/hung/i.test(`${al?.title} ${al?.detail}`), "the wording is no-activity, never hung");
   a.tick();
   eq(a.state().alerts.filter((x) => x.rule === "child").length, 1, "one alert per child, not one per tick");
+}
+
+console.log("a turn cut off mid-flight");
+{
+  created.length = 0;
+  const a = make();
+  // The shipped default is alert, not wake: one panel restart rewrites every running turn as interrupted at
+  // once, so a wake default would spend the whole hourly budget on a single restart.
+  eq(a.settings.rules.interrupted, "alert", "the interrupted rule ships at alert, not wake");
+  eq(RULE_DEFS.interrupted?.default, "alert", "and RULE_DEFS — what the page renders — says the same");
+
+  // `jobs.load()` stamps an interrupted job with no endedAt; its last line is the only clock it leaves behind.
+  const cutId = "turn-cut-1";
+  board = [
+    job({
+      id: cutId,
+      thread: "wtgui-cut",
+      status: "interrupted",
+      endedAt: null,
+      startedAt: iso(t0 - 12 * 60_000),
+      lines: [line("tool", "💻 terminal · npm test", t0 - 4 * 60_000)],
+    }),
+  ];
+  a.tick();
+  const first = a.state().alerts.filter((x) => x.rule === "interrupted");
+  eq(first.length, 1, "one alert for the interrupted turn");
+  eq(first[0]?.turnId, cutId, "the alert names the turn");
+  eq(first[0]?.thread, "wtgui-cut", "and the thread");
+  ok(first[0]?.evidence.some((e) => e.label === "turn" && e.value === cutId), "the evidence carries the turn id", JSON.stringify(first[0]?.evidence));
+  ok(first[0]?.evidence.some((e) => e.label === "endedAt"), "and an endedAt line", JSON.stringify(first[0]?.evidence));
+  eq(created.length, 0, "an alert-default rule starts no assistant turn");
+
+  a.tick();
+  eq(a.state().alerts.filter((x) => x.rule === "interrupted").length, 1, "a second pass inside rearmSeconds does not repeat it");
+
+  // The turn after it took the thread over — that resume is what the interrupted turn was waiting for.
+  const b = make();
+  board = [
+    job({ id: "turn-resumed-2", thread: "wtgui-resumed", turn: 2, status: "running", startedAt: iso(t0 - 3 * 60_000) }),
+    job({ id: "turn-resumed-1", thread: "wtgui-resumed", turn: 1, status: "interrupted", endedAt: iso(t0 - 20 * 60_000), startedAt: iso(t0 - 30 * 60_000) }),
+  ];
+  b.tick();
+  eq(b.state().alerts.filter((x) => x.rule === "interrupted").length, 0, "an interrupted turn the thread has since moved past does not fire");
+
+  // The store's array order is a convenience, not the order of turns.
+  const c = make();
+  board = [
+    job({ id: "turn-order-3", thread: "wtgui-order", turn: 3, status: "interrupted", endedAt: iso(t0 - 2 * 60_000), startedAt: iso(t0 - 5 * 60_000) }),
+    job({ id: "turn-order-2", thread: "wtgui-order", turn: 2, status: "done", endedAt: iso(t0 - 8 * 60_000), startedAt: iso(t0 - 9 * 60_000) }),
+  ];
+  c.tick();
+  const latest = c.state().alerts.find((x) => x.rule === "interrupted");
+  ok(latest?.turnId === "turn-order-3", "the latest turn is read from its counter, not from its position", JSON.stringify(latest?.turnId));
+
+  // The escalation is wired through RULE_DEFS alone: pickRules keeps a rule only if RULE_DEFS has the key, so a
+  // rule the page offers is a rule the server will store — no second whitelist to keep in step.
+  const d = make();
+  d.setSettings({ rules: { interrupted: "wake" } });
+  eq(d.state().settings.rules.interrupted, "wake", "the reader can promote it to wake, and the server keeps it");
 }
 
 console.log("a restart resumes an interrupted turn, and a watchdog repairs the clock");

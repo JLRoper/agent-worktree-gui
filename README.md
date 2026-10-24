@@ -368,7 +368,7 @@ strip of content: drag it larger and the card fills it — the turns take the ne
 with it, and the composer stays at the foot. Only the turns scroll. It is two things:
 
 - **A sentry** that runs in the panel's own process, on `settings.seconds` (default 5 s), over the same job
-  summaries the cards are drawn from. It costs no tokens and it is always awake. Twelve rules:
+  summaries the cards are drawn from. It costs no tokens and it is always awake. Thirteen rules:
   `loop` (the same tool with the same input N times, read-only helpers held to a higher bar), `errorloop`
   (identical failing output), `quiet` (a running turn with no new output — a long build looks exactly like
   this, so it only journals by default), `approval` (parked longer than the threshold), `question` (a turn
@@ -384,7 +384,12 @@ with it, and the composer stays at the foot. Only the turns scroll. It is two th
   being a trigger)
   and `child` (a delegated subagent that has written nothing for `childQuietSeconds` — the wording is "no
   activity for 6m", never "hung": a long tool call looks the same; read from the gateway's session store, and
-  only for threads this board is showing). Every alert carries the evidence it was built from — counts,
+  only for threads this board is showing), plus `interrupted` (a thread whose latest turn ended `interrupted` —
+  a turn stopped without finishing, usually a panel restart; an interrupted turn a later turn has taken over is
+  history and does not fire. It alerts rather than wakes by default, because one restart rewrites every running
+  turn as interrupted at once and would spend the whole hourly wake budget in a single pass; raise it per rule
+  under **Settings → Per-rule escalation** when a cut-off turn is worth the assistant's opinion). Every alert
+  carries the evidence it was built from — counts,
   the repeated call, the failing line, the command being waited on — because "it looks stuck" is not
   actionable.
 - **A real agent thread** (`panel-assistant`) rendered inside the panel by the panel's own card renderer:
