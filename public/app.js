@@ -6087,9 +6087,15 @@ function ringState(row) {
   // Never shorter than the configured cadence, never more than 10x it (a stuck row must not turn
   // into a 10-minute ring that looks frozen).
   const every = Math.max(configured, Math.min(Math.round(observed), configured * 10));
-  const total = every * 1000;
-  const remain = Number.isFinite(scanned) ? Math.max(0, scanned + total - now) : 0;
-  const overdue = Number.isFinite(scanned) ? Math.max(0, now - (scanned + total)) : 0;
+  // Rows are deliberately staggered inside their cadence, so the moment this one is really due is the
+  // server's own stamp (`nextReadAt`), not scannedAt plus a cadence: sized from the cadence, a phased
+  // row's ring would fill early and then sit full until its turn came round. Fall back to the cadence
+  // when a row predates the field.
+  const dueRaw = Date.parse(row.nextReadAt || "");
+  const due = Number.isFinite(dueRaw) ? dueRaw : Number.isFinite(scanned) ? scanned + every * 1000 : NaN;
+  const total = Number.isFinite(due) && Number.isFinite(scanned) ? Math.max(1000, due - scanned) : every * 1000;
+  const remain = Number.isFinite(due) ? Math.max(0, due - now) : 0;
+  const overdue = Number.isFinite(due) ? Math.max(0, now - due) : 0;
   const frac = Math.min(1, remain / total);
   // The ring counts UP to the next read: empty the moment a row is scanned, full and green when it is
   // due again. `frac` is what is left, `fill` is what has elapsed.
