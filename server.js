@@ -17,6 +17,7 @@ import { Scheduler } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
 import { Jobs, hermesHome, makeThreadName, previewRequest } from "./lib/jobs.js";
 import { gitIn, scanWorktree } from "./lib/scan.js";
+import { resolveExistingTarget, resolutionNote } from "./lib/spawn-target.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
 import { Approvals } from "./lib/approvals.js";
@@ -337,24 +338,43 @@ async function assistantSpawnRun(spec = {}) {
     : projectForPath(spec.target);
   if (spec.existing) {
     // An agent in a directory that already exists: no tree is cut, and the card attaches to the git top level.
-    const cwd = path.resolve(String(spec.target || target?.path || ""));
-    try {
-      if (!(await stat(cwd)).isDirectory()) throw new Error("not a directory");
-    } catch {
-      throw new Error(`${cwd} does not exist or is not a directory`);
-    }
+    // The directory named is not taken on trust any more: the panel renames a finished run's worktree directory
+    // AND its branch after the thread title, so the path an assistant wrote down when it watched that worker
+    // finish, or a reader typed from an older report, is one rename out of date while the tree stands. Resolve
+    // it against git's own worktree list (lib/spawn-target.js) — one match is used and named on the card,
+    // several are an error that lists them, none keeps the refusal this line always gave.
+    const res = await resolveExistingTarget({
+      target: spec.target || target?.path,
+      // A path inside a project is that project's business; a branch or a bare worktree name carries no path to
+      // place, so the registry is the search space.
+      project: target,
+      projects: registry.projects,
+      thread: spec.thread || null,
+    });
+    if (!res.ok) throw new Error(res.error);
+    const cwd = res.path;
     const blocked = await spawnBlocker(cwd, null);
     const top = await gitIn(cwd, ["rev-parse", "--show-toplevel"]);
     const ownerPath = top.ok && top.out ? top.out : cwd;
     const norm = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    // A resolved tree can name a project the line itself never did (a branch is not a path), and that project is
+    // what decides whether this run stays in the project's own checkout rather than a branch of its own.
+    const home = target || registry.projects.find((p) => p.name === res.project) || null;
+    const note = resolutionNote(res);
     return jobs.create({
       prompt,
       cwd,
       existing: true,
       ownerPath,
       ownerPending: false,
-      baseCheckout: Boolean(target && norm(ownerPath) === norm(target.path)),
-      origin: { kind: "assistant-spawn", where: "existing" },
+      baseCheckout: Boolean(home && norm(ownerPath) === norm(home.path)),
+      // The card says which tree a stale name resolved to, not just that something ran.
+      note: note ? `SPAWN IN ${note}` : null,
+      origin: {
+        kind: "assistant-spawn",
+        where: "existing",
+        ...(res.resolved ? { resolvedFrom: res.asked, resolvedPath: res.path, resolvedHow: res.how } : {}),
+      },
     });
   }
   if (!target) throw new Error(`unknown project: ${spec.target || spec.project || "(none)"}`);
@@ -1047,16 +1067,20 @@ const server = createServer(async (req, res) => {
       if (!transport.reachable || !transport.capabilities?.runs) {
         return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}` });
       }
-      const cwd = body.cwd || target?.path || config.defaultCwd;
+      let cwd = body.cwd || target?.path || config.defaultCwd;
       // "existing": run in a directory that is already there (a worktree you picked), so no
       // worktree is created and the agent's edits land directly in that tree.
       const existing = Boolean(body.existing);
+      // A directory that is already there is still the first answer, but a missing one is no longer the end of
+      // the request: the panel renames a finished run's worktree directory and its branch after the thread
+      // title, so a path this card was holding can be one rename out of date while the tree stands. Resolved
+      // against git's own worktree list — one match is used and named on the card, several list themselves,
+      // none keeps the refusal this endpoint always gave.
+      let picked = null;
       if (existing) {
-        try {
-          if (!(await stat(cwd)).isDirectory()) return sendJson(res, 400, { error: `${cwd} is not a directory` });
-        } catch {
-          return sendJson(res, 400, { error: `${cwd} does not exist` });
-        }
+        picked = await resolveExistingTarget({ target: cwd, project: cwdProject || pickerTarget, projects: registry.projects });
+        if (!picked.ok) return sendJson(res, 400, { error: picked.error, candidates: picked.candidates });
+        cwd = picked.path;
       }
       const blocked = await spawnBlocker(cwd, existing ? null : target);
       if (blocked) return sendJson(res, 400, { error: blocked, blocked });
@@ -1072,8 +1096,20 @@ const server = createServer(async (req, res) => {
       // say so, because that is the difference between an agent working in a branch of its own and one
       // editing the tree the reader has checked out.
       const norm = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-      const baseCheckout = Boolean(existing && cwdProject && norm(ownerPath || cwd) === norm(cwdProject.path));
-      const job = await jobs.create({ ...body, cwd, existing, ownerPath, ownerPending: !existing, baseCheckout });
+      // A resolved tree can belong to a project the typed directory never named (a branch is not a path).
+      const home = (picked?.project ? registry.projects.find((p) => p.name === picked.project) : null) || cwdProject || null;
+      const baseCheckout = Boolean(existing && home && norm(ownerPath || cwd) === norm(home.path));
+      const note = picked ? resolutionNote(picked) : "";
+      const job = await jobs.create({
+        ...body,
+        cwd,
+        existing,
+        ownerPath,
+        ownerPending: !existing,
+        baseCheckout,
+        // The card says which tree a stale path resolved to, not just that something ran.
+        note: note ? `SPAWN IN ${note}` : null,
+      });
       return sendJson(res, 202, { job });
     }
 

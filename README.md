@@ -48,6 +48,12 @@ diffs it against the panel (exit 1 on any mismatch) — useful after touching th
 card that mis-filed five reviewers, then the edges around it — useful after touching how a turn owns
 the subagents it delegated.
 
+`node tools/verify-spawn-target.mjs` cuts a worktree in a throwaway repo, renames it the way the panel
+renames one, and makes `lib/spawn-target.js` find it again — by the stale path, a branch, a worktree
+directory name, the tag alone and a thread's slug — then checks both refusals (several matches name their
+candidates, none keeps the old wording) and that the card says which tree was picked — useful after
+touching what a SPAWN IN line may name.
+
 ## Two halves
 
 ### Monitor (read-only)
@@ -478,7 +484,24 @@ The assistant acts by writing plain lines at the end of a reply, and only those 
     NOTE: something to remember
     RULE: a standing answer you are sure of
     SPAWN <project> | what the new worker should do
-    SPAWN IN <directory> | what the worker should do in that tree       (no new worktree)
+    SPAWN IN <directory, worktree directory name, or branch> | what the worker should do in that tree  (no new worktree)
+
+**A SPAWN IN name that is out of date is resolved, not refused.** The panel renames a finished run's worktree
+directory and its branch after the thread title (`renameWorktree` — the slug is rebuilt from the title, the
+six-hex tag kept), so a path the assistant wrote down when that worker finished, or one typed from an older
+report, stops existing while the tree is standing one directory over. So an existing-tree spawn no longer
+requires the path to BE a directory before it looks further (`lib/spawn-target.js`, used by both
+`/api/assistant/spawn` and the New-agent card): the path as written first — absolute, or relative to the panel,
+the project's own checkout and that project's `.worktrees/` — then `git worktree list --porcelain` for the
+project, matched on the worktree directory name, the branch, the tag a rename keeps, or the slug cut from the
+same prompt. A branch may be named in place of a path (`SPAWN IN wtgui/fix-the-thing-1a2b3c`), and a thread's
+slug counts as the same signal when a caller knows the thread. Exactly one match is used — and the card says
+which and why (`resolved to …` on the assistant's card, a `SPAWN IN … → … (matched …)` line on the run's own
+card, and the same in the origin chip's tooltip) — several is a refusal that names every candidate, and none
+keeps the refusal the panel always gave, word for word: `<path> does not exist or is not a directory`. A match
+that is not a directory when it is read back refuses too: this resolves a name, it never "starts anyway", and the
+409 guards that keep the panel's index honest (`already being read`, `already merging this worktree`, `already
+has commits`, `already exists`) are untouched by it.
 
 `RULE:` lets the assistant maintain its own standing answers while it watches — the case that prompted it was
 "an interrupted agent gets exactly one continue". Such a rule is part of the normal rules list from then on, so
