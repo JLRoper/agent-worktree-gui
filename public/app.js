@@ -4323,7 +4323,6 @@ function paintThink(turn, copy = "") {
   const key = turnKey(turn, copy);
   const el = document.querySelector(`details.think[data-think-turn="${CSS.escape(key)}"]`);
   if (!el) return;
-  const open = el.open;
   const was = el.querySelector(".think-body");
   // A re-read replaces the node, and a new node starts at its first line. Remember where the reader was (and what
   // the panel last put there, so the scroll event the move causes is not read as the reader scrolling).
@@ -4332,10 +4331,6 @@ function paintThink(turn, copy = "") {
   holder.innerHTML = thinkHtml(turn, copy);
   const fresh = holder.firstElementChild;
   if (!fresh) return;
-  if (fresh.open !== open) {
-    fresh.open = open;
-    thinkAutoOpened.add(fresh);
-  }
   el.replaceWith(fresh);
   const body = fresh.querySelector(".think-body");
   if (!body) return;
