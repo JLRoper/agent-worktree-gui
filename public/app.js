@@ -6047,6 +6047,103 @@ async function renameWorktreePrompt(btn) {
   }
 }
 
+// ---- merge control: the UNMERGED chip ------------------------------------------------------
+// A row that carries commits main does not have is the one row with an action worth taking, so that chip is a button:
+// one click starts an agent IN that worktree whose whole job is to land the branch (the script is lib/merge-prompt.js
+// on the server). The button exists only while the tree is clean — a merge agent commits what it finds, so a
+// half-finished tree would land somebody else's work — and while no merge agent is already working that tree. Both
+// facts are re-read from git by the route, so a stale board cannot start one by accident.
+const mergeInFlight = new Map();
+// The chip a press started on, so a release that lands on a rebuilt one still starts the same merge.
+let mergePress = null;
+
+function mergeAgentLabel(row) {
+  for (const a of agentsFor(row) || []) {
+    const label = String(a?.latest?.label || a?.first?.label || "");
+    if (!label.startsWith("MERGING into ")) continue;
+    if (convLive(a)) return label;
+  }
+  return null;
+}
+
+function baseBranchOf(row) {
+  return String(state.projects.get(row.project)?.mainBranch || "").trim() || "main";
+}
+
+function verdictHtml(row) {
+  const verdict = String(row.verdict || "");
+  const cls = `badge ${verdictClass(verdict)}${row.verdictStale ? " stale" : ""}`;
+  const text = esc(row.verdict);
+  // Every other verdict is a statement; only UNMERGED has an action behind it.
+  if (!verdict.startsWith("UNMERGED")) return `<span class="${cls}">${text}</span>`;
+  const key = keyOf(row.project, row.path);
+  const attrs =
+    `data-merge-start="${esc(key)}" data-merge-project="${esc(row.project)}" data-merge-path="${esc(row.path)}"` +
+    ` data-merge-branch="${esc(row.branch || "")}" data-merge-label="${esc(row.verdict)}"`;
+  const merging = mergeAgentLabel(row);
+  if (merging) {
+    return `<button type="button" class="${cls} merge-start is-merging" ${attrs} disabled title="${esc(
+      `${merging} is working this tree now — its card is under this row`,
+    )}">${text}</button>`;
+  }
+  const dirty = Number(row.dirty) || 0;
+  const untracked = Number(row.untracked) || 0;
+  if (dirty || untracked) {
+    // Not a dead button: the chip stays a statement and its tooltip says what would make it an action, so a click
+    // can never start a merge over uncommitted work.
+    return `<span class="${cls}" title="${esc(
+      `this is merged by an agent, not by hand: ${dirty} modified and ${untracked} untracked file(s) are somebody's unfinished work — commit or stash them and the button appears`,
+    )}">${text}</span>`;
+  }
+  const base = baseBranchOf(row);
+  return `<button type="button" class="${cls} merge-start" ${attrs} title="${esc(
+    `start an agent here that merges ${row.branch || "this branch"} into ${base}: fast-forward first, then a rebase or a real merge, ` +
+      `never dropping ${base}'s own code; it runs the unit, integration and Playwright tests on a port of its own, ` +
+      `pushes only when they pass, and stops every server it started`,
+  )}">${text}<span class="merge-glyph" aria-hidden="true">\u21e5</span></button>`;
+}
+// ---- end merge control
+
+// One click, and the agent is the server's business: this only says where. A repaint can replace the button between
+// press and release (the board rebuilds the table on every scan), so the click is taken at pointerup in the delegated
+// handler and the request is keyed on the row, not on the node.
+async function startMerge(btn) {
+  const path = btn.dataset.mergePath || "";
+  const project = btn.dataset.mergeProject || "";
+  if (!path) return;
+  const key = btn.dataset.mergeStart || keyOf(project, path);
+  if (Date.now() - (mergeInFlight.get(key) || 0) < 15000) return;
+  mergeInFlight.set(key, Date.now());
+  const label = btn.dataset.mergeLabel || btn.textContent || "";
+  btn.disabled = true;
+  btn.classList.add("is-starting");
+  btn.textContent = "starting…";
+  try {
+    const r = await apiFetch(
+      "/api/worktree/merge",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project, path }) },
+      { timeoutMs: 120000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    showBanner(`${d.label || "MERGING"} started · ${d.branch || "branch"} → ${d.base || "base"}${d.job?.id ? ` · ${d.job.id}` : ""}`);
+    if (d.job) {
+      updateJob(d.job, { scroll: false });
+      revealSpawnedAgent(d.job);
+    }
+    await resync();
+  } catch (e) {
+    mergeInFlight.delete(key);
+    showBanner(`could not start the merge — ${String(e.message || e)}`);
+  } finally {
+    if (btn.isConnected) {
+      btn.disabled = false;
+      btn.classList.remove("is-starting");
+      btn.textContent = label;
+    }
+  }
+}
+
 function rowHtml(row) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   const dirty =
@@ -6058,7 +6155,7 @@ function rowHtml(row) {
     : row.remoteBranch === "gone"
       ? `<span class="dimmer">none · branch gone</span>`
       : `<span class="dimmer">none</span>`;
-  const badge = `<span class="badge ${verdictClass(row.verdict)}${row.verdictStale ? " stale" : ""}">${esc(row.verdict)}</span>`;
+  const badge = verdictHtml(row);
   // The project's own checkout is not a worktree anyone may delete or rename from here: it keeps the folder's name.
   const isProjectRoot = isProjectRootRow(row);
   // A tree is named from the prompt, cut at 24 characters; the agent names itself better a moment later. The button
@@ -6083,7 +6180,7 @@ function rowHtml(row) {
     <td>${pr}</td>
     <td class="mono nowrap">${dirty}</td>
     ${ageCellHtml(row)}
-    <td>${badge}</td>
+    <td class="verdict">${badge}</td>
     <td class="row-actions">${isProjectRoot ? "" : `<button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>
   </tr>`;
 }
@@ -9804,6 +9901,12 @@ document.addEventListener("keydown", async (e) => {
     if (state.hot.on) hotAfterSend(thread);
   }
 });
+// A press on the merge chip is remembered until the release: the verdict cell above is rebuilt on every scan.
+document.addEventListener("pointerdown", (e) => {
+  const btn = e.target.closest && e.target.closest(".merge-start[data-merge-start]");
+  mergePress = btn ? { key: btn.dataset.mergeStart, at: Date.now() } : null;
+});
+
 // Answering an approval happens on pointerup, not on click: a repaint between the press and the release replaces
 // the button, and the browser then delivers no click at all. The choices are explicit buttons, so the release is
 // the decision; `approvalSent` makes the click that sometimes still follows a no-op.
@@ -9835,6 +9938,26 @@ document.addEventListener("pointerup", (e) => {
   if (delConfirm) {
     e.preventDefault();
     answerRowConfirm(delConfirm.dataset.delTreeYes ? "yes" : "no", delConfirm.dataset.delTreeYes || delConfirm.dataset.delTreeNo);
+    return;
+  }
+  // The UNMERGED chip starts a merge agent - the same swallowed-click failure as the buttons above, on the busiest
+  // table in the panel. Taken here, matched on the row rather than on the node: a scan repaint that replaces the
+  // button mid-press lands the release on the cell it rebuilt, and the key recorded at press still names the row.
+  const mergeBtn = e.target.closest && e.target.closest(".merge-start[data-merge-start]");
+  if (mergeBtn && !mergeBtn.disabled) {
+    e.preventDefault();
+    mergePress = null;
+    void startMerge(mergeBtn);
+    return;
+  }
+  const pressed = mergePress;
+  mergePress = null;
+  if (pressed && Date.now() - pressed.at < 2000 && e.target.closest?.("td.verdict")) {
+    const built = document.querySelector(`[data-merge-start="${CSS.escape(pressed.key)}"]`);
+    if (built && !built.disabled && built.closest("tr.row")?.dataset.key === pressed.key) {
+      e.preventDefault();
+      void startMerge(built);
+    }
   }
 });
 

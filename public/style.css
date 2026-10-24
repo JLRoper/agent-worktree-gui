@@ -1691,6 +1691,23 @@ button.btn-row-agent.is-probing { opacity: .55; cursor: progress; }
 .badge.error { color: var(--dim); background: #20242c; border-color: var(--line); }
 .badge.stale { opacity: .65; border-style: dashed; }
 
+/* The UNMERGED chip is a control, not a statement: it starts the merge agent for its row. It keeps the badge's own
+   colours and shape (it is still a verdict), and only gains what a button needs - a pointer, a hover that is visibly
+   the same red, and a press that answers. `is-merging` is a live merge agent in that tree; the server refuses a second
+   one anyway, so the disabled state is the honest one to draw. A dirty row's chip stays a span: pressing it can do
+   nothing, and a dead button is worse than a sentence. */
+.badge.merge-start { font-family: inherit; cursor: pointer; }
+/* The glyph is the whole affordance, the way the ↻ on NOT-RUNNING is: a status chip that names an action is the
+   button, so it says so on its own face instead of growing a second control beside it. */
+.merge-glyph { margin-left: 6px; font-size: 11px; opacity: .75; }
+.badge.merge-start:hover .merge-glyph { opacity: 1; }
+.badge.merge-start:hover { background: #4a1f24; border-color: #8f3b41; color: #ffb4ad; }
+.badge.merge-start:active { transform: translateY(1px); }
+.badge.merge-start:focus-visible { outline: 2px solid #ff9c94; outline-offset: 1px; }
+.badge.merge-start:disabled { cursor: default; transform: none; }
+.badge.merge-start.is-merging,
+.badge.merge-start.is-starting { opacity: .7; background: var(--red-bg); border-color: #57262a; color: #ff9c94; }
+
 .clean { color: #7ee787; }
 .dirty { color: #f0c674; }
 .pr-open { color: #f0c674; }

@@ -216,11 +216,37 @@ If none of them fired, the row is not live — whatever processes may be running
 | `MERGED (N commits)` | The branch carried commits of its own and they are in remote main. `MERGED (squash/rebase, N commits)` is the same claim proved by patch id instead of ancestry; `MERGED (content identical)` says the branch's tree already matches main. |
 | `NO COMMITS` | The branch never moved off the commit it was created at. Nothing to merge; nothing was merged — and it is deliberately *not* counted as safe to remove. `NO COMMITS?` means the reflog is missing or expired, so the panel cannot tell whether the branch ever moved and will not claim it did. |
 | `ON MAIN` | This is the primary checkout of the main branch. |
-| `UNMERGED (N commits)` | Carries `N` commits that are not on remote main. |
+| `UNMERGED (N commits)` | Carries `N` commits that are not on remote main. On a clean tree the badge **is a button** (`⇥` on its face): it starts a `MERGING into MAIN` agent for that row — see [Merging a branch from the board](#merging-a-branch-from-the-board). |
 | `EMPTY REPO` / `NO BASE REF` | There is nothing to judge against: the repo has no commits yet, or its remote base ref does not exist here. |
 | *(empty, grey)* | Not computed yet. A dashed grey badge is a verdict being reclassified after a change. |
 
 `MERGED` + clean + not live is what the project's **safe to remove** chip counts.
+
+### Merging a branch from the board
+
+A clean `UNMERGED (N commits)` badge is a button; the `⇥` on its face is the whole affordance. One press starts a
+Hermes agent **in that worktree**, named `MERGING into MAIN` (`MERGING into MASTER`, or whatever the project's base
+branch is called — the label is set the moment the run is created, so the card says it before it draws), whose only
+job is to land the branch:
+
+- it re-reads the tree and stops if anything is modified or untracked;
+- it tries `git merge --ff-only` in the project's own checkout, so a branch that is simply ahead cannot lose a line of
+  what the base already has; a base that moved on is handled by rebasing the branch and retrying, or by a real merge
+  commit in a repo that keeps them — conflicts are resolved by keeping both sides, never by dropping the base's code;
+- it proves nothing was lost (`git diff --diff-filter=D` against the pre-merge sha) and will not leave a merge that
+  deleted a file the branch itself did not delete;
+- it runs the repo's own unit, integration and Playwright tests — Playwright against a server **it starts on a free
+  port of its own** (or a compose project named `wtgui-merge-<stamp>`), never this panel's port and never a server it
+  did not start;
+- it pushes only when the tests pass, and stops every server, container, network and volume it started before it
+  writes its report.
+
+The button is only drawn while the tree is clean. A row with modified or untracked files keeps the plain badge and its
+tooltip says what to do first — a merge agent commits what it finds, so a half-finished tree would land somebody
+else's work. A row that already has a merge agent working it draws a disabled `MERGING into …` chip whose tooltip
+names the agent. The route (`POST /api/worktree/merge {project, path}`) refuses all of those cases again from git, so
+a board that is a scan behind cannot start one by accident; `{dryRun: true}` returns the prompt without starting
+anything, and the script itself is `lib/merge-prompt.js`.
 
 ### Opening a row
 

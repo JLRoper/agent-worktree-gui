@@ -16,7 +16,8 @@ import { Store } from "./lib/store.js";
 import { Scheduler } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
 import { Jobs, hermesHome, makeThreadName, previewRequest } from "./lib/jobs.js";
-import { gitIn } from "./lib/scan.js";
+import { gitIn, scanWorktree } from "./lib/scan.js";
+import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
 import { Approvals } from "./lib/approvals.js";
 import {
@@ -1720,6 +1721,93 @@ const server = createServer(async (req, res) => {
       scheduler.lastFast.set(`${projectName}::${rowPath}`, Date.now());
       const merged = await scheduler.scanOne(project, rowPath, "full");
       return sendJson(res, 200, { ok: true, row: merged });
+    }
+
+    // The UNMERGED chip's button: start the merge agent for one worktree. The board's verdict is a scan behind and
+    // a half-finished tree is the one thing that must never be merged, so every fact the button's enabled state
+    // claims is re-read here, from git, before a run exists. The prompt is lib/merge-prompt.js (the script the agent
+    // is held to); `dryRun` hands it back for a preview without starting anything.
+    if (route === "/api/worktree/merge" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const asked = String(body.path || "").trim();
+      if (!asked) return sendJson(res, 400, { error: "path is required" });
+      const worktree = path.resolve(asked);
+      const info = await stat(worktree).catch(() => null);
+      if (!info || !info.isDirectory()) return sendJson(res, 404, { error: `no such directory: ${worktree}` });
+      // A worktree can live anywhere (`git worktree add ../tree`), so a path outside the project's own root is not an
+      // error by itself: the row's project is the hint, and git's own worktree list is the proof that the hint is real.
+      let project = projectForPath(worktree) || registry.projects.find((p) => normPathKey(p.path) === normPathKey(worktree));
+      let trees = project ? await worktreeList(project.path).catch(() => []) : [];
+      if (!project) {
+        const hinted = registry.projects.find((p) => p.name === String(body.project || "").trim());
+        if (hinted) {
+          const listed = await worktreeList(hinted.path).catch(() => []);
+          if (listed.some((w) => normPathKey(w.path) === normPathKey(worktree))) {
+            project = hinted;
+            trees = listed;
+          }
+        }
+      }
+      if (!project) return sendJson(res, 400, { error: `${worktree} is not inside a known project, and is not one of its worktrees` });
+      const base = String(project.mainBranch || "");
+      if (!base) return sendJson(res, 400, { error: `${project.name} has no base branch (no main/master and no remote default) to merge into` });
+      const remote = project.remote || null;
+      const baseRef = remote ? `${remote}/${base}` : base;
+      const row = await scanWorktree(worktree, { remoteRef: baseRef, mainBranch: base }, "fast");
+      if (row.error) return sendJson(res, 400, { error: row.error });
+      if (row.branch === base) return sendJson(res, 409, { error: `${path.basename(worktree)} is on ${base} itself — there is nothing to land` });
+      if (row.ahead === null) return sendJson(res, 409, { error: `cannot count commits against ${baseRef} in this worktree — is the base ref there?` });
+      if (row.ahead === 0) return sendJson(res, 409, { error: `${row.branch} has no commits off ${base} — nothing to land` });
+      const dirty = Number(row.dirty) || 0;
+      const untracked = Number(row.untracked) || 0;
+      if (dirty || untracked) {
+        return sendJson(res, 409, {
+          error: `the tree is not clean (${dirty} modified, ${untracked} untracked) — commit or stash them first, so a merge cannot carry someone else's work`,
+        });
+      }
+      const label = mergeLabel(base);
+      // One merge agent per worktree: a second would race the first over the same base branch.
+      const live = jobs
+        .list()
+        .find((j) => ["running", "starting"].includes(String(j.status)) && normPathKey(j.ownerPath || j.cwd) === normPathKey(worktree) && String(j.label || "").startsWith("MERGING into "));
+      if (live) return sendJson(res, 409, { error: `an agent is already merging this worktree (${live.label || live.thread})` });
+      const list = await gitIn(worktree, ["log", "--oneline", "-20", `${baseRef}..HEAD`], 20000);
+      const commitList = list.ok ? list.out.split("\n").filter(Boolean) : [];
+      // Where the base branch is actually checked out — normally the project's own checkout, but the worktree list
+      // read above is the only thing that knows, and merging into a branch that is checked out elsewhere needs that
+      // directory.
+      const root = (trees.find((w) => w.branch === base) || trees[0] || { path: project.path }).path;
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const prompt = mergePrompt({
+        project: project.name,
+        worktree,
+        root,
+        branch: row.branch,
+        base,
+        remote,
+        baseRef,
+        ahead: row.ahead,
+        commits: commitList,
+        stamp,
+        panelPort: config.port,
+      });
+      const thread = makeThreadName(`${label} ${project.name}`);
+      const preview = { project: project.name, base, baseRef, remote, branch: row.branch, ahead: row.ahead, root, worktree: worktree.replace(/\\/g, "/"), label, thread, prompt };
+      if (body.dryRun) return sendJson(res, 200, { dryRun: true, ...preview });
+      const transport = await jobs.probe();
+      if (!transport.reachable || !transport.capabilities?.runs) {
+        return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}` });
+      }
+      const top = await gitIn(worktree, ["rev-parse", "--show-toplevel"], 15000);
+      const ownerPath = top.ok && top.out ? top.out : worktree;
+      const job = await jobs.create({ prompt, thread, cwd: worktree, existing: true, ownerPath, project: project.name });
+      // The card is named for the job it is doing before it draws: the label survives the thread for good, and it is
+      // what the route above reads back to refuse a second merge agent in the same tree.
+      jobs.setLabel(job.thread, label);
+      if (job.status === "failed") return sendJson(res, 502, { error: job.error || "the run could not be started", job, ...preview, prompt: undefined });
+      log(`merge ${row.branch} -> ${base} in ${project.name}: job ${job.id} (${job.status})`);
+      return sendJson(res, 202, { job, ...preview });
     }
 
     // Give a worktree a name of its own: the directory and its branch. The row is looked up by path, and the whole
