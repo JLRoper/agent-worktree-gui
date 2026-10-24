@@ -36,7 +36,11 @@ const dirOf = (p) => String(p).replace(/\\/g, "/").split("/").filter(Boolean).po
 const dir = mkdtempSync(path.join(tmpdir(), "spawn-target-"));
 // No gateway listens on this port: a run posted here fails immediately, which is what the card-only assertions
 // need — a card's lines are pushed before the request goes out.
-const jobs = new Jobs({ jobsFile: null, apiServer: { url: "http://127.0.0.1:9" } });
+// The constructor destructures its argument, so the config has to arrive UNDER `config`: a flat
+// { jobsFile, apiServer } drops both keys, apiConfig falls back to the live gateway on 8642, and the
+// create() at the bottom of this file then starts a REAL run in this throwaway tree that `finally`
+// deletes a second later — an agent left standing in a directory that is gone.
+const jobs = new Jobs({ config: { jobsFile: null, apiServer: { url: "http://127.0.0.1:9" } } });
 const tmpLogs = path.join(dir, "logs");
 mkdirSync(tmpLogs, { recursive: true });
 
