@@ -32,6 +32,7 @@ import { Approvals } from "./lib/approvals.js";
 import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyLabel } from "./lib/remote-writes.js";
 import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
 import { safeUrl, openerFor } from "./lib/open-url.js";
+import { errorStatus } from "./lib/errors.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
   clarifyWindowSeconds, approvalWindowSeconds,
@@ -2754,7 +2755,19 @@ const server = createServer(async (req, res) => {
 
     return serveStatic(req, res, route);
   } catch (e) {
-    sendJson(res, 400, { error: String((e && e.message) || e) });
+    // The answer may already be on the wire (a static file half-written, an SSE client that died
+    // mid-write). sendJson there throws ERR_HTTP_HEADERS_SENT *inside* the catch, which rejects the
+    // async handler - an unhandled rejection from a routine client disconnect, and a possible exit.
+    if (res.headersSent) {
+      log(`${req.method} ${route} failed after the headers were sent: ${String((e && e.message) || e)}`);
+      return res.destroy();
+    }
+    // A caller's mistake is one the handler named (HttpError). Everything else is a bug in this
+    // process: 500 and a log line, instead of the 400 that used to make it invisible.
+    const status = errorStatus(e);
+    const detail = String((e && e.message) || e);
+    if (status >= 500) log(`${req.method} ${route} failed (${status}): ${detail}${e?.stack ? `\n${e.stack}` : ""}`);
+    return sendJson(res, status, { error: status >= 500 ? `the panel could not answer that: ${detail}` : detail });
   }
 });
 
