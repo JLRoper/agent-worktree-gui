@@ -1,7 +1,10 @@
 # Setup on a new machine (agent-executable)
 
 Every command here is meant to be run verbatim — by a Hermes agent or by you. There is nothing to
-install: **Node 18+ is the only hard requirement**, because the panel is zero-dependency.
+install: **Node 22.5+ is the only hard requirement**, because the panel is zero-dependency. The
+floor is 22.5, not 18: the server reads Hermes' `state.db` through `node:sqlite`, which does not
+exist before 22.5, and five modules import it statically — on an older Node the process fails to
+start at all.
 
 ---
 
@@ -32,7 +35,7 @@ too when the profile has one.
 
 | need | check | required for |
 | --- | --- | --- |
-| Node 18+ | `node --version` | everything — no `npm install` is needed |
+| Node 22.5+ | `node --version` | everything — `node:sqlite` needs 22.5, and no `npm install` is needed |
 | git | `git --version` | every scan (the panel shells out to git) |
 | Hermes CLI | `hermes --version` | **only** spawning agents; monitoring works without it |
 | an OpenRouter key | `hermes auth`, or `$HERMES_HOME/.env` | **only** spawning agents |
