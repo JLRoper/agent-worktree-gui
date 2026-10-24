@@ -305,13 +305,17 @@ Each turn is an accordion inside the card:
 Output streams into a `<pre>`. It follows the newest line unless you scroll up; a `↓` button brings you back and
 re-pins it. A tool result is a **preview** of what the tool returned, not the full payload — when it was cut the
 console ends it with `… result truncated by the gateway` (the gateway's `HERMES_RUN_PREVIEW_CHARS` raises the cap).
-Opening a specific tool can fetch the stored result from the session store.
+When the preview was empty — routine for `patch` and `write_file` — the panel reads that call's result back out of
+the session store and draws it under the result line **as text**: a patch's diff, a terminal's output, never the JSON
+envelope it travelled in. A call the store has nothing for says `no output recorded for this call`, and a result held
+to 40 lines ends with `… N more line(s) of this result`.
 
 **A run of tool calls is condensed.** Consecutive calls between two pieces of prose become one group, one row per
 tool name: `💻 terminal ×11 curl …` with the last input and either a duration or a live clock. Click a row to filter
 the group to that one tool; the button then reads **all N** and clears the filter. **`N lines`** opens the whole
-group — every call with its output — and the N is the number of console lines it holds. Text ends a group, so the
-next call starts a fresh tally.
+group — every call with its output — and the N is the number of console lines it holds; opening it asks the session
+store for every tool in the group, and a group left open on a turn that is still running refreshes itself as later
+results land. Text ends a group, so the next call starts a fresh tally.
 
 The gateway folds a parallel batch into one summary line — `first command + 3 commands` — so that tail is a button:
 click **`+ 3 commands`** to read all four calls out of the session transcript, listed under the group with the call
