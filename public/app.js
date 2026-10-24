@@ -1578,19 +1578,54 @@ function approvalPrompt(turn, copy = "") {
   if (!live || turn.approvalDone) return "";
   const choices = Array.isArray(approval.choices) && approval.choices.length ? approval.choices : ["once", "deny"];
   const label = { once: "Allow once", session: "Allow for this session", always: "Always allow", deny: "Deny" };
-  return `<div class="turn-approval" data-approval-for="${esc(turn.id)}${esc(copy)}">
-    <div class="ta-head mono">⚠ waiting on you — this turn is parked until you answer</div>
+  // The window is the gateway's own (`approvals.timeout`), carried on the request when it arrived. An approval
+  // is a question with a deadline: the gateway gives up at it and denies the command on its own, so a box that
+  // keeps offering a choice past that instant is offering a decision that can no longer be made — the answer
+  // comes back 409 `approval_not_pending` and the reader is told nothing about why.
+  const deadline = Number(approval.deadline) || 0;
+  const windowMs = (Number(approval.timeoutSeconds) || 0) * 1000;
+  const left = deadline ? deadline - Date.now() : 0;
+  const closed = Boolean(deadline) && left <= 0;
+  const buttons =
+    `<div class="ta-actions">` +
+    choices.map((c) => `<button class="btn-approve${c === "deny" ? " btn-deny" : ""}" data-approve="${esc(turn.id)}" data-choice="${esc(c)}" data-request="${esc(approval.requestId || "")}" data-until="${deadline || ""}" type="button" title="${esc(c === "deny" ? "refuse this command — the agent is told no and carries on without it" : `allow this command (${c})`)}">${esc(label[c] || c)}</button>`).join("") +
+    `</div>`;
+  // The countdown only exists when the window is known: a gateway that never told us one gets no number rather
+  // than an invented one. Driven by the page's own 1s clock from the deadline above.
+  const foot =
+    !deadline || !windowMs
+      ? ""
+      : `<div class="ta-foot${closed ? " is-over" : left <= 20_000 ? " is-low" : ""}" data-approval-until="${deadline}" data-approval-window="${windowMs}" title="time left before the gateway stops waiting for an answer and denies the command itself">` +
+        `<div class="ta-timer"><span style="width:${Math.max(0, Math.min(100, (left / windowMs) * 100)).toFixed(2)}%"></span></div>` +
+        `<span class="ta-left mono">${closed ? "expired" : `~${fmtLeft(left)} left`}</span></div>`;
+  return `<div class="turn-approval${closed ? " is-expired" : ""}" data-approval-for="${esc(turn.id)}${esc(copy)}">
+    <div class="ta-head mono">${closed ? esc(APPROVAL_CLOSED_HEAD) : "⚠ waiting on you — this turn is parked until you answer"}</div>
     <pre class="ta-cmd mono">${esc(approval.command || "(no command text)")}</pre>
-    <div class="ta-actions">
-      ${choices.map((c) => `<button class="btn-approve${c === "deny" ? " btn-deny" : ""}" data-approve="${esc(turn.id)}" data-choice="${esc(c)}" data-request="${esc(approval.requestId || "")}" type="button" title="${esc(c === "deny" ? "refuse this command — the agent is told no and carries on without it" : `allow this command (${c})`)}">${esc(label[c] || c)}</button>`).join("")}
-    </div>
+    ${closed ? approvalClosedNote() : buttons}
+    ${closed ? "" : foot}
   </div>`;
 }
 
-// Once answered the box collapses to one line: what was decided, about what.
+// The window closed with nobody answering: the gateway denied the command and the agent carried on. Nothing is
+// left to answer here, and saying so is better than a disabled button that looks like a decision was pending.
+const APPROVAL_CLOSED_HEAD = "⚠ no answer within the gateway's window — it has already denied this command";
+
+function approvalClosedNote() {
+  return `<div class="ta-note mono">the gateway stopped waiting and denied it; the agent carried on without this command</div>`;
+}
+
+// Once answered the box collapses to one line: what was decided, about what. An approval nobody answered gets its
+// own line — the gateway denied the command when its window ran out, and "✓ approved" for that would be a lie.
 function approvalDecided(turn) {
   const done = turn.approvalDone;
   if (!done || turn.approval) return "";
+  if (done.expired) {
+    const why =
+      done.reason === "withdrawn"
+        ? "the gateway had already let this request go (its window closed, another surface answered it, or the run was stopped)"
+        : `no answer reached the gateway inside its waiting window${Number(done.waitedSeconds) ? ` (${fmtLeft(Number(done.waitedSeconds) * 1000)} unanswered)` : ""}`;
+    return `<div class="turn-approval-done mono is-expired" title="${esc(why)}${done.command ? ` — ${esc(String(done.command))}` : ""}">✕ not answered here${done.command ? `: ${esc(String(done.command).slice(0, 140))}` : ""}</div>`;
+  }
   const denied = String(done.choice || "").toLowerCase() === "deny";
   const verb = denied ? "denied" : `approved ${done.choice || ""}`.trim();
   return `<div class="turn-approval-done mono${denied ? " is-deny" : ""}" title="${esc(done.command || "")}">${denied ? "✕" : "✓"} ${esc(verb)}${done.command ? `: ${esc(String(done.command).slice(0, 140))}` : ""}</div>`;
@@ -3127,8 +3162,10 @@ function conversationHtml(conv) {
   // A pending approval for this conversation means the agent is not thinking, it is waiting on you.
   const waitingApproval = [...state.approvals.values()].find((a) => a && a.thread && a.thread === thread) || null;
   // A run parks its own approval inside the turn (the Runs API path): same message, different
-  // carrier, so the card can answer it without the CLI approval plugin.
-  const runApproval = runningTurn?.approval || latest.approval || null;
+  // carrier, so the card can answer it without the CLI approval plugin. An approval whose window has closed is
+  // not a signal any more — the gateway denied the command on its own and the box below says so.
+  const runApprovalRaw = runningTurn?.approval || latest.approval || null;
+  const runApproval = approvalLive(runApprovalRaw) ? runApprovalRaw : null;
   // …and the same for the agent's own question: the head says the agent is waiting on an ANSWER, which is
   // a different act from allowing a command, so it gets its own chip in the light purple.
   const runQuestion = runningTurn?.question || latest.question || null;
@@ -4300,6 +4337,16 @@ async function answerRunApproval(approveBtn) {
   noteApprovalSent(id, choice);
   const card = approveBtn.closest(".job");
   const warn = card ? card.querySelector("[data-reply-warn]") : null;
+  // The window can close between the paint and the press: the gateway has already denied the command and let the
+  // agent carry on, so nothing is sent — the box says what happened instead of spending a request to be told
+  // "approval_not_pending" (four of those in a row is what this fence exists for).
+  const until = Number(approveBtn.dataset.until) || 0;
+  if (until && Date.now() >= until) {
+    closeApprovalCard(approveBtn.closest(".turn-approval"));
+    if (warn) warn.textContent = "that approval had already expired — the gateway denied the command and the agent carried on";
+    approvalSent.delete(approvalKey(id, choice));
+    return;
+  }
   approveBtn.disabled = true;
   try {
     const res = await apiFetch("/api/jobs/approve", {
@@ -4309,6 +4356,9 @@ async function answerRunApproval(approveBtn) {
     });
     const out = await res.json().catch(() => ({}));
     if (!res.ok || !out.ok) {
+      // The panel answers "gone" when the gateway no longer holds the request: the box goes, and the reason is
+      // left where the reader is looking rather than on a prompt that can never be answered.
+      if (out.gone) closeApprovalCard(approveBtn.closest(".turn-approval"));
       if (warn) warn.textContent = out.error || `approval failed (HTTP ${res.status})`;
       approveBtn.disabled = false;
       approvalSent.delete(approvalKey(id, choice));
@@ -4318,6 +4368,20 @@ async function answerRunApproval(approveBtn) {
     approveBtn.disabled = false;
     approvalSent.delete(approvalKey(id, choice));
   }
+}
+
+// Take the decision away from a card whose request is gone: the buttons become the same note a closed box draws,
+// so a click that arrives after the panel answered with `gone` cannot re-post into the same 409.
+function closeApprovalCard(card) {
+  if (!card || card.classList.contains("is-expired")) return;
+  card.classList.add("is-expired");
+  const head = card.querySelector(".ta-head");
+  if (head) head.textContent = APPROVAL_CLOSED_HEAD;
+  const actions = card.querySelector(".ta-actions");
+  if (actions) actions.outerHTML = approvalClosedNote();
+  // The countdown has nothing left to count, and a stale "~2m left" under a box that is over would be its own
+  // small lie. The server-side sweep replaces this box with the one record line within 5s.
+  card.querySelector(".ta-foot")?.remove();
 }
 
 // ---- approvals ------------------------------------------------------------------
@@ -4404,6 +4468,25 @@ function tickApprovals() {
     const left = Math.max(0, Math.round(((r.deadline || 0) - Date.now()) / 1000));
     el.textContent = left ? `expires in ${left}s` : "expired";
     el.classList.toggle("warn", left < 20);
+  }
+  // …and a run's own approval box, which carries the gateway's window: its label counts down, and at the deadline
+  // the buttons go. The panel's sweep removes the box a moment later (5s), and this is what covers the gap so the
+  // reader never presses a choice the gateway has already refused.
+  const now = Date.now();
+  for (const card of document.querySelectorAll(".turn-approval .ta-foot[data-approval-until]")) {
+    const until = Number(card.dataset.approvalUntil) || 0;
+    const windowMs = Number(card.dataset.approvalWindow) || 0;
+    const left = until - now;
+    if (windowMs) {
+      const fill = card.querySelector(".ta-timer > span");
+      if (fill) fill.style.width = `${Math.max(0, Math.min(100, (left / windowMs) * 100)).toFixed(2)}%`;
+    }
+    const box = card.closest(".turn-approval");
+    const label = card.querySelector(".ta-left");
+    if (label) label.textContent = left <= 0 ? "expired" : `~${fmtLeft(left)} left`;
+    card.classList.toggle("is-low", left > 0 && left <= 20_000);
+    card.classList.toggle("is-over", left <= 0);
+    if (left <= 0) closeApprovalCard(box);
   }
 }
 setInterval(tickApprovals, 1000);
@@ -4852,7 +4935,10 @@ function updateJob(j, { scroll = false } = {}) {
   // advertising "awaiting approval" after the question was answered.
   const approvalChanged =
     Boolean(prev?.approval) !== Boolean(j.approval) ||
-    String(prev?.approvalDone?.choice || "") !== String(j.approvalDone?.choice || "");
+    String(prev?.approvalDone?.choice || "") !== String(j.approvalDone?.choice || "") ||
+    // An approval nobody answered replaces the box with a record line whose `choice` is empty on both sides, so
+    // the expiry itself has to be compared or the card keeps the box it was just told to drop.
+    Boolean(prev?.approvalDone?.expired) !== Boolean(j.approvalDone?.expired);
   const prevOwner = prev ? prev.ownerPath || null : null;
   const ownerChanged = (j.ownerPath || null) !== prevOwner;
   state.jobs.set(j.id, { ...prev, ...j });
@@ -5911,6 +5997,16 @@ function turnLive(t) {
   return Boolean(t.approval && !t.approvalDone);
 }
 
+// An approval is only a question while the gateway is still holding it. The window is the gateway's own
+// (`approvals.timeout`, carried on the request when it arrives): past it the gateway denies the command by itself
+// and moves the turn on, so every place that says "waiting on you" asks this first. An approval with no window at
+// all (an older panel record, restored from the store) is left alone rather than guessed at.
+function approvalLive(a) {
+  if (!a) return false;
+  const deadline = Number(a.deadline);
+  return !Number.isFinite(deadline) || Date.now() < deadline;
+}
+
 // A conversation is live if any of its turns is - not just the newest one. A parked turn can sit behind a newer
 // finished one, and asking only `latest` reported such an agent as not running.
 function convLive(c) {
@@ -6035,7 +6131,7 @@ function agentBadgeHtml(row) {
   const running = agentsRunning(mine);
   // A parked approval is the one state that needs the reader, and it used to be invisible the moment
   // the row was collapsed — the badge only ever said "running".
-  const waiting = mine.filter((c) => (c.turns || []).some((t) => t.approval && !t.approvalDone && turnLive(t))).length;
+  const waiting = mine.filter((c) => (c.turns || []).some((t) => approvalLive(t.approval) && !t.approvalDone && turnLive(t))).length;
   const cls = waiting ? "sig-approval" : running ? "sig-panel" : "sig-panel-done";
   const bits = [waiting ? `${waiting} awaiting approval` : null, running ? `${running} running` : null].filter(Boolean);
   return `<button class="sig ${cls}" data-open-row="${esc(keyOf(row.project, row.path))}" title="${mine.length} agent${mine.length === 1 ? "" : "s"} owned by this worktree${waiting ? `, ${waiting} parked on a permission request — click to answer it` : running ? `, ${running} running` : ""} — click to open the row and its agents">⧉ ${mine.length}${bits.length ? ` · ${bits.join(" · ")}` : ""}</button>`;
@@ -7451,7 +7547,7 @@ function chipsHtml(name) {
   // Amber and loud: an agent parked on a permission request is the one thing here that is waiting for
   // a human, and it must be visible with the project collapsed.
   const panelWaiting = panelAgents.filter((c) =>
-    (c.turns || []).some((t) => t.approval && !t.approvalDone && turnLive(t)),
+    (c.turns || []).some((t) => approvalLive(t.approval) && !t.approvalDone && turnLive(t)),
   ).length;
   if (panelWaiting) {
     out.push(

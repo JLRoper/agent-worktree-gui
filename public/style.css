@@ -1183,9 +1183,27 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
 .ta-actions button:hover { background: #463c24; }
 .ta-actions button.btn-deny { background: #3a2222; border-color: #6b2a2a; color: #ff9c9c; }
 .ta-actions button.btn-deny:hover { background: #46292a; }
+/* The window the gateway gives the answer. Its own line under the buttons rather than a countdown in the head:
+   the head is a sentence, and a number next to it competed with it. */
+.ta-foot { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+.ta-timer { flex: 1; min-width: 0; height: 4px; border-radius: 999px; background: rgba(0,0,0,.4); overflow: hidden; }
+.ta-timer > span { display: block; height: 100%; border-radius: inherit; background: #b98a2f; transition: width 1s linear, background .4s; }
+.ta-left { flex: none; font-size: 10.5px; color: #c9b98f; }
+.ta-foot.is-low .ta-timer > span { background: #ffd479; }
+.ta-foot.is-over .ta-timer > span { background: #ff9c9c; }
+.ta-foot.is-over .ta-left { color: #ff9c9c; }
+/* …and what the box becomes when the window has closed: a record, not a decision. The buttons are gone — the
+   gateway denied the command on its own — so there is nothing to press, only something to read. */
+.turn-approval.is-expired { border-color: #4a4030; background: linear-gradient(180deg, rgba(44,40,28,.5), rgba(30,28,22,.5)); }
+.turn-approval.is-expired .ta-head { color: #d8c79a; }
+.ta-note { margin-top: 7px; font-size: 11px; color: #c9b98f; }
+.ta-note:empty { display: none; }
 /* …and once answered it collapses to this one line. */
 .turn-approval-done { margin: 6px 2px 2px; padding: 3px 9px; font-size: 11px; color: #8fd6a0; border-left: 2px solid #2f6b3f; background: rgba(47,107,63,.10); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .turn-approval-done.is-deny { color: #ff9c9c; border-left-color: #6b2a2a; background: rgba(107,42,42,.10); }
+/* Nobody answered: the gateway denied the command when its window ran out. Not green (approved), not red (denied
+   by a person) — amber, the colour of the prompt that went unanswered. */
+.turn-approval-done.is-expired { color: #d8c79a; border-left-color: #6b4d16; background: rgba(107,77,22,.10); }
 /* The agent's own question: the approval box's place in the flow, in light purple instead of amber, and sized for
    sentences rather than a command. A choice is a full-width row so a long label wraps inside its own control
    instead of stretching the box; the typed "Other" answer and the send button share the row under them.
