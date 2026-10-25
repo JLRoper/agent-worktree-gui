@@ -60,11 +60,11 @@ Things that will bite:
    a `claudeCli` transport will join it in `lib/claude-cli-transport.js`. Each job gets `agent: "hermes" | "claude"`. 
    `consume()` and the cards stay shared.
    
-2. **[2c TODO]** `claudeCli` translates Claude events to the panel's vocabulary:
+2. **[2c DONE]** `lib/claude-stream.js` translates Claude events to the panel's vocabulary:
    `init` → `init`, `tool_use` → `tool.started`, `tool_result` → `tool.completed`, `text` → `message.delta`,
-   `can_use_tool` → `approval.request`, `result` → `run.completed` / `run.failed` (+ stats, cost).
+   `can_use_tool` → `approval.request` (2e; surfaced raw until then), `result` → `run.completed` / `run.failed` (+ stats, cost).
    
-3. **[2c-2f TODO]** The prompt goes on stdin, never in argv. Thread names (`wtgui-…`) map to Claude session UUIDs, persisted.
+3. **[2c DONE, mapping 2d]** The prompt goes on stdin, never in argv. Thread names (`wtgui-…`) map to Claude session UUIDs, persisted.
    
 4. **[2d TODO]** Reply = a new process with `--resume`. Steer = a stdin `user` message. Stop = interrupt, then
    `taskkill /T` as the fallback.
@@ -83,10 +83,11 @@ Things that will bite:
 |---|---|---|---|
 | 2a | spike + this handoff + the version check | 0.2.1 | ✓ done |
 | 2b | transport split, no behaviour change (verify with a real Hermes run) | 0.2.2 | ✓ done |
-| 2c | Claude spawn, stream, stop | 0.2.3 | |
-| 2d | reply (resume) and steer | 0.2.4 | |
-| 2e | approvals | 0.2.5 | |
-| 2f | dedup, UI picker, docs, `tools/verify-claude-transport.mjs` | 0.2.6 | |
+| 2b follow-up | `job.agent`, `transportFor(job)`, `info()` | 0.2.3 | ✓ done (re-landed in 2c, see below) |
+| 2c | Claude spawn, stream, stop | 0.2.4 | ✓ done |
+| 2d | reply (resume) and steer | 0.2.5 | |
+| 2e | approvals | 0.2.6 | |
+| 2f | dedup, UI picker, docs | 0.2.7 | |
 | done | `Status: complete` | 0.3.0 | |
 
 If a milestone splits and both halves change code, the second takes the next patch number; the table is a
@@ -111,19 +112,44 @@ forecast, the rule is the contract.
 - Transport interface is ready for Claude CLI backend (2c)
 - Version bump 0.2.1 → 0.2.2 verified
 
-## Next Steps (2c)
+## Milestone 2c Delivery (v0.2.4)
 
-1. Create `lib/claude-cli-transport.js` implementing the Transport interface
-2. Spawn `claude -p --input-format stream-json --output-format stream-json` subprocess
-3. Translate stream-json events to panel's vocabulary (init → init, tool_use → tool.started, etc.)
-4. Update Jobs.create() to accept `agent: "hermes" | "claude"` parameter
-5. Route to appropriate transport based on agent type
-6. Update UI to show agent picker (Hermes vs Claude)
+**2b re-landed first.** The merge that landed PR #6 kept the pre-split `lib/jobs.js`: `main` had the Hermes HTTP
+calls inline and `lib/hermes-transport.js` was dead code. 2c re-ported the split by hand from `main`'s current
+inline code (not the stale 2b copy), as its own commit with no behaviour change. `Jobs` now holds
+`this.transports = { hermes, claude }` and routes every per-job call through `transportFor(j)` (keyed by `j.agent`,
+default `"hermes"` on create and load). Request validation stays in `Jobs`; the backend calls live in the transport.
+
+**Claude transport** (`lib/claude-transport.js`): one `claude -p --input-format stream-json --output-format stream-json
+--verbose --session-id <uuid> [--model m] --max-budget-usd <n> --permission-mode <mode>` per turn, spawned in the
+job's worktree with `shell: false`. `initialize` then the prompt go on stdin. stdout → `lineSplitter` →
+`translateLine` → `Jobs.consume`. The `result` is held and stdin closed; the job settles when the process exits.
+`j.sessionId` is the Claude session uuid, `j.runId` is `claude-<uuid>`. Stop = `interrupt` control_request, then
+`taskkill /T /F` after 5 s; a stopped job ends `cancelled`. A panel/gateway restart sweep never asks the gateway
+about a Claude job; a panel restart marks it interrupted and kills its process.
+
+**Deviations and decisions:**
+- `--permission-prompt-tool stdio` is **not** passed in 2c: nothing answers `can_use_tool` until 2e, so the job would
+  hang. In `-p` mode a tool that needs permission is denied and counted on the card. Add it back in 2e.
+- `--bare` is not passed (it changes auth and memory); the translator drops hook events.
+- `bypassPermissions` only when the job has `yolo`. Otherwise `claudePermissionMode` (default `default`).
+- No `--max-turns` on CLI 2.1.310: a Claude job says so on its card and relies on the budget cap.
+- A reply to a Claude thread is refused until 2d (a fresh process would silently start a new conversation).
+- steer / approve / clarify answer `{ ok: false, code: "not_in_2c" }`.
+- No UI change: `POST /api/agents` takes `agent` (`hermes` default, `claude`) and `model`; the picker is 2f.
+
+**Config** (`config.json`, all optional): `claudeBin` (`"claude"`), `claudeBudgetUsd` (`0.5`),
+`claudePermissionMode` (`"default"`).
+
+**Tests:** `tools/verify-claude-transport.mjs` (translator) and `tools/verify-claude-spawn.mjs` (process path through
+`Jobs`, against `tools/stub-claude.mjs`: spawn, argv/stdin protocol, settle on exit, cooperative and forced stop,
+crash, yolo, routing). Both offline.
+
+Protocol pinned to Claude Code CLI **2.1.310**.
 
 ## Open Decisions
 
 1. Scope: all of 2c–2f, or stop after 2d and defer approvals?
 2. Default permission behaviour (panel-prompted is the recommendation) and whether to use `--bare`.
-3. Tests: a stub `claude` that replays recorded streams. Record and sanitise fixtures in 2c; the hook events
-   carry local plugin output, so do not commit a raw capture.
+3. ~~Tests~~ done in 2c: `tools/stub-claude.mjs` replays the sanitised fixture.
 4. How to handle per-run budget tracking and cost display for Claude runs.
