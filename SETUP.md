@@ -82,8 +82,19 @@ this repo and needs no configuration. Hermes' half does, and it lives in `$HERME
 | the builtin transport | `hermes config set security.approval.transport builtin` | The panel answers on the run's own SSE stream (`approval.request`, `clarify.request`). A plugin transport is superseded here and must not be selected. |
 
 **These are per machine and per profile.** The three lines belong in the `$HERMES_HOME/config.yaml` of
-whichever machine runs the gateway — not only the one where you first saw the box — and the `clarify`
-line is the one that decides whether the box appears at all. Verify it there (section 5).
+whichever machine runs the gateway — not only the one where you first saw the box. The `clarify` line
+decides whether the tool is *offered*; the gateway **build** decides whether a question it asks can be
+delivered, and install is not configuration:
+
+```bash
+node tools/check-gateway-clarify.mjs --probe   # 0 = the route is there, 1 = it is not
+```
+
+A build without the Runs API clarify route hands the agent the tool and refuses every call with
+`Clarify tool is not available in this execution context.` — the box can never appear, however the
+config file reads. Until the gateway has it, the panel says so on the card once and tells agents to
+ask in prose at the end of the turn, which the `question` rule still escalates to you. Everything
+behind that is in `docs/clarify-over-the-runs-api.md`. Verify both halves (section 5).
 
 The box itself is host-agnostic and lives in this repo: `lib/jobs.js` turns the gateway's
 `clarify.request` event into a pending question on the job, `public/app.js` draws the box, and the
@@ -118,9 +129,12 @@ Then open **http://127.0.0.1:7331**.
    verdict straight from git and diffs it against what the panel reports.
 4. In the UI: each project is minimized to its title line; open one and check the rows carry a
    branch, tip, ahead/behind and a verdict.
-5. `hermes config get platform_toolsets.api_server` → the list **contains `clarify`**. This is the one
-   setting that decides whether an agent's question can become a box, and it is easy to miss because
-   everything else works without it (section 6).
+5. `hermes config get platform_toolsets.api_server` → the list **contains `clarify`**. This decides
+   whether the tool is offered, and it is easy to miss because everything else works without it
+   (section 6). It is **not** sufficient on its own: the installed build must also carry the Runs API
+   clarify route, or the tool is offered and refuses every call. Check that half too —
+   `node tools/check-gateway-clarify.mjs --probe` → exit `0` (the route is there; `1` means the
+   gateway needs a newer build, and the script prints the command).
 6. `node tools/merged-branches.mjs` → every local branch, the PR that owns it and a verdict. Read the
    verdicts; never `git branch --merged main`. The ruleset requires linear history, so a merged PR's commits
    are re-created and its branch stays "ahead by N" forever — **"ahead by N" is never a merge signal in this

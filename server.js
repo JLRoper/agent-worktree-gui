@@ -1320,7 +1320,12 @@ const server = createServer(async (req, res) => {
       const cwd = body?.cwd || target?.path || config.defaultCwd;
       const blocked = await spawnBlocker(cwd, target);
       // The thread name carries a random suffix, so the preview shows its shape.
-      const req0 = previewRequest({ ...(body || {}), thread: makeThreadName(body?.prompt || "") });
+      const req0 = previewRequest({
+        ...(body || {}),
+        thread: makeThreadName(body?.prompt || ""),
+        // A preview that hides the clarify hint is not a preview of what will be sent.
+        clarifyInstruction: jobs.clarify?.instruction?.() || "",
+      });
       return sendJson(res, 200, { transport: jobs.transportInfo(), request: req0, cwd, project: target?.name || null, blocked, command: `POST ${jobs.api.url}${req0.path}\n${JSON.stringify(req0.body, null, 1)}` });
     }
 
@@ -1335,7 +1340,7 @@ const server = createServer(async (req, res) => {
       if (cwdProject && body.project !== cwdProject.name) body.project = cwdProject.name;
       const target = cwdProject || pickerTarget;
       if (body.dryRun) {
-        const req0 = previewRequest(body);
+        const req0 = previewRequest({ ...body, clarifyInstruction: jobs.clarify?.instruction?.() || "" });
         return sendJson(res, 200, { dryRun: true, project: body.project || null, transport: jobs.transportInfo(), request: req0, cwd: body.cwd || target?.path || config.defaultCwd, command: `POST ${jobs.api.url}${req0.path}\n${JSON.stringify(req0.body, null, 1)}` });
       }
       // Refuse before promising a job: a stopped gateway or a missing key is the answer to "why did

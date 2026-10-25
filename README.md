@@ -393,7 +393,7 @@ sent together, and the box under them takes a typed answer of your own (`Enter` 
 collapses to `✓ answered: <what you said>`; a question that was answered elsewhere, withdrawn with the
 turn or timed out leaves `· question closed without an answer here`.
 
-Three pieces have to line up, and each one alone is a silent no-op:
+Four pieces have to line up, and each one alone is a silent no-op:
 
 - `platform_toolsets.api_server` must include `clarify` in `<HERMES_HOME>/config.yaml`. The stock
   `hermes-api-server` toolset deliberately drops interactive UI tools, so without this line a
@@ -404,6 +404,21 @@ Three pieces have to line up, and each one alone is a silent no-op:
   ```
 
   The gateway re-reads that file per run, so the next spawn has the tool; a running turn does not.
+- **The gateway build must carry the Runs API half of the contract** — a clarify callback on an API
+  run's agent and `POST /v1/runs/{run_id}/clarify` to answer the prompt. That is code, not
+  configuration, and the line above cannot supply it. A build with the toolset line and without the
+  route hands the model the tool and then refuses every call with the tool's own
+  `Clarify tool is not available in this execution context.`, which reads like a permission problem
+  and is a missing feature. Check the gateway you are pointed at:
+
+  ```bash
+  node tools/check-gateway-clarify.mjs --probe   # 0 = the route is there, 1 = it is not
+  ```
+
+  Until it is there the panel does not pretend: it records the refusal from the run's own stream,
+  says so once on the card, and tells the agent to ask in prose at the end of its turn — which the
+  `question` rule still escalates to you. See `docs/clarify-over-the-runs-api.md` for the code that
+  decides it in each build.
 - The panel answers through `POST /v1/runs/{run_id}/clarify` with the same fence as an approval —
   `{request_id, execution_generation, answer}` where `answer` is a string (a multi-select answer is a
   JSON array string, which the tool decodes). Both ids come from the run's `pending_controls[]`, not
