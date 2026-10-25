@@ -734,8 +734,9 @@ function isLoopback(req) {
 }
 
 // Loopback is allowed exactly as before, so the local board is untouched. Anything else — the LAN, a
-// tailnet — is allowed only when config.json carries a token AND the request sends it in
-// x-panel-token; with no token configured off-machine writes are refused outright. Every write route
+// tailnet — is allowed only when the panel holds a token (PANEL_TOKEN, from the environment, never
+// config.json) AND the request sends it in x-panel-token; with no token configured off-machine writes
+// are refused outright. Every write route
 // can spawn a process or write a file, so an unauthenticated one reachable from another host is remote
 // code execution — the refusal has to be the default, not something a route has to remember.
 // A refusal is logged with the address it came from: a 403 nobody can see is a bug report nobody can act on.
@@ -743,7 +744,7 @@ function authorised(req) {
   if (isLoopback(req)) return true;
   const addr = (req.socket && req.socket.remoteAddress) || "?";
   if (!config.token) {
-    log(`write refused from ${addr}: no "token" in config.json, so non-loopback writes are off`);
+    log(`write refused from ${addr}: no PANEL_TOKEN in the environment, so non-loopback writes are off`);
     return false;
   }
   if (req.headers["x-panel-token"] === config.token) return true;
