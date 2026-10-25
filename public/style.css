@@ -1834,11 +1834,13 @@ button.sig:hover { filter: brightness(1.25); }
   vertical-align: -5px;
   margin-right: 8px;
   padding: 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1;
-  color: #c3ccd8;
-  background: #161c24;
-  border: 1px solid #39424f;
+  /* Brighter than the console chip's glyph on purpose: that one floats over its own console, this one sits on
+     the legend's dark strip where #c3ccd8 read as a smudge rather than a control. */
+  color: #dbe2ea;
+  background: #191f28;
+  border: 1px solid #46515f;
   border-radius: 50%;
   box-shadow: 0 0 0 3px rgba(10, 13, 18, .55);
   cursor: pointer;
