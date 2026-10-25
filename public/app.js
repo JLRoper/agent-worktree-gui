@@ -6791,7 +6791,7 @@ function ageToggleTitle(project, days, stale, showing) {
 // that neither scrolls sideways nor clips its children — the chart does both the moment the card is narrower than
 // its columns — so the arrow stays on the chart's bottom edge at every width. It is invisible unless the pointer is
 // over the chart (public/style.css), and it is not rendered at all while the threshold is off.
-function ageToggleHtml(project) {
+function ageSlotHtml(project) {
   const days = ageHideDays();
   if (!days) return "";
   const showing = state.showOldProjects.has(project);
@@ -6814,13 +6814,30 @@ function paintAgeToggle(project) {
   btn.title = ageToggleTitle(project, days, staleRowCount(project), showing);
 }
 
+// The legend is built ONCE, when the section's markup is created - before the first snapshot's rows are in
+// `state`, so a stale count taken then is always zero and a button decided then would never appear. The arrow is
+// therefore filled into this slot on every rows change instead (refreshChips below calls straight through): the
+// chart draws an arrow exactly while it has something held back or is showing everything, and none otherwise.
+function refreshAgeToggle(project) {
+  const slot = document.querySelector(`[data-age-slot="${CSS.escape(project)}"]`);
+  if (!slot) return;
+  const want = ageSlotHtml(project);
+  if (!want) {
+    if (slot.firstElementChild) slot.innerHTML = "";
+    return;
+  }
+  // Same button: keep the node so the pointer does not fall off a control that just moved under it.
+  if (!slot.firstElementChild) slot.innerHTML = want;
+  else paintAgeToggle(project);
+}
+
 // One chart, shown in full or held back again. The choice is this project's alone and it is remembered.
 function toggleShowOld(project) {
   if (!project) return;
   if (state.showOldProjects.has(project)) state.showOldProjects.delete(project);
   else state.showOldProjects.add(project);
   saveShowOldProjects();
-  paintAgeToggle(project);
+  refreshAgeToggle(project);
   renderProjectRows(project);
   refreshChips(project);
 }
@@ -8132,13 +8149,15 @@ function projectSection(name) {
         <th>PR</th><th>Dirty</th><th title="time since this worktree was last seen alive (any evidence firing) · the ring fills up to green as the row becomes due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited">Life / next read</th><th>Verdict</th><th title="remove a worktree (sent to the Recycle Bin)"></th>
       </tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
     </div>
-    <div class="legend">${ageToggleHtml(name)}liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read</div>
+    <div class="legend"><span class="age-slot" data-age-slot="${esc(name)}"></span>liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read</div>
   </section>`;
 }
 
 function refreshChips(name) {
   const el = document.querySelector(`[data-chips="${CSS.escape(name)}"]`);
   if (el) el.innerHTML = chipsHtml(name);
+  // The age arrow's presence depends on the same rows, so it is refreshed from the same place.
+  refreshAgeToggle(name);
 }
 
 // ---- column widths: measured from the rows, draggable, remembered ----------------------------
