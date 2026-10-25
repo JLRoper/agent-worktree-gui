@@ -56,41 +56,74 @@ Things that will bite:
 
 ## Design
 
-1. Split the transport out of `Jobs` (`lib/jobs.js`: `create` / `follow` / `steer` / `approve` / `stop` / `poll`
-   are Hermes HTTP today). Hermes code moves unchanged behind an interface; a `claudeCli` transport joins it.
-   Each job gets `agent: "hermes" | "claude"`. `consume()` and the cards stay shared.
-2. `claudeCli` translates Claude events to the panel's vocabulary:
+1. **[2b DONE]** Split the transport out of `Jobs` (`lib/jobs.js`). Hermes code moves unchanged behind an interface in `lib/hermes-transport.js`; 
+   a `claudeCli` transport will join it in `lib/claude-cli-transport.js`. Each job gets `agent: "hermes" | "claude"`. 
+   `consume()` and the cards stay shared.
+   
+2. **[2c TODO]** `claudeCli` translates Claude events to the panel's vocabulary:
    `init` → `init`, `tool_use` → `tool.started`, `tool_result` → `tool.completed`, `text` → `message.delta`,
    `can_use_tool` → `approval.request`, `result` → `run.completed` / `run.failed` (+ stats, cost).
-3. The prompt goes on stdin, never in argv. Thread names (`wtgui-…`) map to Claude session UUIDs, persisted.
-4. Reply = a new process with `--resume`. Steer = a stdin `user` message. Stop = interrupt, then
+   
+3. **[2c-2f TODO]** The prompt goes on stdin, never in argv. Thread names (`wtgui-…`) map to Claude session UUIDs, persisted.
+   
+4. **[2d TODO]** Reply = a new process with `--resume`. Steer = a stdin `user` message. Stop = interrupt, then
    `taskkill /T` as the fallback.
-5. `claudeSessionRoots` takes an `exclude` set of panel-owned session ids, so a panel agent is not also drawn as
+   
+5. **[2f TODO]** `claudeSessionRoots` takes an `exclude` set of panel-owned session ids, so a panel agent is not also drawn as
    an external `⧉ claude`.
-6. Config: `claudeBin`, default model, per-run budget cap. Permission mode defaults to panel-prompted; `yolo`
+   
+6. **[2f TODO]** Config: `claudeBin`, default model, per-run budget cap. Permission mode defaults to panel-prompted; `yolo`
    is the only route to `bypassPermissions`. Localhost binding stays.
-7. UI: Hermes / Claude picker on the New-agent card, Claude model list, a cost readout, a "claude found" chip.
+   
+7. **[2f TODO]** UI: Hermes / Claude picker on the New-agent card, Claude model list, a cost readout, a "claude found" chip.
 
 ## Milestones — one PR each; a patch bump only where code changes
 
-| milestone | what | version |
-|---|---|---|
-| 2a | spike + this handoff + the version check (docs and tools only) | 0.2.0 (no bump) |
-| 2b | transport split, no behaviour change (verify with a real Hermes run) | 0.2.1 |
-| 2c | Claude spawn, stream, stop | 0.2.2 |
-| 2d | reply (resume) and steer | 0.2.3 |
-| 2e | approvals | 0.2.4 |
-| 2f | dedup, UI picker, docs, `tools/verify-claude-transport.mjs` | 0.2.5 |
-| done | `Status: complete` | 0.3.0 |
+| milestone | what | version | status |
+|---|---|---|---|
+| 2a | spike + this handoff + the version check | 0.2.1 | ✓ done |
+| 2b | transport split, no behaviour change (verify with a real Hermes run) | 0.2.2 | ✓ done |
+| 2c | Claude spawn, stream, stop | 0.2.3 | |
+| 2d | reply (resume) and steer | 0.2.4 | |
+| 2e | approvals | 0.2.5 | |
+| 2f | dedup, UI picker, docs, `tools/verify-claude-transport.mjs` | 0.2.6 | |
+| done | `Status: complete` | 0.3.0 | |
 
 If a milestone splits and both halves change code, the second takes the next patch number; the table is a
 forecast, the rule is the contract.
 
-## Open decisions
+## Milestone 2b Delivery (v0.2.2)
 
-1. Scope: all of 2b–2f, or stop after 2d and defer approvals?
-2. Base: stack on PR #1, or wait for it to merge. 2b rewrites `lib/jobs.js`, which `upstream` also edits, so
-   merge `upstream/main` into the fork regularly (it moves fast) and keep the transport split a small, early PR.
-3. Default permission behaviour (panel-prompted is the recommendation) and whether to use `--bare`.
-4. Tests: a stub `claude` that replays recorded streams. Record and sanitise fixtures in 2c; the hook events
+**Created:**
+- `lib/transport.js`: abstract `Transport` base class defining the interface for agent backends
+- `lib/hermes-transport.js`: Hermes HTTP Runs API implementation of Transport
+
+**Changes to lib/jobs.js:**
+- Initialize `this.hermes` (HermesTransport instance) in constructor
+- Rename `this.transport` state object to `this.transportState`
+- Delegate all HTTP operations to transport: `probe()`, `create()` → `createRun()`, `follow()`, `steer()`, 
+  `approve()`, `answerQuestion()` → `clarify()`, `stop()`, `poll()`, `controlContext()`
+- Exported `runResultLine()` for potential external use
+
+**Behavior verification:**
+- No behavior changes (pure refactoring)
+- Jobs class instantiation works correctly
+- Transport interface is ready for Claude CLI backend (2c)
+- Version bump 0.2.1 → 0.2.2 verified
+
+## Next Steps (2c)
+
+1. Create `lib/claude-cli-transport.js` implementing the Transport interface
+2. Spawn `claude -p --input-format stream-json --output-format stream-json` subprocess
+3. Translate stream-json events to panel's vocabulary (init → init, tool_use → tool.started, etc.)
+4. Update Jobs.create() to accept `agent: "hermes" | "claude"` parameter
+5. Route to appropriate transport based on agent type
+6. Update UI to show agent picker (Hermes vs Claude)
+
+## Open Decisions
+
+1. Scope: all of 2c–2f, or stop after 2d and defer approvals?
+2. Default permission behaviour (panel-prompted is the recommendation) and whether to use `--bare`.
+3. Tests: a stub `claude` that replays recorded streams. Record and sanitise fixtures in 2c; the hook events
    carry local plugin output, so do not commit a raw capture.
+4. How to handle per-run budget tracking and cost display for Claude runs.

@@ -209,6 +209,11 @@ button.primary:hover { background: #24466a; }
 .settings-presets button:hover { color: var(--text); border-color: #3b4757; }
 .settings-presets button.on { border-color: var(--q-line); color: var(--q-head); background: var(--surface); }
 .settings-preview.bad { border-color: #57262a; color: #ff9c94; }
+.settings-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.settings-list-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; font: 12px var(--mono); color: var(--text); }
+.settings-list-item button { padding: 1px 6px; font-size: 11px; }
+.scanroot-input { flex: 1; }
+.scanroot-input input { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
 .hidden { display: none; }
 
 main { padding: 14px 16px 40px; }

@@ -11094,6 +11094,7 @@ function toggleSettings(open = null) {
   void loadApprovalSetting();
   void loadSessionSetting();
   void loadProviderSetting();
+  void loadProjectsSetting();
 }
 
 // ---- the provider endpoint every run talks to ------------------------------------------------
@@ -11458,6 +11459,92 @@ function initQLook() {
   applyQLook({}, { save: false });
 }
 
+// ---- projects and scan roots configuration ------
+let projectsState = { scanRoots: [], projects: [] };
+
+function paintProjectsSetting(note = "") {
+  const list = $("scanroots-list");
+  const input = $("scanroot-new");
+  const preview = $("scanroots-preview");
+  const save = $("btn-scanroots-save");
+
+  if (list) {
+    list.innerHTML = projectsState.scanRoots.map((root, i) =>
+      `<div class="settings-list-item"><span>${esc(root)}</span><button type="button" data-remove="${i}" title="remove this folder">Remove</button></div>`
+    ).join("");
+    for (const btn of list.querySelectorAll("button[data-remove]")) {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const idx = Number(btn.dataset.remove);
+        const updated = projectsState.scanRoots.filter((_, i) => i !== idx);
+        projectsState.scanRoots = updated;
+        paintProjectsSetting();
+        save?.classList.add("dirty");
+      });
+    }
+  }
+
+  if (preview) {
+    if (note) {
+      preview.textContent = `${note} — ${projectsState.scanRoots.length} folder${projectsState.scanRoots.length === 1 ? "" : "s"}`;
+    } else {
+      preview.textContent = projectsState.scanRoots.length
+        ? `${projectsState.scanRoots.length} folder${projectsState.scanRoots.length === 1 ? "" : "s"}`
+        : "no folders configured";
+    }
+  }
+
+  if (save) {
+    save.classList.toggle("dirty", String(JSON.stringify(projectsState.scanRoots)) !== String(JSON.stringify(state.savedScanRoots || [])));
+  }
+}
+
+async function loadProjectsSetting() {
+  try {
+    const r = await apiFetch("/api/settings/projects");
+    projectsState = await r.json();
+    state.savedScanRoots = [...projectsState.scanRoots];
+    paintProjectsSetting();
+  } catch (e) {
+    const preview = $("scanroots-preview");
+    if (preview) {
+      preview.textContent = `could not read projects: ${e.message}`;
+      preview.classList.add("bad");
+    }
+  }
+}
+
+async function saveProjectsSetting() {
+  const preview = $("scanroots-preview");
+  if (!projectsState.scanRoots.length) {
+    if (preview) preview.textContent = "NOT SAVED — at least one folder is required";
+    return;
+  }
+  if (preview) {
+    preview.textContent = "saving…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch("/api/settings/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scanRoots: projectsState.scanRoots }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      paintProjectsSetting(d.error || `HTTP ${r.status}`, true);
+      return;
+    }
+    projectsState = d;
+    state.savedScanRoots = [...projectsState.scanRoots];
+    paintProjectsSetting(d.note || "saved");
+    $("scanroot-new").value = "";
+    $("btn-scanroots-save").classList.remove("dirty");
+  } catch (e) {
+    paintProjectsSetting(e.message, true);
+  }
+}
+
 $("btn-settings")?.addEventListener("click", (e) => {
   e.stopPropagation();
   toggleSettings();
@@ -11654,6 +11741,25 @@ for (const btn of document.querySelectorAll("[data-approval-set]")) {
     input.focus();
   });
 }
+$("btn-scanroot-add")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  const input = $("scanroot-new");
+  if (!input || !input.value.trim()) return;
+  const path = input.value.trim();
+  if (!projectsState.scanRoots.includes(path)) {
+    projectsState.scanRoots.push(path);
+    paintProjectsSetting();
+    $("btn-scanroots-save")?.classList.add("dirty");
+  }
+  input.value = "";
+  input.focus();
+});
+$("scanroot-new")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  $("btn-scanroot-add")?.click();
+});
+$("btn-scanroots-save")?.addEventListener("click", () => void saveProjectsSetting());
 document.addEventListener("click", (e) => {
   const panel = $("settings");
   if (!panel || panel.classList.contains("hidden")) return;
