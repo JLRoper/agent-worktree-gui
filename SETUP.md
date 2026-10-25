@@ -46,7 +46,8 @@ Edit `config.json`. Only `scanRoots` normally matters:
 | key | what to set |
 | --- | --- |
 | `scanRoots` | the directory your repos live in. Every git repo directly under it becomes a project. Defaults to the folder the panel sits in. |
-| `port`, `host` | bind address. Keep `127.0.0.1` — this panel spawns processes, so exposing it is remote code execution. |
+| `port`, `host` | bind address. `127.0.0.1` keeps it local. `0.0.0.0` puts the board on the LAN or tailnet: a remote browser authenticates once by opening `http://<this-machine>:7331/?token=…`, but only writes are gated — reads stay open to anyone who can reach the port, so never expose it to a public network. |
+| `PANEL_TOKEN` (environment, not a key here) | the secret behind `?token=…`. Set it in the environment the panel inherits — `setx PANEL_TOKEN "<43 random chars>"` on Windows, then restart the panel — and keep it out of `config.json`, which is tracked by git. With it unset, writes from other machines are refused. |
 | `projects` | optional per-repo overrides: `remote` name, `mainBranch`, `prRepo` (for PR lookups). |
 | `hermesBin`, `defaultCwd` | optional; auto-detected. |
 

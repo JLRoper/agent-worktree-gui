@@ -385,10 +385,14 @@ button.poll-btn.busy { opacity: .55; cursor: progress; }
 /* Life on the left, the next-read ring immediately to its right, both on one line; the evidence
    chips wrap underneath. The old `.age-num { display: block }` is what pushed the ring onto a line
    of its own — the number lives in a flex row now. */
-td.age { white-space: nowrap; }
-td.age .age-line { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
+/* The cell itself must NOT be `nowrap`: the chip strip is an inline-level box, so with nowrap it could not break
+   onto a line of its own, shrink-to-fit the few pixels left beside the duration, and a chip wider than those spilled
+   out of the cell - the row showed "✎ file" with its right border sliced off. Normal wrapping (the strip and the
+   duration each keep nowrap for their own contents) lets a crowded strip drop to a full-width line and stack whole. */
+td.age { white-space: normal; }
+td.age .age-line { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; white-space: nowrap; }
 td.age .poll-ring { display: block; margin-right: 0; flex: none; }
-td.age .sigs { display: inline-flex; align-items: center; flex-wrap: wrap; margin-left: 7px; vertical-align: middle; }
+td.age .sigs { display: inline-flex; align-items: center; flex-wrap: wrap; margin-left: 7px; vertical-align: middle; white-space: nowrap; }
 td.age .age-num { font-family: var(--mono); font-size: 12px; display: inline-block; }
 td.age .age-num.dimmer { color: var(--dimmer); }
 
@@ -829,9 +833,9 @@ button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s li
 .tgrp-more { align-self: flex-start; margin: 3px 0 0; background: none; border: 1px solid var(--line); border-radius: 4px; color: var(--dimmer); font: 10px/1.5 var(--mono); padding: 0 6px; cursor: pointer; }
 .tgrp-more:hover { color: var(--text); border-color: #3b4757; }
 .tgrp-more.is-open { color: var(--text); }
-/* Output that came from the session store rather than the live stream: the console says where it came from, and
-   the text sits at the same size as the rest of the console, dimmed so the preview above it stays the headline. */
-.jl-store-cap { color: #7f8b9b; font-style: italic; }
+/* Output that came from the session store rather than the live stream: same size as the rest of the console,
+   dimmed so a live preview above it stays the headline. A note under it (cut, or nothing recorded) is italic. */
+.jl-note { font-style: italic; }
 .jl-store { color: var(--dim); white-space: pre-wrap; word-break: break-word; }
 .tgrp-body { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--line); }
 /* Pasted documents, as chips above the box: [name.txt] ×. The path is what the agent gets, so it
@@ -1041,6 +1045,10 @@ tr.row:hover .btn-row-rename { opacity: .9; }
 }
 tr.row:hover .btn-del-tree { opacity: 1; }
 .btn-del-tree:hover { background: #2a1418; border-color: #57262a; color: #ff9c94; }
+/* A merged, clean worktree deletes without the question, so its x is drawn quieter than the one that
+   asks first: grey at rest, the same red on hover as every other delete. */
+.btn-del-tree.is-direct { border-color: var(--line); background: #15181e; color: var(--dim); }
+.btn-del-tree.is-direct:hover { background: #2a1418; border-color: #57262a; color: #ff9c94; }
 /* The confirmation is its own row under the tree, so the question has room to say what will happen. */
 tr.row-confirm td {
   padding: 6px 10px;
@@ -1485,6 +1493,10 @@ table { width: 100%; border-collapse: collapse; table-layout: fixed; }
    fit all of that, so the two identifying columns get the room and the low-information ones give it up: Life held
    248px to show "0s" and a ring, and PR is usually "none". Tip, Ahead/Behind, Cherry, Dirty and Verdict keep enough
    for their widest real value. */
+/* The percentages below are only what the table looks like before the first measurement: `fitColumns` (app.js) sizes
+   every column from its own content on the first paint and again whenever a row changes, and writes px widths onto
+   the header cells. They stay as the fallback for the frame before that runs - and they are the numbers this all
+   replaced, which is why the worktree column starts starved. */
 thead th:nth-child(1) { width: 28%; }   /* worktree: name + agent badge + chips — the widest thing in the row */
 thead th:nth-child(2) { width: 22.5%; } /* branch */
 thead th:nth-child(3) { width: 6.2%; }  /* tip */
@@ -1503,6 +1515,28 @@ td.row-actions { padding-left: 4px; padding-right: 4px; }
 td:nth-child(8) { overflow: hidden; }
 td:nth-child(9) .badge { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 td.name, td.branch, td:nth-child(6), td:nth-child(9) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The worktree cell is the only cell whose content competes for its own width: a name that can run long, the rename
+   ✎, and the agent chips. Laid out as inline content the name took the whole cell, and the chips were the part that
+   got clipped - the row showed "…" where its agents were. As a flex row the name ellipsizes instead, and the
+   buttons and chips keep their whole width: what the row is called is the one thing that can afford to lose letters. */
+td.name > .name-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+td.name .row-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.name .btn-row-agent, td.name .btn-row-rename, td.name .sig { flex: none; }
+
+/* The edge between two header cells is the column's handle. The header is already `position: sticky`, so it is a
+   containing block for this absolutely placed strip - no extra positioning of the th is needed (which would break
+   the stickiness). It stays invisible until the pointer is on it: a board of column edges would read as a grid of
+   vertical rules. */
+.col-grip {
+  /* Inside its own header cell, not straddling the boundary: the NEXT cell is its own sticky stacking context and
+     paints over anything that reaches into it, so a grip centred on the edge was unclickable on its right half. */
+  position: absolute; top: 0; right: 0; width: 9px; height: 100%;
+  cursor: col-resize; z-index: 6;
+  border-right: 2px solid transparent;
+}
+.col-grip:hover, .col-grip.is-dragging { border-right-color: #3d6ea8; }
+body.col-resizing { user-select: none; }
+body.col-resizing, body.col-resizing * { cursor: col-resize !important; }
 thead th {
   position: sticky;
   top: 57px;
@@ -1662,6 +1696,23 @@ button.btn-row-agent.is-probing { opacity: .55; cursor: progress; }
 .badge.nocommits { color: var(--dim); background: #20242c; border-color: var(--line); }
 .badge.error { color: var(--dim); background: #20242c; border-color: var(--line); }
 .badge.stale { opacity: .65; border-style: dashed; }
+
+/* The UNMERGED chip is a control, not a statement: it starts the merge agent for its row. It keeps the badge's own
+   colours and shape (it is still a verdict), and only gains what a button needs - a pointer, a hover that is visibly
+   the same red, and a press that answers. `is-merging` is a live merge agent in that tree; the server refuses a second
+   one anyway, so the disabled state is the honest one to draw. A dirty row's chip stays a span: pressing it can do
+   nothing, and a dead button is worse than a sentence. */
+.badge.merge-start { font-family: inherit; cursor: pointer; }
+/* The glyph is the whole affordance, the way the ↻ on NOT-RUNNING is: a status chip that names an action is the
+   button, so it says so on its own face instead of growing a second control beside it. */
+.merge-glyph { margin-left: 6px; font-size: 11px; opacity: .75; }
+.badge.merge-start:hover .merge-glyph { opacity: 1; }
+.badge.merge-start:hover { background: #4a1f24; border-color: #8f3b41; color: #ffb4ad; }
+.badge.merge-start:active { transform: translateY(1px); }
+.badge.merge-start:focus-visible { outline: 2px solid #ff9c94; outline-offset: 1px; }
+.badge.merge-start:disabled { cursor: default; transform: none; }
+.badge.merge-start.is-merging,
+.badge.merge-start.is-starting { opacity: .7; background: var(--red-bg); border-color: #57262a; color: #ff9c94; }
 
 .clean { color: #7ee787; }
 .dirty { color: #f0c674; }

@@ -178,6 +178,41 @@ const state = {
   assistant: null,
 };
 
+// The write routes demand x-panel-token whenever the request does NOT come from this machine — loopback
+// is the panel's own UI and is never challenged. A browser on another machine authenticates once by
+// opening the link with ?token=…: the value is remembered here, dropped from the address bar so a copied
+// or shared URL stops carrying it, and every fetch below then sends it. It is kept in localStorage too,
+// so a later reload without the query string still works.
+const PANEL_TOKEN_KEY = "wtgui.panelToken";
+const panelToken = (() => {
+  let fromUrl = "";
+  try {
+    fromUrl = new URLSearchParams(location.search).get("token") || "";
+  } catch {
+    /* unparsable location: fall back to what is remembered */
+  }
+  if (fromUrl) {
+    try {
+      localStorage.setItem(PANEL_TOKEN_KEY, fromUrl);
+    } catch {
+      /* private mode: this load still carries it in memory */
+    }
+    try {
+      const clean = new URL(location.href);
+      clean.searchParams.delete("token");
+      history.replaceState(null, "", `${clean.pathname}${clean.search}${clean.hash}`);
+    } catch {
+      /* tidying the URL is a courtesy, not a requirement */
+    }
+    return fromUrl;
+  }
+  try {
+    return localStorage.getItem(PANEL_TOKEN_KEY) || "";
+  } catch {
+    return "";
+  }
+})();
+
 // Every call to the panel's own server goes through here. A plain fetch has no deadline, so when the
 // server is restarting — a gateway bounce refuses or hangs connections for a while — the promise never
 // settles: the button stays disabled, no message appears, and the card is indistinguishable from a
@@ -185,8 +220,19 @@ const state = {
 async function apiFetch(url, opts = {}, { timeoutMs = 20000 } = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  // One wrapper means one place to attach the token: a route added later cannot forget to send it, and
+  // the local board (where the header is ignored) behaves exactly as before.
+  const headers = new Headers(opts.headers || {});
+  if (panelToken) headers.set("x-panel-token", panelToken);
   try {
-    return await fetch(url, { ...opts, signal: ctrl.signal });
+    const res = await fetch(url, { ...opts, headers, signal: ctrl.signal });
+    if (res.status === 403) {
+      // Reached from another machine without a usable token. Say so, instead of letting it look like the
+      // panel is broken — reads are still allowed, so the board still draws and the action is the only
+      // thing that failed.
+      showBanner("This browser may only read the board: open the panel once with its ?token=… link to allow changes.");
+    }
+    return res;
   } catch (e) {
     if (e && e.name === "AbortError") {
       throw new Error(`the panel server did not answer within ${Math.round(timeoutMs / 1000)}s — it may be restarting; try again`);
@@ -929,11 +975,25 @@ function conversations() {
   }
   const out = [];
   for (const [thread, turns] of groups) {
-    turns.sort((a, b) => (a.turn || 1) - (b.turn || 1) || String(a.startedAt).localeCompare(String(b.startedAt)));
+    // By the clock, not by `turn`. That counter is `siblings.length + 1` over the jobs KEEP_JOBS still holds, so
+    // trimming old turns moves it BACKWARDS: the turn that resumed an interrupted thread got 7 while the dead turn
+    // it replaced was still 8, and the card drew "turn 7 · running" ABOVE "turn 8 · interrupted" — running on top
+    // of interrupted, which is exactly what a reader reads as a contradiction (measured live on 7473). The clock
+    // only moves forward, so it orders the list; the counter is the tiebreaker for one millisecond.
+    turns.sort((a, b) => (Date.parse(a.startedAt || "") || 0) - (Date.parse(b.startedAt || "") || 0) || (a.turn || 0) - (b.turn || 0));
     out.push({ thread, turns, first: turns[0], latest: turns[turns.length - 1] });
   }
   out.sort((a, b) => String(b.latest.startedAt).localeCompare(String(a.latest.startedAt)));
   return out;
+}
+
+// The number a turn is drawn under (see `turnHead`): its place in the thread by the clock. The one-second clock tick
+// rewrites a running head's text in place, so it has to agree with the render or the label jumps a second later.
+function turnSeqOf(j) {
+  const turns = [...state.jobs.values()].filter((x) => (x.thread || x.id) === (j.thread || j.id));
+  turns.sort((a, b) => (Date.parse(a.startedAt || "") || 0) - (Date.parse(b.startedAt || "") || 0) || (a.turn || 0) - (b.turn || 0));
+  const i = turns.findIndex((x) => x.id === j.id);
+  return i < 0 ? j.turn || "?" : i + 1;
 }
 
 // URLs in agent output become links. They are opened by the panel (POST /api/open-url) rather than by
@@ -1112,41 +1172,125 @@ function burstSegments(lines) {
 // Every line of a group, from the live model when we have it and from the DOM when the group came from a full render.
 function groupLines(grp) {
   if (grp._burst) return grp._burst;
-  return [...grp.querySelectorAll(".tgrp-body .jl")].map((d) => ({
-    kind: (d.className.match(/jl-([a-z-]+)/) || [])[1] || "raw",
-    text: d.textContent,
-  }));
+  // Read the console lines back out of the DOM - but not the panel's own additions to a block: stored output, the
+  // notes under it and an opened batch are all drawn UNDER a line, so counting them inflates the line tally and
+  // turns them into console lines of their own on the next rebuild (an opened batch was re-absorbed as five
+  // summaries that then satisfied "the preview carried this result").
+  return [...grp.querySelectorAll(".tgrp-body .jl")]
+    .filter((d) => !d.classList.contains("jl-store") && !d.classList.contains("jl-note") && !d.classList.contains("jl-panel"))
+    .map((d) => ({
+      kind: (d.className.match(/jl-([a-z-]+)/) || [])[1] || "raw",
+      text: d.textContent,
+    }));
+}
+
+// How many result lines of each tool the bursts already in this console have drawn. That count is where the NEXT
+// burst's pairing starts (see data-gofs): a turn holds several bursts of the same tool, and each one owns its own
+// slice of the store's rows.
+function storeOffsetsBefore(consoleEl, except) {
+  const seen = {};
+  for (const g of consoleEl.querySelectorAll(".tgrp")) {
+    if (g === except) continue;
+    for (const l of groupLines(g)) {
+      if (l.kind !== "tool-out") continue;
+      const m = TOOL_DONE_RE.exec(String(l.text || ""));
+      if (m) seen[m[1]] = (seen[m[1]] || 0) + 1;
+    }
+  }
+  return seen;
+}
+
+// How many result blocks the console drew for one tool: each one is a call's output, and the session store has
+// one row for each of them, so this is also how many rows to ask for.
+function resultBlocksFor(lines, tool) {
+  return (lines || []).filter((l) => {
+    if (l.kind !== "tool-out") return false;
+    const m = TOOL_DONE_RE.exec(String(l.text || ""));
+    return Boolean(m) && m[1] === tool;
+  }).length;
+}
+
+// Rebuild the group the reader has open, wherever it is on the board: the element that asked for the results may
+// have been replaced by a repaint while the request was in flight, so aim by the group's stable state key.
+function repaintToolGroup(grp) {
+  if (!grp || !grp.dataset) return;
+  // One turn can be drawn twice (the pinned card and its paged copy), so the lookup stays inside the console that
+  // owns this group. The state key is the stable identity and wins; the group key is only a fallback, because the
+  // index in it shifts when a long turn is trimmed to its last 300 lines.
+  const scope = grp.closest("pre.job-out") || document;
+  const gkey = grp.dataset.gstate || "";
+  const key = grp.dataset.tgrp || "";
+  const live =
+    (gkey && scope.querySelector(`.tgrp[data-gstate="${CSS.escape(gkey)}"]`)) ||
+    (key && scope.querySelector(`.tgrp[data-tgrp="${CSS.escape(key)}"]`));
+  if (!live) return;
+  const bodyEl = live.querySelector(".tgrp-body");
+  rebuildToolGroup(live, { filter: live.dataset.filter || "", open: bodyEl ? !bodyEl.hidden : true });
 }
 
 // Ask the panel server for this turn's stored results for one tool. The live stream's preview is often empty,
-// so this is where "↳ write_file" turns into the thing the tool actually returned.
-async function fetchToolStore(turnId, tool, grp = null) {
+// so this is where "↳ patch" turns into the thing the tool actually returned.
+//
+// A turn that is still running keeps producing results: a fetch taken when the reader opened the block saw one
+// patch while the burst ended with five, and every later call kept an empty header - so an entry cached while the
+// turn is live expires (five seconds) instead of answering for the rest of the turn. An entry taken while live is
+// also refetched ONCE after the turn ends: the last results of a turn land within a second of its endedAt, and
+// freezing the mid-run answer is how a finished turn shows three "no output recorded" where the output exists.
+async function ensureToolStore(turnId, tool, grp = null) {
   const cacheKey = `${turnId}|${tool}`;
   if (!turnId || !tool || !state.jobs.has(turnId)) return;
-  if (state.toolStore.has(cacheKey) || state.toolStorePending.has(cacheKey)) return;
+  if (state.toolStorePending.has(cacheKey)) return;
   const job = state.jobs.get(turnId);
+  const live = turnLive(job);
+  const have = state.toolStore.get(cacheKey);
+  if (have && !(have.live && !live) && (!live || Date.now() - have.at < 5000)) return;
+  // One row per result line the WHOLE TURN drew for this tool, because the entry is shared by every burst in the
+  // turn: sizing it to the group that happened to fetch first cut the later bursts off at that group's count, and
+  // the missing rows read as "no output recorded".
+  const n = Math.min(60, Math.max(4, resultBlocksFor(state.jobLines.get(turnId) || [], tool) + 1));
+  let changed = false;
   state.toolStorePending.add(cacheKey);
   try {
     const q = new URLSearchParams({
       thread: job.thread || job.id,
       tool,
+      n: String(n),
       from: String(Date.parse(job.startedAt || "") || 0),
       to: String(Date.parse(job.endedAt || "") || 0),
     });
     const r = await apiFetch(`/api/tool-results?${q}`, {}, { timeoutMs: 15000 });
+    // apiFetch does not throw on a 4xx/5xx: a refusal parsed as `{results: []}` would be cached as "the store has
+    // nothing", and every call in the block would say so for good.
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
-    state.toolStore.set(cacheKey, Array.isArray(d.results) ? d.results : []);
+    const results = Array.isArray(d.results) ? d.results : [];
+    changed = JSON.stringify(results) !== JSON.stringify(have ? have.results : null);
+    state.toolStore.set(cacheKey, { at: Date.now(), live, results });
+    // One entry per (turn, tool) the reader ever opened; a long-lived tab must not keep them all.
+    while (state.toolStore.size > 300) state.toolStore.delete(state.toolStore.keys().next().value);
   } catch {
-    state.toolStore.set(cacheKey, []);
+    // Left uncached on purpose: a failed read is not an answer, and the next open retries it.
   } finally {
     state.toolStorePending.delete(cacheKey);
   }
-  const live = grp && grp.isConnected ? grp : document.querySelector(`.tgrp[data-tgrp="${CSS.escape(`${turnId}#0`)}"]`);
-  if (live) {
-    const bodyEl = live.querySelector(".tgrp-body");
-    rebuildToolGroup(live, { filter: live.dataset.filter || tool, open: bodyEl ? !bodyEl.hidden : true });
-  }
+  // Only a real change is worth a repaint: rebuilding the block detaches its text nodes, and a reader dragging
+  // across a diff loses the selection when it happens on every sweep.
+  if (changed) repaintToolGroup(grp);
 }
+
+// A block the reader has open keeps its stored output current while its turn runs, and settles once when the turn
+// ends. Only open blocks are asked for, and ensureToolStore's own throttle bounds the requests.
+setInterval(() => {
+  for (const grp of document.querySelectorAll(".tgrp")) {
+    const bodyEl = grp.querySelector(".tgrp-body");
+    if (!bodyEl || bodyEl.hidden) continue;
+    const turnId = String(grp.dataset.tgrp || "").split("#")[0];
+    if (!state.jobs.has(turnId)) continue;
+    const lines = groupLines(grp);
+    const tools = grp.dataset.filter ? [grp.dataset.filter] : toolBurstRows(lines).map((r) => r.name);
+    for (const tool of tools) void ensureToolStore(turnId, tool, grp);
+  }
+}, 3000);
 
 // The calls behind a "+ N commands" batch: the run stream only carries the gateway's summary of a parallel batch, so
 // this asks the panel server to read the session transcript and then re-renders the burst open with them in it.
@@ -1192,13 +1336,23 @@ async function loadBatchCalls(btn) {
 function rebuildToolGroup(grp, { filter = "", open = false } = {}) {
   const key = grp.dataset.tgrp || "";
   const lines = groupLines(grp);
-  const gkey = grp.dataset.gstate || toolGroupStateKey(key, lines);
+  // The anchor is the burst's own identity and travels on the node: lines read back out of the DOM carry no
+  // timestamp, so without it a rebuild re-keyed the group from the first line's text and the reader's open
+  // state was remembered under one key while the next repaint looked it up under another.
+  const anchor = grp.dataset.gat || "";
+  let gofs = null;
+  try {
+    gofs = grp.dataset.gofs ? JSON.parse(grp.dataset.gofs) : null;
+  } catch {
+    gofs = null;
+  }
+  const gkey = grp.dataset.gstate || toolGroupStateKey(key, lines, anchor);
   // The click is the new truth, so record it before rendering: toolGroupHtml prefers the remembered state, and
   // otherwise it would faithfully put back the state the reader just changed.
   if (!open && !filter) state.toolGroupOpen.delete(gkey);
   else state.toolGroupOpen.set(gkey, { open, filter });
   const holder = document.createElement("div");
-  holder.innerHTML = toolGroupHtml(lines, key, filter, open);
+  holder.innerHTML = toolGroupHtml(lines, key, filter, open, anchor, gofs);
   const fresh = holder.firstElementChild;
   if (!fresh) return;
   fresh._burst = lines;
@@ -1209,10 +1363,15 @@ function rebuildToolGroup(grp, { filter = "", open = false } = {}) {
 // A burst's identity, for remembering whether the reader opened it. The group's DOM key changes when the console
 // is rebuilt from the buffer (it is the group's index) and when the stream starts a new burst (it is a timestamp),
 // so the state is keyed by the turn plus the first line the burst holds - which is the same line in all three.
-function toolGroupStateKey(key, lines) {
+function toolGroupAnchor(lines) {
   const first = Array.isArray(lines) && lines.length ? lines[0] : null;
-  const anchor = first ? String(first.lid || first.at || first.text || "").slice(0, 40) : "";
-  return `${String(key || "").split("#")[0]}|${anchor}`;
+  return first ? String(first.lid || first.at || first.text || "").slice(0, 40) : "";
+}
+
+// `anchor` is the identity the node already carries (data-gat), which wins over re-deriving it from lines that were
+// read back out of the DOM and have lost their timestamp.
+function toolGroupStateKey(key, lines, anchor = "") {
+  return `${String(key || "").split("#")[0]}|${anchor || toolGroupAnchor(lines)}`;
 }
 
 // Record the reader's choice from a rendered group, so the next rebuild can put it back. An open block with no
@@ -1249,20 +1408,24 @@ function linkBatchTail(text, tool, gkey) {
   return `${esc(m[1])} <button type="button" class="tgrp-batch" data-batch-tool="${esc(tool)}" data-batch-n="${n}" data-batch-key="${esc(gkey)}" data-batch-first="${esc(first)}" title="${esc(title)}">+ ${n} command${n === 1 ? "" : "s"}</button>`;
 }
 
-function toolGroupHtml(lines, key, filter = "", openBody = false) {
+function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", gofs = null) {
   const rows = toolBurstRows(lines);
   // No recognisable call lines (a result whose start was trimmed away): show the plain lines rather than an empty box.
   if (!rows.length) return lines.map((l) => lineHtml(l)).join("");
   // The reader's own choice wins over the caller's default: a rebuild is not the reader closing the block.
-  const gkey = toolGroupStateKey(key, lines);
+  const gkey = toolGroupStateKey(key, lines, anchor);
   const saved = state.toolGroupOpen.get(gkey);
   if (saved) {
     filter = saved.filter || filter;
     openBody = saved.open;
   }
+  // A burst is only in flight while its TURN is live: the bare counts kept a dead turn's last burst ticking. A turn
+  // the panel lost at a restart still drew "running 77m16s" an hour later, one line above the word "interrupted".
+  const turnJob = state.jobs.get(String(key).split("#")[0]);
+  const live = turnJob ? turnLive(turnJob) : false;
   const head = rows
     .map((r) => {
-      const running = r.count > r.done;
+      const running = r.count > r.done && live;
       const state = running
         ? `<span class="jl-live tgrp-state" data-live-from="${r.at || Date.now()}">${liveSuffix(r.at || Date.now())}</span>`
         : r.duration != null
@@ -1275,33 +1438,73 @@ function toolGroupHtml(lines, key, filter = "", openBody = false) {
     .join("");
   const segments = burstSegments(lines).filter((s) => !filter || s.tool === filter);
   const turnId = String(key).split("#")[0];
-  const stored = filter ? state.toolStore.get(`${turnId}|${filter}`) : null;
   const bodyLines = segments.flatMap((s) => s.lines);
-  // The live stream only carries a preview of a tool result, and often an empty one. When the reader opens a call
-  // that came back empty, the stored result is what they came to see - it is fetched on the first open and kept.
-  const storeHtml = (seg, i) => {
-    const got = stored?.[i];
-    if (!got) return "";
-    const lines = String(got.text || "").replace(/\r/g, "").split("\n").slice(0, 60);
-    return `<div class="jl jl-store-cap">↳ stored output${got.truncated ? " (cut)" : ""}</div>` + lines.map((l) => `<div class="jl jl-store">${linkifyText(l)}</div>`).join("");
+  // Each result block takes the next stored row for ITS tool: the console's result lines and the store's rows are
+  // both in the order the calls ran, so position pairs them. The segment index did not - a burst interleaves a call
+  // with the result it produced, which drew call #2's output under call #1's result line.
+  const LF = String.fromCharCode(10);
+  const STORE_LINES = 40;
+  // Where this group starts in the store's rows for each tool (carried as data-gofs): a turn can hold several
+  // bursts, and every one of them pairs from ITS first result - a fresh 0 in each group drew burst 1's output
+  // under burst 2's header.
+  const cursorsStart = new Map(Object.entries(gofs || {}));
+  const cursors = new Map(cursorsStart);
+  const takeStored = (tool) => {
+    const rowsOut = state.toolStore.get(`${turnId}|${tool}`)?.results || null;
+    if (!rowsOut || !rowsOut.length) return null;
+    const i = cursors.get(tool) || 0;
+    cursors.set(tool, i + 1);
+    return rowsOut[i] || null;
   };
+  const storedHtml = (got) => {
+    const all = String(got.text || "").split(LF);
+    const cut = got.truncated && !/characters not shown/.test(got.text || "");
+    if (!all.some((l) => l.trim())) return cut ? '<div class="jl jl-dim jl-note">  this result was cut before its text</div>' : "";
+    const shown = all.slice(0, STORE_LINES);
+    const more = all.length - shown.length;
+    return (
+      shown.map((l) => `<div class="jl jl-store">${linkifyText(l)}</div>`).join("") +
+      (more > 0 ? `<div class="jl jl-dim jl-note">… ${more} more line(s) of this result</div>` : "") +
+      (cut ? `<div class="jl jl-dim jl-note">… this result was cut</div>` : "")
+    );
+  };
+  // A block that starts with a result header is a call's output; anything else is a call itself.
+  const resultHead = (seg) => (seg.lines[0] && seg.lines[0].kind === "tool-out" ? TOOL_DONE_RE.exec(String(seg.lines[0].text || "")) : null);
+  const liveTurn = turnLive(state.jobs.get(turnId));
+  const bodyOf = (seg) => {
+    const out = seg.lines.map((l) => lineHtml(l)).join("");
+    if (!resultHead(seg)) return out;
+    // The cursor advances for EVERY result line, preview or not. A tool whose live previews are populated used to
+    // return before consuming its row, so its rows piled up and were re-printed as "more stored result" at the end
+    // while the next result line paired with the wrong row.
+    const got = takeStored(seg.tool);
+    if (seg.lines.slice(1).some((l) => String(l.text || "").trim())) return out;
+    if (got) return out + storedHtml(got);
+    return out + `<div class="jl jl-dim jl-note">  ${liveTurn ? "no output in the session store yet" : "no output recorded for this call"}</div>`;
+  };
+  // No leftover list: the store's rows are paired per burst, so a group cannot know which rows belong to a burst
+  // further down the turn — printing the rest of the array re-printed the NEXT burst's output under this one's last
+  // result line (measured on a two-burst turn). A result line the console lost stays unshown; the call line is
+  // still there, and the store is one click away on that tool's row.
   // A batch the reader has opened: the calls behind its "+ N commands", oldest first.
   const batchBlocks = rows
     .map((r) => {
       const calls = state.batchCalls.get(`${gkey}|${r.name}`);
       if (!calls || !calls.length) return "";
+      // jl-panel: this block is drawn BY the panel, so groupLines must not read it back as console lines (it did,
+      // and the absorbed summaries then satisfied "the preview carried this result", hiding the stored output).
       return (
-        `<div class="jl jl-dim">↳ the ${calls.length} call${calls.length === 1 ? "" : "s"} in this batch (${esc(r.name)})</div>` +
-        calls.map((c) => `<div class="jl jl-tool-out">${esc(c.summary)}</div>`).join("")
+        `<div class="jl jl-dim jl-panel">↳ the ${calls.length} call${calls.length === 1 ? "" : "s"} in this batch (${esc(r.name)})</div>` +
+        calls.map((c) => `<div class="jl jl-tool-out jl-panel">${esc(c.summary)}</div>`).join("")
       );
     })
     .join("");
   const body =
     (bodyLines.length > 0
-      ? segments.map((seg, i) => seg.lines.map((l) => lineHtml(l)).join("") + storeHtml(seg, i)).join("")
+      ? segments.map((seg) => bodyOf(seg)).join("")
       : `<div class="jl jl-dim">this run recorded nothing for ${esc(filter)}</div>`) + batchBlocks;
   const label = filter ? `all ${lines.length}` : `${lines.length} line${lines.length === 1 ? "" : "s"}`;
-  return `<div class="tgrp" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
+  return `<div class="tgrp" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gofs="${esc(JSON.stringify(Object.fromEntries(cursorsStart)))}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
       <div class="tgrp-head">${head}<button type="button" class="tgrp-more${filter ? " is-open" : ""}" data-tgrp-more="${esc(key)}" title="${filter ? "show every tool in this run, not just this one" : "show every call in this run of tools, with its output"}">${label}</button></div>
       <div class="tgrp-body"${openBody || filter ? "" : " hidden"}>${body}</div>
     </div>`;
@@ -1328,10 +1531,21 @@ function turnBody(turn, copy = "") {
   // Which started tool call has no result yet. Parallel calls interleave, so count starts and
   // completions per tool name instead of assuming "the last line is the running one".
   const busy = running ? inflightToolIndex(lines) : -1;
+  // Each burst pairs its result lines with the store's rows from ITS own offset: a turn can hold a patch burst, a
+  // paragraph, then another patch burst, and the second one must start after the first one's rows.
+  const storeSeen = new Map();
   const body =
     burstGroups(lines)
       .map((item, gi) => {
-        if (item.group) return toolGroupHtml(item.lines, `${turn.id}#${gi}`);
+        if (item.group) {
+          const gofs = Object.fromEntries(storeSeen);
+          for (const l of item.lines) {
+            if (l.kind !== "tool-out") continue;
+            const m = TOOL_DONE_RE.exec(String(l.text || ""));
+            if (m) storeSeen.set(m[1], (storeSeen.get(m[1]) || 0) + 1);
+          }
+          return toolGroupHtml(item.lines, `${turn.id}#${gi}`, "", false, "", gofs);
+        }
         const l = item.line;
         const i = lines.indexOf(l);
         const live = i === busy ? `<span class="jl-live" data-live-from="${Number(l.at) || Date.now()}">${liveSuffix(Number(l.at) || Date.now())}</span>` : "";
@@ -1694,7 +1908,10 @@ function originHtml(turn) {
   }
   if (o && o.kind === "assistant-spawn") {
     const where = o.project ? `a worktree cut in ${o.project}` : "a directory that already existed";
-    return ` <span class="turn-origin mono" title="${esc(where)}">\u21b3 started by the assistant</span>`;
+    // A SPAWN IN name that had to be resolved to a real tree: the panel says which one it picked here, because
+    // a chip that only says "the assistant started this" hides the one fact that was in doubt.
+    const fit = o.resolvedPath ? ` — ${o.resolvedFrom} had been renamed, resolved to ${o.resolvedPath} (${o.resolvedHow || "matched"})` : "";
+    return ` <span class="turn-origin mono" title="${esc(where)}${esc(fit)}">\u21b3 started by the assistant</span>`;
   }
   if (!o || o.kind !== "subagent-delivery") return "";
   const subs = Array.isArray(o.subagents) ? o.subagents : [];
@@ -1708,7 +1925,10 @@ function originHtml(turn) {
 }
 
 function turnHead(turn, index, open, copy = "", inline = false) {
-  const label = `turn ${turn.turn || index + 1}`;
+  // The number the reader counts down the thread. Not `turn.turn`: that counter is trimmed with the store and can
+  // repeat (a restarted board showed two "turn 6" and two "turn 7" in one card), while `index` is the turn's place in
+  // the clock-ordered list that the pager already counts ("turns 5–7 of 7").
+  const label = `turn ${index + 1}`;
   const pinned = state.pinnedTurns.has(turn.id);
   const state_ = turn.revived
     // Rebuilt from the gateway's store: there is no duration to report, and "done · 0s" claims a run
@@ -3470,8 +3690,20 @@ function saveTreeNames() {
   }
 }
 
-// The name the row shows: what the reader typed, else the agent's own title, else the directory.
+// The project's own checkout — the directory the project IS, and the parent of every worktree cut from it. Its name
+// is the folder's name and nothing else: an agent run in the checkout (a base-checkout run, no tree cut) has a title
+// of its own, and letting that title onto this row renames the project on the board after one agent's job.
+function isProjectRootRow(row) {
+  const root = state.projects.get(row.project)?.path;
+  if (!root || !row.path) return false;
+  return normPath(root).toLowerCase() === normPath(row.path).toLowerCase();
+}
+
+// The name the row shows: what the reader typed, else the agent's own title, else the directory. The project's own
+// checkout is exempt from both — it reads the folder's name, whatever agents have run in it and whatever was stored
+// against its key.
 function treeTitleOf(row) {
+  if (isProjectRootRow(row)) return "";
   const own = state.treeNames.get(keyOf(row.project, row.path));
   if (own) return own;
   const a = agentsFor(row)[0];
@@ -4324,7 +4556,6 @@ function paintThink(turn, copy = "") {
   const key = turnKey(turn, copy);
   const el = document.querySelector(`details.think[data-think-turn="${CSS.escape(key)}"]`);
   if (!el) return;
-  const open = el.open;
   const was = el.querySelector(".think-body");
   // A re-read replaces the node, and a new node starts at its first line. Remember where the reader was (and what
   // the panel last put there, so the scroll event the move causes is not read as the reader scrolling).
@@ -4333,10 +4564,6 @@ function paintThink(turn, copy = "") {
   holder.innerHTML = thinkHtml(turn, copy);
   const fresh = holder.firstElementChild;
   if (!fresh) return;
-  if (fresh.open !== open) {
-    fresh.open = open;
-    thinkAutoOpened.add(fresh);
-  }
   el.replaceWith(fresh);
   const body = fresh.querySelector(".think-body");
   if (!body) return;
@@ -4603,7 +4830,9 @@ function paintAgentBadges() {
   for (const row of state.rows.values()) {
     const tr = document.querySelector(`tr.row[data-key="${CSS.escape(keyOf(row.project, row.path))}"]`);
     if (!tr) continue;
-    const cell = tr.querySelector("td.name");
+    // Inside the name cell's own flex row: appended to the <td> it lands after that row and drops onto a second
+    // line, which made a row taller the moment an agent started in it.
+    const cell = tr.querySelector("td.name > .name-line") || tr.querySelector("td.name");
     const existing = cell?.querySelector("[data-open-row]");
     const html = agentBadgeHtml(row);
     if (existing && !html) {
@@ -4612,7 +4841,7 @@ function paintAgentBadges() {
     }
     if (!html) continue;
     if (existing) existing.outerHTML = html;
-    else cell?.insertAdjacentHTML("beforeend", ` ${html}`);
+    else cell?.insertAdjacentHTML("beforeend", html);
   }
 }
 
@@ -5010,8 +5239,20 @@ function appendJobLine(evt) {
       // A tool chosen by the reader keeps its filter and open body while the burst grows under it.
       const filter = openGroup ? openGroup.dataset.filter || "" : "";
       const bodyEl = openGroup ? openGroup.querySelector(".tgrp-body") : null;
+      // A growing burst keeps the offset it was rendered with; a new one starts where this console's earlier bursts
+      // stopped consuming this tool's rows.
+      let gofs = null;
+      if (openGroup) {
+        try {
+          gofs = openGroup.dataset.gofs ? JSON.parse(openGroup.dataset.gofs) : null;
+        } catch {
+          gofs = null;
+        }
+      } else {
+        gofs = storeOffsetsBefore(out, null);
+      }
       const holder = document.createElement("div");
-      holder.innerHTML = toolGroupHtml(lines, key, filter, bodyEl ? !bodyEl.hidden : false);
+      holder.innerHTML = toolGroupHtml(lines, key, filter, bodyEl ? !bodyEl.hidden : false, openGroup ? openGroup.dataset.gat || "" : "", gofs);
       const fresh = holder.firstElementChild;
       if (fresh) {
         fresh._burst = lines;
@@ -5814,8 +6055,26 @@ function agentBadgeHtml(row) {
 }
 
 // ---- removing a worktree ---------------------------------------------------------------------
+// A worktree whose work is already in main and which has nothing uncommitted is housekeeping: its ✕
+// deletes it without the in-place question, because there is nothing in that folder main does not
+// already have. Everything else keeps the question — unmerged commits, a stale verdict (the cheap pass
+// only knows what it last saw), any modified or untracked file, and the main branch itself, which is
+// never deleted from this table (the project's own checkout has no ✕ at all).
+function deletableWithoutAsking(key) {
+  const row = state.rows.get(key);
+  if (!row) return false;
+  if (row.verdictStale) return false;
+  if (row.dirty || row.untracked) return false;
+  const verdict = String(row.verdict || "");
+  if (verdict === "ON MAIN") return false;
+  const mainBranch = state.projects.get(row.project)?.mainBranch;
+  if (row.branch && mainBranch && row.branch === mainBranch) return false;
+  return verdict.startsWith("MERGED");
+}
+
 // The red ✕ opens an inline confirmation row under the tree: the question says where the files go
-// (Recycle Bin) rather than just "delete?", and nothing happens until the second click.
+// (Recycle Bin) rather than just "delete?", and nothing happens until the second click. The exception is
+// a merged, clean worktree, whose ✕ goes straight through (see deletableWithoutAsking).
 function showWorktreeConfirm(key) {
   for (const el of document.querySelectorAll("tr.row-confirm")) el.remove();
   state.confirmEls.clear();
@@ -6012,6 +6271,103 @@ async function renameWorktreePrompt(btn) {
   }
 }
 
+// ---- merge control: the UNMERGED chip ------------------------------------------------------
+// A row that carries commits main does not have is the one row with an action worth taking, so that chip is a button:
+// one click starts an agent IN that worktree whose whole job is to land the branch (the script is lib/merge-prompt.js
+// on the server). The button exists only while the tree is clean — a merge agent commits what it finds, so a
+// half-finished tree would land somebody else's work — and while no merge agent is already working that tree. Both
+// facts are re-read from git by the route, so a stale board cannot start one by accident.
+const mergeInFlight = new Map();
+// The chip a press started on, so a release that lands on a rebuilt one still starts the same merge.
+let mergePress = null;
+
+function mergeAgentLabel(row) {
+  for (const a of agentsFor(row) || []) {
+    const label = String(a?.latest?.label || a?.first?.label || "");
+    if (!label.startsWith("MERGING into ")) continue;
+    if (convLive(a)) return label;
+  }
+  return null;
+}
+
+function baseBranchOf(row) {
+  return String(state.projects.get(row.project)?.mainBranch || "").trim() || "main";
+}
+
+function verdictHtml(row) {
+  const verdict = String(row.verdict || "");
+  const cls = `badge ${verdictClass(verdict)}${row.verdictStale ? " stale" : ""}`;
+  const text = esc(row.verdict);
+  // Every other verdict is a statement; only UNMERGED has an action behind it.
+  if (!verdict.startsWith("UNMERGED")) return `<span class="${cls}">${text}</span>`;
+  const key = keyOf(row.project, row.path);
+  const attrs =
+    `data-merge-start="${esc(key)}" data-merge-project="${esc(row.project)}" data-merge-path="${esc(row.path)}"` +
+    ` data-merge-branch="${esc(row.branch || "")}" data-merge-label="${esc(row.verdict)}"`;
+  const merging = mergeAgentLabel(row);
+  if (merging) {
+    return `<button type="button" class="${cls} merge-start is-merging" ${attrs} disabled title="${esc(
+      `${merging} is working this tree now — its card is under this row`,
+    )}">${text}</button>`;
+  }
+  const dirty = Number(row.dirty) || 0;
+  const untracked = Number(row.untracked) || 0;
+  if (dirty || untracked) {
+    // Not a dead button: the chip stays a statement and its tooltip says what would make it an action, so a click
+    // can never start a merge over uncommitted work.
+    return `<span class="${cls}" title="${esc(
+      `this is merged by an agent, not by hand: ${dirty} modified and ${untracked} untracked file(s) are somebody's unfinished work — commit or stash them and the button appears`,
+    )}">${text}</span>`;
+  }
+  const base = baseBranchOf(row);
+  return `<button type="button" class="${cls} merge-start" ${attrs} title="${esc(
+    `start an agent here that merges ${row.branch || "this branch"} into ${base}: fast-forward first, then a rebase or a real merge, ` +
+      `never dropping ${base}'s own code; it runs the unit, integration and Playwright tests on a port of its own, ` +
+      `pushes only when they pass, and stops every server it started`,
+  )}">${text}<span class="merge-glyph" aria-hidden="true">\u21e5</span></button>`;
+}
+// ---- end merge control
+
+// One click, and the agent is the server's business: this only says where. A repaint can replace the button between
+// press and release (the board rebuilds the table on every scan), so the click is taken at pointerup in the delegated
+// handler and the request is keyed on the row, not on the node.
+async function startMerge(btn) {
+  const path = btn.dataset.mergePath || "";
+  const project = btn.dataset.mergeProject || "";
+  if (!path) return;
+  const key = btn.dataset.mergeStart || keyOf(project, path);
+  if (Date.now() - (mergeInFlight.get(key) || 0) < 15000) return;
+  mergeInFlight.set(key, Date.now());
+  const label = btn.dataset.mergeLabel || btn.textContent || "";
+  btn.disabled = true;
+  btn.classList.add("is-starting");
+  btn.textContent = "starting…";
+  try {
+    const r = await apiFetch(
+      "/api/worktree/merge",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project, path }) },
+      { timeoutMs: 120000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    showBanner(`${d.label || "MERGING"} started · ${d.branch || "branch"} → ${d.base || "base"}${d.job?.id ? ` · ${d.job.id}` : ""}`);
+    if (d.job) {
+      updateJob(d.job, { scroll: false });
+      revealSpawnedAgent(d.job);
+    }
+    await resync();
+  } catch (e) {
+    mergeInFlight.delete(key);
+    showBanner(`could not start the merge — ${String(e.message || e)}`);
+  } finally {
+    if (btn.isConnected) {
+      btn.disabled = false;
+      btn.classList.remove("is-starting");
+      btn.textContent = label;
+    }
+  }
+}
+
 function rowHtml(row) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   const dirty =
@@ -6023,10 +6379,9 @@ function rowHtml(row) {
     : row.remoteBranch === "gone"
       ? `<span class="dimmer">none · branch gone</span>`
       : `<span class="dimmer">none</span>`;
-  const badge = `<span class="badge ${verdictClass(row.verdict)}${row.verdictStale ? " stale" : ""}">${esc(row.verdict)}</span>`;
-  // The project's own checkout is not a worktree anyone may delete from here.
-  const projectRoot = state.projects.get(row.project)?.path;
-  const isProjectRoot = projectRoot && normPath(projectRoot).toLowerCase() === normPath(row.path).toLowerCase();
+  const badge = verdictHtml(row);
+  // The project's own checkout is not a worktree anyone may delete or rename from here: it keeps the folder's name.
+  const isProjectRoot = isProjectRootRow(row);
   // A tree is named from the prompt, cut at 24 characters; the agent names itself better a moment later. The button
   // offers that name first and takes anything the reader types. The branch column already carries the real name, so
   // the row does not repeat it here.
@@ -6036,9 +6391,12 @@ function rowHtml(row) {
   const renameBtn = isProjectRoot
     ? ""
     : `<button class="btn-row-rename" data-rename-tree="${esc(keyOf(row.project, row.path))}" data-rename-project="${esc(row.project)}" data-rename-path="${esc(row.path)}" data-rename-name="${esc(row.name)}" data-rename-suggest="${esc(suggestName)}" title="name this worktree — renames its branch, and the directory when nothing is holding it${suggestName ? ` (offered: “${esc(suggestName)}”)` : ""}">\u270e</button>`;
+  // One ✕ per row, and whether it needs the question at all: merged + clean deletes straight away.
+  const delKey = keyOf(row.project, row.path);
+  const delDirect = !isProjectRoot && deletableWithoutAsking(delKey);
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
-    <td class="name"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button> <span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span> ${renameBtn} ${agentBadgeHtml(row)}</td>
+    <td class="name"><div class="name-line"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${agentBadgeHtml(row)}</div></td>
     <td class="mono branch">${esc(row.branch || "—")}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
@@ -6046,8 +6404,8 @@ function rowHtml(row) {
     <td>${pr}</td>
     <td class="mono nowrap">${dirty}</td>
     ${ageCellHtml(row)}
-    <td>${badge}</td>
-    <td class="row-actions">${isProjectRoot ? "" : `<button class="btn-del-tree" data-del-tree="${esc(keyOf(row.project, row.path))}" title="remove this worktree — its files go to the Recycle Bin and git's record of it is pruned">✕</button>`}</td>
+    <td class="verdict">${badge}</td>
+    <td class="row-actions">${isProjectRoot ? "" : `<button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>
   </tr>`;
 }
 
@@ -7396,6 +7754,254 @@ function refreshChips(name) {
   if (el) el.innerHTML = chipsHtml(name);
 }
 
+// ---- column widths: measured from the rows, draggable, remembered ----------------------------
+// The table is `table-layout: fixed` on purpose (auto layout let one long branch grow it past its card), so every
+// column width is a number somebody has to choose. Percentages chose badly: the verdict column held 12.6% of the
+// row to show "NO COMMITS", and the worktree column held 28% to carry a name, a rename ✎ and the agent chips -
+// exactly what the name alone used up, so the chips were the part that got clipped while the far side of the row
+// sat empty. The split is now measured: each column asks for its widest cell, the columns that read the same at any
+// width give their room up first when the table is narrower than that, and the spare room goes to the two text
+// columns. A drag on the edge between two headers sets those two by hand (remembered in this browser, shared by
+// every project table); a double-click on any edge hands the board back to the measurement.
+const WT_COLS = 10;
+// Floors, measured off the real cell text at the panel's own font sizes: the hash, `0 / 0`, `+0/−0`, `none`,
+// `clean`/`3 +1?`, `0s` with the ring and one chip, `NO COMMITS` and the row's ✕ each fit whole at these numbers.
+// A long branch or a long `MERGED (squash/rebase, 3 commits)` still ellipsizes - that is the cheapest thing to lose.
+const COL_MIN = [170, 110, 70, 58, 56, 62, 64, 120, 104, 32];
+// How readily a column gives width back when the content is wider than the table, per column: 1 is a column that
+// says little at any width (`+0/−0`, `none`), 0.15 is one that must not move (the row's ✕). A column only ever gives
+// up its own slack above its floor, so the numbers decide how the squeeze is shared, not who is cut to the bone.
+const COL_GIVE = [0.35, 0.45, 1, 1, 1.1, 1.1, 1, 0.5, 0.5, 0.15];
+const COL_WIDTHS_KEY = "wtgui.colWidths";
+
+function loadColWidths() {
+  const out = new Array(WT_COLS).fill(null);
+  try {
+    const raw = JSON.parse(localStorage.getItem(COL_WIDTHS_KEY) || "[]");
+    if (Array.isArray(raw)) for (let i = 0; i < WT_COLS; i += 1) if (Number.isFinite(raw[i]) && raw[i] > 0) out[i] = Math.round(raw[i]);
+  } catch {
+    /* a corrupt value is the same as none */
+  }
+  return out;
+}
+let colWidths = loadColWidths();
+
+function saveColWidths() {
+  try {
+    localStorage.setItem(COL_WIDTHS_KEY, JSON.stringify(colWidths));
+  } catch {
+    /* private mode: the widths just do not persist */
+  }
+}
+
+function headerCells(table) {
+  return table?.tHead?.rows?.[0] ? [...table.tHead.rows[0].cells] : [];
+}
+
+// What each column would be with nothing constraining it: the header text and every cell below it, chips and
+// buttons included. Measured on the real table by letting it lay out at max-content for one synchronous step and
+// putting the fixed split back before the frame paints - no clone, no flicker.
+function naturalColumnWidths(table) {
+  const ths = headerCells(table);
+  const kept = ths.map((th) => th.style.width);
+  const layout = table.style.tableLayout;
+  const width = table.style.width;
+  table.style.tableLayout = "auto";
+  table.style.width = "max-content";
+  for (const th of ths) th.style.width = "";
+  const natural = ths.map((th) => Math.ceil(th.getBoundingClientRect().width));
+  table.style.tableLayout = layout;
+  table.style.width = width;
+  ths.forEach((th, i) => {
+    th.style.width = kept[i];
+  });
+  return natural;
+}
+
+// What the columns want turned into what they get, in px, adding up to the table's own width.
+function columnPlan(natural, total) {
+  const fixed = colWidths.map((w) => w != null);
+  const want = natural.map((n, i) => (fixed[i] ? colWidths[i] : Math.max(COL_MIN[i], n)));
+  const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+  let spare = total - sum(want);
+  if (spare > 0) {
+    // Spare room belongs to the columns whose text truncates: 70/30 worktree and branch. A column the reader sized
+    // by hand is a promise, so it is skipped; with both text columns hand-set the room is spread over the rest.
+    let pool = [0, 1].filter((i) => !fixed[i]);
+    if (!pool.length) pool = want.map((_, i) => i).filter((i) => !fixed[i]);
+    if (!pool.length) pool = [0, 1];
+    if (pool.length === 1) want[pool[0]] += spare;
+    else if (pool.includes(0) && pool.includes(1)) {
+      const toName = Math.round(spare * 0.7);
+      want[0] += toName;
+      want[1] += spare - toName;
+    } else for (const i of pool) want[i] += Math.floor(spare / pool.length);
+  } else if (spare < 0) {
+    // Too narrow for the content: every column gives up the same fraction of what it can spare above its floor,
+    // weighted by how little that costs it. Proportional rather than one column at a time - draining the first
+    // column to its floor left it clipped mid-word while its neighbour sat at its full natural width.
+    let over = -spare;
+    for (let pass = 0; pass < 4 && over > 0.5; pass += 1) {
+      const room = want.map((w, i) => (fixed[i] ? 0 : Math.max(0, w - COL_MIN[i]) * COL_GIVE[i]));
+      const avail = sum(room);
+      if (!avail) break;
+      const take = Math.min(over, avail);
+      for (let i = 0; i < want.length; i += 1) if (room[i]) want[i] -= (room[i] / avail) * take;
+      over -= take;
+    }
+    // Every column at its floor and still too wide (a very narrow window): scale instead of letting the table grow
+    // past its card, which is the bug `table-layout: fixed` exists to prevent.
+    if (over > 0) {
+      const scale = Math.min(1, total / sum(want));
+      for (let i = 0; i < want.length; i += 1) want[i] = Math.max(24, Math.floor(want[i] * scale));
+    }
+  }
+  // Integers that add up to the table's width exactly: rounding lands on the worktree column, the one with room.
+  want[0] = Math.max(24, want[0] + (total - sum(want)));
+  return want;
+}
+
+function applyColumnWidths(table, widths) {
+  headerCells(table).forEach((th, i) => {
+    th.style.width = `${Math.max(24, Math.round(widths[i]))}px`;
+  });
+}
+
+// Measurements are only good while the cells are: a repaint that changed no text should not pay for a layout.
+const columnSigs = new WeakMap();
+
+function columnSignature(tbody) {
+  let chips = 0;
+  for (const el of tbody.querySelectorAll(".sig, .chip")) chips += 1;
+  return `${tbody.children.length}:${tbody.textContent.length}:${chips}`;
+}
+
+function fitColumns(table) {
+  // A scan landing mid-drag must not fight the pointer for the pair being sized.
+  if (colDrag) return;
+  const ths = headerCells(table);
+  if (ths.length !== WT_COLS) return;
+  installColumnGrips(table);
+  // clientWidth is the table's own content box: the fixed split has to add up to exactly this or the table
+  // overflows its card.
+  const total = Math.floor(table.clientWidth);
+  const tbody = table.tBodies[0];
+  if (!total || !tbody) return;
+  const sig = columnSignature(tbody);
+  if (columnSigs.get(table) === sig && ths[0].style.width) return;
+  columnSigs.set(table, sig);
+  applyColumnWidths(table, columnPlan(naturalColumnWidths(table), total));
+}
+
+// One measurement per table per frame, however many rows arrived this tick.
+const pendingFits = new Set();
+let fitScheduled = false;
+
+function scheduleColumnFit(table) {
+  if (!table || !table.isConnected) return;
+  pendingFits.add(table);
+  if (fitScheduled) return;
+  fitScheduled = true;
+  requestAnimationFrame(() => {
+    fitScheduled = false;
+    const tables = [...pendingFits];
+    pendingFits.clear();
+    // A new split can re-wrap a chip strip and make a row taller. Near the bottom of the page that shortens (or
+    // lengthens) the document under the reader, so the position is held across the measurement like any rebuild.
+    const pageY = window.scrollY;
+    for (const t of tables) if (t.isConnected) fitColumns(t);
+    if (window.scrollY !== pageY) {
+      const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
+      window.scrollTo({ top: Math.min(pageY, maxY) });
+    }
+  });
+}
+
+function fitAllColumns() {
+  const slot = $("projects");
+  if (!slot) return;
+  for (const table of slot.querySelectorAll("section.project > table")) {
+    columnSigs.delete(table);
+    fitColumns(table);
+  }
+}
+
+// ---- dragging a column edge ------------------------------------------------------------------
+// Only the two columns on either side of the grip move, and they trade width rather than push the rest of the row
+// around: the sum of the pair is what stays put. Released, the pair is remembered for every project's table.
+let colDrag = null;
+
+function installColumnGrips(table) {
+  const ths = headerCells(table);
+  ths.forEach((th, i) => {
+    // Nothing sits to the right of the ✕ column, and one grip per header is enough however often this repaints.
+    if (i === ths.length - 1 || th.querySelector(".col-grip")) return;
+    const grip = document.createElement("span");
+    grip.className = "col-grip";
+    grip.dataset.col = String(i);
+    grip.title = "drag to set this column's width · double-click to fit every column to its content again";
+    grip.addEventListener("pointerdown", beginColumnDrag);
+    grip.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      colWidths = new Array(WT_COLS).fill(null);
+      saveColWidths();
+      fitAllColumns();
+    });
+    th.appendChild(grip);
+  });
+}
+
+function beginColumnDrag(e) {
+  if (e.button !== 0) return;
+  const grip = e.currentTarget;
+  const table = grip.closest("table");
+  const i = Number(grip.dataset.col);
+  const widths = headerCells(table).map((th) => th.getBoundingClientRect().width);
+  if (!widths.length || widths[i + 1] == null) return;
+  colDrag = { grip, table, i, x: e.clientX, widths, pair: widths[i] + widths[i + 1], left: null };
+  grip.classList.add("is-dragging");
+  document.body.classList.add("col-resizing");
+  e.preventDefault();
+  e.stopPropagation();
+  window.addEventListener("pointermove", dragColumn);
+  window.addEventListener("pointerup", endColumnDrag, { once: true });
+  window.addEventListener("pointercancel", endColumnDrag, { once: true });
+}
+
+function dragColumn(e) {
+  if (!colDrag) return;
+  const { table, i, x, widths, pair } = colDrag;
+  const ths = headerCells(table);
+  const left = Math.max(COL_MIN[i], Math.min(pair - COL_MIN[i + 1], Math.round(widths[i] + (e.clientX - x))));
+  colDrag.left = left;
+  colDrag.right = Math.round(pair - left);
+  ths[i].style.width = `${colDrag.left}px`;
+  ths[i + 1].style.width = `${colDrag.right}px`;
+}
+
+function endColumnDrag() {
+  if (!colDrag) return;
+  const { grip, i, left, right } = colDrag;
+  colDrag = null;
+  window.removeEventListener("pointermove", dragColumn);
+  grip.classList.remove("is-dragging");
+  document.body.classList.remove("col-resizing");
+  // A press with no movement is a click on the edge, not a decision about the width.
+  if (left == null) return;
+  colWidths[i] = left;
+  colWidths[i + 1] = right;
+  saveColWidths();
+  fitAllColumns();
+}
+
+// A narrower window means the same content in less room, so the measurement is redone. Resizing the window fires
+// this continuously, and each fit costs a layout, so it waits for the drag to settle.
+let columnFitTimer = 0;
+window.addEventListener("resize", () => {
+  clearTimeout(columnFitTimer);
+  columnFitTimer = setTimeout(fitAllColumns, 140);
+});
+
 // ---- stabilize reordering -------------------------------------------------------------------
 // A list that re-sorts while the reader has something open in it moves the thing they are reading. With this on, a
 // list freezes the moment one of its own elements is expanded: a project's worktree rows stop re-ranking while any of
@@ -7698,6 +8304,9 @@ function placeRow(project, row, { flash = false } = {}) {
   }
   reorder(project);
   refreshChips(project);
+  // This row's cells may hold more or less than they did (a longer verdict, a chip that appeared): re-measure, once
+  // per frame however many rows of this project arrived in the same tick.
+  scheduleColumnFit(tbody.closest("table"));
   // The rebuild is one synchronous step, so a moved scroll is the browser clamping rather than the reader leaving:
   // put the page back before the sweep re-measures the anchor.
   if (window.scrollY !== pageY) {
@@ -7724,6 +8333,8 @@ function removeRow(project, p) {
     window.scrollTo({ top: Math.min(pageY, maxY) });
   }
   refreshChips(project);
+  // A row leaving takes its width requirement with it, so the split is measured again - after this tick, not inside it.
+  scheduleColumnFit(state.tbodyEls.get(project)?.closest("table"));
 }
 
 // Paint one project's rows into its (possibly just replaced) tbody.
@@ -7800,6 +8411,9 @@ function renderProjectRows(name, { typing = null } = {}) {
     endDomMove();
     // Nothing of this project's is on screen any more, so its confirmation is gone with it.
     for (const k of [...state.confirmEls.keys()]) if (state.rows.get(k)?.project === name) state.confirmEls.delete(k);
+    // The header is still on screen and its rows are not: measure it anyway, so opening the project later does not
+    // start from the percentage fallback.
+    fitColumns(tbody.closest("table"));
     return;
   }
   const live = new Set(built.map((b) => b.key));
@@ -7813,6 +8427,10 @@ function renderProjectRows(name, { typing = null } = {}) {
     if (!dEl) continue;
     state.detailEls.set(key, dEl);
     fillAgentSlots(dEl, prevCards.get(key) || new Map());
+    // The thinking block lives in the card and this path re-renders or re-inserts every card in the
+    // project. Without this the running turn's open block came back at its FIRST line on every project
+    // event, which is what read as the reasoning flickering while the tool calls scrolled out of view.
+    restoreThinkBodies(dEl);
     rememberAgentOrder(key, dEl);
     restoreTyping(dEl, prevTyping.get(key) || null);
     restoreAddAgent(dEl);
@@ -7823,6 +8441,10 @@ function renderProjectRows(name, { typing = null } = {}) {
     if (state.rows.get(k)?.project !== name) state.detailEls.delete(k);
     else if (!state.expanded.has(k)) state.detailEls.delete(k);
   }
+  // The rows this table holds have just changed, so what each column has to be wide enough for changed with them.
+  // Measured here, before the position below is restored: a new split can re-wrap a chip strip and make a row
+  // taller, and a height change after the restore is a clamp the reader keeps.
+  fitColumns(tbody.closest("table"));
   // The swap can still change the document's height - a row that really did appear or go away. This whole rebuild is
   // one synchronous step, so a scroll that moved under it is the browser clamping (near the bottom, a shorter page
   // pulls the reader up), never the reader scrolling away: put the page back where it was.
@@ -7836,6 +8458,7 @@ function renderProjectRows(name, { typing = null } = {}) {
   if (typing) restoreTyping(tbody, typing);
   restoreScrolls(tbody, prevScrolls);
   applyStoredScrolls(tbody);
+  settleScrolls(tbody);
   restoreCardSelection(heldSelection);
   scheduleBoardSweep(anchor);
   refreshAnchorBaseline();
@@ -8211,7 +8834,7 @@ async function resync() {
 
 async function post(route) {
   try {
-    await fetch(route, { method: "POST" });
+    await apiFetch(route, { method: "POST" });
     await resync();
   } catch (e) {
     showBanner(`${route}: ${e.message}`);
@@ -8643,7 +9266,10 @@ document.addEventListener("click", async (e) => {
   if (delTree) {
     e.preventDefault();
     e.stopPropagation();
-    showWorktreeConfirm(delTree.dataset.delTree);
+    const key = delTree.dataset.delTree;
+    // Merged and clean: nothing here that main does not already have, so no question.
+    if (deletableWithoutAsking(key)) void confirmDeleteWorktree(key);
+    else showWorktreeConfirm(key);
     return;
   }
   const renameTree = e.target.closest("[data-rename-tree]");
@@ -9212,15 +9838,16 @@ document.addEventListener("click", async (e) => {
       const tool = tgrpRow.dataset.tgrpTool;
       const active = grp.dataset.filter === tool;
       const key = grp.dataset.tgrp || "";
+      // Read the identity and the console BEFORE the rebuild: `grp` is detached by it, and a turn drawn twice (the
+      // pinned card and its paged copy) shares every key — the lookup has to stay in the console the reader clicked.
+      const gstate = grp.dataset.gstate || "";
+      const scope = grp.closest("pre.job-out") || document;
       rebuildToolGroup(grp, { filter: active ? "" : tool, open: !active });
       if (!active) {
-        // Opening a call: when the live stream carried no output for it, the stored result is what the reader
-        // came to see, so fetch it now rather than making them click a second time.
-        const fresh = document.querySelector(`.tgrp[data-tgrp="${CSS.escape(key)}"]`);
-        const hasOut = fresh
-          ? [...fresh.querySelectorAll(".tgrp-body .jl-tool-out")].some((el) => !el.textContent.trim().startsWith("↳"))
-          : false;
-        if (!hasOut) void fetchToolStore(String(key).split("#")[0], tool, fresh);
+        // Opening a call asks for its stored output: the live stream's preview for this tool is routinely empty,
+        // and a bare "↳ patch" header is exactly the report.
+        const fresh = scope.querySelector(`.tgrp[data-gstate="${CSS.escape(gstate)}"]`);
+        void ensureToolStore(String(key).split("#")[0], tool, fresh);
       }
     }
     return;
@@ -9234,7 +9861,17 @@ document.addEventListener("click", async (e) => {
       // "all N" while one tool is being shown clears the filter; otherwise it just folds the block.
       const filtered = Boolean(grp.dataset.filter);
       const bodyEl = grp.querySelector(".tgrp-body");
-      rebuildToolGroup(grp, { filter: "", open: filtered || Boolean(bodyEl && bodyEl.hidden) });
+      const open = filtered || Boolean(bodyEl && bodyEl.hidden);
+      const gstate = grp.dataset.gstate || "";
+      const turnId = String(grp.dataset.tgrp || "").split("#")[0];
+      const scope = grp.closest("pre.job-out") || document;
+      rebuildToolGroup(grp, { filter: "", open });
+      // Opening the whole run asks every tool's store, not only the one that was filtered: the reader opened this
+      // to read what the calls returned.
+      if (open) {
+        const fresh = scope.querySelector(`.tgrp[data-gstate="${CSS.escape(gstate)}"]`);
+        if (fresh) for (const r of toolBurstRows(groupLines(fresh))) void ensureToolStore(turnId, r.name, fresh);
+      }
     }
     return;
   }
@@ -9408,15 +10045,16 @@ document.addEventListener("keydown", async (e) => {
       const tool = tgrpRow.dataset.tgrpTool;
       const active = grp.dataset.filter === tool;
       const key = grp.dataset.tgrp || "";
+      // Read the identity and the console BEFORE the rebuild: `grp` is detached by it, and a turn drawn twice (the
+      // pinned card and its paged copy) shares every key — the lookup has to stay in the console the reader clicked.
+      const gstate = grp.dataset.gstate || "";
+      const scope = grp.closest("pre.job-out") || document;
       rebuildToolGroup(grp, { filter: active ? "" : tool, open: !active });
       if (!active) {
-        // Opening a call: when the live stream carried no output for it, the stored result is what the reader
-        // came to see, so fetch it now rather than making them click a second time.
-        const fresh = document.querySelector(`.tgrp[data-tgrp="${CSS.escape(key)}"]`);
-        const hasOut = fresh
-          ? [...fresh.querySelectorAll(".tgrp-body .jl-tool-out")].some((el) => !el.textContent.trim().startsWith("↳"))
-          : false;
-        if (!hasOut) void fetchToolStore(String(key).split("#")[0], tool, fresh);
+        // Opening a call asks for its stored output: the live stream's preview for this tool is routinely empty,
+        // and a bare "↳ patch" header is exactly the report.
+        const fresh = scope.querySelector(`.tgrp[data-gstate="${CSS.escape(gstate)}"]`);
+        void ensureToolStore(String(key).split("#")[0], tool, fresh);
       }
     }
     return;
@@ -9510,6 +10148,12 @@ document.addEventListener("keydown", async (e) => {
     if (state.hot.on) hotAfterSend(thread);
   }
 });
+// A press on the merge chip is remembered until the release: the verdict cell above is rebuilt on every scan.
+document.addEventListener("pointerdown", (e) => {
+  const btn = e.target.closest && e.target.closest(".merge-start[data-merge-start]");
+  mergePress = btn ? { key: btn.dataset.mergeStart, at: Date.now() } : null;
+});
+
 // Answering an approval happens on pointerup, not on click: a repaint between the press and the release replaces
 // the button, and the browser then delivers no click at all. The choices are explicit buttons, so the release is
 // the decision; `approvalSent` makes the click that sometimes still follows a no-op.
@@ -9541,6 +10185,26 @@ document.addEventListener("pointerup", (e) => {
   if (delConfirm) {
     e.preventDefault();
     answerRowConfirm(delConfirm.dataset.delTreeYes ? "yes" : "no", delConfirm.dataset.delTreeYes || delConfirm.dataset.delTreeNo);
+    return;
+  }
+  // The UNMERGED chip starts a merge agent - the same swallowed-click failure as the buttons above, on the busiest
+  // table in the panel. Taken here, matched on the row rather than on the node: a scan repaint that replaces the
+  // button mid-press lands the release on the cell it rebuilt, and the key recorded at press still names the row.
+  const mergeBtn = e.target.closest && e.target.closest(".merge-start[data-merge-start]");
+  if (mergeBtn && !mergeBtn.disabled) {
+    e.preventDefault();
+    mergePress = null;
+    void startMerge(mergeBtn);
+    return;
+  }
+  const pressed = mergePress;
+  mergePress = null;
+  if (pressed && Date.now() - pressed.at < 2000 && e.target.closest?.("td.verdict")) {
+    const built = document.querySelector(`[data-merge-start="${CSS.escape(pressed.key)}"]`);
+    if (built && !built.disabled && built.closest("tr.row")?.dataset.key === pressed.key) {
+      e.preventDefault();
+      void startMerge(built);
+    }
   }
 });
 
@@ -9789,7 +10453,7 @@ setInterval(() => {
     for (const head of heads) {
       const txt = head.querySelector(".turn-text");
       if (!txt) continue;
-      const next = `turn ${j.turn || "?"} · running ${elapsed(j)}`;
+      const next = `turn ${turnSeqOf(j)} · running ${elapsed(j)}`;
       if (txt.textContent !== next) txt.textContent = next;
     }
   }

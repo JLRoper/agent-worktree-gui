@@ -1,10 +1,11 @@
-// Fails unless package.json's version moved the way docs/claude-phase2-handoff.md says it must.
+// Checks that package.json's version moved the way docs/claude-phase2-handoff.md says it must: only when code changed.
 //
 //   node tools/verify-version-bump.mjs [--base <git ref>]      (default: origin/main)
 //
-// The handoff declares `Status: in progress` and a `Version line: 0.2.x`. While in progress, the version must
-// be strictly higher than the base's AND stay on that line, so only the patch number moves. Otherwise it only
-// has to go up.
+// "Code" is server.js, lib/ and public/. Docs, tools and READMEs are not code.
+//   - code changed  -> the version must be strictly higher than the base's, and (while the handoff says
+//                      `Status: in progress`) stay on its `Version line: x.y.x`, so only the patch number moves
+//   - no code change -> the version must be exactly the base's: a docs-only or handoff-only PR does not bump
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -13,7 +14,9 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const argAt = process.argv.indexOf("--base");
 const base = argAt > -1 ? process.argv[argAt + 1] : "origin/main";
+const CODE = /^(server\.js|lib\/|public\/)/;
 
+const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8" });
 const parse = (v) => {
   const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(v || "").trim());
   return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
@@ -28,21 +31,33 @@ const current = parse(JSON.parse(readFileSync(path.join(root, "package.json"), "
 if (!current) fail("package.json has no x.y.z version");
 
 let baseVersion;
+let changed;
 try {
-  const text = execFileSync("git", ["show", `${base}:package.json`], { cwd: root, encoding: "utf8" });
-  baseVersion = parse(JSON.parse(text).version);
+  baseVersion = parse(JSON.parse(git("show", `${base}:package.json`)).version);
+  // Against the merge-base, so commits that landed on the base after this branch left it do not count as ours.
+  // `git diff <commit>` also covers uncommitted edits to tracked files.
+  changed = git("diff", "--name-only", git("merge-base", base, "HEAD").trim()).split(/\r?\n/).filter(Boolean);
 } catch (e) {
-  fail(`cannot read package.json at ${base} (${String((e && e.message) || e).split("\n")[0]})`);
+  fail(`cannot compare against ${base} (${String((e && e.message) || e).split("\n")[0]})`);
 }
 if (!baseVersion) fail(`${base} has no x.y.z version`);
 
+const codeChanged = changed.filter((f) => CODE.test(f));
 const handoff = readFileSync(path.join(root, "docs", "claude-phase2-handoff.md"), "utf8");
 const inProgress = /^Status:\s*in progress\s*$/im.test(handoff);
 const line = /^Version line:\s*(\d+)\.(\d+)\.x\s*$/im.exec(handoff);
 
-console.log(`base ${base}: ${baseVersion.join(".")} -> now ${current.join(".")} · plan ${inProgress ? "in progress" : "not in progress"}`);
+console.log(
+  `base ${base}: ${baseVersion.join(".")} -> now ${current.join(".")} · ${codeChanged.length ? `code changed (${codeChanged.length} file${codeChanged.length === 1 ? "" : "s"})` : "no code change"} · plan ${inProgress ? "in progress" : "not in progress"}`,
+);
 
-if (cmp(current, baseVersion) <= 0) fail(`version must go up from ${baseVersion.join(".")} — bump the patch number in package.json`);
+if (!codeChanged.length) {
+  if (cmp(current, baseVersion) !== 0) fail(`no code changed (only docs/tools/etc.), so the version must stay ${baseVersion.join(".")}; got ${current.join(".")}`);
+  console.log("version check ok");
+  process.exit(0);
+}
+
+if (cmp(current, baseVersion) <= 0) fail(`code changed (${codeChanged.slice(0, 3).join(", ")}${codeChanged.length > 3 ? ", …" : ""}) so the version must go up from ${baseVersion.join(".")} — bump the patch number in package.json`);
 if (inProgress) {
   if (!line) fail("handoff says in progress but has no `Version line: x.y.x`");
   const want = [Number(line[1]), Number(line[2])];
