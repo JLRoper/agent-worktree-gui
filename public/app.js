@@ -6796,6 +6796,8 @@ function ageToggleHtml(project) {
   if (!days) return "";
   const showing = state.showOldProjects.has(project);
   const stale = staleRowCount(project);
+  // Nothing held back and nothing shown: there is no choice to offer here, so this chart draws no arrow at all.
+  if (!showing && !stale) return "";
   return `<button type="button" class="tail-chip wt-age-toggle${showing ? " is-on" : ""}" data-age-toggle="${esc(project)}" aria-pressed="${showing ? "true" : "false"}" title="${esc(ageToggleTitle(project, days, stale, showing))}">${showing ? "\u2191" : "\u2193"}</button>`;
 }
 
