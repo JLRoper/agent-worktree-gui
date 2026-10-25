@@ -48,6 +48,12 @@ diffs it against the panel (exit 1 on any mismatch) — useful after touching th
 card that mis-filed five reviewers, then the edges around it — useful after touching how a turn owns
 the subagents it delegated.
 
+`node tools/verify-spawn-target.mjs` cuts a worktree in a throwaway repo, renames it the way the panel
+renames one, and makes `lib/spawn-target.js` find it again — by the stale path, a branch, a worktree
+directory name, the tag alone and a thread's slug — then checks both refusals (several matches name their
+candidates, none keeps the old wording) and that the card says which tree was picked — useful after
+touching what a SPAWN IN line may name.
+
 ## Two halves
 
 ### Monitor (read-only)
@@ -368,7 +374,7 @@ strip of content: drag it larger and the card fills it — the turns take the ne
 with it, and the composer stays at the foot. Only the turns scroll. It is two things:
 
 - **A sentry** that runs in the panel's own process, on `settings.seconds` (default 5 s), over the same job
-  summaries the cards are drawn from. It costs no tokens and it is always awake. Twelve rules:
+  summaries the cards are drawn from. It costs no tokens and it is always awake. Thirteen rules:
   `loop` (the same tool with the same input N times, read-only helpers held to a higher bar), `errorloop`
   (identical failing output), `quiet` (a running turn with no new output — a long build looks exactly like
   this, so it only journals by default), `approval` (parked longer than the threshold), `question` (a turn
@@ -384,7 +390,12 @@ with it, and the composer stays at the foot. Only the turns scroll. It is two th
   being a trigger)
   and `child` (a delegated subagent that has written nothing for `childQuietSeconds` — the wording is "no
   activity for 6m", never "hung": a long tool call looks the same; read from the gateway's session store, and
-  only for threads this board is showing). Every alert carries the evidence it was built from — counts,
+  only for threads this board is showing), plus `interrupted` (a thread whose latest turn ended `interrupted` —
+  a turn stopped without finishing, usually a panel restart; an interrupted turn a later turn has taken over is
+  history and does not fire. It alerts rather than wakes by default, because one restart rewrites every running
+  turn as interrupted at once and would spend the whole hourly wake budget in a single pass; raise it per rule
+  under **Settings → Per-rule escalation** when a cut-off turn is worth the assistant's opinion). Every alert
+  carries the evidence it was built from — counts,
   the repeated call, the failing line, the command being waited on — because "it looks stuck" is not
   actionable.
 - **A real agent thread** (`panel-assistant`) rendered inside the panel by the panel's own card renderer:
@@ -424,11 +435,29 @@ merely *ended* on a question in prose, where a reply is the right shape.
 
 `watch` ships at **wake**: a watch is the reader explicitly asking to be told, and an alert on its own is a notice
 nobody reads. When a watch expires or its thread finishes, the assistant is woken with the watch, the deadline and
-the worker's state, and answers in its own thread — the measured example was a 5-minute watch on a docs worker that
-came back as *"the worker ended as interrupted after writing docs/using-the-board.md and updating README.md in its
-worktree … the uncommitted documentation changes are ready in `.worktrees/write-md-documentation-f-950b59`"*. Wakes
-fired by one sentry pass are collected for 150 ms and sent as one turn, so two watches on the same worker are one
-answer, not two. A scratchpad written before this default changed is migrated once (file `version: 2`).
+**the completion payload** — what the run actually produced, not just that it stopped: its own last words (or the
+last forty lines of the transcript when it published none), its exit status in three words (`normal`, `failed`, or
+`interrupted` when the panel's cap, a stop from the card or the gateway ended it — a killed run never reads `done`),
+how long it ran, the branch and worktree it worked in, whether that tree holds commits over the commit the turn
+started from, and the report a worker filed under `<repo>/.agentboard/settlers-reports/<thread>.md`. Rendered whole,
+that is what a wake looks like:
+
+    completion — wtgui-in-your-working-directory-ru-682d81 […], turn 1 ended normal
+      exit: 0 (from the run's completed result)
+      duration: 35s
+      branch: wtgui/in-your-working-director-cdc050 · worktree: …/.worktrees/in-your-working-director-cdc050 ·
+              left 1 commit not on 44a6a57c: 43bab99 feat: the payload worker's commit
+      the worker's final message:
+        PAYLOAD-SHOWCASE-OK
+      report …/.agentboard/settlers-reports/wtgui-in-your-working-directory-ru-682d81.md:
+        # Showcase report …
+
+A tree that could not be read says so ("commits not measured") rather than reporting zero, and its notice is held
+back one sentry pass until the measurement lands, so a reader never has to reopen the card to find out whether
+there was anything to merge. Wakes fired by one sentry pass are collected for 150 ms and sent as one turn, so two
+watches on the same worker are one answer, not two — and one finish is one wake however many rules notice it (a
+watch closing and a turn cut off mid-flight are the same terminal result; the second alert is filed, journaled as
+`wake-once`, not sent). A scratchpad written before this default changed is migrated once (file `version: 2`).
 
 **Something supervises the supervisor.** The sentry cannot report its own clock stopping, so the server runs a
 small watchdog outside it (every 10 s): a cleared timer is restarted, and a pass is run if the last one is older
@@ -455,14 +484,52 @@ The assistant acts by writing plain lines at the end of a reply, and only those 
     NOTE: something to remember
     RULE: a standing answer you are sure of
     SPAWN <project> | what the new worker should do
-    SPAWN IN <directory> | what the worker should do in that tree       (no new worktree)
+    SPAWN IN <directory, worktree directory name, or branch> | what the worker should do in that tree  (no new worktree)
 
+**A SPAWN IN name that is out of date is resolved, not refused.** The panel renames a finished run's worktree
+directory and its branch after the thread title (`renameWorktree` — the slug is rebuilt from the title, the
+six-hex tag kept), so a path the assistant wrote down when that worker finished, or one typed from an older
+report, stops existing while the tree is standing one directory over. So an existing-tree spawn no longer
+requires the path to BE a directory before it looks further (`lib/spawn-target.js`, used by both
+`/api/assistant/spawn` and the New-agent card): the path as written first — absolute, or relative to the panel,
+the project's own checkout and that project's `.worktrees/` — then `git worktree list --porcelain` for the
+project, matched on the worktree directory name, the branch, the tag a rename keeps, or the slug cut from the
+same prompt. A branch may be named in place of a path (`SPAWN IN wtgui/fix-the-thing-1a2b3c`), and a thread's
+slug counts as the same signal when a caller knows the thread. Exactly one match is used — and the card says
+which and why (`resolved to …` on the assistant's card, a `SPAWN IN … → … (matched …)` line on the run's own
+card, and the same in the origin chip's tooltip) — several is a refusal that names every candidate, and none
+keeps the refusal the panel always gave, word for word: `<path> does not exist or is not a directory`. A match
+that is not a directory when it is read back refuses too: this resolves a name, it never "starts anyway", and the
+409 guards that keep the panel's index honest (`already being read`, `already merging this worktree`, `already
+has commits`, `already exists`) are untouched by it.
+
+    RESTART gateway        (restart the Hermes gateway — queued until this turn has ended)
+    RESTART panel          (restart this panel — queued until this turn has ended)
 `RULE:` lets the assistant maintain its own standing answers while it watches — the case that prompted it was
 "an interrupted agent gets exactly one continue". Such a rule is part of the normal rules list from then on, so
 it can answer a question (or, at `auto`, pick a choice) on the strength of it; the Scratchpad marks it
 **assistant**, and it is deletable there. A near-identical restatement refines the assistant's own earlier rule
 instead of adding a second; the reader's rules are never merged or edited by it.
 
+**It can restart the thing that runs it.** `RESTART gateway` and `RESTART panel` map to `POST /api/restart`
+and neither runs inside the turn that wrote it: that turn *is* a run inside the gateway, so the request is
+queued and the action starts only once the assistant's thread has no turn running — a synchronous restart
+would kill the very answer that asked for it. Nothing is stopped before the provider key is verified in
+`$HERMES_HOME/.env`: a gateway that comes up without one binds its port, answers `/health`, and then dies on
+every run with `No LLM provider configured`. A refusal is journaled, not thrown at the model. Everything the
+restart will interrupt is given ONE terminal status first — `interrupted`, with the restart recorded as what
+ended it — so no card is left with neither a done nor an interrupted verdict. Once the new process answers it
+is proved with **one real turn through the gateway, never with its port**, and only then is the assistant woken
+once with the completion payload of everything the restart interrupted.
+
+A panel restart hands the port over: the outgoing process writes what was running into `restart.json` beside
+the job store, spawns a detached helper (`lib/panel-restart.cjs`) that waits for the old pid to exit and only
+then starts `server.js` (and writes `logs/server.pid`), and exits through the same path a signal uses. The
+replacement reads that record, proves the gateway and fires the single wake. The SAME wake covers a restart the
+panel did *not* ask for: if runs stop reporting while the panel is still up — the gateway was replaced and no
+longer knows their run ids — each lost run is marked interrupted once and the assistant is told once, with the
+same payload each time. A gateway restart is invisible from the outside (its port answers either way), which is
+why the sweep asks the runs themselves and why the proof is a real turn.
 Each finished turn is harvested exactly once (keyed by turn id, persisted): a turn's title landing or a panel
 restart re-emits the same job, and re-reading its lines would otherwise start a second worker.
 
@@ -482,8 +549,9 @@ Watches without a deadline, and finished ones, say so instead.
 | --- | --- | --- |
 | `port` | 7331 | HTTP port |
 | `scanRoots` | `["C:/ProjectDevelopment"]` | directories scanned for git repos; every repo found becomes a monitored project |
-| `host` | `127.0.0.1` | bind address. **Loopback by default and it should stay that way** — this panel spawns processes, so exposing it on the LAN is unauthenticated remote code execution |
-| `token` | *(unset)* | if set, write endpoints require an `x-panel-token` header |
+| `host` | `127.0.0.1` | bind address. Loopback keeps the board to this machine. `0.0.0.0` makes it reachable from the LAN or a tailnet — set `PANEL_TOKEN` in the same breath, because this panel spawns processes and can write files |
+| `PANEL_TOKEN` | *(unset)* | **an environment variable, not a config key.** The shared secret for writes from **other** machines; loopback is never challenged, so a local browser needs nothing. With it missing (or empty) every off-machine write is refused — the door closes, it does not open. With one, a remote browser authenticates once by opening `http://<host>:7331/?token=…` (the client remembers it and sends `x-panel-token` from then on). Reads — `/api/state`, `/api/stream`, the static files — stay open to anyone who can reach the port, so keep it on a LAN or a tailnet and never a public network |
+| `token` | — | *ignored.* A leftover `token` key in `config.json` is logged and then disregarded: that file is tracked by git, so a secret in it would be a secret in the repository. Use `PANEL_TOKEN` |
 | `defaultCwd` | most recently active project | fallback target for a spawned agent when no project is chosen |
 | `hermesBin` | auto | explicit path to the hermes executable; used by the `hermes worktree` audits behind `/api/cleanup` (agent runs do not spawn it) |
 | `apiServer` | `{"url":"http://127.0.0.1:8642"}` | `url` of the gateway's api_server, and optionally `key` (else `API_SERVER_KEY` from `$HERMES_HOME/.env`) |
@@ -535,6 +603,7 @@ Watches without a deadline, and finished ones, say so instead.
 | POST | `/api/assistant/check` | run one sentry pass now (used by the page after a change, and by probes instead of waiting for the clock) |
 | POST | `/api/jobs/cancel` | `{id}` → `POST /v1/runs/{id}/stop` (cooperative interrupt) |
 | POST | `/api/jobs/clear` | drop finished jobs from the list |
+| GET/POST | `/api/restart` | restart the gateway or this panel. GET reports the queue, the last action, the provider-key preflight (`$HERMES_HOME/.env`, or the `model.api_key` line of `config.yaml`) and where `restart.json` is written; POST `{target:"gateway"\|"panel", reason?, waitFor?}` **queues** the action and answers **202** at once. It runs when `waitFor` (default `panel-assistant`) has no turn running, gives every interrupted run one `interrupted` status, proves the new process with one real turn and wakes the assistant once with the payloads. **400** for another target, **409** when one is already queued/running or when no provider key is present |
 | POST | `/api/refresh` `/api/fetch` `/api/reload` | force a fast pass / fetch remotes / re-read config |
 
 ## Roadmap
@@ -568,4 +637,9 @@ Watches without a deadline, and finished ones, say so instead.
   Re-apply `docs/hermes-runs-api-knobs.diff` and restart the gateway.
 - **`fatal: cannot change to ...: No such file or directory`** — native git can't take MSYS
   `/c/...` paths; use `C:/...`.
+- **A restart is refused: `no provider key in <HERMES_HOME>/.env`** — that is the preflight, not a failure of the
+  route. A gateway started without a provider key binds its port, answers `/health`, and then every run it
+  dispatches dies with `No LLM provider configured`. Write the key where the gateway loads it —
+  `hermes config set OPENROUTER_API_KEY <key>` puts it in `$HERMES_HOME/.env` — and ask again. `GET /api/restart`
+  reports the same check, plus the queue and the last action, so a refused request is visible without reading a log.
 - **Port already in use** — `stop-background.cmd`, or `netstat -ano | grep 7331` and kill the PID.

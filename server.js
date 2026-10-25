@@ -16,8 +16,11 @@ import { Store } from "./lib/store.js";
 import { Scheduler } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
 import { Jobs, hermesHome, makeThreadName, previewRequest } from "./lib/jobs.js";
-import { gitIn } from "./lib/scan.js";
+import { gitIn, scanWorktree } from "./lib/scan.js";
+import { resolveExistingTarget, resolutionNote } from "./lib/spawn-target.js";
+import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
+import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
@@ -98,6 +101,20 @@ async function loadConfig() {
   // Loopback by default. This panel can now spawn agents, so binding it to the LAN
   // would be unauthenticated remote code execution.
   cfg.host = cfg.host || "127.0.0.1";
+  // The token that gates writes from other machines comes from the ENVIRONMENT, never from this file.
+  // config.json is tracked by git, so a secret in it is a secret in the repository and in every clone of it.
+  // PANEL_TOKEN is read once, at boot; if it is missing or empty there is simply no token, and authorised()
+  // then REFUSES every non-loopback write rather than letting one through — the door closes when the variable
+  // is absent, it does not open. A leftover "token" key in the file is ignored, loudly, so an old secret cannot
+  // look like it is doing something.
+  const fileToken = typeof cfg.token === "string" ? cfg.token.trim() : "";
+  const envToken = String(process.env.PANEL_TOKEN || "").trim();
+  cfg.token = envToken || null;
+  if (fileToken) {
+    log(envToken
+      ? 'config.json still has a "token" key — ignoring it: PANEL_TOKEN from the environment wins, so remove the key from the file'
+      : 'config.json has a "token" key but no PANEL_TOKEN in the environment — the file\'s token is IGNORED; set PANEL_TOKEN or writes from other machines stay refused');
+  }
   cfg.refreshSeconds = Number(cfg.refreshSeconds ?? 30);
   cfg.worktreeSeconds = Number(cfg.worktreeSeconds ?? 5);
   cfg.midSeconds = Number(cfg.midSeconds ?? 30);
@@ -264,6 +281,10 @@ function adoptFromJob(evt) {
   if (!project) return;
   void scheduler.adoptWorktree(project.name, j.worktreePath).catch(() => {});
 }
+// The restart controller: the queue, the provider-key preflight, the one-terminal-status snapshot, the
+// real-turn proof and the single resume wake. Declared before the assistant because the assistant is
+// handed its `request` as the one act it cannot perform itself.
+let restart = null;
 // Declared before the job stream that feeds it: a job event arrives on the same tick as construction,
 // and the observer is optional until the assistant exists.
 let assistant = null;
@@ -298,6 +319,9 @@ assistant = new Assistant({
   getRows: () => [...store.rows.values()],
   getChildren: () => subagentRoster({ dbPath: path.join(hermesHome(), "state.db") }),
   spawner: assistantSpawnRun,
+  // The one act this module cannot perform itself: a RESTART line's gateway/panel restart, queued by
+  // the controller and run only once the turn that asked for it has ended.
+  onRestart: (spec) => restart.request(spec),
   onEvent: broadcast,
   onLog: log,
 });
@@ -307,6 +331,22 @@ assistant = new Assistant({
 log(`assistant cwd: ${assistant.ensureCwd()}`);
 assistant.start();
 
+// ---- restarting the gateway, or this panel ---------------------------------------------
+// Everything that touches the outside world is injectable (lib/restart.js), which is what lets
+// tools/verify-restart.mjs prove the queueing, the health wait and the resume without bouncing the
+// live gateway or the live panel.
+restart = new RestartController({
+  config,
+  jobs,
+  assistant,
+  home: hermesHome(),
+  hermesBin: config.hermesBin || null,
+  credentials: () => jobs.api,
+  log,
+  onState: (state) => broadcast({ type: "restart", restart: state }),
+  // A panel restart exits through the same path a signal uses, so the replacement can bind the port.
+  shutdown: (code) => shutdown(code),
+});
 // The sentry cannot report its own clock stopping, and a restart leaves its last turn `interrupted` with
 // nobody to notice: both are the server's business. The watchdog repairs the timer from outside (its own
 // tick() only catches throws), and the resume wakes the assistant once if the restart cut a turn in half.
@@ -319,6 +359,40 @@ setInterval(() => {
     log(`assistant watchdog: ${String((err && err.message) || err)}`);
   }
 }, 10_000).unref?.();
+
+// A panel restarted by its own restart action left a record: the replacement waits for the gateway,
+// proves it with ONE REAL TURN (never with the port), and only then wakes the assistant once with
+// the completion payload of everything the restart interrupted. A clean boot has no record and costs
+// nothing.
+setTimeout(() => {
+  void restart.resumePending().catch((e) => log(`restart resume failed: ${String((e && e.message) || e)}`));
+}, 3_000).unref?.();
+
+// A gateway restart nobody asked for. Runs stop reporting while the panel is still up: their streams
+// dropped and the gateway no longer knows the run ids. Every run it lost is given ONE terminal status
+// (interrupted, with the restart recorded as what ended it) and the same single resume wake the panel
+// fires for a restart it did ask for. Swept here rather than in the sentry: the sentry owns no network
+// call, and this is the only place that can see a run stop reporting.
+let sweepingOrphans = false;
+setInterval(() => {
+  if (sweepingOrphans || !assistant) return;
+  sweepingOrphans = true;
+  void jobs
+    .sweepOrphanedRuns()
+    .then((lost) => {
+      if (!lost.length) return;
+      log(`gateway restart detected: ${lost.length} run(s) stopped reporting (${lost.map((j) => j.id).join(", ")})`);
+      assistant.wakeAfterRestart(lost, {
+        target: "gateway",
+        detected: true,
+        reason: "the gateway was restarted and the panel did not ask for it",
+      });
+    })
+    .catch((e) => log(`orphan sweep failed: ${String((e && e.message) || e)}`))
+    .finally(() => {
+      sweepingOrphans = false;
+    });
+}, 15_000).unref?.();
 
 // Start a worker on the assistant's behalf. Deliberately the same mechanics as the New-agent card —
 // registry for the project, gateway probe before anything is promised, `git rev-parse`/`worktree add` in
@@ -336,24 +410,43 @@ async function assistantSpawnRun(spec = {}) {
     : projectForPath(spec.target);
   if (spec.existing) {
     // An agent in a directory that already exists: no tree is cut, and the card attaches to the git top level.
-    const cwd = path.resolve(String(spec.target || target?.path || ""));
-    try {
-      if (!(await stat(cwd)).isDirectory()) throw new Error("not a directory");
-    } catch {
-      throw new Error(`${cwd} does not exist or is not a directory`);
-    }
+    // The directory named is not taken on trust any more: the panel renames a finished run's worktree directory
+    // AND its branch after the thread title, so the path an assistant wrote down when it watched that worker
+    // finish, or a reader typed from an older report, is one rename out of date while the tree stands. Resolve
+    // it against git's own worktree list (lib/spawn-target.js) — one match is used and named on the card,
+    // several are an error that lists them, none keeps the refusal this line always gave.
+    const res = await resolveExistingTarget({
+      target: spec.target || target?.path,
+      // A path inside a project is that project's business; a branch or a bare worktree name carries no path to
+      // place, so the registry is the search space.
+      project: target,
+      projects: registry.projects,
+      thread: spec.thread || null,
+    });
+    if (!res.ok) throw new Error(res.error);
+    const cwd = res.path;
     const blocked = await spawnBlocker(cwd, null);
     const top = await gitIn(cwd, ["rev-parse", "--show-toplevel"]);
     const ownerPath = top.ok && top.out ? top.out : cwd;
     const norm = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    // A resolved tree can name a project the line itself never did (a branch is not a path), and that project is
+    // what decides whether this run stays in the project's own checkout rather than a branch of its own.
+    const home = target || registry.projects.find((p) => p.name === res.project) || null;
+    const note = resolutionNote(res);
     return jobs.create({
       prompt,
       cwd,
       existing: true,
       ownerPath,
       ownerPending: false,
-      baseCheckout: Boolean(target && norm(ownerPath) === norm(target.path)),
-      origin: { kind: "assistant-spawn", where: "existing" },
+      baseCheckout: Boolean(home && norm(ownerPath) === norm(home.path)),
+      // The card says which tree a stale name resolved to, not just that something ran.
+      note: note ? `SPAWN IN ${note}` : null,
+      origin: {
+        kind: "assistant-spawn",
+        where: "existing",
+        ...(res.resolved ? { resolvedFrom: res.asked, resolvedPath: res.path, resolvedHow: res.how } : {}),
+      },
     });
   }
   if (!target) throw new Error(`unknown project: ${spec.target || spec.project || "(none)"}`);
@@ -407,12 +500,26 @@ function worktreeDirName(name, tag) {
   return slug ? `${slug}-${tag}` : "";
 }
 
+// The main checkout of a repository is the one whose git dir IS the repository (`.git`), not a link into another
+// tree's (`.git/worktrees/<name>`). Asked of git rather than inferred from a path, so a checkout reached by a
+// different spelling, or a project whose registry path is not the top of the repo, is still recognised as main.
+async function isMainCheckout(dir) {
+  const gitDir = await execP("git", ["-C", dir, "rev-parse", "--absolute-git-dir"], { timeout: 20_000 })
+    .then((r) => String(r.stdout || "").trim())
+    .catch(() => "");
+  return Boolean(gitDir) && normPathKey(path.dirname(gitDir)) === normPathKey(dir);
+}
+
 async function renameWorktree({ projectName, target, name }) {
   const project = scheduler.getProjects().find((p) => p.name === projectName);
   if (!project) return { error: `unknown project: ${projectName}`, status: 404 };
   const oldPath = path.resolve(String(target || ""));
-  if (path.resolve(project.path) === oldPath) {
-    return { error: "that is the project's own checkout, not a worktree", status: 400 };
+  // The project's own checkout is the parent of every tree cut from it and its name is the folder's name: renaming it
+  // would rename the project itself. Matched the way every other path comparison here is (case- and slash-insensitive,
+  // because the page, the registry and a scan spell the same directory differently), and again against git so a
+  // checkout reached by another spelling still cannot be moved.
+  if (normPathKey(oldPath) === normPathKey(project.path) || (await isMainCheckout(oldPath))) {
+    return { error: "that is the project's own checkout, not a worktree — its name is the project folder's", status: 400 };
   }
   const row = scheduler.store.rowsFor(projectName).find((r) => path.resolve(r.path) === oldPath);
   if (!row) return { error: `not a worktree row of ${projectName}: ${oldPath}`, status: 404 };
@@ -501,9 +608,16 @@ async function autoNameWorktree(evt) {
   if (evt?.type !== "job") return;
   const j = evt.job;
   if (!j || !j.worktreePath || j.existing || j.reply) return;
+  // A base-checkout run lives in the project's own checkout, whose name is the folder's name. It is never the
+  // agent's to take, even if a job ever carries a worktree path that resolves there.
+  if (j.baseCheckout) return;
   if (!["done", "failed", "cancelled", "interrupted"].includes(String(j.status))) return;
   const treeKey = normPathKey(j.worktreePath);
   if (autoNamedTrees.has(treeKey)) return;
+  const project = projectForPath(j.worktreePath);
+  if (!project) return;
+  // The project's own checkout is the parent of every tree cut from it and keeps the folder's name.
+  if (normPathKey(project.path) === treeKey) return;
   // Only when the tree is idle: moving a directory out from under a running turn is what git refuses.
   const busy = jobs
     .list()
@@ -512,8 +626,6 @@ async function autoNameWorktree(evt) {
   autoNamedTrees.add(treeKey);
   const title = jobs.sessionInfoFor(j.thread).title;
   if (!title) return;
-  const project = projectForPath(j.worktreePath);
-  if (!project) return;
   await renameWorktree({ projectName: project.name, target: j.worktreePath, name: title }).catch(() => {});
 }
 
@@ -614,9 +726,29 @@ function handleStream(req, res) {
   });
 }
 
+// Did this request come in over loopback — i.e. from the machine the panel runs on? That is the panel's
+// own UI, and it is the only caller allowed in without a token.
+function isLoopback(req) {
+  const addr = String((req.socket && req.socket.remoteAddress) || "").toLowerCase().replace(/^::ffff:/, "");
+  return addr === "::1" || addr.startsWith("127.");
+}
+
+// Loopback is allowed exactly as before, so the local board is untouched. Anything else — the LAN, a
+// tailnet — is allowed only when config.json carries a token AND the request sends it in
+// x-panel-token; with no token configured off-machine writes are refused outright. Every write route
+// can spawn a process or write a file, so an unauthenticated one reachable from another host is remote
+// code execution — the refusal has to be the default, not something a route has to remember.
+// A refusal is logged with the address it came from: a 403 nobody can see is a bug report nobody can act on.
 function authorised(req) {
-  if (!config.token) return true;
-  return req.headers["x-panel-token"] === config.token;
+  if (isLoopback(req)) return true;
+  const addr = (req.socket && req.socket.remoteAddress) || "?";
+  if (!config.token) {
+    log(`write refused from ${addr}: no "token" in config.json, so non-loopback writes are off`);
+    return false;
+  }
+  if (req.headers["x-panel-token"] === config.token) return true;
+  log(`write refused from ${addr}: missing or wrong x-panel-token`);
+  return false;
 }
 
 const cleanPath = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "");
@@ -1027,16 +1159,20 @@ const server = createServer(async (req, res) => {
       if (!transport.reachable || !transport.capabilities?.runs) {
         return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}` });
       }
-      const cwd = body.cwd || target?.path || config.defaultCwd;
+      let cwd = body.cwd || target?.path || config.defaultCwd;
       // "existing": run in a directory that is already there (a worktree you picked), so no
       // worktree is created and the agent's edits land directly in that tree.
       const existing = Boolean(body.existing);
+      // A directory that is already there is still the first answer, but a missing one is no longer the end of
+      // the request: the panel renames a finished run's worktree directory and its branch after the thread
+      // title, so a path this card was holding can be one rename out of date while the tree stands. Resolved
+      // against git's own worktree list — one match is used and named on the card, several list themselves,
+      // none keeps the refusal this endpoint always gave.
+      let picked = null;
       if (existing) {
-        try {
-          if (!(await stat(cwd)).isDirectory()) return sendJson(res, 400, { error: `${cwd} is not a directory` });
-        } catch {
-          return sendJson(res, 400, { error: `${cwd} does not exist` });
-        }
+        picked = await resolveExistingTarget({ target: cwd, project: cwdProject || pickerTarget, projects: registry.projects });
+        if (!picked.ok) return sendJson(res, 400, { error: picked.error, candidates: picked.candidates });
+        cwd = picked.path;
       }
       const blocked = await spawnBlocker(cwd, existing ? null : target);
       if (blocked) return sendJson(res, 400, { error: blocked, blocked });
@@ -1052,8 +1188,20 @@ const server = createServer(async (req, res) => {
       // say so, because that is the difference between an agent working in a branch of its own and one
       // editing the tree the reader has checked out.
       const norm = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-      const baseCheckout = Boolean(existing && cwdProject && norm(ownerPath || cwd) === norm(cwdProject.path));
-      const job = await jobs.create({ ...body, cwd, existing, ownerPath, ownerPending: !existing, baseCheckout });
+      // A resolved tree can belong to a project the typed directory never named (a branch is not a path).
+      const home = (picked?.project ? registry.projects.find((p) => p.name === picked.project) : null) || cwdProject || null;
+      const baseCheckout = Boolean(existing && home && norm(ownerPath || cwd) === norm(home.path));
+      const note = picked ? resolutionNote(picked) : "";
+      const job = await jobs.create({
+        ...body,
+        cwd,
+        existing,
+        ownerPath,
+        ownerPending: !existing,
+        baseCheckout,
+        // The card says which tree a stale path resolved to, not just that something ran.
+        note: note ? `SPAWN IN ${note}` : null,
+      });
       return sendJson(res, 202, { job });
     }
 
@@ -1258,10 +1406,13 @@ const server = createServer(async (req, res) => {
       const tool = String(url.searchParams.get("tool") || "").trim();
       const from = Number(url.searchParams.get("from")) || 0;
       const to = Number(url.searchParams.get("to")) || 0;
+      // How many results the console is about to draw: a burst of six calls needs six, not a default of eight
+      // that silently stops halfway through a longer run.
+      const limit = Math.max(1, Math.min(60, Number(url.searchParams.get("n")) || 20));
       if (!thread || !tool) return sendJson(res, 400, { error: "thread and tool are required" });
       const { hermesHome } = await import("./lib/jobs.js");
       const { toolResults } = await import("./lib/tool-results.js");
-      const results = toolResults({ dbPath: path.join(hermesHome(), "state.db"), sessionId: thread, tool, from, to });
+      const results = toolResults({ dbPath: path.join(hermesHome(), "state.db"), sessionId: thread, tool, from, to, limit });
       return sendJson(res, 200, { thread, tool, results });
     }
 
@@ -1459,6 +1610,10 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/refresh" && req.method === "POST") {
+      // Every POST goes through authorised(): with the panel reachable off this machine, "this route
+      // forgot to check" is not a thing the next route should be able to repeat. Loopback is exempt, so
+      // the local board is unaffected.
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       await scheduler.fastPass();
       return sendJson(res, 200, { ok: true });
     }
@@ -1703,6 +1858,93 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, row: merged });
     }
 
+    // The UNMERGED chip's button: start the merge agent for one worktree. The board's verdict is a scan behind and
+    // a half-finished tree is the one thing that must never be merged, so every fact the button's enabled state
+    // claims is re-read here, from git, before a run exists. The prompt is lib/merge-prompt.js (the script the agent
+    // is held to); `dryRun` hands it back for a preview without starting anything.
+    if (route === "/api/worktree/merge" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const asked = String(body.path || "").trim();
+      if (!asked) return sendJson(res, 400, { error: "path is required" });
+      const worktree = path.resolve(asked);
+      const info = await stat(worktree).catch(() => null);
+      if (!info || !info.isDirectory()) return sendJson(res, 404, { error: `no such directory: ${worktree}` });
+      // A worktree can live anywhere (`git worktree add ../tree`), so a path outside the project's own root is not an
+      // error by itself: the row's project is the hint, and git's own worktree list is the proof that the hint is real.
+      let project = projectForPath(worktree) || registry.projects.find((p) => normPathKey(p.path) === normPathKey(worktree));
+      let trees = project ? await worktreeList(project.path).catch(() => []) : [];
+      if (!project) {
+        const hinted = registry.projects.find((p) => p.name === String(body.project || "").trim());
+        if (hinted) {
+          const listed = await worktreeList(hinted.path).catch(() => []);
+          if (listed.some((w) => normPathKey(w.path) === normPathKey(worktree))) {
+            project = hinted;
+            trees = listed;
+          }
+        }
+      }
+      if (!project) return sendJson(res, 400, { error: `${worktree} is not inside a known project, and is not one of its worktrees` });
+      const base = String(project.mainBranch || "");
+      if (!base) return sendJson(res, 400, { error: `${project.name} has no base branch (no main/master and no remote default) to merge into` });
+      const remote = project.remote || null;
+      const baseRef = remote ? `${remote}/${base}` : base;
+      const row = await scanWorktree(worktree, { remoteRef: baseRef, mainBranch: base }, "fast");
+      if (row.error) return sendJson(res, 400, { error: row.error });
+      if (row.branch === base) return sendJson(res, 409, { error: `${path.basename(worktree)} is on ${base} itself — there is nothing to land` });
+      if (row.ahead === null) return sendJson(res, 409, { error: `cannot count commits against ${baseRef} in this worktree — is the base ref there?` });
+      if (row.ahead === 0) return sendJson(res, 409, { error: `${row.branch} has no commits off ${base} — nothing to land` });
+      const dirty = Number(row.dirty) || 0;
+      const untracked = Number(row.untracked) || 0;
+      if (dirty || untracked) {
+        return sendJson(res, 409, {
+          error: `the tree is not clean (${dirty} modified, ${untracked} untracked) — commit or stash them first, so a merge cannot carry someone else's work`,
+        });
+      }
+      const label = mergeLabel(base);
+      // One merge agent per worktree: a second would race the first over the same base branch.
+      const live = jobs
+        .list()
+        .find((j) => ["running", "starting"].includes(String(j.status)) && normPathKey(j.ownerPath || j.cwd) === normPathKey(worktree) && String(j.label || "").startsWith("MERGING into "));
+      if (live) return sendJson(res, 409, { error: `an agent is already merging this worktree (${live.label || live.thread})` });
+      const list = await gitIn(worktree, ["log", "--oneline", "-20", `${baseRef}..HEAD`], 20000);
+      const commitList = list.ok ? list.out.split("\n").filter(Boolean) : [];
+      // Where the base branch is actually checked out — normally the project's own checkout, but the worktree list
+      // read above is the only thing that knows, and merging into a branch that is checked out elsewhere needs that
+      // directory.
+      const root = (trees.find((w) => w.branch === base) || trees[0] || { path: project.path }).path;
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const prompt = mergePrompt({
+        project: project.name,
+        worktree,
+        root,
+        branch: row.branch,
+        base,
+        remote,
+        baseRef,
+        ahead: row.ahead,
+        commits: commitList,
+        stamp,
+        panelPort: config.port,
+      });
+      const thread = makeThreadName(`${label} ${project.name}`);
+      const preview = { project: project.name, base, baseRef, remote, branch: row.branch, ahead: row.ahead, root, worktree: worktree.replace(/\\/g, "/"), label, thread, prompt };
+      if (body.dryRun) return sendJson(res, 200, { dryRun: true, ...preview });
+      const transport = await jobs.probe();
+      if (!transport.reachable || !transport.capabilities?.runs) {
+        return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}` });
+      }
+      const top = await gitIn(worktree, ["rev-parse", "--show-toplevel"], 15000);
+      const ownerPath = top.ok && top.out ? top.out : worktree;
+      const job = await jobs.create({ prompt, thread, cwd: worktree, existing: true, ownerPath, project: project.name });
+      // The card is named for the job it is doing before it draws: the label survives the thread for good, and it is
+      // what the route above reads back to refuse a second merge agent in the same tree.
+      jobs.setLabel(job.thread, label);
+      if (job.status === "failed") return sendJson(res, 502, { error: job.error || "the run could not be started", job, ...preview, prompt: undefined });
+      log(`merge ${row.branch} -> ${base} in ${project.name}: job ${job.id} (${job.status})`);
+      return sendJson(res, 202, { job, ...preview });
+    }
+
     // Give a worktree a name of its own: the directory and its branch. The row is looked up by path, and the whole
     // operation refuses while an agent is running in the tree - see renameWorktree().
     if (route === "/api/worktree/rename" && req.method === "POST") {
@@ -1758,6 +2000,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/fetch" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       // Fire and forget: a sweep across every project is minutes of git work, and the button must not
       // hold the request open for it. Rows update over SSE as each fetch lands.
       void scheduler
@@ -1768,6 +2011,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/reload" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       config = await loadConfig();
       scheduler.stop();
       pool.close();
@@ -1777,6 +2021,27 @@ const server = createServer(async (req, res) => {
       await scheduler.start();
       broadcast({ type: "snapshot", data: snapshot() });
       return sendJson(res, 200, { ok: true, projects: config.projects.map((p) => p.name) });
+    }
+
+    // ---- restarting the gateway or this panel --------------------------------------------
+    // An operator action, answerable from an assistant turn: the request returns at once and the action
+    // runs only once the requesting turn has ended, because restarting the gateway synchronously kills
+    // the very turn that asked for it. The preflight is synchronous, so a missing provider key is
+    // refused here rather than discovered after the new process is up and every run is dying.
+    if (route === "/api/restart" && req.method === "GET") {
+      return sendJson(res, 200, restart.state());
+    }
+
+    if (route === "/api/restart" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      try {
+        const record = restart.request({ target: body.target, reason: body.reason, waitFor: body.waitFor || body.thread });
+        log(`restart queued: ${record.target} (${record.id}) — it runs once ${record.thread} has no turn running`);
+        return sendJson(res, 202, { ok: true, restart: record, provider: record.provider, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, Number(e.status) || 400, { ok: false, error: String((e && e.message) || e), restart: restart.state() });
+      }
     }
 
     if (route === "/api/stream") return handleStream(req, res);
@@ -1809,11 +2074,29 @@ const server = createServer(async (req, res) => {
 
 server.listen(config.port, config.host, () => {
   log(`agent-worktree-gui on http://${config.host}:${config.port}`);
+  // Binding off loopback is a deliberate act, so say out loud what it opens and whether the token that
+  // guards it is there at all. Reads are still open to anyone who can reach the port.
+  if (!["127.0.0.1", "localhost", "::1"].includes(String(config.host).toLowerCase())) {
+    log(config.token
+      ? "reachable off this machine: writes from other hosts need x-panel-token (the PANEL_TOKEN value; open the panel with ?token=… once); reads stay open"
+      : "WARNING reachable off this machine with NO PANEL_TOKEN in the environment — writes from other hosts are refused until one is set");
+  }
   log(`projects: ${config.projects.map((p) => p.name).join(", ") || "(none)"} | threads: ${config.threads} | fast ${config.worktreeSeconds}s / full ${config.slowSeconds}s`);
   log(`agent transport: ${jobs.api.url} (key ${jobs.api.key ? "loaded" : "MISSING"}) | default cwd ${config.defaultCwd}`);
-  void jobs.probe({ fresh: true }).then((t) => {
-    if (!t.reachable) log(`agent transport UNREACHABLE: ${t.error} — spawns will be refused until the gateway is back`);
-    else log(`agent transport ready: hermes ${t.capabilities?.version || "?"} · runs ${t.capabilities?.runs ? "yes" : "no"} · steer ${t.capabilities?.steer ? "yes" : "no"} · per-run cwd ${t.capabilities?.runCwd ? "yes (patched gateway)" : "NO (stock gateway — agents run in the gateway's directory)"}`);
+  void jobs.probe({ fresh: true }).then(async (t) => {
+    if (!t.reachable) {
+      log(`agent transport UNREACHABLE: ${t.error} — spawns will be refused until the gateway is back`);
+      return; // nothing to ask: every restored turn keeps its interrupted verdict, which is the safe one
+    }
+    log(`agent transport ready: hermes ${t.capabilities?.version || "?"} · runs ${t.capabilities?.runs ? "yes" : "no"} · steer ${t.capabilities?.steer ? "yes" : "no"} · per-run cwd ${t.capabilities?.runCwd ? "yes (patched gateway)" : "NO (stock gateway — agents run in the gateway's directory)"}`);
+    // What the gateway did with the turns this panel lost in a restart. `load()` stamps them `interrupted`
+    // without asking, and a run that finished in the meantime must not keep reading "may still be live".
+    try {
+      const settled = await jobs.reconcileRestored();
+      if (settled.length) log(`reconciled ${settled.length} turn(s) a restart cut off: ${settled.join(", ")}`);
+    } catch (e) {
+      log(`reconcile of restored turns failed: ${String((e && e.message) || e)}`);
+    }
   });
 });
 
@@ -1827,13 +2110,25 @@ await scheduler.start();
 // first scan pass, and new projects simply appear when it lands.
 void registry.refresh().catch((e) => log(`project discovery failed: ${String((e && e.message) || e)}`));
 
-for (const sig of ["SIGINT", "SIGTERM"]) {
-  process.on(sig, () => {
-    log("shutting down");
+// The exit path, shared by a signal and a panel restart: the replacement has to be able to bind the
+// port, so nothing waits on the SSE clients beyond the same two seconds this always allowed.
+function shutdown(code = 0) {
+  log(`shutting down (exit ${code})`);
+  try {
     scheduler.stop();
-    clearInterval(heartbeat);
+  } catch {
+    /* an already-stopped scheduler is not a failure */
+  }
+  clearInterval(heartbeat);
+  try {
     pool.close();
-    server.close(() => process.exit(0));
-    setTimeout(() => process.exit(0), 2000);
-  });
+  } catch {
+    /* ...nor is a closed pool */
+  }
+  server.close(() => process.exit(code));
+  setTimeout(() => process.exit(code), 2000).unref?.();
+}
+
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.on(sig, () => shutdown(0));
 }

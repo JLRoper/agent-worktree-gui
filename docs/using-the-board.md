@@ -188,6 +188,16 @@ opens and closes the project. Settings → Display → **Project colours** shows
 | **Verdict** | See below. |
 | ✕ | Remove the worktree (not offered on the project's own checkout row). |
 
+**Column widths are measured, not fixed.** Each column is sized from the widest thing it actually holds — its
+header, the longest branch name, the chips on a row — so the columns that say little (`Cherry`'s `+0/−0`, `PR`'s
+`none`) stay narrow and the room they gave up goes to the two columns whose text truncates: **Worktree** and
+**Branch**. In the worktree cell the name is what ellipsizes; the agent badge and the evidence chips keep their
+whole width, so what a row is doing is never the part that gets cut.
+
+Drag the edge between two column headers to set those columns by hand: the pair trades width, so the rest of the
+row does not move. The choice is remembered in this browser and applies to every project. **Double-click** any
+column edge to hand the board back to the measurement.
+
 The evidence chips are the only definition of "live" the board uses:
 
 | Chip | Evidence |
@@ -206,11 +216,37 @@ If none of them fired, the row is not live — whatever processes may be running
 | `MERGED (N commits)` | The branch carried commits of its own and they are in remote main. `MERGED (squash/rebase, N commits)` is the same claim proved by patch id instead of ancestry; `MERGED (content identical)` says the branch's tree already matches main. |
 | `NO COMMITS` | The branch never moved off the commit it was created at. Nothing to merge; nothing was merged — and it is deliberately *not* counted as safe to remove. `NO COMMITS?` means the reflog is missing or expired, so the panel cannot tell whether the branch ever moved and will not claim it did. |
 | `ON MAIN` | This is the primary checkout of the main branch. |
-| `UNMERGED (N commits)` | Carries `N` commits that are not on remote main. |
+| `UNMERGED (N commits)` | Carries `N` commits that are not on remote main. On a clean tree the badge **is a button** (`⇥` on its face): it starts a `MERGING into MAIN` agent for that row — see [Merging a branch from the board](#merging-a-branch-from-the-board). |
 | `EMPTY REPO` / `NO BASE REF` | There is nothing to judge against: the repo has no commits yet, or its remote base ref does not exist here. |
 | *(empty, grey)* | Not computed yet. A dashed grey badge is a verdict being reclassified after a change. |
 
 `MERGED` + clean + not live is what the project's **safe to remove** chip counts.
+
+### Merging a branch from the board
+
+A clean `UNMERGED (N commits)` badge is a button; the `⇥` on its face is the whole affordance. One press starts a
+Hermes agent **in that worktree**, named `MERGING into MAIN` (`MERGING into MASTER`, or whatever the project's base
+branch is called — the label is set the moment the run is created, so the card says it before it draws), whose only
+job is to land the branch:
+
+- it re-reads the tree and stops if anything is modified or untracked;
+- it tries `git merge --ff-only` in the project's own checkout, so a branch that is simply ahead cannot lose a line of
+  what the base already has; a base that moved on is handled by rebasing the branch and retrying, or by a real merge
+  commit in a repo that keeps them — conflicts are resolved by keeping both sides, never by dropping the base's code;
+- it proves nothing was lost (`git diff --diff-filter=D` against the pre-merge sha) and will not leave a merge that
+  deleted a file the branch itself did not delete;
+- it runs the repo's own unit, integration and Playwright tests — Playwright against a server **it starts on a free
+  port of its own** (or a compose project named `wtgui-merge-<stamp>`), never this panel's port and never a server it
+  did not start;
+- it pushes only when the tests pass, and stops every server, container, network and volume it started before it
+  writes its report.
+
+The button is only drawn while the tree is clean. A row with modified or untracked files keeps the plain badge and its
+tooltip says what to do first — a merge agent commits what it finds, so a half-finished tree would land somebody
+else's work. A row that already has a merge agent working it draws a disabled `MERGING into …` chip whose tooltip
+names the agent. The route (`POST /api/worktree/merge {project, path}`) refuses all of those cases again from git, so
+a board that is a scan behind cannot start one by accident; `{dryRun: true}` returns the prompt without starting
+anything, and the script itself is `lib/merge-prompt.js`.
 
 ### Opening a row
 
@@ -239,6 +275,12 @@ how often that happens (default 5 s; off is allowed).
 The row's ✕ asks in place: *Remove worktree `<name>` on `<branch>`? Its files go to the Recycle Bin (recoverable
 there) and git's record of it is pruned.* — **Cancel** then **Delete**, left to right. While any agent run is live in
 that directory the request is refused (409); stop the run first. A directory that is already gone counts as removed.
+
+**A merged, clean worktree does not ask.** When the row's verdict is `MERGED …`, nothing is modified or untracked, and
+the verdict is not stale, the ✕ deletes on the first click — there is nothing in that folder `main` does not already
+have. Those ✕ are drawn grey instead of red (hover says so in the tooltip). Everything else keeps the question:
+unmerged commits, any dirty or untracked file, a stale verdict, and `ON MAIN` / the project's own checkout, which is
+never deleted from this table.
 
 The files and git's record always go; whether the *folder* can go in the same click depends on what else is using it.
 Windows refuses to delete a directory that a process holds as its working directory, and a worktree often is one (the
@@ -299,13 +341,19 @@ Each turn is an accordion inside the card:
 Output streams into a `<pre>`. It follows the newest line unless you scroll up; a `↓` button brings you back and
 re-pins it. A tool result is a **preview** of what the tool returned, not the full payload — when it was cut the
 console ends it with `… result truncated by the gateway` (the gateway's `HERMES_RUN_PREVIEW_CHARS` raises the cap).
-Opening a specific tool can fetch the stored result from the session store.
+When the preview was empty — routine for `patch` and `write_file` — the panel reads that call's result back out of
+the session store and draws it under the result line **as text**: a patch's diff, a terminal's output, never the JSON
+envelope it travelled in. Each burst in a turn pairs with its own results, so a second run of the same tool later in
+the turn shows its own output rather than the first run's. A call the store has nothing for says `no output recorded
+for this call` — or `no output in the session store yet` while the turn is still running — and a result held to 40
+lines ends with `… N more line(s) of this result`.
 
 **A run of tool calls is condensed.** Consecutive calls between two pieces of prose become one group, one row per
 tool name: `💻 terminal ×11 curl …` with the last input and either a duration or a live clock. Click a row to filter
 the group to that one tool; the button then reads **all N** and clears the filter. **`N lines`** opens the whole
-group — every call with its output — and the N is the number of console lines it holds. Text ends a group, so the
-next call starts a fresh tally.
+group — every call with its output — and the N is the number of console lines it holds; opening it asks the session
+store for every tool in the group, and a group left open on a turn that is still running refreshes itself as later
+results land. Text ends a group, so the next call starts a fresh tally.
 
 The gateway folds a parallel batch into one summary line — `first command + 3 commands` — so that tail is a button:
 click **`+ 3 commands`** to read all four calls out of the session transcript, listed under the group with the call
@@ -520,6 +568,7 @@ Configured in `config.json` (`liveSeconds`, `worktreeSeconds`, `dormantSeconds`,
 | Rows stop moving | The page may be paused, or the stream `reconnecting…`/`offline`. **Resume** or **Refresh now**. |
 | A project's numbers look old while it is off screen | With Settings → Board → Refresh: **only on screen**, off-screen projects are not read until you scroll them into view — and nothing is read at all while no page is open. |
 | A worktree will not delete | An agent run is live in it — stop the run first. |
+| A column is too narrow or too wide | Drag the edge between two column headers (the pair trades width); **double-click** any edge to go back to the measured split. Widths are remembered in this browser, so a reset is per browser too. |
 | `revive` is refused | That session already has a card on the board. |
 | A console result is cut short | The run stream carries a preview, not the full payload. See the README's troubleshooting section. |
 
