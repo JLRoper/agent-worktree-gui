@@ -51,7 +51,8 @@ Then install the commit-subject hook once per clone — it is repo config, so on
 worktree of the clone:
 
     npm run hooks:install          # git config core.hooksPath .githooks
-    chmod +x .githooks/commit-msg  # non-Windows only: the index stores it 644
+    # the index stores the script executable (100755); run chmod +x .githooks/commit-msg only
+    # if a non-Windows checkout ever loses the bit
 
 ## 3. Configure — one file
 
