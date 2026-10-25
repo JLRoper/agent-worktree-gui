@@ -712,9 +712,29 @@ function handleStream(req, res) {
   });
 }
 
+// Did this request come in over loopback — i.e. from the machine the panel runs on? That is the panel's
+// own UI, and it is the only caller allowed in without a token.
+function isLoopback(req) {
+  const addr = String((req.socket && req.socket.remoteAddress) || "").toLowerCase().replace(/^::ffff:/, "");
+  return addr === "::1" || addr.startsWith("127.");
+}
+
+// Loopback is allowed exactly as before, so the local board is untouched. Anything else — the LAN, a
+// tailnet — is allowed only when config.json carries a token AND the request sends it in
+// x-panel-token; with no token configured off-machine writes are refused outright. Every write route
+// can spawn a process or write a file, so an unauthenticated one reachable from another host is remote
+// code execution — the refusal has to be the default, not something a route has to remember.
+// A refusal is logged with the address it came from: a 403 nobody can see is a bug report nobody can act on.
 function authorised(req) {
-  if (!config.token) return true;
-  return req.headers["x-panel-token"] === config.token;
+  if (isLoopback(req)) return true;
+  const addr = (req.socket && req.socket.remoteAddress) || "?";
+  if (!config.token) {
+    log(`write refused from ${addr}: no "token" in config.json, so non-loopback writes are off`);
+    return false;
+  }
+  if (req.headers["x-panel-token"] === config.token) return true;
+  log(`write refused from ${addr}: missing or wrong x-panel-token`);
+  return false;
 }
 
 const cleanPath = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "");
@@ -1576,6 +1596,10 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/refresh" && req.method === "POST") {
+      // Every POST goes through authorised(): with the panel reachable off this machine, "this route
+      // forgot to check" is not a thing the next route should be able to repeat. Loopback is exempt, so
+      // the local board is unaffected.
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       await scheduler.fastPass();
       return sendJson(res, 200, { ok: true });
     }
@@ -1962,6 +1986,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/fetch" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       // Fire and forget: a sweep across every project is minutes of git work, and the button must not
       // hold the request open for it. Rows update over SSE as each fetch lands.
       void scheduler
@@ -1972,6 +1997,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/reload" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       config = await loadConfig();
       scheduler.stop();
       pool.close();
@@ -2034,6 +2060,13 @@ const server = createServer(async (req, res) => {
 
 server.listen(config.port, config.host, () => {
   log(`agent-worktree-gui on http://${config.host}:${config.port}`);
+  // Binding off loopback is a deliberate act, so say out loud what it opens and whether the token that
+  // guards it is there at all. Reads are still open to anyone who can reach the port.
+  if (!["127.0.0.1", "localhost", "::1"].includes(String(config.host).toLowerCase())) {
+    log(config.token
+      ? "reachable off this machine: writes from other hosts need x-panel-token (?token=… once in the browser); reads stay open"
+      : "WARNING reachable off this machine with NO token in config.json — writes from other hosts are refused until one is set");
+  }
   log(`projects: ${config.projects.map((p) => p.name).join(", ") || "(none)"} | threads: ${config.threads} | fast ${config.worktreeSeconds}s / full ${config.slowSeconds}s`);
   log(`agent transport: ${jobs.api.url} (key ${jobs.api.key ? "loaded" : "MISSING"}) | default cwd ${config.defaultCwd}`);
   void jobs.probe({ fresh: true }).then(async (t) => {
