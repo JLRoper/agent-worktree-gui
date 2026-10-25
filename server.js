@@ -19,6 +19,8 @@ import { Jobs, hermesHome, makeThreadName, previewRequest } from "./lib/jobs.js"
 import { gitIn, scanWorktree } from "./lib/scan.js";
 import { resolveExistingTarget, resolutionNote } from "./lib/spawn-target.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
+import { suggestWorktreeName } from "./lib/name-from-work.js";
+import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE } from "./lib/tree-names.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
@@ -137,6 +139,9 @@ async function loadConfig() {
   // The continuity file the assistant is handed every turn, beside its scratchpad for the same reason: it is
   // state, not source. A sandbox config that names its own jobsFile therefore gets its own charter too.
   if (!cfg.charterFile) cfg.charterFile = path.join(path.dirname(cfg.assistantFile), "assistant-charter.md");
+  // Which trees have already been named, and by whom — the panel's own, never git's, so it lives beside the job
+  // store and a PANEL_CONFIG sandbox keeps its own copy of it.
+  if (!cfg.treeNamesFile) cfg.treeNamesFile = path.join(path.dirname(cfg.jobsFile), "tree-names.json");
   return cfg;
 }
 
@@ -508,7 +513,12 @@ const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "
 // reader typed rather than what the agent worked out it was doing. Renaming it is the directory and the branch plus
 // the panel's own bookkeeping - the jobs that ran there (a run's body carries its cwd), the store's row, and the row
 // the board draws.
-const WORKTREE_TAG_RE = /-([0-9a-f]{6})$/i;
+//
+// A tree is named ONCE, and the record of that (who, when — lib/tree-names.js) is what stops a name churning. The
+// automatic half of this (`once: true`, from a finished turn's title) refuses a tree the ledger already knows;
+// the deliberate half (the ✎ and the ✦ in the row, i.e. a reader asking) does not, because replacing a name is
+// the point of it. Either way the six-hex tag is kept and the 409 stands while an agent is running in the tree.
+const treeNames = new TreeNames({ file: config.treeNamesFile, log });
 function worktreeDirName(name, tag) {
   const slug = String(name || "")
     .toLowerCase()
@@ -529,7 +539,7 @@ async function isMainCheckout(dir) {
   return Boolean(gitDir) && normPathKey(path.dirname(gitDir)) === normPathKey(dir);
 }
 
-async function renameWorktree({ projectName, target, name }) {
+async function renameWorktree({ projectName, target, name, by = null, how = null, once = false }) {
   const project = scheduler.getProjects().find((p) => p.name === projectName);
   if (!project) return { error: `unknown project: ${projectName}`, status: 404 };
   const oldPath = path.resolve(String(target || ""));
@@ -546,12 +556,42 @@ async function renameWorktree({ projectName, target, name }) {
   // Keep the six-hex tag: it is what tells two trees named alike apart, and it makes a repeated rename a no-op
   // instead of a second suffix.
   const tag = ((WORKTREE_TAG_RE.exec(base) || [])[1] || randomUUID().slice(0, 6)).toLowerCase();
+  // The tag is also the tree's identity for the naming ledger, and it is the same key before and after a rename —
+  // which is exactly what the old in-memory Set of paths could not say, its key going stale the moment the first
+  // rename landed. A tree already in the ledger keeps its name: this is the automatic path asking (`once`), and a
+  // second run in the same tree is not allowed to rename the directory or the branch under the first one.
+  const key = treeKey({ project: projectName, path: oldPath });
+  if (once) {
+    const named = treeNames.get(key);
+    if (named) {
+      return {
+        ok: true,
+        unchanged: true,
+        skipped: `already named by ${named.by || "the panel"}`,
+        named,
+        path: oldPath.replace(/\\/g, "/"),
+        branch: row.branch || null,
+        jobs: 0,
+      };
+    }
+  }
   const wanted = String(name || "").trim().replace(new RegExp(`-${tag}$`, "i"), "");
   const dirName = worktreeDirName(wanted, tag);
   if (!dirName) return { error: "a name is required", status: 400 };
   const newPath = path.join(project.path, ".worktrees", dirName);
   if (path.resolve(newPath) === oldPath) {
-    return { ok: true, unchanged: true, path: oldPath.replace(/\\/g, "/"), branch: row.branch || null, jobs: 0 };
+    // Already called that, so there is nothing to move — but a tree that has never been written down still gets
+    // its record here, or the automatic half would keep trying the same rename for the rest of the tree's life.
+    const named = treeNames.record(key, {
+      name: dirName,
+      dir: dirName,
+      branch: row.branch || null,
+      tag,
+      by: by || "the panel",
+      how: how || "already its name",
+      at: new Date().toISOString(),
+    });
+    return { ok: true, unchanged: true, path: oldPath.replace(/\\/g, "/"), branch: row.branch || null, jobs: 0, named };
   }
   const taken = await stat(newPath)
     .then((s) => s.isDirectory())
@@ -566,6 +606,21 @@ async function renameWorktree({ projectName, target, name }) {
         [j.cwd, j.ownerPath, j.worktreePath].filter(Boolean).some((p) => path.resolve(p) === oldPath),
     );
   if (busy) return { error: `an agent is running in that worktree (${busy.id}) — stop it first`, status: 409 };
+  // Claim it BEFORE the git work, and only for the automatic half: two events of one finished turn settle within a
+  // second of each other, and both of them would otherwise find an un-named tree and rename it. The claim is rolled
+  // back below if nothing lands, so a tree is never frozen under a name it did not get.
+  if (once) {
+    treeNames.record(key, {
+      name: dirName,
+      dir: dirName,
+      branch: row.branch || null,
+      tag,
+      by: by || "the panel",
+      how: how || "the automatic rename",
+      at: new Date().toISOString(),
+      claimedOnly: true,
+    });
+  }
   // Windows will not rename a directory that any process has open, and an agent's shell lives in its tree long after
   // its turn ends — so the directory move is best-effort and the branch rename is the part that always lands.
   let moved = true;
@@ -605,24 +660,61 @@ async function renameWorktree({ projectName, target, name }) {
     scheduler.store.dropRow(projectName, row.path);
     broadcast({ type: "drop", project: projectName, path: row.path });
   }
+  // Nothing of the rename landed (the directory is held open AND the branch would not move): hand the tree back so a
+  // later run may name it, rather than leaving a claim on a tree that is still called what it was.
+  if (!moved && !branchRenamed) {
+    if (once) treeNames.forget(key);
+    const scanned = await scheduler.scanOne(project, finalPath.replace(/\\/g, "/"), "full").catch(() => null);
+    return {
+      ok: true,
+      moved: false,
+      path: finalPath.replace(/\\/g, "/"),
+      branch: (scanned && scanned.branch) || oldBranch,
+      branchRenamed: false,
+      jobs: repointed,
+      warning: `the directory keeps its old name (${whyNot})`,
+    };
+  }
   // Read the renamed tree in now, not on its next scan: the store's branch name is what the next rename reads, and the
   // board should show the new name in the same breath as the banner.
   const scanned = await scheduler.scanOne(project, finalPath.replace(/\\/g, "/"), "full").catch(() => null);
+  const finalBranch = (scanned && scanned.branch) || (branchRenamed ? newBranch : oldBranch);
+  // The record follows the tree: a name with no tag gets one here (rename keeps a tag, and makes one when the tree
+  // had none), so the key changes with the name and the old one is dropped.
+  const keyAfter = treeKey({ project: projectName, path: finalPath });
+  if (keyAfter !== key) treeNames.forget(key);
+  const named = treeNames.record(keyAfter, {
+    name: path.basename(finalPath),
+    dir: path.basename(finalPath),
+    branch: finalBranch || null,
+    tag: tagOf(finalPath) || tag,
+    by: by || "the panel",
+    how: how || `renamed after “${wanted}”`,
+    at: new Date().toISOString(),
+    moved,
+    from: base,
+    claimedOnly: false,
+  });
   return {
     ok: true,
     moved,
     path: finalPath.replace(/\\/g, "/"),
-    branch: (scanned && scanned.branch) || (branchRenamed ? newBranch : oldBranch),
+    branch: finalBranch,
     branchRenamed,
     jobs: repointed,
+    named,
     warning: moved ? null : `the directory keeps its old name (${whyNot})`,
   };
 }
 
 // A tree is named from the prompt, and Hermes names the session from the work itself a moment later ("Fix delete
 // worktree button not removing directory"). Once that name exists and the tree is idle, the tree takes it - the
-// agent's own name for the job beats the reader's first sentence cut at 24 characters. Once per tree.
-const autoNamedTrees = new Set();
+// agent's own name for the job beats the reader's first sentence cut at 24 characters. ONCE PER TREE, and that
+// "once" is a record rather than a hope (lib/tree-names.js): a second run started into the same tree must not be
+// able to rename the directory or the branch under the first one, and neither may the second, third and fourth
+// event of one finished turn - each of which used to walk past the old in-memory Set because the first rename had
+// already moved the path that Set was keyed on.
+const autoNamingInFlight = new Set();
 async function autoNameWorktree(evt) {
   if (evt?.type !== "job") return;
   const j = evt.job;
@@ -631,21 +723,43 @@ async function autoNameWorktree(evt) {
   // agent's to take, even if a job ever carries a worktree path that resolves there.
   if (j.baseCheckout) return;
   if (!["done", "failed", "cancelled", "interrupted"].includes(String(j.status))) return;
-  const treeKey = normPathKey(j.worktreePath);
-  if (autoNamedTrees.has(treeKey)) return;
   const project = projectForPath(j.worktreePath);
   if (!project) return;
   // The project's own checkout is the parent of every tree cut from it and keeps the folder's name.
-  if (normPathKey(project.path) === treeKey) return;
+  if (normPathKey(project.path) === normPathKey(j.worktreePath)) return;
+  const key = treeKey({ project: project.name, path: j.worktreePath });
+  // Already named - by the run that cut the tree, or by the reader - so the name stays. This is the whole of the
+  // fix for a shared tree: nothing here can rename it a second time, whoever is running in it.
+  const already = treeNames.get(key);
+  if (already) return;
+  // Two events of one turn settle within a second of each other and land here on the same tick: the ledger is
+  // written by renameWorktree itself (it claims the tree before touching git), and this is only the guard for the
+  // moment before that write.
+  if (autoNamingInFlight.has(key)) return;
   // Only when the tree is idle: moving a directory out from under a running turn is what git refuses.
   const busy = jobs
     .list()
-    .some((x) => (x.status === "running" || x.status === "starting") && normPathKey(x.ownerPath || x.cwd) === treeKey);
+    .some((x) => (x.status === "running" || x.status === "starting") && normPathKey(x.ownerPath || x.cwd) === normPathKey(j.worktreePath));
   if (busy) return;
-  autoNamedTrees.add(treeKey);
   const title = jobs.sessionInfoFor(j.thread).title;
   if (!title) return;
-  await renameWorktree({ projectName: project.name, target: j.worktreePath, name: title }).catch(() => {});
+  autoNamingInFlight.add(key);
+  try {
+    // The rename's own refusal is logged rather than swallowed: a tree that misses its name because the row had not
+    // been scanned yet looks exactly like one that was never named, and the sweep that offers the name runs once.
+    const out = await renameWorktree({
+      projectName: project.name,
+      target: j.worktreePath,
+      name: title,
+      once: true,
+      by: `run ${j.id} (${j.thread})`,
+      how: `Hermes named the session “${title}” at the end of its turn`,
+    }).catch((e) => ({ error: String((e && e.message) || e) }));
+    if (out?.error) log(`auto-naming ${j.worktreePath}: ${out.error}`);
+    else if (out?.skipped) log(`auto-naming ${j.worktreePath}: ${out.skipped}`);
+  } finally {
+    autoNamingInFlight.delete(key);
+  }
 }
 
 // Which project a directory belongs to: the innermost project root that contains it (a project can be nested inside
@@ -698,25 +812,51 @@ function withLiveAgents(snap) {
   return snap;
 }
 
+// What the panel itself knows about a tree's name — who gave it and when — is in no git repository, so it travels
+// with the snapshot the way the live agent state does. A row that carries `named` is a row the automatic rename
+// will never touch again; one without it is a tree still waiting for the run that will name it.
+function withTreeNames(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const rec = treeNames.forTree({ project: project.name, path: row.path, branch: row.branch });
+      if (!rec) {
+        delete row.named;
+        continue;
+      }
+      row.named = {
+        name: rec.name || null,
+        by: rec.by || null,
+        at: rec.at || null,
+        how: rec.how || null,
+        claimedOnly: Boolean(rec.claimedOnly),
+        line: describeNaming(rec),
+      };
+    }
+  }
+  return snap;
+}
+
 function snapshot() {
-  return withLiveAgents({
-    ...store.snapshot({ settings: settingsOut() }),
-    jobs: jobs.list(),
-    approvals: approvals.list(),
-    // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
-    // thread id, so a reload comes back to the same conversation and the same watches.
-    assistant: assistant.state(),
-    skipped: registry.skipped,
-    scanRoots: config.scanRoots || [],
-    spawn: {
-      // Spawning is no longer "is there a hermes.exe on this box": it is "is the gateway's api_server
-      // reachable and keyed". The panel probes and reports, instead of assuming.
-      transport: jobs.transportInfo(),
-      defaultCwd: config.defaultCwd,
-      maxRuntimeSeconds: jobs.maxRuntimeSeconds,
-      projects: registry.projects.map((p) => ({ name: p.name, path: p.path, activityAt: p.activityAt || null, empty: Boolean(p.empty) })),
-    },
-  });
+  return withTreeNames(
+    withLiveAgents({
+      ...store.snapshot({ settings: settingsOut() }),
+      jobs: jobs.list(),
+      approvals: approvals.list(),
+      // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
+      // thread id, so a reload comes back to the same conversation and the same watches.
+      assistant: assistant.state(),
+      skipped: registry.skipped,
+      scanRoots: config.scanRoots || [],
+      spawn: {
+        // Spawning is no longer "is there a hermes.exe on this box": it is "is the gateway's api_server
+        // reachable and keyed". The panel probes and reports, instead of assuming.
+        transport: jobs.transportInfo(),
+        defaultCwd: config.defaultCwd,
+        maxRuntimeSeconds: jobs.maxRuntimeSeconds,
+        projects: registry.projects.map((p) => ({ name: p.name, path: p.path, activityAt: p.activityAt || null, empty: Boolean(p.empty) })),
+      },
+    }),
+  );
 }
 
 const heartbeat = setInterval(() => {
@@ -1994,6 +2134,10 @@ const server = createServer(async (req, res) => {
 
     // Give a worktree a name of its own: the directory and its branch. The row is looked up by path, and the whole
     // operation refuses while an agent is running in the tree - see renameWorktree().
+    //
+    // This is the DELIBERATE half: it renames whenever the reader asks, including a tree the automatic half has
+    // already named (replacing a name is the point), and it writes down who asked and when - the naming ledger's
+    // record is what stops every later automatic rename of this tree.
     if (route === "/api/worktree/rename" && req.method === "POST") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
@@ -2001,9 +2145,56 @@ const server = createServer(async (req, res) => {
         projectName: String(body.project || "").trim(),
         target: String(body.path || "").trim(),
         name: String(body.name || "").trim(),
+        by: String(body.by || "").trim().slice(0, 80) || "the reader",
+        how: String(body.how || "").trim().slice(0, 160) || "renamed from the row",
       });
       if (out.error) return sendJson(res, out.status || 500, { error: out.error });
-      return sendJson(res, 200, { ...out, name: path.basename(out.path) });
+      return sendJson(res, 200, { ...out, name: path.basename(out.path), namedLine: describeNaming(out.named) });
+    }
+
+    // What the tree should be called, read from the work in it: the branch's own commits and its diff against the
+    // project's base branch. It renames NOTHING - the row's ✦ shows this name, the commits behind it and where they
+    // came from, and the rename itself is the reader's second click on /api/worktree/rename above.
+    if (route === "/api/worktree/suggest-name" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const projectName = String(body.project || "").trim();
+      const project = scheduler.getProjects().find((p) => p.name === projectName);
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${projectName}` });
+      const dir = path.resolve(String(body.path || "").trim());
+      // A row, not a free path: the same door the rename uses, so this can only ever read a tree the panel watches.
+      const row = scheduler.store.rowsFor(projectName).find((r) => path.resolve(r.path) === dir);
+      if (!row) return sendJson(res, 404, { error: `not a worktree row of ${projectName}: ${dir}` });
+      if (normPathKey(dir) === normPathKey(project.path) || (await isMainCheckout(dir))) {
+        return sendJson(res, 400, { error: "that is the project's own checkout, not a worktree — its name is the project folder's" });
+      }
+      // The tag every rename keeps, so the name this offers is already the whole directory name the row would get.
+      const tag = tagOf(dir) || tagOf(row.branch) || null;
+      const picked = await suggestWorktreeName({
+        dir,
+        base: project.mainBranch || "main",
+        current: row.name || "",
+        tag,
+      });
+      const named = treeNames.forTree({ project: projectName, path: dir, branch: row.branch });
+      return sendJson(res, 200, {
+        ok: true,
+        project: projectName,
+        path: dir.replace(/\\/g, "/"),
+        current: row.name || null,
+        branch: row.branch || null,
+        tag,
+        named: named || null,
+        namedLine: describeNaming(named),
+        name: picked.name,
+        dirName: picked.name && tag ? worktreeDirName(picked.name, tag) : picked.name,
+        why: picked.why,
+        source: picked.source,
+        frame: picked.frame,
+        words: picked.words,
+        note: picked.note,
+        evidence: picked.evidence,
+      });
     }
 
     // Clone a GitHub repo over SSH into ONE of the configured scan roots — what the folder
