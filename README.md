@@ -54,6 +54,10 @@ directory name, the tag alone and a thread's slug — then checks both refusals 
 candidates, none keeps the old wording) and that the card says which tree was picked — useful after
 touching what a SPAWN IN line may name.
 
+`node tools/verify-named-tree.mjs` proves the naming ledger (the once-per-tree rename, `lib/tree-names.js`)
+and the `✦` name-from-the-work button against a panel of its own — sandbox `PANEL_CONFIG`, spare port,
+sandbox `$HERMES_HOME`, stub gateway, throwaway repo — useful after touching anything that renames a tree.
+
 `node tools/verify-action-harvest.mjs` drives three real assistant turns through a stub gateway whose stream
 carries the reply the way the live one does — one paragraph per text line — and then reads the job store and the
 journal back: one turn carrying SPAWN, SPAWN IN, TO, WATCH, NOTE and RULE must produce one job per run-creating
@@ -161,6 +165,46 @@ Liveness is **evidence-based**, never a generic "some process is running":
 
 A row is **live** only if one of those fired. An open-but-idle session shows as grey `⧉ N idle`
 and is counted separately ("open idle" chip). `MERGED` + clean + not live = "safe to remove".
+
+#### What a worktree is called
+
+A tree is cut from the prompt, so its name starts as the reader's first sentence cut at 24 characters —
+usually mid-word. Hermes names the *session* from the work a moment later, and the panel renames the tree
+after that title once, at the end of the turn: the directory (`git worktree move`) and its branch
+(`git branch -m wtgui/<slug>-<tag>`, the six-hex tag kept). That rename happens **once per tree** and the
+"once" is a record, not a hope — `logs/tree-names.json` beside the job store (see `lib/tree-names.js`),
+keyed on the tag every rename keeps, holding who named the tree and when. A second run started into the
+same tree cannot rename it: it would move the directory and the branch out from under the run that already
+lives there, which is how one worktree ended up with a directory named one thing, a branch named another,
+and three live cards each spelling a different branch. The same record is what the board's row reads, so
+the tooltip on `✎` says who named the tree and when.
+
+Two buttons sit beside the worktree name, and neither is automatic:
+
+- `✎` — name it by hand. It opens a box with the session's title offered and takes anything typed; the
+  rename itself is `POST /api/worktree/rename` (the branch always, the directory when nothing holds it
+  open), and the result is written down as the reader's name.
+- `✦` — name it **from the work**. `POST /api/worktree/suggest-name` reads the branch's own commits
+  against the base branch and its diff (`<base>...HEAD`, plus anything uncommitted), reduces them to a
+  name in the panel's own `<slug>-<tag>` shape (`lib/name-from-work.js`), and renames nothing at all: the
+  name, the commits it came from and what the tree is called now go into a question under the row — the
+  same shape as the delete question, with `Name it`, `✎ edit…` and `Cancel`. `Name it` calls the same
+  rename route, and the record then names the reader instead of the run. Deciding what a thing *is* is not
+  something to guess at from a prompt, which is why this is a button and not a behaviour.
+
+The rename refuses with `409 an agent is running in that worktree (<id>) — stop it first` while a run is
+live in the tree, whichever half asks, and `409 <name> already exists` when the target directory is taken.
+Nothing else about a tree is touched: the branch and the files are always the reader's.
+
+`node tools/verify-named-tree.mjs` drives all of this end to end in a sandbox of its own — its own
+`PANEL_CONFIG`, its own port, its own `$HERMES_HOME` and a stub gateway — with a throwaway repo: run one
+names the tree, run two into the same tree leaves the name alone, a restarted panel with a *different*
+title for that tree's run still cannot rename it (with a tree nobody has named yet renamed by the same
+sweeper in the same window, so "untouched" cannot mean "the sweeper was asleep"), the 409 holds while an
+agent is running in the tree, and `✦` suggests a name from three real commits, renames once when answered,
+keeps the tag, and records the reader. It prints which parts are driven rather than inspected. Nothing
+outside the sandbox is touched: the live panel on 7331 and the gateway on 8642 are never used, and no
+branch of this repository is renamed.
 
 ### Agents
 
@@ -554,8 +598,9 @@ The assistant acts by writing plain lines in a reply, and every such line in it 
     SPAWN IN <directory, worktree directory name, or branch> | what the worker should do in that tree  (no new worktree)
 
 **A SPAWN IN name that is out of date is resolved, not refused.** The panel renames a finished run's worktree
-directory and its branch after the thread title (`renameWorktree` — the slug is rebuilt from the title, the
-six-hex tag kept), so a path the assistant wrote down when that worker finished, or one typed from an older
+directory and its branch after the thread title once, on the run that got the tree first (`renameWorktree` — the
+slug is rebuilt from the title, the six-hex tag kept; every later run in that tree leaves the name alone, see
+*What a worktree is called*), so a path the assistant wrote down when that worker finished, or one typed from an older
 report, stops existing while the tree is standing one directory over. So an existing-tree spawn no longer
 requires the path to BE a directory before it looks further (`lib/spawn-target.js`, used by both
 `/api/assistant/spawn` and the New-agent card): the path as written first — absolute, or relative to the panel,
@@ -659,6 +704,8 @@ Watches without a deadline, and finished ones, say so instead.
 | POST | `/api/agents/preview` | returns the exact run request that would be sent (`{transport, request, blocked}`), without sending it |
 | POST | `/api/agents` | start a run (`{prompt, cwd?, project?, model?, budget?, maxTurns?, existing?}`); `{dryRun:true}` returns the request instead. **503** when the gateway's api_server is unreachable or unkeyed |
 | POST | `/api/agents/reply` | `{thread, text}` → another turn on the same `session_id` |
+| POST | `/api/worktree/rename` | `{project, path, name, by?, how?}` → rename one worktree: the branch always (`wtgui/<slug>-<tag>`, the six-hex tag kept), the directory when nothing holds it open. Writes down who named it and when (`logs/tree-names.json`), which is what stops the automatic rename for good. **400** for the project's own checkout, **404** for a path that is not a row, **409** when an agent is running in the tree or the target directory exists |
+| POST | `/api/worktree/suggest-name` | `{project, path}` → what the tree should be called, read from the work in it: the branch's commits against the base branch and their diff, reduced to a `<slug>-<tag>` name and the evidence behind it. Renames nothing — the row's `✦` puts it in a question and the click answers it through `/api/worktree/rename`. Same **400**/**404** refusals as the rename |
 | POST | `/api/jobs/steer` | `{id, text}` → `POST /v1/runs/{id}/steer`; read at the agent's next tool boundary. 409 when the turn already crossed it |
 | POST | `/api/jobs/approve` | `{id, choice, requestId?}` → `POST /v1/runs/{id}/approval`; `choice` must be one the host offered |
 | GET/POST | `/api/settings/approvals` | the gateway's `approvals.timeout`. GET reports the value, whether `config.yaml` sets it, the file's path, and whether this panel may change it. POST `{timeoutSeconds}` rewrites only that line under `approvals:` in `<HERMES_HOME>/config.yaml` — comments, indentation and line endings untouched — and re-reads the file before writing, refusing if it does not say what was asked. **400** outside 15–86400, **409** when the gateway is not on this machine |

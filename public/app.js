@@ -6318,6 +6318,161 @@ function answerRowConfirm(action, key) {
   state.confirmEls.delete(key);
 }
 
+// ---- naming a tree from the work in it ------------------------------------------------------
+// The ✎ takes a name from the reader, and the panel's own automatic rename takes one from the title of whichever
+// agent finished in the tree last. Neither describes the work: this asks the branch. /api/worktree/suggest-name
+// reads the commits on the branch and its diff against the base branch and offers a name built from them, and it
+// renames NOTHING — the name, and the commits it came from, go into a question under the row, and the rename
+// happens only if the reader answers it. A tree keeps the name it is given (the panel records who gave it and
+// when, lib/tree-names.js), so this is the one place a better name can still come from.
+const workNames = new Map(); // row key -> the suggestion its confirm box is offering
+
+async function suggestTreeName(btn) {
+  const project = btn.dataset.nameProject || "";
+  const path = btn.dataset.namePath || "";
+  const key = btn.dataset.nameTree || keyOf(project, path);
+  btn.disabled = true;
+  try {
+    const r = await apiFetch(
+      "/api/worktree/suggest-name",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project, path }) },
+      { timeoutMs: 60000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    workNames.set(key, d);
+    showNameConfirm(key, d);
+  } catch (err) {
+    showBanner(`could not read the work in ${path}: ${err.message}`);
+  } finally {
+    if (btn.isConnected) btn.disabled = false;
+  }
+}
+
+// The question the ✦ puts up: the name it would take, the commits and files it read, and what the tree is called
+// now. Same row-confirm shape as the delete question, and the same reason — nothing happens until the second click.
+function showNameConfirm(key, d) {
+  for (const el of document.querySelectorAll("tr.row-confirm")) el.remove();
+  state.confirmEls.clear();
+  const rowEl = document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
+  if (!rowEl) return;
+  const commits = (d.evidence?.commits || []).slice(0, 4).map((c) => `“${esc(c)}”`).join(" · ");
+  const files = (d.evidence?.files || []).slice(0, 4).map((f) => esc(f.path)).join(" · ");
+  const named = String(d.namedLine || "").trim();
+  const confirm = document.createElement("tr");
+  confirm.className = "row-confirm row-confirm-name";
+  confirm.dataset.confirmRow = key;
+  // Nothing to offer (no commits against the base branch and no changed files): say so, and leave the by-hand ✎
+  // as the only way through rather than putting a button up that cannot do anything.
+  const msg = d.name
+    ? `<span class="dimmer">Name</span> <b>${esc(d.current || "")}</b> <span class="dimmer">after the work in it →</span> <b class="mono">${esc(d.dirName || d.name)}</b>
+       <span class="dimmer">· ${esc(d.why || "")}${named ? ` · currently ${esc(named)}` : ""}</span>
+       ${commits || files ? `<div class="rc-evidence mono dimmer">${commits ? `commits: ${commits}` : ""}${commits && files ? " — " : ""}${files ? `files: ${files}` : ""}</div>` : ""}`
+    : `<span class="dimmer">Nothing to name this one from —</span> ${esc(d.why || "no commits against the base branch and no changed files")}`;
+  confirm.innerHTML = `<td colspan="10">
+      <div class="row-confirm-cell">
+        <span class="rc-msg">${msg}</span>
+        <span class="rc-actions">${
+          d.name
+            ? `<button class="btn-del-no" type="button" data-name-tree-no="${esc(key)}">Cancel</button>
+               <button class="btn-del-no" type="button" data-name-tree-edit="${esc(key)}">✎ edit…</button>
+               <button class="btn-del-yes" type="button" data-name-tree-yes="${esc(key)}">Name it</button>`
+            : `<button class="btn-del-no" type="button" data-name-tree-no="${esc(key)}">Cancel</button>
+               <button class="btn-del-no" type="button" data-name-tree-edit="${esc(key)}">✎ name it by hand</button>`
+        }</span>
+      </div>
+    </td>`;
+  state.confirmEls.set(key, confirm);
+  rowEl.after(confirm);
+}
+
+// The ✎ with the offered name already in the box: the same by-hand path, so a reader who wants a word changed does
+// not have to start from the old name.
+function editNameFromWork(key) {
+  const d = workNames.get(key);
+  const btn = document.querySelector(`[data-rename-tree="${CSS.escape(key)}"]`);
+  if (!btn) return;
+  if (d?.dirName || d?.name) btn.dataset.renameSuggest = d.dirName || d.name;
+  void renameWorktreePrompt(btn);
+}
+
+// Take the offered name: /api/worktree/rename, the one path that renames anything, with the reader written down as
+// the one who named it.
+async function confirmNameWorktree(key) {
+  const d = workNames.get(key) || {};
+  const [project, ...rest] = key.split("::");
+  const path = rest.join("::");
+  const confirmEl = document.querySelector(`tr.row-confirm[data-confirm-row="${CSS.escape(key)}"]`);
+  const yes = confirmEl?.querySelector("[data-name-tree-yes]");
+  if (yes) {
+    yes.disabled = true;
+    yes.textContent = "naming…";
+  }
+  try {
+    const r = await apiFetch(
+      "/api/worktree/rename",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project,
+          path,
+          name: d.dirName || d.name,
+          by: "the reader (✦ from the work)",
+          how: d.why ? `named from the work: ${d.why}` : "named from the work",
+        }),
+      },
+      { timeoutMs: 120000 },
+    );
+    const out = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(out.error || `HTTP ${r.status}`);
+    // A moved directory is a moved row: the board's own name, the open state and the question row follow it.
+    if (out.path && out.path !== path) {
+      const rowKey = keyOf(project, path);
+      state.treeNames.delete(rowKey);
+      state.treeNames.set(keyOf(project, out.path), out.name || d.name);
+      if (state.expanded.delete(rowKey)) state.expanded.add(keyOf(project, out.path));
+      saveTreeNames();
+      state.confirmEls.get(key)?.remove();
+      state.confirmEls.delete(key);
+      workNames.delete(key);
+    }
+    confirmEl?.remove();
+    state.confirmEls.delete(key);
+    showBanner(
+      `“${out.name || d.name}” · branch ${out.branch || "unchanged"}${out.moved === false ? ` — the directory keeps its old name` : ""}${
+        out.namedLine ? ` · ${out.namedLine}` : ""
+      }`,
+    );
+    await resync();
+  } catch (err) {
+    showBanner(`could not name it “${d.dirName || d.name}”: ${err.message}`);
+    if (yes) {
+      yes.disabled = false;
+      yes.textContent = "Name it";
+    }
+  }
+}
+
+// The ✦, the ✎ and Cancel in a naming question: answered on the release, like the delete question and for the same
+// reason (a repaint between press and release replaces the button and the click is never delivered).
+function answerNameConfirm(action, key) {
+  if (!key) return;
+  const id = `${key}|name-${action}`;
+  const at = rowConfirmSent.get(id);
+  if (at && Date.now() - at < 4000) return;
+  rowConfirmSent.set(id, Date.now());
+  const el = state.confirmEls.get(key) || document.querySelector(`tr.row-confirm[data-confirm-row="${CSS.escape(key)}"]`);
+  if (action === "yes") {
+    void confirmNameWorktree(key);
+    return;
+  }
+  el?.remove();
+  state.confirmEls.delete(key);
+  if (action === "edit") editNameFromWork(key);
+}
+
+// ---- naming a tree by hand (the ✎) -----------------------------------------------------------
 // A worktree carries the name of the prompt that cut it - 24 characters, usually mid-word - while the agent names
 // itself from what the work turned out to be a moment later. This puts a name on the row (at once, in this browser)
 // and asks the server to do the git half: the branch, and the directory when nothing is holding it open.
@@ -6342,7 +6497,7 @@ async function renameWorktreePrompt(btn) {
   try {
     const r = await apiFetch(
       "/api/worktree/rename",
-      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project, path, name: clean }) },
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project, path, name: clean, by: "the reader (✎ by hand)", how: `named by hand from the row${suggested && suggested !== clean ? ` (offered “${suggested}”)` : ""}` }) },
       { timeoutMs: 120000 },
     );
     const d = await r.json().catch(() => ({}));
@@ -6484,15 +6639,24 @@ function rowHtml(row) {
   const shownTitle = treeTitleOf(row);
   const shownName = shownTitle || row.name;
   const suggestName = shownTitle || "";
+  // Who gave this tree the name it has, and when — the panel's own record (lib/tree-names.js), the one fact about
+  // naming that git does not hold. It is what makes "the panel will not rename this again by itself" visible.
+  const namedLine = String(row.named?.line || "").trim();
   const renameBtn = isProjectRoot
     ? ""
-    : `<button class="btn-row-rename" data-rename-tree="${esc(keyOf(row.project, row.path))}" data-rename-project="${esc(row.project)}" data-rename-path="${esc(row.path)}" data-rename-name="${esc(row.name)}" data-rename-suggest="${esc(suggestName)}" title="name this worktree — renames its branch, and the directory when nothing is holding it${suggestName ? ` (offered: “${esc(suggestName)}”)` : ""}">\u270e</button>`;
+    : `<button class="btn-row-rename" data-rename-tree="${esc(keyOf(row.project, row.path))}" data-rename-project="${esc(row.project)}" data-rename-path="${esc(row.path)}" data-rename-name="${esc(row.name)}" data-rename-suggest="${esc(suggestName)}" title="name this worktree by hand — renames its branch, and the directory when nothing is holding it${suggestName ? ` (offered: “${esc(suggestName)}”)` : ""}${namedLine ? ` · ${esc(namedLine)}` : ""}">\u270e</button>`;
+  // ✦ offers a name read from the work itself: the branch's commits and its diff against the base branch, via
+  // /api/worktree/suggest-name. It renames nothing on its own — it puts a question under the row, with the commits
+  // the name came from, and the rename is the reader's second click.
+  const nameFromWorkBtn = isProjectRoot
+    ? ""
+    : `<button class="btn-row-name-work" data-name-tree="${esc(keyOf(row.project, row.path))}" data-name-project="${esc(row.project)}" data-name-path="${esc(row.path)}" title="name this worktree from the work in it — reads its commits and its diff against ${esc(baseBranchOf(row))} and offers a name built from them (asks first; the branch is renamed and the six-hex tag kept)${namedLine ? ` · ${esc(namedLine)}` : ""}">\u2726</button>`;
   // One ✕ per row, and whether it needs the question at all: merged + clean deletes straight away.
   const delKey = keyOf(row.project, row.path);
   const delDirect = !isProjectRoot && deletableWithoutAsking(delKey);
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     <td class="name"><div class="name-line"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${agentBadgeHtml(row)}</div></td>
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${nameFromWorkBtn}${agentBadgeHtml(row)}</div></td>
     <td class="mono branch">${esc(row.branch || "—")}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
@@ -9414,6 +9578,36 @@ document.addEventListener("click", async (e) => {
     void renameWorktreePrompt(renameTree);
     return;
   }
+  // ✦: ask the work what this tree should be called. Nothing is renamed here — the question that comes back is
+  // answered on its own buttons, on the release (see answerNameConfirm).
+  const nameTree = e.target.closest("[data-name-tree]");
+  if (nameTree) {
+    e.preventDefault();
+    e.stopPropagation();
+    void suggestTreeName(nameTree);
+    return;
+  }
+  const nameTreeYes = e.target.closest("[data-name-tree-yes]");
+  if (nameTreeYes) {
+    e.preventDefault();
+    e.stopPropagation();
+    answerNameConfirm("yes", nameTreeYes.dataset.nameTreeYes);
+    return;
+  }
+  const nameTreeNo = e.target.closest("[data-name-tree-no]");
+  if (nameTreeNo) {
+    e.preventDefault();
+    e.stopPropagation();
+    answerNameConfirm("no", nameTreeNo.dataset.nameTreeNo);
+    return;
+  }
+  const nameTreeEdit = e.target.closest("[data-name-tree-edit]");
+  if (nameTreeEdit) {
+    e.preventDefault();
+    e.stopPropagation();
+    answerNameConfirm("edit", nameTreeEdit.dataset.nameTreeEdit);
+    return;
+  }
   const delTreeYes = e.target.closest("[data-del-tree-yes]");
   if (delTreeYes) {
     e.preventDefault();
@@ -10320,6 +10514,15 @@ document.addEventListener("pointerup", (e) => {
   if (delConfirm) {
     e.preventDefault();
     answerRowConfirm(delConfirm.dataset.delTreeYes ? "yes" : "no", delConfirm.dataset.delTreeYes || delConfirm.dataset.delTreeNo);
+    return;
+  }
+  // Cancel / ✎ / "Name it" on a naming question: the same swallowed-click failure, and the same answer — read at
+  // the release, matched by data attribute, so a button the board rebuilt mid-press still counts.
+  const nameConfirm = e.target.closest && e.target.closest("[data-name-tree-yes], [data-name-tree-no], [data-name-tree-edit]");
+  if (nameConfirm) {
+    e.preventDefault();
+    const action = nameConfirm.dataset.nameTreeYes ? "yes" : nameConfirm.dataset.nameTreeEdit ? "edit" : "no";
+    answerNameConfirm(action, nameConfirm.dataset.nameTreeYes || nameConfirm.dataset.nameTreeEdit || nameConfirm.dataset.nameTreeNo);
     return;
   }
   // The UNMERGED chip starts a merge agent - the same swallowed-click failure as the buttons above, on the busiest
