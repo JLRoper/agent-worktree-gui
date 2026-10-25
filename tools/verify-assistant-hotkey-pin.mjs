@@ -368,7 +368,7 @@ async function browserPhase(pw) {
     ok("some other letter does not open it", !(await open()));
     await page.keyboard.press("Control+Shift+a");
     ok("Ctrl+Shift+A still toggles it open (the shortcut that was already there)", await open());
-    await pressOutside();
+    // No press outside in between: unpinned, that would close the float before the chord got its turn.
     await page.keyboard.press("Control+Shift+a");
     ok("and still toggles it closed", !(await open()));
   }
@@ -469,7 +469,8 @@ async function browserPhase(pw) {
     await pressOutside();
     ok("unpinned again: an outside press closes it", !(await open()));
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.waitForSelector("#btn-as-pin", { timeout: 20_000 });
+    // Attached, not visible: the reload restores the UNPINNED state, so the button is inside a closed float.
+    await page.waitForSelector("#btn-as-pin", { state: "attached", timeout: 20_000 });
     check("unpinned survives a reload", await page.locator("#btn-as-pin").getAttribute("aria-pressed"), "false");
     check("and it is still stored as unpinned", await store("wm.assistantPinned"), "0");
     check("so the float is closed on the reloaded page", await open(), false);
