@@ -467,7 +467,9 @@ A fresh panel seeds the file from what it already has: the standing rules in ful
 exists nowhere else) and the scratchpad notes, under headings for the role, the hard guardrails, this repo's
 git facts, the ownership splits, where things live, the open design questions and how to update the file. The
 cap is **20,000 characters** and it is enforced rather than advisory: a save over it is refused with `413`
-and the numbers in the message, and an appended entry prunes the OLDEST changelog entries first. There are two
+and the numbers in the message, and an appended entry prunes the OLDEST changelog entries first. The seed
+leaves the last 1,200 characters free for that changelog — a seed filled to the cap would be a file nothing
+could be added to, which is exactly what the live store produced before this was measured. There are two
 writers — the reader's box (a `PUT /api/assistant/charter`, which carries the mtime it read so a save that
 would silently overwrite a newer version is a `409` instead) and the assistant itself, which appends a dated
 entry by ending a reply with a `CHARTER:` line. A standing rule being added or refined appends one
