@@ -1537,6 +1537,12 @@ const server = createServer(async (req, res) => {
       }
       const first = jobs.firstOfThread(String(body.thread || ""));
       if (!first) return sendJson(res, 404, { error: `unknown thread: ${body.thread}` });
+      // A Claude thread is continued by the CLI, not the gateway: refuse before promising a turn it cannot start.
+      const claudeThread = first.agent === "claude";
+      if (claudeThread) {
+        const cli = await jobs.claude.probe();
+        if (!cli.reachable) return sendJson(res, 503, { error: `the Claude CLI is not usable: ${cli.error || "no answer"}` });
+      }
 
       // Run where the agent actually is: its worktree while that still exists, otherwise the
       // project it was started from — Hermes must not cd into a directory cleanup removed.
@@ -1549,22 +1555,30 @@ const server = createServer(async (req, res) => {
         }
       }
       const origin = body.origin && typeof body.origin === "object" ? body.origin : null;
-      const job = await jobs.create({
-        prompt: text,
-        thread: first.thread,
-        reply: true,
-        // Set when the panel is delivering subagent results: the card says what caused this turn.
-        origin,
-        resumeDir: dir,
-        cwd: dir,
-        // A model picked on the card wins; otherwise the thread's own choice, then whatever the first turn used.
-        model: body.model ?? jobs.modelFor(first.thread) ?? first.model,
-        budget: body.budget ?? first.budget ?? 1800,
-        maxTurns: body.maxTurns ?? first.maxTurns,
-        yolo: body.yolo ?? first.yolo,
-        // A reply continues the SAME agent, so it keeps the tree that agent was created for.
-        ownerPath: first.ownerPath || null,
-      });
+      let job;
+      try {
+        job = await jobs.create({
+          prompt: text,
+          thread: first.thread,
+          reply: true,
+          // Set when the panel is delivering subagent results: the card says what caused this turn.
+          origin,
+          resumeDir: dir,
+          cwd: dir,
+          // A model picked on the card wins; otherwise the thread's own choice, then whatever the first turn used.
+          model: body.model ?? jobs.modelFor(first.thread) ?? first.model,
+          // A Hermes budget is the gateway's run budget; a Claude one is dollars, so it never takes the Hermes default.
+          budget: body.budget ?? first.budget ?? (claudeThread ? null : 1800),
+          maxTurns: body.maxTurns ?? first.maxTurns,
+          yolo: body.yolo ?? first.yolo,
+          // A reply continues the SAME agent, so it keeps the tree that agent was created for.
+          ownerPath: first.ownerPath || null,
+        });
+      } catch (e) {
+        // A Claude thread with a turn still running, or with no session to resume. Hermes errors go on as before.
+        if (!claudeThread) throw e;
+        return sendJson(res, 409, { error: String((e && e.message) || e) });
+      }
       // A delivery turn closes the offer on the turn it answers, for every reader and every reload.
       if (origin && origin.fromTurn) jobs.markCollected(origin.fromTurn, job.id);
       return sendJson(res, 202, { job });
