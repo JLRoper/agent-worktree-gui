@@ -253,6 +253,20 @@
             <option value="visible">only on screen</option>
           </select>
         </label>
+
+        <label class="settings-row settings-gap" for="hide-older-days" title="How old a worktree has to be before the chart stops drawing its row. Measured from its LAST ACTIVITY — the newest of its last commit, its last edited file, and the last time the panel saw it alive — never from when the directory was created, so a tree cut months ago that somebody is still working in today stays on the chart. Nothing is lost when a row is held back: the arrow at the bottom of that project's chart shows every tree again, and the project's own chips say how many are being held back. 0 shows everything. Saved in this panel's config.json, so it survives a restart and applies to every browser.">
+          <span>Hide stale worktrees <span class="settings-info">ⓘ</span></span>
+          <input id="hide-older-days" type="number" inputmode="numeric" step="1" min="0" max="3650">
+          <span class="settings-unit mono">days</span>
+        </label>
+        <div class="settings-presets">
+          <button type="button" data-age-set="0">off</button>
+          <button type="button" data-age-set="3">3 d</button>
+          <button type="button" data-age-set="7">7 d</button>
+          <button type="button" data-age-set="14">14 d</button>
+          <button type="button" data-age-set="30">30 d</button>
+        </div>
+        <div class="settings-preview mono" id="hide-older-preview">…</div>
       </div>
 
       <div class="settings-group">

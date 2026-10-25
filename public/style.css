@@ -1838,6 +1838,46 @@ button.sig:hover { filter: brightness(1.25); }
   border-top: 1px solid #1d222b;
 }
 
+/* ---- the chart's age arrow: the console's "to newest line" chip, at the foot of a worktree chart --------
+   The same little circular arrow as `.out-wrap > .to-bottom`, so the two read as one idea: it appears while the
+   pointer is over the chart and fades when the pointer leaves. It sits in the legend line, which is the one strip
+   under the chart that neither scrolls sideways nor clips its children, so it stays on the chart's bottom edge at
+   every width. app.js draws no arrow at all for a chart with nothing held back and nothing shown. */
+.wt-age-toggle {
+  width: 21px;
+  height: 21px;
+  display: inline-grid;
+  place-items: center;
+  vertical-align: -5px;
+  margin-right: 8px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+  /* Brighter than the console chip's glyph on purpose: that one floats over its own console, this one sits on
+     the legend's dark strip where #c3ccd8 read as a smudge rather than a control. */
+  color: #dbe2ea;
+  background: #191f28;
+  border: 1px solid #46515f;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(10, 13, 18, .55);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s ease, color .16s ease, border-color .16s ease;
+}
+/* Revealed while the pointer is over the chart, and kept up while it is over the legend so the press lands. */
+section.project > .wt-scroll:hover ~ .legend .wt-age-toggle,
+section.project > .legend:hover .wt-age-toggle,
+.wt-age-toggle:focus-visible { opacity: 1; pointer-events: auto; }
+.wt-age-toggle:hover { color: var(--text); border-color: #3a4353; }
+.wt-age-toggle:active { transform: translateY(1px); }
+/* Showing every tree: the arrow points up (app.js) and says so in colour. */
+.wt-age-toggle.is-on { color: var(--amber); border-color: #6b4d16; }
+/* Nothing hovers on a touch screen, so there the arrow is simply always there. */
+@media (hover: none) {
+  .wt-age-toggle { opacity: 1; pointer-events: auto; }
+}
+
 tr.detail td { background: var(--surface); border-bottom: 1px solid var(--line); padding: 10px 14px; }
 /* MERGE STATE and LIVENESS EVIDENCE lead the worktree block again, but folded to two one-line strips: they are
    reference material, read rarely, and as full blocks above the agents they cost more height than they earned.
