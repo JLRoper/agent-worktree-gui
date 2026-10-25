@@ -1941,6 +1941,13 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-ev b { color: var(--text); font-weight: 400; }
 .as-actions { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; align-items: center; }
 .as-actions .as-err { color: var(--red); font-size: 11px; }
+/* The charter is a file rather than a field: the box is the whole document, so it gets the room, and the
+   path above it is the click-through the reader checks before trusting what is in it. */
+.as-charter-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin-bottom: 6px; }
+.as-charter-path { font-family: var(--mono); font-size: 10.5px; color: var(--dim); word-break: break-all; }
+.as-charter-meta .as-hint.is-bad { color: var(--amber); }
+.as-charter-box { min-height: 240px; font-size: 11px; line-height: 1.5; }
+.as-charter-box[readonly] { opacity: .6; }
 .as-draft-wrap { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; }
 .as-draft { min-height: 56px; }
 .as-draft-meta { font-family: var(--mono); font-size: 10px; color: var(--dimmer); }

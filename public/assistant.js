@@ -14,7 +14,7 @@
   const TAB_KEY = "wm.assistantTab";
   const RECT_KEY = "wm.assistantRect";
   const SEEN_KEY = "wm.assistantSeenAt";
-  const TABS = ["chat", "alerts", "watches", "pad", "settings"];
+  const TABS = ["chat", "alerts", "watches", "pad", "charter", "settings"];
 
   // Ticks on a multi-select question outlive a repaint: the alerts pane is rebuilt whenever the assistant's
   // state changes, and a selection that vanishes on the next job event is the same bug as a lost draft.
@@ -198,6 +198,7 @@
     if (state.assistantTab === "alerts") renderAssistantAlerts();
     else if (state.assistantTab === "watches") renderAssistantWatches();
     else if (state.assistantTab === "pad") renderAssistantPad();
+    else if (state.assistantTab === "charter") renderAssistantCharter();
     else if (state.assistantTab === "settings") renderAssistantSettings();
   }
 
@@ -524,6 +525,76 @@
       </div>`;
   }
 
+  // ---- the charter: the continuity file ---------------------------------------------------------
+
+  // The text is NOT in the polled state: it runs to 20 KB and the board repaints on every event, so the pane
+  // fetches it when it is opened instead. `charterLoaded` is what keeps the box honest — a textarea that never
+  // read the file must not be able to save an empty one over it, which is why Save stays disabled until the
+  // GET has landed. `charterMtime` is sent back with the save so a write the assistant made in between is a
+  // refusal rather than a lost edit.
+  let charterText = null;
+  let charterMtime = null;
+  let charterLoaded = false;
+  let charterTried = false;
+  let charterLoadedAt = 0;
+  let charterErr = "";
+
+  async function loadCharter() {
+    charterTried = true;
+    try {
+      const r = await apiFetch("/api/assistant/charter");
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      if (d.assistant) applyAssistant(d.assistant);
+      charterText = String(d.charter?.text ?? "");
+      charterMtime = Number.isFinite(Number(d.charter?.mtime)) ? Number(d.charter.mtime) : null;
+      charterLoaded = true;
+      charterLoadedAt = Date.now();
+      charterErr = "";
+    } catch (err) {
+      charterErr = String((err && err.message) || err);
+    }
+    renderAssistantCharter(true);
+  }
+
+  function renderAssistantCharter(force = false) {
+    const host = as$("as-charter");
+    if (!host || !state.assistant) return;
+    if (!force && typingInside("#as-charter")) return;
+    const c = state.assistant.charter || {};
+    // First open: ask for the text once. `charterTried` keeps a failed fetch from re-asking on every repaint.
+    if (!charterTried) void loadCharter();
+    const size = charterLoaded ? String(charterText ?? "").length : Number(c.chars) || 0;
+    const cap = Number(c.cap) || 0;
+    const pct = cap ? Math.round((size / cap) * 100) : 0;
+    const when = c.exists ? `last written ${esc(relTime(c.mtimeIso))} ago` : "not on disk yet — the panel seeds it on first boot";
+    host.innerHTML = `
+      <div class="as-group">
+        <h4>The continuity file — the long tier, injected in full on every turn</h4>
+        <div class="as-charter-meta">
+          <code class="as-charter-path" title="${esc(c.path || "")}">${esc(c.path || "…")}</code>
+          <span class="as-hint">${when}</span>
+          <span class="as-hint${c.over ? " is-bad" : ""}">${size}/${cap} chars${c.over ? " — over the cap, prune it" : pct >= 90 ? ` (${pct}%)` : ""}</span>
+        </div>
+        <textarea class="as-note-box as-charter-box" id="as-charter-text" rows="16" spellcheck="false"${charterLoaded ? "" : " readonly"} placeholder="${charterLoaded ? "" : "reading the file…"}">${esc(charterText ?? "")}</textarea>
+        <div class="as-actions">
+          <button id="btn-as-charter" type="button" class="primary"${charterLoaded ? "" : " disabled"}>Save charter</button>
+          <button id="btn-as-charter-reload" type="button">Reload from disk</button>
+          <span class="as-hint">${
+            charterLoaded
+              ? `read from disk ${esc(relTime(new Date(charterLoadedAt).toISOString()))} ago — saving replaces the whole file`
+              : "read-only until the file has been read"
+          }</span>
+          <span class="as-err" id="as-charter-err">${esc(charterErr)}</span>
+        </div>
+        <div class="as-help">This is what the assistant is handed on every turn, whole, the way the standing rules
+        and the scratchpad are — Hermes does not read it by itself, the panel injects it. It is where the
+        reasoning behind a rule and the lore that a compaction would take go: one dated entry per changed
+        standing answer or closed long task, the oldest entries pruned first over the ${cap}-character cap. The
+        assistant writes one with a CHARTER: line at the end of a reply.</div>
+      </div>`;
+  }
+
   // ---- settings -------------------------------------------------------------------------------
 
   function modelOptionsHtml(selected) {
@@ -619,6 +690,20 @@
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     if (d.assistant) applyAssistant(d.assistant);
     if (d.job) updateJob(d.job, { scroll: true });
+    return d;
+  }
+
+  // The charter's save is a PUT: it replaces the whole file rather than patching a field, and the route
+  // answers 413 when the body is over the cap and 409 when someone else wrote the file since it was loaded.
+  async function asPut(route, body = {}) {
+    const r = await apiFetch(route, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    if (d.assistant) applyAssistant(d.assistant);
     return d;
   }
 
@@ -838,6 +923,37 @@
         renderAssistantPad(true);
       } catch (err) {
         setErr("as-pad-err", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.id === "btn-as-charter") {
+      const text = String(as$("as-charter-text")?.value ?? "");
+      t.disabled = true;
+      try {
+        const d = await asPut("/api/assistant/charter", { text, expectMtime: charterMtime });
+        charterText = String(d.charter?.text ?? text);
+        charterMtime = Number.isFinite(Number(d.charter?.mtime)) ? Number(d.charter.mtime) : null;
+        charterLoaded = true;
+        charterLoadedAt = Date.now();
+        setErr("as-charter-err", "");
+        renderAssistantCharter(true);
+      } catch (err) {
+        // A stale save (409) and an over-cap save (413) both land here as the server's own words: the reader
+        // is told what to do about it rather than that something went wrong.
+        setErr("as-charter-err", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.id === "btn-as-charter-reload") {
+      t.disabled = true;
+      try {
+        await loadCharter();
       } finally {
         t.disabled = false;
       }
