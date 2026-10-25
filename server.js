@@ -1079,6 +1079,42 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // ---- scan roots and projects configuration -------------------------------------------------------
+    if (route === "/api/settings/projects" && req.method === "GET") {
+      return sendJson(res, 200, {
+        scanRoots: config.scanRoots || [],
+        projects: config.projects || [],
+      });
+    }
+
+    if (route === "/api/settings/projects" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const scanRoots = Array.isArray(body.scanRoots) ? body.scanRoots.filter((r) => String(r || "").trim()) : [];
+      if (!scanRoots.length) return sendJson(res, 400, { error: "scanRoots cannot be empty" });
+      try {
+        await patchPanelConfig({ scanRoots });
+        config.scanRoots = scanRoots;
+        log(`scanRoots updated: ${scanRoots.join(", ")}`);
+        // The response only tells THIS request's caller the save worked. Every other open board
+        // (and this one, once settings closes) still shows the old project set until something pushes
+        // a snapshot — a removed root's projects otherwise sit on screen forever, looking like the
+        // removal silently failed. refresh() drops them from the registry and the store; broadcasting
+        // once it lands is what actually retires their sections (see the clone handler, same pattern).
+        void registry
+          .refresh()
+          .then(() => broadcast({ type: "snapshot", data: snapshot() }))
+          .catch(() => {});
+        return sendJson(res, 200, {
+          scanRoots: config.scanRoots,
+          projects: config.projects || [],
+          note: "saved — scanning for repos",
+        });
+      } catch (e) {
+        return sendJson(res, 500, { error: String((e && e.message) || e) });
+      }
+    }
+
     // The models the New-agent form offers. Read from the gateway home, not from the run stream: the
     // provider's live list is what Hermes itself fetched, and a stale one is reported as stale rather
     // than presented as truth.
