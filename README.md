@@ -79,8 +79,8 @@ written as a private note becomes permanent. Install it once per clone — `npm 
 `git config core.hooksPath .githooks`, and that repo config covers every worktree of the clone — useful before
 handing a branch to another agent. The hook is **local**: it binds this machine and this clone only, and this
 repo has **no CI**, so nothing refuses a bad subject at PR time either; its own author can also bypass it with
-`git commit --no-verify`. On a non-Windows clone the script needs its executable bit
-(`chmod +x .githooks/commit-msg`), because the index stores it 644.
+`git commit --no-verify`. The index stores the script executable (mode 100755), so a non-Windows clone runs
+it without a manual `chmod`; if a checkout ever loses the bit, `chmod +x .githooks/commit-msg`.
 
 ## Two halves
 
