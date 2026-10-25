@@ -1,0 +1,65 @@
+#!/bin/sh
+# .githooks/commit-msg — refuse a commit subject that does not name a symptom.
+#
+# WHY: this repo's GitHub configuration sets squash_merge_commit_message = COMMIT_MESSAGES, so
+# when a PR is squash-merged GitHub composes the commit on main FROM THE BRANCH'S OWN COMMIT
+# SUBJECTS. A subject like "wip" or "updates." is not a private note on a scratch branch — it
+# becomes a line in main's permanent history, and with several agents landing through main in
+# parallel it is the only thing a reader has to tell one landed change from another.
+#
+# INSTALL (repo config, so one install covers every worktree of this clone):
+#     npm run hooks:install          # git config core.hooksPath .githooks
+# The hook is local: it binds this machine and this config, not another clone and not GitHub.
+# This repo has no CI, so nothing refuses a bad subject at PR time either.
+
+msgfile="$1"
+[ -n "$msgfile" ] && [ -f "$msgfile" ] || exit 0
+
+# First non-comment, non-blank line is the subject (git keeps '#' template lines until cleanup).
+subject=$(sed -e '/^#/d' -e '/^[[:space:]]*$/d' "$msgfile" | head -n 1 | tr -d '\r')
+length=${#subject}
+
+MIN_LENGTH=12
+
+reject() {
+    printf '%s\n' "" "commit-msg: refused — $1" "" "  subject: \"$subject\"" "" \
+        "This repo sets squash_merge_commit_message = COMMIT_MESSAGES, so every commit subject on" \
+        "this branch becomes a line in the squashed commit's body on main: the branch's subjects" \
+        "ARE main's permanent history. A subject has to name the symptom or the change, in the" \
+        "imperative, as a sentence — \"wip\", \"fix\" and \"updates.\" tell a reader nothing about" \
+        "what broke or what now happens, and on a fleet where several agents land through main in" \
+        "parallel they are indistinguishable from each other. Examples that pass:" "" \
+        "    Let the worktree chart scroll sideways instead of squeezing ten columns" \
+        "    Stop offering an approval the gateway has already decided" "" \
+        "(a local hook is bypassable by its own author: git commit --no-verify)" "" >&2
+    exit 1
+}
+
+case "$subject" in
+    "") reject "empty subject — nothing to name the symptom with" ;;
+esac
+
+# Trailing whitespace and a trailing full stop are both "not a subject, a fragment".
+trimmed=$(printf '%s' "$subject" | sed -e 's/[[:space:]]*$//')
+if [ "$trimmed" != "$subject" ]; then
+    reject "trailing whitespace"
+fi
+case "$subject" in
+    *".") reject "ends with a full stop (write what changed, not a sentence with a period)" ;;
+esac
+
+# A bare no-op word, with any trailing punctuation a hurry adds. Checked BEFORE the length rule so
+# "wip" is refused for being a no-op, not merely for being short — every listed no-op word is under
+# twelve characters, so the length rule would otherwise always answer first and this rule would
+# never fire.
+bare=$(printf '%s' "$subject" | tr 'A-Z' 'a-z' | sed -e 's/[[:space:]]*[.:!,-]*[[:space:]]*$//')
+case "$bare" in
+    wip|fix|fixes|update|updates|changes|change|tweaks|tweak|misc|tmp|temp|test|tests|stuff|things|minor|cleanup)
+        reject "\"$subject\" is a bare no-op word — it names no symptom" ;;
+esac
+
+if [ "$length" -lt "$MIN_LENGTH" ]; then
+    reject "only $length characters — too short to name a symptom (minimum $MIN_LENGTH)"
+fi
+
+exit 0
