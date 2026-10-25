@@ -130,6 +130,18 @@
     }
   }
 
+  // Is the caret sitting in a field the reader is typing into? A shortcut that eats a letter out of a prompt box
+  // is worse than no shortcut, so every text-ish host disqualifies a bare key: a contenteditable (or one of its
+  // children) reports isContentEditable, and input/textarea/select are the three tags a caret can live in.
+  function inTextField(node) {
+    const el = node && node.nodeType === 1 ? node : null;
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return true;
+    const host = el.closest?.("input, textarea, select, [contenteditable]");
+    return Boolean(host && (host.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(host.tagName)));
+  }
+
   // ---- what arrives from the server ------------------------------------------------------------
 
   function applyAssistant(data) {
@@ -154,8 +166,8 @@
     const newest = alerts.reduce((t, a) => Math.max(t, Date.parse(a.at) || 0), 0);
     btn.classList.toggle("is-hot", n > 0 && newest > (state.assistantSeenAt || 0));
     btn.title = n
-      ? `assistant — ${n} thing${n === 1 ? "" : "s"} on the board need${n === 1 ? "s" : ""} a look (Ctrl+Shift+A)`
-      : "assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (Ctrl+Shift+A)";
+      ? `assistant — ${n} thing${n === 1 ? "" : "s"} on the board need${n === 1 ? "s" : ""} a look (A or Ctrl+Shift+A)`
+      : "assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)";
   }
 
   // A sentry that has stopped is the one failure the panel would otherwise show as "nothing wrong": the
@@ -1119,6 +1131,23 @@
     if (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === "A" || e.key === "a")) {
       e.preventDefault();
       toggleAssistant();
+      return;
+    }
+    // A bare letter "A" opens it too — and only a bare one: any modifier disqualifies it (Ctrl+A stays
+    // select-all, Shift+A is a capital, Alt/Meta keys belong to the desktop), and a keystroke aimed at a field
+    // belongs to the field, whether the caret is in one now or has landed there by a repaint.
+    if (
+      !e.repeat &&
+      (e.key === "a" || e.key === "A") &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey &&
+      !e.shiftKey &&
+      !inTextField(e.target) &&
+      !inTextField(document.activeElement)
+    ) {
+      e.preventDefault();
+      toggleAssistant(true);
       return;
     }
     if (e.key !== "Escape") return;
