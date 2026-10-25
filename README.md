@@ -110,7 +110,10 @@ is not in. The folder header carries the aggregate chips (projects, worktrees, u
 live), a **Collapse all / Expand all** button for the projects inside it, and a green **+** that
 opens a clone row: type a repo name (`name`, or `owner/name`) and press Enter to clone it over SSH
 into that folder (`git@github.com:<owner>/<name>.git`). The folder itself collapses from its
-title line; the collapsed set is remembered in localStorage.
+title line; the collapsed set is remembered in localStorage. Click the pencil (✎) next to the
+header text to give that folder a custom name instead of its full path — purely cosmetic, kept in
+this browser's localStorage, and never touches `scanRoots`, discovery or the path any button in
+that header still acts on (hovering the name shows the real path; clearing the field reverts to it).
 
 **Every project starts minimized** to its title line — click the line (or its chevron) to open it,
 and the projects you opened are remembered in `localStorage`, so a reload or a resync keeps your

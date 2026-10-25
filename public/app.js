@@ -28,6 +28,8 @@ const EVENT_FLASH_KEY = "wm.eventFlash";   // flash a row when an event of its o
 // const below `state` is still in its dead zone at that moment - the try/catch in the loader swallowed the error and
 // every reload came back with the agent's title instead of the name that was typed.
 const TREENAMES_KEY = "wtgui.treenames";
+// Custom folder-header labels, by scan root. Same reason as above: `state` reads this while being built.
+const ROOT_LABELS_KEY = "wm.rootLabels";
 
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
@@ -107,6 +109,9 @@ const state = {
   collapsedFixed: loadCollapsedFixed(),
   collapsedRoots: loadCollapsedRoots(),
   recentRoots: loadRecentRoots(),
+  // Custom display names for folder headers ("root" -> label), cosmetic only: the path under it never
+  // changes, so renaming a folder's tab here cannot break discovery, cloning or the scan-roots config.
+  rootLabels: loadRootLabels(),
   // Per-folder project search ("root" -> query). Not persisted: a filter is a moment's narrowing, and a
   // reload that came back with ninety projects hidden would look like the board had lost them.
   rootFilter: new Map(),
@@ -524,6 +529,56 @@ function labelRoot(root) {
   const r = String(root || "");
   if (/^[A-Za-z]:\//.test(r)) return `${r.replace(/\//g, "\\")}\\`;
   return r.endsWith("/") ? r : `${r}/`;
+}
+
+// A folder header shows its full path by default, which is unambiguous but can be long and the same
+// prefix repeated on every root. A custom label swaps that text out; it is cosmetic only (kept in this
+// browser, in localStorage) and never touches scanRoots, discovery or the path any button underneath
+// still acts on.
+
+function loadRootLabels() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(ROOT_LABELS_KEY) || "{}");
+    const map = new Map();
+    for (const [root, label] of Object.entries(raw || {})) {
+      const clean = String(label || "").trim();
+      if (clean) map.set(root, clean);
+    }
+    return map;
+  } catch {
+    return new Map();
+  }
+}
+
+function saveRootLabels() {
+  try {
+    localStorage.setItem(ROOT_LABELS_KEY, JSON.stringify(Object.fromEntries(state.rootLabels)));
+  } catch {
+    /* no storage: the custom name lasts this tab only */
+  }
+}
+
+function displayRootLabel(root) {
+  return state.rootLabels.get(root) || labelRoot(root);
+}
+
+// Ask for a new label, in the same blocking-prompt style as renaming a worktree: no draft to lose to a
+// repaint, and Cancel/blank behave the way a reader expects (blank clears the custom name and the header
+// goes back to showing the path).
+function renameRootLabel(btn) {
+  const root = btn.dataset.renameRoot || "";
+  if (!root) return;
+  const current = state.rootLabels.get(root) || "";
+  const name = window.prompt(
+    `label this folder\n\npath: ${labelRoot(root)}\n\na name shown here instead of the path (blank shows the path):`,
+    current,
+  );
+  if (name === null) return;
+  const clean = name.trim();
+  if (clean) state.rootLabels.set(root, clean);
+  else state.rootLabels.delete(root);
+  saveRootLabels();
+  renderRoot(root);
 }
 
 function toggleRoot(root) {
@@ -7787,7 +7842,8 @@ function rootSection(root, allProjects) {
   return `<section class="root-group${open ? "" : " collapsed"}" data-root="${esc(root)}">
     <div class="root-head" data-toggle-root="${esc(root)}" title="${open ? "collapse" : "expand"} ${esc(labelRoot(root))}">
       <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
-      <h2>${esc(labelRoot(root))}</h2>
+      <h2${state.rootLabels.has(root) ? ` title="${esc(labelRoot(root))}"` : ""}>${esc(displayRootLabel(root))}</h2>
+      <button type="button" class="btn-rename btn-root-rename" data-rename-root="${esc(root)}" title="${state.rootLabels.has(root) ? `rename this folder's tab — path: ${esc(labelRoot(root))} · blank clears it back to the path` : `give this folder a custom tab name instead of ${esc(labelRoot(root))}`}">\u270e</button>
       <div class="chips">${rootChips(projects, hidden)}</div>
       <span class="spacer"></span>
       <span class="root-filter" title="filter the projects in this folder by name or path — Escape clears it">
@@ -9504,6 +9560,13 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     e.preventDefault();
     toggleRootRecent(rrecent.dataset.rootRecent);
+    return;
+  }
+  const rrename = e.target.closest("[data-rename-root]");
+  if (rrename) {
+    e.stopPropagation();
+    e.preventDefault();
+    renameRootLabel(rrename);
     return;
   }
   const rcollapse = e.target.closest("[data-root-collapse]");
