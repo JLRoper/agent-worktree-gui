@@ -585,6 +585,10 @@ function harvestDescriptionsNow() {
     const rec = descriptions.remember(where, {
       text,
       from: { thread: j.thread || null, job: j.id || null, at: j.startedAt || null },
+      // Which tree the words describe, in full: the key is the identity a rename keeps, and this is what a reader of
+      // the file (or a check comparing two trees) can actually look up.
+      path: row.path,
+      branch: row.branch || null,
     });
     if (rec) added += 1;
   }
