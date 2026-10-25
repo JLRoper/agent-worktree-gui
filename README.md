@@ -82,6 +82,13 @@ repo has **no CI**, so nothing refuses a bad subject at PR time either; its own 
 `git commit --no-verify`. The index stores the script executable (mode 100755), so a non-Windows clone runs
 it without a manual `chmod`; if a checkout ever loses the bit, `chmod +x .githooks/commit-msg`.
 
+`node tools/verify-charter.mjs` seeds a charter from a store full of rules and notes, checks the prescribed
+headings and the cap, checks that the whole file is in the per-turn briefing while the polled state carries
+only its path, size and mtime, drives all three writers (the reader's save, a `CHARTER:` line through the
+harvest, a standing rule changing) and both refusals (over the cap, and a save that read an older file) — then
+boots a real instance on a scratch port and exercises `GET` and `PUT /api/assistant/charter` over HTTP,
+including the `413` and the `409`, without touching the live panel — useful after touching the continuity file.
+
 ## Two halves
 
 ### Monitor (read-only)
@@ -435,7 +442,36 @@ Its turns run in a directory of its own (`assistant.cwd`, default `assistant-cwd
 created on demand), not in a project checkout: the gateway refuses a run without an existing cwd, and a panel
 whose `defaultCwd` pointed at a deleted checkout refused every turn with `cwd is not an existing directory`.
 Set it under **Settings → working dir**; an unusable path is kept as written, logged, and the turn falls back
-to a directory that exists rather than failing.
+to a directory that exists rather than failing. That directory is what the panel ASKS for: a stock gateway
+ignores the `cwd` a run body carries (no `cwd` handling in `gateway/platforms/api_server*.py`, and
+`GET /v1/capabilities` does not advertise `run_cwd`), so the run's working directory is the gateway's own
+until the per-run-knobs patch in `docs/hermes-runs-api-knobs.diff` is applied and the gateway restarted.
+Nothing the assistant does depends on it — it reads the board and starts workers, and a worker's own tree
+comes from the `cd` line the spawn wrapper carries.
+
+**The charter.** The rules and the scratchpad are short and clipped (each rule to 200 characters, and only
+the last twelve ride along); the Hermes memory file has a character budget of its own. What neither holds is
+the *reasoning* — why a convention exists, what was learned the hard way, what is still unanswered — so that
+is what a compaction takes first. The **Charter** tab beside Scratchpad is that long tier: one markdown file,
+`assistant-charter.md` beside `assistant.json` (override with `assistant.charterFile`), shown with its path,
+its last-modified time and its size against the cap, in a box the reader can edit and save.
+
+The panel injects the whole file into the assistant's input on every turn, exactly the way the standing rules
+and the scratchpad are injected — and that is not a fallback, it is the mechanism. Hermes does have a native
+project-context mechanism (an `AGENTS.md` chain from the git root down to a run's working directory, injected
+into the system prompt), but it resolves that from the run's CONTEXT cwd, and the stock gateway does not take
+a run body's `cwd` (above), so a file dropped in `assistant-cwd` is never read. The charter says so in its own
+words, and the tab works either way.
+
+A fresh panel seeds the file from what it already has: the standing rules in full (the tail of a long rule
+exists nowhere else) and the scratchpad notes, under headings for the role, the hard guardrails, this repo's
+git facts, the ownership splits, where things live, the open design questions and how to update the file. The
+cap is **20,000 characters** and it is enforced rather than advisory: a save over it is refused with `413`
+and the numbers in the message, and an appended entry prunes the OLDEST changelog entries first. There are two
+writers — the reader's box (a `PUT /api/assistant/charter`, which carries the mtime it read so a save that
+would silently overwrite a newer version is a `409` instead) and the assistant itself, which appends a dated
+entry by ending a reply with a `CHARTER:` line. A standing rule being added or refined appends one
+automatically, because a changed standing answer is exactly what the long tier is for.
 
 **Answers are drafts.** A question alert that a standing rule covers arrives with the rule's answer
 prefilled; one with no rule says so and leaves it to you. Nothing is posted into a worker's thread until you
@@ -510,6 +546,7 @@ The assistant acts by writing plain lines in a reply, and every such line in it 
     TO <thread>: the reply to that worker
     WATCH <thread>: what to watch for | 30        (minutes, optional)
     NOTE: something to remember
+    CHARTER: a dated entry for the continuity file (one per changed standing answer or closed long task)
     RULE: a standing answer you are sure of
     SPAWN <project> | what the new worker should do
     SPAWN IN <directory, worktree directory name, or branch> | what the worker should do in that tree  (no new worktree)
