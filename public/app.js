@@ -5574,6 +5574,9 @@ $("btn-scanroots-save")?.addEventListener("click", () => void saveProjectsSettin
 document.addEventListener("click", (e) => {
   const panel = $("settings");
   if (!panel || panel.classList.contains("hidden")) return;
+  // A click that re-rendered its own button (a scan root's Remove) leaves a detached target, which is
+  // not "outside" the panel; without this the panel would close on every remove.
+  if (!e.target.isConnected) return;
   if (panel.contains(e.target) || (e.target.closest && e.target.closest("#btn-settings"))) return;
   toggleSettings(false);
 });
