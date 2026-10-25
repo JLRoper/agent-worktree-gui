@@ -62,6 +62,26 @@ drop with its reason and still start the spawn written after them, and a thread 
 injected job store must cost only the line that touched it — useful after touching how a finished turn's lines
 are read.
 
+`node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
+`--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
+ancestry cannot see the merge: the repository ruleset requires linear history, so a PR lands as a squash or a
+rebase and GitHub re-creates the commits, which leaves the branch's own SHAs off main and its tip a
+non-ancestor forever. **"Ahead by N" is never a merge signal in this repo**, and "0 ahead" is not proof of a
+merge either — a branch cut from main with nothing committed reads the same way. So a branch no merged PR
+names is reported and left alone, as are the default branch, branches checked out in a worktree and branches
+with an OPEN PR; `--prune` deletes local refs only, never a remote branch, a tag or a worktree — useful when
+the fleet's merged worktrees start to pile up.
+
+`.githooks/commit-msg` refuses a commit subject that does not name a symptom (`wip`, `fix`, `updates.`, a
+trailing full stop, anything under 12 characters). This repo sets `squash_merge_commit_message =
+COMMIT_MESSAGES`, so a squash lands the branch's own commit subjects as lines in main's history: a subject
+written as a private note becomes permanent. Install it once per clone — `npm run hooks:install` runs
+`git config core.hooksPath .githooks`, and that repo config covers every worktree of the clone — useful before
+handing a branch to another agent. The hook is **local**: it binds this machine and this clone only, and this
+repo has **no CI**, so nothing refuses a bad subject at PR time either; its own author can also bypass it with
+`git commit --no-verify`. On a non-Windows clone the script needs its executable bit
+(`chmod +x .githooks/commit-msg`), because the index stores it 644.
+
 ## Two halves
 
 ### Monitor (read-only)
