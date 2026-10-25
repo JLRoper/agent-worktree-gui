@@ -16,7 +16,7 @@
     <div class="controls">
       <span class="meta" id="stream-state">—</span>
       <span class="meta" id="stream-rate"></span>
-      <button id="btn-assistant" type="button" class="btn-assistant" title="assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (Ctrl+Shift+A)">✧ Assistant<span id="assistant-badge" hidden>0</span></button>
+      <button id="btn-assistant" type="button" class="btn-assistant" title="assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)">✧ Assistant<span id="assistant-badge" hidden>0</span></button>
       <button id="btn-hot" type="button" title="NOT-RUNNING — step through the agents that are not running and are waiting on you: each one is opened, its reply box focused and flashed amber. Enter sends and moves on; Alt+Right skips; Alt+Left goes back.">NOT-RUNNING</button>
       <button id="btn-collapse-all" type="button" title="collapse every folder and project section">Collapse all</button>
       <button id="btn-refresh" type="button">Refresh now</button>
@@ -36,6 +36,7 @@
       <span class="as-mode mono" id="as-mode">draft-only</span>
       <span class="spacer"></span>
       <span class="chips" id="as-chips"></span>
+      <button id="btn-as-pin" type="button" class="as-pin" aria-pressed="false" title="pin the assistant open — while it is pinned a click elsewhere on the board leaves it up; unpinned, that click closes it like the ✕">📌</button>
       <button id="btn-as-close" type="button" title="close (Esc) — it keeps watching while closed">✕</button>
     </div>
     <div class="as-tabs" id="as-tabs">

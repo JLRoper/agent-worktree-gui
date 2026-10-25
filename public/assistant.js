@@ -14,6 +14,7 @@
   const TAB_KEY = "wm.assistantTab";
   const RECT_KEY = "wm.assistantRect";
   const SEEN_KEY = "wm.assistantSeenAt";
+  const PIN_KEY = "wm.assistantPinned";
   const TABS = ["chat", "alerts", "watches", "pad", "charter", "settings"];
 
   // Ticks on a multi-select question outlive a repaint: the alerts pane is rebuilt whenever the assistant's
@@ -85,6 +86,7 @@
   state.assistantOpen = state.assistantOpen ?? readFlag(OPEN_KEY, false);
   state.assistantTab = state.assistantTab || readTab();
   state.assistantSeenAt = state.assistantSeenAt ?? seenAt();
+  state.assistantPinned = state.assistantPinned ?? readFlag(PIN_KEY, false);
 
   let dragState = null;
 
@@ -130,6 +132,54 @@
     }
   }
 
+  // Pinning: while it is on, the float ignores the press that would otherwise dismiss it, and it is remembered
+  // across reloads beside the open flag. The button reads as pressed (is-on, aria-pressed) and so does the frame.
+  function paintAssistantPin() {
+    const btn = as$("btn-as-pin");
+    const el = as$("assistant");
+    const on = Boolean(state.assistantPinned);
+    if (btn) {
+      btn.classList.toggle("is-on", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.title = on
+        ? "pinned open — a click elsewhere on the board leaves the assistant up (click to unpin)"
+        : "pin the assistant open — unpinned, a click elsewhere on the board closes it (click to pin)";
+    }
+    if (el) el.classList.toggle("is-pinned", on);
+  }
+
+  function setAssistantPinned(on) {
+    state.assistantPinned = Boolean(on);
+    writeFlag(PIN_KEY, state.assistantPinned);
+    paintAssistantPin();
+  }
+
+  // Unpinned, a press anywhere off the float closes it through the SAME toggle the ✕ calls — one close path.
+  // It listens on pointerdown rather than click on purpose: a drag of the frame starts on the head (inside) and
+  // ends wherever the pointer got to, and the click that follows lands on the nearest common ancestor of press
+  // and release, which is outside the panel — a click listener would close the float every time it was dragged.
+  function onOutsidePress(e) {
+    const el = as$("assistant");
+    if (!el || el.hidden || e.button !== 0) return;
+    if (el.contains(e.target)) return;
+    // The header button toggles for itself: closing here first would make its own click reopen the float.
+    if (e.target?.closest?.("#btn-assistant")) return;
+    if (state.assistantPinned) return;
+    toggleAssistant(false);
+  }
+
+  // Is the caret sitting in a field the reader is typing into? A shortcut that eats a letter out of a prompt box
+  // is worse than no shortcut, so every text-ish host disqualifies a bare key: a contenteditable (or one of its
+  // children) reports isContentEditable, and input/textarea/select are the three tags a caret can live in.
+  function inTextField(node) {
+    const el = node && node.nodeType === 1 ? node : null;
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return true;
+    const host = el.closest?.("input, textarea, select, [contenteditable]");
+    return Boolean(host && (host.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(host.tagName)));
+  }
+
   // ---- what arrives from the server ------------------------------------------------------------
 
   function applyAssistant(data) {
@@ -154,8 +204,8 @@
     const newest = alerts.reduce((t, a) => Math.max(t, Date.parse(a.at) || 0), 0);
     btn.classList.toggle("is-hot", n > 0 && newest > (state.assistantSeenAt || 0));
     btn.title = n
-      ? `assistant — ${n} thing${n === 1 ? "" : "s"} on the board need${n === 1 ? "s" : ""} a look (Ctrl+Shift+A)`
-      : "assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (Ctrl+Shift+A)";
+      ? `assistant — ${n} thing${n === 1 ? "" : "s"} on the board need${n === 1 ? "s" : ""} a look (A or Ctrl+Shift+A)`
+      : "assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)";
   }
 
   // A sentry that has stopped is the one failure the panel would otherwise show as "nothing wrong": the
@@ -739,6 +789,9 @@
 
   as$("btn-assistant")?.addEventListener("click", () => toggleAssistant());
   as$("btn-as-close")?.addEventListener("click", () => toggleAssistant(false));
+  as$("btn-as-pin")?.addEventListener("click", () => setAssistantPinned(!state.assistantPinned));
+  // Capture phase, so a handler on the thing being pressed cannot keep the press from dismissing the float.
+  document.addEventListener("pointerdown", onOutsidePress, true);
 
   as$("as-tabs")?.addEventListener("click", (e) => {
     const b = e.target.closest("[data-as-tab]");
@@ -1121,6 +1174,23 @@
       toggleAssistant();
       return;
     }
+    // A bare letter "A" opens it too — and only a bare one: any modifier disqualifies it (Ctrl+A stays
+    // select-all, Shift+A is a capital, Alt/Meta keys belong to the desktop), and a keystroke aimed at a field
+    // belongs to the field, whether the caret is in one now or has landed there by a repaint.
+    if (
+      !e.repeat &&
+      (e.key === "a" || e.key === "A") &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.altKey &&
+      !e.shiftKey &&
+      !inTextField(e.target) &&
+      !inTextField(document.activeElement)
+    ) {
+      e.preventDefault();
+      toggleAssistant(true);
+      return;
+    }
     if (e.key !== "Escape") return;
     const el = as$("assistant");
     if (!el || el.hidden) return;
@@ -1142,6 +1212,7 @@
     el.hidden = !state.assistantOpen;
     as$("btn-assistant")?.classList.toggle("is-on", state.assistantOpen);
     placeAssistant();
+    paintAssistantPin();
     paintAssistantBadge();
     if (state.assistantOpen) renderAssistant();
   })();
