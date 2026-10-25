@@ -302,6 +302,10 @@ section.project.collapsed .legend { display: none; }
 .root-head h2 { margin: 0; font-size: 13px; font-family: var(--mono); letter-spacing: 0.01em; }
 .root-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; display: inline-block; }
 .root-head:hover .chev { color: var(--text); }
+/* rename this folder's header text — quiet until the header (or the button itself) has attention */
+.root-head .btn-root-rename { opacity: 0.35; border-color: transparent; background: transparent; }
+.root-head:hover .btn-root-rename { opacity: 1; }
+.root-head .btn-root-rename:hover, .root-head .btn-root-rename:focus-visible { opacity: 1; border-color: #2b5480; background: #232936; }
 .root-head .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .root-head .spacer { flex: 1; }
 /* The folder's own project filter, in its header. Quiet until there is something in it — the folder
