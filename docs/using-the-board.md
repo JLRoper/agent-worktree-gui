@@ -198,6 +198,15 @@ Drag the edge between two column headers to set those columns by hand: the pair 
 row does not move. The choice is remembered in this browser and applies to every project. **Double-click** any
 column edge to hand the board back to the measurement.
 
+**On a narrow window the chart scrolls sideways.** Ten columns need ~846px before each one is under the width its
+own text needs, and below that there is no smaller readable version of the table — every column at 24px is a row of
+overlapping words. So under that width the table keeps those widths and its box scrolls left and right (one finger,
+and the swipe does not trigger the browser's back gesture). Two rows do **not** scroll with the columns: an expanded
+worktree and the delete question both stay the width of the visible area, so the transcript is not read through a
+letterbox and **Delete** stays where the thumb is. The one thing given up is the column header's stickiness — inside
+a sideways scroller it can no longer follow the page down, which on a phone costs nothing because the wrapped
+toolbar already covers that line.
+
 The evidence chips are the only definition of "live" the board uses:
 
 | Chip | Evidence |
