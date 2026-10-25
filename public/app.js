@@ -30,6 +30,9 @@ const EVENT_FLASH_KEY = "wm.eventFlash";   // flash a row when an event of its o
 const TREENAMES_KEY = "wtgui.treenames";
 // Custom folder-header labels, by scan root. Same reason as above: `state` reads this while being built.
 const ROOT_LABELS_KEY = "wm.rootLabels";
+// Manual-sort drag order for worktree rows, by project. Same dead-zone trap as TREENAMES_KEY above:
+// `state` calls loadManualOrder() while building itself, so this const has to exist before that line runs.
+const MANUAL_ORDER_KEY = "wtgui.manualOrder";
 
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
@@ -106,6 +109,8 @@ const state = {
   outScrolls: {},
   collapsedJobs: loadCollapsedJobs(),
   expandedProjects: loadExpandedProjects(),
+  // Drag order for worktree rows, by project -> array of worktree paths. See applyManualOrder().
+  manualOrder: loadManualOrder(),
   collapsedFixed: loadCollapsedFixed(),
   collapsedRoots: loadCollapsedRoots(),
   recentRoots: loadRecentRoots(),
@@ -352,9 +357,49 @@ function movementKey(row, { onMain = false } = {}) {
 }
 
 function orderRows(rows) {
+  // Settings > Board > Automatic sort can turn this whole ranking off: with it off, nothing but a manual
+  // drag (and whatever order the rows already happen to be in) decides the sequence.
+  if (!autoSortOn()) return rows;
   return rows.sort(
     (a, b) => rowTier(a) - rowTier(b) || lifeAt(b) - lifeAt(a) || String(a.name).localeCompare(String(b.name)),
   );
+}
+
+// ---- manual sort: the grip on a worktree row's left drags it to a new spot, and that spot sticks -----
+// Saved per project as the list of worktree paths in drop order. A path missing from the list (a brand
+// new worktree, or a project nobody has reordered yet) falls in after the ones that ARE listed, wherever
+// the automatic sort already put it — so dragging one row never requires re-pinning the whole project.
+// (MANUAL_ORDER_KEY itself lives above `state`, next to TREENAMES_KEY — see the comment there.)
+function loadManualOrder() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(MANUAL_ORDER_KEY) || "{}");
+    return new Map(Object.entries(raw).filter(([, v]) => Array.isArray(v)));
+  } catch {
+    return new Map();
+  }
+}
+function saveManualOrder() {
+  try {
+    localStorage.setItem(MANUAL_ORDER_KEY, JSON.stringify(Object.fromEntries(state.manualOrder)));
+  } catch {
+    /* no storage available: the manual order just won't survive a reload */
+  }
+}
+function setManualOrder(project, paths) {
+  state.manualOrder.set(project, paths);
+  saveManualOrder();
+}
+
+// Lays a saved manual order on top of the automatically-sorted list: paths that were dropped somewhere
+// take that position, everything else keeps falling in wherever the automatic sort already placed it.
+function applyManualOrder(rows, order) {
+  if (!order || !order.length) return rows;
+  const pos = new Map(order.map((p, i) => [p, i]));
+  const known = [];
+  const rest = [];
+  for (const r of rows) (pos.has(r.path) ? known : rest).push(r);
+  known.sort((a, b) => pos.get(a.path) - pos.get(b.path));
+  return [...known, ...rest];
 }
 
 function verdictClass(v) {
@@ -6520,7 +6565,8 @@ async function startMerge(btn) {
 }
 
 function rowHtml(row) {
-  const isOpen = state.expanded.has(keyOf(row.project, row.path));
+  const key = keyOf(row.project, row.path);
+  const isOpen = state.expanded.has(key);
   const dirty =
     row.dirty || row.untracked
       ? `<span class="dirty">${row.dirty}</span>${row.untracked ? ` <span class="dimmer">+${row.untracked}?</span>` : ""}`
@@ -6541,13 +6587,18 @@ function rowHtml(row) {
   const suggestName = shownTitle || "";
   const renameBtn = isProjectRoot
     ? ""
-    : `<button class="btn-row-rename" data-rename-tree="${esc(keyOf(row.project, row.path))}" data-rename-project="${esc(row.project)}" data-rename-path="${esc(row.path)}" data-rename-name="${esc(row.name)}" data-rename-suggest="${esc(suggestName)}" title="name this worktree — renames its branch, and the directory when nothing is holding it${suggestName ? ` (offered: “${esc(suggestName)}”)` : ""}">\u270e</button>`;
+    : `<button class="btn-row-rename" data-rename-tree="${esc(key)}" data-rename-project="${esc(row.project)}" data-rename-path="${esc(row.path)}" data-rename-name="${esc(row.name)}" data-rename-suggest="${esc(suggestName)}" title="name this worktree — renames its branch, and the directory when nothing is holding it${suggestName ? ` (offered: "${esc(suggestName)}")` : ""}">✎</button>`;
   // One ✕ per row, and whether it needs the question at all: merged + clean deletes straight away.
-  const delKey = keyOf(row.project, row.path);
+  const delKey = key;
   const delDirect = !isProjectRoot && deletableWithoutAsking(delKey);
-  return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
-    <td class="name"><div class="name-line"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${agentBadgeHtml(row)}</div></td>
+  // The grip on the left is a drag handle, not a toggle: it is a <button> so the row's own
+  // click-to-expand handler (which already skips "button, a, input, select, textarea, label") leaves
+  // it alone, and dragging it reorders this row within its project — see the dragstart/dragover/drop
+  // wiring near the end of the file, and applyManualOrder() for how the drop is remembered.
+  const dragHandle = `<button type="button" class="drag-handle" draggable="true" data-drag-key="${esc(key)}" data-drag-project="${esc(row.project)}" title="drag to move this worktree up or down in the list">⠿</button>`;
+  return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(key)}">
+    <td class="name"><div class="name-line">${dragHandle}<button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">▶</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${agentBadgeHtml(row)}</div></td>`;
     <td class="mono branch">${esc(row.branch || "—")}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
@@ -8223,6 +8274,32 @@ function applyStabilize(on) {
   scheduleRenderJobs();
 }
 
+// ---- automatic sort, on/off ------------------------------------------------------------------
+// Settings > Board > Automatic sort. On (default) is the panel's usual behaviour: running agents first,
+// then anything recently alive, newest first. Off, orderRows() stops ranking rows altogether — the only
+// thing that still moves a row is a manual drag (see applyManualOrder), and an untouched row just keeps
+// sitting wherever it already was. Saved in this browser.
+const AUTO_SORT_KEY = "wtgui.autoSort";
+function autoSortOn() {
+  try {
+    const raw = localStorage.getItem(AUTO_SORT_KEY);
+    return raw === null ? true : raw !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function applyAutoSort(on) {
+  const box = $("autosort-toggle");
+  if (box) box.checked = on;
+  try {
+    localStorage.setItem(AUTO_SORT_KEY, on ? "1" : "0");
+  } catch {
+    /* private mode: the choice just will not persist */
+  }
+  renderAll();
+}
+
 // Is anything open in this list? Rows of a project, and cards of a row.
 function projectHasOpenRow(name) {
   for (const key of state.expanded) if (state.rows.get(key)?.project === name) return true;
@@ -8269,8 +8346,9 @@ function reorder(name) {
   const typing = $("projects") ? captureTyping($("projects")) : null;
   const mine = [...state.rows.values()].filter((r) => r.project === name);
   // The order if nothing were pinned: our running agents first, then everything by how recently it
-  // showed life. This is what "latest movement at the top" means once all the accordions are closed.
-  const ranked = orderRows([...mine]).map((r) => keyOf(name, r.path));
+  // showed life, with any manual drag order from this project laid on top (see applyManualOrder). This is
+  // what "latest movement at the top" means once all the accordions are closed and nothing has been dragged.
+  const ranked = applyManualOrder(orderRows([...mine]), state.manualOrder.get(name)).map((r) => keyOf(name, r.path));
   // An open row keeps its exact slot — opening it is you saying "I am reading this". Everything closed
   // sorts into the gaps around it, exactly how closed projects sort around an open one in a folder.
   const slotKeys = [...tbody.children].filter((el) => el.classList.contains("row")).map((el) => el.dataset.key);
@@ -8564,7 +8642,7 @@ function renderProjectRows(name, { typing = null } = {}) {
   // Stabilized: while a row of this project is open, the rows keep the order they are already in on screen (a row
   // that is genuinely new goes last). Only the painting order changes - the ranking is still there for when the
   // reader closes everything.
-  const rowsInOrder = orderRows([...state.rows.values()].filter((r) => r.project === name));
+  const rowsInOrder = applyManualOrder(orderRows([...state.rows.values()].filter((r) => r.project === name)), state.manualOrder.get(name));
   if (stabilizeOn() && projectHasOpenRow(name) && prevRowKeys.length) {
     const pos = new Map(prevRowKeys.map((k, i) => [k, i]));
     rowsInOrder.sort(
@@ -9302,6 +9380,88 @@ document.addEventListener("drop", (e) => {
   e.preventDefault();
   box.classList.remove("drop-target");
   void attachFiles(files, box);
+});
+
+// ---- manual sort: drag a worktree row by the grip on its left to reorder it vertically ------------
+// Native HTML5 drag-and-drop, started only from the handle (it is the one draggable="true" element in
+// the row, so nothing else in the row can kick off a drag by accident). The dragged row's whole group —
+// itself, plus its detail/confirm siblings if it is expanded — follows the pointer by actually moving in
+// the DOM on every dragover; dropping just stops moving it. dragend reads the final DOM order and saves
+// it, so the spot a row is dropped at is the spot it keeps on the next resync (see applyManualOrder()).
+state.dragRow = null;
+
+// A row's detail (open agents) and delete-confirmation live as sibling <tr>s right after it (see
+// renderProjectRows). They must move WITH the row or dragging would strand an open row's agents under
+// whatever row ends up above it.
+function dragRowGroup(tr) {
+  const els = [tr];
+  let sib = tr.nextElementSibling;
+  while (sib && !sib.classList.contains("row")) {
+    els.push(sib);
+    sib = sib.nextElementSibling;
+  }
+  return els;
+}
+
+document.addEventListener("dragstart", (e) => {
+  const handle = e.target.closest ? e.target.closest(".drag-handle") : null;
+  if (!handle) return;
+  const tr = handle.closest("tr.row");
+  const tbody = tr && tr.closest("tbody[data-tbody]");
+  if (!tr || !tbody) return;
+  state.dragRow = { tr, project: tbody.dataset.tbody };
+  e.dataTransfer.effectAllowed = "move";
+  // Firefox refuses to start a drag without data on the transfer.
+  try {
+    e.dataTransfer.setData("text/plain", tr.dataset.key || "");
+  } catch {
+    /* some browsers throw on setData for non-text drags; the drag still works without it */
+  }
+  try {
+    e.dataTransfer.setDragImage(tr, 16, tr.offsetHeight / 2);
+  } catch {
+    /* setDragImage is optional polish; the default drag image is fine without it */
+  }
+  // Applied a tick late so the drag image snapshot (taken synchronously on dragstart) isn't dimmed too.
+  setTimeout(() => tr.classList.add("dragging"), 0);
+});
+
+document.addEventListener("dragover", (e) => {
+  const dragging = state.dragRow;
+  if (!dragging) return;
+  const targetRow = e.target.closest ? e.target.closest("tr.row") : null;
+  if (!targetRow || targetRow === dragging.tr) return;
+  const tbody = targetRow.closest("tbody[data-tbody]");
+  // Dropping a worktree into a different project would mix projects' worktrees together — keep the
+  // reorder scoped to the project the row was picked up from.
+  if (!tbody || tbody.dataset.tbody !== dragging.project) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  const rect = targetRow.getBoundingClientRect();
+  const before = e.clientY - rect.top < rect.height / 2;
+  const group = dragRowGroup(dragging.tr);
+  if (group.includes(targetRow)) return; // already in place relative to itself
+  const anchor = before ? targetRow : dragRowGroup(targetRow).at(-1).nextElementSibling;
+  for (const el of group) tbody.insertBefore(el, anchor);
+});
+
+document.addEventListener("drop", (e) => {
+  if (!state.dragRow) return;
+  const tbody = e.target.closest ? e.target.closest("tbody[data-tbody]") : null;
+  if (tbody && tbody.dataset.tbody === state.dragRow.project) e.preventDefault();
+});
+
+document.addEventListener("dragend", () => {
+  const dragging = state.dragRow;
+  state.dragRow = null;
+  if (!dragging) return;
+  dragging.tr.classList.remove("dragging");
+  const tbody = dragging.tr.closest("tbody[data-tbody]");
+  if (!tbody) return;
+  const paths = [...tbody.querySelectorAll(":scope > tr.row")]
+    .map((tr) => state.rows.get(tr.dataset.key)?.path)
+    .filter(Boolean);
+  setManualOrder(dragging.project, paths);
 });
 
 // "make the first commit" on an unborn-HEAD refusal: one empty local commit, then the spawn the button was
@@ -11797,6 +11957,7 @@ $("event-flash")?.addEventListener("change", (e) => {
   saveAnchorFlag(EVENT_FLASH_KEY, state.eventFlash);
 });
 $("stabilize-reorder")?.addEventListener("change", (e) => applyStabilize(Boolean(e.target.checked)));
+$("autosort-toggle")?.addEventListener("change", (e) => applyAutoSort(Boolean(e.target.checked)));
 
 // Refresh everything, or only what is on screen. The scans happen in the server, so this is a server setting: it is
 // written to the panel's config.json and applies to whichever browser is open.
@@ -11975,6 +12136,7 @@ initQLook();
 setInterval(tickQuestionClocks, 1000);
 applyGreyFlash(greyFlashOn());
 if ($("stabilize-reorder")) $("stabilize-reorder").checked = stabilizeOn();
+if ($("autosort-toggle")) $("autosort-toggle").checked = autoSortOn();
 applyContrast(contrastSetting(), { save: false });
 applyAddBarBrightness(addBarBrightnessSetting(), { save: false });
 applyAddBarTop(addBarAtTop(), { save: false });
