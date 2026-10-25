@@ -24,7 +24,7 @@ import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
-  clarifyWindowSeconds,
+  clarifyWindowSeconds, approvalWindowSeconds,
   sessionSettings, writeSessionListLimit, SESSION_LIST_MIN, SESSION_LIST_MAX,
   providerState, writeProviderSettings,
 } from "./lib/hermes-config.js";
@@ -264,6 +264,19 @@ function broadcast(evt) {
   }
 }
 
+// One part of a job event's handling must not be able to take the rest down with it. `broadcast` writes to every
+// open SSE client, `adoptFromJob` reads the project registry and the assistant observer runs the finished turn's
+// actions — three unrelated jobs on one line, and a throw from any of them would land inside the job store's own
+// emit. Say which part failed and carry on.
+function guard(what, fn) {
+  try {
+    return fn();
+  } catch (err) {
+    log(`${what} failed: ${String((err && err.message) || err)}`);
+    return null;
+  }
+}
+
 store.onEvent(broadcast);
 
 // A `-w` agent's worktree exists a few seconds after spawn; adopt it into the board right then so the
@@ -291,17 +304,20 @@ let assistant = null;
 const jobs = new Jobs({
   config,
   onEvent: (evt) => {
-    broadcast(evt);
-    adoptFromJob(evt);
+    guard("event broadcast", () => broadcast(evt));
+    guard("worktree adopt", () => adoptFromJob(evt));
     // A turn that just ended is the first moment the session has a name of its own, and the tree is idle: give the
     // worktree that name. Swallowed on purpose - a rename is never worth failing a job event over.
     void autoNameWorktree(evt).catch(() => {});
-    assistant?.observe(evt);
+    guard("assistant observation", () => assistant?.observe(evt));
   },
   onLog: log,
   // Read per question, not once at boot: the file is small and the gateway re-reads it too, so a countdown
   // matches the wait the gateway is actually enforcing.
   clarifyWindow: () => clarifyWindowSeconds(),
+  // The same for an approval, which the gateway gives up on at `approvals.timeout`: without it the card kept
+  // offering "Allow once" long after the gateway had already denied the command and moved on.
+  approvalWindow: () => approvalWindowSeconds(),
 });
 // Human side of the Hermes approval-transport contract: the plugin presents, the panel answers,
 // the host decides. Nothing here can approve anything by itself.
@@ -734,8 +750,9 @@ function isLoopback(req) {
 }
 
 // Loopback is allowed exactly as before, so the local board is untouched. Anything else — the LAN, a
-// tailnet — is allowed only when config.json carries a token AND the request sends it in
-// x-panel-token; with no token configured off-machine writes are refused outright. Every write route
+// tailnet — is allowed only when the panel holds a token (PANEL_TOKEN, from the environment, never
+// config.json) AND the request sends it in x-panel-token; with no token configured off-machine writes
+// are refused outright. Every write route
 // can spawn a process or write a file, so an unauthenticated one reachable from another host is remote
 // code execution — the refusal has to be the default, not something a route has to remember.
 // A refusal is logged with the address it came from: a 403 nobody can see is a bug report nobody can act on.
@@ -743,7 +760,7 @@ function authorised(req) {
   if (isLoopback(req)) return true;
   const addr = (req.socket && req.socket.remoteAddress) || "?";
   if (!config.token) {
-    log(`write refused from ${addr}: no "token" in config.json, so non-loopback writes are off`);
+    log(`write refused from ${addr}: no PANEL_TOKEN in the environment, so non-loopback writes are off`);
     return false;
   }
   if (req.headers["x-panel-token"] === config.token) return true;
@@ -1400,7 +1417,9 @@ const server = createServer(async (req, res) => {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const r = await jobs.approve(String(body.id || ""), body.choice, body.requestId ?? body.request_id);
-      return sendJson(res, r.ok ? 200 : r.code === "approval_not_pending" ? 409 : 400, r);
+      // 409 for "there is nothing to answer any more" — the gateway's own verdict on a prompt it has let go, and
+      // the panel's on one whose window closed (`gone`), so a client can tell it from a malformed request.
+      return sendJson(res, r.ok ? 200 : r.gone || r.code === "approval_not_pending" ? 409 : 400, r);
     }
 
     // Answer a question the agent's `clarify` tool is blocked on. Same fence as an approval: the

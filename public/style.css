@@ -244,12 +244,12 @@ section.project.has-hue > .project-head.meta-line {
   background: hsl(var(--proj-hue) 26% 12%);
   border-bottom-color: hsl(var(--proj-hue) 32% 24%);
 }
-section.project.has-hue > table > thead > tr > th {
+section.project.has-hue > .wt-scroll > table > thead > tr > th {
   background: hsl(var(--proj-hue) 30% 14%);
   border-bottom-color: hsl(var(--proj-hue) 30% 24%);
   color: hsl(var(--proj-hue) 20% 70%);
 }
-section.project.has-hue > table > tbody > tr.row:hover { background: hsl(var(--proj-hue) 28% 14%); --row-rest-bg: hsl(var(--proj-hue) 28% 14%); }
+section.project.has-hue > .wt-scroll > table > tbody > tr.row:hover { background: hsl(var(--proj-hue) 28% 14%); --row-rest-bg: hsl(var(--proj-hue) 28% 14%); }
 section.project.has-hue > .legend { background: hsl(var(--proj-hue) 22% 11%); border-top-color: hsl(var(--proj-hue) 30% 22%); }
 
 .project-head {
@@ -275,7 +275,7 @@ section.project.has-hue > .legend { background: hsl(var(--proj-hue) 22% 11%); bo
 section.project.fixed-collapsed > *:not(.project-head) { display: none; }
 section.project.fixed-collapsed > .project-head { border-bottom: 0; }
 section.project.collapsed .project-head.meta-line,
-section.project.collapsed > table,
+section.project.collapsed > .wt-scroll,
 section.project.collapsed .legend { display: none; }
 
 /* ---- folder layer ------------------------------------------------------------
@@ -1189,9 +1189,27 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
 .ta-actions button:hover { background: #463c24; }
 .ta-actions button.btn-deny { background: #3a2222; border-color: #6b2a2a; color: #ff9c9c; }
 .ta-actions button.btn-deny:hover { background: #46292a; }
+/* The window the gateway gives the answer. Its own line under the buttons rather than a countdown in the head:
+   the head is a sentence, and a number next to it competed with it. */
+.ta-foot { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
+.ta-timer { flex: 1; min-width: 0; height: 4px; border-radius: 999px; background: rgba(0,0,0,.4); overflow: hidden; }
+.ta-timer > span { display: block; height: 100%; border-radius: inherit; background: #b98a2f; transition: width 1s linear, background .4s; }
+.ta-left { flex: none; font-size: 10.5px; color: #c9b98f; }
+.ta-foot.is-low .ta-timer > span { background: #ffd479; }
+.ta-foot.is-over .ta-timer > span { background: #ff9c9c; }
+.ta-foot.is-over .ta-left { color: #ff9c9c; }
+/* …and what the box becomes when the window has closed: a record, not a decision. The buttons are gone — the
+   gateway denied the command on its own — so there is nothing to press, only something to read. */
+.turn-approval.is-expired { border-color: #4a4030; background: linear-gradient(180deg, rgba(44,40,28,.5), rgba(30,28,22,.5)); }
+.turn-approval.is-expired .ta-head { color: #d8c79a; }
+.ta-note { margin-top: 7px; font-size: 11px; color: #c9b98f; }
+.ta-note:empty { display: none; }
 /* …and once answered it collapses to this one line. */
 .turn-approval-done { margin: 6px 2px 2px; padding: 3px 9px; font-size: 11px; color: #8fd6a0; border-left: 2px solid #2f6b3f; background: rgba(47,107,63,.10); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .turn-approval-done.is-deny { color: #ff9c9c; border-left-color: #6b2a2a; background: rgba(107,42,42,.10); }
+/* Nobody answered: the gateway denied the command when its window ran out. Not green (approved), not red (denied
+   by a person) — amber, the colour of the prompt that went unanswered. */
+.turn-approval-done.is-expired { color: #d8c79a; border-left-color: #6b4d16; background: rgba(107,77,22,.10); }
 /* The agent's own question: the approval box's place in the flow, in light purple instead of amber, and sized for
    sentences rather than a command. A choice is a full-width row so a long label wraps inside its own control
    instead of stretching the box; the typed "Other" answer and the send button share the row under them.
@@ -1558,13 +1576,40 @@ tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: 
    and the eye has to search for which one it is looking at. The rail plus indent makes the relation
    explicit, and the column header steps back so it stops reading as another band of projects. */
 #projects section.project { border-left: 3px solid #33405a; }
-#projects section.project > table {
+#projects section.project > .wt-scroll {
   /* The rail inset on the left and a matching buffer on the right. It used to be 24px on the left and 2px on the
      right, so the last column (the row's ✕) sat against the panel's rounded corner and the table header bled into
-     it - the right edge read as a seam where the left read as a margin. */
+     it - the right edge read as a seam where the left read as a margin. The WRAPPER carries it now, not the table:
+     the rail is the one thing that has to stay put while the chart scrolls sideways under it. */
   width: calc(100% - 48px);
   margin-left: 24px;
   border-left: 1px solid #2b3644;
+}
+
+/* ---- the chart scrolls sideways when the card cannot hold ten readable columns ------------------------------
+   `fitColumns` (app.js) adds `is-scroll` and the table's own min-width once the card is narrower than the columns'
+   measured floors (846px in total). Nothing below is on for a desktop card: there the table fits its wrapper
+   exactly, so the wrapper never becomes a scroller and the column header keeps following the page down. */
+.wt-scroll.is-scroll {
+  overflow-x: auto;
+  /* The sideways swipe belongs to the chart, not to the browser's back gesture. */
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+/* Inside a scroller the column header's `position: sticky` is against the scroller, which does not scroll
+   vertically, so the header stops following the page. That is the price of the sideways scroll and it costs the
+   phone nothing: there the topbar wraps to several lines and already covers the line the header stuck to. */
+/* The two rows that span every column must NOT follow the columns sideways. One holds a transcript, which wraps
+   to whatever width it is given - at the table's floor width that is a console read through a letterbox - and the
+   other holds the row's Delete button at its right end. Both are pinned to the visible width instead, at their own
+   cell's left padding so that nothing shifts at rest. */
+.wt-scroll.is-scroll tr.detail > td > .detail-inner {
+  position: sticky; left: 14px;
+  width: calc(var(--wt-visible, 100%) - 28px);
+}
+.wt-scroll.is-scroll tr.row-confirm > td > .row-confirm-cell {
+  position: sticky; left: 10px;
+  width: calc(var(--wt-visible, 100%) - 20px);
 }
 #projects tbody tr.row td { padding-left: 12px; }
 #projects tbody tr.row td:first-child { position: relative; }
@@ -1576,6 +1621,11 @@ tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: 
 /* The last row of a project closes the rail. `:has(~ tr.row)` ignores the detail rows that sit between
    a row and the next one, which `:last-of-type` cannot do. */
 #projects tbody tr.row:not(:has(~ tr.row)) td:first-child::before { content: "\2514"; /* └ */ }
+/* Inside the sideways-scrolling chart the glyph has nowhere to hang: 13px left of the first cell is outside the
+   scroller's own box, which clips it away. It moves into the cell and the cell's padding carries the room, so the
+   rail still reads - and it scrolls away with the row, which is where it belongs. */
+#projects .wt-scroll.is-scroll tbody tr.row td:first-child::before { left: 4px; }
+#projects .wt-scroll.is-scroll tbody tr.row td:first-child { padding-left: 16px; }
 #projects thead th {
   font-size: 10px; color: #66717f; letter-spacing: .07em; border-bottom-color: #1b222c;
 }
@@ -1773,15 +1823,15 @@ tr.detail td { background: var(--surface); border-bottom: 1px solid var(--line);
 /* MERGE STATE and LIVENESS EVIDENCE lead the worktree block again, but folded to two one-line strips: they are
    reference material, read rarely, and as full blocks above the agents they cost more height than they earned.
    The pair is closed off by one hairline, and the agents follow under it. */
-tr.detail > td > .git-block, tr.detail > td > .live-block { margin: 0; }
-tr.detail > td > .git-block .git-head,
-tr.detail > td > .live-block .live-head { padding: 0; line-height: 1.5; }
-tr.detail > td > .git-block .git-head .chev,
-tr.detail > td > .live-block .live-head .chev { font-size: 13px; width: 13px; }
-tr.detail > td > .git-block h4,
-tr.detail > td > .live-block h4 { margin: 0; font-size: 10.5px; }
-tr.detail > td > .git-summary, tr.detail > td > .live-first { font-size: 11px; }
-tr.detail > td > .live-block { padding-bottom: 6px; border-bottom: 1px solid #262f3c; margin-bottom: 8px; }
+tr.detail > td > .detail-inner > .git-block, tr.detail > td > .detail-inner > .live-block { margin: 0; }
+tr.detail > td > .detail-inner > .git-block .git-head,
+tr.detail > td > .detail-inner > .live-block .live-head { padding: 0; line-height: 1.5; }
+tr.detail > td > .detail-inner > .git-block .git-head .chev,
+tr.detail > td > .detail-inner > .live-block .live-head .chev { font-size: 13px; width: 13px; }
+tr.detail > td > .detail-inner > .git-block h4,
+tr.detail > td > .detail-inner > .live-block h4 { margin: 0; font-size: 10.5px; }
+tr.detail > td > .detail-inner > .git-summary, tr.detail > td > .detail-inner > .live-first { font-size: 11px; }
+tr.detail > td > .detail-inner > .live-block { padding-bottom: 6px; border-bottom: 1px solid #262f3c; margin-bottom: 8px; }
 tr.detail h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
 tr.detail ul { margin: 0 0 12px; padding-left: 18px; }
 tr.detail li { font-family: var(--mono); font-size: 12px; color: #c8d1dc; }

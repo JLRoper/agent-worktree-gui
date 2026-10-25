@@ -1,0 +1,4 @@
+# The commit-msg hook is a POSIX shell script: a CRLF shebang is not executable, and
+# core.autocrlf=true would hand every checkout CRLF line endings. Scoped to .githooks/ so no
+# existing file's checkout changes.
+.githooks/** text eol=lf

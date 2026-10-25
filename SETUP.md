@@ -19,6 +19,13 @@ enough instead, since raw URLs then work unauthenticated:
 
 > Fetch https://raw.githubusercontent.com/JLRoper/agent-worktree-gui/main/SETUP.md and follow it.
 
+One thing a clone does **not** carry: the panel's own operating skill lives in the **Hermes profile's
+skills directory**, not in this repo — on the author's machine that is
+`$HERMES_HOME/skills/autonomous-ai-agents/multi-agent-workspace/`, which carries the panel's
+invariants, the fleet audit and the redeploy sequence. A machine that only clones this repo has never
+read it, so a setup that stops at this file is only half the picture; point the agent at that skill
+too when the profile has one.
+
 ---
 
 ## 1. Prerequisites
@@ -30,6 +37,7 @@ enough instead, since raw URLs then work unauthenticated:
 | Hermes CLI | `hermes --version` | **only** spawning agents; monitoring works without it |
 | an OpenRouter key | `hermes auth`, or `$HERMES_HOME/.env` | **only** spawning agents |
 | `gh` | `gh auth status` | cloning (the repo is private) and PR columns |
+| the commit-subject hook | `git config core.hooksPath` prints `.githooks` | keeping `wip`-style subjects out of main's history — one install covers every worktree of the clone |
 
 `setup.cmd` (Windows) or `./setup.sh` (macOS/Linux) checks the first three and tells you what is
 missing.
@@ -38,6 +46,13 @@ missing.
 
     gh repo clone JLRoper/agent-worktree-gui        # private: needs gh auth
     # or, once public:  git clone https://github.com/JLRoper/agent-worktree-gui.git
+
+Then install the commit-subject hook once per clone — it is repo config, so one install covers every
+worktree of the clone:
+
+    npm run hooks:install          # git config core.hooksPath .githooks
+    # the index stores the script executable (100755); run chmod +x .githooks/commit-msg only
+    # if a non-Windows checkout ever loses the bit
 
 ## 3. Configure — one file
 
@@ -53,6 +68,26 @@ Edit `config.json`. Only `scanRoots` normally matters:
 
 No `config.json`? The panel starts on defaults and logs that it did, so a bare `node server.js`
 still comes up.
+
+### The gateway settings the two popups need
+
+The panel draws two kinds of parked turn: an **approval card** (amber — a command Hermes flagged) and
+the agent's own **question box** (light purple — the `clarify` tool). The panel's half of both is in
+this repo and needs no configuration. Hermes' half does, and it lives in `$HERMES_HOME/config.yaml`:
+
+| setting | command | why |
+| --- | --- | --- |
+| the `clarify` toolset | `hermes config set platform_toolsets.api_server '["hermes-api-server","clarify"]'` | The stock `hermes-api-server` toolset drops interactive UI tools, so a panel-spawned agent has no `clarify` tool at all: its questions stay prose in the console and no box is ever drawn. |
+| manual approvals | `hermes config set approvals.mode manual` | Every flagged command parks for a person. Under the `smart` default the ones Hermes judges safe are auto-approved, so a card appears only sometimes. |
+| the builtin transport | `hermes config set security.approval.transport builtin` | The panel answers on the run's own SSE stream (`approval.request`, `clarify.request`). A plugin transport is superseded here and must not be selected. |
+
+**These are per machine and per profile.** The three lines belong in the `$HERMES_HOME/config.yaml` of
+whichever machine runs the gateway — not only the one where you first saw the box — and the `clarify`
+line is the one that decides whether the box appears at all. Verify it there (section 5).
+
+The box itself is host-agnostic and lives in this repo: `lib/jobs.js` turns the gateway's
+`clarify.request` event into a pending question on the job, `public/app.js` draws the box, and the
+answer returns through `POST /api/jobs/answer` to `POST /v1/runs/{id}/clarify`.
 
 ### A sandbox to click around in
 
@@ -83,6 +118,17 @@ Then open **http://127.0.0.1:7331**.
    verdict straight from git and diffs it against what the panel reports.
 4. In the UI: each project is minimized to its title line; open one and check the rows carry a
    branch, tip, ahead/behind and a verdict.
+5. `hermes config get platform_toolsets.api_server` → the list **contains `clarify`**. This is the one
+   setting that decides whether an agent's question can become a box, and it is easy to miss because
+   everything else works without it (section 6).
+6. `node tools/merged-branches.mjs` → every local branch, the PR that owns it and a verdict. Read the
+   verdicts; never `git branch --merged main`. The ruleset requires linear history, so a merged PR's commits
+   are re-created and its branch stays "ahead by N" forever — **"ahead by N" is never a merge signal in this
+   repo**. `--prune` deletes the branches a merged PR accounts for (local refs only; open PRs, the default
+   branch, worktrees and branches with no PR are kept).
+7. `git commit --allow-empty -m wip` in a scratch clone → refused by the hook; a subject that names the
+   change goes through. Then remove the scratch clone. The hook is local: it binds this machine only, and this
+   repo has no CI, so nothing refuses a bad subject at PR time either.
 
 ## 6. Failure modes and what they mean
 
@@ -94,6 +140,16 @@ Then open **http://127.0.0.1:7331**.
 - **Spawn fails with `503 the Hermes gateway API is not usable at …`** — the gateway is not running,
   or `API_SERVER_KEY` is missing from `$HERMES_HOME/.env`. `hermes gateway restart`, and check the
   `api: up / api: down` chip in the New-agent header for which one it is.
+- **The agent asks you something in prose and no light-purple box appears** — `clarify` is missing
+  from `platform_toolsets.api_server` on the machine running the gateway, so the panel-spawned agent
+  has no `clarify` tool and its question is only text in the console. Set the line in section 3 and
+  restart the gateway. A question already asked in prose cannot be retro-answered — the run has to ask
+  again.
+- **A commit landed with a subject like "wip"** — the hook is not installed in this clone: run
+  `npm run hooks:install`. A local hook binds this machine and this clone only — this repo has no CI, so
+  nothing refuses a bad subject at PR time either — and its own author can bypass it with
+  `git commit --no-verify`. On a non-Windows clone also check `ls -l .githooks/commit-msg` for the
+  executable bit.
 - **A row shows `ERROR`** — that worktree could not be read; the row detail names the reason.
 - **Windows-only bits**: the `:port` / `● board` liveness signals read `netstat` / `tasklist`. Off
   Windows those two stay dark; scanning, verdicts, spawning and replies all still work.

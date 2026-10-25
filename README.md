@@ -54,6 +54,34 @@ directory name, the tag alone and a thread's slug — then checks both refusals 
 candidates, none keeps the old wording) and that the card says which tree was picked — useful after
 touching what a SPAWN IN line may name.
 
+`node tools/verify-action-harvest.mjs` drives three real assistant turns through a stub gateway whose stream
+carries the reply the way the live one does — one paragraph per text line — and then reads the job store and the
+journal back: one turn carrying SPAWN, SPAWN IN, TO, WATCH, NOTE and RULE must produce one job per run-creating
+action, a turn carrying a project that does not exist and a thread that is not on the board must journal each
+drop with its reason and still start the spawn written after them, and a thread lookup that throws inside the
+injected job store must cost only the line that touched it — useful after touching how a finished turn's lines
+are read.
+
+`node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
+`--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
+ancestry cannot see the merge: the repository ruleset requires linear history, so a PR lands as a squash or a
+rebase and GitHub re-creates the commits, which leaves the branch's own SHAs off main and its tip a
+non-ancestor forever. **"Ahead by N" is never a merge signal in this repo**, and "0 ahead" is not proof of a
+merge either — a branch cut from main with nothing committed reads the same way. So a branch no merged PR
+names is reported and left alone, as are the default branch, branches checked out in a worktree and branches
+with an OPEN PR; `--prune` deletes local refs only, never a remote branch, a tag or a worktree — useful when
+the fleet's merged worktrees start to pile up.
+
+`.githooks/commit-msg` refuses a commit subject that does not name a symptom (`wip`, `fix`, `updates.`, a
+trailing full stop, anything under 12 characters). This repo sets `squash_merge_commit_message =
+COMMIT_MESSAGES`, so a squash lands the branch's own commit subjects as lines in main's history: a subject
+written as a private note becomes permanent. Install it once per clone — `npm run hooks:install` runs
+`git config core.hooksPath .githooks`, and that repo config covers every worktree of the clone — useful before
+handing a branch to another agent. The hook is **local**: it binds this machine and this clone only, and this
+repo has **no CI**, so nothing refuses a bad subject at PR time either; its own author can also bypass it with
+`git commit --no-verify`. The index stores the script executable (mode 100755), so a non-Windows clone runs
+it without a manual `chmod`; if a checkout ever loses the bit, `chmod +x .githooks/commit-msg`.
+
 ## Two halves
 
 ### Monitor (read-only)
@@ -477,7 +505,7 @@ then the run. The worker gets the gateway default model (the assistant's small m
 work), the card is tagged `↳ started by the assistant`, and the new thread is put on the watchlist automatically
 so "spawned" later reads as "and here is how it ended".
 
-The assistant acts by writing plain lines at the end of a reply, and only those lines are read:
+The assistant acts by writing plain lines in a reply, and every such line in it is read — wherever it sits among the paragraphs, not only the one the reply ends on:
 
     TO <thread>: the reply to that worker
     WATCH <thread>: what to watch for | 30        (minutes, optional)
@@ -532,6 +560,15 @@ same payload each time. A gateway restart is invisible from the outside (its por
 why the sweep asks the runs themselves and why the proof is a real turn.
 Each finished turn is harvested exactly once (keyed by turn id, persisted): a turn's title landing or a panel
 restart re-emits the same job, and re-reading its lines would otherwise start a second worker.
+
+**Every action in that turn stands on its own.** The lines are read from the WHOLE reply (`turnProse`), because
+the run stream opens a text line per paragraph: reading only the last one carried out whatever the turn ended on
+and dropped everything above it with no job, no alert and no journal line (live, 2026-10-24: a SPAWN and a TO
+vanished for hours while the NOTE under them applied). Each line is then carried out inside its own try — a
+rejected promise and a synchronous throw are both caught — and a line that could not be carried out is journaled
+with the line and the reason (`spawn-failed`, `send-failed`, `watch-failed`, `rule-failed`, `note-failed`,
+`draft-skipped`, `watch-skipped`, `spawn-skipped`, `rule-skipped`). One failure never stops the others, and
+`observe` never throws into the job store, so the panel keeps seeing the jobs that follow.
 
 **The scratchpad** is one JSON file beside the job store (`assistantFile`, default
 `logs/assistant.json`): `settings`, `notes` (freeform, read every turn), `rules` (standing answers),
