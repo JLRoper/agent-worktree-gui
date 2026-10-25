@@ -386,9 +386,15 @@ check("...and nothing was woken before the replacement proved the gateway", pane
 check("...with the record still un-resumed", record.resumedAt, null);
 
 // The replacement's boot path: jobs.load() stamps the running turn interrupted, then resumePending proves
-// the gateway and wakes once. (The stamp is reproduced here rather than by restarting a store.)
+// the gateway and wakes once. (The stamp is reproduced here rather than by restarting a store.) What that wake
+// says is decided by the gateway, and there are two answers to drive, because the reconcile in the middle of the
+// resume tells them apart:
+//   * the gateway STILL HAS the run  → it is re-attached, so nothing was interrupted, and the wake names the turn
+//     that is going on rather than a completion nobody will ever see
+//   * the gateway has FORGOTTEN it   → nobody saw it end, so it is named as the interrupted turn it is
 const bootJob = panelJobs.jobs.get(panelJob.id);
 bootJob.status = "interrupted";
+bootJob.error = `the panel restarted while this was running (run ${bootJob.runId} may still be live in the gateway)`;
 bootJob.endedAt = new Date().toISOString();
 panelJobs.finalise(bootJob);
 const bootAssistantCalls = [];
@@ -403,14 +409,69 @@ const bootController = new RestartController({
   credentials: () => ({ url, key: "test-key" }),
   pollMs: 50,
 });
-await bootController.resumePending();
+const resume = await bootController.resumePending();
 ok("the replacement proved the new gateway with one real turn", stub.state.posts.filter((p) => p.isProof).length === proofsBefore + 1, String(stub.state.posts.filter((p) => p.isProof).length));
-check("...and woke the assistant once with what was interrupted", bootAssistantCalls.length, 1);
-check("...naming the interrupted run", bootAssistantCalls[0]?.list, [panelJob.id]);
+check("...and woke the assistant once", bootAssistantCalls.length, 1);
+// The stub still holds this run, so the boot reconcile re-attached to it instead of writing the turn off.
+check("...with nothing reported as interrupted", bootAssistantCalls[0]?.list, []);
+check("...naming instead the run the gateway still had", (bootAssistantCalls[0]?.meta.reattached || []).map((j) => j.id), [panelJob.id]);
+check("...with its run id, so the wake can say what is going on", bootAssistantCalls[0]?.meta.reattached?.[0]?.runId, bootJob.runId);
+check("the re-attached turn is running on the board again", panelJobs.jobs.get(panelJob.id).status, "running");
+const resumedRecord = JSON.parse(readFileSync(panelFile, "utf8"));
+check("...and the record says which run was re-attached", [resumedRecord.reattached.map((j) => j.id), resumedRecord.interrupted], [[panelJob.id], []]);
 check("...as a panel restart, not a detected one", [bootAssistantCalls[0]?.meta.target, bootAssistantCalls[0]?.meta.detected], ["panel", false]);
 check("...only after proving it", [bootAssistantCalls[0]?.meta.proof.ok, bootAssistantCalls[0]?.meta.proof.status], [true, "completed"]);
-check("...and the record is marked resumed", JSON.parse(readFileSync(panelFile, "utf8")).resumedAt !== null, true);
+check("...with the resume record naming both counts", [resumedRecord.resume.interrupted, resumedRecord.resume.reattached], [0, 1]);
+check("...and the record is marked resumed", resumedRecord.resumedAt !== null, true);
 check("a second boot does not resume the same restart again", await bootController.resumePending(), null);
+
+// The wake text for that case, through the REAL assistant: a re-attached run is named as still going, and the
+// wake may not say nothing was running.
+const resumedAssistant = new Assistant({ config: jobsConfig(), jobs: make(), getProjects: () => [], onEvent: () => {}, onLog: () => {} });
+const wakeTextBefore = stub.state.posts.filter((p) => p.session === ASSISTANT_THREAD).length;
+resumedAssistant.wakeAfterRestart([], {
+  target: "panel",
+  proof: { ok: true, ms: 120, runId: "proof-resume", status: "completed", output: "PANEL-RESTART-OK" },
+  reattached: [{ id: panelJob.id, thread: panelJob.thread, runId: bootJob.runId }],
+});
+await waitFor(() => stub.state.posts.filter((p) => p.session === ASSISTANT_THREAD).length > wakeTextBefore, 5_000);
+const reattachedText = stub.state.posts.filter((p) => p.session === ASSISTANT_THREAD).at(-1)?.input || "";
+ok("the wake text names the re-attached turn as still going", /was still going in the gateway, so the panel re-attached/.test(reattachedText), reattachedText.slice(0, 400));
+ok("...with the run id", reattachedText.includes(String(bootJob.runId)), reattachedText.slice(0, 400));
+ok("...and says nothing was interrupted", /nothing was interrupted\./.test(reattachedText), reattachedText.slice(0, 400));
+ok("...without claiming no run was going", !/no run was still going when it stopped/.test(reattachedText), reattachedText.slice(0, 400));
+ok("...and without inventing a completion payload for it", !/interrupted run never finished/.test(reattachedText), reattachedText.slice(-300));
+
+// The other answer: the gateway has no record of the run at all.
+const goneJobs = make();
+const goneJob = await goneJobs.create({ prompt: "panel path worker gone", cwd: tmpGH, existing: true, worktree: false });
+const goneFile = path.join(dir, "panel-restart-gone.json");
+const goneAssistantCalls = [];
+const goneAssistant = { wakeAfterRestart: (list, meta) => goneAssistantCalls.push({ list: list.map((j) => j.id), meta }) };
+writeFileSync(
+  goneFile,
+  JSON.stringify({ id: "gone-case", target: "panel", reason: "", requestedBy: "reader", requestedAt: new Date().toISOString(), runningIds: [goneJob.id], thread: ASSISTANT_THREAD, provider: null, resumedAt: null }),
+);
+const goneInternal = goneJobs.jobs.get(goneJob.id);
+goneInternal.status = "interrupted";
+goneInternal.error = `the panel restarted while this was running (run ${goneInternal.runId} may still be live in the gateway)`;
+goneInternal.endedAt = new Date().toISOString();
+goneJobs.finalise(goneInternal);
+stub.state.forget.add(goneJob.runId);
+const goneResume = await new RestartController({
+  config: { ...jobsConfig(), restartFile: goneFile },
+  jobs: goneJobs,
+  assistant: goneAssistant,
+  home: homeDir,
+  log: () => {},
+  credentials: () => ({ url, key: "test-key" }),
+  pollMs: 50,
+}).resumePending();
+check("a run the gateway no longer has is named as the interrupted one", goneAssistantCalls[0]?.list, [goneJob.id]);
+check("...with nothing claimed as re-attached", (goneAssistantCalls[0]?.meta.reattached || []).length, 0);
+check("...and the record keeps them apart", [goneResume.record.interrupted.map((j) => j.id), goneResume.record.reattached], [[goneJob.id], []]);
+ok("...its card repaired to interrupted-by-restart", /the gateway no longer has run/.test(goneInternal.error), goneInternal.error);
+ok("...with no promise it will finish on its own", !/will finish on its own/.test(goneInternal.error) && !/may still be live/.test(goneInternal.error), goneInternal.error);
 
 // The helper waits for the outgoing pid before it binds the port. Two cases, each with its own marker: a
 // detached replacement writes its marker a moment after the helper itself has exited.
