@@ -101,6 +101,20 @@ async function loadConfig() {
   // Loopback by default. This panel can now spawn agents, so binding it to the LAN
   // would be unauthenticated remote code execution.
   cfg.host = cfg.host || "127.0.0.1";
+  // The token that gates writes from other machines comes from the ENVIRONMENT, never from this file.
+  // config.json is tracked by git, so a secret in it is a secret in the repository and in every clone of it.
+  // PANEL_TOKEN is read once, at boot; if it is missing or empty there is simply no token, and authorised()
+  // then REFUSES every non-loopback write rather than letting one through — the door closes when the variable
+  // is absent, it does not open. A leftover "token" key in the file is ignored, loudly, so an old secret cannot
+  // look like it is doing something.
+  const fileToken = typeof cfg.token === "string" ? cfg.token.trim() : "";
+  const envToken = String(process.env.PANEL_TOKEN || "").trim();
+  cfg.token = envToken || null;
+  if (fileToken) {
+    log(envToken
+      ? 'config.json still has a "token" key — ignoring it: PANEL_TOKEN from the environment wins, so remove the key from the file'
+      : 'config.json has a "token" key but no PANEL_TOKEN in the environment — the file\'s token is IGNORED; set PANEL_TOKEN or writes from other machines stay refused');
+  }
   cfg.refreshSeconds = Number(cfg.refreshSeconds ?? 30);
   cfg.worktreeSeconds = Number(cfg.worktreeSeconds ?? 5);
   cfg.midSeconds = Number(cfg.midSeconds ?? 30);
@@ -2064,8 +2078,8 @@ server.listen(config.port, config.host, () => {
   // guards it is there at all. Reads are still open to anyone who can reach the port.
   if (!["127.0.0.1", "localhost", "::1"].includes(String(config.host).toLowerCase())) {
     log(config.token
-      ? "reachable off this machine: writes from other hosts need x-panel-token (?token=… once in the browser); reads stay open"
-      : "WARNING reachable off this machine with NO token in config.json — writes from other hosts are refused until one is set");
+      ? "reachable off this machine: writes from other hosts need x-panel-token (the PANEL_TOKEN value; open the panel with ?token=… once); reads stay open"
+      : "WARNING reachable off this machine with NO PANEL_TOKEN in the environment — writes from other hosts are refused until one is set");
   }
   log(`projects: ${config.projects.map((p) => p.name).join(", ") || "(none)"} | threads: ${config.threads} | fast ${config.worktreeSeconds}s / full ${config.slowSeconds}s`);
   log(`agent transport: ${jobs.api.url} (key ${jobs.api.key ? "loaded" : "MISSING"}) | default cwd ${config.defaultCwd}`);
