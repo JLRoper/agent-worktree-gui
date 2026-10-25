@@ -1374,11 +1374,20 @@ const server = createServer(async (req, res) => {
         const req0 = previewRequest(body);
         return sendJson(res, 200, { dryRun: true, project: body.project || null, transport: jobs.transportInfo(), request: req0, cwd: body.cwd || target?.path || config.defaultCwd, command: `POST ${jobs.api.url}${req0.path}\n${JSON.stringify(req0.body, null, 1)}` });
       }
+      // Which backend runs it. Hermes is the default; anything the panel has no transport for is refused here.
+      const agent = String(body.agent || "hermes");
+      if (!jobs.transports[agent]) return sendJson(res, 400, { error: `unknown agent: ${agent} (one of: ${Object.keys(jobs.transports).join(", ")})` });
+      body.agent = agent;
       // Refuse before promising a job: a stopped gateway or a missing key is the answer to "why did
       // nothing happen", not a card that says "starting" forever.
-      const transport = await jobs.probe();
-      if (!transport.reachable || !transport.capabilities?.runs) {
-        return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}` });
+      if (agent === "claude") {
+        const cli = await jobs.claude.probe();
+        if (!cli.reachable) return sendJson(res, 503, { error: `the Claude CLI is not usable: ${cli.error || "no answer"}` });
+      } else {
+        const transport = await jobs.probe();
+        if (!transport.reachable || !transport.capabilities?.runs) {
+          return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}` });
+        }
       }
       let cwd = body.cwd || target?.path || config.defaultCwd;
       // "existing": run in a directory that is already there (a worktree you picked), so no
