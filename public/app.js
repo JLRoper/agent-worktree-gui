@@ -12011,6 +12011,101 @@ $("scan-mode")?.addEventListener("change", async (e) => {
   }
 });
 
+// ---- how old a worktree may be before the chart holds its row back ---------------------------------
+// The threshold lives in this panel's config.json (POST /api/settings/age), like the refresh mode above: one
+// number for every browser, and it survives a restart. The per-chart "show all" arrow is the one half of this that
+// is per-browser (state.showOldProjects). Moving the number redraws the board, because rows leave and come back the
+// instant the line moves - waiting for the next scan would show the change one project at a time.
+const AGE_DAYS_MAX_UI = 3650;
+
+function ageDaysStored() {
+  const n = Number(state.settings?.hideOlderThanDays);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : 7;
+}
+
+function ageDaysSentence(days) {
+  return days > 0
+    ? `hold back worktrees whose last activity is older than ${days} day${days === 1 ? "" : "s"}`
+    : "hold nothing back - every worktree is on its chart";
+}
+
+function paintAgeSetting(note = "", bad = false) {
+  const stored = ageDaysStored();
+  const input = $("hide-older-days");
+  // A rejected save leaves what was typed in the box: snapping back to the stored number reads as "it saved that",
+  // when the save is exactly what failed.
+  if (input && !bad && document.activeElement !== input) input.value = String(stored);
+  for (const btn of document.querySelectorAll("[data-age-set]")) {
+    btn.classList.toggle("on", Number(btn.dataset.ageSet) === stored);
+  }
+  const preview = $("hide-older-preview");
+  if (preview) {
+    const live = input && document.activeElement === input ? Math.round(Number(input.value)) : stored;
+    const days = Number.isFinite(live) && live >= 0 ? live : stored;
+    const bits = [
+      `${ageDaysSentence(days)} · set in config.json, so it applies to every browser and survives a restart`,
+      "the arrow at the bottom of a chart shows that chart's held-back trees",
+    ];
+    preview.textContent = bad
+      ? `NOT SAVED - ${note}. config.json still says: ${ageDaysSentence(stored)}.`
+      : note
+        ? `${note} - ${bits.join(" · ")}`
+        : bits.join(" · ");
+    preview.classList.toggle("bad", bad);
+  }
+}
+
+async function saveAgeSetting(days) {
+  const stored = ageDaysStored();
+  const want = Number(days);
+  const n = Number.isFinite(want) ? Math.max(0, Math.min(AGE_DAYS_MAX_UI, Math.round(want))) : stored;
+  const preview = $("hide-older-preview");
+  if (preview) {
+    preview.textContent = "saving…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch(
+      "/api/settings/age",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days: n }),
+      },
+      { timeoutMs: 10000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    state.settings.hideOlderThanDays = Number.isFinite(Number(d.days)) ? Number(d.days) : n;
+    // The line moved, so which rows every chart draws moved with it: rebuild the board rather than let the next
+    // scan trickle it in one project at a time.
+    renderAll();
+    paintAgeSetting(ageDaysSentence(state.settings.hideOlderThanDays));
+    showBanner(ageDaysSentence(state.settings.hideOlderThanDays));
+  } catch (err) {
+    paintAgeSetting(String((err && err.message) || err), true);
+  }
+}
+
+$("hide-older-days")?.addEventListener("change", (e) => void saveAgeSetting(e.target.value));
+for (const btn of document.querySelectorAll("[data-age-set]")) {
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    const input = $("hide-older-days");
+    if (input) input.value = btn.dataset.ageSet;
+    void saveAgeSetting(btn.dataset.ageSet);
+  });
+}
+
+// The chart's own arrow: one press shows this project every tree, or holds the stale ones back again.
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest ? e.target.closest("[data-age-toggle]") : null;
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  toggleShowOld(btn.dataset.ageToggle);
+});
+
 // ---- the anchor's two signals: hover and last touched, each switched and timed on its own ----------
 function paintAnchorSettings() {
   const hover = $("anchor-hover");
@@ -12255,6 +12350,7 @@ startVisibilityReporting();
     startAnchorObserver();
     updateColorsRow();
     paintAnchorSettings();
+    paintAgeSetting();
     // "On screen" mode: say what is visible before the first paint settles, so the rows in front of the reader are
     // the first thing the scheduler reads.
     reportVisibility({ force: true });
