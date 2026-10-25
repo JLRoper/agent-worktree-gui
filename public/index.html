@@ -254,6 +254,23 @@
       </div>
 
       <div class="settings-group">
+        <h3 class="settings-group-head" title="Saved to config.json. The panel re-reads them without a restart.">Projects & Folders</h3>
+
+        <label class="settings-row" title="Directories the panel scans for git repositories. Each git repo directly under these folders becomes a project. You can add multiple folders.">
+          <span>Scan roots <span class="settings-info">ⓘ</span></span>
+        </label>
+        <div id="scanroots-list" class="settings-list"></div>
+        <div class="settings-row">
+          <label class="scanroot-input">
+            <input id="scanroot-new" type="text" placeholder="Add folder path" spellcheck="false" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" />
+          </label>
+          <button id="btn-scanroot-add" type="button" title="add this folder to the scan roots">Add</button>
+          <button id="btn-scanroots-save" type="button" title="save scan roots to config.json">Save</button>
+        </div>
+        <div class="settings-preview mono" id="scanroots-preview">…</div>
+      </div>
+
+      <div class="settings-group">
         <h3 class="settings-group-head" title="Written to the gateway's config.yaml, not this browser. It re-reads them, so the next prompt or session list uses the new number without a restart.">Gateway</h3>
 
         <label class="settings-row" for="approval-timeout" id="approval-row" title="How long a permission prompt waits for you before it fails closed — if it expires, nothing runs.">
