@@ -103,6 +103,7 @@ const state = {
   // so the position has to live outside the DOM or it comes back at the top.
   outScrolls: {},
   collapsedJobs: loadCollapsedJobs(),
+  closedDescs: loadClosedDescs(),
   expandedProjects: loadExpandedProjects(),
   collapsedFixed: loadCollapsedFixed(),
   collapsedRoots: loadCollapsedRoots(),
@@ -382,6 +383,25 @@ function saveCollapsedJobs() {
     localStorage.setItem("wm.collapsedJobs", JSON.stringify([...state.collapsedJobs]));
   } catch {
     /* no storage available: folding just won't survive a reload */
+  }
+}
+
+// Which descriptions the reader has folded away, by row key. The block leads the worktree's detail and opens itself —
+// it says what the branch was for, which is worth one glance — but a reader who has read it should not have to fold it
+// again on every reload, so unlike the two strips under it (git detail, liveness) this one remembers.
+function loadClosedDescs() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem("wm.closedDescs") || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveClosedDescs() {
+  try {
+    localStorage.setItem("wm.closedDescs", JSON.stringify([...state.closedDescs]));
+  } catch {
+    /* no storage: the fold simply will not survive a reload */
   }
 }
 
@@ -7627,12 +7647,38 @@ function detailHtml(row) {
           .join("")}
       </div>`
     : "";
+  // What this branch was STARTED to do, in the words of its first run's own brief. The MERGE STATE below says where
+  // the branch got to; this says what it was for, which is the question an old row actually raises. The text is the
+  // server's (lib/descriptions.js, written down once per tree from the earliest run in it) — nothing here derives or
+  // summarises anything — and a tree the panel has no run for has no block at all, so the section simply goes away
+  // rather than standing there empty.
+  const desc = row.description && row.description.text ? row.description : null;
+  const descOpen = desc ? !state.closedDescs.has(key) : false;
+  const descFrom = desc?.from
+    ? ["first run in this tree", desc.from.thread || null, desc.from.at ? `started ${relTime(desc.from.at)} ago` : null]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
+  const descBlock = desc
+    ? `<div class="desc-block${descOpen ? "" : " collapsed"}" data-desc-block="${esc(key)}">
+      <div class="desc-head" data-toggle-desc="${esc(key)}" title="${descOpen ? "fold" : "unfold"} what this branch was started to do">
+        <span class="chev">${descOpen ? "\u25be" : "\u25b8"}</span>
+        <h4>Description</h4>
+        ${descOpen ? "" : `<span class="desc-first mono">${esc(desc.text)}</span>`}
+      </div>
+      <div class="desc-body">
+        <p class="desc-text">${esc(desc.text)}</p>
+        ${descFrom ? `<div class="desc-from mono">${esc(descFrom)}</div>` : ""}
+      </div>
+    </div>`
+    : "";
   // Merge state and liveness evidence lead the block again, but as two folded one-line strips: they are
   // reference material and were taking a block's worth of height above the agents when they sat open here.
   // Ten columns, not nine: the row-actions cell is the tenth, and a colspan of 9 left the card area short of the
   // table's right edge by that column, so the expanded agent section ended in a bare strip of panel on the right
   // while the left was flush. (The delete confirmation row below already spans 10.)
   return `<tr class="detail" data-detail="${esc(key)}"><td colspan="10"><div class="detail-inner">
+    ${descBlock}
     <div class="git-block${gitOpen ? "" : " collapsed"}" data-git-block="${esc(key)}">
       <div class="git-head" data-toggle-git="${esc(key)}" title="${gitOpen ? "fold" : "unfold"} the merge state, commit and diff detail">
         <span class="chev">${gitOpen ? "\u25be" : "\u25b8"}</span>
@@ -10026,6 +10072,40 @@ document.addEventListener("click", async (e) => {
         first.remove();
       }
       liveToggle.title = `${open ? "unfold" : "fold"} the liveness evidence`;
+    }
+    return;
+  }
+  // What this branch was started to do folds like the two strips below it, except that its folded state is REMEMBERED
+  // (localStorage): this is the one block a reader dismisses on purpose, and putting it back on every reload would make
+  // the remembering pointless. Folded, it keeps its first line to the right of the header the way the other two do.
+  const descToggle = e.target.closest("[data-toggle-desc]");
+  if (descToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    const key = descToggle.dataset.toggleDesc;
+    const block = document.querySelector(`[data-desc-block="${CSS.escape(key)}"]`);
+    if (block) {
+      const closed = state.closedDescs.has(key);
+      if (closed) state.closedDescs.delete(key);
+      else state.closedDescs.add(key);
+      saveClosedDescs();
+      block.classList.toggle("collapsed", !closed);
+      const chev = descToggle.querySelector(".chev");
+      if (chev) chev.textContent = closed ? "\u25be" : "\u25b8";
+      let first = descToggle.querySelector(".desc-first");
+      const text = block.querySelector(".desc-text");
+      if (!closed) {
+        if (!first && text) {
+          first = document.createElement("span");
+          first.className = "desc-first mono";
+          first.textContent = text.textContent;
+          first.title = text.textContent;
+          descToggle.appendChild(first);
+        }
+      } else if (first) {
+        first.remove();
+      }
+      descToggle.title = `${closed ? "fold" : "unfold"} what this branch was started to do`;
     }
     return;
   }
