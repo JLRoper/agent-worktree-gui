@@ -28,6 +28,11 @@ const EVENT_FLASH_KEY = "wm.eventFlash";   // flash a row when an event of its o
 // const below `state` is still in its dead zone at that moment - the try/catch in the loader swallowed the error and
 // every reload came back with the agent's title instead of the name that was typed.
 const TREENAMES_KEY = "wtgui.treenames";
+// Which charts are showing every worktree, threshold or not (the "older than N days" collapse). Declared up here for
+// the same reason as TREENAMES_KEY above: `state` reads it while it is being built, and a const below `state` is
+// still in its dead zone at that moment — the try/catch in the loader would swallow the error and every reload would
+// come back with the stale trees hidden again.
+const SHOW_OLD_KEY = "wtgui.showOldProjects";
 
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
@@ -528,9 +533,8 @@ const RECENT_DAYS = 7;
 // config.json (`hideOlderThanDays`) are held out of the chart, and one arrow at the bottom of that chart shows
 // every tree again. Both halves of that choice are remembered where a reload keeps them: the DAYS in the panel's
 // own config.json (so they apply to every browser, and to the panel after a restart), and which charts are showing
-// everything in this browser, per project, exactly like the folder-level All/7d choice above.
-const SHOW_OLD_KEY = "wtgui.showOldProjects";
-
+// everything in this browser, per project, exactly like the folder-level All/7d choice above. Its key is declared
+// above `state`, where the loader can reach it (see SHOW_OLD_KEY).
 function loadShowOldProjects() {
   try {
     return new Set(JSON.parse(localStorage.getItem(SHOW_OLD_KEY) || "[]"));
@@ -1560,7 +1564,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
 // positioned wrapper, so it stays in the corner of the console instead of travelling with the text; it is shown
 // only while the reader is scrolled away from the end.
 function toBottomBtnHtml() {
-  return `<button type="button" class="to-bottom" data-to-bottom="1" title="jump to the newest line and follow it again">\u2193</button>`;
+  return `<button type="button" class="tail-chip to-bottom" data-to-bottom="1" title="jump to the newest line and follow it again">\u2193</button>`;
 }
 
 function paintToBottom(box) {
@@ -6820,11 +6824,24 @@ function ageToggleHtml(project) {
 }
 
 // The arrow's own state, in place. The rows are re-rendered by the caller, and this is the button that asked for
-// it: keeping the same node means the pointer does not fall off a control that just moved under it.
+// it: keeping the same node means the pointer does not fall off a control that just moved under it. It also puts
+// the button there or takes it away, because the threshold can be changed from the Settings row while the chart is
+// already on screen — switched off, a chart has nothing to hold back and must not keep an arrow saying it does;
+// switched back on, the arrow has to come back without waiting for the next rebuild of the whole section.
 function paintAgeToggle(project) {
-  const btn = document.querySelector(`[data-age-toggle="${CSS.escape(project)}"]`);
-  if (!btn) return;
+  const legend = document.querySelector(`section.project[data-project="${CSS.escape(project)}"] > .legend`);
+  if (!legend) return;
+  let btn = legend.querySelector("[data-age-toggle]");
   const days = ageHideDays();
+  if (!days) {
+    btn?.remove();
+    return;
+  }
+  if (!btn) {
+    legend.insertAdjacentHTML("afterbegin", ageToggleHtml(project));
+    btn = legend.querySelector("[data-age-toggle]");
+    if (!btn) return;
+  }
   const showing = state.showOldProjects.has(project);
   btn.classList.toggle("is-on", showing);
   btn.setAttribute("aria-pressed", showing ? "true" : "false");
@@ -10916,6 +10933,15 @@ document.addEventListener(
 );
 
 $("projects").addEventListener("click", (e) => {
+  // The chart's age arrow: it lives in the legend line under the chart, not in a row, so it is answered before the
+  // row handling below (which ignores anything that is not a `tr.row`).
+  const ageBtn = e.target.closest("[data-age-toggle]");
+  if (ageBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleShowOld(ageBtn.dataset.ageToggle);
+    return;
+  }
   // The agent badge inside a row opens the row (and its agents block) instead of toggling blindly.
   const badgeBtn = e.target.closest("[data-open-row]");
   if (badgeBtn) {
@@ -11652,6 +11678,9 @@ function toggleSettings(open = null) {
   // The browser-owned rows are read at boot; painting them again here just means the panel always opens on
   // what is in effect, even if another tab changed it.
   paintQLook();
+  // The server's own board settings are re-read here for the same reason: this browser may not be the one that
+  // changed them, and the age row's preview counts rows that have been scanned since the page loaded.
+  paintAgeSetting();
   // Read the gateway's window every time the panel opens: it can be changed from a CLI, and the
   // panel is not the owner of that value.
   void loadApprovalSetting();
@@ -12090,6 +12119,79 @@ $("scan-mode")?.addEventListener("change", async (e) => {
     showBanner(`could not change the refresh mode: ${err.message}`);
   }
 });
+
+// ---- how old a worktree has to be before the chart holds its row back -----------------------------
+// A server setting, like the refresh mode above: the number goes into this panel's own config.json, so it survives a
+// restart and applies to whichever browser is open. The chart's own arrow is the per-project half of the same idea —
+// the fast way to see ONE project in full — and this row is where the number itself lives. The chart redraws from the
+// number, so changing it here changes what is already on screen rather than only the next page load.
+const AGE_DAYS_MAX_INPUT = 3650;
+
+function agePreviewText(days, stale) {
+  if (!days) return "every worktree is on the chart — no threshold is set (0 = off)";
+  const trees = `${stale} worktree${stale === 1 ? "" : "s"}`;
+  const of = `last activity older than ${days} day${days === 1 ? "" : "s"}`;
+  return stale
+    ? `holding back ${trees} whose ${of} — the arrow at the bottom of a chart shows one project's in full`
+    : `nothing held back: no worktree's ${of}`;
+}
+
+function paintAgeSetting(note = "") {
+  const days = ageHideDays();
+  const stale = [...state.rows.values()].filter(rowAgeStale).length;
+  const input = $("hide-older-days");
+  if (input && document.activeElement !== input) input.value = String(days);
+  const preview = $("hide-older-preview");
+  if (preview) preview.textContent = note ? `${note} — ${agePreviewText(days, stale)}` : agePreviewText(days, stale);
+}
+
+// Written where the scans can see it too, so one reader's answer is the whole board's.
+async function saveAgeSetting(value) {
+  const raw = Number(value);
+  if (!Number.isFinite(raw) || raw < 0) {
+    const input = $("hide-older-days");
+    if (input) input.value = String(ageHideDays());
+    paintAgeSetting("NOT SAVED — give a number of days, 0 to show everything");
+    return;
+  }
+  const days = Math.min(AGE_DAYS_MAX_INPUT, Math.round(raw));
+  try {
+    const r = await apiFetch("/api/settings/age", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ days }),
+    }, { timeoutMs: 10000 });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    state.settings.hideOlderThanDays = Number.isFinite(Number(d.days)) ? Number(d.days) : days;
+    // Every chart is drawn from this number, so the rows already on screen are rebuilt rather than left stale.
+    for (const p of state.projects.values()) {
+      paintAgeToggle(p.name);
+      renderProjectRows(p.name);
+      refreshChips(p.name);
+    }
+    showBanner(days ? `worktrees older than ${days} day${days === 1 ? "" : "s"} are held out of the chart` : "every worktree is on the chart again");
+    paintAgeSetting(days === Math.round(raw) ? "saved" : `saved, clamped to ${AGE_DAYS_MAX_INPUT} days`);
+  } catch (err) {
+    paintAgeSetting(`NOT SAVED — ${err.message}`);
+  }
+}
+
+$("hide-older-days")?.addEventListener("change", (e) => void saveAgeSetting(e.target.value));
+$("hide-older-days")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  void saveAgeSetting(e.target.value);
+  e.target.blur();
+});
+for (const b of document.querySelectorAll("[data-age-set]")) {
+  b.addEventListener("click", () => {
+    void saveAgeSetting(b.dataset.ageSet);
+    // A preset is the same answer typed faster, so the box follows it without waiting for the round trip.
+    const input = $("hide-older-days");
+    if (input) input.value = String(b.dataset.ageSet);
+  });
+}
 
 // ---- the anchor's two signals: hover and last touched, each switched and timed on its own ----------
 function paintAnchorSettings() {

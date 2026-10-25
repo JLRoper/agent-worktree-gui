@@ -715,6 +715,7 @@ Watches without a deadline, and finished ones, say so instead.
 | `fetchSeconds` | 600 | how often remotes are fetched |
 | `refreshSeconds` | 30 | client resync interval |
 | `liveMinutes` | 5 | how recent activity counts as live |
+| `hideOlderThanDays` | 7 | how old a worktree's **last activity** has to be before its chart stops drawing it. Activity, never the age of the directory: the newest of its last commit, its last edited file, the last moment the panel saw it alive and any event received about its agents — so a tree cut months ago that somebody is working in today stays. Nothing is lost: the arrow at the bottom of that project's chart (visible while the pointer is over it) shows every tree again, and each `older hidden` chip says how many are held back. `0` shows everything. Written back by `POST /api/settings/age` (Settings → **Hide stale worktrees**) |
 | `threads` | 4 (capped) | scan worker threads |
 | `discovery.worktreeSource` | `git` | `git` probes each repo (6-7 calls, ~0.8s, the default) or `hermes` runs `hermes worktree list --json` (5.5-7.2s per repo, measured on Windows). `hermes` additionally reports per-tree `locked`/`missing` and a per-branch keep/reap verdict; it is opt-in because discovery sweeps every repo on `slowSeconds`. Either way `/api/cleanup?project=NAME` gives the full audit for one repo on demand |
 | `cloneOwner` | `JLRoper` | GitHub owner used by `/api/clone` (and the folder **+** box) when the typed name has no `owner/` prefix |
@@ -758,6 +759,7 @@ Watches without a deadline, and finished ones, say so instead.
 | POST | `/api/jobs/clear` | drop finished jobs from the list |
 | GET/POST | `/api/restart` | restart the gateway or this panel. GET reports the queue, the last action, the provider-key preflight (`$HERMES_HOME/.env`, or the `model.api_key` line of `config.yaml`) and where `restart.json` is written; POST `{target:"gateway"\|"panel", reason?, waitFor?}` **queues** the action and answers **202** at once. It runs when `waitFor` (default `panel-assistant`) has no turn running, gives every interrupted run one `interrupted` status, proves the new process with one real turn and wakes the assistant once with the payloads. **400** for another target, **409** when one is already queued/running or when no provider key is present |
 | POST | `/api/refresh` `/api/fetch` `/api/reload` | force a fast pass / fetch remotes / re-read config |
+| POST | `/api/settings/age` | `{days}` → how old a worktree's last activity must be before the worktree chart holds its row back (`config.json`'s `hideOlderThanDays`; `0` shows everything). Rewrites only that key, answers with the settings the page then redraws from, and broadcasts the new snapshot to every open board |
 
 ## Roadmap
 

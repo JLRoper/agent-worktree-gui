@@ -746,12 +746,10 @@ button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s li
    boxes line up exactly and the chip centred in the wrapper is centred in the console. */
 .out-wrap.out-tab { margin-left: 18px; }
 .out-wrap.out-tab > .job-out { margin-left: 0; }
-.out-wrap > .to-bottom {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 9px;
-  z-index: 2;
+/* The chip itself: one look, two placements — the console's "jump back to the newest line", and the worktree
+   chart's "show the trees this chart is holding back" (`.wt-age-toggle`, further down). Only the placement lives
+   with each owner, so the second one cannot drift into a second style. */
+.tail-chip {
   width: 21px;
   height: 21px;
   display: grid;
@@ -759,7 +757,7 @@ button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s li
   padding: 0;
   font-size: 12px;
   line-height: 1;
-  /* Centred over the console's own text, so it has to be opaque and carry a halo: at 92% the lines behind it
+  /* Centred over the text it belongs to, so it has to be opaque and carry a halo: at 92% the lines behind it
      showed through the circle and the arrow read as a ghost. */
   color: #c3ccd8;
   background: #161c24;
@@ -769,7 +767,15 @@ button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s li
   cursor: pointer;
   transition: opacity .16s ease, color .16s ease, border-color .16s ease;
 }
-.out-wrap > .to-bottom:hover { color: var(--text); border-color: #3a4353; }
+.tail-chip:hover { color: var(--text); border-color: #3a4353; }
+.tail-chip:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.out-wrap > .to-bottom {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 9px;
+  z-index: 2;
+}
 .out-wrap > .to-bottom:active { transform: translate(-50%, 1px); }
 /* Scrolled to the newest line, or nothing to scroll: the chip fades out and stops taking clicks. */
 .out-wrap.is-at-end > .to-bottom { opacity: 0; pointer-events: none; }
@@ -1836,6 +1842,40 @@ button.sig:hover { filter: brightness(1.25); }
   color: var(--dimmer);
   font-size: 11px;
   border-top: 1px solid #1d222b;
+  /* The chart's age arrow is positioned against this line (see .wt-age-toggle below). */
+  position: relative;
+}
+
+/* ---- the chart's age arrow: the same chip the console uses, over the bottom of the worktree chart --------
+   It shows the rows the chart is holding back (config.json's `hideOlderThanDays`), so a chart that is quieter than
+   the reader remembers says why and answers in one click. It is INVISIBLE until the pointer is over the chart and
+   takes no clicks before then — the same bargain the console's chip makes at the end of a transcript, so the board
+   does not carry a permanent control for a view nobody asked about. It hangs off the legend line rather than off the
+   chart's own box because that box scrolls sideways and clips the moment the card is narrower than its ten columns
+   (`.wt-scroll.is-scroll`), and a control that slides out of sight with the columns is one a phone can never press.
+   The rule that keeps it up when the pointer is ON the arrow is not redundancy: the arrow sits above the legend, so
+   moving onto it leaves `.wt-scroll:hover` and would otherwise drop the control out from under the click. */
+.wt-age-toggle {
+  position: absolute;
+  left: 50%;
+  top: -28px;
+  transform: translateX(-50%);
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+}
+section.project:has(> .wt-scroll:hover) > .legend > .wt-age-toggle,
+section.project:has(> .legend > .wt-age-toggle:hover) > .legend > .wt-age-toggle,
+section.project > .legend > .wt-age-toggle:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Showing every tree is a state worth seeing at a glance, the way the folder's All button says which list you are in. */
+.wt-age-toggle.is-on { color: #9ecbff; border-color: #2f5a7a; }
+.wt-age-toggle.is-on:hover { color: #cfe6ff; border-color: #3d78a3; }
+/* A touch screen has no hover to wait for: there the chip is simply there, and it is the only way to the rows. */
+@media (hover: none) {
+  .wt-age-toggle { opacity: 1; pointer-events: auto; }
 }
 
 tr.detail td { background: var(--surface); border-bottom: 1px solid var(--line); padding: 10px 14px; }
