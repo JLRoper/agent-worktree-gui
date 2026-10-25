@@ -28,6 +28,11 @@ const EVENT_FLASH_KEY = "wm.eventFlash";   // flash a row when an event of its o
 // const below `state` is still in its dead zone at that moment - the try/catch in the loader swallowed the error and
 // every reload came back with the agent's title instead of the name that was typed.
 const TREENAMES_KEY = "wtgui.treenames";
+// Which charts are showing every tree, as a set of project names. Declared up here for the same reason as
+// TREENAMES_KEY just above: `state` reads this key while it is being built, and a const below `state` is still in
+// its dead zone at that moment. The loader's try/catch swallowed the ReferenceError, so the choice was written to
+// localStorage and then never read back - every reload held the stale rows again and pointed the arrow down.
+const SHOW_OLD_KEY = "wtgui.showOldProjects";
 
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
@@ -528,9 +533,8 @@ const RECENT_DAYS = 7;
 // config.json (`hideOlderThanDays`) are held out of the chart, and one arrow at the bottom of that chart shows
 // every tree again. Both halves of that choice are remembered where a reload keeps them: the DAYS in the panel's
 // own config.json (so they apply to every browser, and to the panel after a restart), and which charts are showing
-// everything in this browser, per project, exactly like the folder-level All/7d choice above.
-const SHOW_OLD_KEY = "wtgui.showOldProjects";
-
+// everything in this browser, per project, exactly like the folder-level All/7d choice above. The key itself is
+// declared above `state`, which is what reads it.
 function loadShowOldProjects() {
   try {
     return new Set(JSON.parse(localStorage.getItem(SHOW_OLD_KEY) || "[]"));
