@@ -9,6 +9,7 @@
   "prCacheSeconds": 1800,
   "remoteCacheSeconds": 1800,
   "liveMinutes": 5,
+  "hideOlderThanDays": 7,
   "threads": 5,
   "scanRoots": [
     "C:/ProjectDevelopment"
