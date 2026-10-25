@@ -7359,7 +7359,7 @@ function detailHtml(row) {
   // Ten columns, not nine: the row-actions cell is the tenth, and a colspan of 9 left the card area short of the
   // table's right edge by that column, so the expanded agent section ended in a bare strip of panel on the right
   // while the left was flush. (The delete confirmation row below already spans 10.)
-  return `<tr class="detail" data-detail="${esc(key)}"><td colspan="10">
+  return `<tr class="detail" data-detail="${esc(key)}"><td colspan="10"><div class="detail-inner">
     <div class="git-block${gitOpen ? "" : " collapsed"}" data-git-block="${esc(key)}">
       <div class="git-head" data-toggle-git="${esc(key)}" title="${gitOpen ? "fold" : "unfold"} the merge state, commit and diff detail">
         <span class="chev">${gitOpen ? "\u25be" : "\u25b8"}</span>
@@ -7377,7 +7377,7 @@ function detailHtml(row) {
     ${liveBlock}
     ${agentsHtml}
     ${sessionsHtml}
-  </td></tr>`;
+  </div></td></tr>`;
 }
 
 function chipsHtml(name) {
@@ -7717,10 +7717,12 @@ function projectSection(name) {
       <span class="mono dim">${mainLine}</span><span class="spacer"></span>${board}${tip}
       <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>
     </div>
-    <table><thead><tr>
-      <th>Worktree</th><th>Branch</th><th>Tip</th><th>Ahead / Behind</th><th>Cherry</th>
-      <th>PR</th><th>Dirty</th><th title="time since this worktree was last seen alive (any evidence firing) · the ring fills up to green as the row becomes due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited">Life / next read</th><th>Verdict</th><th title="remove a worktree (sent to the Recycle Bin)"></th>
-    </tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
+    <div class="wt-scroll">
+      <table><thead><tr>
+        <th>Worktree</th><th>Branch</th><th>Tip</th><th>Ahead / Behind</th><th>Cherry</th>
+        <th>PR</th><th>Dirty</th><th title="time since this worktree was last seen alive (any evidence firing) · the ring fills up to green as the row becomes due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited">Life / next read</th><th>Verdict</th><th title="remove a worktree (sent to the Recycle Bin)"></th>
+      </tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
+    </div>
     <div class="legend">liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read</div>
   </section>`;
 }
@@ -7843,6 +7845,42 @@ function applyColumnWidths(table, widths) {
   });
 }
 
+// ---- how wide the split is allowed to be, and what happens when there is less room than that ----------------
+// The table's own box has always been the answer, and on a desktop card it still is. It stops being an answer once
+// the card is narrower than the ten columns' measured floors (COL_MIN, 846px in total): the plan then had to scale
+// every column below its floor, and a 393px phone - 330px of table - gave each column ~24px, so the headers wrapped
+// onto three lines and the values ran into each other. There is no smaller readable version of ten columns, so below
+// that width the table keeps the floor width and `.wt-scroll` (its wrapper) scrolls sideways instead. The mode is
+// decided here, from the wrapper's own width, which the table cannot influence: no feedback loop, and no scrollbar
+// that makes itself necessary.
+const WT_SCROLL = "wt-scroll";
+
+function fitTarget(table) {
+  const wrap = table.parentElement && table.parentElement.classList.contains(WT_SCROLL) ? table.parentElement : null;
+  const box = Math.floor((wrap || table).clientWidth);
+  const floor = COL_MIN.reduce((a, b) => a + b, 0);
+  const scroll = Boolean(wrap) && box > 0 && box < floor;
+  return { wrap, box, total: scroll ? floor : box, scroll };
+}
+
+// Writes the mode onto the page: the class the CSS hangs the sideways scroll on, the table's own min-width (the
+// width the column split adds up to, so nothing overflows inside the table), and the visible width the two
+// column-spanning rows are pinned to while the columns move under them.
+function applyFitMode(table, fit) {
+  if (!fit.wrap) return;
+  fit.wrap.classList.toggle("is-scroll", fit.scroll);
+  // Written only when it changes: this runs on every row rebuild, and re-setting a value that is already there
+  // costs a style recalculation of the whole table for nothing.
+  const minWidth = fit.scroll ? `${fit.total}px` : "";
+  if (table.style.minWidth !== minWidth) table.style.minWidth = minWidth;
+  if (fit.scroll) {
+    const visible = `${fit.box}px`;
+    if (fit.wrap.style.getPropertyValue("--wt-visible") !== visible) fit.wrap.style.setProperty("--wt-visible", visible);
+  } else if (fit.wrap.style.getPropertyValue("--wt-visible")) {
+    fit.wrap.style.removeProperty("--wt-visible");
+  }
+}
+
 // Measurements are only good while the cells are: a repaint that changed no text should not pay for a layout.
 const columnSigs = new WeakMap();
 
@@ -7858,15 +7896,16 @@ function fitColumns(table) {
   const ths = headerCells(table);
   if (ths.length !== WT_COLS) return;
   installColumnGrips(table);
-  // clientWidth is the table's own content box: the fixed split has to add up to exactly this or the table
-  // overflows its card.
-  const total = Math.floor(table.clientWidth);
   const tbody = table.tBodies[0];
-  if (!total || !tbody) return;
+  const fit = fitTarget(table);
+  if (!fit.total || !tbody) return;
+  // Applied BEFORE the "nothing changed" return below: whether the chart scrolls is not a fact about the rows, and
+  // a phone rotating changes the answer with every cell staying exactly as it was.
+  applyFitMode(table, fit);
   const sig = columnSignature(tbody);
   if (columnSigs.get(table) === sig && ths[0].style.width) return;
   columnSigs.set(table, sig);
-  applyColumnWidths(table, columnPlan(naturalColumnWidths(table), total));
+  applyColumnWidths(table, columnPlan(naturalColumnWidths(table), fit.total));
 }
 
 // One measurement per table per frame, however many rows arrived this tick.
@@ -7896,7 +7935,7 @@ function scheduleColumnFit(table) {
 function fitAllColumns() {
   const slot = $("projects");
   if (!slot) return;
-  for (const table of slot.querySelectorAll("section.project > table")) {
+  for (const table of slot.querySelectorAll("section.project > .wt-scroll > table")) {
     columnSigs.delete(table);
     fitColumns(table);
   }
@@ -10507,6 +10546,10 @@ function applyZoom(pct, { save = true } = {}) {
   document.documentElement.style.zoom = z === 100 ? "" : String(z / 100);
   const label = $("zoom-pct");
   if (label) label.textContent = `${z}%`;
+  // The zoom is a layout scale, so it changes how much room the columns have without a resize event to say so:
+  // without this the chart kept a split measured for the previous scale (and, on a phone, the wrong idea of
+  // whether it should be scrolling sideways).
+  fitAllColumns();
   if (save) {
     try {
       localStorage.setItem(ZOOM_KEY, String(z));
