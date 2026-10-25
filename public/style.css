@@ -1006,6 +1006,28 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
   cursor: pointer;
 }
 .btn-artifacts:hover { border-color: #3b4757; background: #1b2230; }
+/* The grip that drags a worktree row to a new spot — the one icon in the row with its own cursor, so a
+   reader scanning for "what can I click" still reads buttons as buttons. Quiet until hovered, like the
+   rename pencil beside it, and `touch-action: none` keeps a touch drag from also scrolling the page. */
+.drag-handle {
+  border: 1px solid transparent;
+  background: none;
+  color: var(--dimmer);
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 3px;
+  margin-right: 2px;
+  cursor: grab;
+  touch-action: none;
+  vertical-align: 1px;
+  opacity: .5;
+}
+.drag-handle:hover { background: #232b3a; border-color: var(--line); color: var(--fg); opacity: 1; }
+.drag-handle:active { cursor: grabbing; }
+tr.row:hover .drag-handle { opacity: .9; }
+/* The row being dragged stays in the flow (it is what dragover keeps moving) but reads as "picked up". */
+tr.row.dragging { opacity: .45; }
 .row-actions { width: 26px; text-align: center; }
 .btn-del-tree {
   border: 1px solid #3a2226;
