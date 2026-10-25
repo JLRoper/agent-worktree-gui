@@ -98,6 +98,18 @@ harvest, a standing rule changing) and both refusals (over the cap, and a save t
 boots a real instance on a scratch port and exercises `GET` and `PUT /api/assistant/charter` over HTTP,
 including the `413` and the `409`, without touching the live panel — useful after touching the continuity file.
 
+`node tools/verify-age-collapse.mjs` builds a throwaway repo with three worktrees whose activity ages are known
+to the minute (one committed 45 days ago and left alone since, one committed 45 days ago but worked in half an
+hour ago, one committed today) and drives a sandbox panel plus a headless Chromium over it: the default the
+panel applies with no key in `config.json`, the chart at rest holding the stale tree back and saying so in a
+chip, the arrow invisible and unclickable until the chart is hovered — with its computed style compared against
+the console's own tail chip, built on the page by the panel's own renderer — one click drawing every tree, the
+reload that has to come back with that choice, the Settings control writing `config.json` and the chart
+redrawing from it, and `0` putting every tree back with no arrow left behind. Point it at a Playwright install
+with `PANEL_PLAYWRIGHT_ROOT=<dir with node_modules/playwright>` (e.g. the `heroes-js` checkout on this box);
+without one it prints `BROWSER-HALF-NOT-RUN` and **fails** rather than passing on a half that never ran —
+useful after touching the chart or the age threshold.
+
 ## Two halves
 
 ### Monitor (read-only)
