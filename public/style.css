@@ -1404,6 +1404,23 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
    keeps just its title - done in CSS so the toggle stays a class flip and the detail is not re-rendered to
    rearrange one span. */
 .git-block:not(.collapsed) .git-head .git-summary { display: none; }
+/* WHAT THIS BRANCH WAS STARTED TO DO: the one strip ABOVE merge state. Same shape as the two under it — a chevron, a
+   small-caps title, a one-line peek while folded — because it is the same kind of thing, and the four strips a
+   worktree's detail opens with should read as one column. What differs is the fold: it is remembered per row
+   (localStorage), so a reader who has read the goal does not get it back on the next reload, and the text itself is a
+   sentence or two rather than a field list. */
+.desc-block { margin-bottom: 6px; }
+.desc-head { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0; }
+.desc-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
+.desc-head h4 { margin: 0; flex: none; }
+.desc-head:hover .chev, .desc-head:hover h4, .desc-head:hover .desc-first { color: var(--text); }
+.desc-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.desc-block.collapsed .desc-body { display: none; }
+.desc-block:not(.collapsed) .desc-head .desc-first { display: none; }
+.desc-body { padding: 2px 0 4px 28px; }
+.desc-text { margin: 0; font-size: 12.5px; line-height: 1.55; color: #c8d1dc; max-width: 96ch; }
+/* Which run the words came from, and when: the description is quoted from that brief, never written for the board. */
+.desc-from { margin-top: 3px; font-size: 11px; color: var(--dimmer); }
 /* the agent mark at the head of every agent row (parent row only, turns keep their own chevron) */
 .job-head .agent-glyph { flex: 0 0 auto; color: #c8a6ff; font-size: 13px; line-height: 1; }
 /* forget one agent session (two-step: first click arms it) */
@@ -1824,15 +1841,25 @@ button.sig:hover { filter: brightness(1.25); }
 tr.detail td { background: var(--surface); border-bottom: 1px solid var(--line); padding: 10px 14px; }
 /* MERGE STATE and LIVENESS EVIDENCE lead the worktree block again, but folded to two one-line strips: they are
    reference material, read rarely, and as full blocks above the agents they cost more height than they earned.
-   The pair is closed off by one hairline, and the agents follow under it. */
-tr.detail > td > .detail-inner > .git-block, tr.detail > td > .detail-inner > .live-block { margin: 0; }
+   The pair is closed off by one hairline, and the agents follow under it. WHAT THIS BRANCH WAS STARTED TO DO
+   leads the two of them, at the same size, so the worktree's three strips read as one column. */
+tr.detail > td > .detail-inner > .desc-block, tr.detail > td > .detail-inner > .git-block, tr.detail > td > .detail-inner > .live-block { margin: 0; }
+tr.detail > td > .detail-inner > .desc-block .desc-head,
 tr.detail > td > .detail-inner > .git-block .git-head,
 tr.detail > td > .detail-inner > .live-block .live-head { padding: 0; line-height: 1.5; }
+tr.detail > td > .detail-inner > .desc-block .desc-head .chev,
 tr.detail > td > .detail-inner > .git-block .git-head .chev,
 tr.detail > td > .detail-inner > .live-block .live-head .chev { font-size: 13px; width: 13px; }
+tr.detail > td > .detail-inner > .desc-block h4,
 tr.detail > td > .detail-inner > .git-block h4,
 tr.detail > td > .detail-inner > .live-block h4 { margin: 0; font-size: 10.5px; }
 tr.detail > td > .detail-inner > .git-summary, tr.detail > td > .detail-inner > .live-first { font-size: 11px; }
+/* The description's own text and its folded peek, in the sizes the two strips below it use. The prose (not a fact
+   list) sits on the title's own indent instead of the 28px a bullet list uses, so the three strips read as one
+   column under their three headings. */
+tr.detail > td > .detail-inner > .desc-block .desc-first { font-size: 11px; }
+tr.detail > td > .detail-inner > .desc-block .desc-body { padding: 0 0 6px 20px; }
+tr.detail > td > .detail-inner > .desc-block .desc-text { font-size: 12px; }
 tr.detail > td > .detail-inner > .live-block { padding-bottom: 6px; border-bottom: 1px solid #262f3c; margin-bottom: 8px; }
 tr.detail h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
 tr.detail ul { margin: 0 0 12px; padding-left: 18px; }

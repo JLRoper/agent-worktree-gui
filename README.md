@@ -58,6 +58,11 @@ touching what a SPAWN IN line may name.
 and the `✦` name-from-the-work button against a panel of its own — sandbox `PANEL_CONFIG`, spare port,
 sandbox `$HERMES_HOME`, stub gateway, throwaway repo — useful after touching anything that renames a tree.
 
+`node tools/verify-description.mjs` proves the `DESCRIPTION` strip above MERGE STATE — the record's earliest-run
+choice, the live half through a real spawn against a stub gateway, and the whole client half in headless Chromium
+(above MERGE STATE, open by default, folded after a reload, absent for a tree with no run) — useful after touching
+`lib/descriptions.js`, the harvest in `server.js` or that strip in `public/app.js`.
+
 `node tools/verify-action-harvest.mjs` drives three real assistant turns through a stub gateway whose stream
 carries the reply the way the live one does — one paragraph per text line — and then reads the job store and the
 journal back: one turn carrying SPAWN, SPAWN IN, TO, WATCH, NOTE and RULE must produce one job per run-creating
@@ -205,6 +210,31 @@ agent is running in the tree, and `✦` suggests a name from three real commits,
 keeps the tag, and records the reader. It prints which parts are driven rather than inspected. Nothing
 outside the sandbox is touched: the live panel on 7331 and the gateway on 8642 are never used, and no
 branch of this repository is renamed.
+
+#### What a worktree was started to do
+
+The other half of a row's git story sits above MERGE STATE: a `DESCRIPTION` strip quoting the opening of the
+**earliest** run's brief in that tree — what the branch was started to do, in the reader's own words, rather
+than what the branch looks like now. Two sentences of it, verbatim, plus a dim line naming the run it came from.
+
+The text is extracted once and written down beside the job store (`logs/descriptions.json`, see
+`lib/descriptions.js`), keyed on the six-hex tag a rename keeps, for the same reason the naming ledger is: the
+job store keeps only the most recent ~80 runs, so a description computed at render time would empty itself the
+moment a tree's earliest brief aged out. The first record for a tree also **wins** — a follow-up run into the
+same tree ("land it and write the report") is not what the branch was for, so it cannot rewrite the goal. The
+record carries the tree's full path and branch alongside the tag, so the file says which tree it describes.
+
+The strip opens itself and folds from its own header like the two under it, and unlike them the fold is
+remembered per row in `localStorage` (`wm.closedDescs`) — a reader who has read the goal does not want it back
+on every reload. Nothing is invented: a brief with no sentences is cut at a word boundary, the panel's own
+"Work in …" wrapper is stripped, and a tree the panel has no run for renders **no strip at all**.
+
+`node tools/verify-description.mjs` proves it in a sandbox of its own — a seeded job store (two runs in one
+tree, one in a hand-cut tree with no tag, and a tree with no runs at all), a real `POST /api/agents` against a
+stub gateway for the live half, another into an existing tree to show the goal is not rewritten, and headless
+Chromium (Playwright) over the running panel for the placement above MERGE STATE, the fold, the reloaded
+state, the reopen and the absent strip. Point it at a Playwright install with `PANEL_PLAYWRIGHT_ROOT`; without
+one it reports `BROWSER-HALF-NOT-RUN` and fails rather than passing on a half that never ran.
 
 ### Agents
 

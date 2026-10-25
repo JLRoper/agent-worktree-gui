@@ -21,6 +21,7 @@ import { resolveExistingTarget, resolutionNote } from "./lib/spawn-target.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE } from "./lib/tree-names.js";
+import { Descriptions, describeFromPrompt } from "./lib/descriptions.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
@@ -142,6 +143,9 @@ async function loadConfig() {
   // Which trees have already been named, and by whom — the panel's own, never git's, so it lives beside the job
   // store and a PANEL_CONFIG sandbox keeps its own copy of it.
   if (!cfg.treeNamesFile) cfg.treeNamesFile = path.join(path.dirname(cfg.jobsFile), "tree-names.json");
+  // What each branch was started to do, extracted once from the earliest run in that tree: the same state-not-source
+  // rule as the naming ledger, so a PANEL_CONFIG sandbox keeps its own copy of this too.
+  if (!cfg.descriptionsFile) cfg.descriptionsFile = path.join(path.dirname(cfg.jobsFile), "descriptions.json");
   return cfg;
 }
 
@@ -317,6 +321,9 @@ const jobs = new Jobs({
     // A turn that just ended is the first moment the session has a name of its own, and the tree is idle: give the
     // worktree that name. Swallowed on purpose - a rename is never worth failing a job event over.
     void autoNameWorktree(evt).catch(() => {});
+    // A run that just arrived (or changed) is a new chance to learn what a tree was started to do: the earliest
+    // brief in a tree is in this store, and a harvest is collapsed into one pass per couple of seconds.
+    guard("description harvest", () => harvestDescriptions());
     guard("assistant observation", () => assistant?.observe(evt));
   },
   onLog: log,
@@ -519,6 +526,95 @@ const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "
 // the deliberate half (the ✎ and the ✦ in the row, i.e. a reader asking) does not, because replacing a name is
 // the point of it. Either way the six-hex tag is kept and the 409 stands while an agent is running in the tree.
 const treeNames = new TreeNames({ file: config.treeNamesFile, log });
+
+// What a branch was STARTED to do travels with the snapshot the way its name does: the row carries the record's own
+// text and where it came from, and no row carries a description for a tree the panel has no run for — the section is
+// then simply absent, which is the honest answer, not an empty box.
+function withDescriptions(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const rec = descriptions.forTree({ project: project.name, path: row.path, branch: row.branch });
+      if (!rec || !rec.text) {
+        delete row.description;
+        continue;
+      }
+      row.description = { text: rec.text, from: rec.from || null, at: rec.at || null };
+    }
+  }
+  return snap;
+}
+
+// ---- what a branch was STARTED to do -------------------------------------------------------------------------------
+// The extraction lives in lib/descriptions.js and is written down once per tree; this is the half that has to see the
+// panel's own two stores to run it — a row (which tree, in which project) and a job (the brief, and when it started).
+// It runs on the events that can ADD either, never on render: /api/state reads a record, it does not build one.
+const descriptions = new Descriptions({ file: config.descriptionsFile, log });
+let descHarvestTimer = null;
+
+// The earliest run in each tree, out of the panel's own job store. A tree is reached by the path a run CUT
+// (`worktreePath`) or by the directory it ran in (`cwd`); a follow-up run into an existing tree carries only the
+// latter, which is why both are tried.
+function earliestRunPerTree() {
+  const earliest = new Map();
+  for (const j of jobs.jobs.values()) {
+    const started = String(j.startedAt || "");
+    for (const p of [j.worktreePath, j.cwd]) {
+      const n = normPathKey(p);
+      if (!n) continue;
+      const prev = earliest.get(n);
+      if (!prev || started < String(prev.startedAt || "")) earliest.set(n, j);
+    }
+  }
+  return earliest;
+}
+
+// One pass: give every tree that HAS a run, and no record yet, the opening of its earliest run's brief.
+function harvestDescriptionsNow() {
+  const earliest = earliestRunPerTree();
+  if (!earliest.size) return 0;
+  let added = 0;
+  for (const [key, row] of store.rows) {
+    const cut = key.indexOf("::");
+    const where = { project: cut < 0 ? key : key.slice(0, cut), path: row.path, branch: row.branch };
+    // Asked BEFORE any text is derived. An extraction per harvest is the per-render cost this module exists to
+    // avoid, and it is the RECORD — not the job store — that decides what a tree's description is.
+    if (descriptions.isDescribed(where)) continue;
+    const j = earliest.get(normPathKey(row.path));
+    const text = describeFromPrompt(j && j.prompt);
+    if (!text) continue;
+    const rec = descriptions.remember(where, {
+      text,
+      from: { thread: j.thread || null, job: j.id || null, at: j.startedAt || null },
+      // Which tree the words describe, in full: the key is the identity a rename keeps, and this is what a reader of
+      // the file (or a check comparing two trees) can actually look up.
+      path: row.path,
+      branch: row.branch || null,
+    });
+    if (rec) added += 1;
+  }
+  return added;
+}
+
+// Collapsed into one pass per couple of seconds — a scan writes a row per worktree and a live turn emits an event per
+// line, and neither is a reason to re-walk the store. A pass that recorded something broadcasts, so the new section
+// reaches the board without waiting for the next scan to happen to mention that row.
+function harvestDescriptions(delay = 1500) {
+  if (descHarvestTimer) return;
+  descHarvestTimer = setTimeout(() => {
+    descHarvestTimer = null;
+    const added = guard("description harvest", harvestDescriptionsNow) || 0;
+    if (added) broadcast({ type: "snapshot", data: snapshot() });
+  }, delay);
+  descHarvestTimer.unref?.();
+}
+
+// The two events that can add what a harvest needs — a row written by a scan, a job arriving or changing — plus one
+// pass at boot, because a panel started over a store whose trees were all scanned long ago has no row event coming.
+store.onEvent((evt) => {
+  if (evt?.type === "row") harvestDescriptions();
+});
+harvestDescriptions(2500);
+
 function worktreeDirName(name, tag) {
   const slug = String(name || "")
     .toLowerCase()
@@ -837,25 +933,27 @@ function withTreeNames(snap) {
 }
 
 function snapshot() {
-  return withTreeNames(
-    withLiveAgents({
-      ...store.snapshot({ settings: settingsOut() }),
-      jobs: jobs.list(),
-      approvals: approvals.list(),
-      // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
-      // thread id, so a reload comes back to the same conversation and the same watches.
-      assistant: assistant.state(),
-      skipped: registry.skipped,
-      scanRoots: config.scanRoots || [],
-      spawn: {
-        // Spawning is no longer "is there a hermes.exe on this box": it is "is the gateway's api_server
-        // reachable and keyed". The panel probes and reports, instead of assuming.
-        transport: jobs.transportInfo(),
-        defaultCwd: config.defaultCwd,
-        maxRuntimeSeconds: jobs.maxRuntimeSeconds,
-        projects: registry.projects.map((p) => ({ name: p.name, path: p.path, activityAt: p.activityAt || null, empty: Boolean(p.empty) })),
-      },
-    }),
+  return withDescriptions(
+    withTreeNames(
+      withLiveAgents({
+        ...store.snapshot({ settings: settingsOut() }),
+        jobs: jobs.list(),
+        approvals: approvals.list(),
+        // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
+        // thread id, so a reload comes back to the same conversation and the same watches.
+        assistant: assistant.state(),
+        skipped: registry.skipped,
+        scanRoots: config.scanRoots || [],
+        spawn: {
+          // Spawning is no longer "is there a hermes.exe on this box": it is "is the gateway's api_server
+          // reachable and keyed". The panel probes and reports, instead of assuming.
+          transport: jobs.transportInfo(),
+          defaultCwd: config.defaultCwd,
+          maxRuntimeSeconds: jobs.maxRuntimeSeconds,
+          projects: registry.projects.map((p) => ({ name: p.name, path: p.path, activityAt: p.activityAt || null, empty: Boolean(p.empty) })),
+        },
+      }),
+    ),
   );
 }
 
