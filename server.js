@@ -134,6 +134,9 @@ async function loadConfig() {
   // (mode, model, rule escalations) that the page can also change at runtime.
   cfg.assistant = cfg.assistant && typeof cfg.assistant === "object" ? cfg.assistant : {};
   if (!cfg.assistantFile) cfg.assistantFile = path.join(path.dirname(cfg.jobsFile), "assistant.json");
+  // The continuity file the assistant is handed every turn, beside its scratchpad for the same reason: it is
+  // state, not source. A sandbox config that names its own jobsFile therefore gets its own charter too.
+  if (!cfg.charterFile) cfg.charterFile = path.join(path.dirname(cfg.assistantFile), "assistant-charter.md");
   return cfg;
 }
 
@@ -984,6 +987,31 @@ const server = createServer(async (req, res) => {
     // returns the whole assistant state so the float repaints from one answer instead of guessing.
     if (route === "/api/assistant" && req.method === "GET") {
       return sendJson(res, 200, assistant.state());
+    }
+
+    // The continuity file — the long tier of the assistant's memory, injected into every turn. GET carries
+    // the text (the polled state carries only its path, size and mtime, so a 20 KB body is not re-sent on
+    // every board event); PUT replaces it whole. Too big is its own status: the module raises the cap
+    // refusal with the numbers in it, and 413 says "prune it" rather than "something broke".
+    if (route === "/api/assistant/charter" && req.method === "GET") {
+      return sendJson(res, 200, { charter: assistant.charterPayload(), assistant: assistant.state() });
+    }
+    if (route === "/api/assistant/charter" && req.method === "PUT") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      let body;
+      try {
+        body = await readBody(req);
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
+      try {
+        const charter = assistant.setCharter(body.text, "reader", { expectMtime: body.expectMtime });
+        return sendJson(res, 200, { charter, assistant: assistant.state() });
+      } catch (e) {
+        // 413 prune it · 409 someone else wrote it since you read it · 400 anything else.
+        const code = (e && e.code) === "charter-too-long" ? 413 : (e && e.code) === "charter-stale" ? 409 : 400;
+        return sendJson(res, code, { error: String((e && e.message) || e) });
+      }
     }
 
     // A message from the reader. The board digest and the scratchpad are attached to the run's input by
