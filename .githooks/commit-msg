@@ -48,15 +48,18 @@ case "$subject" in
     *".") reject "ends with a full stop (write what changed, not a sentence with a period)" ;;
 esac
 
-if [ "$length" -lt "$MIN_LENGTH" ]; then
-    reject "only $length characters — too short to name a symptom (minimum $MIN_LENGTH)"
-fi
-
-# A bare no-op word, with any trailing punctuation a hurry adds.
+# A bare no-op word, with any trailing punctuation a hurry adds. Checked BEFORE the length rule so
+# "wip" is refused for being a no-op, not merely for being short — every listed no-op word is under
+# twelve characters, so the length rule would otherwise always answer first and this rule would
+# never fire.
 bare=$(printf '%s' "$subject" | tr 'A-Z' 'a-z' | sed -e 's/[[:space:]]*[.:!,-]*[[:space:]]*$//')
 case "$bare" in
     wip|fix|fixes|update|updates|changes|change|tweaks|tweak|misc|tmp|temp|test|tests|stuff|things|minor|cleanup)
         reject "\"$subject\" is a bare no-op word — it names no symptom" ;;
 esac
+
+if [ "$length" -lt "$MIN_LENGTH" ]; then
+    reject "only $length characters — too short to name a symptom (minimum $MIN_LENGTH)"
+fi
 
 exit 0
