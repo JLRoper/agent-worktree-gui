@@ -108,6 +108,9 @@ const state = {
   collapsedFixed: loadCollapsedFixed(),
   collapsedRoots: loadCollapsedRoots(),
   recentRoots: loadRecentRoots(),
+  // Which projects' charts are showing every tree, threshold or not (see the age collapse below). Per project,
+  // because one board holds a hundred of them.
+  showOldProjects: loadShowOldProjects(),
   // Per-folder project search ("root" -> query). Not persisted: a filter is a moment's narrowing, and a
   // reload that came back with ninety projects hidden would look like the board had lost them.
   rootFilter: new Map(),
@@ -520,6 +523,29 @@ function saveRecentRoots() {
 }
 
 const RECENT_DAYS = 7;
+
+// The chart's "older than N days" collapse. Rows whose LAST ACTIVITY is older than the threshold in the panel's
+// config.json (`hideOlderThanDays`) are held out of the chart, and one arrow at the bottom of that chart shows
+// every tree again. Both halves of that choice are remembered where a reload keeps them: the DAYS in the panel's
+// own config.json (so they apply to every browser, and to the panel after a restart), and which charts are showing
+// everything in this browser, per project, exactly like the folder-level All/7d choice above.
+const SHOW_OLD_KEY = "wtgui.showOldProjects";
+
+function loadShowOldProjects() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(SHOW_OLD_KEY) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveShowOldProjects() {
+  try {
+    localStorage.setItem(SHOW_OLD_KEY, JSON.stringify([...state.showOldProjects]));
+  } catch {
+    /* no storage: the choice simply will not persist */
+  }
+}
 
 const normPath = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "");
 
@@ -6726,6 +6752,97 @@ function lifeAtFor(row) {
   return Math.max(eventLifeAt(row), Date.parse(row.lastAliveAt || "") || 0);
 }
 
+// ---- the age collapse: which rows a chart is holding back --------------------------------------
+// The newest moment this row's WORK moved: its last commit, its last edited file (the server folds both into
+// lastEdit, and keeps lastCommit beside it), the last moment the panel saw it alive, and any event we received
+// about one of its agents — an event is a fresh look at the tree, which is why noteEventLife counts it as life too.
+function rowActivityAt(row) {
+  return Math.max(lifeAtFor(row), Date.parse(row.lastEdit || "") || 0, Date.parse(row.lastCommit || "") || 0);
+}
+
+// The threshold, as a number of days. 0 (or anything unreadable) means nothing is held back — the same reading the
+// server gives the key, so a config.json that says "off" beats a client that thinks it read a number.
+function ageHideDays() {
+  const n = Number(state.settings?.hideOlderThanDays);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+// A row the chart holds back: its last activity is older than the threshold. Deliberately NOT the age of the
+// directory — a tree cut months ago that somebody is working in right now measures as active and stays, which is
+// the whole point of measuring activity. Four things are never held back: the project's own checkout (the chart is
+// of the worktrees CUT from it), a row that is live right now, a row the reader has open (it must not vanish under
+// them), and a row with nothing to measure at all — "no evidence" is not "abandoned", and hiding a fresh tree that
+// has not committed or saved anything yet would be the worst of the two mistakes.
+function rowAgeStale(row) {
+  const days = ageHideDays();
+  if (!days || !row) return false;
+  if (isProjectRootRow(row) || isRowLive(row)) return false;
+  if (state.expanded.has(keyOf(row.project, row.path))) return false;
+  const at = rowActivityAt(row);
+  return Boolean(at) && at < Date.now() - days * 864e5;
+}
+
+// ...and the rows the chart is actually not drawing: stale ones, unless the reader asked this project's chart for
+// everything.
+function rowAgeHidden(row) {
+  return rowAgeStale(row) && !state.showOldProjects.has(row?.project);
+}
+
+function staleRowCount(project) {
+  return [...state.rows.values()].filter((r) => r.project === project && rowAgeStale(r)).length;
+}
+
+function ageToggleTitle(project, days, stale, showing) {
+  const n = `${stale} worktree${stale === 1 ? "" : "s"}`;
+  if (!days) return "every worktree is drawn: no age threshold is set (Settings → Hide stale worktrees)";
+  if (showing) {
+    return stale
+      ? `hold back the ${n} whose last activity is older than ${days} day${days === 1 ? "" : "s"} again`
+      : `nothing here is older than ${days} day${days === 1 ? "" : "s"} — this chart is showing every worktree`;
+  }
+  return stale
+    ? `show the ${n} whose last activity is older than ${days} day${days === 1 ? "" : "s"} — this chart is holding them back`
+    : `nothing here is older than ${days} day${days === 1 ? "" : "s"} — every worktree is on the chart`;
+}
+
+// The chart's arrow: the same little circular chip the console uses to jump back to its newest line, sitting at the
+// bottom of the worktree chart, pointing down when it will show you more rows and up once it is showing them. It
+// lives in the legend line rather than in the chart box itself because that line is the one box under the chart
+// that neither scrolls sideways nor clips its children — the chart does both the moment the card is narrower than
+// its columns — so the arrow stays on the chart's bottom edge at every width. It is invisible unless the pointer is
+// over the chart (public/style.css), and it is not rendered at all while the threshold is off.
+function ageToggleHtml(project) {
+  const days = ageHideDays();
+  if (!days) return "";
+  const showing = state.showOldProjects.has(project);
+  const stale = staleRowCount(project);
+  return `<button type="button" class="tail-chip wt-age-toggle${showing ? " is-on" : ""}" data-age-toggle="${esc(project)}" aria-pressed="${showing ? "true" : "false"}" title="${esc(ageToggleTitle(project, days, stale, showing))}">${showing ? "\u2191" : "\u2193"}</button>`;
+}
+
+// The arrow's own state, in place. The rows are re-rendered by the caller, and this is the button that asked for
+// it: keeping the same node means the pointer does not fall off a control that just moved under it.
+function paintAgeToggle(project) {
+  const btn = document.querySelector(`[data-age-toggle="${CSS.escape(project)}"]`);
+  if (!btn) return;
+  const days = ageHideDays();
+  const showing = state.showOldProjects.has(project);
+  btn.classList.toggle("is-on", showing);
+  btn.setAttribute("aria-pressed", showing ? "true" : "false");
+  btn.textContent = showing ? "\u2191" : "\u2193";
+  btn.title = ageToggleTitle(project, days, staleRowCount(project), showing);
+}
+
+// One chart, shown in full or held back again. The choice is this project's alone and it is remembered.
+function toggleShowOld(project) {
+  if (!project) return;
+  if (state.showOldProjects.has(project)) state.showOldProjects.delete(project);
+  else state.showOldProjects.add(project);
+  saveShowOldProjects();
+  paintAgeToggle(project);
+  renderProjectRows(project);
+  refreshChips(project);
+}
+
 function ringState(row) {
   const now = Date.now();
   const scannedRaw = Date.parse(row.scannedAt || "");
@@ -7719,7 +7836,13 @@ function chipsHtml(name) {
   const panelAgentCount = panelAgents.length;
   const panelRunningCount = panelAgents.filter(convLive).length;
   const stale = rows.filter((r) => r.verdictStale).length;
+  // What the chart is holding back, so a collapsed project cannot silently under-report its trees: the count is of
+  // rows this project's chart is not drawing because their last activity is older than the threshold, and it goes
+  // away the moment that chart is asked for everything.
+  const held = rows.filter(rowAgeHidden).length;
+  const ageDays = ageHideDays();
   const out = [`<span class="chip">${rows.length} worktrees</span>`];
+  if (held) out.push(`<span class="chip" title="${esc(`${held} worktree${held === 1 ? "" : "s"} whose last activity is older than ${ageDays} day${ageDays === 1 ? "" : "s"} — the chart is holding ${held === 1 ? "it" : "them"} back; the arrow at the bottom of the chart shows every tree`)}">${held} older hidden</span>`);
   if (merged) out.push(`<span class="chip good">${merged} merged</span>`);
   if (noCommits) out.push(`<span class="chip">${noCommits} no commits</span>`);
   if (unmerged) out.push(`<span class="chip bad">${unmerged} unmerged</span>`);
@@ -8053,7 +8176,7 @@ function projectSection(name) {
         <th>PR</th><th>Dirty</th><th title="time since this worktree was last seen alive (any evidence firing) · the ring fills up to green as the row becomes due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited">Life / next read</th><th>Verdict</th><th title="remove a worktree (sent to the Recycle Bin)"></th>
       </tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
     </div>
-    <div class="legend">liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read</div>
+    <div class="legend">${ageToggleHtml(name)}liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read</div>
   </section>`;
 }
 
@@ -8580,6 +8703,21 @@ function placeRow(project, row, { flash = false } = {}) {
   const holder = document.createElement("tbody");
   holder.innerHTML = rowHtml(row);
   const newTr = holder.firstElementChild;
+  // A row the chart is holding back is not on the chart, so nothing of it may be drawn - the state, the chips and
+  // the agents still know the row (they always did; the row is only held out of the drawing). The threshold can have
+  // just crossed this row's activity, or the reader can have just asked this chart to hold the stale ones back, and
+  // either way the row has to leave the DOM here rather than wait for the next full rebuild of the project.
+  if (rowAgeHidden(row)) {
+    const gone = state.rowEls.get(key);
+    if (gone) {
+      state.detailEls.get(key)?.remove();
+      state.detailEls.delete(key);
+      gone.remove();
+      state.rowEls.delete(key);
+    }
+    refreshChips(project);
+    return;
+  }
   const old = state.rowEls.get(key);
   // A collapsed section is not on screen: keep the row in state (the chips and counters need it)
   // but spend nothing on its markup. Expanding the project renders it from state.
@@ -8718,7 +8856,10 @@ function renderProjectRows(name, { typing = null } = {}) {
   // Stabilized: while a row of this project is open, the rows keep the order they are already in on screen (a row
   // that is genuinely new goes last). Only the painting order changes - the ranking is still there for when the
   // reader closes everything.
-  const rowsInOrder = orderRows([...state.rows.values()].filter((r) => r.project === name));
+  // Rows older than the age threshold are not built at all: the chart draws what it is showing, and the arrow in the
+  // legend below it is what brings the rest back (see rowAgeHidden). The ranking above still sees them, so a row that
+  // comes back to life takes its place in the order the moment it is drawn again.
+  const rowsInOrder = orderRows([...state.rows.values()].filter((r) => r.project === name && !rowAgeHidden(r)));
   if (stabilizeOn() && projectHasOpenRow(name) && prevRowKeys.length) {
     const pos = new Map(prevRowKeys.map((k, i) => [k, i]));
     rowsInOrder.sort(

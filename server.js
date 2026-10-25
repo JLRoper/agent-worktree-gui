@@ -90,6 +90,22 @@ const TYPES = {
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
+// How old a worktree's last activity has to be before the chart holds its row out of the view it opens on (the row
+// is never lost — one arrow on that chart shows every tree again). Measured from ACTIVITY, never from when the
+// directory was created: a tree cut months ago that somebody is working in right now is not stale, and hiding it
+// would be the one thing this setting must not do. 0 shows everything.
+//
+// A value that cannot be read as a number or a count of days falls back to the DEFAULT rather than to 0: an
+// unreadable number must never silently switch a filter off (and Number(null) is 0, so "absent" is handled first).
+const AGE_DAYS_DEFAULT = 7;
+const AGE_DAYS_MAX = 3650;
+function ageDaysFrom(value) {
+  if (value == null || value === "") return AGE_DAYS_DEFAULT;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return AGE_DAYS_DEFAULT;
+  return Math.min(AGE_DAYS_MAX, Math.round(n));
+}
+
 async function loadConfig() {
   // A fresh clone may have no config.json yet: start on defaults and say so, rather than dying.
   let cfg;
@@ -125,6 +141,9 @@ async function loadConfig() {
   cfg.slowSeconds = Number(cfg.slowSeconds ?? 60);
   cfg.fetchSeconds = Number(cfg.fetchSeconds ?? 600);
   cfg.threads = Number(cfg.threads) || Math.max(1, Math.min(4, cpus().length - 1));
+  // How old a worktree's last activity has to be before the chart hides its row. Server-side, like scanMode below:
+  // it lives in this file so it survives a restart and applies to every browser.
+  cfg.hideOlderThanDays = ageDaysFrom(cfg.hideOlderThanDays);
   cfg.projects = Array.isArray(cfg.projects) ? cfg.projects : [];
   if (!cfg.defaultCwd) cfg.defaultCwd = cfg.projects[0]?.path || process.cwd();
   // "all": keep every project fresh, whether or not anyone is looking at it. "visible": the page reports which
@@ -504,6 +523,7 @@ const settingsOut = () => ({
   slowSeconds: config.slowSeconds,
   fetchSeconds: config.fetchSeconds,
   liveMinutes: config.liveMinutes ?? 5,
+  hideOlderThanDays: config.hideOlderThanDays,
   threads: config.threads,
   host: config.host,
   defaultCwd: config.defaultCwd,
@@ -1934,6 +1954,25 @@ const server = createServer(async (req, res) => {
       log(`scan mode: ${mode}`);
       broadcast({ type: "snapshot", data: snapshot() });
       return sendJson(res, 200, { ok: true, mode, settings: settingsOut() });
+    }
+
+    // How old a worktree has to be before the chart holds its row back, so the board can open on the trees that
+    // are still being worked in. Server-side for the same reason the refresh mode is: the number goes into this
+    // panel's own config.json, so it survives a restart and applies to whichever browser is open — and it is the
+    // config.json the reader edits by hand. `days: 0` shows everything.
+    if (route === "/api/settings/age" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const days = ageDaysFrom(body.days);
+      try {
+        await patchPanelConfig({ hideOlderThanDays: days });
+      } catch (e) {
+        return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
+      }
+      config.hideOlderThanDays = days;
+      log(`worktrees older than: ${days ? `${days} day${days === 1 ? "" : "s"} held back (the chart's arrow shows them)` : "none held back"}`);
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, { ok: true, days, settings: settingsOut() });
     }
 
     // Open a link from an agent's console in the OS default browser. Only http(s) gets through: this
