@@ -549,8 +549,8 @@ Watches without a deadline, and finished ones, say so instead.
 | --- | --- | --- |
 | `port` | 7331 | HTTP port |
 | `scanRoots` | `["C:/ProjectDevelopment"]` | directories scanned for git repos; every repo found becomes a monitored project |
-| `host` | `127.0.0.1` | bind address. **Loopback by default and it should stay that way** — this panel spawns processes, so exposing it on the LAN is unauthenticated remote code execution |
-| `token` | *(unset)* | if set, write endpoints require an `x-panel-token` header |
+| `host` | `127.0.0.1` | bind address. Loopback keeps the board to this machine. `0.0.0.0` makes it reachable from the LAN or a tailnet — set `token` in the same breath, because this panel spawns processes and can write files |
+| `token` | *(unset)* | the shared secret for writes from **other** machines. Loopback is never challenged, so a local browser needs nothing. With no `token`, every off-machine write is refused; with one, a remote browser authenticates once by opening `http://<host>:7331/?token=…` (the client remembers it and sends `x-panel-token` from then on). Reads — `/api/state`, `/api/stream`, the static files — stay open to anyone who can reach the port, so keep it on a LAN or a tailnet and never a public network |
 | `defaultCwd` | most recently active project | fallback target for a spawned agent when no project is chosen |
 | `hermesBin` | auto | explicit path to the hermes executable; used by the `hermes worktree` audits behind `/api/cleanup` (agent runs do not spawn it) |
 | `apiServer` | `{"url":"http://127.0.0.1:8642"}` | `url` of the gateway's api_server, and optionally `key` (else `API_SERVER_KEY` from `$HERMES_HOME/.env`) |
