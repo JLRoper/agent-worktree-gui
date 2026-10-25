@@ -6598,7 +6598,7 @@ function rowHtml(row) {
   const dragHandle = `<button type="button" class="drag-handle" draggable="true" data-drag-key="${esc(key)}" data-drag-project="${esc(row.project)}" title="drag to move this worktree up or down in the list">⠿</button>`;
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(key)}">
     <td class="name"><div class="name-line">${dragHandle}<button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">▶</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${agentBadgeHtml(row)}</div></td>`;
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">▶</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${agentBadgeHtml(row)}</div></td>
     <td class="mono branch">${esc(row.branch || "—")}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
