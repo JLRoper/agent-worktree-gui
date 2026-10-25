@@ -804,7 +804,15 @@ const server = createServer(async (req, res) => {
         await patchPanelConfig({ scanRoots });
         config.scanRoots = scanRoots;
         log(`scanRoots updated: ${scanRoots.join(", ")}`);
-        void registry.refresh().catch(() => {});
+        // The response only tells THIS request's caller the save worked. Every other open board
+        // (and this one, once settings closes) still shows the old project set until something pushes
+        // a snapshot — a removed root's projects otherwise sit on screen forever, looking like the
+        // removal silently failed. refresh() drops them from the registry and the store; broadcasting
+        // once it lands is what actually retires their sections (see the clone handler, same pattern).
+        void registry
+          .refresh()
+          .then(() => broadcast({ type: "snapshot", data: snapshot() }))
+          .catch(() => {});
         return sendJson(res, 200, {
           scanRoots: config.scanRoots,
           projects: config.projects || [],
