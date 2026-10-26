@@ -353,6 +353,39 @@ const jobs = new Jobs({
   // offering "Allow once" long after the gateway had already denied the command and moved on.
   approvalWindow: () => approvalWindowSeconds(),
 });
+// Where the work of a card whose run the gateway has forgotten still is: the tree the turn ran in, and the PR its
+// branch has. Read from the board's own rows — a scan already carries the PR per branch (lib/scheduler.js), so this
+// is a lookup, not a measurement: no git call, no gh call, and nothing the boot reconcile would have to pay per
+// card. The manual press is its only caller.
+function gonePointers(id) {
+  const j = jobs.get(id);
+  if (!j) return null;
+  const store = scheduler.store;
+  const wanted = [j.worktreePath, j.ownerPath, j.cwd].filter(Boolean).map(normPathKey);
+  // The rows are the store's, keyed by "<project>::<path>", so the search walks that store's own project names:
+  // discovery publishes a project to the registry on its own clock, and a press must not miss a row that is already
+  // on the board just because the registry has not named its project yet.
+  let found = null;
+  for (const name of store.projects.keys()) {
+    const hit = (store.rowsFor(name) || []).find((r) => wanted.includes(normPathKey(r.path))) || null;
+    if (hit) {
+      found = { project: store.projects.get(name), row: hit };
+      break;
+    }
+  }
+  const row = found?.row || null;
+  const pr = row?.pr || null;
+  return {
+    worktree: row?.path || j.worktreePath || j.ownerPath || j.cwd || null,
+    branch: row?.branch || j.branch || null,
+    // The scan's PR index carries the number, the state and the title; the URL is the one form of a pointer the
+    // console renders as a link, and it is derivable from the repo the PRs were listed from.
+    pr: pr
+      ? { number: pr.number, state: pr.state || null, title: pr.title || null, url: found?.project?.prRepo ? `https://github.com/${found.project.prRepo}/pull/${pr.number}` : null }
+      : null,
+  };
+}
+
 // Human side of the Hermes approval-transport contract: the plugin presents, the panel answers,
 // the host decides. Nothing here can approve anything by itself.
 const approvals = new Approvals({ onEvent: broadcast });
@@ -1664,6 +1697,21 @@ const server = createServer(async (req, res) => {
       // card rather than to a new one.
       if (r.ok && Array.isArray(body.attachments) && body.attachments.length) jobs.addAttachments(String(body.id || ""), body.attachments);
       return sendJson(res, r.ok ? 200 : r.code === "run_not_accepting_steer" ? 409 : 400, r);
+    }
+
+    // The NOT-RUNNABLE chip's press: ask the gateway about ONE interrupted card's run and take the same decision
+    // the boot reconcile takes (lib/jobs.js settleRestoredRun — one implementation, not two). The pointers are
+    // looked up only here, because only this answer leaves the reader with nothing left to click: a run the gateway
+    // has forgotten settles as interrupted, and the card has to name the tree the work is in and its PR.
+    if (route === "/api/jobs/reattach" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const id = String(body?.id || "").trim();
+      const r = await jobs.reattachNow(id, { pointers: gonePointers(id) });
+      // 400 for a card this route cannot ask about at all (unknown, no run id, not interrupted), and for a gateway
+      // that will not answer: the press is a question the panel understood and cannot settle, and the card keeps its
+      // verdict. A decision always comes back as 200 with the card it left behind.
+      return sendJson(res, r.ok ? 200 : 400, r);
     }
 
     // Answer a parked run's approval. The gateway validates the choice a second time, so a stale
