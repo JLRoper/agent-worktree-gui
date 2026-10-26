@@ -31,7 +31,9 @@
 function hotWaiting() {
   return conversations().filter((c) => {
     const t = c.latest || {};
-    return t.status !== "running" && t.status !== "starting";
+    // A turn held on the gateway's 429 cap is not waiting on the READER: there is nothing to answer, the panel
+    // is waiting on the gateway. Offering it in this rotation would ask for a reply that has nowhere to go.
+    return t.status !== "running" && t.status !== "starting" && t.status !== "waiting";
   });
 }
 
@@ -58,7 +60,7 @@ function hotStillWaiting(thread) {
   const conv = conversations().find((c) => c.thread === thread);
   if (!conv) return false;
   const t = conv.latest || {};
-  return t.status !== "running" && t.status !== "starting";
+  return t.status !== "running" && t.status !== "starting" && t.status !== "waiting";
 }
 
 // The whole card flashes, not just the box: the rotation moves the reader's attention to a panel, and a ring

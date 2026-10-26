@@ -1629,6 +1629,9 @@ tr.row td.name button, tr.row td.name .chip, tr.row td.branch button { user-sele
 .pv-status.is-run { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
 .pv-status.is-failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .pv-status.is-interrupted { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+/* A turn held on the gateway's 429 cap: amber like an interrupted turn — it is neither running nor failed —
+   but not the SAME chip, so "waiting for a slot" can never be read as "this turn died". */
+.pv-status.is-waiting { color: #d9b3ff; border-color: #452f5c; background: #241a33; }
 .pv-meta { flex: none; color: var(--dimmer); }
 .pv-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
