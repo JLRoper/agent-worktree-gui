@@ -1865,9 +1865,20 @@ const server = createServer(async (req, res) => {
       // How many results the console is about to draw: a burst of six calls needs six, not a default of eight
       // that silently stops halfway through a longer run.
       const limit = Math.max(1, Math.min(60, Number(url.searchParams.get("n")) || 20));
+      // One row, exactly as stored, for the console's fold: `row` picks which of the turn's results (the order the
+      // console paired them in) and `full=1` lifts the store reader's own 6,000-character display cap. Without
+      // them this is the array the burst pairing reads; with them it is the whole text behind one folded result.
+      const rowParam = url.searchParams.get("row");
+      const index = rowParam === null ? null : Math.max(0, Number(rowParam) || 0);
+      const full = url.searchParams.get("full") === "1";
       if (!thread || !tool) return sendJson(res, 400, { error: "thread and tool are required" });
       const { toolResults } = await import("./lib/tool-results.js");
-      const results = toolResults({ dbPath: path.join(hermesHome(), "state.db"), sessionId: thread, tool, from, to, limit });
+      // `full=1` reads the row exactly as it was stored (maxChars 0 = no cap); without it the store reader's own
+      // 6,000-character display cap applies to every row of the array.
+      const results = toolResults({
+        dbPath: path.join(hermesHome(), "state.db"), sessionId: thread, tool, from, to, limit, index,
+        ...(full ? { maxChars: 0 } : {}),
+      });
       return sendJson(res, 200, { thread, tool, results });
     }
 
