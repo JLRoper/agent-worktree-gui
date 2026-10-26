@@ -26,7 +26,7 @@ import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE } from "./lib/tree-names.js";
 import { createDescriptions } from "./lib/features/descriptions.js";
-import { auditRepo } from "./lib/hermes-worktrees.js";
+import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
 import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyLabel } from "./lib/remote-writes.js";
@@ -166,6 +166,10 @@ async function loadConfig() {
   // What each branch was started to do, extracted once from the earliest run in that tree: the same state-not-source
   // rule as the naming ledger, so a PANEL_CONFIG sandbox keeps its own copy of this too.
   if (!cfg.descriptionsFile) cfg.descriptionsFile = path.join(path.dirname(cfg.jobsFile), "descriptions.json");
+  // The TODO list of each worktree — written by the assistant, kept current by every agent in the tree, read by the
+  // row. State, not source, and beside the job store for the same reason as the two records above: a PANEL_CONFIG
+  // sandbox gets its own copy. NEVER inside the worktree, where it would be git noise and a merge conflict.
+  if (!cfg.todosFile) cfg.todosFile = path.join(path.dirname(cfg.jobsFile), "todos.json");
   // The model menu's price/rating half: what the dropdown decorates each row with, rebuilt only by the
   // Settings refresh (POST /api/models/refresh). State, not source — beside the job store, so a sandbox
   // config that names its own jobsFile gets its own copy.
@@ -564,7 +568,6 @@ setTimeout(() => {
     })
     .catch((e) => log(`push guard refresh failed at boot: ${String((e && e.message) || e)}`));
 }, 4_000).unref?.();
-
 const settingsOut = () => ({
   version: VERSION,
   refreshSeconds: config.refreshSeconds,
@@ -605,10 +608,6 @@ const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "
 // the point of it. Either way the six-hex tag is kept and the 409 stands while an agent is running in the tree.
 const treeNames = new TreeNames({ file: config.treeNamesFile, log });
 
-// ---- what a branch was STARTED to do --------------------------------------------------------------
-// The extraction and the record file live in lib/descriptions.js; the pass that has to see a row and a
-// job at once lives in lib/features/descriptions.js. Only the wiring stays here, in the composition
-// root and in this order: a subscriber list is not something a feature module should own.
 const descriptions = createDescriptions({
   getConfig: () => config,
   // The RAW maps, not list()/rowsFor(): the earliest brief in a tree needs `prompt` and `startedAt`,
@@ -621,6 +620,86 @@ const descriptions = createDescriptions({
   guard,
   log,
 });
+
+// ---- the TODO list of each worktree --------------------------------------------------------------------------------
+// Written by the assistant (a `TODO <text>` line, normally under the SPAWN that starts the work), kept current by
+// every agent in the tree (a run's FINAL message is harvested when it settles), and read by the row. ONE store for
+// the whole panel, keyed the way the row already is (`keyOf(project, path)` — `${project}::${path}` in
+// public/app.js), and never a file inside the worktree: it is state, not source, and a file in the tree would be git
+// noise and a merge conflict. Every writer goes through this one Node process, so the store is its own lock.
+const todos = new TodoLists({
+  file: config.todosFile,
+  log,
+  // The trees this store may NAME — a path, a directory name, a branch, a six-hex tag, a thread. Read per question,
+  // never captured: a rename moves a row and the store must see the new one.
+  trees: () => {
+    const out = [];
+    const seen = new Set();
+    for (const p of registry.projects || []) {
+      const key = `${p.name}::${normPathKey(p.path)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ project: p.name, path: String(p.path || "").replace(/\\/g, "/"), branch: null });
+    }
+    for (const [rowKey, row] of store.rows) {
+      const project = String(rowKey).split("::")[0];
+      const n = `${project}::${normPathKey(row.path)}`;
+      if (seen.has(n)) continue;
+      seen.add(n);
+      out.push({ project, path: String(row.path || "").replace(/\\/g, "/"), branch: row.branch || null });
+    }
+    return out;
+  },
+  // …and the job store, so a THREAD can name its tree (that is how the assistant points a TODO line at a card).
+  jobs: () => jobs,
+});
+// The two writers that need the store: lib/jobs.js prepends the list to a worker's brief and harvests the run's own
+// last words; the assistant seeds a tree and keeps the list honest against what a worker actually did.
+jobs.todos = todos;
+if (assistant) {
+  assistant.todos = todos;
+  // …and the one thing the assistant cannot do itself: tell the page a list moved. The assistant's own TODO lines are
+  // applied inside its harvest, which has no SSE handle of its own.
+  assistant.todosChanged = broadcastTodos;
+}
+
+// The list travels with the snapshot the way a description does: the row carries the counts, the OLDEST incomplete
+// item (the one thing the collapsed strip reads) and the items themselves. A tree with no list carries no `todo`
+// field at all, so the section is simply absent rather than an empty box.
+function withTodos(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const rec = todos.forRow(project.name, row.path);
+      if (!rec) {
+        delete row.todo;
+        continue;
+      }
+      row.todo = rec;
+    }
+  }
+  return snap;
+}
+
+// A list that changed is a row that changed: the same full snapshot the description harvest sends, so the strip
+// repaints without waiting for the next scan to happen to mention that row.
+function broadcastTodos() {
+  broadcast({ type: "snapshot", data: snapshot() });
+}
+
+// What the page says after a reader's own press. It names the item and the id, because the id is what the assistant
+// and every worker are told to write, and a press that says nothing is a press the reader cannot trust.
+function todoSay(op, item) {
+  if (!item) return null;
+  const id = `#${item.id}`;
+  if (op === "add") return `added ${id}: ${item.text}`;
+  if (op === "edit") return `${id} rewritten`;
+  if (op === "note") return item.note ? `${id} note saved` : `${id} note cleared`;
+  if (op === "files") return `${id} files ${item.files?.length ? `set to ${item.files.join(", ")}` : "cleared"}`;
+  if (item.status === "done") return `${id} done`;
+  if (item.status === "dropped") return `${id} dropped`;
+  if (item.status === "doing") return `${id} claimed — doing`;
+  return `${id} reopened`;
+}
 
 // The two events that can add what a harvest needs — a row written by a scan, a job arriving or changing — plus one
 // pass at boot, because a panel started over a store whose trees were all scanned long ago has no row event coming.
@@ -932,17 +1011,17 @@ function withTreeNames(snap) {
 }
 
 function snapshot() {
-  return descriptions.withDescriptions(
-    withTreeNames(
-      withLiveAgents({
-        ...store.snapshot({ settings: settingsOut() }),
-        jobs: jobs.list(),
-        approvals: approvals.list(),
-        // The panel's own permission requests (a push a worker's guard parked, a merge the panel itself wants to
-        // write to a remote for). They ride with the snapshot the way the CLI-transport approvals do, so a reload
-        // comes back to the same open question instead of losing it.
-        remoteWrites: remoteWrites.state(),
-        // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
+  return withTodos(
+    descriptions.withDescriptions(
+      withTreeNames(
+        withLiveAgents({
+          ...store.snapshot({ settings: settingsOut() }),
+          jobs: jobs.list(),
+          approvals: approvals.list(),
+          // The panel's own permission requests (a push a worker's guard parked, a merge the panel itself wants to
+          // write to a remote for). They ride with the snapshot the way the CLI-transport approvals do, so a reload
+          // comes back to the same open question instead of losing it.
+          remoteWrites: remoteWrites.state(),        // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
         // thread id, so a reload comes back to the same conversation and the same watches.
         assistant: assistant.state(),
         skipped: registry.skipped,
@@ -957,6 +1036,7 @@ function snapshot() {
         },
       }),
     ),
+  ),
   );
 }
 
@@ -1442,6 +1522,51 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, approvals.status(id));
     }
 
+    // ---- the TODO list of one worktree -------------------------------------------------------------------------
+    // Read on demand (the row carries its own copy in /api/state; this is for the expanded strip's journal and for a
+    // check that wants the whole list), and written by the reader's own buttons. Every write is stamped
+    // `by: "reader"` and every refusal comes back WITH its reason — the page says it rather than looking like a
+    // press that did nothing.
+    if (route === "/api/todos" && req.method === "GET") {
+      const key = todos.keyFor({ project: url.searchParams.get("project"), path: url.searchParams.get("path") || url.searchParams.get("tree") });
+      if (!key) return sendJson(res, 400, { error: "a worktree is required: pass project and path (the row's own key)" });
+      const rec = todos.list(key);
+      return sendJson(res, 200, { key, list: rec ? { project: rec.project, path: rec.path, items: rec.items, journal: rec.journal } : null, summary: todos.summary(key) });
+    }
+
+    if (route === "/api/todos" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const op = String(body?.op || "").toLowerCase();
+      const args = {
+        project: body?.project || null,
+        path: body?.path || null,
+        id: body?.id === undefined || body?.id === null || body?.id === "" ? null : Number(body.id),
+        text: body?.text ?? "",
+        note: body?.note ?? null,
+        files: Array.isArray(body?.files) ? body.files : null,
+        by: "reader",
+        owner: null,
+        from: "reader",
+      };
+      let r;
+      if (op === "add") r = todos.write({ ...args, op: "add" });
+      else if (op === "edit") r = todos.write({ ...args, op: "edit" });
+      else if (op === "note") r = todos.write({ ...args, op: "note" });
+      else if (op === "files") r = todos.write({ ...args, op: "files" });
+      else if (["done", "doing", "drop", "dropped", "reopen", "todo"].includes(op)) r = todos.setStatus({ ...args, op });
+      else r = { ok: false, error: `unknown todo op “${op || "(none)"}” — one of add, edit, note, done, doing, drop, reopen` };
+      if (r.ok) broadcastTodos();
+      return sendJson(res, r.ok ? 200 : 400, {
+        ok: Boolean(r.ok),
+        error: r.error || null,
+        message: r.ok ? todoSay(op, r.item) : null,
+        key: r.key || null,
+        summary: r.key ? todos.summary(r.key) : null,
+        journal: r.list ? r.list.journal.slice(-6) : [],
+      });
+    }
+
     // ---- who may put a branch on a remote ------------------------------------------------------------
     // The page's own view of it: what is parked, what the setting is, and which trees carry the guard.
     if (route === "/api/remote-write/state" && req.method === "GET") {
@@ -1605,7 +1730,6 @@ const server = createServer(async (req, res) => {
       log(`push guard: install asked for ${done.length} worktree(s), ${done.filter((d) => d.ok).length} ok`);
       return sendJson(res, 200, { ok: true, installed: done.filter((d) => d.ok).length, failed: done.filter((d) => !d.ok).length, trees: done, guards: guardReport() });
     }
-
     // Preview the exact request that would be sent — the confirm affordance.
     if (route === "/api/agents/preview" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
@@ -1626,8 +1750,7 @@ const server = createServer(async (req, res) => {
       // nothing happen", not a card that says "starting" forever.
       const linked = await spawnFeature.linkSpawn(body, aimed.target, aimed.cwdProject);
       if (!linked.ok) return sendJson(res, linked.status, linked.payload);
-      const job = await jobs.create({ ...body, ...linked.fields });
-      return sendJson(res, 202, { job });
+      const job = await jobs.create({ ...body, ...linked.fields });      return sendJson(res, 202, { job });
     }
 
     // Continue a conversation: same named thread, no new worktree, run where the agent is.
