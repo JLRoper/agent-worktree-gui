@@ -536,6 +536,7 @@ try {
         usageText: usage ? usage.textContent.trim() : null,
         usageTitle: usage ? usage.getAttribute("title") : null,
         height: Math.round(rect.height),
+        width: Math.round(rect.width),
         rendered: rect.height > 0,
         lines: Math.max(1, Math.round(rect.height / lineHeight)),
         cardHeight: card ? Math.round(card.getBoundingClientRect().height) : null,
@@ -593,6 +594,13 @@ try {
   note(`the readout is ${rNew.height}px on this build and ${rOld.height}px on the one it replaces; the card is ${rNew.cardHeight}px vs ${rOld.cardHeight}px`);
   ok("the counts and the dollars are the session's cumulative totals, not its context occupancy", /cumulative/.test(rNew.title) && /not how full the context is now/.test(rNew.usageTitle || ""), rNew.usageTitle);
   // The figures ride the snapshot the page already loads: no new round trip is asked for by a card.
+  // The line has to survive a narrower board too: the brief's "one line" is a claim about the card, and a
+  // 1600px window is the widest one. The same card is re-read at 1100px and the row must still be one line.
+  await after.page.setViewportSize({ width: 1100, height: 1000 });
+  const narrow = await readoutOf(after.page, t);
+  check("...and at a 1100px window, where the card is narrower", [narrow.lines, narrow.rendered], [1, true]);
+  note(`at 1100px the readout is ${narrow.height}px tall over a ${narrow.width}px card`);
+  await after.page.setViewportSize({ width: 1600, height: 1000 });
   const stateBody = requests.find((r) => r && typeof r === "object" && r.body);
   const snapshotJob = stateBody ? (stateBody.body.jobs || []).find((j) => j.thread === t) : null;
   ok("the figures arrive in the existing /api/state snapshot (no per-render round trip)", Boolean(snapshotJob && snapshotJob.stats), snapshotJob ? JSON.stringify({ in: snapshotJob.stats.input_tokens, out: snapshotJob.stats.output_tokens, usd: snapshotJob.stats.cost_usd }) : "no stats in the snapshot");
@@ -656,6 +664,10 @@ try {
   console.log("\n== (c) the same session after a COMPACTION ==");
   const beforeCounters = db.prepare("select input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_usd from sessions where id = ?").get(t);
   const beforeAnchor = JSON.parse(db.prepare("select model_config from sessions where id = ?").get(t).model_config || "{}")?._usage_anchor?.prompt_tokens ?? null;
+  // What the anchor becomes: a compaction leaves the summary plus a tail, so it is a fraction of what was there —
+  // derived from this session's own anchor rather than hard-coded, because the raw store this snapshot came from
+  // keeps moving and a fixed number could sit ABOVE the anchor and make the context figure rise.
+  const afterAnchor = Math.max(1000, Math.round(beforeAnchor * 0.6));
   const beforeMsgs = db.prepare("select count(*) n from messages where session_id = ? and active = 1").get(t).n;
   const beforeCompactions = copyStore.compactions(t);
   const beforeRead = await readoutOf(after3.page, t);
@@ -668,13 +680,13 @@ try {
   db.prepare("insert into messages (session_id, role, content, timestamp, active, compacted, _compressed_summary) values (?, 'user', ?, ?, 1, 0, 1)").run(t, summaryText, Date.now() / 1000);
   const cfgRow = db.prepare("select model_config from sessions where id = ?").get(t).model_config;
   const cfgJson = JSON.parse(cfgRow || "{}");
-  if (cfgJson._usage_anchor) cfgJson._usage_anchor.prompt_tokens = 91_000;
+  if (cfgJson._usage_anchor) cfgJson._usage_anchor.prompt_tokens = afterAnchor;
   db.prepare("update sessions set model_config = ? where id = ?").run(JSON.stringify(cfgJson), t);
   db.prepare(
     "insert into session_model_usage (session_id, model, billing_provider, billing_mode, task, api_call_count, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_usd, actual_cost_usd, cost_status, cost_source, first_seen, last_seen) values (?, ?, '', '', 'compression', 1, 120000, 8000, 40000, 0, 0.0123, 0, 'estimated', 'provider_models_api', ?, ?)",
   ).run(t, model, Date.now() / 1000, Date.now() / 1000);
   const afterCounters = db.prepare("select input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, estimated_cost_usd from sessions where id = ?").get(t);
-  note(`the compaction: ${beforeMsgs} active messages absorbed, one summary written, the usage anchor ${beforeAnchor} → 91000, ${copyStore.compactions(t)} ⇊ in the store now`);
+  note(`the compaction: ${beforeMsgs} active messages absorbed, one summary written, the usage anchor ${beforeAnchor} → ${afterAnchor}, ${copyStore.compactions(t)} ⇊ in the store now`);
   check("the store's own cumulative counters are exactly what the compaction left alone", afterCounters, beforeCounters);
   await stopPanel("now");
   await startPanel("now");
@@ -706,7 +718,7 @@ try {
   );
   const ctxOld = Number(/ (\d+)%/.exec(beforeRead.segments.find((s) => /%/.test(s)) || "")?.[1]);
   const ctxNew = Number(/ (\d+)%/.exec(afterRead.segments.find((s) => /%/.test(s)) || "")?.[1]);
-  ok("the context figure — the one a naive implementation would have used — DID fall", ctxNew < ctxOld, `${ctxOld}% → ${ctxNew}% (the store's usage anchor went ${beforeAnchor} → 91000)`);
+  ok("the context figure — the one a naive implementation would have used — DID fall", ctxNew < ctxOld, `${ctxOld}% → ${ctxNew}% (the store's usage anchor went ${beforeAnchor} → ${afterAnchor})`);
   ok("...and the tooltip reports the compaction's own spend as a separate line, not as part of the counts", /more has gone on this session's own background review, compaction and approvals/.test(afterRead.usageTitle || ""), (afterRead.usageTitle || "").slice(-170));
 
   // ---- (d) a model the panel's copy has no price for: the counts, and no dollars ----
