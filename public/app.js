@@ -38,6 +38,20 @@ const SHOW_OLD_KEY = "wtgui.showOldProjects";
 // the segments of every box that carries one. Read ONCE, above `state`, so a box can be restored from it
 // the moment it is rendered — the same reason TREENAMES_KEY lives up here.
 const boxChips = loadPasteChipState();
+
+// The row ranking averages a row's liveness over a SLIDING WINDOW of the events it receives, instead of keying
+// on the single newest one. Declared above `state` because the state literal reads the saved window below, and a
+// const further down would still be in its temporal dead zone at that moment.
+const RANK_WINDOW_KEY = "wm.rankWindowSeconds";
+const RANK_WINDOW_DEFAULT = 300;   // seconds: the five minutes the reader asked for
+const RANK_WINDOW_MIN = 30;
+const RANK_WINDOW_MAX = 3600;
+const RANK_EVENT_CAP = 400;        // hard cap on one row's ring, so an eight-hour session cannot grow it
+// Hysteresis: a row takes the slot above it only when its smoothed rate beats that row's by this many events
+// PER MINUTE. One console line is 0.2/min over the default window, so it can never twitch the order; a row being
+// hammered clears the margin comfortably, and a row that has gone quiet yields as its events age out.
+const RANK_MARGIN_PER_MIN = 1;
+
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
   // "Console size" stays the baseline for every card. Kept in memory so a repaint does not undo it.
@@ -175,12 +189,28 @@ const state = {
   // the worktree that owns that agent is being worked in right now, without waiting for the next scan to notice.
   // Key = worktree row key -> ms of the newest event seen for it.
   eventLife: new Map(),
+
+  // The sliding window behind the ranking: row key -> ms timestamps of the liveness events it has received,
+  // oldest first, pruned by the window and capped at RANK_EVENT_CAP. Bounded on purpose - an eight-hour session
+  // must not grow it - and the only thing that decides a row's smoothed score.
+  eventWindows: new Map(),
+  // Row keys whose window has been seeded once from the life the row already carried (its own lastAliveAt /
+  // lastEdit / lastCommit and its jobs' turn starts and ends), so a reload is not a fresh-start scramble.
+  rankSeeded: new Set(),
+  // ...and the same for a project's own activityAt, so a project's window is seeded once too.
+  rankProjSeeded: new Set(),
+  // The ranked row order per project, as of the last reorder tick: arrays of row keys, so the hysteresis pass
+  // can compare a row against the slot it is trying to take. Rebuilt on the reorder clock, never per event.
+  rankOrder: new Map(),
   // One green pulse per second per row, not one per line: a streaming turn emits dozens of lines a second, and
   // re-adding the class for each of them is a style pass each and a row that never stops being green.
   lastEventFlashAt: new Map(),
   // Whether an arriving event flashes the row and its project. The life clock and the ring restart happen either
   // way; this only decides whether the board says it out loud. Settings > Board.
   eventFlash: loadAnchorFlag(EVENT_FLASH_KEY, true),
+
+  // How far back the row ranking averages, in seconds. A per-browser Display setting beside Flash time.
+  rankWindowSeconds: loadRankSeconds(),
   // The reader's attention, tracked beside the geometry: the card under a moving pointer, and the card last
   // clicked / focused / typed in. Either one, while it is on screen and recent, wins over the reading line.
   hoverThread: null,
@@ -1742,6 +1772,56 @@ function turnBody(turn, copy = "") {
 // turn that is parked on it, not in a separate panel at the bottom of the card. It is a box that
 // behaves like a popup (raised, bordered, the only thing asking for a decision) but it lives in the
 // flow, so it never covers the output it is about.
+// The choices a parked question offers, and what each one means. ONE table for every box the panel draws — a turn
+// parked on an approval, a local-only worktree parked on a push — because "Always allow" has to mean the same
+// thing in both, and the reader asked for the same box rather than a lookalike.
+const APPROVAL_CHOICE_LABEL = { once: "Allow once", session: "Allow for this session", always: "Always allow", deny: "Deny" };
+
+// The permission box itself: the amber raised box, its head, the thing being asked about, the choices, and a
+// deadline the page's own 1s clock counts down. Extracted from approvalPrompt() when the remote-write permission
+// arrived, so the two questions cannot drift into two designs. Everything that differs is a parameter: which
+// record the press belongs to (`extra`), what the head and the tooltips say, and where the foot's countdown is
+// driven from (`data-approval-until`, which tickApprovals already reads).
+function permissionBoxHtml({
+  id,
+  requestId = "",
+  forAttr = "",
+  head,
+  command,
+  choices = ["once", "deny"],
+  deadline = 0,
+  windowMs = 0,
+  closed = false,
+  closedHead = APPROVAL_CLOSED_HEAD,
+  closedNote = "",
+  titles = null,
+  extra = "",
+}) {
+  const left = deadline ? deadline - Date.now() : 0;
+  const buttons =
+    `<div class="ta-actions">` +
+    choices
+      .map(
+        (c) =>
+          `<button class="btn-approve${c === "deny" ? " btn-deny" : ""}" data-approve="${esc(id)}" data-choice="${esc(c)}" data-request="${esc(requestId)}" data-until="${deadline || ""}"${extra} type="button" title="${esc((titles && titles[c]) || APPROVAL_CHOICE_LABEL[c] || c)}">${esc(APPROVAL_CHOICE_LABEL[c] || c)}</button>`,
+      )
+      .join("") +
+    `</div>`;
+  // The countdown only exists when the window is known: a question with no deadline gets no invented number.
+  const foot =
+    !deadline || !windowMs
+      ? ""
+      : `<div class="ta-foot${closed ? " is-over" : left <= 20_000 ? " is-low" : ""}" data-approval-until="${deadline}" data-approval-window="${windowMs}" title="time left before this question is denied and the writer is told so">` +
+        `<div class="ta-timer"><span style="width:${Math.max(0, Math.min(100, (left / windowMs) * 100)).toFixed(2)}%"></span></div>` +
+        `<span class="ta-left mono">${closed ? "expired" : `~${fmtLeft(left)} left`}</span></div>`;
+  return `<div class="turn-approval${closed ? " is-expired" : ""}" ${forAttr}>
+    <div class="ta-head mono">${closed ? esc(closedHead) : head}</div>
+    <pre class="ta-cmd mono">${esc(command || "(no command text)")}</pre>
+    ${closed ? closedNote : buttons}
+    ${closed ? "" : foot}
+  </div>`;
+}
+
 function approvalPrompt(turn, copy = "") {
   const approval = turn.approval;
   if (!approval) return "";
@@ -1752,33 +1832,31 @@ function approvalPrompt(turn, copy = "") {
   const live = turnLive(turn);
   if (!live || turn.approvalDone) return "";
   const choices = Array.isArray(approval.choices) && approval.choices.length ? approval.choices : ["once", "deny"];
-  const label = { once: "Allow once", session: "Allow for this session", always: "Always allow", deny: "Deny" };
   // The window is the gateway's own (`approvals.timeout`), carried on the request when it arrived. An approval
   // is a question with a deadline: the gateway gives up at it and denies the command on its own, so a box that
   // keeps offering a choice past that instant is offering a decision that can no longer be made — the answer
   // comes back 409 `approval_not_pending` and the reader is told nothing about why.
   const deadline = Number(approval.deadline) || 0;
   const windowMs = (Number(approval.timeoutSeconds) || 0) * 1000;
-  const left = deadline ? deadline - Date.now() : 0;
-  const closed = Boolean(deadline) && left <= 0;
-  const buttons =
-    `<div class="ta-actions">` +
-    choices.map((c) => `<button class="btn-approve${c === "deny" ? " btn-deny" : ""}" data-approve="${esc(turn.id)}" data-choice="${esc(c)}" data-request="${esc(approval.requestId || "")}" data-until="${deadline || ""}" type="button" title="${esc(c === "deny" ? "refuse this command — the agent is told no and carries on without it" : `allow this command (${c})`)}">${esc(label[c] || c)}</button>`).join("") +
-    `</div>`;
-  // The countdown only exists when the window is known: a gateway that never told us one gets no number rather
-  // than an invented one. Driven by the page's own 1s clock from the deadline above.
-  const foot =
-    !deadline || !windowMs
-      ? ""
-      : `<div class="ta-foot${closed ? " is-over" : left <= 20_000 ? " is-low" : ""}" data-approval-until="${deadline}" data-approval-window="${windowMs}" title="time left before the gateway stops waiting for an answer and denies the command itself">` +
-        `<div class="ta-timer"><span style="width:${Math.max(0, Math.min(100, (left / windowMs) * 100)).toFixed(2)}%"></span></div>` +
-        `<span class="ta-left mono">${closed ? "expired" : `~${fmtLeft(left)} left`}</span></div>`;
-  return `<div class="turn-approval${closed ? " is-expired" : ""}" data-approval-for="${esc(turn.id)}${esc(copy)}">
-    <div class="ta-head mono">${closed ? esc(APPROVAL_CLOSED_HEAD) : "⚠ waiting on you — this turn is parked until you answer"}</div>
-    <pre class="ta-cmd mono">${esc(approval.command || "(no command text)")}</pre>
-    ${closed ? approvalClosedNote() : buttons}
-    ${closed ? "" : foot}
-  </div>`;
+  const closed = Boolean(deadline) && deadline - Date.now() <= 0;
+  return permissionBoxHtml({
+    id: turn.id,
+    requestId: approval.requestId || "",
+    forAttr: `data-approval-for="${esc(turn.id)}${esc(copy)}"`,
+    head: "⚠ waiting on you — this turn is parked until you answer",
+    command: approval.command,
+    choices,
+    deadline,
+    windowMs,
+    closed,
+    closedNote: approvalClosedNote(),
+    titles: {
+      once: "allow this command (once)",
+      session: "allow this command (session)",
+      always: "allow this command (always)",
+      deny: "refuse this command — the agent is told no and carries on without it",
+    },
+  });
 }
 
 // The window closed with nobody answering: the gateway denied the command and the agent carried on. Nothing is
@@ -2519,6 +2597,43 @@ function contextSegHtml(stats, thread, contextLimit) {
   return `<button type="button" class="stat stat-ctx${over ? " is-over" : ""}" data-context-pick="${esc(thread)}" title="${esc(why)}">${esc(shown)}<span class="stat-caret">\u2304</span></button>`;
 }
 
+// Dollars, at the size they actually come in. A session often costs well under a cent, and "$0.00" for a
+// session that did cost something reads as free: anything under a cent is shown as such. Above a thousand the
+// cents stop meaning anything and the figure is rounded with its thousands separated.
+function fmtUsd(usd) {
+  const n = Number(usd);
+  if (!Number.isFinite(n) || n < 0) return "";
+  if (n === 0) return "$0.00";
+  if (n < 0.01) return "<$0.01";
+  if (n >= 1000) return `$${Math.round(n).toLocaleString("en-US")}`;
+  return `$${n.toFixed(2)}`;
+}
+
+// What this session has spent, in tokens and in dollars — the session's own cumulative totals, which is not
+// the same thing as how full its context is. The context bar beside this legitimately falls when the
+// transcript is compacted; these two must not, so they are read from the store's cumulative counters and are
+// never derived from the context figure. The `~` is this readout's own mark for an estimate (the panel's
+// cached prices, or the gateway's own estimate); without it the figure is what was actually billed.
+function usageSegHtml(stats) {
+  const hasIn = Number.isFinite(stats.input_tokens);
+  const hasOut = Number.isFinite(stats.output_tokens);
+  if (!hasIn && !hasOut) return "";
+  const tokens = `\u2211 ${fmtTok(stats.input_tokens || 0)} in / ${fmtTok(stats.output_tokens || 0)} out`;
+  const money = Number.isFinite(stats.cost_usd) ? `${stats.cost_estimated ? "~" : ""}${fmtUsd(stats.cost_usd)}` : "";
+  const why = [
+    `${tokens} is this session's cumulative token total — every call's share added up, not how full the context is now` +
+      (stats.cache_read_tokens ? `, and ${fmtTok(stats.cache_read_tokens)} prompt tokens were read back from the prompt cache besides` : "") +
+      ` — so it keeps rising when the transcript is compressed and is the same figure after a panel restart`,
+    money ? `${money} is what this session has cost: ${stats.cost_note || "priced from the store"}` : stats.cost_note || "",
+    stats.cost_other_usd
+      ? `${fmtUsd(stats.cost_other_usd)} more has gone on this session's own background review, compaction and approvals — recorded by the store separately, and not part of the counts above`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+  return `<span class="stat stat-usage" title="${esc(why)}">${esc(money ? `${tokens} \u00b7 ${money}` : tokens)}</span>`;
+}
+
 function statsLine(stats, model = null, thread = "", contextLimit = null) {
   // The model is a control even when there are no numbers to put beside it: it is the one place a session's model can
   // be changed, and a card whose run left no usage still needs to say (and offer) it.
@@ -2535,10 +2650,13 @@ function statsLine(stats, model = null, thread = "", contextLimit = null) {
   const known = Number.isFinite(stats.context_used) && Number.isFinite(stats.context_max) && stats.context_max > 0;
   // Kept out of `segs`: that list is escaped when it is joined, and this one is markup (a button).
   const ctxSeg = known ? contextSegHtml(stats, thread, contextLimit) : "";
+  // The bar itself is held apart from the rest of `segs` so the session's cumulative counts can sit directly
+  // beside it — the pair reads as "how full the context is now, and how much has gone through it altogether".
+  let bar = "";
   if (known) {
-    if (pct !== null) segs.push(`${contextBar(pct)} ${mark}${Math.round(pct)}%`);
+    if (pct !== null) bar = `${contextBar(pct)} ${mark}${Math.round(pct)}%`;
   } else if (pct !== null) {
-    segs.push(`${mark}${Math.round(pct)}%`);
+    bar = `${mark}${Math.round(pct)}%`;
   }
   if (Number.isFinite(stats.cache_hit_pct)) segs.push(`\u25ce ${stats.cache_hit_pct.toFixed(1)}%`);
   // Latency and throughput are the two figures the store does not record: they are computed over the
@@ -2553,12 +2671,16 @@ function statsLine(stats, model = null, thread = "", contextLimit = null) {
   // the same square meant "an agent lives here" and "this transcript was compacted N times". A double arrow
   // pressed down reads as "condensed" and collides with nothing.
   if (Number.isFinite(stats.compressions)) segs.push(`\u21ca ${stats.compressions}`);
-  if (!segs.length) return "";
+  const usageSeg = usageSegHtml(stats);
+  if (!segs.length && !bar && !usageSeg) return "";
   // The model leads the line: these figures describe what that model did, and the id's owner prefix is
   // dropped for width (the full id stays in the tooltip).
   const modelSeg = model ? modelSegHtml(model, thread) : "";
-  const title = "this session's usage: context occupancy, prompt-cache hit rate, and \u21ca = how many times the transcript was compacted into a summary; latency and t/s are estimated from the turn's wall clock (~)";
-  const body = [modelSeg, ctxSeg, segs.map((s) => `<span class="stat">${esc(s)}</span>`).join('<span class="stat-sep">\u2502</span>')]
+  const title =
+    "this session's usage: context occupancy, prompt-cache hit rate, and \u21ca = how many times the transcript was compacted into a summary; " +
+    "latency and t/s are estimated from the turn's wall clock (~). \u2211 in / out are this session's cumulative token totals — not the current context occupancy — so they keep rising when the transcript is compacted; " +
+    "the dollar figure beside them is what the session has cost, and a ~ in front of it means an estimate (hover it to see which price it came from)";
+  const body = [modelSeg, ctxSeg, bar ? `<span class="stat">${esc(bar)}</span>` : "", usageSeg, segs.map((s) => `<span class="stat">${esc(s)}</span>`).join('<span class="stat-sep">\u2502</span>')]
     .filter(Boolean)
     .join('<span class="stat-sep">\u2502</span>');
   // A span, not a div: the readout belongs on the footer line with the outcome and the token count,
@@ -5018,6 +5140,10 @@ async function clearThread(btn) {
 async function answerRunApproval(approveBtn) {
   const id = approveBtn.dataset.approve;
   const choice = approveBtn.dataset.choice;
+  // The same box, the same four choices, two questions: a run parked on a gateway approval, or a write parked on
+  // the panel's own remote-write permission (lib/remote-writes.js). The button is identical, so the ROUTE is
+  // decided by which record the id belongs to — never by a second kind of button.
+  if (state.rwPending.has(id)) return answerRemoteWrite(id, choice, approveBtn);
   if (approvalAlreadySent(id, choice)) return;
   noteApprovalSent(id, choice);
   const card = approveBtn.closest(".job");
@@ -5123,11 +5249,65 @@ function approvalCard(r) {
   </div>`;
 }
 
+// ---- remote writes: the panel's own permission box, in the same dock --------------------------------
+// A worktree the panel cut is LOCAL ONLY by default (see Settings > Branches on the remote). When something tries
+// to put a branch on a remote anyway — a worker's `git push`, met by the pre-push guard the panel installed, or
+// the panel's own merge flow — the question lands here, and it is the SAME box a parked run gets: same amber
+// chrome, same four choices, same deadline and countdown (permissionBoxHtml). Deny leaves the remote untouched;
+// Allow tells the waiting hook to go ahead.
+state.rwPending = state.rwPending || new Map(); // id -> request still waiting for an answer
+state.rwDecided = state.rwDecided || new Map(); // id -> what was decided, shown as the collapsed line
+state.rwPolicy = state.rwPolicy || "local-only";
+
+function applyRemoteWrites(rw) {
+  state.rwPolicy = (rw && rw.policy) || state.rwPolicy;
+  state.rwPending.clear();
+  for (const r of (rw && rw.pending) || []) if (r && r.id) state.rwPending.set(r.id, r);
+  renderApprovals();
+}
+
+// One parked write. The head names the tree, because a reader answering three of these needs to know WHICH tree is
+// asking; the command line is what will actually run.
+function remoteWriteBoxHtml(r) {
+  const deadline = Number(r.deadline) || 0;
+  const windowMs = (Number(r.timeoutSeconds) || 0) * 1000;
+  const closed = Boolean(deadline) && deadline - Date.now() <= 0;
+  const kind = r.kind === "merge" ? "the panel's own merge flow" : "a push from this worktree";
+  return permissionBoxHtml({
+    id: r.id,
+    requestId: r.id,
+    forAttr: `data-remote-write="${esc(r.id)}" data-rw-tree="${esc(r.worktree || "")}"`,
+    head: `⚠ waiting on you — ${esc(kind)}: ${esc(r.project || "this project")} is local-only`,
+    command: r.command || "",
+    choices: Array.isArray(r.allowed) && r.allowed.length ? r.allowed : ["once", "session", "always", "deny"],
+    deadline,
+    windowMs,
+    closed,
+    closedHead: "⚠ no answer inside the panel's window — this write has been denied",
+    closedNote: `<div class="ta-note mono">the panel stopped waiting and told the writer no; nothing was pushed</div>`,
+    what: "write",
+    titles: {
+      once: "allow this one write — the waiting push is told to go ahead",
+      session: "allow writes from this worktree until the panel restarts",
+      always: "allow remote writes from now on — this WRITES the panel's setting, so the box stops asking",
+      deny: "refuse: nothing is pushed and the remote is left exactly as it is",
+    },
+  });
+}
+
+function remoteWriteDecidedHtml(d) {
+  const denied = String(d.choice || "") === "deny";
+  const verb = denied ? (d.expired ? "not answered — denied" : "denied") : `allowed ${d.choice}`;
+  return `<div class="turn-approval-done mono${denied ? " is-deny" : ""}" title="${esc(d.why || "")}">${denied ? "✕" : "✓"} remote write ${esc(verb)}${d.command ? `: ${esc(String(d.command).slice(0, 140))}` : ""}</div>`;
+}
+
 function renderApprovals() {
   const sec = $("approvals");
   if (!sec) return;
   const list = [...state.approvals.values()].sort((a, b) => (a.deadline || 0) - (b.deadline || 0));
-  sec.hidden = list.length === 0;
+  const writes = [...state.rwPending.values()].sort((a, b) => (a.deadline || 0) - (b.deadline || 0));
+  const decided = [...state.rwDecided.values()].sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 3);
+  sec.hidden = list.length === 0 && writes.length === 0 && decided.length === 0;
   applyApprovalsFold(sec);
   // The card that says "waiting on you →" is part of the same fact: repaint the threads whose answer changed,
   // instead of leaving the chip on a stale card until the next job event happens to arrive.
@@ -5137,13 +5317,17 @@ function renderApprovals() {
     if (document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)) renderConversation(thread);
   }
   approvalThreadsShown = threadsNow;
-  if (!list.length) {
+  const total = list.length + writes.length;
+  if (!total && !decided.length) {
     $("approval-list").innerHTML = "";
     $("approval-chips").innerHTML = "";
     return;
   }
-  $("approval-chips").innerHTML = `<span class="chip bad">${list.length}</span>`;
-  $("approval-list").innerHTML = list.map(approvalCard).join("");
+  $("approval-chips").innerHTML = total ? `<span class="chip bad">${total}</span>` : "";
+  // The panel's own questions lead (they are the ones holding a worker's push), then the CLI-transport approvals,
+  // then the collapsed records of writes already decided.
+  $("approval-list").innerHTML =
+    writes.map(remoteWriteBoxHtml).join("") + list.map(approvalCard).join("") + decided.map(remoteWriteDecidedHtml).join("");
 }
 
 function tickApprovals() {
@@ -5224,6 +5408,43 @@ async function answerApproval(id, choice, btn) {
     if (err) err.textContent = e.message;
     card?.querySelectorAll("button").forEach((b) => (b.disabled = false));
     approvalSent.delete(approvalKey(id, choice));
+  }
+}
+
+// Answer a parked remote write. The waiting side is a shell process on this box (the pre-push guard) or the
+// panel's own merge flow, and both are told through the panel: this POST is the whole answer, and the collapsed
+// line that replaces the box is what the reader has left as the record.
+async function answerRemoteWrite(id, choice, btn) {
+  const box = btn?.closest(".turn-approval");
+  const req = state.rwPending.get(id) || null;
+  btn?.closest(".ta-actions")?.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  try {
+    const res = await apiFetch("/api/remote-write/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, choice, by: "reader" }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) throw new Error(out.error || `HTTP ${res.status}`);
+    state.rwPending.delete(id);
+    state.rwDecided.set(id, {
+      choice: out.choice || choice,
+      why: out.why || "",
+      command: req?.command || "",
+      at: Date.now(),
+    });
+    renderApprovals();
+    showBanner(
+      choice === "deny"
+        ? "remote write denied — nothing was pushed"
+        : choice === "always"
+          ? "remote writes are now allowed — the setting is saved (Settings > Branches on the remote)"
+          : `remote write allowed ${choice}${req?.branch ? ` (${req.branch})` : ""} — the waiting push is going ahead`,
+    );
+  } catch (e) {
+    btn?.closest(".ta-actions")?.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    box?.classList.add("is-error");
+    showBanner(`could not answer that permission request: ${e.message}`);
   }
 }
 
@@ -6562,6 +6783,10 @@ function formValues() {
     // true = run in that directory as-is (an existing worktree), no new worktree created. The checkbox says
     // the opposite ("create workspace"), so this is where the two meet.
     existing: !$("job-create").checked,
+    // Does this worktree exist to LAND? Unchecked (the default) is LOCAL ONLY: the brief says so, and the panel's
+    // pre-push guard refuses a push and asks the reader instead. Ticked, the brief names the landing step and the
+    // tree's guard allows the push — the reader's own opt-in, in the reader's own words.
+    landing: $("job-landing")?.checked ? true : undefined,
     project: $("job-project").value || undefined,
     model: $("job-model").value.trim() || undefined,
     budget: Number($("job-budget").value) || undefined,
@@ -7503,6 +7728,29 @@ function prMatchNote(pr) {
   return "";
 }
 
+// ---- the branch cell: a link only when the remote actually has that branch ----------------------------
+// The URL is built by the SERVER (`row.branchUrl`, from the project's own remote through `githubRepo()` in
+// lib/projects.js) and from git's own answer to "does the remote have this branch" — so it is null unless a page
+// is certain to exist, and this renders a link or plain text, never a guess. The cell's `mono branch` class and
+// its column sizing are untouched, and the row's own click handler already steps aside for an `<a>` (it treats
+// `a` like a button), so the link opens the remote page and nothing else.
+//
+// A branch with no copy on the remote says why in its title AND carries one dim word. That word is the answer to
+// the question the chart was asked to answer at a glance — which trees exist on the remote and which are local
+// only — and it appears only for a project that HAS a remote: in a project without one every branch is local, and
+// the title says that instead of marking each row.
+function branchCellHtml(row) {
+  const name = esc(row.branch || "—");
+  if (row.branchUrl) {
+    const how = row.branchLinkFrom === "local-refs" ? " (found in refs/remotes from the last fetch — the remote itself was not asked)" : "";
+    return `<a class="branch-link" href="${esc(row.branchUrl)}" target="_blank" rel="noopener" title="${esc(`open ${row.branch} on the remote${how}`)}">${name}</a>`;
+  }
+  const project = state.projects.get(row.project) || null;
+  const why = row.branchWhy || (row.remoteBranch === "n/a" ? "no remote configured" : "local only — this branch has no copy on the remote");
+  const localOnly = Boolean(row.branch && project?.remote && row.remoteBranch !== "n/a");
+  return `<span class="branch-plain" title="${esc(why)}">${name}</span>${localOnly ? ` <span class="branch-local" title="${esc(why)}">local</span>` : ""}`;
+}
+
 function rowHtml(row) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   const dirty =
@@ -7542,7 +7790,7 @@ function rowHtml(row) {
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     <td class="name"><div class="name-line"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
       title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${nameFromWorkBtn}${agentBadgeHtml(row)}</div></td>
-    <td class="mono branch">${esc(row.branch || "—")}</td>
+    <td class="mono branch">${branchCellHtml(row)}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
     <td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>
@@ -7832,15 +8080,400 @@ function pulseProject(project) {
   sec._flashT = setTimeout(() => sec.classList.remove("flash"), flashProjectMs() + 40);
 }
 
+// ---- the sliding average every liveness ranking is built on -----------------------------------
+// A row's "life" used to be the moment of its LAST event, which is a maximum: one console line promoted the row to
+// the top and the next line demoted it. The same shape drove the projects in a folder (newest activity wins) and
+// the agent cards inside a worktree (newest turn first). All of them now average over a sliding window instead -
+// the events in the last RANK_WINDOW seconds, as a rate per minute - so something being hammered sits high, a
+// single line moves nothing, and a thing that goes quiet slides down as its events age out.
+//
+// ONE engine serves all of them. `pushEventLife(windowKey, at)` records an event against a namespaced key
+// ("row:...", "proj:...", "agent:..."), `rankScore` turns that window into events per minute, and
+// `tickRankedOrder` advances one scope's order by ONE adjacent swap per reorder tick, with hysteresis. It is
+// bounded: every ring is capped at RANK_EVENT_CAP and pruned by the window, so a long session cannot grow it.
+
+function lifeRowKey(rowKey) {
+  return `row:${rowKey}`;
+}
+function lifeProjKey(project) {
+  return `proj:${project}`;
+}
+function lifeAgentKey(thread) {
+  return `agent:${thread}`;
+}
+
+function rankWindowMs() {
+  const n = Number(state.rankWindowSeconds);
+  return (Number.isFinite(n) && n > 0 ? n : RANK_WINDOW_DEFAULT) * 1000;
+}
+
+// One liveness event against a window key. Events arrive in time order, so the ring stays sorted and the prune is
+// a splice off the front (amortised O(1) per event); the cap bounds it even under a flood.
+function pushEventLife(windowKey, at) {
+  if (!windowKey) return;
+  const t = Number(at);
+  if (!Number.isFinite(t)) return;
+  let arr = state.eventWindows.get(windowKey);
+  if (!arr) {
+    arr = [];
+    state.eventWindows.set(windowKey, arr);
+  }
+  arr.push(t);
+  const cutoff = t - rankWindowMs();
+  let i = 0;
+  while (i < arr.length && arr[i] <= cutoff) i++;
+  if (i) arr.splice(0, i);
+  if (arr.length > RANK_EVENT_CAP) arr.splice(0, arr.length - RANK_EVENT_CAP);
+}
+
+// How many of the window's events are still inside it. The ring is sorted, so this is a scan of at most
+// RANK_EVENT_CAP entries - read-only, so it is safe to call from a comparator.
+function rankWindowCount(windowKey, now) {
+  const arr = state.eventWindows.get(windowKey);
+  if (!arr || !arr.length) return 0;
+  const cutoff = now - rankWindowMs();
+  let i = 0;
+  while (i < arr.length && arr[i] <= cutoff) i++;
+  return arr.length - i;
+}
+
+// The smoothed score: events per minute across the window. One console line in the default 300 s window is
+// 0.2/min; a burst of twenty in ten seconds is 4/min.
+function rankScore(windowKey, now) {
+  return rankWindowCount(windowKey, now) / (rankWindowMs() / 60000);
+}
+
+// Drop everything that has aged out of the window, and the windows and orders of things that are gone, so a long
+// session does not grow with time or with the fleet.
+function pruneRankWindows(now) {
+  const cutoff = now - rankWindowMs();
+  const liveProjects = new Set();
+  for (const r of state.rows.values()) liveProjects.add(r.project);
+  for (const [key, arr] of [...state.eventWindows]) {
+    let i = 0;
+    while (i < arr.length && arr[i] <= cutoff) i++;
+    if (i) arr.splice(0, i);
+    if (!arr.length) state.eventWindows.delete(key);
+  }
+  for (const key of [...state.rankSeeded]) if (!state.rows.has(key)) state.rankSeeded.delete(key);
+  for (const name of [...state.rankProjSeeded]) if (!state.projects.has(name)) state.rankProjSeeded.delete(name);
+  for (const scope of [...state.rankOrder.keys()]) {
+    const gone = scope.startsWith("rows:")
+      ? !liveProjects.has(scope.slice(5))
+      : scope.startsWith("agents:")
+        ? !state.rows.has(scope.slice(7))
+        : scope === "projects"
+          ? !state.projects.size
+          : scope === "folders"
+            ? !$("projects")
+            : true;
+    if (gone) state.rankOrder.delete(scope);
+  }
+}
+
+// ---- one ranked sequence, advanced a tick at a time ---------------------------------------------
+// `ids` are a scope's members (row keys, project names, thread names). `ctx` answers, per id: its `tier` (a
+// primary key that applies at once), its `score` (the smoothed rate over its own window), its `recency` evidence
+// and a `path` for the final tie-break. The stored order lives in state.rankOrder under `scope`.
+
+function rankIdealOrder(ids, ctx) {
+  return [...ids].sort(
+    (x, y) =>
+      ctx.tier(x) - ctx.tier(y) ||
+      ctx.score(y) - ctx.score(x) ||
+      ctx.recency(y) - ctx.recency(x) ||
+      String(ctx.path(x)).localeCompare(String(ctx.path(y))),
+  );
+}
+
+function tickRankedOrder(scope, ids, ctx) {
+  const set = new Set(ids);
+  if (!set.size) {
+    state.rankOrder.delete(scope);
+    return [];
+  }
+  const prev = (state.rankOrder.get(scope) || []).filter((k) => set.has(k));
+  if (!prev.length) {
+    const order = rankIdealOrder([...set], ctx);
+    state.rankOrder.set(scope, order);
+    return order;
+  }
+  const order = prev.slice();
+  // A member that has just appeared gets a slot at the end; the pass below lets it climb as it proves itself.
+  for (const id of set) if (!order.includes(id)) order.push(id);
+  const beats = (down, up) => {
+    const td = ctx.tier(down);
+    const tu = ctx.tier(up);
+    if (td !== tu) return td < tu;
+    const sd = ctx.score(down);
+    const su = ctx.score(up);
+    if (sd > su + RANK_MARGIN_PER_MIN) return true;
+    if (su > sd + RANK_MARGIN_PER_MIN) return false;
+    // Within the margin of each other: the existing recency evidence decides, then the path.
+    const rd = ctx.recency(down);
+    const ru = ctx.recency(up);
+    if (rd !== ru) return rd > ru;
+    return String(ctx.path(down)).localeCompare(String(ctx.path(up))) < 0;
+  };
+  // ONE pass of adjacent swaps in which each member moves at most one slot, so a burst climbs a place a tick and a
+  // burst that stops slides a place a tick, instead of either leaping.
+  const moved = new Set();
+  for (let i = 0; i < order.length - 1; i++) {
+    const up = order[i];
+    const down = order[i + 1];
+    if (moved.has(up) || moved.has(down)) continue;
+    if (beats(down, up)) {
+      order[i] = down;
+      order[i + 1] = up;
+      moved.add(up);
+      moved.add(down);
+    }
+  }
+  state.rankOrder.set(scope, order);
+  return order;
+}
+
+// The ids in the stored order, with tiers still applied at once (a running agent must not wait for a tick) and
+// anything the tick has not seen yet falling to the ideal comparison. With no tick yet - a first paint - the
+// seeded ideal order IS the order, which is what makes a reload come back smoothed rather than scrambled.
+function orderedByRank(scope, ids, ctx) {
+  if (ids.length < 2) return ids;
+  if (!state.rankOrder.has(scope)) tickRankedOrder(scope, ids, ctx);
+  const order = state.rankOrder.get(scope) || [];
+  const pos = new Map(order.map((k, i) => [k, i]));
+  return [...ids].sort((a, b) => {
+    const ta = ctx.tier(a);
+    const tb = ctx.tier(b);
+    if (ta !== tb) return ta - tb;
+    const pa = pos.has(a) ? pos.get(a) : order.length;
+    const pb = pos.has(b) ? pos.get(b) : order.length;
+    if (pa !== pb) return pa - pb;
+    return ctx.score(b) - ctx.score(a) || ctx.recency(b) - ctx.recency(a) || String(ctx.path(a)).localeCompare(String(ctx.path(b)));
+  });
+}
+
+// ---- the contexts: what each scope ranks on ------------------------------------------------------
+// Rows inside a project: our own running agents first (rowTier, untouched), then the row's own window, then the
+// existing recency evidence (lastAliveAt, which an event does NOT move), then the path.
+function rowRankCtx(now) {
+  const rowOf = (key) => state.rows.get(key);
+  return {
+    tier: (key) => { const r = rowOf(key); return r ? rowTier(r) : 2; },
+    score: (key) => rankScore(lifeRowKey(key), now),
+    recency: (key) => { const r = rowOf(key); return r ? lifeAt(r) : Number.NEGATIVE_INFINITY; },
+    path: (key) => { const r = rowOf(key); return r ? r.path : key; },
+  };
+}
+
+// Projects in a folder: the existing tier (a project an agent is busy in leads), then the project's own window,
+// then its newest activity, then the name.
+function projectRankCtx(rank, now) {
+  const at = (name) => rank.get(name) || { tier: 2, activity: 0 };
+  return {
+    tier: (name) => at(name).tier,
+    score: (name) => rankScore(lifeProjKey(name), now),
+    recency: (name) => at(name).activity,
+    path: (name) => String(name),
+  };
+}
+
+// A folder ranks on its busiest project: the best tier, the best rate, the newest activity.
+function folderRankCtx(byRoot, rank, now) {
+  const cache = new Map();
+  const info = (root) => {
+    if (cache.has(root)) return cache.get(root);
+    let tier = 2;
+    let score = 0;
+    let recency = 0;
+    for (const name of byRoot.get(root) || []) {
+      const r = rank.get(name) || { tier: 2, activity: 0 };
+      tier = Math.min(tier, r.tier);
+      recency = Math.max(recency, r.activity);
+      score = Math.max(score, rankScore(lifeProjKey(name), now));
+    }
+    const v = { tier, score, recency };
+    cache.set(root, v);
+    return v;
+  };
+  return {
+    tier: (root) => info(root).tier,
+    score: (root) => info(root).score,
+    recency: (root) => info(root).recency,
+    path: (root) => String(root),
+  };
+}
+
+// Agent cards inside one worktree: no tier (a card is not a worktree), the thread's own window, then its newest
+// turn start, then the thread id so the order is total.
+function agentRankCtx(row, now) {
+  const byThread = new Map(agentsFor(row).map((c) => [c.thread, c]));
+  const started = (t) => {
+    const c = byThread.get(t);
+    return c ? Number(Date.parse(c.latest?.startedAt || "")) || 0 : 0;
+  };
+  return {
+    tier: () => 0,
+    score: (t) => rankScore(lifeAgentKey(t), now),
+    recency: (t) => started(t),
+    path: (t) => String(t),
+  };
+}
+
+// ---- seeding: the first paint is the smoothed order, not a fresh-start scramble -------------------
+// Seed one row's windows from the life it ALREADY carries - its own lastAliveAt / lastEdit / lastCommit and the
+// start or end of any of its jobs' turns - into the row's window, its project's window, and each job's own agent
+// window. Seeded once per row key.
+function seedRankWindows(row) {
+  if (!row) return;
+  const key = keyOf(row.project, row.path);
+  if (state.rankSeeded.has(key)) return;
+  state.rankSeeded.add(key);
+  const now = Date.now();
+  const cutoff = now - rankWindowMs();
+  const stamps = [];
+  const perAgent = new Map();
+  const add = (v) => {
+    const t = Date.parse(v || "");
+    if (Number.isFinite(t) && t > cutoff && t <= now) stamps.push(t);
+  };
+  add(row.lastAliveAt);
+  add(row.lastEdit);
+  add(row.lastCommit);
+  const path = normPath(row.path).toLowerCase();
+  for (const j of state.jobs.values()) {
+    if (normPath(j.ownerPath || "").toLowerCase() !== path) continue;
+    add(j.startedAt);
+    add(j.endedAt);
+    const thread = j.thread || j.id;
+    if (!thread) continue;
+    const arr = perAgent.get(thread) || [];
+    for (const v of [j.startedAt, j.endedAt]) {
+      const t = Date.parse(v || "");
+      if (Number.isFinite(t) && t > cutoff && t <= now) arr.push(t);
+    }
+    if (arr.length) perAgent.set(thread, arr);
+  }
+  stamps.sort((a, b) => a - b);
+  for (const t of stamps) {
+    pushEventLife(lifeRowKey(key), t);
+    pushEventLife(lifeProjKey(row.project), t);
+  }
+  for (const [thread, arr] of perAgent) {
+    arr.sort((a, b) => a - b);
+    for (const t of arr) pushEventLife(lifeAgentKey(thread), t);
+  }
+}
+
+// A project's own activity is life for its window too, once.
+function seedProjectRank(project) {
+  if (!project || !project.name || state.rankProjSeeded.has(project.name)) return;
+  state.rankProjSeeded.add(project.name);
+  const t = Date.parse(project.activityAt || "");
+  const now = Date.now();
+  if (Number.isFinite(t) && t > now - rankWindowMs() && t <= now) pushEventLife(lifeProjKey(project.name), t);
+}
+
+// ---- the ticks: the order moves here and nowhere else --------------------------------------------
+function tickRowScope(project, now = Date.now()) {
+  const ids = [...state.rows.values()].filter((r) => r.project === project).map((r) => keyOf(r.project, r.path));
+  return tickRankedOrder(`rows:${project}`, ids, rowRankCtx(now));
+}
+
+function tickAgentScopes(project, now = Date.now()) {
+  for (const row of state.rows.values()) {
+    if (row.project !== project) continue;
+    const key = keyOf(row.project, row.path);
+    const threads = agentsFor(row).map((c) => c.thread);
+    // A row with no cards right now keeps whatever order it had: the card list is empty for a moment (a repaint, a
+    // resync) far more often than it is really gone, and forgetting the order would make every card climb again
+    // from the bottom. The scope dies with its row, in pruneRankWindows.
+    if (!threads.length) continue;
+    tickRankedOrder(`agents:${key}`, threads, agentRankCtx(row, now));
+  }
+}
+
+function tickProjectScopes(now = Date.now()) {
+  const host = $("projects");
+  if (!host) return;
+  const ids = [...state.projects.keys()];
+  const rank = projectRanks();
+  tickRankedOrder("projects", ids, projectRankCtx(rank, now));
+  const byRoot = new Map();
+  for (const name of ids) {
+    const root = rootOf(state.projects.get(name)) || "";
+    const arr = byRoot.get(root) || [];
+    arr.push(name);
+    byRoot.set(root, arr);
+  }
+  const roots = [...host.querySelectorAll("section.root-group")].map((g) => g.dataset.root).filter(Boolean);
+  if (roots.length) tickRankedOrder("folders", roots, folderRankCtx(byRoot, rank, now));
+}
+
+// The whole board, on the reorder clock: prune, advance every liveness scope one tick, and re-apply the orders.
+// Nothing here runs per event, so a line arriving cannot shuffle anything.
+function tickLivenessRanks(now = Date.now()) {
+  pruneRankWindows(now);
+  const projects = new Set([...state.rows.values()].map((r) => r.project));
+  for (const name of projects) {
+    tickRowScope(name, now);
+    tickAgentScopes(name, now);
+    reorder(name);
+    reorderAgentCards(name);
+  }
+  tickProjectScopes(now);
+  reorderProjects();
+}
+
+// The ranked order for the rows a caller is about to draw or move. Age-hidden rows are ranked too, so a row that
+// comes back takes its slot rather than appearing at the bottom.
+function applyRowRank(rows) {
+  if (!rows.length) return rows;
+  const project = rows[0].project;
+  const byKey = new Map(rows.map((r) => [keyOf(r.project, r.path), r]));
+  const all = [...state.rows.values()].filter((r) => r.project === project).map((r) => keyOf(r.project, r.path));
+  const order = orderedByRank(`rows:${project}`, all, rowRankCtx(Date.now()));
+  return order.map((k) => byKey.get(k)).filter(Boolean);
+}
+
+// Re-apply the agent-card order inside one project's open rows, in place, so a tick moves the cards without
+// rebuilding a transcript. Stabilize reordering (with a card open) wins, exactly as it does for rows.
+function reorderAgentCards(project) {
+  for (const [key, dEl] of state.detailEls) {
+    const row = state.rows.get(key);
+    if (!row || row.project !== project) continue;
+    const block = dEl.querySelector(".agents-block");
+    if (!block) continue;
+    const cards = [...block.children].filter((el) => el.classList.contains("job") && el.dataset.thread);
+    if (cards.length < 2) continue;
+    if (stabilizeOn() && rowHasOpenCard(cards.map((c) => c.dataset.thread))) continue;
+    const order = orderedByRank(`agents:${key}`, cards.map((c) => c.dataset.thread), agentRankCtx(row, Date.now()));
+    const pos = new Map(order.map((t, i) => [t, i]));
+    const sorted = [...cards].sort((a, b) => (pos.get(a.dataset.thread) ?? order.length) - (pos.get(b.dataset.thread) ?? order.length));
+    if (sorted.every((el, i) => el === cards[i])) continue;
+    const anchor = [...block.children].find((el) => !(el.classList.contains("job") && el.dataset.thread)) || null;
+    beginDomMove();
+    for (const el of sorted) block.insertBefore(el, anchor);
+    endDomMove();
+  }
+}
+
 // An event about a worktree is a sign of life in its own right: the age number starts again, the ring (which counts
 // toward the next read) restarts from now, and the row and its project take the green pulse - unless the reader has
 // switched that pulse off. Returns true when the event belonged to a row, so a caller can tell the difference.
 function noteEventLife(thread) {
+  const now = Date.now();
+  // Every event is life for THREE windows: the agent card itself, the worktree row that owns it, and that row's
+  // project. An unattached agent still has its own card, so it still ranks - it just has no row to light up.
+  pushEventLife(lifeAgentKey(thread), now);
   const key = rowKeyForThread(thread);
   if (!key) return false;
-  const now = Date.now();
   if (now > (state.eventLife.get(key) || 0)) state.eventLife.set(key, now);
   const row = state.rows.get(key);
+  // ...and the row's and project's windows, which is what those two RANKINGS average. The orders themselves are
+  // recomputed on the reorder clock (tickLivenessRanks), never here: an event still stamps life, pulses the row
+  // and repaints the age cell exactly as it did before.
+  pushEventLife(lifeRowKey(key), now);
+  if (row && row.project) pushEventLife(lifeProjKey(row.project), now);
   const cell = document.querySelector(`td.age[data-key="${CSS.escape(key)}"]`);
   if (cell && row) paintAgeCell(cell, row);
   if (state.eventFlash) {
@@ -7948,14 +8581,19 @@ function saveAnchorFlag(key, on) {
   }
 }
 
-function loadAnchorSeconds(key, fallback, min = 1, legacyKey = null) {
+function loadAnchorSeconds(key, fallback, min = 1, legacyKey = null, max = 600) {
   try {
     const raw = localStorage.getItem(key) ?? (legacyKey ? localStorage.getItem(legacyKey) : null);
     const n = Number(raw);
-    return Number.isFinite(n) && raw !== null && n >= min && n <= 600 ? Math.round(n) : fallback;
+    return Number.isFinite(n) && raw !== null && n >= min && n <= max ? Math.round(n) : fallback;
   } catch {
     return fallback;
   }
+}
+
+// The row-ranking window. Saved in this browser like the other Display numbers, and read while `state` is built.
+function loadRankSeconds() {
+  return loadAnchorSeconds(RANK_WINDOW_KEY, RANK_WINDOW_DEFAULT, RANK_WINDOW_MIN, null, RANK_WINDOW_MAX);
 }
 
 function saveAnchorSeconds(key, seconds) {
@@ -8622,6 +9260,8 @@ function detailHtml(row) {
         ? "branch never moved — it has no commits of its own"
         : null,
     `remote branch: ${esc(row.remoteBranch || "?")}`,
+    // Why the branch cell is plain text rather than a link (or the page it links to), in the reader's own words.
+    row.branchUrl ? `remote page: ${esc(row.branchUrl)}` : row.branchWhy ? `branch link: ${esc(row.branchWhy)}` : null,
     row.lastCommit ? `last commit ${relTime(row.lastCommit)} ago` : null,
     row.error ? `error: ${esc(row.error)}` : null,
   ].filter(Boolean);
@@ -8906,12 +9546,9 @@ function pinOpenProjects(body, prevNames) {
 
 function sortedProjects() {
   const rank = projectRanks();
-  const at = (p) => rank.get(p.name) || { tier: 2, activity: 0 };
-  return [...state.projects.values()].sort((a, b) => {
-    const ra = at(a);
-    const rb = at(b);
-    return ra.tier - rb.tier || rb.activity - ra.activity || String(a.name).localeCompare(String(b.name));
-  });
+  const ctx = projectRankCtx(rank, Date.now());
+  const byName = new Map([...state.projects.values()].map((p) => [p.name, p]));
+  return orderedByRank("projects", [...byName.keys()], ctx).map((n) => byName.get(n)).filter(Boolean);
 }
 
 // Re-order the board live, one folder at a time. Only the projects the reader has OPEN hold their
@@ -8940,21 +9577,22 @@ function reorderProjects() {
   const typing = captureTyping(host);
   beginDomMove();
   const rank = projectRanks();
-  const at = (n) => rank.get(n) || { tier: 2, activity: 0 };
-  const cmp = (x, y) => {
-    const a = at(x.dataset.project);
-    const b = at(y.dataset.project);
-    return a.tier - b.tier || b.activity - a.activity || String(x.dataset.project).localeCompare(String(y.dataset.project));
-  };
+  const ctx = projectRankCtx(rank, Date.now());
   // An open project keeps its exact slot — opening one is you saying "this is the one I am reading",
   // so it must not slide out from under the cursor. Everything closed sorts into the gaps around it:
-  // one open project is no reason to hold the rest of the folder still.
+  // one open project is no reason to hold the rest of the folder still. The order itself is the stored
+  // smoothed one, so a project climbs or slides a place a tick rather than jumping on its newest line.
   const order = (els) => {
     const open = new Map();
     els.forEach((el, i) => {
       if (state.expandedProjects.has(el.dataset.project)) open.set(i, el);
     });
-    const free = els.filter((el) => !state.expandedProjects.has(el.dataset.project)).sort(cmp);
+    const byName = new Map(els.map((el) => [el.dataset.project, el]));
+    const ranked = orderedByRank("projects", els.map((el) => el.dataset.project), ctx);
+    const free = ranked
+      .filter((n) => !state.expandedProjects.has(n))
+      .map((n) => byName.get(n))
+      .filter(Boolean);
     const out = [];
     let f = 0;
     els.forEach((_, i) => out.push(open.has(i) ? open.get(i) : free[f++]));
@@ -8971,24 +9609,21 @@ function reorderProjects() {
   // Then the folders themselves, on the same ranking: a folder holding the project an agent is busy
   // in leads, then the one worked in most recently.
   const groups = [...host.querySelectorAll("section.root-group")];
-  const folderRank = (g) => {
-    let tier = 2;
-    let act = 0;
-    for (const s of g.querySelectorAll("section.project")) {
-      const r = at(s.dataset.project);
-      tier = Math.min(tier, r.tier);
-      act = Math.max(act, r.activity);
-    }
-    return { tier, act };
-  };
+  // A folder's rate is its busiest project's, and it is ranked the same smoothed way, on the same clock.
+  const byRoot = new Map();
+  for (const name of state.projects.keys()) {
+    const root = rootOf(state.projects.get(name)) || "";
+    const arr = byRoot.get(root) || [];
+    arr.push(name);
+    byRoot.set(root, arr);
+  }
+  const groupByRoot = new Map(groups.map((g) => [g.dataset.root || "", g]));
+  const ranked = orderedByRank("folders", groups.map((g) => g.dataset.root || ""), folderRankCtx(byRoot, rank, Date.now()))
+    .map((r) => groupByRoot.get(r))
+    .filter(Boolean);
   // A folder you are reading a project in holds its slot for the same reason the project does: the
   // folder sliding up takes the open section with it, which looks exactly like the section itself jumping.
   const holdsOpen = (g) => [...g.querySelectorAll("section.project")].some((s) => state.expandedProjects.has(s.dataset.project));
-  const ranked = groups.slice().sort((a, b) => {
-    const ra = folderRank(a);
-    const rb = folderRank(b);
-    return ra.tier - rb.tier || rb.act - ra.act || String(a.dataset.root || "").localeCompare(String(b.dataset.root || ""));
-  });
   const pinnedGroups = new Map();
   groups.forEach((g, i) => { if (holdsOpen(g)) pinnedGroups.set(i, g); });
   const freeGroups = ranked.filter((g) => !pinnedGroups.has(groups.indexOf(g)));
@@ -9429,15 +10064,22 @@ function rowHasOpenCard(threads) {
   return threads.some((t) => !state.collapsedJobs.has(t));
 }
 
-// The order the cards in one row were last painted in, with anything new appended. A frozen list keeps this; a list
-// that is free to sort ignores it.
+// The order the cards in one row show in. With Stabilize reordering on and a card open they keep the slots they
+// already have on screen; otherwise they are ranked by the same sliding average as everything else - the thread's
+// own liveness over the window, so a chatty agent sits at the top of its row, a card with one line stays put, and
+// one that goes quiet slides down. A frozen list keeps its remembered order.
 function orderedAgents(row, agents) {
   const key = keyOf(row.project, row.path);
-  if (!stabilizeOn() || !rowHasOpenCard(agents.map((c) => c.thread))) return agents;
-  const last = state.agentOrder.get(key);
-  if (!last || !last.length) return agents;
-  const pos = new Map(last.map((t, i) => [t, i]));
-  return [...agents].sort((a, b) => (pos.get(a.thread) ?? last.length) - (pos.get(b.thread) ?? last.length));
+  if (!agents.length) return agents;
+  if (stabilizeOn() && rowHasOpenCard(agents.map((c) => c.thread))) {
+    const last = state.agentOrder.get(key);
+    if (!last || !last.length) return agents;
+    const pos = new Map(last.map((t, i) => [t, i]));
+    return [...agents].sort((a, b) => (pos.get(a.thread) ?? last.length) - (pos.get(b.thread) ?? last.length));
+  }
+  const byThread = new Map(agents.map((c) => [c.thread, c]));
+  const order = orderedByRank(`agents:${key}`, [...byThread.keys()], agentRankCtx(row, Date.now()));
+  return order.map((t) => byThread.get(t)).filter(Boolean);
 }
 
 // Remember what was just painted, so the next frozen paint has an order to keep.
@@ -9466,7 +10108,7 @@ function reorder(name) {
   const mine = [...state.rows.values()].filter((r) => r.project === name);
   // The order if nothing were pinned: our running agents first, then everything by how recently it
   // showed life. This is what "latest movement at the top" means once all the accordions are closed.
-  const ranked = orderRows([...mine]).map((r) => keyOf(name, r.path));
+  const ranked = applyRowRank([...mine]).map((r) => keyOf(name, r.path));
   // An open row keeps its exact slot — opening it is you saying "I am reading this". Everything closed
   // sorts into the gaps around it, exactly how closed projects sort around an open one in a folder.
   const slotKeys = [...tbody.children].filter((el) => el.classList.contains("row")).map((el) => el.dataset.key);
@@ -9599,6 +10241,7 @@ function placeRow(project, row, { flash = false } = {}) {
   const isNew = !state.rows.has(key);
   noteScan(row);
   state.rows.set(key, row);
+  if (isNew) seedRankWindows(row);
   // A worktree that has just appeared can adopt the agents that were waiting in the unattached panel:
   // their owner path now resolves to a row. (A `-w` spawn is owned seconds before its row exists.)
   if (isNew) {
@@ -9778,7 +10421,7 @@ function renderProjectRows(name, { typing = null } = {}) {
   // Rows older than the age threshold are not built at all: the chart draws what it is showing, and the arrow in the
   // legend below it is what brings the rest back (see rowAgeHidden). The ranking above still sees them, so a row that
   // comes back to life takes its place in the order the moment it is drawn again.
-  const rowsInOrder = orderRows([...state.rows.values()].filter((r) => r.project === name && !rowAgeHidden(r)));
+  const rowsInOrder = applyRowRank([...state.rows.values()].filter((r) => r.project === name && !rowAgeHidden(r)));
   if (stabilizeOn() && projectHasOpenRow(name) && prevRowKeys.length) {
     const pos = new Map(prevRowKeys.map((k, i) => [k, i]));
     rowsInOrder.sort(
@@ -10012,6 +10655,9 @@ function applySnapshot(data) {
     for (const r of data.approvals) if (r && r.id) state.approvals.set(r.id, r);
     renderApprovals();
   }
+  // The panel's own permission requests travel with the snapshot like the CLI-transport approvals: a reload comes
+  // back to the same open question (a push still parked on an answer) rather than losing it.
+  if (data.remoteWrites) applyRemoteWrites(data.remoteWrites);
   // The assistant's scratchpad, alerts and thread id travel with the snapshot (assistant.js owns the panel).
   if (data.assistant && typeof applyAssistant === "function") applyAssistant(data.assistant);
   // A snapshot refreshes what it carries; it does not retract rows. Only an explicit "drop"
@@ -10028,6 +10674,8 @@ function applySnapshot(data) {
   for (const p of incomingProjects) {
     seen.add(p.name);
     state.projects.set(p.name, p);
+    // A project's own activityAt seeds its window once, so the folder order is smoothed from the first paint.
+    seedProjectRank(p);
     const wts = Array.isArray(p.worktrees) ? p.worktrees : [];
     if (!wts.length) continue;
     for (const [k, r] of [...state.rows]) if (r.project === p.name) state.rows.delete(k);
@@ -10035,6 +10683,8 @@ function applySnapshot(data) {
       const row = { ...w, project: p.name };
       state.rows.set(keyOf(p.name, w.path), row);
       noteScan(row);
+      // Seed the ranking windows from the life the row already carries, so the first paint is smoothed.
+      seedRankWindows(row);
     }
   }
   // A snapshot is authoritative about WHICH projects exist: the server drops a project when it
@@ -11875,7 +12525,10 @@ function startReorderClock() {
   state.reorderTimer = every > 0
     ? setInterval(() => {
         if (document.hidden) return;
-        reorderProjects();
+        // Every liveness ranking - rows, their projects, their folders and the agent cards - advances on this
+        // same clock, never on an event: each order is recomputed a tick at a time, and this is the only place
+        // any of them moves.
+        tickLivenessRanks();
       }, every * 1000)
     : null;
 }
@@ -12283,6 +12936,9 @@ function toggleSettings(open = null) {
   void loadSessionSetting();
   void loadProviderSetting();
   void loadModelsSetting();
+  // The remote-write setting is the panel's own (config.json), but which trees carry the push guard is a file on
+  // disk that another instance or a hand edit can change, so it is re-read every time the panel opens.
+  void refreshRemoteGuards();
 }
 
 // ---- the provider endpoint every run talks to ------------------------------------------------
@@ -12616,6 +13272,35 @@ function saveReorderSetting(value) {
   paintReorderSetting(clamped === Math.round(n) ? "saved" : `saved, clamped to ${REORDER_MAX} s`);
 }
 
+// ---- how far back the row ranking averages ------------------------------------------------
+function paintRankWindow() {
+  const input = $("rank-window");
+  if (input && document.activeElement !== input) input.value = String(state.rankWindowSeconds);
+}
+
+function saveRankWindow(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) {
+    paintRankWindow();
+    showBanner(`Rank window left at ${state.rankWindowSeconds} s — give a number of seconds`);
+    return;
+  }
+  // The window is shared by every liveness ranking: it is one answer to one question, how far back the board
+  // looks when it decides what is busiest.
+  const clamped = Math.max(RANK_WINDOW_MIN, Math.min(RANK_WINDOW_MAX, Math.round(n)));
+  try {
+    localStorage.setItem(RANK_WINDOW_KEY, String(clamped));
+  } catch {
+    /* private mode: the choice just will not persist */
+  }
+  state.rankWindowSeconds = clamped;
+  // An explicit change re-reads the evidence at once rather than easing over ticks: the reader asked for it.
+  state.rankOrder.clear();
+  tickLivenessRanks();
+  paintRankWindow();
+  showNote(`Rank window ${clamped} s — every liveness ranking (rows, projects, folders, agent cards) now averages over the last ${clamped} s`);
+}
+
 // ---- how many sessions the CLI's picker lists ------------------------------------------------
 // Not a panel preference and not a retention policy: the store keeps every session, and this is the
 // number the CLI's in-chat browser used to hardcode. It writes `sessions.list_limit`, which only the
@@ -12898,6 +13583,123 @@ document.addEventListener("click", (e) => {
   toggleShowOld(btn.dataset.ageToggle);
 });
 
+// ---- may a branch exist on a REMOTE at all? ------------------------------------------------------
+// The reader's own words: "all branches local only unless permission was specifically granted in a permission box
+// like other permissions". It lives in this panel's config.json (`remoteBranchPolicy`), so it applies to every
+// browser and survives a restart; changing it writes the installed guards' own copy of it as well, and THAT is
+// what stands between a worker's `git push` and the remote.
+const REMOTE_POLICY_SENTENCE = {
+  "local-only": "branches stay local unless you allow a write in the permission box",
+  allow: "remote writes go through without asking — the box is not offered",
+  deny: "remote writes are refused outright — the box is not even offered",
+};
+
+function remotePolicyStored() {
+  const p = String(state.settings?.remoteBranchPolicy || "local-only");
+  return REMOTE_POLICY_SENTENCE[p] ? p : "local-only";
+}
+
+function paintRemotePolicy(note = "", bad = false) {
+  const stored = remotePolicyStored();
+  const sel = $("remote-policy");
+  // A rejected save leaves what was picked in the box: snapping back reads as "it saved that", when the save is
+  // exactly what failed.
+  if (sel && !bad) sel.value = stored;
+  const preview = $("remote-policy-preview");
+  if (!preview) return;
+  const g = state.remoteGuards;
+  const last = g?.latest?.[0];
+  const bits = [
+    `config.json remoteBranchPolicy: ${stored} — ${REMOTE_POLICY_SENTENCE[stored]}`,
+    !g
+      ? "push guard: reading…"
+      : g.count
+        ? `push guard in ${g.count} worktree${g.count === 1 ? "" : "s"} across ${g.projects} project${g.projects === 1 ? "" : "s"}${last ? ` · last: ${last.tree}` : ""}${g.dirs?.length ? ` · ${g.dirs[0]}` : ""}`
+        : "push guard: not installed yet — it goes in when the panel cuts a worktree (or press the button)",
+    g?.landing?.length ? `${g.landing.length} tree(s) started to land, so they may push` : null,
+    state.rwPending.size ? `${state.rwPending.size} permission request(s) waiting on you — in the dock, bottom right` : null,
+  ].filter(Boolean);
+  preview.textContent = bad ? `NOT SAVED — ${note}` : note ? `${note} · ${bits.join(" · ")}` : bits.join(" · ");
+  preview.classList.toggle("bad", bad);
+}
+
+// The guard's own state (which trees carry it), read on demand: it is a file, not a scan, so opening Settings can
+// ask for it every time.
+async function refreshRemoteGuards() {
+  try {
+    const d = await apiFetch("/api/remote-write/state").then((r) => r.json());
+    state.remoteGuards = d.guards || null;
+    if (d.policy) state.settings = { ...(state.settings || {}), remoteBranchPolicy: d.policy };
+    paintRemotePolicy();
+  } catch {
+    paintRemotePolicy("could not read the guard's state", true);
+  }
+}
+
+async function saveRemotePolicy(policy) {
+  const before = remotePolicyStored();
+  const preview = $("remote-policy-preview");
+  if (preview) {
+    preview.textContent = "saving…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch(
+      "/api/settings/remote-branches",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ policy }) },
+      { timeoutMs: 20000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    state.settings = { ...(state.settings || {}), ...(d.settings || {}) };
+    state.remoteGuards = d.guards || state.remoteGuards;
+    paintRemotePolicy(d.note || "saved");
+    showBanner(`branches on the remote: ${REMOTE_POLICY_SENTENCE[d.policy] || d.policy}`);
+  } catch (err) {
+    // Put the box back where it was: the stored value did NOT change.
+    const sel = $("remote-policy");
+    if (sel) sel.value = before;
+    paintRemotePolicy(String((err && err.message) || err), true);
+  }
+}
+
+async function installPushGuardNow(btn) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "installing…";
+  try {
+    const r = await apiFetch("/api/remote-write/guard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "install" }) }, { timeoutMs: 180000 });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    state.remoteGuards = d.guards || state.remoteGuards;
+    const failed = Number(d.failed) || 0;
+    paintRemotePolicy(`push guard installed in ${d.installed} worktree${d.installed === 1 ? "" : "s"}${failed ? `, ${failed} refused (named in the log)` : ""}`);
+    showBanner(`push guard: ${d.installed} worktree(s) now refuse a local-only push and ask you instead${failed ? ` · ${failed} could not be installed` : ""}`);
+  } catch (err) {
+    paintRemotePolicy(`could not install the push guard: ${String((err && err.message) || err)}`, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+$("remote-policy")?.addEventListener("change", (e) => void saveRemotePolicy(e.target.value));
+$("btn-guard-install")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  void installPushGuardNow(e.target);
+});
+
+// Settings that arrive from the SERVER apply here, in one place: a snapshot carries them, and a `settings` event
+// carries them after a change made anywhere else (another tab, or "Always allow" in the permission box).
+function applySettings(settings) {
+  if (!settings) return;
+  state.settings = { ...(state.settings || {}), ...settings };
+  paintConfigLine();
+  const scanMode = $("scan-mode");
+  if (scanMode) scanMode.value = state.settings.scanMode === "visible" ? "visible" : "all";
+  paintRemotePolicy();
+}
+
 // ---- the anchor's two signals: hover and last touched, each switched and timed on its own ----------
 function paintAnchorSettings() {
   const hover = $("anchor-hover");
@@ -12912,6 +13714,8 @@ function paintAnchorSettings() {
   if (touch) touch.checked = state.anchorTouch;
   if (touchSeconds) touchSeconds.value = String(state.anchorTouchSeconds);
   if (flash) flash.value = String(state.flashSeconds);
+  const rankWindow = $("rank-window");
+  if (rankWindow && document.activeElement !== rankWindow) rankWindow.value = String(state.rankWindowSeconds);
   if (eventFlash) eventFlash.checked = state.eventFlash;
   if (scanMode) scanMode.value = state.settings?.scanMode === "visible" ? "visible" : "all";
   applyFlashTime();
@@ -13064,6 +13868,17 @@ for (const b of document.querySelectorAll("[data-reorder-set]")) {
     if (input) input.value = String(reorderSeconds());
   });
 }
+
+// The rank window: a number of seconds, saved in this browser like the other Display rows.
+$("rank-window")?.addEventListener("change", (e) => saveRankWindow(e.target.value));
+$("rank-window")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    saveRankWindow(e.target.value);
+    e.target.blur();
+  }
+});
+paintRankWindow();
 startReorderClock();
 paintReorderSetting();
 
@@ -13144,6 +13959,8 @@ startVisibilityReporting();
     updateColorsRow();
     paintAnchorSettings();
     paintAgeSetting();
+    paintRemotePolicy();
+    void refreshRemoteGuards();
     // "On screen" mode: say what is visible before the first paint settles, so the rows in front of the reader are
     // the first thing the scheduler reads.
     reportVisibility({ force: true });

@@ -101,6 +101,14 @@ repo has **no CI**, so nothing refuses a bad subject at PR time either; its own 
 `git commit --no-verify`. The index stores the script executable (mode 100755), so a non-Windows clone runs
 it without a manual `chmod`; if a checkout ever loses the bit, `chmod +x .githooks/commit-msg`.
 
+`.githooks/pre-push` refuses a push that carries commits with no version bump: it runs
+`node tools/version.mjs check` (a branch whose `package.json` version is still its base's, and which carries
+commits of its own, is refused; an already-bumped branch and a branch with nothing on it pass silently). The
+level is a judgement the landing agent makes from the diff and lands in the same PR as the change —
+`node tools/version.mjs suggest` advises, `apply <patch|minor|major>` writes the one place the version lives,
+and `docs/versioning.md` is the scale. The merge prompt tells the landing agent to do it. Same install covers
+both hooks, and the same `--no-verify` bypasses this one.
+
 `node tools/verify-charter.mjs` seeds a charter from a store full of rules and notes, checks the prescribed
 headings and the cap, checks that the whole file is in the per-turn briefing while the polled state carries
 only its path, size and mtime, drives all three writers (the reader's save, a `CHARTER:` line through the
@@ -793,6 +801,9 @@ Watches without a deadline, and finished ones, say so instead.
 | `hideOlderThanDays` | 7 | how old a worktree's **last activity** has to be before its chart stops drawing it. Activity, never the age of the directory: the newest of its last commit, its last edited file, the last moment the panel saw it alive and any event received about its agents — so a tree cut months ago that somebody is working in today stays. Nothing is lost: the arrow at the bottom of that project's chart (visible while the pointer is over it) shows every tree again, and each `older hidden` chip says how many are held back. `0` shows everything. Written back by `POST /api/settings/age` (Settings → **Hide stale worktrees**) |
 | `threads` | 4 (capped) | scan worker threads |
 | `discovery.worktreeSource` | `git` | `git` probes each repo (6-7 calls, ~0.8s, the default) or `hermes` runs `hermes worktree list --json` (5.5-7.2s per repo, measured on Windows). `hermes` additionally reports per-tree `locked`/`missing` and a per-branch keep/reap verdict; it is opt-in because discovery sweeps every repo on `slowSeconds`. Either way `/api/cleanup?project=NAME` gives the full audit for one repo on demand |
+| `remoteBranchPolicy` | `local-only` | whether a branch may exist on a **remote** at all. `local-only` (the default): every tree the panel cuts stays on this box — the pre-push hook it installs refuses a `git push` out of one and asks you through the permission box instead (Allow once / this session / Always allow / Deny), and the panel's own merge flow asks before it starts. `allow`: remote writes go through without asking (this is what **Always allow** in the box writes, so the box and the setting are one fact). `deny`: refused outright, and the box is not even offered. Written back by `POST /api/settings/remote-branches` (Settings → **Branches on the remote**), so it survives a restart | 
+| `remoteWriteSeconds` | 300 | how long a parked remote-write question waits before it is denied — the box's countdown and the guard's own poll window |
+| `pushGuardFile` | `logs/push-guard.json` | the panel's record of which worktrees carry the pre-push guard and when it went in (git holds the hooks path itself) |
 | `cloneOwner` | `JLRoper` | GitHub owner used by `/api/clone` (and the folder **+** box) when the typed name has no `owner/` prefix |
 | `projects[]` | — | `name`, `path`, `remote`, `mainBranch`, `prRepo` |
 
@@ -806,7 +817,7 @@ Watches without a deadline, and finished ones, say so instead.
 | GET/POST | `/api/approvals`, `/api/approvals/answer`, `/api/approvals/<id>` | human side of the Hermes approval-transport contract: list pending requests, answer one (`{id, choice}` within the request's `allowed_choices`), poll one request's status. Requests expire to `deny` |
 | POST | `/api/clone` | clone a GitHub repo over ssh into one configured scan root: `{root, name}` where `root` must equal a `scanRoots` entry and `name` is `repo` or `owner/repo`. Refuses anything else (no paths, no URLs), and a destination that already exists. Responds when git finishes; discovery picks the repo up on the next pass |
 | GET | `/api/jobs` | job list plus `transport` (gateway URL, reachability, `capabilities`: runs/events/steer/stop/approval/runCwd/runBudget/maxTurns) |
-| GET | `/api/stream` | SSE: `snapshot`, `row`, `project`, `drop`, `job`, `jobline`, `jobs`, `heartbeat` |
+| GET | `/api/stream` | SSE: `snapshot`, `row`, `project`, `drop`, `job`, `jobline`, `jobs`, `approval`, `approval-answered`, `remote-write`, `remote-write-answered`, `settings`, `heartbeat` |
 | POST | `/api/agents/preview` | returns the exact run request that would be sent (`{transport, request, blocked}`), without sending it |
 | POST | `/api/agents` | start a run (`{prompt, cwd?, project?, model?, budget?, maxTurns?, existing?}`); `{dryRun:true}` returns the request instead. **503** when the gateway's api_server is unreachable or unkeyed |
 | POST | `/api/agents/reply` | `{thread, text}` → another turn on the same `session_id` |
@@ -835,6 +846,12 @@ Watches without a deadline, and finished ones, say so instead.
 | GET/POST | `/api/restart` | restart the gateway or this panel. GET reports the queue, the last action, the provider-key preflight (`$HERMES_HOME/.env`, or the `model.api_key` line of `config.yaml`) and where `restart.json` is written; POST `{target:"gateway"\|"panel", reason?, waitFor?}` **queues** the action and answers **202** at once. It runs when `waitFor` (default `panel-assistant`) has no turn running, gives every interrupted run one `interrupted` status, proves the new process with one real turn and wakes the assistant once with the payloads. **400** for another target, **409** when one is already queued/running or when no provider key is present |
 | POST | `/api/refresh` `/api/fetch` `/api/reload` | force a fast pass / fetch remotes / re-read config |
 | POST | `/api/settings/age` | `{days}` → how old a worktree's last activity must be before the worktree chart holds its row back (`config.json`'s `hideOlderThanDays`; `0` shows everything). Rewrites only that key, answers with the settings the page then redraws from, and broadcasts the new snapshot to every open board |
+| GET | `/api/remote-write/state` | the remote-write policy, what is parked on the permission box, which trees have a standing grant, and `guards` (which worktrees carry the pre-push hook, and where) |
+| POST | `/api/remote-write/request` | **the guard asking.** `{worktree, branch, remote, refs, remoteUrl}` → `{allowed:true}` (the setting allows it, the tree was started to land, or a grant stands), `{refused:true}` (`deny` — no question is offered), or `{id, deadline}` — a question parked on the box. Local-only by nature: the hook runs on this machine, so it needs no token |
+| GET | `/api/remote-write/status?id=` | what a parked hook long-polls: `pending`, or `answered` with the choice. A request nobody answered reads `deny` once its window closes |
+| POST | `/api/remote-write/answer` | `{id, choice}` from the panel's permission box — `once` / `session` / `always` (which **writes the setting**) / `deny`. A granted panel-side write (a parked merge) is resumed by the same call |
+| POST | `/api/remote-write/guard` | `{action:"install"\|"remove", path?, project?}` → put the pre-push guard in one worktree, a project's worktrees, or (with neither) every local-only tree on the board. Idempotent; the automatic path is the panel's own worktree creation |
+| POST | `/api/settings/remote-branches` | `{policy:"local-only"\|"allow"\|"deny"}` → write `config.json`'s `remoteBranchPolicy`, push it into every installed guard's own copy, and broadcast `settings`. **400** for anything else |
 
 ## Roadmap
 
