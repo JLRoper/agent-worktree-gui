@@ -17,6 +17,7 @@
       <span class="meta" id="stream-state">—</span>
       <span class="meta" id="stream-rate"></span>
       <button id="btn-assistant" type="button" class="btn-assistant" title="assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)">✧ Assistant<span id="assistant-badge" hidden>0</span></button>
+      <button id="btn-aggressive" type="button" class="btn-aggressive" aria-pressed="false" title="aggressive assistant — spends more tokens: the assistant wakes on everything, monitors and checks every live card, and keeps pushing until the fleet is waiting on something outside. While it is on it holds the waking, monitoring and acting settings; switching it off puts your own values back (Alt+Shift+A)">⚡ Aggressive<span id="aggressive-state">off</span></button>
       <button id="btn-hot" type="button" title="NOT-RUNNING — step through the agents that are not running and are waiting on you: each one is opened, its reply box focused and flashed amber. Enter sends and moves on; Alt+Right skips; Alt+Left goes back.">NOT-RUNNING</button>
       <button id="btn-collapse-all" type="button" title="collapse every folder and project section">Collapse all</button>
       <button id="btn-refresh" type="button">Refresh now</button>
@@ -450,5 +451,9 @@
   <!-- The assistant's floating panel. Loaded after app.js on purpose: it reads that file's own state and card
        renderer, so the assistant's card is a real card rather than a second implementation of one. -->
   <script src="/assistant.js"></script>
+
+  <!-- A short-lived note beside the aggressive switch: "on twice" and "off when it was never on" are no-ops and
+       have to say so without opening a panel. Fixed, so it never reflows the header buttons. -->
+  <div id="aggressive-msg" hidden role="status" aria-live="polite"></div>
 </body>
 </html>

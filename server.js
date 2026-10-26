@@ -1347,6 +1347,18 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { settings: assistant.setSettings(body), assistant: assistant.state() });
     }
 
+    // The header's aggressive-mode toggle. One route for one button: `on` is the requested state and the answer
+    // says whether anything changed — pressing it twice, or switching off a mode that was never on, comes back
+    // changed:false with a reason instead of silently pretending it did something. The whole assistant state
+    // rides with the answer so the float repaints from one response.
+    if (route === "/api/assistant/aggressive" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const wanted = body.on === undefined ? !assistant.aggressive.on : Boolean(body.on);
+      const out = assistant.setAggressive(wanted);
+      return sendJson(res, 200, { ...out, settings: assistant.settings, assistant: assistant.state() });
+    }
+
     // Dismiss an alert, or hand it to the assistant (one digest, rate limited). Nothing here answers an
     // approval: that stays on the agent's own card, where the gateway validates the choice.
     if (route === "/api/assistant/alert" && req.method === "POST") {

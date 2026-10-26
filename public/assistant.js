@@ -162,8 +162,9 @@
     const el = as$("assistant");
     if (!el || el.hidden || e.button !== 0) return;
     if (el.contains(e.target)) return;
-    // The header button toggles for itself: closing here first would make its own click reopen the float.
-    if (e.target?.closest?.("#btn-assistant")) return;
+    // The two header buttons toggle for themselves: closing here first would make their own click reopen (or,
+    // for the aggressive switch, dismiss the panel the reader is reading while it changes how it behaves).
+    if (e.target?.closest?.("#btn-assistant, #btn-aggressive")) return;
     if (state.assistantPinned) return;
     toggleAssistant(false);
   }
@@ -187,6 +188,7 @@
     state.assistant = data;
     if (data.thread) state.assistantThread = data.thread;
     paintAssistantBadge();
+    paintAggressive();
     // The card has to exist even while the float is closed: app.js's renderConversation finds it by thread
     // anywhere in the document, and that is what keeps a running turn current instead of frozen.
     renderAssistantChat();
@@ -206,6 +208,59 @@
     btn.title = n
       ? `assistant — ${n} thing${n === 1 ? "" : "s"} on the board need${n === 1 ? "s" : ""} a look (A or Ctrl+Shift+A)`
       : "assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)";
+  }
+
+  // The header's aggressive switch. The SERVER owns the record of what the mode changed — this only paints what
+  // the server says and asks it to change. The pill reads on/off so the state is legible without colour alone,
+  // and the title carries the plain description of the cost.
+  function paintAggressive() {
+    const btn = as$("btn-aggressive");
+    const pill = as$("aggressive-state");
+    if (!btn || !pill) return;
+    const agg = state.assistant?.aggressive || {};
+    const on = Boolean(agg.on);
+    const saved = agg.restore;
+    btn.classList.toggle("is-on", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    pill.textContent = on ? "on" : "off";
+    btn.title = on
+      ? `aggressive assistant is ON — more tokens: it wakes on everything, monitors and checks every live card, and keeps pushing until the fleet is waiting on something outside. ${saved ? `${saved.present} of your settings are saved and ${saved.absent} absent key${saved.absent === 1 ? "" : "s"} will be removed again` : "your settings are saved"} — click to switch it off (Alt+Shift+A)`
+      : "aggressive assistant — spends more tokens: the assistant wakes on everything, monitors and checks every live card, and keeps pushing until the fleet is waiting on something outside. Your own settings are saved while it is on and put back exactly when you switch it off (Alt+Shift+A)";
+  }
+
+  // Say something briefly beside the header button without opening a panel: a no-op press (on twice, or off when
+  // it was never on) has to be acknowledged, or the button reads as broken.
+  let aggressiveMsgTimer = null;
+  function aggressiveNote(text) {
+    const el = as$("aggressive-msg");
+    if (!el) return;
+    el.textContent = text || "";
+    el.hidden = !text;
+    if (aggressiveMsgTimer) clearTimeout(aggressiveMsgTimer);
+    aggressiveMsgTimer = text
+      ? setTimeout(() => {
+          el.hidden = true;
+          el.textContent = "";
+        }, 6000)
+      : null;
+  }
+
+  // One press, one round trip. `asPost` applies the assistant state the answer carries, which repaints this
+  // button and the settings tab; the extra paint here is for the first frame before that lands.
+  async function setAggressiveMode(on) {
+    const btn = as$("btn-aggressive");
+    if (btn) btn.disabled = true;
+    try {
+      const d = await asPost("/api/assistant/aggressive", { on: Boolean(on) });
+      if (d && d.changed === false) aggressiveNote(d.reason || "no change");
+      else aggressiveNote(on ? "aggressive mode on — your settings are saved" : "aggressive mode off — your settings are back");
+      paintAggressive();
+      renderAssistantSettings(true);
+    } catch (err) {
+      aggressiveNote(err.message);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
 
   // A sentry that has stopped is the one failure the panel would otherwise show as "nothing wrong": the
@@ -234,6 +289,9 @@
       as$("as-chips").innerHTML = [
         a?.running ? `<span class="chip warn" title="its own turn is running">thinking</span>` : "",
         a && a.enabled === false ? `<span class="chip" title="the sentry is off — no rule is being evaluated">off</span>` : "",
+        a?.aggressive?.on
+          ? `<span class="chip warn" title="aggressive mode is on — the assistant wakes on everything, checks every live card and keeps pushing until the fleet is waiting on something outside. Switch it off in the header (Alt+Shift+A)">⚡ aggressive</span>`
+          : "",
         sentryState(a?.health) ? `<span class="chip warn" title="the sentry's clock is not running or has not ticked — the server watchdog restarts it, and this goes green again">sentry ${sentryState(a?.health)}</span>` : "",
         a ? `<span class="chip" title="self-wakes in the last hour (a rule set to wake, or an alert handed to it)">${a.wakes?.lastHour ?? 0}/${a.wakes?.limit ?? 0} wakes</span>` : "",
       ].join("");
@@ -876,14 +934,32 @@
     const health = a.health || {};
     const hs = sentryState(health);
     const lastPass = health.lastTickAt ? `${Math.max(0, Math.round((Date.now() - health.lastTickAt) / 1000))}s ago` : "not yet";
+    // Aggressive mode: while it is on, the controls whose knobs or rules it holds are disabled here and marked,
+    // so the reader can see which values are the mode's and where to switch it off. Controls the profile does
+    // not touch (model, working dir, and anything else outside its list) stay usable.
+    const agg = a.aggressive || {};
+    const heldKnobs = new Set(agg.on ? (agg.holds && agg.holds.settings) || [] : []);
+    const heldRules = new Set(agg.on ? (agg.holds && agg.holds.rules) || [] : []);
+    const dis = (key) => (heldKnobs.has(key) ? ' disabled title="aggressive mode holds this setting — switch it off in the header to change it"' : "");
+    const disRule = (id) => (heldRules.has(id) ? ' disabled title="aggressive mode holds this rule — switch it off in the header to change it"' : "");
+    const savedLine = agg.restore
+      ? `${agg.restore.present} of your own value${agg.restore.present === 1 ? "" : "s"} come back when it is switched off; ${agg.restore.absent} key${agg.restore.absent === 1 ? "" : "s"} that were absent will be deleted again so they follow their default.`
+      : "";
     host.innerHTML = `
+      ${agg.on
+        ? `<div class="as-group as-held">
+        <h4>⚡ Aggressive mode is holding these</h4>
+        <div class="as-help">The settings and rules marked <b>held</b> below are set to the aggressive profile and cannot be changed from this tab. Switch aggressive mode off with the <b>⚡ Aggressive</b> button in the header (Alt+Shift+A) and they are put back exactly as you had them — ${esc(savedLine)}</div>
+        <div class="as-line"><button type="button" id="btn-as-aggressive-off" title="switch aggressive mode off and put your own settings back">Switch aggressive mode off</button></div>
+      </div>`
+        : ""}
       <div class="as-group">
         <h4>How it behaves</h4>
         <div class="as-line">
-          <label>watching <input type="checkbox" data-as-set="enabled"${s.enabled ? " checked" : ""}></label>
-          <label>autonomy <select data-as-set="autonomy">${autonomy.map((v) => `<option value="${v}"${s.autonomy === v ? " selected" : ""}>${esc(autonomyLabel[v] || v)}</option>`).join("")}</select></label>
+          <label${heldKnobs.has("enabled") ? ' class="as-held-label"' : ""}>watching <input type="checkbox" data-as-set="enabled"${s.enabled ? " checked" : ""}${dis("enabled")}></label>
+          <label${heldKnobs.has("autonomy") ? ' class="as-held-label"' : ""}>autonomy <select data-as-set="autonomy"${dis("autonomy")}>${autonomy.map((v) => `<option value="${v}"${s.autonomy === v ? " selected" : ""}>${esc(autonomyLabel[v] || v)}</option>`).join("")}</select></label>
         </div>
-        <div class="as-line"><label>create worktrees <select data-as-set="spawn" title="whether the assistant may cut a worktree and start a worker — ask keeps a one-click card between it and git">${(a.spawnModes || ["off", "ask", "auto"]).map((v) => `<option value="${v}"${s.spawn === v ? " selected" : ""}>${v === "off" ? "off — it may not start workers" : v === "ask" ? "ask me first" : "start immediately"}</option>`).join("")}</select></label></div>
+        <div class="as-line"><label${heldKnobs.has("spawn") ? ' class="as-held-label"' : ""}>create worktrees <select data-as-set="spawn"${dis("spawn")} title="whether the assistant may cut a worktree and start a worker — ask keeps a one-click card between it and git">${(a.spawnModes || ["off", "ask", "auto"]).map((v) => `<option value="${v}"${s.spawn === v ? " selected" : ""}>${v === "off" ? "off — it may not start workers" : v === "ask" ? "ask me first" : "start immediately"}</option>`).join("")}</select></label></div>
         <div class="as-line"><label>model <select data-as-set="model" title="the assistant's own model — pick something small and fast; the board digest is the whole input">${modelOptionsHtml(s.model || "")}</select></label></div>
         <div class="as-line"><label title="the assistant does no work here — the gateway just refuses a run without an existing cwd. It is created if missing; leave empty for a folder beside the job store.">working dir <input type="text" spellcheck="false" data-as-set="cwd" value="${esc(s.cwd || "")}" placeholder="default: beside the job store"></label></div>
         <div class="as-help">Draft-only is the default: a reply reaches a worker only when you press Send on it. Auto-safe sends a reply the assistant itself wrote with a TO line; auto also sends anything a standing rule drafted. Creating a worktree has its own switch: <b>ask me first</b> turns a SPAWN line into a card, and nothing runs until you press it. An approval is never answered from here at any setting.</div>
@@ -891,15 +967,15 @@
       </div>
       <div class="as-group">
         <h4>Thresholds</h4>
-        <div class="as-line"><label>pass every <input type="number" min="2" max="120" data-as-set="seconds" value="${s.seconds}"> s</label>
-          <label>same call × <input type="number" min="2" max="12" data-as-set="repeatLimit" value="${s.repeatLimit}"></label>
-          <label title="consecutive turns of one thread ending on the same failure before it is reported">same failure × <input type="number" min="2" max="10" data-as-set="repeatTurns" value="${s.repeatTurns}"></label></div>
-        <div class="as-line"><label>silent for <input type="number" min="30" max="3600" data-as-set="quietSeconds" value="${s.quietSeconds}"> s</label>
-          <label>approval waiting <input type="number" min="15" max="3600" data-as-set="approvalSeconds" value="${s.approvalSeconds}"> s</label></div>
-        <div class="as-line"><label>context over <input type="number" min="50" max="100" data-as-set="contextPercent" value="${s.contextPercent}"> %</label>
-          <label>wakes / hour <input type="number" min="0" max="60" data-as-set="maxWakesPerHour" value="${s.maxWakesPerHour}"></label></div>
-        <div class="as-line"><label title="how recently a worker must have finished for work left in its tree to be worth a word">leftover work <input type="number" min="1" max="240" data-as-set="leftoverMinutes" value="${s.leftoverMinutes}"> min</label>
-          <label title="a delegated subagent that writes nothing for this long is worth flagging">child silent <input type="number" min="60" max="3600" data-as-set="childQuietSeconds" value="${s.childQuietSeconds}"> s</label></div>
+        <div class="as-line"><label>pass every <input type="number" min="2" max="120" data-as-set="seconds" value="${s.seconds}"${dis("seconds")}> s</label>
+          <label>same call × <input type="number" min="2" max="12" data-as-set="repeatLimit" value="${s.repeatLimit}"${dis("repeatLimit")}></label>
+          <label title="consecutive turns of one thread ending on the same failure before it is reported">same failure × <input type="number" min="2" max="10" data-as-set="repeatTurns" value="${s.repeatTurns}"${dis("repeatTurns")}></label></div>
+        <div class="as-line"><label>silent for <input type="number" min="30" max="3600" data-as-set="quietSeconds" value="${s.quietSeconds}"${dis("quietSeconds")}> s</label>
+          <label>approval waiting <input type="number" min="15" max="3600" data-as-set="approvalSeconds" value="${s.approvalSeconds}"${dis("approvalSeconds")}> s</label></div>
+        <div class="as-line"><label>context over <input type="number" min="50" max="100" data-as-set="contextPercent" value="${s.contextPercent}"${dis("contextPercent")}> %</label>
+          <label>wakes / hour <input type="number" min="0" max="60" data-as-set="maxWakesPerHour" value="${s.maxWakesPerHour}"${dis("maxWakesPerHour")}></label></div>
+        <div class="as-line"><label title="how recently a worker must have finished for work left in its tree to be worth a word">leftover work <input type="number" min="1" max="240" data-as-set="leftoverMinutes" value="${s.leftoverMinutes}"${dis("leftoverMinutes")}> min</label>
+          <label title="a delegated subagent that writes nothing for this long is worth flagging">child silent <input type="number" min="60" max="3600" data-as-set="childQuietSeconds" value="${s.childQuietSeconds}"${dis("childQuietSeconds")}> s</label></div>
         <div class="as-help">A long build is silent too, which is why “no new output” only journals by default. Raise the repeat bar if “same call” is noisy on your agents. Leftover work and a silent child are both judged from what the board and the gateway already know — no extra git or sqlite pass.</div>
       </div>
       <div class="as-group">
@@ -908,7 +984,7 @@
           .map(
             ([id, def]) => `<div class="as-rule-row">
               <span class="as-rule-name"><b>${esc(def.label)}</b><i>${esc(def.hint)}</i></span>
-              <select data-as-rule="${esc(id)}">${levels.map((v) => `<option value="${v}"${s.rules[id] === v ? " selected" : ""}>${v}</option>`).join("")}</select>
+              <select data-as-rule="${esc(id)}"${disRule(id)}>${levels.map((v) => `<option value="${v}"${s.rules[id] === v ? " selected" : ""}>${v}</option>`).join("")}</select>
             </div>`,
           )
           .join("")}
@@ -991,6 +1067,9 @@
   // ---- wiring ---------------------------------------------------------------------------------
 
   as$("btn-assistant")?.addEventListener("click", () => toggleAssistant());
+  // The aggressive switch is its own button beside the Assistant one: it does not open the float, it changes how
+  // the assistant behaves. The server answers whether anything changed, and the note beside it says so.
+  as$("btn-aggressive")?.addEventListener("click", () => setAggressiveMode(!state.assistant?.aggressive?.on));
   as$("btn-as-close")?.addEventListener("click", () => toggleAssistant(false));
   as$("btn-as-pin")?.addEventListener("click", () => setAssistantPinned(!state.assistantPinned));
   // Capture phase, so a handler on the thing being pressed cannot keep the press from dismissing the float.
@@ -1232,6 +1311,16 @@
       return;
     }
 
+    if (t.id === "btn-as-aggressive-off") {
+      t.disabled = true;
+      try {
+        await setAggressiveMode(false);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
     if (t.id === "btn-as-check") {
       t.disabled = true;
       try {
@@ -1406,6 +1495,12 @@
       toggleAssistant();
       return;
     }
+    // Alt+Shift+A throws the aggressive switch — the second assistant key, beside the one that opens the float.
+    if (e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && (e.key === "A" || e.key === "a")) {
+      e.preventDefault();
+      setAggressiveMode(!state.assistant?.aggressive?.on);
+      return;
+    }
     // A bare letter "A" opens it too — and only a bare one: any modifier disqualifies it (Ctrl+A stays
     // select-all, Shift+A is a capital, Alt/Meta keys belong to the desktop), and a keystroke aimed at a field
     // belongs to the field, whether the caret is in one now or has landed there by a repaint.
@@ -1446,6 +1541,7 @@
     placeAssistant();
     paintAssistantPin();
     paintAssistantBadge();
+    paintAggressive();
     if (state.assistantOpen) renderAssistant();
   })();
 
