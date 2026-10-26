@@ -56,6 +56,17 @@ let board = [];
 const jobs = {
   list: () => board,
   firstOfThread: (thread) => board.find((j) => j.thread === thread) || null,
+  // The same question the real store answers (lib/jobs.js busyFor): is this thread — or the tree it works in —
+  // already turning? This stub board carries no ownerPath fixtures, so the thread half is what it covers; the tree
+  // half is driven against the real store in lib/jobs.test.js.
+  busyFor: (thread, { exceptId = null } = {}) => {
+    const t = String(thread || "");
+    const live = board.filter((j) => (j.status === "running" || j.status === "starting") && j.id !== exceptId);
+    const brief = (j) => ({ id: j.id, thread: j.thread, status: j.status, prompt: String(j.prompt || "").slice(0, 120) });
+    const onThread = live.filter((j) => j.thread === t);
+    if (onThread.length) return { held: true, where: "thread", thread: t, tree: null, by: onThread.map(brief) };
+    return { held: false, where: null, thread: t, tree: null, by: [] };
+  },
   modelFor: () => null,
   create: async (opts) => {
     created.push(opts);
@@ -326,7 +337,7 @@ console.log("the assistant's own actions: draft by default, sent only when allow
 {
   created.length = 0;
   const a = make();
-  board = [job({ thread: "wtgui-worker-b", label: "worker b" })];
+  board = [job({ thread: "wtgui-worker-b", label: "worker b", status: "done", endedAt: iso(t0) })];
   const answer = "I read it as the second option.\nTO wtgui-worker-b: Go with option two — the QA target.\nNOTE: worker b prefers option two.\nWATCH wtgui-worker-b: the deploy finishes | 20";
   a.settings.autonomy = "draft";
   a.harvest({ id: "asst-turn-1", thread: ASSISTANT_THREAD, lines: [line("text", answer)] });
@@ -341,6 +352,27 @@ console.log("the assistant's own actions: draft by default, sent only when allow
   await new Promise((r) => setTimeout(r, 20));
   eq(created.length, 1, "auto-safe sends the assistant's own reply");
   ok(created[0].origin?.kind === "assistant-reply" && created[0].thread === "wtgui-worker-b", "the reply is tagged as the assistant's", JSON.stringify(created[0]?.origin));
+}
+
+// A reply is not a steer. The same TO line, aimed at a worker that is still going, must be refused rather than posted:
+// measured on the board, two TOs to one thread took its worktree from one live run to three, all editing one tree.
+console.log("one run per thread: a TO into a thread that is still going is refused");
+{
+  created.length = 0;
+  const a = make();
+  board = [job({ thread: "wtgui-busy-worker", label: "busy worker" })]; // status defaults to running
+  a.settings.autonomy = "auto-safe";
+  a.harvest({ id: "asst-turn-busy", thread: ASSISTANT_THREAD, lines: [line("text", "TO wtgui-busy-worker: keep going?")] });
+  await new Promise((r) => setTimeout(r, 20));
+  eq(created.length, 0, "nothing was posted into the thread that is turning");
+  const st = a.state();
+  ok(
+    st.journal.some((j) => j.kind === "to-skipped" && /already has a live run/.test(j.text || "")),
+    "the journal says the TO was refused and why",
+    JSON.stringify(st.journal.filter((j) => j.kind === "to-skipped").slice(-1)),
+  );
+  const draft = st.alerts.find((x) => x.title === "the assistant drafted a reply");
+  eq(Boolean(draft), false, "…and no draft was offered either: one press later it would be the same second run");
 }
 
 console.log("creating worktrees: ask, auto and off");
