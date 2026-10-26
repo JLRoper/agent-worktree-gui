@@ -4,9 +4,12 @@
 // moved line for line: lines 9199-9335 of public/app.js at ae528c7 — `setStream` and the whole of `connect`,
 // 137 lines. Nothing renamed, nothing rewritten, no call site touched.
 //
-// `connect` is the contract surface: it closes the previous stream, opens /api/stream and registers thirteen
-// handlers (open, snapshot, row, project, drop, job, jobline, approval, approval-answered, jobs, assistant,
-// heartbeat, error). Three things about it are load-bearing and moved exactly as they were:
+// `connect` is the contract surface: it closes the previous stream, opens /api/stream and registers its handlers
+// (open, snapshot, row, project, drop, job, jobline, remote-write, remote-write-answered, settings, approval,
+// approval-answered, jobs, assistant, heartbeat, error). `remote-write*` and `settings` were added with the
+// remote-write permission box: the first two are the panel's own parked question about a push, the third is a
+// settings change made anywhere else (another tab, or "Always allow" in the box). Three things about the rest are
+// load-bearing and moved exactly as they were:
 //
 //   * the `project` handler does its own synchronous DOM surgery — read window.scrollY, capture the caret,
 //     detach the section, put the old row nodes straight back into the fresh tbody before anything measures,
@@ -129,6 +132,30 @@ function connect() {
     // Every line an agent writes is proof that its worktree is being worked in right now - the freshest sign of
     // life there is, and one the scanner only finds out about on its next pass.
     noteEventLife(state.jobs.get(evt.id)?.thread || evt.thread || evt.id);
+  });
+  // The panel's own permission box for a remote write (lib/remote-writes.js): a worker's push parked by the guard
+  // the panel installed, or the panel's own merge flow asking before it pushes. Same dock, same box chrome.
+  es.addEventListener("remote-write", (e) => {
+    const r = JSON.parse(e.data).request;
+    if (!r || !r.id) return;
+    state.lastEventAt = Date.now();
+    state.rwPending.set(r.id, r);
+    renderApprovals();
+  });
+  es.addEventListener("remote-write-answered", (e) => {
+    const evt = JSON.parse(e.data);
+    const r = state.rwPending.get(evt.id) || null;
+    state.rwPending.delete(evt.id);
+    state.rwDecided.set(evt.id, { choice: evt.choice || "deny", why: evt.why || "", command: r?.command || "", expired: Boolean(evt.expired), at: Date.now() });
+    renderApprovals();
+  });
+  // A settings change made anywhere (the Settings row, another tab, "Always allow" in the permission box): the page
+  // repaints from the numbers the server just wrote, rather than keeping its own copy of a policy.
+  es.addEventListener("settings", (e) => {
+    const d = JSON.parse(e.data);
+    if (!d.settings) return;
+    state.lastEventAt = Date.now();
+    applySettings(d.settings);
   });
   es.addEventListener("approval", (e) => {
     const r = JSON.parse(e.data).request;

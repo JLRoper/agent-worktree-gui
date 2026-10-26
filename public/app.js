@@ -1648,6 +1648,56 @@ function turnBody(turn, copy = "") {
 // turn that is parked on it, not in a separate panel at the bottom of the card. It is a box that
 // behaves like a popup (raised, bordered, the only thing asking for a decision) but it lives in the
 // flow, so it never covers the output it is about.
+// The choices a parked question offers, and what each one means. ONE table for every box the panel draws — a turn
+// parked on an approval, a local-only worktree parked on a push — because "Always allow" has to mean the same
+// thing in both, and the reader asked for the same box rather than a lookalike.
+const APPROVAL_CHOICE_LABEL = { once: "Allow once", session: "Allow for this session", always: "Always allow", deny: "Deny" };
+
+// The permission box itself: the amber raised box, its head, the thing being asked about, the choices, and a
+// deadline the page's own 1s clock counts down. Extracted from approvalPrompt() when the remote-write permission
+// arrived, so the two questions cannot drift into two designs. Everything that differs is a parameter: which
+// record the press belongs to (`extra`), what the head and the tooltips say, and where the foot's countdown is
+// driven from (`data-approval-until`, which tickApprovals already reads).
+function permissionBoxHtml({
+  id,
+  requestId = "",
+  forAttr = "",
+  head,
+  command,
+  choices = ["once", "deny"],
+  deadline = 0,
+  windowMs = 0,
+  closed = false,
+  closedHead = APPROVAL_CLOSED_HEAD,
+  closedNote = "",
+  titles = null,
+  extra = "",
+}) {
+  const left = deadline ? deadline - Date.now() : 0;
+  const buttons =
+    `<div class="ta-actions">` +
+    choices
+      .map(
+        (c) =>
+          `<button class="btn-approve${c === "deny" ? " btn-deny" : ""}" data-approve="${esc(id)}" data-choice="${esc(c)}" data-request="${esc(requestId)}" data-until="${deadline || ""}"${extra} type="button" title="${esc((titles && titles[c]) || APPROVAL_CHOICE_LABEL[c] || c)}">${esc(APPROVAL_CHOICE_LABEL[c] || c)}</button>`,
+      )
+      .join("") +
+    `</div>`;
+  // The countdown only exists when the window is known: a question with no deadline gets no invented number.
+  const foot =
+    !deadline || !windowMs
+      ? ""
+      : `<div class="ta-foot${closed ? " is-over" : left <= 20_000 ? " is-low" : ""}" data-approval-until="${deadline}" data-approval-window="${windowMs}" title="time left before this question is denied and the writer is told so">` +
+        `<div class="ta-timer"><span style="width:${Math.max(0, Math.min(100, (left / windowMs) * 100)).toFixed(2)}%"></span></div>` +
+        `<span class="ta-left mono">${closed ? "expired" : `~${fmtLeft(left)} left`}</span></div>`;
+  return `<div class="turn-approval${closed ? " is-expired" : ""}" ${forAttr}>
+    <div class="ta-head mono">${closed ? esc(closedHead) : head}</div>
+    <pre class="ta-cmd mono">${esc(command || "(no command text)")}</pre>
+    ${closed ? closedNote : buttons}
+    ${closed ? "" : foot}
+  </div>`;
+}
+
 function approvalPrompt(turn, copy = "") {
   const approval = turn.approval;
   if (!approval) return "";
@@ -1658,33 +1708,31 @@ function approvalPrompt(turn, copy = "") {
   const live = turnLive(turn);
   if (!live || turn.approvalDone) return "";
   const choices = Array.isArray(approval.choices) && approval.choices.length ? approval.choices : ["once", "deny"];
-  const label = { once: "Allow once", session: "Allow for this session", always: "Always allow", deny: "Deny" };
   // The window is the gateway's own (`approvals.timeout`), carried on the request when it arrived. An approval
   // is a question with a deadline: the gateway gives up at it and denies the command on its own, so a box that
   // keeps offering a choice past that instant is offering a decision that can no longer be made — the answer
   // comes back 409 `approval_not_pending` and the reader is told nothing about why.
   const deadline = Number(approval.deadline) || 0;
   const windowMs = (Number(approval.timeoutSeconds) || 0) * 1000;
-  const left = deadline ? deadline - Date.now() : 0;
-  const closed = Boolean(deadline) && left <= 0;
-  const buttons =
-    `<div class="ta-actions">` +
-    choices.map((c) => `<button class="btn-approve${c === "deny" ? " btn-deny" : ""}" data-approve="${esc(turn.id)}" data-choice="${esc(c)}" data-request="${esc(approval.requestId || "")}" data-until="${deadline || ""}" type="button" title="${esc(c === "deny" ? "refuse this command — the agent is told no and carries on without it" : `allow this command (${c})`)}">${esc(label[c] || c)}</button>`).join("") +
-    `</div>`;
-  // The countdown only exists when the window is known: a gateway that never told us one gets no number rather
-  // than an invented one. Driven by the page's own 1s clock from the deadline above.
-  const foot =
-    !deadline || !windowMs
-      ? ""
-      : `<div class="ta-foot${closed ? " is-over" : left <= 20_000 ? " is-low" : ""}" data-approval-until="${deadline}" data-approval-window="${windowMs}" title="time left before the gateway stops waiting for an answer and denies the command itself">` +
-        `<div class="ta-timer"><span style="width:${Math.max(0, Math.min(100, (left / windowMs) * 100)).toFixed(2)}%"></span></div>` +
-        `<span class="ta-left mono">${closed ? "expired" : `~${fmtLeft(left)} left`}</span></div>`;
-  return `<div class="turn-approval${closed ? " is-expired" : ""}" data-approval-for="${esc(turn.id)}${esc(copy)}">
-    <div class="ta-head mono">${closed ? esc(APPROVAL_CLOSED_HEAD) : "⚠ waiting on you — this turn is parked until you answer"}</div>
-    <pre class="ta-cmd mono">${esc(approval.command || "(no command text)")}</pre>
-    ${closed ? approvalClosedNote() : buttons}
-    ${closed ? "" : foot}
-  </div>`;
+  const closed = Boolean(deadline) && deadline - Date.now() <= 0;
+  return permissionBoxHtml({
+    id: turn.id,
+    requestId: approval.requestId || "",
+    forAttr: `data-approval-for="${esc(turn.id)}${esc(copy)}"`,
+    head: "⚠ waiting on you — this turn is parked until you answer",
+    command: approval.command,
+    choices,
+    deadline,
+    windowMs,
+    closed,
+    closedNote: approvalClosedNote(),
+    titles: {
+      once: "allow this command (once)",
+      session: "allow this command (session)",
+      always: "allow this command (always)",
+      deny: "refuse this command — the agent is told no and carries on without it",
+    },
+  });
 }
 
 // The window closed with nobody answering: the gateway denied the command and the agent carried on. Nothing is
@@ -4968,6 +5016,10 @@ async function clearThread(btn) {
 async function answerRunApproval(approveBtn) {
   const id = approveBtn.dataset.approve;
   const choice = approveBtn.dataset.choice;
+  // The same box, the same four choices, two questions: a run parked on a gateway approval, or a write parked on
+  // the panel's own remote-write permission (lib/remote-writes.js). The button is identical, so the ROUTE is
+  // decided by which record the id belongs to — never by a second kind of button.
+  if (state.rwPending.has(id)) return answerRemoteWrite(id, choice, approveBtn);
   if (approvalAlreadySent(id, choice)) return;
   noteApprovalSent(id, choice);
   const card = approveBtn.closest(".job");
@@ -5073,11 +5125,65 @@ function approvalCard(r) {
   </div>`;
 }
 
+// ---- remote writes: the panel's own permission box, in the same dock --------------------------------
+// A worktree the panel cut is LOCAL ONLY by default (see Settings > Branches on the remote). When something tries
+// to put a branch on a remote anyway — a worker's `git push`, met by the pre-push guard the panel installed, or
+// the panel's own merge flow — the question lands here, and it is the SAME box a parked run gets: same amber
+// chrome, same four choices, same deadline and countdown (permissionBoxHtml). Deny leaves the remote untouched;
+// Allow tells the waiting hook to go ahead.
+state.rwPending = state.rwPending || new Map(); // id -> request still waiting for an answer
+state.rwDecided = state.rwDecided || new Map(); // id -> what was decided, shown as the collapsed line
+state.rwPolicy = state.rwPolicy || "local-only";
+
+function applyRemoteWrites(rw) {
+  state.rwPolicy = (rw && rw.policy) || state.rwPolicy;
+  state.rwPending.clear();
+  for (const r of (rw && rw.pending) || []) if (r && r.id) state.rwPending.set(r.id, r);
+  renderApprovals();
+}
+
+// One parked write. The head names the tree, because a reader answering three of these needs to know WHICH tree is
+// asking; the command line is what will actually run.
+function remoteWriteBoxHtml(r) {
+  const deadline = Number(r.deadline) || 0;
+  const windowMs = (Number(r.timeoutSeconds) || 0) * 1000;
+  const closed = Boolean(deadline) && deadline - Date.now() <= 0;
+  const kind = r.kind === "merge" ? "the panel's own merge flow" : "a push from this worktree";
+  return permissionBoxHtml({
+    id: r.id,
+    requestId: r.id,
+    forAttr: `data-remote-write="${esc(r.id)}" data-rw-tree="${esc(r.worktree || "")}"`,
+    head: `⚠ waiting on you — ${esc(kind)}: ${esc(r.project || "this project")} is local-only`,
+    command: r.command || "",
+    choices: Array.isArray(r.allowed) && r.allowed.length ? r.allowed : ["once", "session", "always", "deny"],
+    deadline,
+    windowMs,
+    closed,
+    closedHead: "⚠ no answer inside the panel's window — this write has been denied",
+    closedNote: `<div class="ta-note mono">the panel stopped waiting and told the writer no; nothing was pushed</div>`,
+    what: "write",
+    titles: {
+      once: "allow this one write — the waiting push is told to go ahead",
+      session: "allow writes from this worktree until the panel restarts",
+      always: "allow remote writes from now on — this WRITES the panel's setting, so the box stops asking",
+      deny: "refuse: nothing is pushed and the remote is left exactly as it is",
+    },
+  });
+}
+
+function remoteWriteDecidedHtml(d) {
+  const denied = String(d.choice || "") === "deny";
+  const verb = denied ? (d.expired ? "not answered — denied" : "denied") : `allowed ${d.choice}`;
+  return `<div class="turn-approval-done mono${denied ? " is-deny" : ""}" title="${esc(d.why || "")}">${denied ? "✕" : "✓"} remote write ${esc(verb)}${d.command ? `: ${esc(String(d.command).slice(0, 140))}` : ""}</div>`;
+}
+
 function renderApprovals() {
   const sec = $("approvals");
   if (!sec) return;
   const list = [...state.approvals.values()].sort((a, b) => (a.deadline || 0) - (b.deadline || 0));
-  sec.hidden = list.length === 0;
+  const writes = [...state.rwPending.values()].sort((a, b) => (a.deadline || 0) - (b.deadline || 0));
+  const decided = [...state.rwDecided.values()].sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 3);
+  sec.hidden = list.length === 0 && writes.length === 0 && decided.length === 0;
   applyApprovalsFold(sec);
   // The card that says "waiting on you →" is part of the same fact: repaint the threads whose answer changed,
   // instead of leaving the chip on a stale card until the next job event happens to arrive.
@@ -5087,13 +5193,17 @@ function renderApprovals() {
     if (document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)) renderConversation(thread);
   }
   approvalThreadsShown = threadsNow;
-  if (!list.length) {
+  const total = list.length + writes.length;
+  if (!total && !decided.length) {
     $("approval-list").innerHTML = "";
     $("approval-chips").innerHTML = "";
     return;
   }
-  $("approval-chips").innerHTML = `<span class="chip bad">${list.length}</span>`;
-  $("approval-list").innerHTML = list.map(approvalCard).join("");
+  $("approval-chips").innerHTML = total ? `<span class="chip bad">${total}</span>` : "";
+  // The panel's own questions lead (they are the ones holding a worker's push), then the CLI-transport approvals,
+  // then the collapsed records of writes already decided.
+  $("approval-list").innerHTML =
+    writes.map(remoteWriteBoxHtml).join("") + list.map(approvalCard).join("") + decided.map(remoteWriteDecidedHtml).join("");
 }
 
 function tickApprovals() {
@@ -5174,6 +5284,43 @@ async function answerApproval(id, choice, btn) {
     if (err) err.textContent = e.message;
     card?.querySelectorAll("button").forEach((b) => (b.disabled = false));
     approvalSent.delete(approvalKey(id, choice));
+  }
+}
+
+// Answer a parked remote write. The waiting side is a shell process on this box (the pre-push guard) or the
+// panel's own merge flow, and both are told through the panel: this POST is the whole answer, and the collapsed
+// line that replaces the box is what the reader has left as the record.
+async function answerRemoteWrite(id, choice, btn) {
+  const box = btn?.closest(".turn-approval");
+  const req = state.rwPending.get(id) || null;
+  btn?.closest(".ta-actions")?.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  try {
+    const res = await apiFetch("/api/remote-write/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, choice, by: "reader" }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) throw new Error(out.error || `HTTP ${res.status}`);
+    state.rwPending.delete(id);
+    state.rwDecided.set(id, {
+      choice: out.choice || choice,
+      why: out.why || "",
+      command: req?.command || "",
+      at: Date.now(),
+    });
+    renderApprovals();
+    showBanner(
+      choice === "deny"
+        ? "remote write denied — nothing was pushed"
+        : choice === "always"
+          ? "remote writes are now allowed — the setting is saved (Settings > Branches on the remote)"
+          : `remote write allowed ${choice}${req?.branch ? ` (${req.branch})` : ""} — the waiting push is going ahead`,
+    );
+  } catch (e) {
+    btn?.closest(".ta-actions")?.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    box?.classList.add("is-error");
+    showBanner(`could not answer that permission request: ${e.message}`);
   }
 }
 
@@ -6512,6 +6659,10 @@ function formValues() {
     // true = run in that directory as-is (an existing worktree), no new worktree created. The checkbox says
     // the opposite ("create workspace"), so this is where the two meet.
     existing: !$("job-create").checked,
+    // Does this worktree exist to LAND? Unchecked (the default) is LOCAL ONLY: the brief says so, and the panel's
+    // pre-push guard refuses a push and asks the reader instead. Ticked, the brief names the landing step and the
+    // tree's guard allows the push — the reader's own opt-in, in the reader's own words.
+    landing: $("job-landing")?.checked ? true : undefined,
     project: $("job-project").value || undefined,
     model: $("job-model").value.trim() || undefined,
     budget: Number($("job-budget").value) || undefined,
@@ -7453,6 +7604,29 @@ function prMatchNote(pr) {
   return "";
 }
 
+// ---- the branch cell: a link only when the remote actually has that branch ----------------------------
+// The URL is built by the SERVER (`row.branchUrl`, from the project's own remote through `githubRepo()` in
+// lib/projects.js) and from git's own answer to "does the remote have this branch" — so it is null unless a page
+// is certain to exist, and this renders a link or plain text, never a guess. The cell's `mono branch` class and
+// its column sizing are untouched, and the row's own click handler already steps aside for an `<a>` (it treats
+// `a` like a button), so the link opens the remote page and nothing else.
+//
+// A branch with no copy on the remote says why in its title AND carries one dim word. That word is the answer to
+// the question the chart was asked to answer at a glance — which trees exist on the remote and which are local
+// only — and it appears only for a project that HAS a remote: in a project without one every branch is local, and
+// the title says that instead of marking each row.
+function branchCellHtml(row) {
+  const name = esc(row.branch || "—");
+  if (row.branchUrl) {
+    const how = row.branchLinkFrom === "local-refs" ? " (found in refs/remotes from the last fetch — the remote itself was not asked)" : "";
+    return `<a class="branch-link" href="${esc(row.branchUrl)}" target="_blank" rel="noopener" title="${esc(`open ${row.branch} on the remote${how}`)}">${name}</a>`;
+  }
+  const project = state.projects.get(row.project) || null;
+  const why = row.branchWhy || (row.remoteBranch === "n/a" ? "no remote configured" : "local only — this branch has no copy on the remote");
+  const localOnly = Boolean(row.branch && project?.remote && row.remoteBranch !== "n/a");
+  return `<span class="branch-plain" title="${esc(why)}">${name}</span>${localOnly ? ` <span class="branch-local" title="${esc(why)}">local</span>` : ""}`;
+}
+
 function rowHtml(row) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   const dirty =
@@ -7492,7 +7666,7 @@ function rowHtml(row) {
   return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     <td class="name"><div class="name-line"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
       title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${nameFromWorkBtn}${agentBadgeHtml(row)}</div></td>
-    <td class="mono branch">${esc(row.branch || "—")}</td>
+    <td class="mono branch">${branchCellHtml(row)}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
     <td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>
@@ -8962,6 +9136,8 @@ function detailHtml(row) {
         ? "branch never moved — it has no commits of its own"
         : null,
     `remote branch: ${esc(row.remoteBranch || "?")}`,
+    // Why the branch cell is plain text rather than a link (or the page it links to), in the reader's own words.
+    row.branchUrl ? `remote page: ${esc(row.branchUrl)}` : row.branchWhy ? `branch link: ${esc(row.branchWhy)}` : null,
     row.lastCommit ? `last commit ${relTime(row.lastCommit)} ago` : null,
     row.error ? `error: ${esc(row.error)}` : null,
   ].filter(Boolean);
@@ -10355,6 +10531,9 @@ function applySnapshot(data) {
     for (const r of data.approvals) if (r && r.id) state.approvals.set(r.id, r);
     renderApprovals();
   }
+  // The panel's own permission requests travel with the snapshot like the CLI-transport approvals: a reload comes
+  // back to the same open question (a push still parked on an answer) rather than losing it.
+  if (data.remoteWrites) applyRemoteWrites(data.remoteWrites);
   // The assistant's scratchpad, alerts and thread id travel with the snapshot (assistant.js owns the panel).
   if (data.assistant && typeof applyAssistant === "function") applyAssistant(data.assistant);
   // A snapshot refreshes what it carries; it does not retract rows. Only an explicit "drop"
@@ -12623,6 +12802,9 @@ function toggleSettings(open = null) {
   void loadSessionSetting();
   void loadProviderSetting();
   void loadModelsSetting();
+  // The remote-write setting is the panel's own (config.json), but which trees carry the push guard is a file on
+  // disk that another instance or a hand edit can change, so it is re-read every time the panel opens.
+  void refreshRemoteGuards();
 }
 
 // ---- the provider endpoint every run talks to ------------------------------------------------
@@ -13267,6 +13449,123 @@ document.addEventListener("click", (e) => {
   toggleShowOld(btn.dataset.ageToggle);
 });
 
+// ---- may a branch exist on a REMOTE at all? ------------------------------------------------------
+// The reader's own words: "all branches local only unless permission was specifically granted in a permission box
+// like other permissions". It lives in this panel's config.json (`remoteBranchPolicy`), so it applies to every
+// browser and survives a restart; changing it writes the installed guards' own copy of it as well, and THAT is
+// what stands between a worker's `git push` and the remote.
+const REMOTE_POLICY_SENTENCE = {
+  "local-only": "branches stay local unless you allow a write in the permission box",
+  allow: "remote writes go through without asking — the box is not offered",
+  deny: "remote writes are refused outright — the box is not even offered",
+};
+
+function remotePolicyStored() {
+  const p = String(state.settings?.remoteBranchPolicy || "local-only");
+  return REMOTE_POLICY_SENTENCE[p] ? p : "local-only";
+}
+
+function paintRemotePolicy(note = "", bad = false) {
+  const stored = remotePolicyStored();
+  const sel = $("remote-policy");
+  // A rejected save leaves what was picked in the box: snapping back reads as "it saved that", when the save is
+  // exactly what failed.
+  if (sel && !bad) sel.value = stored;
+  const preview = $("remote-policy-preview");
+  if (!preview) return;
+  const g = state.remoteGuards;
+  const last = g?.latest?.[0];
+  const bits = [
+    `config.json remoteBranchPolicy: ${stored} — ${REMOTE_POLICY_SENTENCE[stored]}`,
+    !g
+      ? "push guard: reading…"
+      : g.count
+        ? `push guard in ${g.count} worktree${g.count === 1 ? "" : "s"} across ${g.projects} project${g.projects === 1 ? "" : "s"}${last ? ` · last: ${last.tree}` : ""}${g.dirs?.length ? ` · ${g.dirs[0]}` : ""}`
+        : "push guard: not installed yet — it goes in when the panel cuts a worktree (or press the button)",
+    g?.landing?.length ? `${g.landing.length} tree(s) started to land, so they may push` : null,
+    state.rwPending.size ? `${state.rwPending.size} permission request(s) waiting on you — in the dock, bottom right` : null,
+  ].filter(Boolean);
+  preview.textContent = bad ? `NOT SAVED — ${note}` : note ? `${note} · ${bits.join(" · ")}` : bits.join(" · ");
+  preview.classList.toggle("bad", bad);
+}
+
+// The guard's own state (which trees carry it), read on demand: it is a file, not a scan, so opening Settings can
+// ask for it every time.
+async function refreshRemoteGuards() {
+  try {
+    const d = await apiFetch("/api/remote-write/state").then((r) => r.json());
+    state.remoteGuards = d.guards || null;
+    if (d.policy) state.settings = { ...(state.settings || {}), remoteBranchPolicy: d.policy };
+    paintRemotePolicy();
+  } catch {
+    paintRemotePolicy("could not read the guard's state", true);
+  }
+}
+
+async function saveRemotePolicy(policy) {
+  const before = remotePolicyStored();
+  const preview = $("remote-policy-preview");
+  if (preview) {
+    preview.textContent = "saving…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch(
+      "/api/settings/remote-branches",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ policy }) },
+      { timeoutMs: 20000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    state.settings = { ...(state.settings || {}), ...(d.settings || {}) };
+    state.remoteGuards = d.guards || state.remoteGuards;
+    paintRemotePolicy(d.note || "saved");
+    showBanner(`branches on the remote: ${REMOTE_POLICY_SENTENCE[d.policy] || d.policy}`);
+  } catch (err) {
+    // Put the box back where it was: the stored value did NOT change.
+    const sel = $("remote-policy");
+    if (sel) sel.value = before;
+    paintRemotePolicy(String((err && err.message) || err), true);
+  }
+}
+
+async function installPushGuardNow(btn) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "installing…";
+  try {
+    const r = await apiFetch("/api/remote-write/guard", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "install" }) }, { timeoutMs: 180000 });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    state.remoteGuards = d.guards || state.remoteGuards;
+    const failed = Number(d.failed) || 0;
+    paintRemotePolicy(`push guard installed in ${d.installed} worktree${d.installed === 1 ? "" : "s"}${failed ? `, ${failed} refused (named in the log)` : ""}`);
+    showBanner(`push guard: ${d.installed} worktree(s) now refuse a local-only push and ask you instead${failed ? ` · ${failed} could not be installed` : ""}`);
+  } catch (err) {
+    paintRemotePolicy(`could not install the push guard: ${String((err && err.message) || err)}`, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
+
+$("remote-policy")?.addEventListener("change", (e) => void saveRemotePolicy(e.target.value));
+$("btn-guard-install")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  void installPushGuardNow(e.target);
+});
+
+// Settings that arrive from the SERVER apply here, in one place: a snapshot carries them, and a `settings` event
+// carries them after a change made anywhere else (another tab, or "Always allow" in the permission box).
+function applySettings(settings) {
+  if (!settings) return;
+  state.settings = { ...(state.settings || {}), ...settings };
+  paintConfigLine();
+  const scanMode = $("scan-mode");
+  if (scanMode) scanMode.value = state.settings.scanMode === "visible" ? "visible" : "all";
+  paintRemotePolicy();
+}
+
 // ---- the anchor's two signals: hover and last touched, each switched and timed on its own ----------
 function paintAnchorSettings() {
   const hover = $("anchor-hover");
@@ -13526,6 +13825,8 @@ startVisibilityReporting();
     updateColorsRow();
     paintAnchorSettings();
     paintAgeSetting();
+    paintRemotePolicy();
+    void refreshRemoteGuards();
     // "On screen" mode: say what is visible before the first paint settles, so the rows in front of the reader are
     // the first thing the scheduler reads.
     reportVisibility({ force: true });

@@ -463,6 +463,13 @@ body.addbar-top .agents-block > .add-agent-form { order: -1; margin-top: 0; marg
 .approval-dock.is-folded #approval-list { display: none; }
 .approval-dock.is-folded .ap-dock-head { border-bottom: 0; }
 #approval-list { overflow: auto; }
+/* The permission box for a remote write wears the same chrome as a parked turn's approval (.turn-approval), which
+   is deliberately in-card markup. Inside the dock it needs nothing but a trim: the dock already has the border and
+   the shadow, so the inner box keeps its own colour and loses the outer glow. */
+#approval-list .turn-approval { margin: 0 0 0 0; border-radius: 0; border: 0; border-bottom: 1px solid #4a3a17; box-shadow: none; }
+#approval-list .turn-approval .ta-head { font-size: 11px; }
+#approval-list .turn-approval .ta-note { margin-top: 6px; font-size: 11px; color: #d8c79a; }
+#approval-list .turn-approval-done { border-radius: 0; }
 .approval { padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .approval:last-child { border-bottom: 0; }
 .ap-head { display: flex; align-items: center; gap: 10px; font-size: 11px; }
@@ -2014,6 +2021,16 @@ button.btn-row-agent.is-probing { opacity: .55; cursor: progress; }
 .add-agent-input:focus { border-color: var(--addbar-hover-edge, #319051); box-shadow: inset 0 0 0 2px #ffffff2e; }
 .add-agent-input:disabled { opacity: .7; cursor: progress; }
 .branch { color: #c8d1dc; }
+/* A branch the remote actually has: the name itself is the link, so the cell keeps its `mono branch` sizing and
+   only the colour says "this opens something". Hover underlines it rather than moving it — a row is a dense grid
+   and a shifting column under the pointer is worse than no affordance. */
+td.branch a.branch-link { color: #7fb2e8; text-decoration: none; }
+td.branch a.branch-link:hover { text-decoration: underline; }
+td.branch a.branch-link:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; border-radius: 2px; }
+/* No copy on the remote: plain text, and one dim word that answers "which trees have a remote copy" at a glance.
+   Deliberately small and quiet — most rows of a research fleet carry it, and a loud marker on most rows is noise. */
+td.branch .branch-local { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: #55606e; border: 1px solid #2b323c; border-radius: 3px; padding: 0 3px; vertical-align: 1px; }
+td.branch .branch-plain { color: #9aa6b4; }
 .dim { color: var(--dim); }
 .dimmer { color: var(--dimmer); }
 .nowrap { white-space: nowrap; }
