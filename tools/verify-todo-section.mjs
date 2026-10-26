@@ -554,6 +554,37 @@ async function browserPhase(pw) {
   check("browser: every item is listed, in id order", items.map((i) => i.id), ["1", "2", "3", "4", "5"]);
   check("browser: with its status", items.map((i) => i.status), ["todo", "done", "doing", "dropped", "todo"]);
   ok("browser: and its owner and age", items.some((i) => /wtgui-the-mixed-list-a1b2c3/.test(String(i.meta)) && /ago/.test(String(i.meta))), items[2].meta);
+  // The facts hang UNDER the item's own line as a nested bullet list. They used to be one string pushed to the far
+  // right of a full-width flex row (`margin-left:auto`), which put a short item and its owner a screen apart on a wide
+  // board and made the reader zoom out to read one row. Geometry, not markup alone: the list must start near the item's
+  // left edge and below its line, whatever the viewport.
+  const facts = await page.locator(`${todoSel} .todo-item`).evaluateAll((els) =>
+    els
+      .map((el) => {
+        const meta = el.querySelector(".todo-meta");
+        const line = el.querySelector(".todo-line");
+        if (!meta) return null;
+        const m = meta.getBoundingClientRect();
+        return {
+          id: el.dataset.todoItem,
+          tag: meta.tagName,
+          bullets: meta.querySelectorAll(":scope > li").length,
+          indent: Math.round(m.left - el.getBoundingClientRect().left),
+          under: line ? m.top >= line.getBoundingClientRect().bottom - 1 : false,
+        };
+      })
+      .filter(Boolean),
+  );
+  // #1 by+updated, #2 owner+by+updated, #3 owner+by+updated+files, #4 by+updated+note, #5 by+updated.
+  check("browser: every item's facts are a <ul>, one bullet per fact", facts.map((f) => [f.tag, f.bullets]), [
+    ["UL", 2],
+    ["UL", 3],
+    ["UL", 4],
+    ["UL", 3],
+    ["UL", 2],
+  ]);
+  ok("browser: the fact list is indented under the item, not pushed to the row's right edge", facts.every((f) => f.indent > 0 && f.indent < 60), facts.map((f) => `#${f.id}:${f.indent}px`).join(" "));
+  ok("browser: and it sits below the item's line, never beside it", facts.every((f) => f.under), facts.map((f) => `#${f.id}:${f.under}`).join(" "));
   const shot = process.env.PANEL_VERIFY_ARTIFACTS;
   if (shot) {
     try {
