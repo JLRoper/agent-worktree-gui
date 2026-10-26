@@ -337,8 +337,14 @@ async function browserPhase(pw) {
       probe.note = () => card()?.querySelector(".queue-note")?.textContent ?? null;
       probe.warn = () => card()?.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`)?.textContent ?? null;
       probe.buttons = () => [...(card()?.querySelectorAll(".reply-actions button") || [])].map((b) => b.textContent);
-      probe.placeholder = () => card()?.querySelector(".reply-box")?.placeholder ?? null;
-      probe.boxValue = () => card()?.querySelector(".reply-box")?.value ?? null;
+      // The placeholder lives in data-ph now (the box is a div: :empty draws it), which is what the panel reads.
+      probe.placeholder = () => card()?.querySelector(".reply-box")?.dataset.ph ?? null;
+      probe.boxValue = () => {
+        const box = card()?.querySelector(".reply-box");
+        // The panel's own reader: the reply box is a contenteditable host now (it holds a pasted block as an
+        // inline chip), so it has no `.value` to read.
+        return box ? window.WMApp.board.pasteChips.readBox(box) : null;
+      };
       // Everything in the card EXCEPT the held-reply block: the proof for (a) that the editor moved nothing else.
       probe.shell = () => {
         const c = card();
