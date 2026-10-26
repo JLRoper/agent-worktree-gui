@@ -819,15 +819,63 @@ function jobPreview(j) {
   return turnLive(j) ? "starting…" : "no output";
 }
 
+// ---- a turn held on the gateway's 429 cap -----------------------------------------------------
+// The gateway answers `POST /v1/runs` with 429 when its concurrent-run cap is reached — "no slot right
+// now", not "this run is broken" — and lib/jobs.js holds the turn and sends the same request again. These
+// three helpers are what the card says while that happens: the head's state words, the countdown under
+// them, and the one-line note a folded card carries. `waiting` is the status only a held turn has.
+function isWaiting(j) {
+  return String(j?.status || "") === "waiting";
+}
+
+// "try 2 of 6 · next in 3s" — where the hold has got to, from the hold record the panel publishes. Only
+// what is known is said: a record without an attempt count says nothing about attempts.
+function waitTries(j) {
+  const w = j?.waiting || {};
+  const total = Number(w.attempts);
+  const n = Number(w.attempt);
+  if (!Number.isFinite(total) || !Number.isFinite(n)) return "";
+  return `try ${Math.min(n + 1, total)} of ${total}`;
+}
+
+function waitNext(j) {
+  const until = Date.parse(String(j?.waiting?.until || ""));
+  if (!Number.isFinite(until)) return "";
+  const left = Math.ceil((until - Date.now()) / 1000);
+  return left > 0 ? `next in ${left}s` : "sending now";
+}
+
+function waitNote(j) {
+  const bits = [waitTries(j), waitNext(j)].filter(Boolean);
+  return bits.length ? bits.join(" · ") : "held for a free run slot";
+}
+
+// The turn head's state words, in ONE place: the head draws them and the one-second ticker rewrites them,
+// so a held turn says the same thing in both. This is the word that used to be "failed".
+function turnStateText(turn) {
+  // Rebuilt from the gateway's store: there is no duration to report, and "done · 0s" claims a run of zero
+  // seconds that never happened here.
+  if (turn.revived) return "revived";
+  if (isWaiting(turn)) {
+    const note = waitNote(turn);
+    return `waiting for a slot ${elapsed(turn)} · ${note}`;
+  }
+  if (turnLive(turn)) return `running ${elapsed(turn)}`;
+  return `${turn.status} · ${elapsed(turn)}${turn.tokens?.total ? ` · ${fmtTok(turn.tokens.total)} tok` : ""}`;
+}
+
 // A minimized card is a head and one line, and the head's pill only says whether the agent is LIVE - not how its
 // last turn ended. The line under it carries the outcome: the same status word the turn's own head shows (done,
-// failed, interrupted, cancelled, running), how long the turn ran, and then either the reason it died or the last
-// thing it printed. A reason beats the last output: "the panel restarted while this was running" is what a reader
-// needs, and it was only visible with the card open.
+// failed, interrupted, cancelled, waiting, running), how long the turn ran, and then either the reason it died or
+// the last thing it printed. A reason beats the last output: "the panel restarted while this was running" is what
+// a reader needs, and it was only visible with the card open.
 function jobStatusWord(j) {
   // A turn rebuilt from the gateway's store never ran here: "done · 0s" would be a claim about a duration this panel
   // never measured, so it says "revived", the same word the turn's own head uses.
   if (j.revived) return "revived";
+  // Waiting for a run slot is its OWN word — not "failed", which is what the card used to say the instant the
+  // gateway answered 429, and not "running", which it is not yet. The turn is held, not lost (lib/jobs.js).
+  if (isWaiting(j)) return "waiting for a slot";
   if (turnLive(j)) return "running";
   return String(j.status || "").trim() || "unknown";
 }
@@ -835,6 +883,7 @@ function jobStatusWord(j) {
 function jobStatusClass(j) {
   const s = jobStatusWord(j);
   if (s === "failed") return "failed";
+  if (s === "waiting for a slot") return "waiting";
   // Interrupted means the run outlived something - the panel restarting, a stream dying. That is the one a folded
   // card has to say out loud, because the gateway may still be working on it.
   if (s === "interrupted") return "interrupted";
@@ -847,7 +896,9 @@ function jobPreviewHtml(j) {
   const cls = jobStatusClass(j);
   const why = String(j.error || "").replace(/\s+/g, " ").trim();
   const dur = turnLive(j) || j.revived ? "" : elapsed(j);
-  const text = why || jobPreview(j);
+  // A held turn has said nothing yet — there is no prose to preview — so the line carries what it is waiting
+  // for instead of falling through to "starting…", which reads as a stall.
+  const text = why || (isWaiting(j) ? waitNote(j) : jobPreview(j));
   return (
     `<span class="pv-status is-${esc(cls)}" title="${esc(`${word}${dur ? ` · ${dur}` : ""}${why ? ` · ${why}` : ""}`)}">${esc(word)}</span>` +
     (dur ? `<span class="pv-meta">${esc(dur)}</span>` : "") +
@@ -1881,13 +1932,7 @@ function turnHead(turn, index, open, copy = "", inline = false) {
   // the clock-ordered list that the pager already counts ("turns 5–7 of 7").
   const label = `turn ${index + 1}`;
   const pinned = state.pinnedTurns.has(turn.id);
-  const state_ = turn.revived
-    // Rebuilt from the gateway's store: there is no duration to report, and "done · 0s" claims a run
-    // of zero seconds that never happened here.
-    ? "revived"
-    : turnLive(turn)
-      ? `running ${elapsed(turn)}`
-      : `${turn.status} · ${elapsed(turn)}${turn.tokens?.total ? ` · ${fmtTok(turn.tokens.total)} tok` : ""}`;
+  const state_ = turnStateText(turn);
   return `<div class="turn-head mono dimmer" data-turn-head="${esc(turn.id)}" data-toggle-turn="${esc(turnKey(turn, copy))}" title="${open ? "collapse" : "expand"} this turn"><button type="button" class="btn-star${pinned ? " on" : ""}" data-star-turn="${esc(turn.id)}" title="${pinned ? "unpin this turn" : "pin this turn above the paged turns"}">${pinned ? "\u2605" : "\u2606"}</button><span class="chev">${open ? "\u25be" : "\u25b8"}</span> <span class="turn-text">${esc(label)} · ${esc(state_)}</span>${originHtml(turn)}${inlinePrompt(turn, inline)}</div>`;
 }
 
@@ -6603,8 +6648,10 @@ async function reviveSession(btn) {
 
 // A turn is live while it runs - and a turn parked on an approval is still live: the agent is inside the turn,
 // waiting on the reader, not finished with it. Counting a parked turn as done is what let a worktree badge say
-// "2 awaiting approval" and show no running count at all.
-const LIVE_STATUS = new Set(["running", "starting", "waiting_for_approval", "queued"]);
+// "2 awaiting approval" and show no running count at all. A turn HELD on the gateway's 429 cap is live for the
+// same reason in the other direction: it has no run id yet, but it owns its thread and its worktree, so it must
+// not read as a finished turn (the reply queue and the "is this thread busy" checks both ask this).
+const LIVE_STATUS = new Set(["running", "starting", "waiting", "waiting_for_approval", "queued"]);
 
 function turnLive(t) {
   if (!t) return false;
@@ -11494,7 +11541,9 @@ setInterval(() => {
     if (next && el.textContent !== next) el.textContent = next;
   }
   for (const j of state.jobs.values()) {
-    if (j.status !== "running" && j.status !== "starting") continue;
+    // A held turn ticks on the same clock: its head counts the wait and the countdown to the next try, and
+    // nothing else repaints it while it waits (the gateway sends no events for a POST it refused).
+    if (j.status !== "running" && j.status !== "starting" && !isWaiting(j)) continue;
     const card = document.querySelector(`.job[data-thread="${CSS.escape(j.thread || j.id)}"]`);
     // The clock is its own span. Replacing the whole foot here deleted the stats strip one second
     // after the card rendered it: a running card showed "running 42s" and nothing else, while every
@@ -11512,7 +11561,7 @@ setInterval(() => {
     for (const head of heads) {
       const txt = head.querySelector(".turn-text");
       if (!txt) continue;
-      const next = `turn ${turnSeqOf(j)} · running ${elapsed(j)}`;
+      const next = `turn ${turnSeqOf(j)} · ${turnStateText(j)}`;
       if (txt.textContent !== next) txt.textContent = next;
     }
   }
