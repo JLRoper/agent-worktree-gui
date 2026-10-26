@@ -3311,6 +3311,20 @@ function conversationHtml(conv) {
   const zoom = state.consoleZoom.get(thread);
   const thinkZoom = state.thinkZoom.get(thread);
   const sizeVars = [zoom ? `--out-size:${zoom}px` : "", thinkZoom ? `--think-size:${thinkZoom}px` : ""].filter(Boolean).join(";");
+  // A card the panel lost the stream of while its run may still be going in the gateway. "not-running" would be a
+  // promise this panel cannot keep — that pill starts a NEW turn, while the old run may be mid-flight — so the pill
+  // becomes the NOT-RUNNABLE chip instead: a statement the reader can press. The press asks the gateway about run
+  // <id> (POST /api/jobs/reattach) and the panel takes the same decision its boot reconcile takes: still live, the
+  // card re-attaches and steers again; ended, its result is adopted; forgotten, the card settles as interrupted and
+  // its console names the tree the work is in and the PR. It is drawn only while the run MAY still exist — once the
+  // gateway has said it has no record of this run (runGone), there is nothing left to ask, and the settled wording
+  // stands alone.
+  const runMayStillExist = latest.status === "interrupted" && Boolean(latest.runId) && !latest.runGone;
+  const detachedChip = runMayStillExist
+    ? `<button type="button" class="pill pill-notrunnable pill-reattach" data-reattach-job="${esc(latest.id || thread)}" title="${esc(
+        `this card is not runnable here: the panel lost the stream while run ${latest.runId} may still be going in the gateway — click to ask it. Still live: the card re-attaches to that run and can steer it again. Ended: the run's result is adopted. Forgotten: the card settles as interrupted and names the worktree and PR.`,
+      )}">NOT-RUNNABLE<span class="pill-again" aria-hidden="true">\u21bb</span></button>`
+    : "";
   const hotFlash = state.hotFlash.thread === thread && Date.now() < state.hotFlash.until;
   return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}${jumped}${hotFlash ? " hot-flash" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}"${sizeVars ? ` style="${sizeVars}"` : ""}>
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
@@ -3318,7 +3332,8 @@ function conversationHtml(conv) {
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
       ${runningNow
         ? `<span class="pill pill-running" title="${esc(running ? `running ${elapsed(latest)}` : `this turn is ${latest.status}, but subagents it started are still running`)}">running</span>`
-        : `<button class="pill pill-notrunning pill-continue${latest.status === "failed" ? " is-failed" : ""}" data-continue-thread="${esc(thread)}" type="button" title="${esc(
+        : detachedChip ||
+          `<button class="pill pill-notrunning pill-continue${latest.status === "failed" ? " is-failed" : ""}" data-continue-thread="${esc(thread)}" type="button" title="${esc(
             `${latest.status} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""} — click to send this agent "${CONTINUE_TEXT}" and start its next turn`,
           )}">${latest.status === "failed" ? "exited" : "not-running"}<span class="pill-again" aria-hidden="true">\u21bb</span></button>`}
       ${whenHtml}
@@ -3898,6 +3913,47 @@ async function continueThread(thread, btn = null) {
   if (btn && btn.isConnected) {
     btn.disabled = false;
     btn.classList.remove("is-starting");
+  }
+}
+
+// The NOT-RUNNABLE chip's press. One card, one question (POST /api/jobs/reattach), and the server runs it through
+// reconcileRestored's own decision, so a press and a boot can never disagree about what the gateway answered. The
+// card repaints itself from the job events that decision emits; what is added here is the sentence for the reader,
+// and the green note is the same one the other "this gesture did what it said" controls use.
+async function reattachCard(btn) {
+  const id = btn.dataset.reattachJob || "";
+  if (!id) return;
+  btn.disabled = true;
+  btn.classList.add("is-starting");
+  try {
+    const res = await apiFetch("/api/jobs/reattach", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) {
+      showBanner(out.error || `could not ask the gateway about that run (HTTP ${res.status})`);
+      return;
+    }
+    showNote(
+      out.action === "reattached"
+        ? `the gateway still has run ${out.runId} — this card is re-attached to it and can steer it again`
+        : out.action === "adopted"
+          ? `the gateway had already finished run ${out.runId} — its result is on the card`
+          : out.action === "gone"
+            ? out.already
+              ? `the gateway has no record of run ${out.runId} — the card already says so`
+              : `the gateway has no record of run ${out.runId} — the card settled as interrupted, with the worktree and PR named`
+            : `asked the gateway about run ${out.runId || "this turn"}`,
+    );
+  } catch (e) {
+    showBanner(`could not ask the gateway about that run — ${String((e && e.message) || e)}`);
+  } finally {
+    if (btn.isConnected) {
+      btn.disabled = false;
+      btn.classList.remove("is-starting");
+    }
   }
 }
 
@@ -10328,6 +10384,17 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     void continueThread(continueBtn.dataset.continueThread || "", continueBtn);
+    return;
+  }
+  // The NOT-RUNNABLE chip: ask the gateway about this one card's run and let the panel take the same decision its
+  // boot reconcile takes. Nothing is drawn from the response — the decision emits the job events the card is
+  // repainted from — so the press is answered in words, and a refusal says why instead of leaving a chip that looks
+  // broken.
+  const reattachBtn = e.target.closest("[data-reattach-job]");
+  if (reattachBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    void reattachCard(reattachBtn);
     return;
   }
   const head = e.target.closest(".job-head");
