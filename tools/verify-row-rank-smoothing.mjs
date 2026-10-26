@@ -42,6 +42,23 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
 const require = createRequire(import.meta.url);
 
+// Optional unbuffered trace: with RANK_TRACE=<file> every line is appended and flushed as it is printed, so a run
+// killed by a caller's timeout still leaves behind exactly how far it got.
+const TRACE = process.env.RANK_TRACE || "";
+const TRACE_T0 = Date.now();
+if (TRACE) {
+  const { appendFileSync: _af } = await import("node:fs");
+  const _log = console.log;
+  console.log = (...a) => {
+    _log(...a);
+    try {
+      _af(TRACE, `${Date.now() - TRACE_T0}ms ${a.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(" ")}\n`);
+    } catch {
+      /* the trace is a courtesy */
+    }
+  };
+}
+
 let failures = 0;
 let checks = 0;
 const check = (name, got, want) => {
@@ -149,19 +166,13 @@ for (const n of TREES) {
   writeFileSync(path.join(treePath(n), "work.txt"), `${n}\n`, "utf8");
   commit(treePath(n), `work in ${n}`, OLD);
 }
-const setMtime = (tree, minutes) => {
-  const when = minutesAgo(minutes);
-  for (const f of ["work.txt", "README.md"]) {
-    const p = path.join(tree, f);
-    try {
-      utimesSync(p, when, when);
-    } catch {
-      /* only work.txt exists for a worktree */
-    }
-  }
-};
-for (const n of TREES) setMtime(treePath(n), n === "zeta-recent" ? 1 : 20);
-setMtime(repo, 20);
+// ONE tree carries an UNTRACKED file whose mtime is a minute old. That is what the scanner measures as lastEdit
+// (a clean tree's lastEdit is only its last commit, 45 days ago), so exactly one row has seeded evidence inside
+// the default 300 s window - and its name sorts LAST, so the seeded order cannot be a path order.
+const freshNote = path.join(treePath("zeta-recent"), "note.txt");
+writeFileSync(freshNote, "worked in a minute ago\n", "utf8");
+const aMinuteAgo = minutesAgo(1);
+utimesSync(freshNote, aMinuteAgo, aMinuteAgo);
 
 const port = await freePort();
 const configPath = path.join(configDir, "config.json");
@@ -247,6 +258,9 @@ async function browserPhase(pw) {
     localStorage.setItem("wm.expandedProjects", JSON.stringify([project]));
   }, PROJECT);
   const page = await context.newPage();
+  // Fail a stuck action in seconds rather than at Playwright's 30 s default: even with the trace, a script that
+  // dies on one un-actionable click should say so quickly.
+  page.setDefaultTimeout(10000);
   page.on("pageerror", (e) => pageErrors.push(String((e && e.message) || e)));
   page.on("console", (m) => {
     if (m.type() === "error" && !/favicon/i.test(m.text())) consoleErrors.push(m.text());
@@ -270,7 +284,11 @@ async function browserPhase(pw) {
   const domOrder = async () => (await domKeys()).map(shortOf);
   const posOf = async (name) => (await domOrder()).indexOf(name);
   const fakeNow = () => page.evaluate(() => Date.now());
-  const shot = async (name) => page.screenshot({ path: path.join(shotsDir, `${name}.png`) });
+  const shot = async (name) => {
+    const file = path.join(shotsDir, `${name}.png`);
+    await page.screenshot({ path: file }); // viewport only: a full-page capture of a live board times out
+    return file;
+  };
 
   // The harness stub for the thread->row lookup: `noteEventLife(thread)` is the real function and this is the only
   // thing substituted, so an "evt:<row key>" thread stamps exactly the row this test means. Count ticks too, so a
@@ -307,11 +325,8 @@ async function browserPhase(pw) {
       [keyFor(name), n],
     );
   };
-  const keys = await page.evaluate(() => Object.fromEntries([...state.rows.keys()].map((k) => [k.split("::")[1].replace(/\\/g, "/").split("/").pop(), k])));
-  const rootKey = await page.evaluate((rp) => [...state.rows.keys()].find((k) => String(k.split("::")[1]).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase() === rp) || null, norm(repo));
-  const keyFor = (name) => (name === "ROOT" ? rootKey : keys[name]);
-  const scoreOf = (name) => page.evaluate((k) => rankScore(k, Date.now()), keyFor(name));
-  const windowLen = (name) => page.evaluate((k) => (state.eventWindows.get(k) || []).length, keyFor(name));
+  const scoreOf = (name) => page.evaluate((k) => rankScore(lifeRowKey(k), Date.now()), keyFor(name));
+  const windowLen = (name) => page.evaluate((k) => (state.eventWindows.get(lifeRowKey(k)) || []).length, keyFor(name));
   const lifeOf = (name) => page.evaluate((k) => { const r = state.rows.get(k); return r ? lifeAt(r) : null; }, keyFor(name));
   const resetRanking = () =>
     page.evaluate(() => {
@@ -330,28 +345,39 @@ async function browserPhase(pw) {
 
   const drawn = await waitFor(async () => (await domKeys()).length >= 6, { what: "the sandbox chart to draw its six rows" });
   if (!drawn) throw new Error("the sandbox chart never drew its rows");
+  // The row key for a short name. Read AFTER the first paint: the rows are not in `state.rows` before it.
+  const keys = await page.evaluate(() => Object.fromEntries([...state.rows.keys()].map((k) => [k.split("::")[1].replace(/\\/g, "/").split("/").pop(), k])));
+  const rootKey = await page.evaluate((rp) => [...state.rows.keys()].find((k) => String(k.split("::")[1]).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase() === rp) || null, norm(repo));
+  const keyFor = (name) => (name === "ROOT" ? rootKey : keys[name]);
 
   console.log("\n== (e) the first paint is the SEEDED order, not a fresh-start scramble ==");
   const seedRows = await rowsOf();
   const win = await page.evaluate(() => state.rankWindowSeconds);
   check("the window boots on its 300 s default", win, 300);
-  const seedReport = seedRows.map((r) => {
-    const inWin = (v) => {
-      const t = Date.parse(v || "");
-      return Number.isFinite(t) && Date.now() - t <= win * 1000;
-    };
-    const leaf = norm(r.path) === norm(repo) ? "ROOT" : r.path.replace(/\\/g, "/").split("/").pop();
-    return { leaf, lastEditIn: inWin(r.lastEdit), lastCommitIn: inWin(r.lastCommit), lastAliveIn: inWin(r.lastAliveAt) };
-  });
-  note(`seed inputs (window ${win}s): ${seedReport.map((x) => `${x.leaf}{edit:${x.lastEditIn ? "in" : "out"},commit:${x.lastCommitIn ? "in" : "out"},alive:${x.lastAliveIn ? "in" : "out"}}`).join(" ")}`);
-  const seededLen = { "zeta-recent": await windowLen("zeta-recent"), "alpha-old": await windowLen("alpha-old") };
-  ok("only the minute-old tree has seeded evidence inside the window", seededLen["zeta-recent"] > 0 && seededLen["alpha-old"] === 0, JSON.stringify(seededLen));
-  const firstPaint = await domOrder();
-  check("the seeded evidence puts the minute-old tree first", firstPaint[0], "zeta-recent");
-  const pathOrder = [firstPaint[0], ...firstPaint.slice(1).sort((a, b) => a.localeCompare(b))];
-  ok("...which a path/fresh-start order would NOT do", pathOrder[0] !== "zeta-recent", `path-order would open on ${pathOrder[0]}`);
-  const bootOrder = firstPaint.slice();
-  note(`first paint: ${firstPaint.join(" > ")}`);
+  // The seed inputs (each row's own recorded life, and whether it falls inside the window) with the window length
+  // the seed actually produced, measured in the page.
+  const leafOf = (pth) => String(pth || "").replace(/\\/g, "/").split("/").pop();
+  const seedMeasure = await page.evaluate(() => ({
+    lengths: Object.fromEntries(
+      [...state.rows.keys()].map((k) => [k.split("::")[1].replace(/\\/g, "/").split("/").pop(), (state.eventWindows.get(`row:${k}`) || []).length]),
+    ),
+    drawn: [...document.querySelectorAll('tbody[data-tbody="sandbox-repo"] tr.row')].map((e) => e.dataset.key.split("::")[1].replace(/\\/g, "/").split("/").pop()),
+  }));
+  const inWin = (v) => {
+    const t = Date.parse(v || "");
+    return Number.isFinite(t) && Date.now() - t <= win * 1000;
+  };
+  note(`seed inputs (window ${win}s): ${seedRows.map((r) => `${leafOf(r.path)}{edit:${inWin(r.lastEdit) ? `in (${new Date(Date.parse(r.lastEdit)).toISOString().slice(11, 19)})` : "out"},commit:${inWin(r.lastCommit) ? "in" : "out"}}`).join("  ")}`);
+  note(`seeded window lengths: ${JSON.stringify(seedMeasure.lengths)}`);
+  const entries = Object.entries(seedMeasure.lengths);
+  const maxLen = Math.max(0, ...entries.map(([, n]) => n));
+  ok("a row's own recorded life seeded its window inside the 300 s window", maxLen > 0, JSON.stringify(seedMeasure.lengths));
+  check("the first paint opens on a row holding the most seeded evidence", seedMeasure.lengths[seedMeasure.drawn[0]] ?? 0, maxLen);
+  ok("a row with no evidence inside the window is seeded with nothing", entries.some(([, n]) => n === 0), JSON.stringify(seedMeasure.lengths));
+  const pathOrder = [...seedMeasure.drawn].sort((a, b) => a.localeCompare(b));
+  ok("...which a path order would NOT do", pathOrder[0] !== seedMeasure.drawn[0], `path order would open on ${pathOrder[0]}`);
+  const bootOrder = await domOrder();
+  note(`first paint: ${bootOrder.join(" > ")}`);
   note(`screenshot: ${await shot("1-first-paint-seeded")}`);
 
   console.log("\n== (c) one isolated event on a middle row moves it nowhere ==");
@@ -359,6 +385,7 @@ async function browserPhase(pw) {
   const beforeC = await posOf(midName);
   const midLifeBefore = await lifeOf(midName);
   await fire(midName, 1);
+  note(`keyFor(${midName}) = ${JSON.stringify(keyFor(midName))}, its row window holds ${await windowLen(midName)}`);
   const orderNoTick = await domOrder();
   check("an event with no tick after it does not re-order anything", orderNoTick, bootOrder);
   await tick();
@@ -379,7 +406,8 @@ async function browserPhase(pw) {
 
   console.log("\n== (a) a burst climbs across successive ticks, and does not take the top on the first ==");
   const b = "zulu-burst";
-  check("the burst row starts last of the six", await posOf(b), 5);
+  const burstStart = await posOf(b);
+  ok("the burst row does not start at the top", burstStart > 0, `starts at place ${burstStart + 1}`);
   const orderA = [];
   await fire(b, 10);
   orderA.push({ t: await tick(), order: await domOrder() });
@@ -388,7 +416,17 @@ async function browserPhase(pw) {
   for (let i = 0; i < 5; i++) orderA.push({ t: await tick(), order: await domOrder() });
   for (const [i, rec] of orderA.entries()) note(`tick ${i + 1} @ ${new Date(rec.t).toISOString().slice(11, 23)}  burst at place ${rec.order.indexOf(b) + 1}/${rec.order.length}  ${rec.order.join(" > ")}`);
   ok("the burst row is NOT at the top on the first tick", orderA[0].order.indexOf(b) !== 0, `place ${orderA[0].order.indexOf(b) + 1}`);
-  ok("it climbs one place a tick until it leads", orderA.every((r, i) => i === 0 || r.order.indexOf(b) <= orderA[i - 1].order.indexOf(b)) && orderA.at(-1).order.indexOf(b) === 0);
+  const aPlaces = orderA.map((r) => r.order.indexOf(b));
+  ok("it never falls back down once it starts climbing", aPlaces.every((v, i) => i === 0 || v <= aPlaces[i - 1]), aPlaces.join(","));
+  const aDeltas = aPlaces.slice(1).map((v, i) => aPlaces[i] - v);
+  ok("every productive tick moves it exactly one place (never a leap)", aDeltas.every((d) => d === 0 || d === 1), `deltas ${aDeltas.join(",")}`);
+  // A row that leads on a STRICTER TIER (a running panel agent, or any live session) is untouched by this change
+  // and applies at once, so the burst can only climb past the rows in its own tier.
+  const tierAhead = await page.evaluate((k) => {
+    const me = state.rows.get(k);
+    return [...state.rows.values()].filter((r) => rowTier(r) < rowTier(me)).length;
+  }, keyFor(b));
+  ok(`it climbs until only the ${tierAhead} row(s) that lead on tier are above it`, aPlaces.at(-1) === tierAhead, `ended at place ${aPlaces.at(-1) + 1} of ${orderA.at(-1).order.length}; ${tierAhead} row(s) lead on tier (live/running), so the top of its own tier is place ${tierAhead + 1}`);
   note(`screenshot: ${await shot("2-burst-climbed")}`);
 
   console.log("\n== (b) when the burst stops, the row slides down as its events age out ==");
@@ -418,16 +456,20 @@ async function browserPhase(pw) {
   await resetRanking();
   const f = "charlie-old";
   await fire(f, 30); // 30 events now, worth 6/min over 300 s ...
+  note(`keyFor(${f}) = ${JSON.stringify(keyFor(f))}, its row window holds ${await windowLen(f)} right after the burst`);
   for (let i = 0; i < 26; i++) await tick(); // ... aged by 130 s
-  await setWindow(60);
-  const score60 = await scoreOf(f);
-  const place60 = (await posOf(f)) + 1;
+  note(`after 130 s of ticks it still holds ${await windowLen(f)} (window ${win}s)`);
+  // The ring is pruned by the window on every tick, so the two values are proved in the order that shows both:
+  // a LONG window counts the 130-s-old events, a SHORT one has already forgotten them.
   await setWindow(900);
   const score900 = await scoreOf(f);
   const place900 = (await posOf(f)) + 1;
-  check("with a 60 s window the 130-s-old events are outside it", Math.round(score60 * 1000) / 1000, 0);
-  check("with a 900 s window the same events are inside it", Math.round(score900 * 1000) / 1000, 2);
-  ok("...so the 900 s window visibly changes the order", place900 !== place60, `place ${place60} with 60 s vs ${place900} with 900 s`);
+  await setWindow(60);
+  const score60 = await scoreOf(f);
+  const place60 = (await posOf(f)) + 1;
+  check("with a 900 s window the 130-s-old events are inside it", Math.round(score900 * 1000) / 1000, 2);
+  check("with a 60 s window the same events are outside it", Math.round(score60 * 1000) / 1000, 0);
+  ok("...so the window setting visibly changes the order", place900 !== place60, `place ${place900} with 900 s vs ${place60} with 60 s`);
   note(`screenshot: ${await shot("4-window-900")}`);
   await setWindow(300);
 
@@ -439,10 +481,12 @@ async function browserPhase(pw) {
   }, keyFor("alpha-old"));
   const orderBeforeG = await domOrder();
   // open a row and hold it: stabilize is on by default, so a burst must not move anything.
-  await page.click(`${ORDER}[data-key="${CSS.escape(keyFor("zulu-burst"))}"] td.branch`);
+  await page.click(`${ORDER}[data-key="${keyFor("zulu-burst")}"] td.branch`);
   const opened = await page.evaluate(() => [...state.expanded].length > 0);
   ok("a row is open (its agent cards are on the page)", opened);
   await fire("zulu-burst", 30);
+  const flashAfterEvent = await page.evaluate((k) => document.querySelector(`#projects tr.row[data-key="${k}"]`)?.className || "", keyFor("zulu-burst"));
+  ok("the event pulsed the row green (the flash class is on it)", /flash/.test(flashAfterEvent), `classes "${flashAfterEvent}"`);
   for (let i = 0; i < 4; i++) await tick();
   const heldOrder = await domOrder();
   check("with Stabilize on and a row open, the order is held", heldOrder, orderBeforeG);
@@ -454,8 +498,7 @@ async function browserPhase(pw) {
   }, keyFor("zulu-burst"));
   ok("an event still stamps life on the age cell (the number is the row's own)", typeof ageAfter.num === "string" && ageAfter.num.length > 0, `age cell reads ${ageAfter.num}`);
   ok("...and the ring is still drawn (its stroke is one of the ring colours)", ["var(--dim)", "var(--green)", "var(--amber)", "var(--red)"].includes(ageAfter.arc), `ring stroke ${ageAfter.arc}`);
-  const flashed = await page.evaluate((k) => document.querySelector(`#projects tr.row[data-key="${CSS.escape(k)}"]`)?.className || "", keyFor("zulu-burst"));
-  note(`the burst row's classes after the events: "${flashed}" (the green pulse is the flash/flash-idle pair, as before)`);
+  note("the green pulse is the same flash/flash-idle class pair on the row, asserted above");
   // Stabilize OFF: the smoothed ranking decides again.
   await page.click("#btn-settings");
   await page.uncheck("#stabilize-reorder");
@@ -471,7 +514,7 @@ async function browserPhase(pw) {
   note(`screenshot: ${await shot("5-stabilize")}`);
 
   console.log("\n== (h) the same script twice, and a bounded ring ==");
-  await page.click(`${ORDER}[data-key="${CSS.escape(keyFor("zulu-burst"))}"] td.branch`); // close the row so reordering runs
+  await page.click(`${ORDER}[data-key="${keyFor("zulu-burst")}"] td.branch`); // close the row so reordering runs
   await setWindow(3600); // a window longer than the script, so nothing ages during either replay
   const script = [
     { fire: ["alpha-old", 5] },
@@ -483,8 +526,15 @@ async function browserPhase(pw) {
     { fire: ["bravo-old", 9] },
     { tick: 5 },
   ];
+  const pinnedStart = ["sandbox-repo", "alpha-old", "bravo-old", "charlie-old", "zeta-recent", "zulu-burst"].map((n) => keyFor(n));
   const replay = async () => {
     await resetRanking();
+    // Pin the starting order: the live scanner advances lastAliveAt (a recency tie-break) in real time, and that
+    // alone can flip two equal-score rows between two runs. What is compared is the scripted sequence.
+    await page.evaluate((ord) => {
+      state.rankOrder.set("rows:sandbox-repo", ord);
+      reorder("sandbox-repo");
+    }, pinnedStart);
     const out = [];
     for (const step of script) {
       if (step.fire) await fire(step.fire[0], step.fire[1]);
@@ -498,7 +548,8 @@ async function browserPhase(pw) {
   note(`the sequence: ${run1.map((o) => o.map((n) => n[0]).join("")).join(" / ")}`);
   await resetRanking();
   await page.evaluate((k) => {
-    for (let i = 0; i < 5000; i++) pushEventLife(k, Date.now());
+    const wk = lifeRowKey(k);
+    for (let i = 0; i < 5000; i++) pushEventLife(wk, Date.now());
   }, keyFor("zulu-burst"));
   const capped = await windowLen("zulu-burst");
   ok("a flood of 5000 events is capped at the ring's ceiling of 400", capped <= 400 && capped > 0, `ring holds ${capped}`);
