@@ -1314,7 +1314,9 @@ const server = createServer(async (req, res) => {
         });
         return sendJson(res, 202, { job, assistant: assistant.state() });
       } catch (e) {
-        return sendJson(res, 400, { error: String((e && e.message) || e) });
+        // 409 for a worker that is already turning: the request was well-formed and understood, and the answer is
+        // "not now" (the code a steer that missed the last tool boundary already gets). 400 for everything else.
+        return sendJson(res, (e && e.code) === "thread_busy" ? 409 : 400, { error: String((e && e.message) || e) });
       }
     }
 
