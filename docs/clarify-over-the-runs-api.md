@@ -13,18 +13,23 @@ anything. This file is the answer both investigations converged on, with the cod
 the one thing that has to change, and what the panel does until it does.
 
 **Short version.** The panel's half of the contract ships in this repo and is complete. The
-gateway's half is *code*, and the build installed here does not have it: there is no
-`POST /v1/runs/{run_id}/clarify` on this build and no clarify callback on an API run's agent, so the
-tool is offered to the model and refuses at dispatch. No `hermes config set` can supply a route.
-`lib/clarify.js` therefore records the refusal from the run's own stream and tells the next turn to
-ask in prose, which is what the reader sees on the board today.
+gateway's half is *code*, and the stock build installed here does not have it: there is no
+`POST /v1/runs/{run_id}/clarify` and no clarify callback on an API run's agent, so the tool is offered
+to the model and refuses at dispatch. No `hermes config set` can supply a route — but the missing half
+is four edits, and this box carries them as a local patch
+(`%LOCALAPPDATA%\hermes\patches\clarify-runs-api.patch`). Measured 2026-10-26 on a second
+gateway: an agent's question parks the run, `clarify.request` arrives with its choices and prompt id,
+the answer is posted to the route, and the turn ends holding it. The earlier conclusion — that this
+needed an upstream install and could not be an edit — was wrong. `lib/clarify.js` still records what it
+OBSERVES (a refusal on a run's stream means the build cannot deliver a question, a `clarify.request`
+means it can), so a build without the patch keeps telling agents to ask in prose.
 
 ## The two gates, and which one is shut
 
 | gate | decided by | state on this box |
 | --- | --- | --- |
 | 1. the tool is in the run's toolset | `platform_toolsets.api_server` in `<HERMES_HOME>/config.yaml` | **open** — the line is present and the tool is in the pinned schema |
-| 2. the build can deliver a question | gateway source: a clarify callback on an API run's agent + `POST /v1/runs/{run_id}/clarify` | **shut** — neither exists in the installed build |
+| 2. the build can deliver a question | gateway source: a clarify callback on an API run's agent + `POST /v1/runs/{run_id}/clarify` | **open on this box since 2026-10-26** — neither exists in the stock 0.22.2 build; the local patch supplies both, and a gateway running it advertises `run_clarify_response` |
 
 Gate 1 alone is a trap: it puts `clarify` in the schema, so the model calls it, and then gate 2
 refuses every call. That is exactly the observed refusal, and it is why the panel's own docs used to
@@ -105,6 +110,9 @@ could not be traced here — this checkout is a partial clone whose promisor rem
 this; the tree is.** Check a build by what it contains, which is what
 `tools/check-gateway-clarify.mjs` does.
 
+Upstream is not the only route to it: the local patch below gives this build the same contract, which is
+what this box runs.
+
 ## What the panel does about it (this repo's half)
 
 Shipped here, and all of it observable on the board:
@@ -132,31 +140,47 @@ So a question still reaches the reader on this build — as a prose question at 
 which the board's `question` rule already escalates with the choices it can read. What is lost is the
 *parked* question: the box, the choices as buttons, and the turn waiting for the answer.
 
-## What the reader has to do (one command, and a restart)
+## What the reader has to do (a patch, then a restart)
 
-The gateway change is an install, not an edit — 1692 commits of upstream work, not a one-line patch
-this repo could carry:
+The gateway change is code, and it does not have to be 1692 commits of upstream work: the contract the
+panel already speaks is four edits, mirroring the approval plumbing that works on this build today.
+The patch, its re-runnable generator and the proof live outside the repo:
 
-```bash
-hermes update          # installs a build with the Runs API clarify contract
-node tools/check-gateway-clarify.mjs --probe   # 0 = the route is there, 1 = it is not
+```
+%LOCALAPPDATA%\hermes\patches\clarify-runs-api.patch      patch -p1, applies to pristine 0.22.2 files
+%LOCALAPPDATA%\hermes\patches\clarify-runs-api.apply.py   exact-anchor surgery; asserts every anchor
+%LOCALAPPDATA%\hermes\patches\clarify-runs-api.demo.py    the end-to-end driver (second gateway, spare port)
+%LOCALAPPDATA%\hermes\patches\clarify-runs-api.demo-patched.txt / -demo-unpatched.txt   both transcripts
 ```
 
-Two caveats, both real:
+What it changes, and why each piece is needed:
 
-- **`hermes update` restarts the gateway.** Do it while the board is idle: an update bounces the
-  gateway and every run in flight dies with it. (This is not hypothetical — a run on this box was
-  killed mid-investigation by an update that was asked not to restart anything and restarted anyway.)
-- **The panel needs a restart afterwards and the gateway does not.** `lib/**` is loaded at boot, so
-  the new module and the new body composition only take effect once the panel is restarted:
+- `gateway/platforms/api_server_runs.py` — `_make_clarify_callback(run, *, _api_server)`: register a
+  waiter in the shipped `tools/clarify_gateway.py`, park the run's status with `clarify=<prompt>`, publish
+  `clarify.request`, block the agent thread on `wait_for_response`, publish `clarify.settled`.
+  `_run_agent_sync(..., clarify_callback=None, ...)` sets `agent.clarify_callback` before
+  `run_conversation` and clears it afterwards. `_handle_run_clarify` answers
+  `POST /v1/runs/{run_id}/clarify` with the same fence as `/approval`. Plus the route row, `/clarify` →
+  `"approve"` in `_room_permission_for`, `_run_clarify_prompts`, `_pending_controls_for()` and
+  `pending_controls` on `GET /v1/runs/{id}`, and `clarify` in the `_set_run_status` persist/clear sets.
+- `gateway/platforms/api_server.py` — `run_clarify_response` + `clarify_events` in
+  `_STATIC_FEATURE_FLAGS`, `run_clarify` in `_CAPABILITY_ENDPOINTS`, **and the adapter binding
+  `_handle_run_clarify = _run_route_delegate("_handle_run_clarify")`**. That binding is not optional:
+  without it the route table raises `'APIServerAdapter' object has no attribute '_handle_run_clarify'` and
+  the API server fails to start at all — the whole platform, not just the new route.
+- `toolsets.py` — `hermes-api-server` no longer drops `clarify`, so a stock install offers the tool and the
+  `platform_toolsets` line becomes belt-and-braces.
 
-      stop-background.cmd
-      start-background.cmd
+Apply it to BOTH copies (`hermes-agent/` — the checkout `gateway-service/Hermes_Gateway.cmd` puts on
+`PYTHONPATH` — and `installs/*/environments/*/workspace/`), delete the stale
+`__pycache__/api_server_runs*.pyc`, then restart the gateway: a running Python process keeps the modules it
+loaded at boot, so nothing changes until it is restarted. There is no restart button in the page — the
+assistant's `RESTART gateway` line, or `POST /api/restart {"target":"gateway","waitFor":"<thread>"}`,
+which queues it until the asking turn has ended (a synchronous restart would kill the reply that asked for
+it). `hermes update` installs a build with the contract too, and it is the heavier path: it bounces the
+gateway and every run in flight dies with it.
 
-  The gateway reads `platform_toolsets` per run, so the config line needs no restart — but the
-  *route* does need the new build, which the update installs.
-
-Nothing in this repo has to change for the box to appear once the gateway has the route.
+The panel needs no restart — `public/**` is read from disk per request, and nothing under `lib/**` changed.
 
 ## Verifying this without a gateway
 
@@ -164,6 +188,12 @@ Nothing in this repo has to change for the box to appear once the gateway has th
 node tools/verify-clarify.mjs          # 30 checks, all offline, against a stub Runs API
 node tools/check-gateway-clarify.mjs   # read-only: one GET, and with --probe one OPTIONS per route
 ```
+
+`check-gateway-clarify.mjs` reads `features.run_clarify_response` first: a patched gateway answers
+`VERDICT the clarify route is present` (exit 0) on one GET, and a stock one still reads ABSENT (exit 1).
+Its `--probe` half is a cross-check only. Measured on this box, `OPTIONS` answers **403 for the clarify
+route and for its own approval control** — an auth layer answers before the router — so the probe settles
+nothing there, and the script now says exactly that instead of a bare "undecided".
 
 `verify-clarify.mjs` drives the shipped `lib/clarify.js` and `lib/jobs.js` against a stub Runs API on
 an ephemeral loopback port — no real gateway, no worker started — and checks the whole chain in

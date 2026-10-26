@@ -1,11 +1,16 @@
 // Does the gateway this panel is pointed at carry the Runs API half of the `clarify` contract?
 //
 // The panel's own half (the light-purple question box, `POST /api/jobs/answer`, the `clarify.request`
-// handling in lib/jobs.js) ships in this repo. The gateway's half does not: a build needs a route to
+// handling in lib/jobs.js) ships in this repo. The gateway's half is code: a build needs a route to
 // answer a parked question (`POST /v1/runs/{run_id}/clarify`) and a clarify callback on an API run's
 // agent. Without them the model is still handed the tool — `platform_toolsets.api_server` can add it —
 // and every call is refused with "Clarify tool is not available in this execution context", which
 // looks like a permission problem and is a missing feature.
+//
+// A build that has it advertises `features.run_clarify_response` in /v1/capabilities, and that flag is
+// the cheapest honest answer this script can read. The stock 0.22.2 build does not have the route, and
+// this box carries it as a LOCAL PATCH rather than an upstream install: the four edits, the apply
+// script and the restart step are in docs/clarify-over-the-runs-api.md.
 //
 //   node tools/check-gateway-clarify.mjs                 # capabilities only: one GET, no guessing
 //   node tools/check-gateway-clarify.mjs --probe         # + one OPTIONS per route, to tell a route
@@ -67,6 +72,8 @@ say(`auth     ${key ? "API_SERVER_KEY present" : "no key found (set --key, API_S
 
 let verdict = 2;
 let reason = "nothing answered the probe";
+// What the gateway says about itself. null = this build says nothing either way.
+let flagPresent = null;
 
 try {
   const ctrl = new AbortController();
@@ -82,9 +89,17 @@ try {
     const endpoints = caps.endpoints || {};
     say(`version   ${caps.version || "(not reported)"}`);
     say(`features  ${Object.entries(features).filter(([, v]) => v === true).map(([k]) => k).join(", ") || "(none true)"}`);
+    flagPresent = features.run_clarify_response === true;
+    say(`clarify   ${flagPresent ? "advertised (run_clarify_response)" : "not advertised — a build may still have the route, so this is a hint, not proof"}`);
     // A build that ships the route is free not to advertise it; the absence below is a hint, not proof.
     const advertised = Object.keys(endpoints).filter((name) => /clarif/i.test(name) || /clarify$/.test(String(endpoints[name]?.path || "")));
-    say(`advertised clarify endpoints: ${advertised.length ? advertised.join(", ") : "none (upstream main does not advertise one either)"}`);
+    say(`advertised clarify endpoints: ${advertised.length ? advertised.join(", ") : "none (the stock build does not advertise one either)"}`);
+    if (flagPresent) {
+      // The gateway's own statement, and the one signal here that does not depend on how a router
+      // answers a method it was never asked to serve.
+      verdict = 0;
+      reason = "the gateway advertises run_clarify_response — the Runs API clarify contract is present";
+    }
   }
 } catch (e) {
   say(`capabilities  unreachable — ${String((e && e.message) || e)}`);
@@ -114,7 +129,16 @@ if (flag("--probe")) {
   // OPTIONS; a status from a handler (200/400/409) means the path reached code. 401/403 and a dead
   // socket mean something in front of the router answered, which settles nothing either way.
   const routeKnown = (code) => (code === 405 || code === 200 || code === 400 || code === 409 ? true : code === 404 ? false : null);
-  if (routeKnown(control) === false) {
+  if (flagPresent === true) {
+    // The flag already answered; the probe only has to agree with it. A disagreement is worth saying
+    // out loud rather than smoothing over — one of the two readings is stale.
+    if (routeKnown(clarify) === false) {
+      verdict = 2;
+      reason = "the capability flag says the route is there, but the router answered 404 for it — re-read before believing either";
+    } else if (routeKnown(clarify) === true) {
+      reason = "the gateway advertises run_clarify_response and the router knows /v1/runs/{id}/clarify";
+    }
+  } else if (routeKnown(control) === false) {
     reason = "the control route answered 404 too — an auth layer or a proxy is answering, not the router";
   } else if (routeKnown(clarify) === true) {
     verdict = 0;
@@ -123,7 +147,11 @@ if (flag("--probe")) {
     verdict = 1;
     reason = "the router does not know /v1/runs/{id}/clarify on this build";
   } else {
-    reason = `undecided: the clarify probe answered ${clarify}`;
+    // Measured on this box: BOTH probes answer 403 (an auth layer answers before the router), so a
+    // bare "undecided" here reads like a broken script. Say which two answers were the same.
+    const same = String(clarify) === String(control);
+    reason = `undecided: the clarify probe answered ${clarify}`
+      + (same ? ` — and so did the approval control (${control}), so something in front of the router answered and the probe settles nothing` : "");
   }
 }
 
@@ -134,10 +162,16 @@ if (verdict !== 0) {
   say();
   say("The panel's half is already written and needs no change. The gateway's half is code, not config:");
   say("  `hermes config set platform_toolsets.api_server` only puts the tool in the schema — it cannot add the route.");
-  say("  Install a Hermes build that contains the Runs API clarify contract, then re-run this check:");
-  say("    hermes update            # restarts the gateway: do it while the board is idle");
-  say("  docs/clarify-over-the-runs-api.md has the quoted code, and says what the panel does until then.");
-  say("  Until it is there, the panel records the refusal from a run's own stream and tells agents to ask in prose.");
+  say("  A build without it can be given it locally, which is what this box does:");
+  say("    %LOCALAPPDATA%\\hermes\\patches\\clarify-runs-api.patch      (patch -p1; delete the stale __pycache__)");
+  say("    %LOCALAPPDATA%\\hermes\\patches\\clarify-runs-api.apply.py   (re-runnable; asserts every anchor)");
+  say("  Apply it to BOTH copies — hermes-agent/ and installs/*/environments/*/workspace/ — then restart the");
+  say("  gateway: a running process keeps the modules it loaded at boot. There is no restart button in the page;");
+  say("  the assistant's `RESTART gateway` line, or POST /api/restart {\"target\":\"gateway\",\"waitFor\":\"<thread>\"},");
+  say("  queues it until the asking turn has ended.");
+  say("  `hermes update` installs a build with the contract too — the heavier path, and it restarts the gateway.");
+  say("  docs/clarify-over-the-runs-api.md has the quoted code, the patch's four edits, and what the panel does");
+  say("  until then: it records the refusal from a run's own stream and tells agents to ask in prose.");
 }
 if (!flag("--probe")) {
   say();
