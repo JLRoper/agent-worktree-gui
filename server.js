@@ -1300,6 +1300,22 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, assistant.state());
     }
 
+    // The message board between the assistant and the agents. Deliberately NOT part of the polled state:
+    // it is the whole seven-day conversation, it is only read while its tab is open, and it is built from
+    // the job store and the journal on every request (no cache to prune). The cap and the window travel
+    // with the answer, so the tab can say which one it is up against.
+    if (route === "/api/assistant/messages" && req.method === "GET") {
+      const q = new URL(req.url, "http://127.0.0.1").searchParams;
+      const days = Number(q.get("days"));
+      const cap = Number(q.get("cap"));
+      return sendJson(res, 200, {
+        messages: assistant.messages({
+          ...(Number.isFinite(days) && days > 0 ? { days: Math.min(30, days) } : {}),
+          ...(Number.isFinite(cap) && cap > 0 ? { cap: Math.min(2000, Math.round(cap)) } : {}),
+        }),
+      });
+    }
+
     // The continuity file — the long tier of the assistant's memory, injected into every turn. GET carries
     // the text (the polled state carries only its path, size and mtime, so a 20 KB body is not re-sent on
     // every board event); PUT replaces it whole. Too big is its own status: the module raises the cap

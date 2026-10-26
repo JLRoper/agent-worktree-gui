@@ -15,7 +15,7 @@
   const RECT_KEY = "wm.assistantRect";
   const SEEN_KEY = "wm.assistantSeenAt";
   const PIN_KEY = "wm.assistantPinned";
-  const TABS = ["chat", "alerts", "watches", "pad", "charter", "settings"];
+  const TABS = ["chat", "alerts", "watches", "messages", "pad", "charter", "settings"];
 
   // Ticks on a multi-select question outlive a repaint: the alerts pane is rebuilt whenever the assistant's
   // state changes, and a selection that vanishes on the next job event is the same bug as a lost draft.
@@ -247,6 +247,7 @@
     renderAssistantChat();
     if (state.assistantTab === "alerts") renderAssistantAlerts();
     else if (state.assistantTab === "watches") renderAssistantWatches();
+    else if (state.assistantTab === "messages") renderAssistantMessages();
     else if (state.assistantTab === "pad") renderAssistantPad();
     else if (state.assistantTab === "charter") renderAssistantCharter();
     else if (state.assistantTab === "settings") renderAssistantSettings();
@@ -575,6 +576,203 @@
       </div>`;
   }
 
+  // ---- the message board: what it sent them, and what they sent back ------------------------------
+
+  // The board is the whole seven-day conversation, so it is NOT in the polled state (which is re-sent on
+  // every board event): this pane reads it from its own route, and re-reads it on the panel's refresh
+  // clock while it is the tab on screen. Nothing is cached between reads — the server builds the view per
+  // request from the job store and the assistant's journal — so there is no second copy of the log here to
+  // prune at seven days, and no way for this pane to drift from what the panel actually recorded.
+  const MSG_REFRESH_MS = 15000;
+  const MSG_RETRY_MS = 5000;
+  const MSG_TEXT_CHARS = 320;
+  let msgBoard = null; // the last answer from the server
+  let msgErr = "";
+  let msgAt = 0;
+  let msgTried = false;
+  let msgDir = "all"; // the in-tab chip: all | out | in
+  const msgOpen = new Set(); // entries the reader expanded — a repaint must not fold them back up
+
+  async function loadMessages(force = false) {
+    if (!force && msgTried && Date.now() - msgAt < MSG_RETRY_MS) return;
+    msgTried = true;
+    try {
+      const r = await apiFetch("/api/assistant/messages");
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      msgBoard = d.messages || null;
+      msgErr = "";
+    } catch (err) {
+      msgErr = String((err && err.message) || err);
+    }
+    msgAt = Date.now();
+    renderAssistantMessages();
+  }
+
+  const msgClip = (s, n) => {
+    const t = String(s ?? "");
+    return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  };
+
+  // Which way the message went, in words. Never colour alone: the direction is a sentence on the entry
+  // itself, and the same sentence is in the entry's accessibility label.
+  function msgDirLabel(e) {
+    const onAssistant = e.thread === state.assistantThread;
+    const thread = onAssistant ? "the assistant" : e.thread || "(no thread)";
+    if (e.dir === "in") return onAssistant ? "the assistant → you" : `${thread} → assistant`;
+    if (e.from === "you") return `you → ${thread}`;
+    if (e.from === "panel") return `the panel → ${thread}`;
+    return onAssistant ? "the board → the assistant" : `assistant → ${thread}`;
+  }
+
+  function msgTimeHtml(e) {
+    const at = Date.parse(e.at);
+    if (!Number.isFinite(at)) return `<span class="as-ago">—</span>`;
+    return `<span class="as-ago" title="${esc(new Date(at).toLocaleString())}">${esc(relTime(e.at))} ago</span>`;
+  }
+
+  function msgMetaHtml(e) {
+    const chip = (label, value, title = "") => `<span title="${esc(title || `${label}: ${value}`)}">${esc(label)} <b>${esc(value)}</b></span>`;
+    const bits = [];
+    if (e.dir === "out") {
+      if (e.status) bits.push(chip("run", e.status));
+      // A wake runs in the assistant's own thread and is filed under the thread it was about: say so,
+      // because "ran in" is the one thing a reader could otherwise get wrong about it.
+      if (e.ranIn && e.ranIn !== e.thread) bits.push(chip("ran in", e.ranIn, "the thread this turn actually ran in — it is filed under the thread it was woken about"));
+      if (e.worktree) bits.push(chip("tree", tailPath(e.worktree, 2), e.worktree));
+      if (e.branch) bits.push(chip("branch", e.branch));
+      return bits;
+    }
+    const c = e.completion;
+    if (c) {
+      bits.push(chip("ended", `${c.word}${c.reason ? ` — ${msgClip(c.reason, 100)}` : ""}`, `the run ended ${c.word}${c.reason ? `: ${c.reason}` : ""}`));
+      if (c.duration) bits.push(chip("took", c.duration));
+      if (c.branch) bits.push(chip("branch", c.branch));
+      if (c.worktree) bits.push(chip("tree", tailPath(c.worktree, 2), c.worktree));
+      if (c.commits !== null) bits.push(chip("commits", String(c.commits)));
+      if (c.treeExists === false) bits.push(`<span>its worktree is no longer on disk</span>`);
+      else if (c.treeNote) bits.push(`<span title="${esc(c.treeNote)}">${esc(msgClip(c.treeNote, 80))}</span>`);
+    }
+    if (e.empty && e.wordsFrom) bits.push(chip("held", e.wordsFrom, e.wordsFrom));
+    const q = e.question;
+    if (q) {
+      if (q.choices.length) bits.push(chip(q.multiSelect ? "choices (multi-select)" : "choices", q.choices.join(" · ")));
+      if (q.answered) bits.push(chip("answered", q.answer, "the answer the panel sent back"));
+      else if (q.withdrawn) bits.push(`<span>it left without an answer — withdrawn, timed out, or answered on another surface</span>`);
+      else bits.push(chip("waiting", "still parked on it"));
+    }
+    return bits;
+  }
+
+  // The report path is the way the reader opens what the worker wrote, so it is a real control rather than
+  // text: the panel's own open (an editor) and its own copy, on the path the record holds.
+  function msgReportHtml(e) {
+    const r = e.report;
+    if (!r || !r.path) return "";
+    return `<div class="as-msg-report">
+      <span class="as-hint">report</span>
+      <button type="button" class="as-msg-path mono" data-open-path="${esc(r.path)}" title="open ${esc(r.path)}">${esc(r.path)}</button>
+      <button type="button" class="as-msg-copy mono" data-copy-path="${esc(r.path)}" title="copy this path">copy</button>
+      ${Number.isFinite(Number(r.bytes)) && r.bytes ? `<span class="as-hint">${esc(fmtBytes(r.bytes))}</span>` : ""}
+    </div>`;
+  }
+
+  // An entry whose text the panel no longer holds says what it is holding instead of showing an empty
+  // box: a run that ended with nothing recorded, a question that left unanswered, a turn that is gone
+  // from the store but still in the journal.
+  function msgMissingText(e) {
+    if (e.kind === "final") return "this turn ended with no final message and no transcript left in the store — the panel watched it end and holds nothing it said";
+    if (e.kind === "answer") return "the question left without an answer (withdrawn, timed out, or answered on another surface)";
+    if (e.kind === "question") return "the question itself is no longer in the store — only that it was asked, and the answer below";
+    return "the panel holds no text for this entry";
+  }
+
+  function msgEntryHtml(e) {
+    const kind = (msgBoard?.kinds || {})[e.kind] || {};
+    const dir = msgDirLabel(e);
+    const label = kind.label || e.kind;
+    const text = String(e.text || "");
+    const long = text.length > MSG_TEXT_CHARS;
+    const open = msgOpen.has(e.id);
+    const meta = msgMetaHtml(e);
+    const report = msgReportHtml(e);
+    const body = !text.trim()
+      ? `<div class="as-msg-text is-missing">${esc(msgMissingText(e))}</div>`
+      : `<div class="as-msg-text">${esc(long && !open ? `${text.slice(0, MSG_TEXT_CHARS)}…` : text)}${e.clipped ? `<span class="as-msg-cut"> (the panel clipped this message at its own cap)</span>` : ""}</div>`;
+    const aria = `${dir}, ${label}, ${relTime(e.at)} ago: ${msgClip(text.replace(/\s+/g, " "), 160) || msgMissingText(e)}`;
+    return `<div class="as-msg is-${e.dir}" role="listitem" data-msg="${esc(e.id)}" data-dir="${e.dir}" aria-label="${esc(aria)}">
+      <div class="as-msg-head">
+        <span class="as-msg-dir">${esc(dir)}</span>
+        <span class="as-msg-kind" title="${esc(kind.hint || "")}">${esc(label)}</span>
+        ${e.source === "journal" ? `<span class="as-msg-src" title="the panel's job store no longer holds this turn — the assistant's own journal is what is left of it">from the journal</span>` : ""}
+        ${msgTimeHtml(e)}
+      </div>
+      ${body}
+      ${long ? `<button type="button" class="as-msg-more" data-as-msg-more="${esc(e.id)}" aria-expanded="${open ? "true" : "false"}">${open ? "show less" : `show the whole message (${text.length} chars)`}</button>` : ""}
+      ${meta.length ? `<div class="as-msg-meta">${meta.join("")}</div>` : ""}
+      ${report}
+    </div>`;
+  }
+
+  function msgGroupHtml(g) {
+    const name = g.name || g.thread || "(no thread)";
+    return `<div class="as-msg-thread${g.assistant ? " is-assistant" : ""}" role="list" aria-label="${esc(`${name}: ${g.count} message${g.count === 1 ? "" : "s"}, newest ${relTime(g.newestIso)} ago`)}">
+      <div class="as-msg-thread-head">
+        <button type="button" class="as-thread" data-as-open="${esc(g.thread || "")}" title="open that agent's card">${esc(name)}</button>
+        ${g.thread && g.thread !== name ? `<span class="as-hint mono">${esc(g.thread)}</span>` : ""}
+        ${g.project ? `<span class="as-hint">${esc(g.project)}</span>` : ""}
+        <span class="as-hint">${g.count} message${g.count === 1 ? "" : "s"}</span>
+        <span class="as-ago" title="${esc(new Date(g.newest).toLocaleString())}">${esc(relTime(g.newestIso))} ago</span>
+      </div>
+      ${g.entries.map(msgEntryHtml).join("")}
+    </div>`;
+  }
+
+  function renderAssistantMessages() {
+    const host = as$("as-messages");
+    if (!host) return;
+    if (!msgTried) {
+      void loadMessages();
+      return;
+    }
+    const b = msgBoard;
+    if (!b) {
+      host.innerHTML = `<div class="as-empty">${msgErr ? `could not read the message board: ${esc(msgErr)}` : "reading the message board…"}</div>`;
+      return;
+    }
+    const scroller = host.closest(".as-body");
+    const keepScroll = scroller ? scroller.scrollTop : 0;
+    const dirs = ["all", "out", "in"];
+    const dirLabel = { all: "All", out: "Sent", in: "Received" };
+    const dirCount = { all: b.shown, out: b.counts?.out ?? 0, in: b.counts?.in ?? 0 };
+    const groups = (b.groups || [])
+      .map((g) => ({ ...g, entries: msgDir === "all" ? g.entries : g.entries.filter((e) => e.dir === msgDir) }))
+      .filter((g) => g.entries.length);
+    const shown = groups.reduce((n, g) => n + g.entries.length, 0);
+    const chips = dirs
+      .map((d) => `<button type="button" data-as-msgdir="${d}" aria-pressed="${msgDir === d ? "true" : "false"}" class="${msgDir === d ? "is-on" : ""}" title="${d === "all" ? "both directions, thread by thread" : d === "out" ? "what the assistant (or the panel) sent them" : "what they sent back"}">${dirLabel[d]} <span class="as-n">${dirCount[d]}</span></button>`)
+      .join("");
+    const windowLine = `<div class="as-msg-bar">
+      <span class="as-msg-window" title="the window is fixed at seven days, computed from each message's own timestamp — nothing older is shown here, whatever the store still holds">the last ${b.windowDays} days</span>
+      <span class="as-hint">since ${esc(new Date(b.since).toLocaleString())}</span>
+      <span class="as-hint">${b.shown} entr${b.shown === 1 ? "y" : "ies"} in ${b.counts?.threads ?? 0} thread${(b.counts?.threads ?? 0) === 1 ? "" : "s"} · ${b.counts?.out ?? 0} sent · ${b.counts?.in ?? 0} received</span>
+      <span class="as-hint" title="what the view was built from: the runs this panel still holds, and the assistant's own journal. An entry the store no longer holds is marked 'from the journal' where it appears.">from ${b.counts?.jobs ?? 0} runs and ${b.counts?.journal ?? 0} journal lines${b.counts?.fromJournal ? ` · ${b.counts.fromJournal} journal-only` : ""}</span>
+    </div>`;
+    const capLine = b.capped
+      ? `<div class="as-msg-cap" title="the cap is applied on the server, so the page never receives more than this">showing the newest ${b.shown} of ${b.total} messages in the window — the older ${b.dropped} are still in the stores, past the ${b.cap}-entry cap this view reads with</div>`
+      : "";
+    let list;
+    if (!shown) {
+      list = msgDir === "all"
+        ? `<div class="as-empty">Nothing in the last ${b.windowDays} days (since ${esc(new Date(b.since).toLocaleString())}). The panel holds ${b.counts?.jobs ?? 0} run${(b.counts?.jobs ?? 0) === 1 ? "" : "s"} and the assistant's journal ${b.counts?.journal ?? 0} line${(b.counts?.journal ?? 0) === 1 ? "" : "s"}, and not one of them is a message newer than that — an empty tab here is not an empty board.</div>`
+        : `<div class="as-empty">No ${msgDir === "out" ? "sent" : "received"} messages in the last ${b.windowDays} days. ${b.shown} message${b.shown === 1 ? "" : "s"} exist in this window in the other direction. <button type="button" data-as-msgdir="all">Show all</button></div>`;
+    } else {
+      list = groups.map(msgGroupHtml).join("");
+    }
+    host.innerHTML = `${windowLine}${capLine}<div class="as-msg-chips" role="group" aria-label="which direction to show">${chips}</div>${list}`;
+    if (scroller) scroller.scrollTop = keepScroll;
+  }
+
   // ---- the charter: the continuity file ---------------------------------------------------------
 
   // The text is NOT in the polled state: it runs to 20 KB and the board repaints on every event, so the pane
@@ -810,6 +1008,21 @@
     if (!t) return;
     // Tabs are buttons too and are handled above; ignore a second pass here.
     if (t.dataset.asTab) return;
+
+    // The message board's own two controls: the direction chips, and an entry's expander. Neither is a
+    // round trip — the board is already on the page — so both are a repaint of this pane alone.
+    if (t.dataset.asMsgdir) {
+      msgDir = t.dataset.asMsgdir;
+      renderAssistantMessages();
+      return;
+    }
+    if (t.dataset.asMsgMore) {
+      const id = t.dataset.asMsgMore;
+      if (msgOpen.has(id)) msgOpen.delete(id);
+      else msgOpen.add(id);
+      renderAssistantMessages();
+      return;
+    }
 
     if (t.dataset.asOpen) {
       openAgentThread(t.dataset.asOpen);
@@ -1096,6 +1309,19 @@
   // The watch countdown: one tick a second, painting only the clocks on screen. It returns immediately when the
   // panel is closed or another tab is showing, so a board of quiet cards pays nothing for it.
   setInterval(paintWatchClocks, 1000);
+
+  // The message board's read, on the same clock the rest of the panel refreshes on, and only while its tab
+  // is the one on screen: a reader of the server's view costs nothing while nobody is looking at it. A
+  // repaint is skipped while the reader has text selected in the pane — the board is a thing you read and
+  // copy out of, and yanking a selection out from under them every fifteen seconds is worse than a stale
+  // relative time.
+  setInterval(() => {
+    if (!state.assistantOpen || state.assistantTab !== "messages" || document.hidden) return;
+    const host = as$("as-messages");
+    const sel = window.getSelection?.();
+    if (host && sel && !sel.isCollapsed && sel.anchorNode && host.contains(sel.anchorNode)) return;
+    void loadMessages(true);
+  }, MSG_REFRESH_MS);
 
   // ---- drag and resize -------------------------------------------------------------------------
 
