@@ -6,6 +6,9 @@ import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+// The push-guard record is a few hundred bytes read at boot and written on an install: sync is the honest shape
+// for it, and it is the same file the Settings row reports from.
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { cpus } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,9 +26,11 @@ import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE } from "./lib/tree-names.js";
 import { createDescriptions } from "./lib/features/descriptions.js";
-import { auditRepo } from "./lib/hermes-worktrees.js";
+import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
+import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyLabel } from "./lib/remote-writes.js";
+import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
   clarifyWindowSeconds, approvalWindowSeconds,
@@ -161,10 +166,24 @@ async function loadConfig() {
   // What each branch was started to do, extracted once from the earliest run in that tree: the same state-not-source
   // rule as the naming ledger, so a PANEL_CONFIG sandbox keeps its own copy of this too.
   if (!cfg.descriptionsFile) cfg.descriptionsFile = path.join(path.dirname(cfg.jobsFile), "descriptions.json");
+  // The TODO list of each worktree — written by the assistant, kept current by every agent in the tree, read by the
+  // row. State, not source, and beside the job store for the same reason as the two records above: a PANEL_CONFIG
+  // sandbox gets its own copy. NEVER inside the worktree, where it would be git noise and a merge conflict.
+  if (!cfg.todosFile) cfg.todosFile = path.join(path.dirname(cfg.jobsFile), "todos.json");
   // The model menu's price/rating half: what the dropdown decorates each row with, rebuilt only by the
   // Settings refresh (POST /api/models/refresh). State, not source — beside the job store, so a sandbox
   // config that names its own jobsFile gets its own copy.
   if (!cfg.modelPricingFile) cfg.modelPricingFile = path.join(path.dirname(cfg.jobsFile), "model-prices.json");
+  // Which worktrees carry the push guard, and when it went in. The panel's own record (git holds the hooks path
+  // itself), beside the job store, so a sandbox config keeps its own copy of it.
+  if (!cfg.pushGuardFile) cfg.pushGuardFile = path.join(path.dirname(cfg.jobsFile), "push-guard.json");
+  // Whether a branch may exist on a REMOTE at all: the setting the reader's permission box writes, and what the
+  // installed pre-push guard reads. local-only by default — a value that cannot be read falls back to it rather
+  // than to a permissive one.
+  cfg.remoteBranchPolicy = policyFrom(cfg.remoteBranchPolicy);
+  // How long a parked remote-write question waits before it is denied: the guard's own poll window as well, since
+  // the panel hands it this number at install time.
+  cfg.remoteWriteSeconds = Number(cfg.remoteWriteSeconds) > 0 ? Math.min(3600, Number(cfg.remoteWriteSeconds)) : 300;
   return cfg;
 }
 
@@ -309,6 +328,138 @@ function gonePointers(id) {
 // the host decides. Nothing here can approve anything by itself.
 const approvals = new Approvals({ onEvent: broadcast });
 
+// ---- who may put a branch on a remote ------------------------------------------------------------
+// The reader's rule: a worktree the panel cuts is LOCAL ONLY unless the work is going to land. The setting
+// (`remoteBranchPolicy`) is the standing answer, the permission box is how an exception is granted, and the
+// installed pre-push guard is what makes the default hold against a worker's own `git push`. Three surfaces, one
+// decision — RemoteWrites owns it, this block is only the wiring.
+//
+// Which worktrees carry the guard, and when it went in. git holds the hooks path itself; this is the panel's list
+// of what it installed, so the Settings row can report it without walking 90 repositories' git dirs.
+function readGuardRecord() {
+  try {
+    const raw = JSON.parse(readFileSync(config.pushGuardFile, "utf8"));
+    return raw && typeof raw === "object" && raw.trees ? raw : { version: 1, trees: {} };
+  } catch {
+    return { version: 1, trees: {} };
+  }
+}
+function writeGuardRecord() {
+  try {
+    mkdirSync(path.dirname(config.pushGuardFile), { recursive: true });
+    writeFileSync(config.pushGuardFile, `${JSON.stringify(guardRecord, null, 2)}\n`, "utf8");
+  } catch (e) {
+    log(`could not write ${config.pushGuardFile}: ${String((e && e.message) || e)}`);
+  }
+}
+const guardRecord = readGuardRecord();
+
+// The url the guard calls back on. Loopback on purpose: the hook runs on this box, and a loopback request is never
+// challenged for the panel token (authorised), so the guard needs no secret of its own.
+const guardPanelUrl = () => `http://127.0.0.1:${config.port}`;
+
+// Install (or refresh) the guard for ONE worktree and remember it. Called the moment the panel cuts a tree, and by
+// the Settings button for trees that predate this feature.
+async function installGuardFor({ projectPath, worktree, branch = null, landing = false, project = null }) {
+  const out = await installGuard({
+    projectPath,
+    worktree,
+    panelUrl: guardPanelUrl(),
+    timeoutSeconds: config.remoteWriteSeconds,
+    policy: config.remoteBranchPolicy,
+    landing: [...remoteWrites.landing],
+    log,
+  });
+  if (!out.ok) return out;
+  // A tree started to LAND is allowed to push by design; recorded on the panel side too, so the guard's own file
+  // and this process agree about it.
+  if (landing) remoteWrites.markLanding(worktree);
+  guardRecord.trees[normTree(worktree)] = {
+    tree: normTree(worktree),
+    path: cleanPath(worktree),
+    project: project || path.basename(projectPath || ""),
+    projectPath: cleanPath(projectPath || worktree),
+    branch: branch || null,
+    landing: Boolean(landing),
+    dir: out.dir,
+    at: new Date().toISOString(),
+  };
+  writeGuardRecord();
+  log(`push guard installed: ${cleanPath(worktree)} -> ${out.dir} (policy ${config.remoteBranchPolicy}${landing ? ", started to land" : ""})`);
+  return { ...out, policy: config.remoteBranchPolicy };
+}
+
+// The panel's own worktree creation (lib/jobs.js calls this) — the one place a spawned tree is cut, so it is the
+// one place the guard has to go in.
+jobs.afterWorktreeCreate = async ({ repoDir, path: tree, branch, landing }) => {
+  try {
+    const project = registry.projects.find((p) => normPathKey(p.path) === normPathKey(repoDir));
+    return await installGuardFor({ projectPath: repoDir, worktree: tree, branch, landing, project: project?.name || null });
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+};
+
+// Every guard the panel installed gets the current setting and the current landing list written into it. Cheap: a
+// handful of one-word files, one call per project.
+async function refreshGuards() {
+  const dirs = new Map();
+  for (const rec of Object.values(guardRecord.trees)) if (rec?.projectPath) dirs.set(normTree(rec.projectPath), rec.projectPath);
+  const landing = [...remoteWrites.landing].map((t) => guardRecord.trees[t]?.path || t);
+  const out = [];
+  for (const [key, projectPath] of dirs) {
+    const r = await refreshGuardFiles({ projectPath, panelUrl: guardPanelUrl(), timeoutSeconds: config.remoteWriteSeconds, policy: config.remoteBranchPolicy, landing, log });
+    out.push({ project: key, ...r });
+  }
+  return out;
+}
+
+// What the Settings row reports, and what the tests read: which trees carry the guard, what it replaced, and which
+// of them were started to land. The record is the panel's own — this is one file read, never a git call per tree.
+function guardReport() {
+  const trees = Object.values(guardRecord.trees || {});
+  const projects = new Set(trees.map((t) => normTree(t.projectPath)).filter(Boolean));
+  return {
+    file: config.pushGuardFile,
+    count: trees.length,
+    projects: projects.size,
+    landing: [...remoteWrites.landing],
+    dirs: [...new Set(trees.map((t) => t.dir).filter(Boolean))],
+    latest: trees
+      .slice()
+      .sort((a, b) => String(b.at).localeCompare(String(a.at)))
+      .slice(0, 8)
+      .map((t) => ({ tree: t.path, project: t.project, branch: t.branch, landing: Boolean(t.landing), at: t.at })),
+  };
+}
+
+// "Always allow" in the permission box IS this setting, so the box and Settings cannot tell two different stories.
+async function setRemotePolicy(policy, { by = "reader", why = "" } = {}) {
+  const clean = policyFrom(policy, config.remoteBranchPolicy);
+  try {
+    await patchPanelConfig({ remoteBranchPolicy: clean });
+  } catch (e) {
+    return { error: `could not write the setting: ${String((e && e.message) || e)}` };
+  }
+  const before = config.remoteBranchPolicy;
+  config.remoteBranchPolicy = clean;
+  log(`remoteBranchPolicy: ${before} -> ${clean}${by ? ` (by ${by}${why ? `: ${why}` : ""})` : ""}`);
+  await refreshGuards();
+  broadcast({ type: "settings", settings: settingsOut() });
+  return { ok: true, policy: clean, before };
+}
+
+const remoteWrites = new RemoteWrites({
+  getPolicy: () => config.remoteBranchPolicy,
+  onEvent: broadcast,
+  onLog: log,
+  timeoutSeconds: config.remoteWriteSeconds,
+  onPolicy: (policy, { by, why }) => setRemotePolicy(policy, { by, why }),
+  // A grant reaches the guard's own files too, so a tree the reader allowed does not have to reach the panel to
+  // find that out — and a tree started to land keeps its permission across a panel restart.
+  onGrant: () => void refreshGuards(),
+});
+
 // ---- spawning ---------------------------------------------------------------------------
 // The New-agent card, its preview and the assistant's spawner all ask the same question, so they
 // ask it in one place (lib/features/spawn.js), named `spawnFeature` because node:child_process
@@ -407,6 +558,16 @@ setInterval(() => {
     });
 }, 15_000).unref?.();
 
+// The installed guards read their policy from files of their own, so a config.json edited by hand while the panel
+// was down is mirrored into them once at boot. Silent when nothing is installed, which is the case on a fresh clone.
+setTimeout(() => {
+  void refreshGuards()
+    .then((out) => {
+      const refreshed = out.filter((o) => o && o.ok);
+      if (refreshed.length) log(`push guard: ${refreshed.length} project(s) refreshed at boot (policy ${config.remoteBranchPolicy})`);
+    })
+    .catch((e) => log(`push guard refresh failed at boot: ${String((e && e.message) || e)}`));
+}, 4_000).unref?.();
 const settingsOut = () => ({
   version: VERSION,
   refreshSeconds: config.refreshSeconds,
@@ -424,6 +585,12 @@ const settingsOut = () => ({
   worktreeSource: String(config.discovery?.worktreeSource || "git").toLowerCase(),
   scanMode: config.scanMode === "visible" ? "visible" : "all",
   scanVisible: scheduler ? scheduler.visibilityReport() : null,
+  // Whether a branch may exist on a remote at all. It travels with every snapshot because the Settings row, the
+  // spawn card's default and the permission box all read the same fact — and the guard's own copy of it is written
+  // from here too, so a hook cannot be reading a different policy than the page shows.
+  remoteBranchPolicy: config.remoteBranchPolicy,
+  remoteBranchPolicyLabel: policyLabel(config.remoteBranchPolicy),
+  remoteWriteSeconds: config.remoteWriteSeconds,
   spawnEnabled: true,
 });
 
@@ -441,10 +608,6 @@ const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "
 // the point of it. Either way the six-hex tag is kept and the 409 stands while an agent is running in the tree.
 const treeNames = new TreeNames({ file: config.treeNamesFile, log });
 
-// ---- what a branch was STARTED to do --------------------------------------------------------------
-// The extraction and the record file live in lib/descriptions.js; the pass that has to see a row and a
-// job at once lives in lib/features/descriptions.js. Only the wiring stays here, in the composition
-// root and in this order: a subscriber list is not something a feature module should own.
 const descriptions = createDescriptions({
   getConfig: () => config,
   // The RAW maps, not list()/rowsFor(): the earliest brief in a tree needs `prompt` and `startedAt`,
@@ -457,6 +620,86 @@ const descriptions = createDescriptions({
   guard,
   log,
 });
+
+// ---- the TODO list of each worktree --------------------------------------------------------------------------------
+// Written by the assistant (a `TODO <text>` line, normally under the SPAWN that starts the work), kept current by
+// every agent in the tree (a run's FINAL message is harvested when it settles), and read by the row. ONE store for
+// the whole panel, keyed the way the row already is (`keyOf(project, path)` — `${project}::${path}` in
+// public/app.js), and never a file inside the worktree: it is state, not source, and a file in the tree would be git
+// noise and a merge conflict. Every writer goes through this one Node process, so the store is its own lock.
+const todos = new TodoLists({
+  file: config.todosFile,
+  log,
+  // The trees this store may NAME — a path, a directory name, a branch, a six-hex tag, a thread. Read per question,
+  // never captured: a rename moves a row and the store must see the new one.
+  trees: () => {
+    const out = [];
+    const seen = new Set();
+    for (const p of registry.projects || []) {
+      const key = `${p.name}::${normPathKey(p.path)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ project: p.name, path: String(p.path || "").replace(/\\/g, "/"), branch: null });
+    }
+    for (const [rowKey, row] of store.rows) {
+      const project = String(rowKey).split("::")[0];
+      const n = `${project}::${normPathKey(row.path)}`;
+      if (seen.has(n)) continue;
+      seen.add(n);
+      out.push({ project, path: String(row.path || "").replace(/\\/g, "/"), branch: row.branch || null });
+    }
+    return out;
+  },
+  // …and the job store, so a THREAD can name its tree (that is how the assistant points a TODO line at a card).
+  jobs: () => jobs,
+});
+// The two writers that need the store: lib/jobs.js prepends the list to a worker's brief and harvests the run's own
+// last words; the assistant seeds a tree and keeps the list honest against what a worker actually did.
+jobs.todos = todos;
+if (assistant) {
+  assistant.todos = todos;
+  // …and the one thing the assistant cannot do itself: tell the page a list moved. The assistant's own TODO lines are
+  // applied inside its harvest, which has no SSE handle of its own.
+  assistant.todosChanged = broadcastTodos;
+}
+
+// The list travels with the snapshot the way a description does: the row carries the counts, the OLDEST incomplete
+// item (the one thing the collapsed strip reads) and the items themselves. A tree with no list carries no `todo`
+// field at all, so the section is simply absent rather than an empty box.
+function withTodos(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const rec = todos.forRow(project.name, row.path);
+      if (!rec) {
+        delete row.todo;
+        continue;
+      }
+      row.todo = rec;
+    }
+  }
+  return snap;
+}
+
+// A list that changed is a row that changed: the same full snapshot the description harvest sends, so the strip
+// repaints without waiting for the next scan to happen to mention that row.
+function broadcastTodos() {
+  broadcast({ type: "snapshot", data: snapshot() });
+}
+
+// What the page says after a reader's own press. It names the item and the id, because the id is what the assistant
+// and every worker are told to write, and a press that says nothing is a press the reader cannot trust.
+function todoSay(op, item) {
+  if (!item) return null;
+  const id = `#${item.id}`;
+  if (op === "add") return `added ${id}: ${item.text}`;
+  if (op === "edit") return `${id} rewritten`;
+  if (op === "note") return item.note ? `${id} note saved` : `${id} note cleared`;
+  if (op === "files") return `${id} files ${item.files?.length ? `set to ${item.files.join(", ")}` : "cleared"}`;
+  if (item.status === "done") return `${id} done`;
+  if (item.status === "dropped") return `${id} dropped`;
+  if (item.status === "doing") return `${id} claimed — doing`;
+  return `${id} reopened`;
+}
 
 // The two events that can add what a harvest needs — a row written by a scan, a job arriving or changing — plus one
 // pass at boot, because a panel started over a store whose trees were all scanned long ago has no row event coming.
@@ -768,13 +1011,17 @@ function withTreeNames(snap) {
 }
 
 function snapshot() {
-  return descriptions.withDescriptions(
-    withTreeNames(
-      withLiveAgents({
-        ...store.snapshot({ settings: settingsOut() }),
-        jobs: jobs.list(),
-        approvals: approvals.list(),
-        // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
+  return withTodos(
+    descriptions.withDescriptions(
+      withTreeNames(
+        withLiveAgents({
+          ...store.snapshot({ settings: settingsOut() }),
+          jobs: jobs.list(),
+          approvals: approvals.list(),
+          // The panel's own permission requests (a push a worker's guard parked, a merge the panel itself wants to
+          // write to a remote for). They ride with the snapshot the way the CLI-transport approvals do, so a reload
+          // comes back to the same open question instead of losing it.
+          remoteWrites: remoteWrites.state(),        // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
         // thread id, so a reload comes back to the same conversation and the same watches.
         assistant: assistant.state(),
         skipped: registry.skipped,
@@ -789,6 +1036,7 @@ function snapshot() {
         },
       }),
     ),
+  ),
   );
 }
 
@@ -1286,6 +1534,214 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, approvals.status(id));
     }
 
+    // ---- the TODO list of one worktree -------------------------------------------------------------------------
+    // Read on demand (the row carries its own copy in /api/state; this is for the expanded strip's journal and for a
+    // check that wants the whole list), and written by the reader's own buttons. Every write is stamped
+    // `by: "reader"` and every refusal comes back WITH its reason — the page says it rather than looking like a
+    // press that did nothing.
+    if (route === "/api/todos" && req.method === "GET") {
+      const key = todos.keyFor({ project: url.searchParams.get("project"), path: url.searchParams.get("path") || url.searchParams.get("tree") });
+      if (!key) return sendJson(res, 400, { error: "a worktree is required: pass project and path (the row's own key)" });
+      const rec = todos.list(key);
+      return sendJson(res, 200, { key, list: rec ? { project: rec.project, path: rec.path, items: rec.items, journal: rec.journal } : null, summary: todos.summary(key) });
+    }
+
+    if (route === "/api/todos" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const op = String(body?.op || "").toLowerCase();
+      const args = {
+        project: body?.project || null,
+        path: body?.path || null,
+        id: body?.id === undefined || body?.id === null || body?.id === "" ? null : Number(body.id),
+        text: body?.text ?? "",
+        note: body?.note ?? null,
+        files: Array.isArray(body?.files) ? body.files : null,
+        by: "reader",
+        owner: null,
+        from: "reader",
+      };
+      let r;
+      if (op === "add") r = todos.write({ ...args, op: "add" });
+      else if (op === "edit") r = todos.write({ ...args, op: "edit" });
+      else if (op === "note") r = todos.write({ ...args, op: "note" });
+      else if (op === "files") r = todos.write({ ...args, op: "files" });
+      else if (["done", "doing", "drop", "dropped", "reopen", "todo"].includes(op)) r = todos.setStatus({ ...args, op });
+      else r = { ok: false, error: `unknown todo op “${op || "(none)"}” — one of add, edit, note, done, doing, drop, reopen` };
+      if (r.ok) broadcastTodos();
+      return sendJson(res, r.ok ? 200 : 400, {
+        ok: Boolean(r.ok),
+        error: r.error || null,
+        message: r.ok ? todoSay(op, r.item) : null,
+        key: r.key || null,
+        summary: r.key ? todos.summary(r.key) : null,
+        journal: r.list ? r.list.journal.slice(-6) : [],
+      });
+    }
+
+    // ---- who may put a branch on a remote ------------------------------------------------------------
+    // The page's own view of it: what is parked, what the setting is, and which trees carry the guard.
+    if (route === "/api/remote-write/state" && req.method === "GET") {
+      return sendJson(res, 200, {
+        ...remoteWrites.state(),
+        policies: POLICIES,
+        defaultPolicy: DEFAULT_POLICY,
+        configPath: CONFIG_PATH,
+        guards: guardReport(),
+      });
+    }
+
+    // THE GUARD ASKING. A local-only worktree's `git push` reaches here (lib/push-guard.js writes the hook that
+    // calls it) and this is what draws the permission box. Three answers, and the hook reads them off the body:
+    //   allowed:true          — go ahead (the setting allows it, the tree was started to land, or a grant stands)
+    //   refused:true          — no, and no question to ask (the setting is `deny`)
+    //   id + deadline         — a question is parked in the dock; the hook polls the status route for the answer
+    if (route === "/api/remote-write/request" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const worktree = String(body.worktree || "");
+      const decision = remoteWrites.decision(worktree);
+      if (decision.allowed) {
+        // A one-shot grant is spent by the write it was given for.
+        if (decision.consume) remoteWrites.spend(worktree);
+        return sendJson(res, 200, { allowed: true, why: decision.why, policy: remoteWrites.policy() });
+      }
+      if (!decision.ask) {
+        log(`remote write refused without asking: ${cleanPath(worktree)} (${decision.why})`);
+        return sendJson(res, 200, { allowed: false, refused: true, why: decision.why, policy: remoteWrites.policy() });
+      }
+      const found = spawnFeature.projectForPath(worktree);
+      const remote = String(body.remote || "") || found?.remote || "";
+      const branch = String(body.branch || "");
+      const req0 = remoteWrites.request({
+        kind: "push",
+        worktree,
+        project: found?.name || "",
+        branch,
+        remote,
+        refs: String(body.refs || ""),
+        title: `${path.basename(worktree || "") || worktree} wants to push`,
+        command: `git push ${remote || "<remote>"} ${branch || "<branch>"}   — from ${cleanPath(worktree)}${body.remoteUrl ? ` (${String(body.remoteUrl).slice(0, 120)})` : ""}`,
+        description: "a worker in this LOCAL-ONLY worktree is trying to put a branch on the remote. Nothing is pushed until you answer, and Deny leaves the remote untouched.",
+      });
+      return sendJson(res, 200, {
+        allowed: false,
+        id: req0.id,
+        deadline: req0.deadline,
+        timeoutSeconds: req0.timeoutSeconds,
+        policy: remoteWrites.policy(),
+        why: "local only — this push is parked on your permission box",
+      });
+    }
+
+    // What the parked hook long-polls. A request nobody answered reads as `deny` once its window closes.
+    if (route === "/api/remote-write/status" && req.method === "GET") {
+      const id = url.searchParams.get("id") || "";
+      const st = remoteWrites.status(id);
+      // The one-shot grant is handed to the hook that asked for it: it is spent as soon as the hook has been told,
+      // so a second push cannot ride the same answer.
+      if (st.status === "answered" && st.choice === "once") remoteWrites.spend(remoteWrites.treeOfDecision(id));
+      return sendJson(res, 200, st);
+    }
+
+    // The reader's answer, from the panel's own permission box. Same four choices, same semantics as an approval:
+    // once / this session / always (which IS the setting) / deny. Anything the question was parked on is resumed
+    // here — the panel's own merge flow starts only after a yes.
+    if (route === "/api/remote-write/answer" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const id = String(body.id || "");
+      // Read the resumable action BEFORE the answer clears the request, and never twice: a second press finds
+      // nothing to run.
+      const resume = remoteWrites.takeResume(id);
+      const out = remoteWrites.answer(id, body.choice, { by: body.by || "reader" });
+      if (!out.ok) return sendJson(res, 409, out);
+      let resumed = null;
+      if (resume && out.choice !== "deny") {
+        try {
+          resumed = await resume();
+          log(`remote-write ${id}: the granted write was resumed (${resumed?.status || "ok"})`);
+        } catch (e) {
+          resumed = { status: 500, error: String((e && e.message) || e) };
+          log(`remote-write ${id}: resuming the granted write failed — ${resumed.error}`);
+        }
+      }
+      return sendJson(res, 200, { ...out, resumed, state: remoteWrites.state() });
+    }
+
+    // The setting itself. Written into this panel's config.json (with every other key left exactly as it was),
+    // pushed into the guards' own copies, and broadcast so a second tab sees it at once.
+    if (route === "/api/settings/remote-branches" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const wanted = String(body.policy || "").trim().toLowerCase();
+      if (!POLICIES.includes(wanted)) {
+        return sendJson(res, 400, { error: `the setting must be one of: ${POLICIES.join(", ")}`, settings: settingsOut() });
+      }
+      const out = await setRemotePolicy(wanted, { by: "the Settings row" });
+      if (out.error) return sendJson(res, 500, { error: out.error, settings: settingsOut() });
+      return sendJson(res, 200, {
+        ok: true,
+        ...out,
+        settings: settingsOut(),
+        guards: guardReport(),
+        note:
+          wanted === "allow"
+            ? "saved — remote writes go through without asking from now on (the guard's own copy says so too)"
+            : wanted === "deny"
+              ? "saved — remote writes are refused outright, and the box will not even be offered"
+              : "saved — branches stay local unless you allow a write in the permission box",
+      });
+    }
+
+    // Put the guard in (or take it out of) the worktrees of a project, or in every local-only tree the board
+    // knows. The automatic path is the panel's own worktree creation; this is the deliberate one, for trees that
+    // were cut before the guard existed.
+    if (route === "/api/remote-write/guard" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const action = String(body.action || "install").toLowerCase();
+      const one = String(body.path || "").trim();
+      if (action === "remove") {
+        if (!one) return sendJson(res, 400, { error: "path is required to remove the guard" });
+        const out = await uninstallGuard({ worktree: path.resolve(one), log });
+        delete guardRecord.trees[normTree(one)];
+        writeGuardRecord();
+        return sendJson(res, out.ok ? 200 : 500, { ...out, guards: guardReport() });
+      }
+      const targets = [];
+      if (one) {
+        targets.push({ tree: path.resolve(one), projectPath: null });
+      } else if (String(body.project || "").trim()) {
+        const project = registry.projects.find((p) => p.name === String(body.project).trim());
+        if (!project) return sendJson(res, 404, { error: `unknown project: ${body.project}` });
+        for (const row of scheduler.store.rowsFor(project.name)) targets.push({ tree: row.path, projectPath: project.path, project: project.name, branch: row.branch });
+      } else {
+        // Every LOCAL-ONLY tree the board holds: a branch that exists on the remote is not one of these, and the
+        // project's own checkout is never touched (the reader pushes there himself).
+        for (const project of registry.projects) {
+          for (const row of scheduler.store.rowsFor(project.name)) {
+            if (normPathKey(row.path) === normPathKey(project.path)) continue;
+            if (row.remoteBranch === "exists") continue;
+            targets.push({ tree: row.path, projectPath: project.path, project: project.name, branch: row.branch });
+          }
+        }
+      }
+      const done = [];
+      for (const t of targets) {
+        if (!t.projectPath) {
+          const proj = spawnFeature.projectForPath(t.tree);
+          t.projectPath = proj?.path || t.tree;
+          t.project = proj?.name || null;
+        }
+        // Idempotent, and never a reason to fail the request: one tree that cannot take a hooks path (a directory
+        // held open, a git dir that is not there) is reported and the rest carry on.
+        const out = await installGuardFor({ projectPath: t.projectPath, worktree: t.tree, branch: t.branch, project: t.project }).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+        done.push({ tree: cleanPath(t.tree), ok: Boolean(out.ok), error: out.error || null, dir: out.dir || null, shims: out.shims || [] });
+      }
+      log(`push guard: install asked for ${done.length} worktree(s), ${done.filter((d) => d.ok).length} ok`);
+      return sendJson(res, 200, { ok: true, installed: done.filter((d) => d.ok).length, failed: done.filter((d) => !d.ok).length, trees: done, guards: guardReport() });
+    }
     // Preview the exact request that would be sent — the confirm affordance.
     if (route === "/api/agents/preview" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
@@ -1306,8 +1762,7 @@ const server = createServer(async (req, res) => {
       // nothing happen", not a card that says "starting" forever.
       const linked = await spawnFeature.linkSpawn(body, aimed.target, aimed.cwdProject);
       if (!linked.ok) return sendJson(res, linked.status, linked.payload);
-      const job = await jobs.create({ ...body, ...linked.fields });
-      return sendJson(res, 202, { job });
+      const job = await jobs.create({ ...body, ...linked.fields });      return sendJson(res, 202, { job });
     }
 
     // Continue a conversation: same named thread, no new worktree, run where the agent is.
@@ -1545,9 +2000,20 @@ const server = createServer(async (req, res) => {
       // How many results the console is about to draw: a burst of six calls needs six, not a default of eight
       // that silently stops halfway through a longer run.
       const limit = Math.max(1, Math.min(60, Number(url.searchParams.get("n")) || 20));
+      // One row, exactly as stored, for the console's fold: `row` picks which of the turn's results (the order the
+      // console paired them in) and `full=1` lifts the store reader's own 6,000-character display cap. Without
+      // them this is the array the burst pairing reads; with them it is the whole text behind one folded result.
+      const rowParam = url.searchParams.get("row");
+      const index = rowParam === null ? null : Math.max(0, Number(rowParam) || 0);
+      const full = url.searchParams.get("full") === "1";
       if (!thread || !tool) return sendJson(res, 400, { error: "thread and tool are required" });
       const { toolResults } = await import("./lib/tool-results.js");
-      const results = toolResults({ dbPath: path.join(hermesHome(), "state.db"), sessionId: thread, tool, from, to, limit });
+      // `full=1` reads the row exactly as it was stored (maxChars 0 = no cap); without it the store reader's own
+      // 6,000-character display cap applies to every row of the array.
+      const results = toolResults({
+        dbPath: path.join(hermesHome(), "state.db"), sessionId: thread, tool, from, to, limit, index,
+        ...(full ? { maxChars: 0 } : {}),
+      });
       return sendJson(res, 200, { thread, tool, results });
     }
 
@@ -2080,19 +2546,63 @@ const server = createServer(async (req, res) => {
       const thread = makeThreadName(`${label} ${project.name}`);
       const preview = { project: project.name, base, baseRef, remote, branch: row.branch, ahead: row.ahead, root, worktree: worktree.replace(/\\/g, "/"), label, thread, prompt };
       if (body.dryRun) return sendJson(res, 200, { dryRun: true, ...preview });
-      const transport = await jobs.probe();
-      if (!transport.reachable || !transport.capabilities?.runs) {
-        return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}` });
+      // The whole start, as its own function, because a local-only panel may have to PARK it on the reader's
+      // permission box first and run it the moment they say yes. The one thing the merge agent does that touches
+      // the world outside this box is PHASE 4's push, so that is the panel's own remote write and it asks first.
+      const startMerge = async () => {
+        const transport = await jobs.probe();
+        if (!transport.reachable || !transport.capabilities?.runs) {
+          return { status: 503, body: { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}`, ...preview, prompt: undefined } };
+        }
+        const top = await gitIn(worktree, ["rev-parse", "--show-toplevel"], 15000);
+        const ownerPath = top.ok && top.out ? top.out : worktree;
+        // `remoteWrite: "land"` is what tells lib/jobs.js this worker MAY push and names the landing step: the
+        // merge prompt says so in every phase, and the brief line must not contradict it.
+        const job = await jobs.create({ prompt, thread, cwd: worktree, existing: true, ownerPath, project: project.name, remoteWrite: "land", remote, baseBranch: base });
+        // The card is named for the job it is doing before it draws: the label survives the thread for good, and it
+        // is what the route above reads back to refuse a second merge agent in the same tree.
+        jobs.setLabel(job.thread, label);
+        if (job.status === "failed") return { status: 502, body: { error: job.error || "the run could not be started", job, ...preview, prompt: undefined } };
+        log(`merge ${row.branch} -> ${base} in ${project.name}: job ${job.id} (${job.status})`);
+        return { status: 202, body: { job, ...preview } };
+      };
+      const decision = remoteWrites.decision(worktree);
+      if (decision.allowed) {
+        // A one-shot grant is spent by the write it was granted for.
+        if (decision.consume) remoteWrites.spend(worktree);
+        const out = await startMerge();
+        return sendJson(res, out.status, out.body);
       }
-      const top = await gitIn(worktree, ["rev-parse", "--show-toplevel"], 15000);
-      const ownerPath = top.ok && top.out ? top.out : worktree;
-      const job = await jobs.create({ prompt, thread, cwd: worktree, existing: true, ownerPath, project: project.name });
-      // The card is named for the job it is doing before it draws: the label survives the thread for good, and it is
-      // what the route above reads back to refuse a second merge agent in the same tree.
-      jobs.setLabel(job.thread, label);
-      if (job.status === "failed") return sendJson(res, 502, { error: job.error || "the run could not be started", job, ...preview, prompt: undefined });
-      log(`merge ${row.branch} -> ${base} in ${project.name}: job ${job.id} (${job.status})`);
-      return sendJson(res, 202, { job, ...preview });
+      if (!decision.ask) {
+        return sendJson(res, 403, {
+          error: `nothing was started: ${decision.why}. The merge agent pushes the base branch as its last phase, so the panel will not start one while remote writes are refused.`,
+          ...preview,
+          prompt: undefined,
+        });
+      }
+      // Local only (the default): park it on the permission box. Answering Allow starts the merge; Deny starts
+      // nothing at all, which is the difference between asking and telling.
+      const parked = remoteWrites.request({
+        kind: "merge",
+        worktree,
+        project: project.name,
+        branch: row.branch,
+        remote,
+        title: `${label} — ${project.name}`,
+        command: `git push ${remote || "<remote>"} ${base}   (PHASE 4 of ${label}, in ${root} — the merge itself is only staged first)`,
+        description:
+          "the panel's OWN merge flow, which pushes the base branch once the branch has landed and the tests pass. Allow starts the merge agent; Deny starts nothing and touches neither tree.",
+        timeoutSeconds: config.remoteWriteSeconds,
+        resume: async () => {
+          const out = await startMerge();
+          if (out.status >= 400) log(`remote-write ${parked.id}: the granted merge could not start — ${out.body?.error || out.status}`);
+          // The page finds the new card through the ordinary job events this emits.
+          broadcast({ type: "jobs", jobs: jobs.list() });
+          return out;
+        },
+      });
+      log(`merge ${row.branch} -> ${base} in ${project.name}: parked on the permission box (${parked.id}) — the setting is local-only`);
+      return sendJson(res, 202, { pending: { id: parked.id, deadline: parked.deadline, timeoutSeconds: parked.timeoutSeconds, kind: "merge" }, ...preview, prompt: undefined });
     }
 
     // Give a worktree a name of its own: the directory and its branch. The row is looked up by path, and the whole

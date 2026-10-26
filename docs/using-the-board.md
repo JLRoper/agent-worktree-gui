@@ -352,13 +352,24 @@ Each turn is an accordion inside the card:
 
 Output streams into a `<pre>`. It follows the newest line unless you scroll up; a `↓` button brings you back and
 re-pins it. A tool result is a **preview** of what the tool returned, not the full payload — when it was cut the
-console ends it with `… result truncated by the gateway` (the gateway's `HERMES_RUN_PREVIEW_CHARS` raises the cap).
-When the preview was empty — routine for `patch` and `write_file` — the panel reads that call's result back out of
-the session store and draws it under the result line **as text**: a patch's diff, a terminal's output, never the JSON
-envelope it travelled in. Each burst in a turn pairs with its own results, so a second run of the same tool later in
-the turn shows its own output rather than the first run's. A call the store has nothing for says `no output recorded
-for this call` — or `no output in the session store yet` while the turn is still running — and a result held to 40
-lines ends with `… N more line(s) of this result`.
+console ends it with `… result truncated by the gateway` (the gateway's `HERMES_RUN_PREVIEW_CHARS` raises the cap;
+set to `0` on this box, so the stream carries the whole result). When the preview was empty — routine for `patch`
+and `write_file` — the panel reads that call's result back out of the session store and draws it under the result
+line **as text**: a patch's diff, a terminal's output, never the JSON envelope it travelled in. Each burst in a turn
+pairs with its own results, so a second run of the same tool later in the turn shows its own output rather than the
+first run's. A call the store has nothing for says `no output recorded for this call` — or `no output in the session
+store yet` while the turn is still running.
+
+A long result is folded by the panel itself: the card keeps its **first 40 lines** (and shortens any line past 400
+characters), because a whole 5,000-line read in the console would push every other line of the card out of its
+600-line ring buffer. The fold ends with a sentence you can click — `… 214 lines hidden — click to read`, or
+`… 12 lines hidden, 3 lines shortened — click to read` when the head wore the line cap too. The click reads **that
+one result** back out of the session store, uncapped, and draws the whole thing in place; nothing is added to the
+console's own lines, so the card stays as long as it was. A store with no copy of the result says so instead of
+inventing output: `… the session store has no copy of this result — the lines above are all of it here`. Both
+truncation notes are honest about which cap cut: `… result truncated by the gateway` is the gateway's preview cap,
+the `… N lines hidden — click to read` sentence is this panel's fold, and each only appears when its own cap really
+dropped something.
 
 **A run of tool calls is condensed.** Consecutive calls between two pieces of prose become one group, one row per
 tool name: `💻 terminal ×11 curl …` with the last input and either a duration or a live clock. Click a row to filter

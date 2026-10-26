@@ -220,6 +220,12 @@
           <input id="stabilize-reorder" type="checkbox" checked>
         </label>
 
+        <label class="settings-row" for="rank-window" title="How far back the board looks when it decides what is busiest — one window for every liveness ranking: the worktree rows in a project, the projects in a folder, the folders, and the agent cards in a worktree. A thing's place is its average rate of liveness events over this window (a console line, a job starting or finishing, an approval), so anything being hammered sits at the top, a single line moves nothing, and anything that goes quiet slides down as its events age out. The orders are recomputed on the board-reorder clock, never on each event, and a thing must out-rate the one above it by at least one event a minute before it takes that slot. 300 s (5 minutes) is the default; longer is slower and steadier. Saved in this browser.">
+          <span>Rank window <span class="settings-info">ⓘ</span></span>
+          <input id="rank-window" type="number" inputmode="numeric" step="30" min="30" max="3600">
+          <span class="settings-unit mono">s</span>
+        </label>
+
         <label class="settings-row settings-gap" for="anchor-hover" title="The hover anchor: the card the pointer is moving over keeps its screen position while other cards above it grow. It lingers for the seconds beside it after the pointer stops. Off, hovering chooses nothing and the anchor falls through to the next rule. Saved in this browser.">
           <span>Hover anchor <span class="settings-info">ⓘ</span></span>
           <input id="anchor-hover" type="checkbox" checked>
@@ -271,6 +277,23 @@
           <button type="button" data-age-set="30">30 d</button>
         </div>
         <div class="settings-preview mono" id="hide-older-preview">…</div>
+      </div>
+
+      <div class="settings-group">
+        <h3 class="settings-group-head" title="Whether a branch may exist on a REMOTE at all. Most of what this panel starts is research or a browser probe, and a remote branch per probe clutters a repository other people share — so local-only is the default, and the exception is a grant you give on purpose in the permission box. It is written into this panel's config.json (remoteBranchPolicy), so it applies to every browser and survives a restart.">Branches on the remote</h3>
+
+        <label class="settings-row" for="remote-policy" title="local only (the default) — every branch stays on this box; a push from a worktree the panel cut is REFUSED by the pre-push guard the panel installs, and that refusal asks you through the permission box in the dock (Allow once / this session / Always allow / Deny). allow — remote writes go through without asking; this is what &quot;Always allow&quot; in the box writes, so the setting and the box are the same fact. deny — refused outright, and the box is not even offered. Written into config.json, so it survives a restart and applies to every browser.">
+          <span>Remote branches <span class="settings-info">ⓘ</span></span>
+          <select id="remote-policy">
+            <option value="local-only">local only — ask in the box</option>
+            <option value="allow">allow remote writes</option>
+            <option value="deny">refuse outright</option>
+          </select>
+        </label>
+        <div class="settings-preview mono" id="remote-policy-preview">…</div>
+        <div class="settings-presets">
+          <button type="button" id="btn-guard-install" title="install the pre-push guard into every local-only worktree on this board. The panel does this by itself when it cuts a worktree; this button is for the trees that were cut before it existed. It writes a pre-push hook inside the repository's .git (never a tracked file), enables it for those worktrees only, and runs any hook they already had through a shim. Report comes back here and in the log.">install the push guard now</button>
+        </div>
       </div>
 
       <div class="settings-group">
@@ -359,6 +382,9 @@
           <label class="chk" title="Create a workspace: a new worktree and branch under .worktrees/, so the agent's edits land there and never in the folder itself. Untick to run in the 'start in' folder as it is — that is how you aim an agent at an existing worktree.">
             <input id="job-create" type="checkbox" checked /> create workspace
           </label>
+          <label class="chk" title="Unticked (the default): this worktree is LOCAL ONLY. Its brief says so in the first line, and the panel's pre-push guard refuses a `git push` out of it and asks you through the permission box instead — so research and browser-testing trees never add a branch to a shared remote. Ticked: the work is meant to land, so the brief names the landing step (push + open a pull request) and the tree is allowed to push.">
+            <input id="job-landing" type="checkbox" /> may land on the remote
+          </label>
           <span class="spacer"></span>
         </div>
         <div id="spawn-warn" class="warnline"></div>
@@ -399,7 +425,7 @@
   <footer class="foot">
     <span>Live over SSE: each worktree refreshes on its own cadence — cheap fields every <span id="f-worktree">5</span>s, merge verdict / PR / commit detail every <span id="f-slow">60</span>s. Rows flash when something changed.</span>
     <span>Read-only for git: every scan is an inspect (rev-parse / rev-list / merge-base / cherry / diff / status / log). Only <code>fetch</code> touches refs.</span>
-    <span>Spawning writes: a new worktree + branch under <code>.worktrees/</code> (<code>git worktree add -b wtgui/…</code>), and the agent runs in that tree through the Hermes gateway — no child process, no API key handed to one.</span>
+    <span>Spawning writes: a new worktree + branch under <code>.worktrees/</code> (<code>git worktree add -b wtgui/…</code>), and the agent runs in that tree through the Hermes gateway — no child process, no API key handed to one. Every tree it cuts is <b>local only</b>: a <code>git push</code> out of one is refused by the pre-push hook the panel installs (inside <code>.git</code>, never a tracked file) and asks you through the permission box instead. Settings · Branches on the remote.</span>
     <span>Projects: every git repo under <code>scanRoots</code> in <code>config.json</code>, grouped in a folder accordion per root (a project outside every root gets its own sibling folder), ordered by most recent activity. The green <b>+</b> beside a project name aims the spawn card at that project.</span>
     <span id="skipped-note" class="dimmer"></span>
     <span>Config: <code>config.json</code> — scanRoots, projects, cadences, <code>dormantSeconds</code>, <code>host</code> (loopback by default).</span>

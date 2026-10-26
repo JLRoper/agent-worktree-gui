@@ -463,6 +463,13 @@ body.addbar-top .agents-block > .add-agent-form { order: -1; margin-top: 0; marg
 .approval-dock.is-folded #approval-list { display: none; }
 .approval-dock.is-folded .ap-dock-head { border-bottom: 0; }
 #approval-list { overflow: auto; }
+/* The permission box for a remote write wears the same chrome as a parked turn's approval (.turn-approval), which
+   is deliberately in-card markup. Inside the dock it needs nothing but a trim: the dock already has the border and
+   the shadow, so the inner box keeps its own colour and loses the outer glow. */
+#approval-list .turn-approval { margin: 0 0 0 0; border-radius: 0; border: 0; border-bottom: 1px solid #4a3a17; box-shadow: none; }
+#approval-list .turn-approval .ta-head { font-size: 11px; }
+#approval-list .turn-approval .ta-note { margin-top: 6px; font-size: 11px; color: #d8c79a; }
+#approval-list .turn-approval-done { border-radius: 0; }
 .approval { padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .approval:last-child { border-bottom: 0; }
 .ap-head { display: flex; align-items: center; gap: 10px; font-size: 11px; }
@@ -1078,6 +1085,28 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 /* The UA's own [hidden] rule is one attribute selector and loses to a class: without this the folded body
    would render anyway. */
 .code-body[hidden] { display: none; }
+
+/* The panel's own fold, at the foot of a result the card kept only the head of: "… 214 lines hidden — click to
+   read". It is a button because the rest of the result is one click away (the session store has it verbatim), and
+   it reads as the note it has always been until the pointer is over it — a card full of long results should read
+   as a transcript, not as a wall of controls. */
+.jl-fold { margin: 1px 0; }
+.fold-read {
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--dimmer);
+  font: inherit;
+  font-style: italic;
+  text-align: left;
+  cursor: pointer;
+}
+.fold-read:hover { color: var(--text); border-color: var(--line); background: #161d26; }
+.fold-read:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.fold-read[disabled] { cursor: progress; }
 .job-foot { margin-top: 6px; font-size: 11.5px; }
 /* the CLI's prompt readout for a card: context occupancy, cache hit, latency, throughput. It rides
    on the footer line, to the right of the outcome and token count, behind a rule so the two groups
@@ -1682,6 +1711,48 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
 .desc-body { padding: 2px 0 4px 28px; }
 /* Which run the words came from, and when: the description is quoted from that brief, never written for the board. */
 .desc-from { margin-top: 3px; font-size: 11px; color: var(--dimmer); }
+
+/* ---- the worktree's TODO list ------------------------------------------------------------------------------------ */
+/* The third strip in the row's family, with the description above it and MERGE STATE under it. FOLDED it reads the
+   OLDEST item still open (the lowest id whose status is todo or doing — NOT the last one that moved) with a done/total
+   count; UNFOLDED it lists every item with its status glyph, owner and age, and offers the reader the four things they
+   can do to one. The head is a real <button>, so the section is keyboard reachable, and so is every control inside it
+   — the two strips beside it are click-only. */
+.todo-block { margin-bottom: 6px; }
+.todo-head {
+  display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0;
+  width: 100%; background: none; border: 0; color: inherit; font: inherit; text-align: left;
+}
+.todo-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
+.todo-head .todo-title { flex: none; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
+.todo-head:hover .chev, .todo-head:hover .todo-title, .todo-head:hover .todo-first { color: var(--text); }
+.todo-head:focus-visible { outline: 1px solid var(--text); outline-offset: 2px; }
+.todo-count { font-size: 11.5px; color: var(--dim); flex: none; }
+.todo-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.todo-block.collapsed .todo-body { display: none; }
+.todo-block:not(.collapsed) .todo-head .todo-first { display: none; }
+.todo-body { padding: 2px 0 4px 28px; }
+.todo-body .todo-list { margin: 0 0 6px; padding-left: 15px; list-style: none; }
+.todo-body .todo-list li { font: 11.5px/1.7 var(--mono); color: var(--dim); }
+.todo-item { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.todo-item .todo-glyph { flex: none; color: var(--dimmer); }
+.todo-item.todo-done .todo-text, .todo-item.todo-dropped .todo-text { color: var(--dimmer); text-decoration: line-through; }
+.todo-item.todo-doing .todo-glyph { color: var(--text); }
+.todo-item .todo-id { flex: none; }
+.todo-item .todo-meta { margin-left: auto; flex: none; }
+.todo-btn { background: none; border: 0; color: var(--dimmer); cursor: pointer; font: inherit; padding: 0 2px; }
+.todo-btn:hover { color: var(--text); }
+.todo-btn.on { color: var(--text); }
+.todo-btn.add { color: var(--dim); }
+.todo-edit, .todo-add-input {
+  flex: 1 1 320px; min-width: 160px; background: #20242c; border: 1px solid var(--line); color: var(--text);
+  font: 11.5px/1.5 var(--mono); padding: 2px 6px; border-radius: 4px;
+}
+.todo-add { margin-top: 2px; display: flex; gap: 6px; align-items: baseline; }
+.todo-journal { margin-top: 4px; font-size: 10.5px; }
+.todo-journal ul { margin: 0; padding-left: 15px; }
+.todo-journal li { font-size: 10.5px; color: var(--dimmer); }
+.todo-note, .todo-files { margin-left: 6px; }
 /* the agent mark at the head of every agent row (parent row only, turns keep their own chevron) */
 .job-head .agent-glyph { flex: 0 0 auto; color: #c8a6ff; font-size: 13px; line-height: 1; }
 /* forget one agent session (two-step: first click arms it) */
@@ -2014,6 +2085,16 @@ button.btn-row-agent.is-probing { opacity: .55; cursor: progress; }
 .add-agent-input:focus { border-color: var(--addbar-hover-edge, #319051); box-shadow: inset 0 0 0 2px #ffffff2e; }
 .add-agent-input:disabled { opacity: .7; cursor: progress; }
 .branch { color: #c8d1dc; }
+/* A branch the remote actually has: the name itself is the link, so the cell keeps its `mono branch` sizing and
+   only the colour says "this opens something". Hover underlines it rather than moving it — a row is a dense grid
+   and a shifting column under the pointer is worse than no affordance. */
+td.branch a.branch-link { color: #7fb2e8; text-decoration: none; }
+td.branch a.branch-link:hover { text-decoration: underline; }
+td.branch a.branch-link:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; border-radius: 2px; }
+/* No copy on the remote: plain text, and one dim word that answers "which trees have a remote copy" at a glance.
+   Deliberately small and quiet — most rows of a research fleet carry it, and a loud marker on most rows is noise. */
+td.branch .branch-local { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: #55606e; border: 1px solid #2b323c; border-radius: 3px; padding: 0 3px; vertical-align: 1px; }
+td.branch .branch-plain { color: #9aa6b4; }
 .dim { color: var(--dim); }
 .dimmer { color: var(--dimmer); }
 .nowrap { white-space: nowrap; }
@@ -2162,6 +2243,15 @@ tr.detail > td > .detail-inner > .desc-block h4,
 tr.detail > td > .detail-inner > .git-block h4,
 tr.detail > td > .detail-inner > .live-block h4 { margin: 0; font-size: 10.5px; }
 tr.detail > td > .detail-inner > .git-summary, tr.detail > td > .detail-inner > .live-first { font-size: 11px; }
+/* The TODO strip is the fourth of that column: same head metrics as the three above it, same 28px indent for its list,
+   and the same compact type. Its head is a <button>, so the metrics are set on the button itself. */
+tr.detail > td > .detail-inner > .todo-block { margin: 0; }
+tr.detail > td > .detail-inner > .todo-block .todo-head { padding: 0; line-height: 1.5; }
+tr.detail > td > .detail-inner > .todo-block .todo-head .chev { font-size: 13px; width: 13px; }
+tr.detail > td > .detail-inner > .todo-block .todo-head .todo-title { font-size: 10.5px; }
+tr.detail > td > .detail-inner > .todo-block .todo-count,
+tr.detail > td > .detail-inner > .todo-block .todo-first { font-size: 11px; }
+tr.detail > td > .detail-inner > .todo-block .todo-body { padding: 0 0 6px 28px; }
 /* The description's own text and its folded peek, in the sizes the two strips below it use. Its bullets are the
    shared fact list (`.desc-body .git-list`, styled with the merge state's), on the same 28px indent the two strips'
    lists use, so the three strips read as one column under their three headings. */

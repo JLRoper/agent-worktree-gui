@@ -159,13 +159,63 @@ by `session_id`/`tool_name`/timestamp window, unwraps them with the same `unwrap
 own `maxChars` (6,000) with an explicit `… N characters not shown` marker. So the live stream being a
 preview is not a data-loss problem, and nothing here needs a transcript reader built from scratch.
 
-## Recommendation for the console work (three lines)
+## What was set, and where (this card)
 
-1. Keep the live stream as the card body and mark the block's edge as partial from the *existing*
-   `unwrapped.truncated` flag — do not raise the gateway cap just to fill a card: 500 chars × every tool
-   call × every reader is the bandwidth the cap exists to save.
-2. Offer the full text where the reader asked for it — the diff renderer's own "show the whole result"
-   affordance on that block, backed by the `toolResults()` reader in `lib/tool-results.js`, which already
-   returns the uncapped stored row and says how much it trimmed.
-3. If the console wants more than a few lines inline, raise `MAX_TOOL_LINES` (40) rather than the gateway
-   cap — that number, not 500, is what actually bounds a card.
+`HERMES_RUN_PREVIEW_CHARS=0` is now durable in the two places a NEW gateway process reads, and the built-in
+default (500) is never reached:
+
+| place | what it says | who reads it |
+|---|---|---|
+| `$HERMES_HOME/.env` (`C:\Users\Jacob\AppData\Local\hermes\.env`) | `HERMES_RUN_PREVIEW_CHARS=0` | every Hermes process at boot — `hermes_cli/main.py:714` calls `load_hermes_dotenv()`, which loads `$HERMES_HOME/.env` with **`override=True`** (`hermes_cli/env_loader.py:505`), so it also beats a stale value inherited from the shell |
+| `HKCU\Environment` | `HERMES_RUN_PREVIEW_CHARS=0` (`REG_SZ`) | any new process started from the user environment (it held `20000` before this card — a 20,000-char cap, still a cut) |
+
+Proof that a new process picks it up, without restarting anything (the shell is given a deliberately WRONG value,
+which `.env` must beat):
+
+```
+cd C:/Users/Jacob/AppData/Local/hermes
+HERMES_HOME='C:\Users\Jacob\AppData\Local\hermes' \
+PYTHONPATH='C:\Users\Jacob\AppData\Local\hermes\hermes-agent;<the unpacked wheels under cache/uv/archive-v0>' \
+HERMES_RUN_PREVIEW_CHARS=20000 tools/python-*/python.exe -c \
+"import os; from hermes_cli.env_loader import load_hermes_dotenv; load_hermes_dotenv(); \
+ from gateway.platforms.api_server_runs import _tool_preview_max_chars, _tool_completed_preview; \
+ print(os.environ['HERMES_RUN_PREVIEW_CHARS'], _tool_preview_max_chars(), \
+ len(_tool_completed_preview({'output':'x'*100000}, lambda t, force=False: t)))"
+→ 0 0 100014
+```
+
+and the value itself: `grep -n HERMES_RUN_PREVIEW_CHARS "$HERMES_HOME/.env"` (0) plus
+`reg query "HKCU\Environment" /v HERMES_RUN_PREVIEW_CHARS` (0). `tools/measure-tool-output-cap.mjs --runs` is
+the live measurement of whatever the running gateway is actually doing.
+
+**Do not restart the gateway to test this**: a restart cuts every `/v1` run in flight. The live gateway on this
+box was measured already streaming the whole payload (`--runs`: 45,916 chars for a 43,892-byte read, uncut), so
+the setting only has to make that survive the next restart — before this card, a restart would have picked
+`20000` (or `500`) back up, which is the cut the reader was looking at.
+
+## The other half: the panel's own fold, and the click that opens it
+
+With the preview cap gone the whole result arrives, and the binding limit becomes the panel's own: `MAX_TOOL_LINES`
+(40) / `MAX_TOOL_LINE_CHARS` (400) against the console's ring buffer (`lib/jobs.js` `MAX_LINES = 600`). That fold
+is now **explicit and clickable**:
+
+- it ends with `… N lines hidden — click to read` (or `… N lines hidden, M lines shortened — click to read` when a
+  head line wore the 400-character cap), pushed as a normal console line by `lib/jobs/console-lines.js`;
+- `public/core/console-format.js` draws that line as a button carrying the turn, the tool and **which row** of that
+  turn's results it is;
+- the click asks `/api/tool-results?row=<i>&full=1` for exactly that one row — `lib/tool-results.js` gained an
+  `index` (SQL `LIMIT 1 OFFSET i`) and treats `maxChars: 0` as uncapped — and the burst is redrawn with the whole
+  text in place. Nothing is appended to the job's lines, so a 5,000-line result never enters the 600-line ring
+  buffer, and the opened row is remembered (`state.foldRows`) so a repaint does not fold it back shut;
+- each note appears only when its own cap really cut something, and each names that cap: the gateway's sentence for
+  the gateway's preview, this sentence for the panel's fold.
+
+Measured on this box's own store (`node tools/measure-whole-tool-stream.mjs`): the largest stored tool result is
+**102,936 bytes** (a `read_file`); at the old 500-char cap the panel received 500 bytes and drew 10 console lines,
+at 20,000 it received 20,000 bytes and drew 43 lines, and with the cap lifted it receives all 102,936 bytes and
+still draws **42 lines** (40 of head, plus the fold note). The ring buffer survives every case — that is the point
+of the fold. `node tools/measure-whole-tool-stream.mjs --volume` has the affordability numbers: 25,010 results,
+62.8 MB, mean 2.6 kB, 74% of rows longer than 500 characters holding 97% of the bytes.
+
+`tools/verify-whole-tool-stream.mjs` drives all of it (the two caps by their own code, the store row selection, and
+the fold-and-fetch in a real browser); the older `tools/verify-console-*.mjs` suites stay green.
