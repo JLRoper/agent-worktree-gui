@@ -99,6 +99,10 @@ const state = {
   // Replies typed while the agent is still working, in the order they were written. They go out one
   // at a time as each turn finishes: Hermes refuses a second session on a thread already running.
   replyQueue: new Map(),
+  // The entries the drain has taken out of `replyQueue` to send, by thread, so a × pressed after the send
+  // can say "that one was already sent" instead of claiming a cancellation it did not make. The entry's own
+  // identity only (`at`): it is a record of a press, not the queue's state, and it neither renders nor sends.
+  replySent: new Map(),
   // Documents pasted or dropped into a reply box, per thread: the reply area is rebuilt on every job
   // event, so these cannot live in the DOM the way the New-agent box's list can.
   replyAttachments: new Map(),
@@ -3215,7 +3219,7 @@ function conversationHtml(conv) {
       ${pinnedHtml}
       ${blocks.html}
       ${queued ? `<div class="ghost-turns">${queue
-        .map((q) => `<div class="ghost-turn"><div class="ghost-head mono"><span class="ghost-badge">queued</span><span class="queue-ago" data-queued-at="${q.at}">${fmtDur(Date.now() - q.at)}</span><span class="dimmer">sends when the current turn finishes</span></div><div class="ghost-prompt">${linkifyText(q.text)}</div></div>`)
+        .map((q) => `<div class="ghost-turn"><div class="ghost-head mono"><span class="ghost-badge">queued</span><span class="queue-ago" data-queued-at="${q.at}">${fmtDur(Date.now() - q.at)}</span><span class="dimmer">sends when the current turn finishes</span><button class="ghost-cancel" type="button" data-queue-cancel="${esc(thread)}" data-queue-cancel-at="${q.at}" title="cancel this queued reply — it will not be sent, and if the reply box is empty its text comes back as your draft" aria-label="cancel this queued reply for ${esc(thread)}">✕</button></div><div class="ghost-prompt">${linkifyText(q.text)}</div></div>`)
         .join("")}</div>` : ""}
       ${foot ? `<div class="job-foot">${foot}</div>` : ""}
       <div class="reply">
@@ -3573,7 +3577,11 @@ function turnPrompts(thread) {
 // Hermes never sees a second session on the same thread at once (which it answers with "busy").
 function queueReply(thread, text) {
   const q = state.replyQueue.get(thread) || [];
-  q.push({ text, at: Date.now() });
+  // `at` is this entry's identity — the × and the drain both key on it — so two replies held in the same
+  // millisecond still get one each: the stamp is nudged until it is unique within this thread's queue.
+  let at = Date.now();
+  while (q.some((entry) => entry && entry.at === at)) at += 1;
+  q.push({ text, at });
   state.replyQueue.set(thread, q);
   renderConversation(thread);
 }
@@ -3623,6 +3631,51 @@ function replyQueued(thread) {
   return state.replyQueue.get(thread) || [];
 }
 
+// The entries the drain has taken out of a thread's queue to send, newest last, so a × pressed after the send
+// can tell "already sent" apart from "never held". Bounded: it is a record of the last few press answers, not a
+// history of the thread.
+function markReplySent(thread, entry) {
+  const sent = state.replySent.get(thread) || [];
+  sent.push({ at: entry.at, text: entry.text });
+  state.replySent.set(thread, sent.slice(-8));
+}
+
+function replyTakenByDrain(thread, at) {
+  return (state.replySent.get(thread) || []).some((entry) => entry.at === at);
+}
+
+// The × on a queued entry. It is keyed on the ENTRY's own identity — its `at` — never on the thread, so two
+// held replies stay independent: cancelling the first leaves the second scheduled and still sending. An
+// accidental × gives the text back as the draft when that thread's reply box is EMPTY, and leaves a box that
+// already holds something alone (the reader's own words there are not ours to overwrite).
+function cancelQueuedReply(thread, at) {
+  const q = state.replyQueue.get(thread) || [];
+  const i = q.findIndex((entry) => entry && entry.at === at);
+  if (i < 0) {
+    // The race, and the only two honest answers: the drain has already taken this entry out and its send is on
+    // its way (the press cannot call it back, so say so), or it is simply not held here any more.
+    const sent = replyTakenByDrain(thread, at);
+    renderConversation(thread);
+    const warn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
+    if (warn) warn.textContent = sent ? "that one was already sent" : "that queued reply is no longer held";
+    return sent ? "sent" : "gone";
+  }
+  const [entry] = q.splice(i, 1);
+  if (!q.length) state.replyQueue.delete(thread);
+  const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+  const backToDraft = Boolean(box && !box.value.trim() && entry.text);
+  if (backToDraft) state.replyDrafts[thread] = entry.text;
+  renderConversation(thread);
+  // After the repaint: a rebuild replaces the card and the warnline with it, so the note goes in last.
+  const warn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
+  if (warn) {
+    warn.textContent = backToDraft
+      ? "that queued reply is cancelled — the text is back in the box as your draft"
+      : "that queued reply is cancelled";
+  }
+  return "cancelled";
+}
+
 // Children this thread started that are still working. A finished parent turn with children out is not "busy"
 // in the run sense, but a reply sent then races them: the parent starts a new turn while its own children are
 // still writing. So the queue waits for them too.
@@ -3639,14 +3692,23 @@ function threadBusy(thread) {
 }
 
 async function drainReplyQueue(thread) {
-  const q = replyQueued(thread);
-  if (!q.length || threadBusy(thread) || childrenOut(thread)) return;
-  const text = q.shift().text;
+  // The next entry is read here, then the queue is re-read at send time and that entry is looked up by its own
+  // identity (`at`). The turn finishing and the reader pressing a held reply's × can land in the same moment,
+  // and the press wins whenever the entry is still held: what the queue no longer carries is never sent.
+  const next = replyQueued(thread)[0];
+  if (!next || threadBusy(thread) || childrenOut(thread)) return;
+  const q = state.replyQueue.get(thread) || [];
+  const i = q.findIndex((entry) => entry && entry.at === next.at);
+  if (i < 0) return;
+  const [entry] = q.splice(i, 1);
   if (!q.length) state.replyQueue.delete(thread);
   else state.replyQueue.set(thread, q);
+  // Out of the queue, so the send is already on its way and no press can call it back — which is what a ×
+  // landing after this point has to say, instead of claiming a cancellation that did not happen.
+  markReplySent(thread, entry);
   renderConversation(thread);
   try {
-    await sendReply(thread, text);
+    await sendReply(thread, entry.text);
   } catch {
     /* sendReply reports its own errors */
   }
@@ -10156,6 +10218,15 @@ document.addEventListener("click", async (e) => {
   ) {
     const id = head ? head.dataset.toggle : foldedCard.dataset.thread;
     keepInPlace(() => document.querySelector(`.job[data-thread="${CSS.escape(id)}"] .job-head`), () => toggleJob(id));
+    return;
+  }
+  // The × on a queued entry: take that ONE entry back, by its own identity. Nothing is sent, nothing is
+  // steered, and no other held reply on the thread is touched.
+  const queueCancel = e.target.closest("[data-queue-cancel]");
+  if (queueCancel) {
+    e.preventDefault();
+    e.stopPropagation();
+    cancelQueuedReply(queueCancel.dataset.queueCancel, Number(queueCancel.dataset.queueCancelAt) || 0);
     return;
   }
   // Queue reply: hold the text (do not send) because a turn is running on this thread.
