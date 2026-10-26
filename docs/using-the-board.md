@@ -270,6 +270,12 @@ Click a row to expand it. The detail is built not to bury the agents:
   strip the two of them sit in. A tree with nothing unmerged, or a clean one, shows no empty strip.
 - **Liveness evidence** — folded, with its strongest line still visible on the header. Open it to see why the row is
   live, or why it is not.
+- **TODO** — the worktree's list, folded to one line: the OLDEST item still open and a `done/total` count. Open it for
+  every item with its status glyph and its controls (add, edit, claim, complete, drop, reopen), the journal of who
+  changed what, and a **+ add** for a new item. Each item's facts — `owner`, `by`, `updated`, its note and its files —
+  are folded behind the small `▸` in front of the item's line: click it, or `Tab` to it and press `Enter` or `Space`,
+  to unfold that one item. A worktree's open items are remembered in this browser, so a repaint or a reload leaves
+  them as you left them, and an item you never opened stays folded.
 - **Agents** — the cards owned by this worktree, each moved into place rather than rebuilt, so a running console keeps
   its scroll. The **+** bar in the row starts another agent in this tree; it is drawn even when the row has no cards,
   and it sits above the cards by default (Settings → Display → **Add-agent bar at top** moves it back under them).
@@ -548,7 +554,7 @@ only its own line so your comments and formatting survive.
 | `Ctrl+wheel` | Over a console or a thinking block | Size that text for that card; anywhere else it zooms the page. |
 | `Ctrl+` / `Ctrl-` / `Ctrl+0` | Anywhere | Page zoom in, out, reset. |
 | `Ctrl+[` / `Ctrl+]` | Anywhere | Collapse / expand the whole tree. |
-| Click | Worktree row | Open its detail (merge state, liveness, agents, sessions). |
+| Click | Worktree row | Open its detail (description, TODO, merge state, liveness, agents, sessions). |
 | Click | Project or folder title | Open or close it. |
 | `Ctrl+click` | Project title | Give it a theme colour; again re-rolls. |
 | `Ctrl+Shift+click` | Project title | Clear its theme colour. |
@@ -561,6 +567,7 @@ only its own line so your comments and formatting survive.
 | Click / right-click | `used/ceiling⌄` | Cycle the context ceiling / open the full picker. |
 | Click | `📄 N` / `🔗 N` | Open the file or link list. |
 | Click | Turn head | Open or fold that turn. |
+| Click / `Tab`+`Enter`/`Space` | The `▸` in front of a TODO item | Unfold that one item's owner / by / updated facts; again folds them. |
 | Click | `☆` on a turn | Pin the turn above the paged turns. |
 | Click | Tool group row | Filter the group to that tool (`all N` clears). |
 

@@ -8,6 +8,9 @@
 //   (a) the folded line reads the OLDEST item still open — the LOWEST id whose status is todo or doing — even when a
 //       LATER item was completed first, with a done/total count beside it, and the unfolded section lists every item
 //       with its status, owner and age (quoted from the live DOM, over a real sandbox panel)
+//   (a2) each item's owner/by/age bullets are a disclosure of their own: FOLDED until that item's control is opened,
+//       opened by click or by Enter/Space, folded again without touching the row, remembered per worktree + item
+//       across a repaint AND a reload, and never allowed to take the caret out of the item's own edit box
 //   (b) a list seeded by the assistant's own `TODO` line, then a worker's `TODO DONE <id>` and `TODO ADD <text>` read
 //       out of its FINAL message and applied to that same list, with the journal entries quoted
 //   (c) the block a worker's brief carries — the list WITH its ids and the standing instruction to reconcile against
@@ -545,6 +548,55 @@ async function browserPhase(pw) {
   await page.keyboard.press("Enter");
   ok("browser: Enter unfolds it", !(await page.locator(todoSel).getAttribute("class")).includes("collapsed"));
   check("browser: and the unfold is remembered", String(await page.evaluate(() => localStorage.getItem("wm.openTodos"))).includes(key), true);
+  // Each item's FACTS are a disclosure of their own and start FOLDED: the item's line is what the reader scans, and
+  // three bullets of the same worker string under every item of a twelve-item list is the repetition the fold removes.
+  const itemState = () =>
+    page.locator(`${todoSel} .todo-item`).evaluateAll((els) =>
+      els.map((el) => {
+        const meta = el.querySelector(".todo-meta");
+        const line = el.querySelector(".todo-line");
+        const btn = el.querySelector("[data-toggle-todo-facts]");
+        const shown = (node) => {
+          if (!node) return false;
+          if (getComputedStyle(node).display === "none") return false;
+          const r = node.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        };
+        return {
+          id: el.dataset.todoItem,
+          collapsed: el.classList.contains("collapsed"),
+          factsShown: shown(meta),
+          lineShown: shown(line),
+          bullets: meta ? meta.querySelectorAll(":scope > li").length : 0,
+          tag: btn ? btn.tagName : null,
+          expanded: btn ? btn.getAttribute("aria-expanded") : null,
+          chev: btn ? (btn.querySelector(".chev") || {}).textContent : null,
+        };
+      }),
+    );
+  const atItem = async (id) => (await itemState()).find((i) => i.id === id);
+  const factsBtn = (id) => page.locator(`${todoSel} .todo-item[data-todo-item="${id}"] .todo-facts-btn`);
+  const foldedItems = await itemState();
+  check("browser: every item's facts start FOLDED — an item nobody opened is never expanded on their behalf", foldedItems.map((i) => i.factsShown), [false, false, false, false, false]);
+  ok("browser: …the bullets are still in the markup, one per fact, simply not shown", foldedItems.map((i) => i.bullets).join(",") === "2,3,4,3,2", foldedItems.map((i) => `#${i.id}:${i.bullets}`).join(" "));
+  ok("browser: …the item's own line and its text stay visible", foldedItems.every((i) => i.lineShown), foldedItems.map((i) => `#${i.id}:${i.lineShown}`).join(" "));
+  ok("browser: …and every item carries its own disclosure control", foldedItems.every((i) => i.tag === "BUTTON" && i.expanded === "false" && i.chev === "\u25b8"), JSON.stringify(foldedItems.map((i) => [i.tag, i.expanded, i.chev])));
+  // Keyboard: a real <button>, so Tab reaches it and both Enter and Space toggle it.
+  await factsBtn("2").focus();
+  check("browser: a fact disclosure takes focus", await page.evaluate(() => document.activeElement?.classList?.contains("todo-facts-btn")), true);
+  await page.keyboard.press("Enter");
+  check("browser: Enter opens that item's facts", (await atItem("2")).factsShown, true);
+  await page.keyboard.press("Space");
+  check("browser: Space folds them again", (await atItem("2")).factsShown, false);
+  await page.keyboard.press("Enter");
+  check("browser: …and Enter re-opens them", (await atItem("2")).factsShown, true);
+  // A click opens ONE item and nothing else: the detail is still open, and the row's own fold never fired.
+  await factsBtn("1").click();
+  check("browser: a click opens that one item", (await atItem("1")).factsShown, true);
+  check("browser: …and leaves the row and its detail open", await page.evaluate((k) => Boolean(state.expanded.has(k)) && Boolean(document.querySelector(`tr.detail[data-detail="${CSS.escape(k)}"]`)), key), true);
+  check("browser: …with no second fold from the row's own click", await page.locator(`tr.row[data-key="${key}"].expanded`).count(), 1);
+  for (const id of ["3", "4", "5"]) await factsBtn(id).click();
+  check("browser: each item opens on its own control", (await itemState()).map((i) => i.factsShown), [true, true, true, true, true]);
   // (a) UNFOLDED: every item, with its status, owner and age.
   const items = await page.locator(`${todoSel} .todo-item`).evaluateAll((els) =>
     els.map((el) => ({ id: el.dataset.todoItem, status: el.querySelector(".todo-glyph")?.getAttribute("title"), text: el.querySelector(".todo-text")?.textContent, meta: el.querySelector(".todo-meta")?.textContent })),
@@ -585,12 +637,47 @@ async function browserPhase(pw) {
   ]);
   ok("browser: the fact list is indented under the item, not pushed to the row's right edge", facts.every((f) => f.indent > 0 && f.indent < 60), facts.map((f) => `#${f.id}:${f.indent}px`).join(" "));
   ok("browser: and it sits below the item's line, never beside it", facts.every((f) => f.under), facts.map((f) => `#${f.id}:${f.under}`).join(" "));
+  // The control must not take the caret: the item's own edit box opens on the line above its facts, so a reader
+  // half-way through rewording an item has to be able to fold a neighbour's bullets without losing the sentence.
+  await page.locator(`${todoSel} .todo-item[data-todo-item="1"] [data-todo-op="edit-start"]`).click();
+  const caretBox = page.locator(`${todoSel} .todo-edit`);
+  await caretBox.focus();
+  await page.keyboard.press("End");
+  await page.keyboard.type("-zq-");
+  await factsBtn("2").click();
+  check("browser: pressing a disclosure keeps the caret in the item's edit box", await page.evaluate(() => document.activeElement?.classList?.contains("todo-edit")), true);
+  check("browser: …and the half-typed text is still in it", (await caretBox.inputValue()).endsWith("-zq-"), true);
+  check("browser: …and the item it toggled folded in place", (await atItem("2")).factsShown, false);
+  await factsBtn("2").click();
+  await page.locator(`${todoSel} .todo-item[data-todo-item="1"] [data-todo-op="edit-cancel"]`).click();
+  check("browser: the block's own repaint keeps every item's fold", (await itemState()).map((i) => i.factsShown), [true, true, true, true, true]);
+  // …and it replaces the detail with another `tr.detail`, not with the `<div>` inside one: a `<tr>` parsed in a <div>
+  // holder is dropped by the HTML parser, and the row's detail then stops being findable by every path that follows it.
+  check("browser: …and leaves the detail a tr.detail[data-detail] the rest of the panel can find", await page.evaluate((k) => document.querySelectorAll(`tr.detail[data-detail="${CSS.escape(k)}"]`).length, key), 1);
+  // One item left folded: the remembered set holds what the reader OPENED, so a folded item must not be in it.
+  await factsBtn("4").click();
+  check("browser: folding one item hides its bullets again", (await atItem("4")).factsShown, false);
+  const storedFacts = JSON.parse(await page.evaluate(() => localStorage.getItem("wm.openTodoFacts") || "[]"));
+  check("browser: the open items are remembered per worktree and per item", [...storedFacts].sort(), [`${key}::1`, `${key}::2`, `${key}::3`, `${key}::5`].sort());
+  ok("browser: …and the folded one is not in that set", !storedFacts.includes(`${key}::4`), JSON.stringify(storedFacts));
+  // A full repaint (the snapshot path) must not re-expand them, and neither must a reload.
+  await page.evaluate(() => renderAll());
+  await page.waitForSelector(`${todoSel} .todo-item[data-todo-item="4"]`, { timeout: 10_000 });
+  check("browser: a repaint keeps each item's fold (the open stay open, the folded one stays folded)", (await itemState()).map((i) => [i.id, i.factsShown]), [["1", true], ["2", true], ["3", true], ["4", false], ["5", true]]);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await openRow(TREE_MIX);
+  ok("browser: the section's unfold survived the reload", !(await page.locator(todoSel).getAttribute("class")).includes("collapsed"));
+  check("browser: …and so did each item's own fold", (await itemState()).map((i) => [i.id, i.factsShown]), [["1", true], ["2", true], ["3", true], ["4", false], ["5", true]]);
+  ok("browser: …with the item nobody ever opened still folded, not re-expanded for the reader", (await atItem("4")).factsShown === false && (await atItem("4")).collapsed === true, JSON.stringify(await atItem("4")));
   const shot = process.env.PANEL_VERIFY_ARTIFACTS;
   if (shot) {
     try {
       mkdirSync(shot, { recursive: true });
       await page.screenshot({ path: path.join(shot, "todo-section.png"), fullPage: false });
-      note(`screenshot: ${path.join(shot, "todo-section.png")}`);
+      // The block itself, big enough to read: the per-item folds are what this change is about, and a viewport shot
+      // puts half the list under the fold.
+      await page.locator(todoSel).screenshot({ path: path.join(shot, "todo-block.png") });
+      note(`screenshot: ${path.join(shot, "todo-section.png")} · ${path.join(shot, "todo-block.png")}`);
     } catch {
       /* a screenshot is a courtesy */
     }
