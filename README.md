@@ -325,6 +325,16 @@ Semantics, all verified against real runs:
 - **Output** is the run's event stream: each tool call with its argument preview, the assistant's text
   as it arrives, approval requests, and a closing line with tokens and exit. Tool results are the
   gateway's redacted, 500-character preview (the full payload stays in the session transcript).
+- **A file is drawn as a file, not as lines.** A unified diff in a tool's output becomes one framed
+  window per `@@` hunk: the `diff --git` / `--- ` / `+++ ` headers and the hunk line ride as labels, and
+  the body is two sides — the before lines on the left (yellow where a line was modified, red where it
+  was purely removed) and the after lines on the right in green, with unchanged context dim across
+  both. Any other file body (`read_file`, `write_file`, a shell `cat` / `head` / `sed -n`) folds into a
+  code box whose header names the file and counts its lines, so a reader can see that a file was
+  printed, and which one, without reading it. Both wrap, so a 300-character line never forces the
+  console sideways. The classification is made at render time from a line's own text and only ever
+  looks at a tool's own output: a call line, the agent's sentences, a shell transcript, an `ls` listing
+  and the gateway's own notes stay plain lines, in the colours they always had.
 - **Cancel** posts `/v1/runs/<id>/stop`; stopping is cooperative, so the card settles as `cancelled`
   when the turn actually ends.
 - **A run can outlive the panel.** Restarting the panel marks in-flight cards `interrupted` and keeps
