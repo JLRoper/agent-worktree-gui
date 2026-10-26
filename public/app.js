@@ -3182,17 +3182,17 @@ function conversationHtml(conv) {
           <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"
             placeholder="${running
               ? (inDelegate
-                ? "a subagent is out — a steer lands when delegate_task returns; Ctrl+Enter holds yours for the next turn"
-                : "a turn is running — Enter steers it; Ctrl+Enter holds yours for the next turn")
+                ? "a subagent is out — a steer lands when delegate_task returns; Enter holds yours for the next turn"
+                : "a turn is running — Ctrl+Enter steers it; Enter holds yours for the next turn")
               : childrenStillOut
-                ? "this thread's subagents are still out — Enter sends now; Ctrl+Enter holds yours until they finish"
-                : "Reply to this agent — continues the same Hermes thread, Enter to send"}"></textarea>
+                ? "this thread's subagents are still out — Enter holds yours until they finish"
+                : "Reply to this agent — continues the same Hermes thread, Enter or Ctrl+Enter to send"}"></textarea>
           <div class="reply-actions">
             ${running
-              ? `<button class="btn-reply btn-steer-primary" data-steer="${esc(runningTurn.id)}" type="button" title="${inDelegate ? "send this into the running turn (Enter) — it waits for delegate_task to return, and if the turn ends first it comes back to this box unsent" : "send this into the running turn (Enter) — the agent reads it at its next tool boundary and the turn carries on"}">Steer turn</button>`
-              : `<button class="btn-reply" data-thread="${esc(thread)}" type="button" title="${childrenStillOut ? "send this as the next turn now (Enter) — the subagents this thread started are still out; Ctrl+Enter holds it until they finish" : "send this as the next turn (Enter)"}">Send reply</button>`}
+              ? `<button class="btn-reply btn-steer-primary" data-steer="${esc(runningTurn.id)}" type="button" title="${inDelegate ? "send this into the running turn (Ctrl+Enter) — it waits for delegate_task to return, and if the turn ends first it comes back to this box unsent" : "send this into the running turn (Ctrl+Enter) — the agent reads it at its next tool boundary and the turn carries on"}">Steer turn</button>`
+              : `<button class="btn-reply" data-thread="${esc(thread)}" type="button" title="${childrenStillOut ? "send this as the next turn now — the subagents this thread started are still out, and Enter holds it until they finish instead" : "send this as the next turn (Enter or Ctrl+Enter)"}">Send reply</button>`}
             ${running || childrenStillOut
-              ? `<button class="btn-queue" data-queue-reply="${esc(thread)}" type="button" title="${running ? "hold this reply and send it the moment the current turn finishes (Ctrl+Enter)" : "hold this reply until the subagents this thread started have finished, so the parent is not talking over them (Ctrl+Enter)"}">Queue reply</button>`
+              ? `<button class="btn-queue" data-queue-reply="${esc(thread)}" type="button" title="${running ? "hold this reply and send it the moment the current turn finishes (Enter)" : "hold this reply until the subagents this thread started have finished, so the parent is not talking over them (Enter)"}">Queue reply</button>`
               : ""}
             ${queued ? `<span class="queue-note mono" title="${esc(queuedTitle)}">${queued} queued</span>` : ""}
             ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button" title="cancel the run this agent is in the middle of">Cancel turn</button>` : ""}
@@ -3536,9 +3536,9 @@ function queueReply(thread, text) {
   renderConversation(thread);
 }
 
-// One press of Queue reply, from the button or from Ctrl/Cmd+Enter: hold what the box holds and send it when
-// the thread is free, instead of steering the turn that is running now. The draft is cleared BEFORE queueReply,
-// which rebuilds the card - the rebuild would otherwise put the text back into the new box from the saved draft.
+// One press of Queue reply, from the button or from Enter: hold what the box holds and send it when the thread
+// is free, instead of steering the turn that is running now. The draft is cleared BEFORE queueReply, which
+// rebuilds the card - the rebuild would otherwise put the text back into the new box from the saved draft.
 function queueReplyFromBox(thread) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   const text = (box?.value || "").trim();
@@ -3553,12 +3553,28 @@ function queueReplyFromBox(thread) {
   return true;
 }
 
-// Is the Queue reply button offered for this card right now? It is drawn for two reasons - a turn is running,
-// or a finished turn whose subagents are still out - and Ctrl/Cmd+Enter means the same thing as that button.
-// Asking the page where the card drew it is what keeps the gesture and the button from ever disagreeing about
-// whether there is anything to wait for: no button, nothing to queue, so the keystroke sends like Enter.
+// Is the Queue reply button offered for this card right now? It is drawn for two reasons - a turn is running, or
+// a finished turn whose subagents are still out - and Enter means the same thing as that button. Asking the page
+// where the card drew it is what keeps the gesture and the button from ever disagreeing about whether there is
+// anything to hold: no button, nothing to wait for, so Enter sends.
 function queueOfferedFor(box) {
   return Boolean(box && box.closest(".reply")?.querySelector("[data-queue-reply]"));
+}
+
+// Is the Steer turn button offered for this card right now? It is drawn while a turn is live on the thread, and
+// Ctrl/Cmd+Enter means the same thing as that button - the same question asked of the same markup.
+function steerOfferedFor(box) {
+  return Boolean(box && box.closest(".reply")?.querySelector("[data-steer]"));
+}
+
+// One press of Steer turn, from the button or from Ctrl/Cmd+Enter: send what the box holds into the turn that is
+// running now. The button carries the id of the turn it was drawn for; from the keyboard the live turn on this
+// thread is looked up instead, which is the same turn the card drew its button for.
+function steerFromBox(thread, turnId = null) {
+  const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+  const id = turnId || [...state.jobs.values()].find((j) => (j.thread || j.id) === thread && turnLive(j))?.id;
+  if (!id) return Promise.resolve(false);
+  return steerTurn(thread, id, box?.value || "");
 }
 
 function replyQueued(thread) {
@@ -9812,7 +9828,10 @@ document.addEventListener("click", async (e) => {
     jumpToAgent(apAgent.dataset.agentThread);
     return;
   }
-  const replyBtn = e.target.closest(".btn-reply");
+  // Only the Send reply button: the Steer turn button wears .btn-reply too, and this branch used to answer its
+  // click with sendReply(undefined) - which looks for a box for the thread "undefined" and quietly does nothing,
+  // so the button was dead and its own branch below was unreachable.
+  const replyBtn = e.target.closest(".btn-reply[data-thread]");
   if (replyBtn) {
     await sendReply(replyBtn.dataset.thread);
     return;
@@ -10244,10 +10263,8 @@ document.addEventListener("click", async (e) => {
   if (steerBtn) {
     e.preventDefault();
     e.stopPropagation();
-    const card = steerBtn.closest(".job");
-    const thread = card?.dataset.thread || "";
-    const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-    await steerTurn(thread, steerBtn.dataset.steer, box?.value || "", steerBtn);
+    // The same press Ctrl/Cmd+Enter makes: one function, so the button and the keystroke cannot drift apart.
+    await steerFromBox(steerBtn.closest(".job")?.dataset.thread || "", steerBtn.dataset.steer);
     return;
   }
   const btn = e.target.closest(".btn-cancel");
@@ -10441,22 +10458,29 @@ document.addEventListener("keydown", async (e) => {
     insertNewlineAtCaret(box);
     return;
   }
-  // Ctrl+Enter (⌘+Enter on a Mac) is the Queue reply button's gesture, not a second way to queue: hold this text
-  // for the next turn instead of steering the one running now. Offered exactly while that button is - a turn is
-  // running, or a finished turn's subagents are still out - and with nothing to wait for the keystroke falls
-  // through to the plain Enter path below and sends, so the two never disagree. Shift is decided first, so
-  // Ctrl+Shift+Enter is still a newline and never a queue.
-  if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.shiftKey && queueOfferedFor(box)) {
+  // Ctrl+Enter (⌘+Enter on a Mac) is the Steer turn button's gesture, not a second way to steer: send this text
+  // into the turn that is running now. It is offered exactly while that button is, so with no live turn to steer
+  // it falls through to the Enter path below and means what Enter means - which is what keeps the two gestures
+  // from disagreeing about a state that has no steer in it. Shift is decided first, so Ctrl+Shift+Enter is still
+  // a newline and never a steer.
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.shiftKey && steerOfferedFor(box)) {
     e.preventDefault();
-    queueReplyFromBox(box.dataset.reply);
+    void steerFromBox(box.dataset.reply);
     return;
   }
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     const thread = box.dataset.reply;
     const text = (box.value || "").trim();
-    // While a turn is running, the primary action IS steering: the text goes into the live turn
-    // rather than bouncing off a busy agent. Queue reply is the explicit "next turn" button.
+    // Enter is the Queue reply button's gesture: while the card offers that button - a turn is running, or a
+    // finished turn whose subagents are still out - the text is held for the next turn rather than sent into a
+    // busy thread. With nothing to wait for there is nothing to hold, and Enter sends.
+    if (queueOfferedFor(box)) {
+      queueReplyFromBox(thread);
+      return;
+    }
+    // A card that offers no Queue reply button while a turn is live is not a state the renderer draws; if one ever
+    // turns up, the text goes into the live turn rather than bouncing off a busy agent.
     if (threadBusy(thread)) {
       if (!text) return;
       const running = [...state.jobs.values()].find(
