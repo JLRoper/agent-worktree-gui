@@ -806,6 +806,61 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
 /* Scrolled to the newest line, or nothing to scroll: the chip fades out and stops taking clicks. */
 .out-wrap.is-at-end > .to-bottom { opacity: 0; pointer-events: none; }
 
+/* ---- the hover copy button -------------------------------------------------------------------------
+   One attribute, one mechanism: anything carrying `data-copy` is a block the reader can lift, and app.js
+   mounts a button into its corner itself - so a block another worker draws opts in by carrying the same
+   attribute, with nothing per-renderer. Hidden it is completely inert: out of the pointer's way, out of
+   the tab order and the accessibility tree, out of a selection dragged across the block, and always out
+   of the text flow - so revealing it reflows the block by nothing, and the gutter the block reserves for
+   it (below) is what keeps it off the block's own text, first line and fold chevron included. */
+.copy-block {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font: 11px/1 var(--mono);
+  color: #c3ccd8;
+  background: #161c24;
+  border: 1px solid #39424f;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity .14s ease, visibility .14s ease, color .14s ease, border-color .14s ease;
+}
+[data-copy] { position: relative; }
+/* The room the button needs, reserved whether or not it is showing so its appearance moves nothing:
+   the console's own text, a burst's call lines, a thinking block's title line. */
+[data-copy] > .job-out,
+[data-copy] > .tgrp-head,
+[data-copy] > summary { padding-right: 24px; }
+/* The reveal - the whole of it. A <details>'s button lives in its summary (the only part a folded one
+   renders), so both placements answer to the block being hovered. */
+[data-copy]:hover > .copy-block,
+[data-copy]:hover > summary > .copy-block { opacity: 1; visibility: visible; pointer-events: auto; }
+/* Nested blocks (a tool burst inside a console): only the block the pointer is actually in shows its
+   button, so hovering a burst never shows the console's as well. */
+[data-copy]:has([data-copy]:hover) > .copy-block:not(.is-copied):not(.is-failed) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.copy-block:hover { color: var(--text); border-color: #3a4353; }
+/* A confirmation stands on its own for a moment - the pointer may already have left the block, and it is
+   never the one a nested block's hover hides. */
+.copy-block.is-copied,
+.copy-block.is-failed { opacity: 1; visibility: visible; pointer-events: auto; }
+.copy-block.is-copied { color: #7ee787; border-color: #2f5f38; }
+.copy-block.is-failed { color: #ff9c94; border-color: #57262a; }
+
 .job-out {
   margin: 0;
   /* Resizable like the reply box. The max-height is the cap the console always had — the drag lifts it
@@ -1450,10 +1505,28 @@ button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: defau
 .ghost-head { display: flex; gap: 8px; align-items: baseline; font-size: 10.5px; color: var(--dim); }
 .ghost-badge { color: #ffd479; border: 1px dashed #6b4d16; border-radius: 4px; padding: 0 5px; font-size: 10px; letter-spacing: .04em; }
 .ghost-prompt { font: italic 12.5px/1.45 var(--ui); color: var(--text); margin-top: 4px; white-space: pre-wrap; }
+/* The held text is the handle for editing it in place, so it reads as one: a text caret over it, and a hover/focus
+   edge — nothing about the line moves when it becomes a textarea. */
+.ghost-prompt { cursor: text; border-radius: 5px; }
+.ghost-prompt:hover, .ghost-prompt:focus-visible { background: rgba(255, 212, 121, .07); outline: 1px dashed #4a4353; outline-offset: 2px; }
+/* The in-place editor the held text becomes: the same ghost block, undimmed, holding a box and its two actions. An
+   edit is not a send, so neither control here is drawn like a send. */
+.ghost-turn.editing { opacity: 1; }
+.ghost-edit { margin-top: 4px; }
+.ghost-edit-box { display: block; width: 100%; box-sizing: border-box; padding: 5px 7px; font: 12.5px/1.45 var(--mono); color: var(--text); background: #10141a; border: 1px solid #3a4353; border-radius: 6px; resize: vertical; }
+.ghost-edit-box:focus { outline: none; border-color: #6b4d16; }
+.ghost-edit-actions { display: flex; gap: 6px; margin-top: 5px; }
+.ghost-edit-actions button { padding: 1px 8px; font: 10.5px/1.6 var(--mono); background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; cursor: pointer; }
+.ghost-edit-actions .btn-edit-save { color: #ffd479; border-color: #6b4d16; }
+.ghost-edit-actions button:hover, .ghost-edit-actions button:focus-visible { background: rgba(255, 255, 255, .06); }
 /* what is waiting to go out, with how long it has been waiting */
 .queue-list { margin: 6px 0 0 18px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .queue-item { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px; color: var(--dim); min-width: 0; }
 .queue-ago { color: #ffd479; flex: none; min-width: 44px; }
+/* The × on a queued entry: the small dismiss control the card's own head uses, on the ghost line itself, and
+   drawn no taller than that line so adding it reflows nothing. Never a send: transparent, no fill, no arrow. */
+.ghost-head .ghost-cancel { flex: none; margin-left: auto; padding: 0 4px; font: 10.5px/1 var(--mono); background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; cursor: pointer; }
+.ghost-head .ghost-cancel:hover, .ghost-head .ghost-cancel:focus-visible { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .queue-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 /* display:block, or the inline-block baseline leaves ~5px of the wrap under the textarea and the
    button's bottom offset is measured from there — which is why it sat on the border. */

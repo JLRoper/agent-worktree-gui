@@ -444,6 +444,13 @@ a row of zeros. Token counts read in three significant digits, truncated (`636k 
   (`queued · sends when the current turn finishes`). While subagents are out, queueing also waits for them. `Enter`
   is that button's press: while the card offers it, `Enter` holds the reply instead of sending it. With no live turn
   to steer, `Ctrl+Enter` means the same thing there.
+- **Click a held reply to edit it.** The held text becomes a textarea in place — `Tab` to the line and press `Enter`, or
+  click it. `Enter` saves, `Shift+Enter` adds a line, `Escape` or **Cancel** puts the entry back exactly as it was, and a
+  click anywhere outside the editor means the same one thing every time — what `Escape` means. A save writes back to
+  that one held reply, whose age keeps counting from when it was first held: editing is not re-queueing, and an edit
+  never sends. An entry being edited stays held — a turn (and its subagents) finishing under the editor does not shoot
+  your half-written reply off, and the held line says so — and it sends when you save. Saving an empty box removes that
+  held reply; nothing is sent.
 - **Send reply** when nothing is running: the next turn on the same session, in the same directory. There is nothing
   to steer and nothing to hold, so `Enter` and `Ctrl+Enter` both send. `Shift+Enter` adds a line, `Up`/`Down` walk
   earlier prompts for that thread, shell style.
