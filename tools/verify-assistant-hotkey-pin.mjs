@@ -293,12 +293,16 @@ async function browserPhase(pw) {
     ok("the float starts closed", !(await open()));
 
     // The four hosts a caret can live in. Each one is a REAL field on the board, and the letter must land in it.
+    // The board's prompt boxes are contenteditable hosts now (they hold pasted blocks as inline chips), so the
+    // reading is the panel's own readBox(box) — the same read every send path takes — not a `.value`.
+    const readBox = (sel) => page.evaluate((s) => window.WMApp.board.pasteChips.readBox(document.querySelector(s)), sel);
+    const writeBox = (sel, v) => page.evaluate(([s, t]) => window.WMApp.board.pasteChips.writeBox(document.querySelector(s), t), [sel, v]);
     await page.locator("#job-prompt").click();
-    check("the board's prompt box has the caret", await activeEl(), "TEXTAREA#job-prompt");
+    check("the board's prompt box has the caret", await activeEl(), "DIV#job-prompt");
     await page.keyboard.type("a");
-    check("the letter went into the prompt box, not to the shortcut", await page.locator("#job-prompt").inputValue(), "a");
+    check("the letter went into the prompt box, not to the shortcut", await readBox("#job-prompt"), "a");
     ok("a keystroke aimed at the prompt box does not open the float", !(await open()));
-    await page.locator("#job-prompt").fill("");
+    await writeBox("#job-prompt", "");
 
     // The panel pre-fills this one with the project's path, so the measure is "the field grew by the letter typed",
     // not "the field reads a" — a click puts the caret wherever it was pressed.

@@ -283,9 +283,15 @@ async function browserPhase(pw) {
         subagents: o.subagents || [],
       });
       probe.card = (turns) => {
+        // A fabricated state starts EMPTY, and the card node goes with it: the box is contenteditable now, and a
+        // focused host is restored from its own typing snapshot by the render — faithfully, which would carry the
+        // previous state's text into this one.
+        document.activeElement?.blur?.();
         state.jobs.clear();
         state.replyQueue.delete(thread);
         state.replyDrafts[thread] = "";
+        state.boxModels.delete(`reply:${thread}`);
+        document.querySelector(`.job[data-thread="${thread}"]`)?.remove();
         for (const t of turns) state.jobs.set(t.id, job(t));
         renderJobs();
         const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
@@ -293,8 +299,13 @@ async function browserPhase(pw) {
         return Boolean(box);
       };
       probe.queue = () => [...(state.replyQueue.get(thread) || [])].map((q) => q.text);
-      probe.boxValue = () => document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.value ?? null;
-      probe.placeholder = () => document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.placeholder ?? null;
+      probe.boxValue = () => {
+        // The panel's own reader, so a chip in the box is the text it swallowed here too — and never `box.value`,
+        // which a contenteditable host does not have.
+        const box = document.querySelector(`.reply-box[data-reply="${thread}"]`);
+        return box ? window.WMApp.board.pasteChips.readBox(box) : null;
+      };
+      probe.placeholder = () => document.querySelector(`.reply-box[data-reply="${thread}"]`)?.dataset.ph ?? null;
       probe.titles = () => {
         const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
         const q = card?.querySelector("[data-queue-reply]");
@@ -417,7 +428,11 @@ async function browserPhase(pw) {
   ok("(5) it is the newline branch that ran, so the box grew a line", String(await boxValue()).split("\n").length >= 3, JSON.stringify(await boxValue()));
 
   // (5) an empty box is still ignored, without an error — for either gesture.
-  await page.evaluate(() => { document.querySelector('.reply-box[data-reply="wtgui-probe-reply-keys-4e71aa"]').value = ""; state.replyDrafts["wtgui-probe-reply-keys-4e71aa"] = ""; });
+  await page.evaluate(() => {
+    const box = document.querySelector('.reply-box[data-reply="wtgui-probe-reply-keys-4e71aa"]');
+    window.WMApp.board.pasteChips.writeBox(box, "");
+    state.replyDrafts["wtgui-probe-reply-keys-4e71aa"] = "";
+  });
   await clearPosts();
   await press("Enter");
   check("(5) an empty box with Enter holds nothing", await queueOf(), []);
