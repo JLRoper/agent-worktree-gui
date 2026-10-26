@@ -101,6 +101,14 @@ repo has **no CI**, so nothing refuses a bad subject at PR time either; its own 
 `git commit --no-verify`. The index stores the script executable (mode 100755), so a non-Windows clone runs
 it without a manual `chmod`; if a checkout ever loses the bit, `chmod +x .githooks/commit-msg`.
 
+`.githooks/pre-push` refuses a push that carries commits with no version bump: it runs
+`node tools/version.mjs check` (a branch whose `package.json` version is still its base's, and which carries
+commits of its own, is refused; an already-bumped branch and a branch with nothing on it pass silently). The
+level is a judgement the landing agent makes from the diff and lands in the same PR as the change —
+`node tools/version.mjs suggest` advises, `apply <patch|minor|major>` writes the one place the version lives,
+and `docs/versioning.md` is the scale. The merge prompt tells the landing agent to do it. Same install covers
+both hooks, and the same `--no-verify` bypasses this one.
+
 `node tools/verify-charter.mjs` seeds a charter from a store full of rules and notes, checks the prescribed
 headings and the cap, checks that the whole file is in the per-turn briefing while the polled state carries
 only its path, size and mtime, drives all three writers (the reader's save, a `CHARTER:` line through the
