@@ -438,6 +438,8 @@ a row of zeros. Token counts read in three significant digits, truncated (`636k 
   agent's next tool boundary, so the turn changes course. `Enter` does the same.
 - **Queue reply** holds the text and sends it when the current turn finishes; queued replies show as ghost turns
   (`queued · sends when the current turn finishes`). While subagents are out, queueing also waits for them.
+  `Ctrl+Enter` (`⌘+Enter` on a Mac) is that button's press from the box itself. With nothing to wait for — no turn
+  running and no subagent out — the button is not offered and `Ctrl+Enter` simply sends, exactly like `Enter`.
 - **Send reply** when nothing is running: the next turn on the same session, in the same directory. `Enter` sends,
   `Shift+Enter` adds a line, `Up`/`Down` walk earlier prompts for that thread, shell style.
 - **Cancel turn** stops the live run (cooperative — the card settles as `cancelled` when the turn actually ends).
@@ -516,6 +518,7 @@ only its own line so your comments and formatting survive.
 | `Shift+Enter` | Spawn prompt, reply box, question answer | A newline instead of sending. |
 | `Up` / `Down` | Spawn prompt, reply box | Walk earlier prompts for this thread/board. |
 | `Enter` | Reply box | Send — or **steer** when the turn is running. |
+| `Ctrl+Enter` (⌘+Enter) | Reply box | **Queue reply** — hold the text for the next turn instead of steering the running one. The same press as the **Queue reply** button, and it is offered in the same two states. |
 | `Alt+Right` / `Alt+Left` | During NOT-RUNNING | Skip forward / go back. |
 | `Ctrl+,` | Anywhere | Settings. |
 | `Esc` | Anywhere | Close what is open: an artifacts list, Settings, a maximized card, a clone row, or a folder filter. |

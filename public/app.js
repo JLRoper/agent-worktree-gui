@@ -3201,6 +3201,9 @@ function conversationHtml(conv) {
   // matters, instead of promising a boundary the turn may never reach.
   const inDelegate = runningTurn ? inflightToolName(jobLines(runningTurn.id)) === "delegate_task" : false;
   const running = Boolean(runningTurn);
+  // The second reason Queue reply is offered: the turn is over but the subagents it started are still out. Asked
+  // once here, because the placeholder, both button titles and the button itself all have to agree on it.
+  const childrenStillOut = childrenOut(thread);
   const queue = state.replyQueue.get(thread) || [];
   const queued = queue.length;
   const queuedTitle = queue.map((q, i) => `${i + 1}. ${q.text}`).join("\n");
@@ -3373,13 +3376,19 @@ function conversationHtml(conv) {
         <div class="reply-wrap">
           <div class="attach-chips" data-chips="${esc(thread)}">${attachmentChipsHtml(thread)}</div>
           <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"
-            placeholder="${running ? (inDelegate ? "a subagent is out — a steer lands when delegate_task returns; Queue reply holds yours for the next turn" : "a turn is running — Enter steers it; Queue reply holds yours for the next turn") : "Reply to this agent — continues the same Hermes thread, Enter to send"}"></textarea>
+            placeholder="${running
+              ? (inDelegate
+                ? "a subagent is out — a steer lands when delegate_task returns; Ctrl+Enter holds yours for the next turn"
+                : "a turn is running — Enter steers it; Ctrl+Enter holds yours for the next turn")
+              : childrenStillOut
+                ? "this thread's subagents are still out — Enter sends now; Ctrl+Enter holds yours until they finish"
+                : "Reply to this agent — continues the same Hermes thread, Enter to send"}"></textarea>
           <div class="reply-actions">
             ${running
-              ? `<button class="btn-reply btn-steer-primary" data-steer="${esc(runningTurn.id)}" type="button" title="${inDelegate ? "send this into the running turn — it waits for delegate_task to return, and if the turn ends first it comes back to this box unsent" : "send this into the running turn — the agent reads it at its next tool boundary and the turn carries on"}">Steer turn</button>`
-              : `<button class="btn-reply" data-thread="${esc(thread)}" type="button" title="send this as the next turn (Enter)">Send reply</button>`}
-            ${running || childrenOut(thread)
-              ? `<button class="btn-queue" data-queue-reply="${esc(thread)}" type="button" title="${running ? "hold this reply and send it the moment the current turn finishes" : "hold this reply until the subagents this thread started have finished, so the parent is not talking over them"}">Queue reply</button>`
+              ? `<button class="btn-reply btn-steer-primary" data-steer="${esc(runningTurn.id)}" type="button" title="${inDelegate ? "send this into the running turn (Enter) — it waits for delegate_task to return, and if the turn ends first it comes back to this box unsent" : "send this into the running turn (Enter) — the agent reads it at its next tool boundary and the turn carries on"}">Steer turn</button>`
+              : `<button class="btn-reply" data-thread="${esc(thread)}" type="button" title="${childrenStillOut ? "send this as the next turn now (Enter) — the subagents this thread started are still out; Ctrl+Enter holds it until they finish" : "send this as the next turn (Enter)"}">Send reply</button>`}
+            ${running || childrenStillOut
+              ? `<button class="btn-queue" data-queue-reply="${esc(thread)}" type="button" title="${running ? "hold this reply and send it the moment the current turn finishes (Ctrl+Enter)" : "hold this reply until the subagents this thread started have finished, so the parent is not talking over them (Ctrl+Enter)"}">Queue reply</button>`
               : ""}
             ${queued ? `<span class="queue-note mono" title="${esc(queuedTitle)}">${queued} queued</span>` : ""}
             ${running ? `<button class="btn-cancel" data-id="${esc(runningTurn.id)}" type="button" title="cancel the run this agent is in the middle of">Cancel turn</button>` : ""}
@@ -3721,6 +3730,31 @@ function queueReply(thread, text) {
   q.push({ text, at: Date.now() });
   state.replyQueue.set(thread, q);
   renderConversation(thread);
+}
+
+// One press of Queue reply, from the button or from Ctrl/Cmd+Enter: hold what the box holds and send it when
+// the thread is free, instead of steering the turn that is running now. The draft is cleared BEFORE queueReply,
+// which rebuilds the card - the rebuild would otherwise put the text back into the new box from the saved draft.
+function queueReplyFromBox(thread) {
+  const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+  const text = (box?.value || "").trim();
+  if (!text) {
+    if (box) box.focus();
+    return false;
+  }
+  state.replyDrafts[thread] = "";
+  if (box) box.value = "";
+  queueReply(thread, text);
+  document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.focus();
+  return true;
+}
+
+// Is the Queue reply button offered for this card right now? It is drawn for two reasons - a turn is running,
+// or a finished turn whose subagents are still out - and Ctrl/Cmd+Enter means the same thing as that button.
+// Asking the page where the card drew it is what keeps the gesture and the button from ever disagreeing about
+// whether there is anything to wait for: no button, nothing to queue, so the keystroke sends like Enter.
+function queueOfferedFor(box) {
+  return Boolean(box && box.closest(".reply")?.querySelector("[data-queue-reply]"));
 }
 
 function replyQueued(thread) {
@@ -10434,19 +10468,8 @@ document.addEventListener("click", async (e) => {
   if (queueBtn) {
     e.preventDefault();
     e.stopPropagation();
-    const thread = queueBtn.dataset.queueReply;
-    const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-    const text = (box?.value || "").trim();
-    if (!text) {
-      if (box) box.focus();
-      return;
-    }
-    // Clear the draft first: queueReply rebuilds the card, and the rebuild would put the text back
-    // into the new box from the saved draft.
-    state.replyDrafts[thread] = "";
-    if (box) box.value = "";
-    queueReply(thread, text);
-    document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.focus();
+    // The same press Ctrl/Cmd+Enter makes: one function, so the button and the keystroke cannot drift apart.
+    queueReplyFromBox(queueBtn.dataset.queueReply);
     return;
   }
   // Answer an approval a run is parked on. The buttons come from the host's own choice list.
@@ -10787,6 +10810,16 @@ document.addEventListener("keydown", async (e) => {
   if (e.key === "Enter" && e.shiftKey) {
     e.preventDefault();
     insertNewlineAtCaret(box);
+    return;
+  }
+  // Ctrl+Enter (⌘+Enter on a Mac) is the Queue reply button's gesture, not a second way to queue: hold this text
+  // for the next turn instead of steering the one running now. Offered exactly while that button is - a turn is
+  // running, or a finished turn's subagents are still out - and with nothing to wait for the keystroke falls
+  // through to the plain Enter path below and sends, so the two never disagree. Shift is decided first, so
+  // Ctrl+Shift+Enter is still a newline and never a queue.
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.shiftKey && queueOfferedFor(box)) {
+    e.preventDefault();
+    queueReplyFromBox(box.dataset.reply);
     return;
   }
   if (e.key === "Enter" && !e.shiftKey) {
