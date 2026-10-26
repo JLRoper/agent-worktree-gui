@@ -1409,8 +1409,8 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
       ? segments.map((seg, si) => bodyOf(seg, si)).join("")
       : `<div class="jl jl-dim">this run recorded nothing for ${esc(filter)}</div>`) + batchBlocks;
   const label = filter ? `all ${lines.length}` : `${lines.length} line${lines.length === 1 ? "" : "s"}`;
-  return `<div class="tgrp" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gofs="${esc(JSON.stringify(Object.fromEntries(cursorsStart)))}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
-      <div class="tgrp-head">${head}<button type="button" class="tgrp-more${filter ? " is-open" : ""}" data-tgrp-more="${esc(key)}" title="${filter ? "show every tool in this run, not just this one" : "show every call in this run of tools, with its output"}">${label}</button></div>
+  return `<div class="tgrp" data-copy data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gofs="${esc(JSON.stringify(Object.fromEntries(cursorsStart)))}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
+      <div class="tgrp-head" data-copy-text>${head}<button type="button" class="tgrp-more${filter ? " is-open" : ""}" data-tgrp-more="${esc(key)}" title="${filter ? "show every tool in this run, not just this one" : "show every call in this run of tools, with its output"}">${label}</button></div>
       <div class="tgrp-body"${openBody || filter ? "" : " hidden"}>${body}</div>
     </div>`;
 }
@@ -1460,7 +1460,7 @@ function turnBody(turn, copy = "") {
   return thinkHtml(turn, copy) +
     // `out-tab` carries the 18px left tab the console itself has, so the wrapper is the console's box: the chip
     // centred in the wrapper is centred in the console, not 9px off it.
-    `<div class="out-wrap out-tab"><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${toBottomBtnHtml()}</div>` +
+    `<div class="out-wrap out-tab" data-copy><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${toBottomBtnHtml()}</div>` +
     // The subagents this turn spawned, right under the console they ran beside: the delegation is the turn's own
     // work, not the card's, and a card with several turns would otherwise show the newest one's children under all
     // of them.
@@ -4970,7 +4970,7 @@ function thinkHtml(turn, copy = "") {
   const blocks = entry?.blocks || [];
   const open = thinkOpenFor(turn, key);
   const meta = !entry ? "reading…" : blocks.length ? `${blocks.length} block${blocks.length === 1 ? "" : "s"}` : "none recorded";
-  return `<details class="think" data-think-turn="${esc(key)}"${open ? " open" : ""}>
+  return `<details class="think" data-copy data-think-turn="${esc(key)}"${open ? " open" : ""}>
     <summary><span class="think-title">🧠 thinking</span> <span class="think-meta mono">${esc(meta)}</span></summary>
     <div class="out-wrap"><div class="think-body">${
       blocks.length
@@ -4985,6 +4985,139 @@ function thinkHtml(turn, copy = "") {
     }</div>${toBottomBtnHtml()}</div>
   </details>`;
 }
+
+// ---- copy buttons ------------------------------------------------------------------------------
+// One mechanism for every "lift this block" affordance: an element carrying `data-copy` carries a small
+// button in its corner that appears while the pointer is over it and copies THAT BLOCK's own visible
+// text. The button is mounted here, by the observer below, never by the renderers - so a block another
+// worker draws (the console's code and diff windows) opts in by carrying the same attribute, and there
+// is no second mechanism to keep in step with this one.
+//
+// What a block copies is what it SHOWS: the reading goes through innerText, so a folded burst or a
+// folded reasoning block contributes only the lines on screen, never a hidden one. Every control inside
+// the block is taken out of that reading - this button's own label, the "N lines" and "+ N commands"
+// buttons, the jump-to-the-newest-line chip - because a control's label is chrome, not output.
+const COPY_SEL = "[data-copy]";
+const COPY_BTN_SEL = "[data-copy-btn]";
+const COPY_TEXT_SEL = "[data-copy-text]";
+const COPY_TITLE = "copy this block's text to the clipboard";
+const COPY_FLASH_MS = 1400;
+
+function copyButtonHtml() {
+  return `<button type="button" class="copy-block" data-copy-btn="1" title="${COPY_TITLE}" aria-label="${COPY_TITLE}">⧉</button>`;
+}
+
+// The one place a button is created. Idempotent: the button this inserts is itself a mutation, so the
+// observer below sees it, asks again, finds the button already there and stops.
+function mountCopyButtons(root) {
+  if (!root || root.nodeType !== 1) return;
+  const blocks = [];
+  if (root.matches?.(COPY_SEL)) blocks.push(root);
+  for (const el of root.querySelectorAll?.(COPY_SEL) || []) blocks.push(el);
+  for (const block of blocks) {
+    // A <details> renders only its summary while it is folded, so its button goes IN the summary: a folded
+    // block has to be copyable too, and what it copies is still its folded text.
+    const host = block.tagName === "DETAILS" ? block.querySelector(":scope > summary") || block : block;
+    if (host.querySelector(":scope > .copy-block")) continue;
+    host.insertAdjacentHTML("beforeend", copyButtonHtml());
+  }
+}
+
+// Generic by construction: ANY render path that puts a `[data-copy]` block on the page gets its button -
+// a card rebuilt from scratch, a console line appended by the run's stream, a pinned copy of a turn.
+const copyObserver = new MutationObserver((records) => {
+  for (const r of records) for (const node of r.addedNodes) if (node.nodeType === 1) mountCopyButtons(node);
+});
+copyObserver.observe(document.documentElement, { childList: true, subtree: true });
+mountCopyButtons(document.documentElement);
+
+// What a block copies: its own text, as the reader sees it. innerText alone will not do - a flex row (a
+// tool burst's call: glyph, name, tally, arguments, timer) has its items blockified, so innerText breaks
+// them onto five separate lines, and textContent ignores what is folded away altogether. So the walk
+// below keeps innerText's rules for what is SHOWN - a folded or hidden subtree contributes nothing - one
+// line box at a time, and lays a flex row's items out the way the reader sees them: one line, separated.
+const COPY_SKIP_TAGS = new Set(["SCRIPT", "STYLE", "TEMPLATE", "BUTTON"]);
+
+function copyBlockBox(el) {
+  const d = getComputedStyle(el).display;
+  return d !== "none" && d !== "contents" && !d.startsWith("inline");
+}
+
+function copyShownText(el) {
+  if (!el || el.nodeType !== 1) return "";
+  if (COPY_SKIP_TAGS.has(el.tagName)) return ""; // a control's label is chrome, never output
+  if (el.tagName === "BR") return "\n";
+  const cs = getComputedStyle(el);
+  if (cs.display === "none" || cs.visibility === "hidden" || el.hidden) return "";
+  if (el.checkVisibility && !el.checkVisibility({ checkVisibilityCSS: true })) return "";
+  // A folded block contributes its title line and nothing else, whatever its contents compute to.
+  if (el.tagName === "DETAILS" && !el.open) return copyShownText(el.querySelector(":scope > summary"));
+  const display = cs.display;
+  if (display === "flex" || display === "inline-flex" || display === "grid" || display === "inline-grid") {
+    // A flex ROW lays its items out on one line - which is the whole reason this walk exists - while a
+    // flex COLUMN or a grid stacks them, one line each. (A tool burst's head is a column: one row per
+    // tool, and its copy is one line per tool.)
+    const onOneLine = (display === "flex" || display === "inline-flex") && !String(cs.flexDirection || "").startsWith("column");
+    return [...el.children]
+      .map(copyShownText)
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .join(onOneLine ? " " : "\n");
+  }
+  const kids = [...el.childNodes];
+  // A line box - text and inline content only: innerText is exact for one, pre-wrap and all.
+  if (!kids.some((k) => k.nodeType === 1 && copyBlockBox(k))) return el.innerText;
+  return kids
+    .map((k) => (k.nodeType === 3 ? k.nodeValue : k.nodeType === 1 ? copyShownText(k) : ""))
+    .join("\n")
+    .replace(/[ \t]+(?=\r?\n)/g, "")
+    .replace(/(\r?\n){2,}/g, "\n")
+    .replace(/^[\s\r\n]+|[\s\r\n]+$/g, "");
+}
+
+// The part that IS the block's text, when the marked element is a wrapper: a tool burst's button sits on
+// the burst (so hovering anywhere in it finds one button) while a burst copies its CALL - the header and
+// its summary as rendered - and never its result lines. It is a DIRECT child: a burst inside a console
+// carries one of its own, and the console must not read it as its own text.
+function blockCopyText(block) {
+  return copyShownText(block.querySelector(`:scope > ${COPY_TEXT_SEL}`) || block);
+}
+
+function flashCopyButton(btn, ok) {
+  btn.textContent = ok ? "✓" : "✕";
+  btn.classList.toggle("is-copied", ok);
+  btn.classList.toggle("is-failed", !ok);
+  btn.title = ok ? "copied to the clipboard" : "the clipboard refused it - nothing was copied";
+  clearTimeout(btn._copyTimer);
+  btn._copyTimer = setTimeout(() => {
+    btn.textContent = "⧉";
+    btn.classList.remove("is-copied", "is-failed");
+    btn.title = COPY_TITLE;
+  }, COPY_FLASH_MS);
+}
+
+// The one delegated handler. It runs in the CAPTURE phase, so a press on the button is answered here and
+// never reaches the console's own click handlers; and a copy that fails says so (a cross) instead of
+// looking like the tick a successful one shows.
+document.addEventListener(
+  "click",
+  (e) => {
+    const target = e.target && e.target.closest ? e.target : null;
+    const btn = target ? target.closest(COPY_BTN_SEL) : null;
+    if (!btn) return;
+    const block = btn.closest(COPY_SEL);
+    if (!block) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // copyText() is the panel's own writer: the async clipboard where the origin is secure (loopback
+    // is), the select-and-execCommand path behind it, and `false` when neither of them worked.
+    void copyText(blockCopyText(block)).then(
+      (ok) => flashCopyButton(btn, ok),
+      () => flashCopyButton(btn, false),
+    );
+  },
+  true,
+);
 
 // A console follows its newest line unless the reader has deliberately gone back to read something older. This is the
 // default the panel promises, and it has to survive three things that used to fight over scrollTop: a card rebuild, a
