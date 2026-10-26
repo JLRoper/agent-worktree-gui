@@ -3916,7 +3916,9 @@ function cancelQueuedReply(thread, at) {
     return sent ? "sent" : "gone";
   }
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-  const backToDraft = Boolean(box && !box.value.trim() && entry.text);
+  // The box's own text, read the one way a prompt box is read now (a chip is the text it swallowed): the
+  // answer decides whether the cancelled reply can come back as a draft.
+  const backToDraft = Boolean(box && !readBox(box).trim() && entry.text);
   if (backToDraft) state.replyDrafts[thread] = entry.text;
   renderConversation(thread);
   // After the repaint: a rebuild replaces the card and the warnline with it, so the note goes in last.
