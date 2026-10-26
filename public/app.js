@@ -187,71 +187,6 @@ const state = {
   assistant: null,
 };
 
-// The write routes demand x-panel-token whenever the request does NOT come from this machine — loopback
-// is the panel's own UI and is never challenged. A browser on another machine authenticates once by
-// opening the link with ?token=…: the value is remembered here, dropped from the address bar so a copied
-// or shared URL stops carrying it, and every fetch below then sends it. It is kept in localStorage too,
-// so a later reload without the query string still works.
-const PANEL_TOKEN_KEY = "wtgui.panelToken";
-const panelToken = (() => {
-  let fromUrl = "";
-  try {
-    fromUrl = new URLSearchParams(location.search).get("token") || "";
-  } catch {
-    /* unparsable location: fall back to what is remembered */
-  }
-  if (fromUrl) {
-    try {
-      localStorage.setItem(PANEL_TOKEN_KEY, fromUrl);
-    } catch {
-      /* private mode: this load still carries it in memory */
-    }
-    try {
-      const clean = new URL(location.href);
-      clean.searchParams.delete("token");
-      history.replaceState(null, "", `${clean.pathname}${clean.search}${clean.hash}`);
-    } catch {
-      /* tidying the URL is a courtesy, not a requirement */
-    }
-    return fromUrl;
-  }
-  try {
-    return localStorage.getItem(PANEL_TOKEN_KEY) || "";
-  } catch {
-    return "";
-  }
-})();
-
-// Every call to the panel's own server goes through here. A plain fetch has no deadline, so when the
-// server is restarting — a gateway bounce refuses or hangs connections for a while — the promise never
-// settles: the button stays disabled, no message appears, and the card is indistinguishable from a
-// frozen page. A timeout turns that into a sentence on screen.
-async function apiFetch(url, opts = {}, { timeoutMs = 20000 } = {}) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  // One wrapper means one place to attach the token: a route added later cannot forget to send it, and
-  // the local board (where the header is ignored) behaves exactly as before.
-  const headers = new Headers(opts.headers || {});
-  if (panelToken) headers.set("x-panel-token", panelToken);
-  try {
-    const res = await fetch(url, { ...opts, headers, signal: ctrl.signal });
-    if (res.status === 403) {
-      // Reached from another machine without a usable token. Say so, instead of letting it look like the
-      // panel is broken — reads are still allowed, so the board still draws and the action is the only
-      // thing that failed.
-      showBanner("This browser may only read the board: open the panel once with its ?token=… link to allow changes.");
-    }
-    return res;
-  } catch (e) {
-    if (e && e.name === "AbortError") {
-      throw new Error(`the panel server did not answer within ${Math.round(timeoutMs / 1000)}s — it may be restarting; try again`);
-    }
-    throw e;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 // ---------------- agents ----------------
 function jobLines(id) {
   return state.jobLines.get(id) || [];
@@ -9268,24 +9203,6 @@ function connect() {
     state.pool = JSON.parse(e.data).pool;
   });
   es.addEventListener("error", () => setStream("reconnecting…", "warn"));
-}
-
-async function resync() {
-  try {
-    applySnapshot(await apiFetch("/api/state").then((r) => r.json()));
-  } catch (e) {
-    showBanner(`Cannot reach the server: ${e.message}`);
-    setStream("offline", "bad");
-  }
-}
-
-async function post(route) {
-  try {
-    await apiFetch(route, { method: "POST" });
-    await resync();
-  } catch (e) {
-    showBanner(`${route}: ${e.message}`);
-  }
 }
 
 $("btn-refresh").addEventListener("click", () => post("/api/refresh"));
