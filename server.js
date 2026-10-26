@@ -15,7 +15,7 @@ import { worktreeList } from "./lib/project.js";
 import { Store } from "./lib/store.js";
 import { Scheduler } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
-import { Jobs, hermesHome, makeThreadName, previewRequest } from "./lib/jobs.js";
+import { Jobs, hermesHome, isLiveJobStatus, makeThreadName, previewRequest } from "./lib/jobs.js";
 import { gitIn, scanWorktree } from "./lib/scan.js";
 import { resolveExistingTarget, resolutionNote } from "./lib/spawn-target.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
@@ -755,7 +755,7 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
     .list()
     .find(
       (j) =>
-        (j.status === "running" || j.status === "starting") &&
+        isLiveJobStatus(j.status) &&
         [j.cwd, j.ownerPath, j.worktreePath].filter(Boolean).some((p) => path.resolve(p) === oldPath),
     );
   if (busy) return { error: `an agent is running in that worktree (${busy.id}) — stop it first`, status: 409 };
@@ -892,7 +892,7 @@ async function autoNameWorktree(evt) {
   // Only when the tree is idle: moving a directory out from under a running turn is what git refuses.
   const busy = jobs
     .list()
-    .some((x) => (x.status === "running" || x.status === "starting") && normPathKey(x.ownerPath || x.cwd) === normPathKey(j.worktreePath));
+    .some((x) => isLiveJobStatus(x.status) && normPathKey(x.ownerPath || x.cwd) === normPathKey(j.worktreePath));
   if (busy) return;
   const title = jobs.sessionInfoFor(j.thread).title;
   if (!title) return;
@@ -2155,7 +2155,7 @@ const server = createServer(async (req, res) => {
         .list()
         .find(
           (j) =>
-            (j.status === "running" || j.status === "starting") &&
+            isLiveJobStatus(j.status) &&
             [j.cwd, j.ownerPath].filter(Boolean).some((p) => path.resolve(p) === target),
         );
       if (busy) return sendJson(res, 409, { error: `an agent is running in that worktree (${busy.id})` });
@@ -2340,7 +2340,7 @@ const server = createServer(async (req, res) => {
       // One merge agent per worktree: a second would race the first over the same base branch.
       const live = jobs
         .list()
-        .find((j) => ["running", "starting"].includes(String(j.status)) && normPathKey(j.ownerPath || j.cwd) === normPathKey(worktree) && String(j.label || "").startsWith("MERGING into "));
+        .find((j) => isLiveJobStatus(j.status) && normPathKey(j.ownerPath || j.cwd) === normPathKey(worktree) && String(j.label || "").startsWith("MERGING into "));
       if (live) return sendJson(res, 409, { error: `an agent is already merging this worktree (${live.label || live.thread})` });
       const list = await gitIn(worktree, ["log", "--oneline", "-20", `${baseRef}..HEAD`], 20000);
       const commitList = list.ok ? list.out.split("\n").filter(Boolean) : [];
