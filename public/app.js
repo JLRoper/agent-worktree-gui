@@ -108,7 +108,7 @@ const state = {
   // so the position has to live outside the DOM or it comes back at the top.
   outScrolls: {},
   collapsedJobs: loadCollapsedJobs(),
-  closedDescs: loadClosedDescs(),
+  openDescs: loadOpenDescs(),
   expandedProjects: loadExpandedProjects(),
   collapsedFixed: loadCollapsedFixed(),
   collapsedRoots: loadCollapsedRoots(),
@@ -211,22 +211,28 @@ function saveCollapsedJobs() {
   }
 }
 
-// Which descriptions the reader has folded away, by row key. The block leads the worktree's detail and opens itself —
-// it says what the branch was for, which is worth one glance — but a reader who has read it should not have to fold it
-// again on every reload, so unlike the two strips under it (git detail, liveness) this one remembers.
-function loadClosedDescs() {
+// Which descriptions the reader has UNFOLDED, by row key. The block leads the worktree's detail and starts folded,
+// like the two strips under it (merge state, liveness): its folded peek says what the branch was for, which is the one
+// thing worth seeing without opening anything, and the full text was taking a block's worth of height above the agents.
+// Unfolding it is remembered, and only unfolding — the set starts empty, so a row nobody has opened is folded, and the
+// remembered state is the reader's own.
+//
+// A NEW key, not an inversion of the old `wm.closedDescs`. That set was written by a build where every description
+// started OPEN, so its contents describe a layout the board no longer has; read either way round it would fold or
+// unfold rows on this reader's behalf. An absent key means every row folded, which is now the default.
+function loadOpenDescs() {
   try {
-    return new Set(JSON.parse(localStorage.getItem("wm.closedDescs") || "[]"));
+    return new Set(JSON.parse(localStorage.getItem("wm.openDescs") || "[]"));
   } catch {
     return new Set();
   }
 }
 
-function saveClosedDescs() {
+function saveOpenDescs() {
   try {
-    localStorage.setItem("wm.closedDescs", JSON.stringify([...state.closedDescs]));
+    localStorage.setItem("wm.openDescs", JSON.stringify([...state.openDescs]));
   } catch {
-    /* no storage: the fold simply will not survive a reload */
+    /* no storage: the unfold simply will not survive a reload */
   }
 }
 
@@ -7576,6 +7582,21 @@ function fillAgentSlots(root, reuse) {
   }
 }
 
+// The description as bullets: one per sentence. The split is the SAME boundary lib/descriptions.js used to cut the
+// text down to two sentences in the first place (a full stop, question or bang mark, then whitespace and something
+// that can start a sentence), so the panel shows the sentences the server recognised rather than re-parsing the prose
+// its own way — and text with no sentence punctuation at all (the store's word-boundary fallback) stays one bullet.
+const DESC_SENTENCE_BREAK = /(?<=[.!?])\s+(?=[A-Z0-9"'([])/;
+
+function descLines(text) {
+  const all = String(text ?? "").trim();
+  if (!all) return [];
+  return all
+    .split(DESC_SENTENCE_BREAK)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 function detailHtml(row) {
   const parts = [];
   const dirty = row.dirtyFiles || [];
@@ -7685,10 +7706,16 @@ function detailHtml(row) {
   // What this branch was STARTED to do, in the words of its first run's own brief. The MERGE STATE below says where
   // the branch got to; this says what it was for, which is the question an old row actually raises. The text is the
   // server's (lib/descriptions.js, written down once per tree from the earliest run in it) — nothing here derives or
-  // summarises anything — and a tree the panel has no run for has no block at all, so the section simply goes away
-  // rather than standing there empty.
+  // summarises anything beyond cutting it into its own sentences — and a tree the panel has no run for has no block at
+  // all, so the section simply goes away rather than standing there empty.
+  //
+  // A bullet list, one bullet per sentence, and FOLDED to start with — the same shape as the two strips under it
+  // (`ul.git-list`, one fact per `<li>`, the head's own line repeated as the first item). Folded, the first bullet
+  // rides to the right of the header as the peek, exactly as the merge state's summary and the liveness block's first
+  // line do, so the three strips read as one column of one-line headers.
   const desc = row.description && row.description.text ? row.description : null;
-  const descOpen = desc ? !state.closedDescs.has(key) : false;
+  const descOpen = desc ? state.openDescs.has(key) : false;
+  const descBullets = desc ? descLines(desc.text) : [];
   const descFrom = desc?.from
     ? ["first run in this tree", desc.from.thread || null, desc.from.at ? `started ${relTime(desc.from.at)} ago` : null]
         .filter(Boolean)
@@ -7699,10 +7726,12 @@ function detailHtml(row) {
       <div class="desc-head" data-toggle-desc="${esc(key)}" title="${descOpen ? "fold" : "unfold"} what this branch was started to do">
         <span class="chev">${descOpen ? "\u25be" : "\u25b8"}</span>
         <h4>Description</h4>
-        ${descOpen ? "" : `<span class="desc-first mono">${esc(desc.text)}</span>`}
+        ${descOpen ? "" : `<span class="desc-first mono">${esc(descBullets[0] || desc.text)}</span>`}
       </div>
       <div class="desc-body">
-        <p class="desc-text">${esc(desc.text)}</p>
+        <ul class="git-list desc-list">
+          ${descBullets.map((line, i) => `<li${i === 0 ? ` class="git-summary-line"` : ""}>${esc(line)}</li>`).join("")}
+        </ul>
         ${descFrom ? `<div class="desc-from mono">${esc(descFrom)}</div>` : ""}
       </div>
     </div>`
@@ -9857,9 +9886,10 @@ document.addEventListener("click", async (e) => {
     }
     return;
   }
-  // What this branch was started to do folds like the two strips below it, except that its folded state is REMEMBERED
-  // (localStorage): this is the one block a reader dismisses on purpose, and putting it back on every reload would make
-  // the remembering pointless. Folded, it keeps its first line to the right of the header the way the other two do.
+  // What this branch was started to do folds like the two strips below it, except that its UNFOLDED state is
+  // REMEMBERED (localStorage, `wm.openDescs`): the block starts folded, so the remembering is what keeps a reader's
+  // opened rows open across a reload. Folded, it keeps its first bullet to the right of the header the way the other
+  // two strips keep their first line.
   const descToggle = e.target.closest("[data-toggle-desc]");
   if (descToggle) {
     e.preventDefault();
@@ -9867,27 +9897,27 @@ document.addEventListener("click", async (e) => {
     const key = descToggle.dataset.toggleDesc;
     const block = document.querySelector(`[data-desc-block="${CSS.escape(key)}"]`);
     if (block) {
-      const closed = state.closedDescs.has(key);
-      if (closed) state.closedDescs.delete(key);
-      else state.closedDescs.add(key);
-      saveClosedDescs();
-      block.classList.toggle("collapsed", !closed);
+      const open = state.openDescs.has(key);
+      if (open) state.openDescs.delete(key);
+      else state.openDescs.add(key);
+      saveOpenDescs();
+      block.classList.toggle("collapsed", open);
       const chev = descToggle.querySelector(".chev");
-      if (chev) chev.textContent = closed ? "\u25be" : "\u25b8";
+      if (chev) chev.textContent = open ? "\u25b8" : "\u25be";
       let first = descToggle.querySelector(".desc-first");
-      const text = block.querySelector(".desc-text");
-      if (!closed) {
-        if (!first && text) {
+      const lead = block.querySelector(".desc-body li");
+      if (open) {
+        if (!first && lead) {
           first = document.createElement("span");
           first.className = "desc-first mono";
-          first.textContent = text.textContent;
-          first.title = text.textContent;
+          first.textContent = lead.textContent;
+          first.title = lead.textContent;
           descToggle.appendChild(first);
         }
       } else if (first) {
         first.remove();
       }
-      descToggle.title = `${closed ? "fold" : "unfold"} what this branch was started to do`;
+      descToggle.title = `${open ? "unfold" : "fold"} what this branch was started to do`;
     }
     return;
   }
