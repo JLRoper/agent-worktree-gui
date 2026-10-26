@@ -64,6 +64,15 @@ choice, the live half through a real spawn against a stub gateway, and the whole
 after a reload, folded again by a second click, a stale legacy key with no say, absent for a tree with no run) —
 useful after touching `lib/descriptions.js`, the harvest in `server.js` or that strip in `public/app.js`.
 
+`node tools/verify-merge-state.mjs` proves the `MERGE STATE` strip's own detail in a sandbox of its own — three
+hand-cut worktrees (five commits off remote main and a dirty tree, fourteen commits and a clean tree, nothing at
+all) over a throwaway repo with a bare `origin`, and headless Chromium over the running panel: every commit on its
+own line at the full width of the row, a fourteen-commit list drawn whole and unclipped, the two file strips one
+line each with their counts and their names hidden, every open/close combination of the three folds, the empty
+strips absent on a clean tree, and the `DESCRIPTION` and `LIVENESS EVIDENCE` strips around it untouched — useful
+after touching that strip in `public/app.js`. Point it at a Playwright install with `PANEL_PLAYWRIGHT_ROOT`;
+without one it reports `BROWSER-HALF-NOT-RUN` and fails rather than passing on a half that never ran.
+
 `node tools/verify-action-harvest.mjs` drives three real assistant turns through a stub gateway whose stream
 carries the reply the way the live one does — one paragraph per text line — and then reads the job store and the
 journal back: one turn carrying SPAWN, SPAWN IN, TO, WATCH, NOTE and RULE must produce one job per run-creating
@@ -256,6 +265,24 @@ against the merge state's own list, the fold on a fresh expand, the click that u
 keeps it open, the click that folds it again, a stale legacy key, and the absent strip. Point it at a Playwright
 install with `PANEL_PLAYWRIGHT_ROOT`; without one it reports `BROWSER-HALF-NOT-RUN` and fails rather than
 passing on a half that never ran.
+
+#### What the merge state strip unfolds to
+
+`MERGE STATE` is the strip between those two — the row's verdict and the git facts behind it, folded to one line
+until it is opened. Unfolded, it reads top to bottom as three things, in the order a reader wants them:
+
+- the merge facts, one per line: the verdict, `cherry +N/−M`, the branch's reflog count, whether the branch ever
+  carried its own commits, the remote branch, the last commit. The head's own summary is the first bullet while
+  the strip is open, and only the head line while it is folded.
+- **every commit the tree carries off remote main**, under a heading naming the remote and the diffstat, one
+  commit per line — short sha, then subject — at the **full width of the row** and never clipped. A tree with
+  fifty commits makes a long list and the panel scrolls; nothing is hidden to keep the row short. These used to
+  be one of three `<div class="col">` blocks in a flex row (`tr.detail .cols`, `min-width: 300px`), where a long
+  commit list was squeezed into a ribbon beside the changed files.
+- `MODIFIED (N)` and `UNTRACKED (N)`: one line each, carrying their count, with the file names folded away until
+  the strip is opened. Each folds **on its own** — opening `MODIFIED` moves neither `MERGE STATE` nor `UNTRACKED`,
+  and folding `MERGE STATE` does not forget which of the two was open (the open set is keyed per row and per kind,
+  `state.gitSubOpen`). A clean tree, or one with nothing unmerged, renders no strip at all rather than an empty one.
 
 ### Agents
 

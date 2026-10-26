@@ -1425,6 +1425,23 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
    keeps just its title - done in CSS so the toggle stays a class flip and the detail is not re-rendered to
    rearrange one span. */
 .git-block:not(.collapsed) .git-head .git-summary { display: none; }
+/* The commits this tree carries off remote main: the row's own full-width list, one commit per line. The three-column
+   flex row that used to hold this, Modified and Untracked is gone — a long commit list was clipped there and a long
+   file list was squeezed into 300px beside its neighbours. Nothing here caps the height: a tree with fifty commits
+   extends and the panel scrolls, rather than hiding the tail. */
+.git-body .git-commits { margin: 2px 0 8px; }
+.git-body .git-commits-list { margin: 3px 0 0; padding-left: 15px; }
+.git-body .git-commits-list li { font: 11.5px/1.6 var(--mono); color: #c8d1dc; overflow-wrap: anywhere; }
+/* Modified and Untracked: one-line strips under the commit list, each with its own fold. Folded, a strip is a
+   chevron, its title and its count and nothing else; opened, its names indent under it like the commit list's. */
+.git-sub { margin: 0 0 2px; }
+.git-sub-head { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0; }
+.git-sub-head .chev { color: var(--dimmer); font-size: 13px; line-height: 1; width: 13px; flex: none; }
+.git-sub-head h4 { margin: 0; flex: none; }
+.git-sub-head:hover .chev, .git-sub-head:hover h4 { color: var(--text); }
+.git-sub.collapsed > ul { display: none; }
+.git-sub > ul { margin: 2px 0 6px; padding-left: 15px; }
+.git-sub > ul li { font: 11.5px/1.6 var(--mono); color: var(--dim); overflow-wrap: anywhere; }
 /* WHAT THIS BRANCH WAS STARTED TO DO: the strip ABOVE merge state. Same shape as the two under it — a chevron, a
    small-caps title, a one-line peek while folded, and, open, a bullet list of its own sentences — because it is the
    same kind of thing, and the three strips a worktree's detail opens with should read as one column. What differs is
@@ -1923,8 +1940,6 @@ tr.detail > td > .detail-inner > .live-block { padding-bottom: 6px; border-botto
 tr.detail h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
 tr.detail ul { margin: 0 0 12px; padding-left: 18px; }
 tr.detail li { font-family: var(--mono); font-size: 12px; color: #c8d1dc; }
-tr.detail .cols { display: flex; gap: 28px; flex-wrap: wrap; }
-tr.detail .col { min-width: 300px; }
 tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
 
 .foot {
