@@ -1360,6 +1360,10 @@ button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: defau
 .queue-list { margin: 6px 0 0 18px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .queue-item { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px; color: var(--dim); min-width: 0; }
 .queue-ago { color: #ffd479; flex: none; min-width: 44px; }
+/* The × on a queued entry: the small dismiss control the card's own head uses, on the ghost line itself, and
+   drawn no taller than that line so adding it reflows nothing. Never a send: transparent, no fill, no arrow. */
+.ghost-head .ghost-cancel { flex: none; margin-left: auto; padding: 0 4px; font: 10.5px/1 var(--mono); background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; cursor: pointer; }
+.ghost-head .ghost-cancel:hover, .ghost-head .ghost-cancel:focus-visible { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .queue-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 /* display:block, or the inline-block baseline leaves ~5px of the wrap under the textarea and the
    button's bottom offset is measured from there — which is why it sat on the border. */
