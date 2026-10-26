@@ -1734,12 +1734,29 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
 .todo-body { padding: 2px 0 4px 28px; }
 .todo-body .todo-list { margin: 0 0 6px; padding-left: 15px; list-style: none; }
 .todo-body .todo-list li { font: 11.5px/1.7 var(--mono); color: var(--dim); }
-.todo-item { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+/* One item is a LINE — glyph, id, its words, its controls — and, UNDER it, the facts about the item as a nested
+   bullet list: its owner, who touched it, when, and its optional note and files. The facts used to ride the far right
+   of that line (`margin-left:auto` on a full-width flex row), so on a 1,400px row a three-word item and its owner sat
+   a screen apart and the reader had to zoom out to read one row. Nothing about the line itself changed; only where its
+   facts sit. The left rule is what makes the nesting visible at a glance: bullets hang off the item they describe. */
+.todo-item { display: block; padding: 1px 0 3px; }
+.todo-line { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .todo-item .todo-glyph { flex: none; color: var(--dimmer); }
 .todo-item.todo-done .todo-text, .todo-item.todo-dropped .todo-text { color: var(--dimmer); text-decoration: line-through; }
 .todo-item.todo-doing .todo-glyph { color: var(--text); }
 .todo-item .todo-id { flex: none; }
-.todo-item .todo-meta { margin-left: auto; flex: none; }
+/* The fact list: indented under the item's words, one bullet per fact, and no wider indent than the text it belongs
+   to. `list-style: disc` draws the bullet in the list's own padding, so the markers line up in a column beside the
+   left rule rather than drifting with the length of each fact. */
+.todo-item .todo-meta {
+  margin: 1px 0 1px 22px;
+  padding: 1px 0 1px 14px;
+  list-style: disc;
+  border-left: 1px solid var(--line);
+}
+.todo-body .todo-list .todo-meta li { font: 10.5px/1.55 var(--mono); color: var(--dimmer); overflow-wrap: anywhere; }
+.todo-fact-label { margin-right: 1px; color: var(--dim); }
+.todo-body .todo-list .todo-meta .todo-note { color: var(--dim); }
 .todo-btn { background: none; border: 0; color: var(--dimmer); cursor: pointer; font: inherit; padding: 0 2px; }
 .todo-btn:hover { color: var(--text); }
 .todo-btn.on { color: var(--text); }
@@ -1752,7 +1769,6 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
 .todo-journal { margin-top: 4px; font-size: 10.5px; }
 .todo-journal ul { margin: 0; padding-left: 15px; }
 .todo-journal li { font-size: 10.5px; color: var(--dimmer); }
-.todo-note, .todo-files { margin-left: 6px; }
 /* the agent mark at the head of every agent row (parent row only, turns keep their own chevron) */
 .job-head .agent-glyph { flex: 0 0 auto; color: #c8a6ff; font-size: 13px; line-height: 1; }
 /* forget one agent session (two-step: first click arms it) */
