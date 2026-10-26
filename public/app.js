@@ -3311,14 +3311,6 @@ function conversationHtml(conv) {
   const zoom = state.consoleZoom.get(thread);
   const thinkZoom = state.thinkZoom.get(thread);
   const sizeVars = [zoom ? `--out-size:${zoom}px` : "", thinkZoom ? `--think-size:${thinkZoom}px` : ""].filter(Boolean).join(";");
-  // A card the panel lost the stream of while its run may still be going in the gateway. "not-running" would be a
-  // promise this panel cannot keep — that pill starts a NEW turn, while the old run may be mid-flight — so the pill
-  // becomes the NOT-RUNNABLE chip instead: a statement the reader can press. The press asks the gateway about run
-  // <id> (POST /api/jobs/reattach) and the panel takes the same decision its boot reconcile takes: still live, the
-  // card re-attaches and steers again; ended, its result is adopted; forgotten, the card settles as interrupted and
-  // its console names the tree the work is in and the PR. It is drawn only while the run MAY still exist — once the
-  // gateway has said it has no record of this run (runGone), there is nothing left to ask, and the settled wording
-  // stands alone.
   // The pill the reader already knows, for a card this panel has no line to. It still reads "not-running" — that is
   // the state, and the press is the same press: pick this up. What differs is behind the click. This one asks the
   // gateway about the run it lost BEFORE starting anything: still live -> the card re-attaches to that run and
@@ -3922,10 +3914,11 @@ async function continueThread(thread, btn = null) {
   }
 }
 
-// The NOT-RUNNABLE chip's press. One card, one question (POST /api/jobs/reattach), and the server runs it through
-// reconcileRestored's own decision, so a press and a boot can never disagree about what the gateway answered. The
-// card repaints itself from the job events that decision emits; what is added here is the sentence for the reader,
-// and the green note is the same one the other "this gesture did what it said" controls use.
+// The re-attach pill's press (the not-running pill on a card this panel has no line to). One card, one question
+// (POST /api/jobs/reattach), and the server runs it through reconcileRestored's own decision, so a press and a boot
+// can never disagree about what the gateway answered. The card repaints itself from the job events that decision
+// emits; what is added here is the sentence for the reader — and, on the answer that settles the card, the press
+// then continues the thread, which is the pick-up the reader asked for.
 async function reattachCard(btn) {
   const id = btn.dataset.reattachJob || "";
   if (!id) return;
@@ -5103,10 +5096,10 @@ function conversationSignature(conv) {
   const runQuestions = conv.turns
     .map((t) => `${t.id}:${t.question ? t.question.requestId || t.question.question?.slice(0, 40) || 1 : 0}:${t.question ? (t.question.choices || []).length : 0}:${t.questionDone ? (t.questionDone.answer || "closed").slice(0, 40) : 0}`)
     .join(",");
-  // The NOT-RUNNABLE chip's own input, for the same reason as the two above: the gateway answering 404 for a card's
-  // run settles it — the promise becomes the settled wording and `runGone` goes up — while its status stays
-  // `interrupted` and it still carries an error, so nothing else in this signature moves. Without it the chip sat on
-  // a card whose run is provably gone until some unrelated event forced a rebuild.
+  // The re-attach pill's own input, for the same reason as the two above: the gateway answering 404 for a card's run
+  // settles it — the promise becomes the settled wording and `runGone` goes up — while its status stays `interrupted`
+  // and it still carries an error, so nothing else in this signature moves. Without it the pill sat on a card whose
+  // run is provably gone until some unrelated event forced a rebuild.
   const runReattach = conv.turns.map((t) => `${t.id}:${t.runGone ? 1 : 0}`).join(",");
   const open = [...state.turnOpen].map(([k, v]) => `${k}${v ? 1 : 0}`).join(",");
   const approvals = [...state.approvals.values()]
@@ -10403,10 +10396,9 @@ document.addEventListener("click", async (e) => {
     void continueThread(continueBtn.dataset.continueThread || "", continueBtn);
     return;
   }
-  // The NOT-RUNNABLE chip: ask the gateway about this one card's run and let the panel take the same decision its
-  // boot reconcile takes. Nothing is drawn from the response — the decision emits the job events the card is
-  // repainted from — so the press is answered in words, and a refusal says why instead of leaving a chip that looks
-  // broken.
+  // The re-attach pill: ask the gateway about this one card's run and let the panel take the same decision its boot
+  // reconcile takes. Nothing is drawn from the response — the decision emits the job events the card is repainted
+  // from — so the press is answered in words, and a refusal says why instead of leaving a pill that looks broken.
   const reattachBtn = e.target.closest("[data-reattach-job]");
   if (reattachBtn) {
     e.preventDefault();
