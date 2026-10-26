@@ -899,6 +899,85 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 .jl-cmd { color: var(--dimmer); }
 .jl-dim { color: var(--dimmer); font-style: italic; }
 .jl-raw { color: var(--dim); }
+
+/* A unified diff, drawn as a window per hunk (core/console-format.js builds it). The head keeps the file
+   headers and the @@ line as labels — the reader has to be able to see WHICH file and which hunk without
+   reading the body. The body is a two-column grid: the before side on the left, the after side on the right,
+   so a modification's two halves sit on one row and read as one change.
+   Both sides WRAP. A diff line is often 200+ characters (a minified line, a long path) and the console is a
+   few hundred pixels wide: with `nowrap` the window would scroll sideways and the reader would lose the
+   alignment that is the whole point of two sides. minmax(0, 1fr) is load-bearing — a bare 1fr refuses to
+   shrink below its content and pushes the grid wider than the console. */
+.df-win {
+  margin: 4px 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #10151c;
+  overflow: hidden;
+  white-space: normal;
+}
+.df-head {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px;
+  background: #161d26;
+  border-bottom: 1px solid var(--line);
+}
+.df-body { padding: 2px 0; white-space: normal; }
+.df-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); white-space: normal; }
+.df-row > .df-c:nth-child(2) { border-left: 1px solid rgba(255, 255, 255, .07); }
+.df-c {
+  min-width: 0;
+  padding: 0 8px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+/* Context is the unchanged surroundings: quiet, and spanning both sides so it reads as a separator between
+   changes rather than as a line of either side. */
+.df-c.is-ctx { grid-column: 1 / -1; padding-left: 8px; color: var(--dimmer); }
+/* A modification: the before half yellow, the after half green. A pure removal is red, a pure addition green. */
+.df-c.is-mod { color: #f0c674; background: rgba(210, 153, 34, .10); padding-left: 8px; }
+.df-c.is-del { color: #ff9c94; background: rgba(229, 83, 75, .10); padding-left: 8px; }
+.df-c.is-add { color: #7ee787; background: rgba(46, 160, 67, .10); padding-left: 8px; }
+.df-c.is-gap { background: transparent; }
+/* The labels: the headers and the hunk line, quiet and monospace, never competing with the body. */
+.df-label { padding: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .96em; }
+.df-label.is-meta { color: var(--dimmer); }
+.df-label.is-minus { color: #ff9c94; }
+.df-label.is-plus { color: #7ee787; }
+.df-label.is-hunk { color: #9ecbff; }
+.df-lab-path { font-style: italic; }
+
+/* A file printed into the console that is NOT a diff: the same window shape, its header naming the file, and
+   folded by default — the reader can see that a file was printed, and which one, without reading it. */
+.code-box { margin: 4px 0; border: 1px solid var(--line); border-radius: 6px; background: #10151c; overflow: hidden; white-space: normal; }
+.code-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  background: #161d26;
+  color: var(--dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.code-head:hover { background: #1b232e; color: var(--text); }
+.code-head:focus-visible { outline: 1px solid #4a90d9; outline-offset: -1px; }
+.code-box.is-open .code-head { border-bottom: 1px solid var(--line); }
+.code-caret { flex: none; color: var(--dimmer); }
+.code-what { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c8a6ff; }
+.code-n { flex: none; margin-left: auto; color: var(--dimmer); }
+.code-hint { flex: none; color: var(--dimmer); font-size: .9em; }
+.code-head:hover .code-hint { visibility: hidden; }
+.code-body { padding: 4px 8px; white-space: normal; }
+.code-body .jl { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The UA's own [hidden] rule is one attribute selector and loses to a class: without this the folded body
+   would render anyway. */
+.code-body[hidden] { display: none; }
 .job-foot { margin-top: 6px; font-size: 11.5px; }
 /* the CLI's prompt readout for a card: context occupancy, cache hit, latency, throughput. It rides
    on the footer line, to the right of the outcome and token count, behind a rule so the two groups
