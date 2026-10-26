@@ -7838,7 +7838,7 @@ function rowHtml(row) {
   // the name came from, and the rename is the reader's second click.
   const nameFromWorkBtn = isProjectRoot
     ? ""
-    : `<button class="btn-row-name-work" data-name-tree="${esc(keyOf(row.project, row.path))}" data-name-project="${esc(row.project)}" data-name-path="${esc(row.path)}" title="name this worktree from the work in it — reads its commits and its diff against ${esc(baseBranchOf(row))} and offers a name built from them (asks first; the branch is renamed and the six-hex tag kept)${namedLine ? ` · ${esc(namedLine)}` : ""}">\u2726</button>`;
+    : `<button class="btn-row-name-work" data-name-tree="${esc(keyOf(row.project, row.path))}" data-name-project="${esc(row.project)}" data-name-path="${esc(row.path)}" title="name this worktree from the work in it — reads its commits and its diff against ${esc(baseBranchOf(row))} and offers a name built from them (asks first; the branch is renamed and the six-hex tag kept) · the panel's own naming stops at the branch's first commit and never moves a published branch, so this is how a tree that already has work gets a name${namedLine ? ` · ${esc(namedLine)}` : ""}">\u2726</button>`;
   // One ✕ per row, and whether it needs the question at all: merged + clean deletes straight away.
   const delKey = keyOf(row.project, row.path);
   const delDirect = !isProjectRoot && deletableWithoutAsking(delKey);
