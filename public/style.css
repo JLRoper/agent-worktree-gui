@@ -1078,6 +1078,28 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 /* The UA's own [hidden] rule is one attribute selector and loses to a class: without this the folded body
    would render anyway. */
 .code-body[hidden] { display: none; }
+
+/* The panel's own fold, at the foot of a result the card kept only the head of: "… 214 lines hidden — click to
+   read". It is a button because the rest of the result is one click away (the session store has it verbatim), and
+   it reads as the note it has always been until the pointer is over it — a card full of long results should read
+   as a transcript, not as a wall of controls. */
+.jl-fold { margin: 1px 0; }
+.fold-read {
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--dimmer);
+  font: inherit;
+  font-style: italic;
+  text-align: left;
+  cursor: pointer;
+}
+.fold-read:hover { color: var(--text); border-color: var(--line); background: #161d26; }
+.fold-read:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.fold-read[disabled] { cursor: progress; }
 .job-foot { margin-top: 6px; font-size: 11.5px; }
 /* the CLI's prompt readout for a card: context occupancy, cache hit, latency, throughput. It rides
    on the footer line, to the right of the outcome and token count, behind a rule so the two groups

@@ -68,6 +68,15 @@
 // as a finished hunk. The rest of such a result is not in these lines — the console asks the session store for
 // what the tool actually returned (public/app.js), and falls back to the cut row when the store has nothing.
 //
+// A RESULT THE PANEL ITSELF FOLDED
+//
+// One cap down is the panel's own: with the gateway's preview cap lifted the whole result arrives, and the card
+// keeps its head (40 lines, 400 characters a line — lib/jobs/console-lines.js) so that a 5,000-line read cannot
+// evict every other line of the card through the console's 600-line ring buffer. That fold ends with its own
+// sentence ("… 214 lines hidden — click to read"), which this module draws as a BUTTON: the click fetches the
+// whole stored row (one row, uncapped) and the card re-renders it in place. The two notes are never confused —
+// each says which cap cut it, and each appears only when its cap really cut something.
+//
 // WHAT IT REACHES OUT FOR
 //
 //   tailPath  — the code box's header shows the last few segments of the file (dom-format.js, loaded first)
@@ -83,10 +92,31 @@ const CF_NOTE_RE = /^\s*(?:…|\.\.\.)\s/;
 // for a preview it cut ("… result truncated by the gateway — the live stream carries a preview of a tool
 // result, not all of it"). A hunk such a line lands in is not complete, so the frame has to say so.
 const CF_CUT_RE = /truncated by the gateway/;
+// The panel's OWN fold, whose click reads the rest of the result out of the session store: "… 214 lines hidden —
+// click to read" (and "… 12 lines hidden, 3 lines shortened — click to read" when the head also wore this
+// panel's 400-character line cap). The sentence is built on the server (lib/jobs/console-lines.js,
+// foldNoteText) and matched here; a note this does not recognise is a fold whose rest cannot be reached, which
+// is why a harness asserts the two agree.
+const CF_FOLD_RE = /^\s*(?:…|\.\.\.)\s+\d+ lines?(?: hidden| shortened)(?:, \d+ lines? shortened)? — click to read\s*$/;
+// jobs.json written before that wording existed says "… 12 more line(s)": the same open edge, so the same
+// affordance. New notes never take this shape.
+const CF_FOLD_LEGACY_RE = /^\s*(?:…|\.\.\.)\s+\d+ more line\(s\)\s*$/;
+// The sentence itself, so the two worlds cannot drift: the server pushes exactly this text.
+function foldNoteText({ hidden = 0, shortened = 0 } = {}) {
+  const bits = [];
+  if (hidden > 0) bits.push(`${hidden} line${hidden === 1 ? "" : "s"} hidden`);
+  if (shortened > 0) bits.push(`${shortened} line${shortened === 1 ? "" : "s"} shortened`);
+  return bits.length ? `… ${bits.join(", ")} — click to read` : "";
+}
 // A global, like consoleClassify and consoleFileOutput: public/app.js asks it before deciding whether the lines it
 // was handed are all there is of a result.
 function consoleCutNote(text) {
   return CF_NOTE_RE.test(text) && CF_CUT_RE.test(text);
+}
+// …and this one before deciding whether the rest of a result is one click away.
+function consoleFoldNote(text) {
+  const t = String(text ?? "");
+  return CF_FOLD_RE.test(t) || CF_FOLD_LEGACY_RE.test(t);
 }
 // `ls -l`, `dir`, `stat`: a mode string. The leading "-" is the trap this exists for.
 const CF_MODE_RE = /^[-dlbcps][rwxSsTt-]{9}[.+]?(?:\s|$)/;
@@ -349,6 +379,27 @@ function cfCutRow(row) {
   );
 }
 
+// The panel's own fold, drawn as the thing it is: an open edge with a click behind it. The card keeps a result's
+// head in its console (a 5,000-line read pushed there whole would evict every other line the card had — the ring
+// buffer is 600 lines), and the rest of it is in the session store. The note stays a console line (data-ltext on
+// the row, so a burst rebuild reads it back exactly as before) and the button inside it carries which result to
+// fetch: the turn, the tool and which of that turn's rows this is. Without those (a caller that cannot say) the
+// sentence is drawn plain — an honest note with no promise behind it.
+function cfFoldRow(row, fold) {
+  const kind = cfEsc(String((row && row.kind) || "tool-out"));
+  const text = cfText(row);
+  const open = `<div class="jl jl-${kind} jl-fold" data-ltext="${cfEsc(text)}" data-lkind="${kind}">`;
+  if (!fold || !fold.tool || fold.turn == null || fold.row == null) return `${open}${cfLink(text)}</div>`;
+  const title =
+    `this panel keeps a result's first ${fold.head > 0 ? fold.head : 40} lines on the card — ` +
+    `the whole stored result is one click away`;
+  return (
+    `${open}<button type="button" class="fold-read" data-tool-fold="1" data-fold-turn="${cfEsc(String(fold.turn))}"` +
+    ` data-fold-tool="${cfEsc(String(fold.tool))}" data-fold-row="${cfEsc(String(fold.row))}" title="${cfEsc(title)}">` +
+    `${cfLink(text)}</button></div>`
+  );
+}
+
 // One framed diff window: the identifiers as a chrome strip on top, then the two sides. Every row is its own
 // two-column grid, so a modification's halves sit on one line, a lone addition leaves the right cell empty and a
 // cut row spans the window's width.
@@ -466,6 +517,12 @@ function consoleBodyHtml(rows, opts = {}) {
       i = end;
       continue;
     }
+    // The panel's own fold, as the button that opens it (opts.fold says which result it is).
+    if (consoleFoldNote(cfText(list[i]))) {
+      out.push(cfFoldRow(list[i], opts.fold));
+      i++;
+      continue;
+    }
     out.push(cfLine(list[i]));
     i++;
   }
@@ -500,4 +557,10 @@ window.WMApp.core.consoleFormat = {
   // Was this preview cut by the gateway? The console asks before it decides whether the lines it was handed are
   // all there is of a result, so the wording of the note lives here and nowhere else.
   cutNote: consoleCutNote,
+  // …and was the rest of it folded by THIS panel? Same question, one cap down: the answer is what turns the note
+  // into the button that fetches the whole stored result.
+  foldNote: consoleFoldNote,
+  // The fold note's own sentence, shared so the server's push (lib/jobs/console-lines.js) and this matcher cannot
+  // drift apart — a harness drives both against the same string.
+  foldText: foldNoteText,
 };

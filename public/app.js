@@ -165,6 +165,12 @@ const state = {
   // burst rebuild replaces the markup, and a call that sprang back open under the reader's cursor would read as
   // the panel losing the click.
   callFolded: new Set(),
+  // The whole stored text of a result the reader asked to see past the panel's fold: "<turnId>|<tool>|<row>" ->
+  // the row /api/tool-results answered with. Only rows the reader actually opened are here (a result can be 100
+  // kB, so caching them all would trade the ring buffer for a worse one), and it lives here rather than in the
+  // DOM for the same reason callFolded does: a repaint or a burst rebuild replaces the console's markup, and a
+  // result the reader just opened folding itself back shut would read as the panel losing the click.
+  foldRows: new Map(),
   // Events are life. A line arriving in an agent's console, a job starting or ending, an approval: each one proves
   // the worktree that owns that agent is being worked in right now, without waiting for the next scan to notice.
   // Key = worktree row key -> ms of the newest event seen for it.
@@ -1241,6 +1247,78 @@ async function ensureToolStore(turnId, tool, grp = null) {
   if (changed) repaintToolGroup(grp);
 }
 
+// The panel's fold, opened: the whole stored text of one result, drawn in place of the note that offered it.
+//
+// This is the DOM being handed the rest of a result, never the job's own lines: the console's ring buffer
+// (jobs.js MAX_LINES = 600) is what a big result would evict, and a result the reader asked to see is not
+// something the card has to keep — it is one click away again after any repaint.
+function wholeStoredHtml(got, tool = "", arg = "", boxKey = "") {
+  const LF = String.fromCharCode(10);
+  const all = String((got && got.text) || "").split(LF);
+  if (!all.some((l) => l.trim())) return `<div class="jl jl-dim jl-note">  the stored result has no text</div>`;
+  return (
+    consoleBodyHtml(all.map((l) => ({ kind: "store", text: l })), { tool, arg, codeOpen: null, codeKey: boxKey }) +
+    (got.truncated ? `<div class="jl jl-dim jl-note">… this stored result was cut as well</div>` : "")
+  );
+}
+
+// Which result a fold belongs to, and how many of them the opened tab may hold. The row is the pairing the burst
+// already uses (the i-th result line of this tool in this turn is the store's i-th row for it), so the number the
+// note was drawn with is the number the fetch asks for.
+const foldKey = (turnId, tool, row) => `${turnId}|${tool}|${row}`;
+const FOLD_ROWS_MAX = 12;
+
+// The reader clicked the fold: read that one row out of the session store — whole, not the store reader's own
+// 6,000-character display cut — and let the card redraw the burst with it. The request carries the turn's own
+// window, exactly like the store fetch a burst makes, because the store is queried by time
+// (lib/tool-results.js) and the turn's clock is the only thing that says which rows are its.
+async function expandToolFold(btn) {
+  const grp = btn.closest(".tgrp");
+  const turnId = String((grp && grp.dataset.tgrp) || "").split("#")[0];
+  const tool = btn.dataset.foldTool || "";
+  const row = Math.max(0, Number(btn.dataset.foldRow) || 0);
+  if (!turnId || !tool) return false;
+  const job = state.jobs.get(turnId);
+  if (!job) return true;
+  const key = foldKey(turnId, tool, row);
+  if (state.foldRows.has(key)) {
+    if (grp) repaintToolGroup(grp);
+    return true;
+  }
+  const q = new URLSearchParams({
+    thread: job.thread || job.id,
+    tool,
+    row: String(row),
+    full: "1",
+    n: "1",
+    from: String(Date.parse(job.startedAt || "") || 0),
+    to: String(Date.parse(job.endedAt || "") || 0),
+  });
+  const was = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "reading the stored result…";
+  try {
+    const r = await apiFetch(`/api/tool-results?${q}`, {}, { timeoutMs: 15000 });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    const got = Array.isArray(d.results) ? d.results[0] : null;
+    if (!got) {
+      // Honest answer, and the note stays a note: this turn's store has no row here (a session the panel no
+      // longer shares, a tool whose result was never recorded), so the head above really is all there is.
+      btn.disabled = false;
+      btn.textContent = "… the session store has no copy of this result — the lines above are all of it here";
+      return true;
+    }
+    state.foldRows.set(key, got);
+    while (state.foldRows.size > FOLD_ROWS_MAX) state.foldRows.delete(state.foldRows.keys().next().value);
+    if (grp) repaintToolGroup(grp);
+  } catch {
+    btn.disabled = false;
+    btn.textContent = `${was} — the session store could not be read; click to retry`;
+  }
+  return true;
+}
+
 // A block the reader has open keeps its stored output current while its turn runs, and settles once when the turn
 // ends. Only open blocks are asked for, and ensureToolStore's own throttle bounds the requests.
 setInterval(() => {
@@ -1420,12 +1498,35 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
     cursors.set(tool, i + 1);
     return rowsOut[i] || null;
   };
-  const storedHtml = (got, tool = "", arg = "", boxKey = "") => {
+  // The index takeStored is ABOUT to take: a result's fold names which of the turn's rows it is, and the pairing
+  // above is where that number comes from (the click then reads exactly that row back out of the store).
+  const storedRowAt = (tool) => cursors.get(tool) || 0;
+  const storedHtml = (got, tool = "", arg = "", boxKey = "", at = null) => {
     const all = String(got.text || "").split(LF);
     const cut = got.truncated && !/characters not shown/.test(got.text || "");
     if (!all.some((l) => l.trim())) return cut ? '<div class="jl jl-dim jl-note">  this result was cut before its text</div>' : "";
+    // A row the reader has already opened is drawn whole from then on: the store path's own 40-line fold is a
+    // display cap exactly like the live stream's, and re-folding a result the reader just opened reads as the
+    // panel losing the click.
+    const opened = at == null ? null : state.foldRows.get(foldKey(turnId, tool, at));
+    if (opened) return wholeStoredHtml(opened, tool, arg, boxKey) + (cut ? `<div class="jl jl-dim jl-note">… this result was cut</div>` : "");
     const shown = all.slice(0, STORE_LINES);
     const more = all.length - shown.length;
+    // The tail is the same affordance the live stream's fold ends with — one renderer, one click — and it is only
+    // drawn when this fold really dropped lines. With no row to name (a caller that cannot say) it stays the
+    // plain note it has always been.
+    const tail =
+      more > 0 && at != null
+        ? consoleBodyHtml([{ kind: "tool-out", text: foldNoteText({ hidden: more }) }], {
+            tool,
+            arg: "",
+            codeOpen: null,
+            codeKey: "",
+            fold: { turn: turnId, tool, row: at },
+          })
+        : more > 0
+          ? `<div class="jl jl-dim jl-note">… ${more} more line(s) of this result</div>`
+          : "";
     return (
       // The stored rows are the tool's output, so they go through the same renderer the live preview does: a
       // patch's diff is usually ONLY here (the run stream's preview for patch/write_file is empty on this
@@ -1434,7 +1535,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
         shown.map((l) => ({ kind: "store", text: l })),
         { tool, arg, codeOpen: state.codeBoxOpen, codeKey: boxKey },
       ) +
-      (more > 0 ? `<div class="jl jl-dim jl-note">… ${more} more line(s) of this result</div>` : "") +
+      tail +
       (cut ? `<div class="jl jl-dim jl-note">… this result was cut</div>` : "")
     );
   };
@@ -1462,9 +1563,10 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
   const storedForFile = (tool, arg) => {
     const want = pathKey(arg);
     if (!want) return null;
-    for (const r of state.toolStore.get(`${turnId}|${tool}`)?.results || []) {
-      for (const l of String(r.text || "").split(LF).slice(0, 3)) {
-        if (pathKey(l.replace(/^[-+]{3}\s+/, "")) === want) return r;
+    const rowsOut = state.toolStore.get(`${turnId}|${tool}`)?.results || [];
+    for (let i = 0; i < rowsOut.length; i++) {
+      for (const l of String(rowsOut[i].text || "").split(LF).slice(0, 3)) {
+        if (pathKey(l.replace(/^[-+]{3}\s+/, "")) === want) return { row: rowsOut[i], at: i };
       }
     }
     return null;
@@ -1497,7 +1599,11 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
     // is drawn under it.
     const resultLine = resultHead(seg) ? seg.lines.slice(0, 1) : [];
     const preview = resultHead(seg) ? seg.lines.slice(1) : seg.lines;
-    const render = (list) => consoleBodyHtml(list, { tool: seg.tool, arg, codeOpen: state.codeBoxOpen, codeKey: boxKey });
+    const render = (list, extra = {}) =>
+      consoleBodyHtml(list, { tool: seg.tool, arg, codeOpen: state.codeBoxOpen, codeKey: boxKey, ...extra });
+    // Where this result's store row is: the pairing below takes rows in order, so the cursor's value BEFORE it
+    // advances is this result's own row — the number a fold's click fetches by.
+    const rowAt = resultHead(seg) ? storedRowAt(seg.tool) : 0;
     // The cursor advances for EVERY result line, preview or not. A tool whose live previews are populated used to
     // return before consuming its row, so its rows piled up and were re-printed as "more stored result" at the end
     // while the next result line paired with the wrong row.
@@ -1509,9 +1615,27 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
       // first place. So the stored row for this call's own file is drawn in place of the cut preview, and the cut
       // row the renderer put at the preview's edge stays as the honest answer only when the store has nothing.
       const full = preview.some((l) => consoleCutNote(String(l.text || ""))) ? storedForFile(seg.tool, arg) : null;
-      if (full) out = render(resultLine) + storedHtml(full, seg.tool, arg, boxKey);
-      else if (!preview.some((l) => String(l.text || "").trim())) {
-        out += got ? storedHtml(got, seg.tool, arg, boxKey) : `<div class="jl jl-dim jl-note">  ${liveTurn ? "no output in the session store yet" : "no output recorded for this call"}</div>`;
+      // The panel's own fold, one cap down from the gateway's: the whole result arrived and the card kept its
+      // head. The note is drawn as the button that opens it — unless the reader already opened THIS result, in
+      // which case the whole stored text is drawn in its place (that is what the click set up, and a rebuild
+      // must not fold it back shut).
+      const foldAt = preview.findIndex((l) => consoleFoldNote(String(l.text || "")));
+      const opened = foldAt < 0 ? null : state.foldRows.get(foldKey(turnId, seg.tool, rowAt));
+      if (full) out = render(resultLine) + storedHtml(full.row, seg.tool, arg, boxKey, full.at);
+      else if (opened) {
+        out =
+          render(resultLine) +
+          render(preview.filter((_, k) => k !== foldAt)) +
+          wholeStoredHtml(opened, seg.tool, arg, boxKey);
+      } else if (foldAt >= 0) {
+        out =
+          render(resultLine) +
+          render(preview.filter((_, k) => k !== foldAt)) +
+          render([preview[foldAt]], { fold: { turn: turnId, tool: seg.tool, row: rowAt } });
+      } else if (!preview.some((l) => String(l.text || "").trim())) {
+        out += got
+          ? storedHtml(got, seg.tool, arg, boxKey, rowAt)
+          : `<div class="jl jl-dim jl-note">  ${liveTurn ? "no output in the session store yet" : "no output recorded for this call"}</div>`;
       }
     }
     return out;
@@ -10960,6 +11084,16 @@ document.addEventListener("click", async (e) => {
       return;
     }
     void answerRunQuestion(turnId, picked, qSend.dataset.qrequest, box);
+    return;
+  }
+  // The panel's own fold: the card kept a result's head, and this is the reader asking for the rest of it. The
+  // click reads ONE row out of the session store (whole, uncapped) and the burst is redrawn with it — nothing
+  // goes into the job's lines, so the console's 600-line ring buffer is not what holds a 5,000-line result.
+  const foldRead = e.target.closest("[data-tool-fold]");
+  if (foldRead) {
+    e.preventDefault();
+    e.stopPropagation();
+    void expandToolFold(foldRead);
     return;
   }
   // A tool call's own row: fold or unfold THAT call's output, and nothing else on the card. The caret is a real
