@@ -3655,7 +3655,7 @@ function conversationHtml(conv) {
                Shift+Enter, the ↑/↓ recall and the draft restore are the same gestures — and every reader of
                its text goes through readBox(box) (board/paste-chips.js), which gives a chip's own text back
                in place. The placeholder moved to data-ph, because :empty draws it on a div. -->
-          <div class="reply-box" contenteditable="true" role="textbox" aria-multiline="true"
+          <div class="reply-box chipbox" contenteditable="true" role="textbox" aria-multiline="true"
             data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off"
             data-reply="${esc(thread)}" data-chipbox="reply:${esc(thread)}" data-rows="2" spellcheck="false"
             data-ph="${running
@@ -3774,12 +3774,19 @@ function restoreTyping(root, typing) {
     // A rebuild hands back an empty box, so what it comes back as is decided here and nowhere else: the
     // chip model the panel holds for this draft, else the draft's own text, else what this tab mirrored
     // before a reload.
+    let held = readBox(box);
     if (draft) {
-      if (!restoreBoxDraft(box, draft)) writeBox(box, draft);
-    } else restorePersistedBox(box);
+      // A box that already holds this draft is the reader's OWN node — the row path moves the card across
+      // instead of rebuilding it — so it is left untouched: rewriting it would only cost them the caret and
+      // the engine's own spacing (a space it stored as U+00A0 comes back as a plain one, and the next
+      // keystroke eats it).
+      if (held !== draft) {
+        if (!restoreBoxDraft(box, draft)) writeBox(box, draft);
+        held = readBox(box);
+      }
+    } else if (restorePersistedBox(box)) held = readBox(box);
     // A repaint builds the box at its default height: give a restored draft its room back. Keyed on length
     // so a board of quiet cards is not re-measured on every tick.
-    const held = readBox(box);
     if (held && box.dataset.grownFor !== String(held.length)) growBoxToDraft(box, REPLY_MAX_LINES);
   }
   if (!typing) return;
@@ -4694,7 +4701,7 @@ function addAgentBarHtml({ key = "", path = "", name = "", project = "", value =
     // A contenteditable host, like the reply box: this field is where a prompt is often pasted in from a
     // document, so a paste that big collapses to a chip here too. It keeps the single-line behaviour it had
     // as an <input> (data-single strips line breaks out of a short paste; Shift+Enter adds none).
-    `<div class="add-agent-input" contenteditable="true" role="textbox" data-single="1" ${attrs} data-chipbox="add:${esc(key)}" spellcheck="false" autocomplete="off" data-form-type="other" data-1p-ignore data-bwignore data-lpignore="true"` +
+    `<div class="add-agent-input chipbox" contenteditable="true" role="textbox" data-single="1" ${attrs} data-chipbox="add:${esc(key)}" spellcheck="false" autocomplete="off" data-form-type="other" data-1p-ignore data-bwignore data-lpignore="true"` +
     ` data-ph="what should this agent do here?  Enter starts it · Esc puts the + back"></div>` +
     `</div>`
   );

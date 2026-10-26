@@ -170,6 +170,20 @@ function serializeBox(box) {
 }
 
 // ---- the one reader, and its writers ------------------------------------------------------
+// The read side takes the engine's NON-BREAKING space back to the space the reader typed (see serializeBox);
+// the write side has to hand it back the same way, or the reader loses a space they typed. A browser stores a
+// typed space as U+00A0 exactly where a plain space is COLLAPSING whitespace — the end of the box's content,
+// and a run touching a chip (an inline-block) — and it drops a plain space written there on the next
+// keystroke: type "two words", let a repaint rewrite the box, and the next letter eats the space, so the agent
+// receives "twowords". Only those runs are written non-breaking, so ordinary spaces still wrap and break.
+const NBSP = "\u00a0";
+const holdSpaces = (text, { end = false, chipBefore = false, chipAfter = false } = {}) => {
+  const s = String(text == null ? "" : text);
+  let out = s;
+  if (chipBefore) out = out.replace(/^ +/, (m) => NBSP.repeat(m.length));
+  if (end || chipAfter) out = out.replace(/ +$/, (m) => NBSP.repeat(m.length));
+  return out;
+};
 
 function chipBoxOf(node) {
   const el = node && node.nodeType === 1 ? node : node && node.parentElement;
@@ -192,21 +206,32 @@ function writeBox(box, text) {
     return;
   }
   const s = String(text == null ? "" : text);
+  // A box with content is always ending its content here, so its last spaces go back non-breaking.
   if (!s) box.replaceChildren(); // empty, not a lone empty text node: the placeholder is drawn on :empty
-  else box.replaceChildren(document.createTextNode(s));
+  else box.replaceChildren(document.createTextNode(holdSpaces(s, { end: true })));
 }
 
 function writeBoxModel(box, model) {
+  const segs = cleanModel(model);
   const frag = document.createDocumentFragment();
-  for (const seg of cleanModel(model)) {
+  segs.forEach((seg, i) => {
     if (seg.t === "text") {
-      frag.appendChild(document.createTextNode(seg.v));
-      continue;
+      // Same rule per segment: the last one ends the content, and a run touching a chip is collapsing too.
+      frag.appendChild(
+        document.createTextNode(
+          holdSpaces(seg.v, {
+            end: i === segs.length - 1,
+            chipBefore: i > 0 && segs[i - 1].t === "chip",
+            chipAfter: i + 1 < segs.length && segs[i + 1].t === "chip",
+          }),
+        ),
+      );
+      return;
     }
     const c = state.pasteChips.get(seg.id);
-    if (!c) continue; // a chip whose text is gone is not drawn at all: never a half-chip
+    if (!c) return; // a chip whose text is gone is not drawn at all: never a half-chip
     frag.appendChild(chipEl(seg.id, c.lines, c.text));
-  }
+  });
   box.replaceChildren(frag);
 }
 
