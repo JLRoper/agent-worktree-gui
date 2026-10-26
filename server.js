@@ -360,12 +360,16 @@ const jobs = new Jobs({
 function gonePointers(id) {
   const j = jobs.get(id);
   if (!j) return null;
+  const store = scheduler.store;
   const wanted = [j.worktreePath, j.ownerPath, j.cwd].filter(Boolean).map(normPathKey);
+  // The rows are the store's, keyed by "<project>::<path>", so the search walks that store's own project names:
+  // discovery publishes a project to the registry on its own clock, and a press must not miss a row that is already
+  // on the board just because the registry has not named its project yet.
   let found = null;
-  for (const project of registry.projects) {
-    const hit = (scheduler.store.rowsFor(project.name) || []).find((r) => wanted.includes(normPathKey(r.path))) || null;
+  for (const name of store.projects.keys()) {
+    const hit = (store.rowsFor(name) || []).find((r) => wanted.includes(normPathKey(r.path))) || null;
     if (hit) {
-      found = { project, row: hit };
+      found = { project: store.projects.get(name), row: hit };
       break;
     }
   }
