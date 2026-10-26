@@ -5092,6 +5092,11 @@ function conversationSignature(conv) {
   const runQuestions = conv.turns
     .map((t) => `${t.id}:${t.question ? t.question.requestId || t.question.question?.slice(0, 40) || 1 : 0}:${t.question ? (t.question.choices || []).length : 0}:${t.questionDone ? (t.questionDone.answer || "closed").slice(0, 40) : 0}`)
     .join(",");
+  // The NOT-RUNNABLE chip's own input, for the same reason as the two above: the gateway answering 404 for a card's
+  // run settles it — the promise becomes the settled wording and `runGone` goes up — while its status stays
+  // `interrupted` and it still carries an error, so nothing else in this signature moves. Without it the chip sat on
+  // a card whose run is provably gone until some unrelated event forced a rebuild.
+  const runReattach = conv.turns.map((t) => `${t.id}:${t.runGone ? 1 : 0}`).join(",");
   const open = [...state.turnOpen].map(([k, v]) => `${k}${v ? 1 : 0}`).join(",");
   const approvals = [...state.approvals.values()]
     .filter((a) => a && a.thread === conv.thread)
@@ -5123,6 +5128,7 @@ function conversationSignature(conv) {
     approvals,
     runApprovals,
     runQuestions,
+    runReattach,
     l.runId || "",
     l.cwd || "",
     // The row this agent is filed under: the card's cwd line falls back to it, so a change must repaint.
