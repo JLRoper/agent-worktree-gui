@@ -389,7 +389,9 @@ run's `session_id`, so a reply continues the same Hermes session:
 While a turn is **still running** the reply box's primary button is **Steer turn** — Enter does the
 same. The text goes into the LIVE run and is read at the agent's next tool boundary, so the turn
 changes course instead of queueing behind it. **Queue reply** is the explicit "send this when the
-current turn finishes" path. A steer that arrives after the last tool boundary comes back as
+current turn finishes" path — and `Ctrl+Enter` (`⌘+Enter` on a Mac) is that same press from the box, so a
+reply can be held for the next turn without leaving the keyboard. Where there is nothing to wait for (no turn
+running, no subagent out) `Ctrl+Enter` sends, exactly like `Enter`. A steer that arrives after the last tool boundary comes back as
 `pending_steer`, and the panel replays it as the next turn rather than dropping it.
 
 When nothing is running the button is **Send reply**: it starts the next turn on the same session, in
