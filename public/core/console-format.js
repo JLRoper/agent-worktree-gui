@@ -517,9 +517,21 @@ function consoleBodyHtml(rows, opts = {}) {
       i = end;
       continue;
     }
-    // The panel's own fold, as the button that opens it (opts.fold says which result it is).
+    // The panel's own fold, as the button that opens it. Which result it names is read, in order of how much
+    // the answer is worth:
+    //   * `opts.folds`/`opts.fold` — what the caller worked out for this very note (public/app.js): the head
+    //     the panel kept, checked against the store's own rows, or the burst's cursor for a line written before
+    //     any of this existed. The caller is the only one that knows the TURN the note is filed under;
+    //   * the line's own `fold` — the server stamped it when it pushed the note (lib/jobs/console-lines.js,
+    //     foldLine): the tool, and this result's index among the turn's results for it. A fact about the RESULT,
+    //     so it carries no turn, which is why it is the last word and not the first: on its own it can name a
+    //     result but not the card the reader is looking at.
+    // A note drawn with none of them stays the honest plain sentence it has always been: better a note that
+    // promises nothing than a click that reads someone else's result.
     if (consoleFoldNote(cfText(list[i]))) {
-      out.push(cfFoldRow(list[i], opts.fold));
+      const note = list[i];
+      const resolved = opts.folds && typeof opts.folds.get === "function" ? opts.folds.get(note) : null;
+      out.push(cfFoldRow(note, resolved || opts.fold || note.fold));
       i++;
       continue;
     }

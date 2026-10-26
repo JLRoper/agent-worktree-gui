@@ -1180,13 +1180,21 @@ function groupLines(grp) {
   // notes under it and an opened batch are all drawn UNDER a line, so counting them inflates the line tally and
   // turns them into console lines of their own on the next rebuild (an opened batch was re-absorbed as five
   // summaries that then satisfied "the preview carried this result").
-  const read = (d) => ({
+  const read = (d) => {
     // The line's own text, not the rendered text: a diff window draws one row per change and a code box
     // holds its lines folded, and neither may cost the rebuild a line or invent one (the carried file label
     // is not a .jl for exactly that reason).
-    kind: d.dataset.lkind || (d.className.match(/jl-([a-z-]+)/) || [])[1] || "raw",
-    text: d.dataset.ltext != null ? d.dataset.ltext : d.textContent,
-  });
+    const line = {
+      kind: d.dataset.lkind || (d.className.match(/jl-([a-z-]+)/) || [])[1] || "raw",
+      text: d.dataset.ltext != null ? d.dataset.ltext : d.textContent,
+    };
+    // …and which result a fold note names travels with it too: the sentence cannot say it (that is what the
+    // stamp on the line is for), and a rebuild that lost it would put the reader back in front of "click to
+    // read" with nothing to click. Read from the button the note was already drawn as.
+    const btn = d.querySelector ? d.querySelector("[data-tool-fold]") : null;
+    if (btn) line.fold = { tool: btn.dataset.foldTool || "", row: Math.max(0, Number(btn.dataset.foldRow) || 0) };
+    return line;
+  };
   const out = [];
   for (const d of grp.querySelectorAll(".tgrp-body .jl")) {
     if (d.classList.contains("jl-store") || d.classList.contains("jl-note") || d.classList.contains("jl-panel")) continue;
@@ -1268,8 +1276,12 @@ async function ensureToolStore(turnId, tool, grp = null) {
   if (have && !(have.live && !live) && (!live || Date.now() - have.at < 5000)) return;
   // One row per result line the WHOLE TURN drew for this tool, because the entry is shared by every burst in the
   // turn: sizing it to the group that happened to fetch first cut the later bursts off at that group's count, and
-  // the missing rows read as "no output recorded".
-  const n = Math.min(60, Math.max(4, resultBlocksFor(state.jobLines.get(turnId) || [], tool) + 1));
+  // the missing rows read as "no output recorded". A fold note names its result by that result's index over the
+  // whole turn, so the read covers up to the furthest row this turn's own notes name as well — the head above
+  // such a note is only checkable against its own row if the row is in hand.
+  const turnLines = state.jobLines.get(turnId) || [];
+  const stamped = stampedRowFor(turnLines, tool);
+  const n = Math.min(60, Math.max(4, resultBlocksFor(turnLines, tool) + 1, stamped == null ? 0 : stamped + 1));
   let changed = false;
   state.toolStorePending.add(cacheKey);
   try {
@@ -1321,13 +1333,133 @@ function wholeStoredHtml(got, tool = "", arg = "", boxKey = "") {
 const foldKey = (turnId, tool, row) => `${turnId}|${tool}|${row}`;
 const FOLD_ROWS_MAX = 12;
 
+// Which row of the store a fold note names. The stronger of two facts wins, and the per-burst cursor is only
+// the last resort.
+//
+// The store indexes a tool's results over the WHOLE TURN (lib/tool-results.js: one row at `OFFSET row`, ordered
+// by the turn's clock window), while the console's own lines are a trimmed window of that turn — 600 lines in
+// memory, the last 120 served — so a position inside the console is NOT that number. Measured: the clickable
+// note in burst `9658fe9e#2` named `row=0` while the store's row 0 for `terminal` is the turn's opening recon
+// command (799 chars, 14 lines), a different result entirely, so the click read back the wrong text.
+//
+//   * the head the panel kept. The console lines drawn above a note ARE the first lines of the stored row: one
+//     fold, one `unwrapToolText` (lib/jobs/console-lines.js pushes the head, lib/tool-results.js reads the store
+//     back through the same unwrapping), 40 lines on both sides. So once the burst has read its tool's rows, the
+//     note names the row those lines came from — and that row can be checked against its own text.
+//   * the row the server stamped on the note (`line.fold`): this result's index among the turn's results for
+//     that tool, counted at the event (lib/jobs.js `withResultRow`). The only handle a burst the window trimmed
+//     of its call line has, and right whenever the panel saw every result of the turn.
+const HEAD_LINES = 40; // MAX_TOOL_LINES in lib/jobs/console-lines.js: the head the panel keeps of a result
+const LF = String.fromCharCode(10);
+// A line as it compares: no trailing newline, no trailing blanks. The panel trims trailing whitespace on the
+// console side of nothing, but a diff's context lines and a store row's may differ by exactly that.
+const foldLineText = (l) => String((l && l.text) != null ? l.text : l || "").replace(/\s+$/, "");
+const storeRowsFor = (turnId, tool) => state.toolStore.get(`${turnId}|${tool}`)?.results || null;
+
+// The store row a head of console lines came from: the row whose text carries those lines, in order, inside the
+// head the panel kept (the row's first 40 lines). `prefer` is the row the note's own stamp named — checked
+// first, so a note whose stamp is right keeps naming exactly that row (two results whose heads read the same,
+// the same command run twice, are told apart by it), and one whose stamp drifted is repaired to the row the
+// lines really came from.
+function rowForHead(rows, head, prefer = null) {
+  const H = (Array.isArray(head) ? head : []).map(foldLineText).filter((t) => t.trim());
+  if (!H.length || !Array.isArray(rows) || !rows.length) return null;
+  const hits = [];
+  for (let i = 0; i < rows.length; i++) {
+    const R = foldLineText(rows[i]).split(LF);
+    for (let j = 0; j + H.length <= R.length && j <= HEAD_LINES; j++) {
+      if (H.every((h, k) => R[j + k].startsWith(h))) {
+        hits.push({ i, j });
+        break;
+      }
+    }
+  }
+  if (!hits.length) return null;
+  const wanted = hits.find((h) => h.i === prefer);
+  if (wanted) return wanted.i;
+  // A head that starts the row is the stronger reading than one that ends in the middle of it (which is what a
+  // trimmed window leaves behind), so a j = 0 match wins over a later row's suffix match.
+  const best = hits.reduce((a, b) => (b.j < a.j ? b : a));
+  return best.i;
+}
+
+// The fold context a note is drawn with: the turn, the tool it belongs to, and the row of the store it names.
+// `tool` is what the caller knows from the burst (a result header named it); the note's own stamp wins when the
+// window trimmed that away. `cursor` is the burst's pairing, for a line written before the stamp existed.
+function foldForNote({ turnId, tool = "", note = null, head = [], cursor = null }) {
+  const stamped = note && note.fold ? note.fold : null;
+  const which = String((stamped && stamped.tool) || tool || "");
+  // No tool anywhere: a note written before the stamp existed, in a burst the window trimmed of its call line.
+  // The head over it still does not answer for one tool only, so ask whichever of THIS turn's tool reads is in
+  // hand which row those lines came from — the answer names the tool as well as the row.
+  if (!which) return foldByHeadAnyTool(turnId, head);
+  const prefer = stamped && stamped.row != null ? Math.max(0, Number(stamped.row) || 0) : null;
+  const byHead = rowForHead(storeRowsFor(turnId, which), head, prefer);
+  const row = byHead != null ? byHead : prefer != null ? prefer : cursor;
+  if (row == null) return null;
+  return { turn: turnId, tool: which, row: Math.max(0, Number(row) || 0) };
+}
+
+// Which of this turn's tools a head of console lines came from, across the store reads the card has in hand
+// (the same reads every burst of the turn shares). Only ever consulted for a note that can name no tool of its
+// own; the first read whose rows carry the head is the answer.
+function foldByHeadAnyTool(turnId, head) {
+  const prefix = `${turnId}|`;
+  for (const [key, entry] of state.toolStore) {
+    if (!key.startsWith(prefix) || !entry || !Array.isArray(entry.results) || !entry.results.length) continue;
+    const row = rowForHead(entry.results, head, null);
+    if (row != null) return { turn: turnId, tool: key.slice(prefix.length), row: Math.max(0, Number(row) || 0) };
+  }
+  return null;
+}
+
+// Every note's fold context in a list of console lines, keyed by the note line itself. Where the lines are drawn
+// in one go (a burst the window trimmed of its call line, so no segment names its own tool), each note is still
+// resolved from its stamp and the head above it — bounded to the head's own length, because a note ends the head
+// the panel kept.
+function noteFolds(turnId, lines) {
+  const folds = new Map();
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (!l || l.kind !== "tool-out" || !consoleFoldNote(String(l.text || ""))) continue;
+    const fold = foldForNote({ turnId, note: l, head: lines.slice(Math.max(0, i - HEAD_LINES), i) });
+    if (fold) folds.set(l, fold);
+  }
+  return folds;
+}
+
+// The tools a burst's store read has to cover: the ones its call lines name, plus any a fold note inside it
+// names. A burst the window trimmed of its call line has no rows to count, and the note is the only thing left
+// that says which result it folds.
+function burstStoreTools(lines) {
+  const out = new Set(toolBurstRows(lines).map((r) => r.name));
+  for (const l of lines) if (l && l.fold && l.fold.tool) out.add(String(l.fold.tool));
+  return [...out].filter(Boolean);
+}
+
+// The furthest row this turn's own notes name for one tool: the store read that pairs a burst asks for the rows
+// its result lines need, and one more result than that when a note names a later one (the head above the note
+// has to be checkable against the row it claims).
+function stampedRowFor(lines, tool) {
+  let out = null;
+  for (const l of lines || []) {
+    if (!l || !l.fold || String(l.fold.tool || "") !== tool || l.fold.row == null) continue;
+    const row = Math.max(0, Number(l.fold.row) || 0);
+    if (out == null || row > out) out = row;
+  }
+  return out;
+}
+
 // The reader clicked the fold: read that one row out of the session store — whole, not the store reader's own
 // 6,000-character display cut — and let the card redraw the burst with it. The request carries the turn's own
 // window, exactly like the store fetch a burst makes, because the store is queried by time
 // (lib/tool-results.js) and the turn's clock is the only thing that says which rows are its.
 async function expandToolFold(btn) {
   const grp = btn.closest(".tgrp");
-  const turnId = String((grp && grp.dataset.tgrp) || "").split("#")[0];
+  // The button carries the turn it was drawn for (data-fold-turn). The burst's own key is the same number, but a
+  // burst the window trimmed of its call line is drawn as bare console lines — no `.tgrp` to read it from — and
+  // the note there is still a control the reader can press.
+  const turnId = String(btn.dataset.foldTurn || (grp && grp.dataset.tgrp) || "").split("#")[0];
   const tool = btn.dataset.foldTool || "";
   const row = Math.max(0, Number(btn.dataset.foldRow) || 0);
   if (!turnId || !tool) return false;
@@ -1365,6 +1497,15 @@ async function expandToolFold(btn) {
     state.foldRows.set(key, got);
     while (state.foldRows.size > FOLD_ROWS_MAX) state.foldRows.delete(state.foldRows.keys().next().value);
     if (grp) repaintToolGroup(grp);
+    else {
+      // No burst wrapper to repaint: a burst the window trimmed of its call lines is drawn as bare console lines.
+      // The whole stored row goes in the note's own place — the same markup the next full repaint draws there
+      // (trimmedBurstHtml), so the answer is on the card now rather than at the next paint.
+      const rowEl = btn.closest(".jl-fold");
+      const holder = document.createElement("div");
+      holder.innerHTML = wholeStoredHtml(got, tool, "", `${turnId}|${tool}`);
+      if (rowEl && rowEl.parentElement && holder.firstChild) rowEl.replaceWith(...holder.childNodes);
+    }
   } catch {
     btn.disabled = false;
     btn.textContent = `${was} — the session store could not be read; click to retry`;
@@ -1381,7 +1522,7 @@ setInterval(() => {
     const turnId = String(grp.dataset.tgrp || "").split("#")[0];
     if (!state.jobs.has(turnId)) continue;
     const lines = groupLines(grp);
-    const tools = grp.dataset.filter ? [grp.dataset.filter] : toolBurstRows(lines).map((r) => r.name);
+    const tools = grp.dataset.filter ? [grp.dataset.filter] : burstStoreTools(lines);
     for (const tool of tools) void ensureToolStore(turnId, tool, grp);
   }
 }, 3000);
@@ -1502,11 +1643,42 @@ function linkBatchTail(text, tool, gkey) {
   return `${esc(m[1])} <button type="button" class="tgrp-batch" data-batch-tool="${esc(tool)}" data-batch-n="${n}" data-batch-key="${esc(gkey)}" data-batch-first="${esc(first)}" title="${esc(title)}">+ ${n} command${n === 1 ? "" : "s"}</button>`;
 }
 
+// A burst the served window trimmed of its call line — and of the `↳ tool` header after it — has no segments to
+// pair: no tool name, no result header, no cursor. Its notes still name their own result (the tool and the row the
+// server stamped on them, and the head above each one, checked against the store's rows), so the burst is drawn in
+// pieces AROUND them: the console lines as they are, each note as the button that opens it, and — once the reader
+// has pressed one — the whole stored text in the note's place, exactly as the grouped path draws it.
+function trimmedBurstHtml(lines, turnId, gkey) {
+  const folds = noteFolds(turnId, lines);
+  const out = [];
+  let run = [];
+  const flush = () => {
+    if (!run.length) return;
+    out.push(consoleBodyHtml(run, { tool: "", arg: "", codeOpen: state.codeBoxOpen, codeKey: String(gkey), folds }));
+    run = [];
+  };
+  for (const l of lines) {
+    const fold = folds.get(l);
+    const opened = fold ? state.foldRows.get(foldKey(fold.turn, fold.tool, fold.row)) : null;
+    if (!opened) {
+      run.push(l);
+      continue;
+    }
+    flush();
+    out.push(wholeStoredHtml(opened, fold.tool, "", `${gkey}|${fold.tool}`));
+  }
+  flush();
+  return out.join("");
+}
+
 function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", gofs = null) {
   const rows = toolBurstRows(lines);
-  // No recognisable call lines (a result whose start was trimmed away): show the lines rather than an empty
-  // box. They still go through the one renderer, so a diff in a burst whose call lines were trimmed is a diff.
-  if (!rows.length) return consoleBodyHtml(lines, { tool: "", arg: "", codeOpen: state.codeBoxOpen, codeKey: String(key) });
+  // No recognisable call lines (a result whose start was trimmed away): show the lines rather than an empty box.
+  // They still go through the one renderer, so a diff in a burst whose call lines were trimmed is a diff — and
+  // every note in them is resolved on its own identity, because there is no tool name and no cursor to be had
+  // here. Without that the note drew as a plain div and the reader was shown "click to read" with nothing to
+  // click, which is exactly the state a reload of a long turn produces.
+  if (!rows.length) return trimmedBurstHtml(lines, String(key).split("#")[0], key);
   // The reader's own choice wins over the caller's default: a rebuild is not the reader closing the block.
   const gkey = toolGroupStateKey(key, lines, anchor);
   const saved = state.toolGroupOpen.get(gkey);
@@ -1673,7 +1845,11 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
       // which case the whole stored text is drawn in its place (that is what the click set up, and a rebuild
       // must not fold it back shut).
       const foldAt = preview.findIndex((l) => consoleFoldNote(String(l.text || "")));
-      const opened = foldAt < 0 ? null : state.foldRows.get(foldKey(turnId, seg.tool, rowAt));
+      // The note names its own result — from the head the panel kept above it (checked against the store's own
+      // rows once the burst has read them) or from the row the server stamped on the line — and only falls back
+      // to this burst's cursor when it has neither.
+      const fold = foldAt < 0 ? null : foldForNote({ turnId, tool: seg.tool, note: preview[foldAt], head: preview.slice(0, foldAt), cursor: rowAt });
+      const opened = fold ? state.foldRows.get(foldKey(turnId, fold.tool, fold.row)) : null;
       if (full) out = render(resultLine) + storedHtml(full.row, seg.tool, arg, boxKey, full.at);
       else if (opened) {
         out =
@@ -1684,7 +1860,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
         out =
           render(resultLine) +
           render(preview.filter((_, k) => k !== foldAt)) +
-          render([preview[foldAt]], { fold: { turn: turnId, tool: seg.tool, row: rowAt } });
+          render([preview[foldAt]], fold ? { fold } : {});
       } else if (!preview.some((l) => String(l.text || "").trim())) {
         out += got
           ? storedHtml(got, seg.tool, arg, boxKey, rowAt)
@@ -12150,7 +12326,7 @@ document.addEventListener("click", async (e) => {
       // to read what the calls returned.
       if (open) {
         const fresh = scope.querySelector(`.tgrp[data-gstate="${CSS.escape(gstate)}"]`);
-        if (fresh) for (const r of toolBurstRows(groupLines(fresh))) void ensureToolStore(turnId, r.name, fresh);
+        if (fresh) for (const tool of burstStoreTools(groupLines(fresh))) void ensureToolStore(turnId, tool, fresh);
       }
     }
     return;
