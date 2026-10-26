@@ -748,6 +748,21 @@ button.pill-reattach:focus-visible { outline: 2px solid #6b7b8f; outline-offset:
 button.pill-reattach:disabled { cursor: progress; }
 /* While the gateway is being asked the glyph turns, exactly as the continue pill's does. */
 button.pill-reattach.is-starting .pill-again { animation: pill-again-spin .9s linear infinite; }
+/* The COMPLETE chip on a card whose latest turn is done: the same pill in the same place, at the same size — only the
+   colour and the word change, because a finished agent is not a stopped one. Green is the panel's own "finished happily"
+   colour (the RUNNING pill and a worktree row's MERGED use it), so nothing new is taught here. No refresh glyph: this pill
+   resumes nothing. Its press queues one ask for the board assistant instead of nudging the agent that already finished, and
+   `is-asked` is the short state change that says the ask landed. */
+button.pill-complete {
+  flex: none; align-self: center;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--ui); line-height: 1.5; cursor: pointer; vertical-align: middle;
+  color: #7ee787; border-color: #1f4a2a; background: var(--green-bg);
+}
+button.pill-complete:hover { border-color: #2f6b3d; background: #16301f; }
+button.pill-complete:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 1px; }
+button.pill-complete:disabled { cursor: progress; }
+button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); background: #20242c; }
 .pill.done { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
 .pill.failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .pill.cancelled, .pill.interrupted { color: var(--dim); background: #20242c; }

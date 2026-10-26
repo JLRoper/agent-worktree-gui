@@ -1772,6 +1772,21 @@ const server = createServer(async (req, res) => {
       return sendJson(res, r.ok ? 200 : 400, r);
     }
 
+    // The press on a finished card's COMPLETE chip: queue ONE ask for the board assistant and send nothing to the
+    // agent. It goes through the assistant's own wake queue — the path an alert handed over uses — and never through
+    // /api/assistant/say, which starts a turn at once and would talk over a run already in flight. The answer carries
+    // what the queue decided, so the chip can say the ask landed or say why it did not; a card this route cannot ask
+    // about (unknown, or no longer `done`) is a 400 with the reason.
+    if (route === "/api/jobs/ask-complete" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        return sendJson(res, 200, assistant.askAboutComplete(String(body?.id || "").trim()));
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e), ok: false });
+      }
+    }
+
     // Answer a parked run's approval. The gateway validates the choice a second time, so a stale
     // card cannot widen what the host allows.
     if (route === "/api/jobs/approve" && req.method === "POST") {

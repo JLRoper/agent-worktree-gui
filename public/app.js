@@ -3130,6 +3130,17 @@ function conversationHtml(conv) {
         `not running: this panel lost its line to run ${latest.runId}, which may still be going in the gateway — click to pick this up. Still live: the card re-attaches to that run and can steer it again. Ended: the run's result is adopted. Forgotten: the card settles as interrupted and this thread is continued.`,
       )}">not-running<span class="pill-again" aria-hidden="true">\u21bb</span></button>`
     : "";
+  // A finished agent is not a stopped one, and the reader asked for the difference: when the card's latest turn is
+  // exactly `done` the pill reads COMPLETE in the panel's green and carries no refresh glyph, because nothing here is
+  // being resumed. Same pill, same place, same size — a word, a colour, and a press that queues one ask for the board
+  // assistant instead of nudging the agent that already finished. Every other status keeps the pill it has today, word
+  // for word: `failed` stays "exited", `cancelled`/`interrupted`/lost stay "not-running", and the re-attach pill's own
+  // path is untouched.
+  const completeChip = latest.status === "done"
+    ? `<button type="button" class="pill pill-complete" data-complete-ask="${esc(latest.id || thread)}" title="${esc(
+        `done · ${elapsed(latest)} — click to queue one ask for the board assistant: whether this really is complete (the commits, the PR, the report) and what has to happen next for this worktree. Nothing is sent to this agent.`,
+      )}">complete</button>`
+    : "";
   const hotFlash = state.hotFlash.thread === thread && Date.now() < state.hotFlash.until;
   return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}${jumped}${hotFlash ? " hot-flash" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}"${sizeVars ? ` style="${sizeVars}"` : ""}>
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
@@ -3137,7 +3148,8 @@ function conversationHtml(conv) {
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
       ${runningNow
         ? `<span class="pill pill-running" title="${esc(running ? `running ${elapsed(latest)}` : `this turn is ${latest.status}, but subagents it started are still running`)}">running</span>`
-        : detachedChip ||
+        : completeChip ||
+          detachedChip ||
           `<button class="pill pill-notrunning pill-continue${latest.status === "failed" ? " is-failed" : ""}" data-continue-thread="${esc(thread)}" type="button" title="${esc(
             `${latest.status} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""} — click to send this agent "${CONTINUE_TEXT}" and start its next turn`,
           )}">${latest.status === "failed" ? "exited" : "not-running"}<span class="pill-again" aria-hidden="true">\u21bb</span></button>`}
@@ -3813,6 +3825,61 @@ async function reattachCard(btn) {
       btn.classList.remove("is-starting");
     }
   }
+}
+
+// The COMPLETE chip's press, on a card whose latest turn is `done`. It is deliberately NOT the continue pill: nothing is
+// sent to the agent that already finished (it is finished — nudging it is the one thing this press must not do), and the
+// panel does not start an assistant turn either, which would talk over a run already in flight. Instead one message is
+// QUEUED for the board assistant through the wake queue an alert handed over uses (POST /api/jobs/ask-complete ->
+// Assistant.askAboutComplete -> wake), so it lands in the assistant's next turn inside its hourly budget. The pill says
+// the ask happened; a queue that refuses it (the hourly budget, or an assistant switched off) says WHY on the card, in
+// the place a failed nudge already speaks, and the pill is then left as it was rather than claiming a success.
+async function askComplete(btn) {
+  const id = btn.dataset.completeAsk || "";
+  if (!id) return;
+  btn.disabled = true;
+  btn.classList.add("is-asking");
+  try {
+    const res = await apiFetch("/api/jobs/ask-complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) {
+      showBanner(out.error || `could not queue the check for the assistant (HTTP ${res.status})`);
+      return;
+    }
+    // Already asked and the assistant has not turned yet: the ask IS queued, so the chip says asked — but nothing was
+    // queued twice, and the card says so rather than letting a second press look like a second ask.
+    if (out.duplicate) {
+      markChipAsked(btn);
+      showNote(`that check is already in the assistant's queue (asked ${out.at || "just now"}) — nothing was queued twice`);
+      return;
+    }
+    // Refused: the wake queue would not take it. Never claim otherwise — the pill stays as it was and the card says why.
+    if (!out.queued) {
+      showBanner(out.reason || "the assistant's wake queue refused that ask — nothing was queued");
+      return;
+    }
+    markChipAsked(btn);
+    showNote(`queued one check for the board assistant — it is asked to look at ${out.thread || "that"} and say whether it is really complete`);
+  } catch (e) {
+    showBanner(`could not queue the check for the assistant — ${String((e && e.message) || e)}`);
+  } finally {
+    if (btn.isConnected) {
+      btn.disabled = false;
+      btn.classList.remove("is-asking");
+    }
+  }
+}
+
+// The chip's own short state change, so the reader can see the press landed without reading the card's footer. No glyph
+// either way: the not-running pill's ↻ says "this resumes something", which is exactly what this one does not do.
+function markChipAsked(btn) {
+  if (!btn || !btn.isConnected) return;
+  btn.classList.add("is-asked");
+  btn.textContent = "asked";
 }
 
 // The green ▶ on a worktree row: ask every agent in that worktree that is NOT running to carry on. One sentence each,
@@ -10086,6 +10153,15 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     void continueThread(continueBtn.dataset.continueThread || "", continueBtn);
+    return;
+  }
+  // The COMPLETE chip, on a card whose latest turn is done: queue one ask for the board assistant and send nothing to
+  // the agent. Its own hook (`data-complete-ask`), so it can never fall into the continue branch above.
+  const completeBtn = e.target.closest("[data-complete-ask]");
+  if (completeBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    void askComplete(completeBtn);
     return;
   }
   // The re-attach pill: ask the gateway about this one card's run and let the panel take the same decision its boot
