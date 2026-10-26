@@ -335,7 +335,10 @@
       </div>
       <div class="form">
         <div class="attach-chips" id="spawn-chips"></div>
-        <textarea id="job-prompt" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" rows="3" placeholder="What should the agent do? (this becomes the first turn)"></textarea>
+        <!-- A chip needs an inline atom, so this is contenteditable like the reply box: a long paste collapses
+             in place, a short one is still plain text, and readBox(box) is how every reader of it gets the
+             text back (the placeholder is drawn from data-ph by :empty). -->
+        <div id="job-prompt" class="chipbox" contenteditable="true" role="textbox" aria-multiline="true" data-single="0" data-chipbox="spawn" data-rows="3" spellcheck="false" data-ph="What should the agent do? (this becomes the first turn)"></div>
         <div class="row">
           <label class="cwd">start in <input id="job-cwd" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" list="project-paths" spellcheck="false" placeholder="(project path — the green + on a project fills this in)" /></label>
           <label class="proj">project <select id="job-project" title="which project the agent starts in"></select></label>
@@ -408,6 +411,10 @@
   <script src="/core/dom-format.js"></script>
   <script src="/core/console-format.js"></script>
   <script src="/board/attachments.js"></script>
+  <!-- Pasted blocks collapsed into inline chips, for every box the reader writes a prompt in. Loaded after
+       attachments.js on purpose: a paste of a FILE belongs to that module (it registers its listener first
+       and prevents the default), and this one steps aside for it. -->
+  <script src="/board/paste-chips.js"></script>
   <script src="/board/hot.js"></script>
   <script src="/core/transport.js"></script>
   <script src="/core/sse.js"></script>

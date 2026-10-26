@@ -34,6 +34,10 @@ const TREENAMES_KEY = "wtgui.treenames";
 // localStorage and then never read back - every reload held the stale rows again and pointed the arrow down.
 const SHOW_OLD_KEY = "wtgui.showOldProjects";
 
+// The chip-bearing drafts this tab already holds (board/paste-chips.js): each chip's own text by id, and
+// the segments of every box that carries one. Read ONCE, above `state`, so a box can be restored from it
+// the moment it is rendered — the same reason TREENAMES_KEY lives up here.
+const boxChips = loadPasteChipState();
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
   // "Console size" stays the baseline for every card. Kept in memory so a repaint does not undo it.
@@ -72,6 +76,13 @@ const state = {
   jobs: new Map(),
   jobLines: new Map(),
   replyDrafts: {},
+  // Pasted blocks collapsed into inline chips (board/paste-chips.js): id -> { text, lines }. The DOM holds
+  // the id only, so the text lives HERE, where a card rebuild and a reload can find it again — and
+  // boxModels is what those two replay: each box's own chip/text segments, keyed the way the box names
+  // itself (its data-chipbox), with the id counter bumped past whatever this tab already remembers.
+  pasteChips: boxChips.chips,
+  pasteChipSeq: boxChips.seq,
+  boxModels: boxChips.drafts,
   // Up/Down in a reply box walks this thread's previous prompts; this remembers how far back you are
   // and the draft you started from.
   replyNav: new Map(),
@@ -3230,14 +3241,21 @@ function conversationHtml(conv) {
       <div class="reply">
         <div class="reply-wrap">
           <div class="attach-chips" data-chips="${esc(thread)}">${attachmentChipsHtml(thread)}</div>
-          <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"
-            placeholder="${running
+          <!-- A chip needs an inline atom, and a textarea cannot hold one: this box is contenteditable and
+               the chip is a non-editable span inside it. Nothing changes for the reader — Enter, Ctrl+Enter,
+               Shift+Enter, the ↑/↓ recall and the draft restore are the same gestures — and every reader of
+               its text goes through readBox(box) (board/paste-chips.js), which gives a chip's own text back
+               in place. The placeholder moved to data-ph, because :empty draws it on a div. -->
+          <div class="reply-box" contenteditable="true" role="textbox" aria-multiline="true"
+            data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off"
+            data-reply="${esc(thread)}" data-chipbox="reply:${esc(thread)}" data-rows="2" spellcheck="false"
+            data-ph="${running
               ? (inDelegate
                 ? "a subagent is out — a steer lands when delegate_task returns; Enter holds yours for the next turn"
                 : "a turn is running — Ctrl+Enter steers it; Enter holds yours for the next turn")
               : childrenStillOut
                 ? "this thread's subagents are still out — Enter holds yours until they finish"
-                : "Reply to this agent — continues the same Hermes thread, Enter or Ctrl+Enter to send"}"></textarea>
+                : "Reply to this agent — continues the same Hermes thread, Enter or Ctrl+Enter to send"}"></div>
           <div class="reply-actions">
             ${running
               ? `<button class="btn-reply btn-steer-primary" data-steer="${esc(runningTurn.id)}" type="button" title="${inDelegate ? "send this into the running turn (Ctrl+Enter) — it waits for delegate_task to return, and if the turn ends first it comes back to this box unsent" : "send this into the running turn (Ctrl+Enter) — the agent reads it at its next tool boundary and the turn carries on"}">Steer turn</button>`
@@ -3263,7 +3281,16 @@ function conversationHtml(conv) {
 
 function restoreReplyDraft(thread) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-  if (box && state.replyDrafts[thread]) box.value = state.replyDrafts[thread];
+  if (!box) return;
+  const draft = state.replyDrafts[thread];
+  if (draft) {
+    // One place decides what a rebuilt box comes back as: the chip model the panel is holding for this
+    // draft (a pasted block returns as a chip, with its text), else the draft's own text.
+    if (!restoreBoxDraft(box, draft)) writeBox(box, draft);
+    return;
+  }
+  // Nothing in memory: a chip-bearing draft this tab mirrored before a reload comes back here.
+  restorePersistedBox(box);
 }
 
 // Typing state inside a card, so a rebuild can put it back. Row events arrive every few seconds for a
@@ -3278,7 +3305,10 @@ function captureTyping(root) {
     return { edit: el.dataset.editThread, editAt: Number(el.dataset.editQueued) || 0, value: el.value, start: el.selectionStart, end: el.selectionEnd };
   }
   if (!el.classList?.contains("reply-box")) return null;
-  return { thread: el.dataset.reply, value: el.value, start: el.selectionStart, end: el.selectionEnd };
+  // The caret is captured in the units readBox measures in, so a chip in the draft cannot move it: the
+  // value is the serialized text, which is exactly what the send path posts.
+  const at = caretOffset(el);
+  return { thread: el.dataset.reply, value: readBox(el), start: at, end: at };
 }
 
 // What this thread's box just sent, and when: a repaint during the POST can capture the text before the reply
@@ -3296,12 +3326,12 @@ const REPLY_MAX_LINES = 18;
 const SPAWN_MAX_LINES = 14;
 
 function growBoxToDraft(box, maxLines) {
-  if (!box || box.tagName !== "TEXTAREA") return;
+  if (!box || (box.tagName !== "TEXTAREA" && !(box.dataset && box.dataset.chipbox))) return;
   const cs = getComputedStyle(box);
   const line = parseFloat(cs.lineHeight) || 18;
   const border = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
   const chrome = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + border;
-  const rows = Math.max(2, Number(box.getAttribute("rows")) || 2);
+  const rows = Math.max(2, Number(box.getAttribute("rows") || box.dataset.rows) || 2);
   const min = Math.round(rows * line + chrome);
   const max = Math.max(min, Math.min(Math.round(line * maxLines + chrome), Math.round(window.innerHeight * 0.45)));
   box.style.height = "auto"; // measure the content, not the box we are trying to size
@@ -3309,12 +3339,14 @@ function growBoxToDraft(box, maxLines) {
   const h = Math.max(min, Math.min(want, max));
   box.style.height = `${h}px`;
   box.style.overflowY = want > max + 1 ? "auto" : "hidden";
-  box.dataset.grownFor = String(box.value.length);
+  // The serialized length, not the DOM's: a chip is as long as the text it swallowed, which is what the
+  // box has to make room for.
+  box.dataset.grownFor = String(readBox(box).length);
 }
 
 // Grow without moving the page - unless the box is the one being typed in and it now runs off the bottom.
 function growReplyBox(box) {
-  if (!box || box.tagName !== "TEXTAREA") return;
+  if (!box || (box.tagName !== "TEXTAREA" && !(box.dataset && box.dataset.chipbox))) return;
   const maxLines = box.id === "job-prompt" ? SPAWN_MAX_LINES : REPLY_MAX_LINES;
   growBoxToDraft(box, maxLines);
   if (document.activeElement !== box) return;
@@ -3330,10 +3362,16 @@ function growReplyBox(box) {
 function restoreTyping(root, typing) {
   for (const box of root.querySelectorAll(".reply-box[data-reply]")) {
     const draft = state.replyDrafts[box.dataset.reply];
-    if (draft) box.value = draft;
+    // A rebuild hands back an empty box, so what it comes back as is decided here and nowhere else: the
+    // chip model the panel holds for this draft, else the draft's own text, else what this tab mirrored
+    // before a reload.
+    if (draft) {
+      if (!restoreBoxDraft(box, draft)) writeBox(box, draft);
+    } else restorePersistedBox(box);
     // A repaint builds the box at its default height: give a restored draft its room back. Keyed on length
     // so a board of quiet cards is not re-measured on every tick.
-    if (box.value && box.dataset.grownFor !== String(box.value.length)) growBoxToDraft(box, REPLY_MAX_LINES);
+    const held = readBox(box);
+    if (held && box.dataset.grownFor !== String(held.length)) growBoxToDraft(box, REPLY_MAX_LINES);
   }
   if (!typing) return;
   // The held reply's editor: the textarea is rebuilt from state (edit.text follows the box), and this puts the caret
@@ -3358,21 +3396,21 @@ function restoreTyping(root, typing) {
   const stale = Boolean(sent && Date.now() - sent.at < 20000 && typing.value.trim() === sent.text);
   if (stale) {
     // The text in this snapshot is the text that was just sent: the box comes back empty, not refilled.
-    box.value = "";
+    writeBox(box, "");
+    clearBoxDraft(box);
     state.replyDrafts[typing.thread] = "";
   } else {
-    box.value = typing.value;
+    // The snapshot is what the reader had mid-sentence, chip and all: it comes back through the one writer.
+    if (!restoreBoxDraft(box, typing.value)) writeBox(box, typing.value);
     state.replyDrafts[typing.thread] = typing.value;
   }
   // preventScroll is the whole point here: this runs on every repaint, and a plain focus() scrolls the box
   // into view - which pulled the page back up to the reader's caret every few seconds while they had
   // scrolled away to read something lower on the board.
   box.focus({ preventScroll: true });
-  try {
-    box.setSelectionRange(typing.start, typing.end);
-  } catch {
-    /* a box that is no longer a text field: nothing to restore */
-  }
+  // A contenteditable host has no setSelectionRange: the caret is a serialized offset, which is the same
+  // measure the snapshot was taken in (a chip counts as the text it swallowed, so it cannot move it).
+  setCaretOffset(box, Number.isFinite(typing.end) ? typing.end : typing.start);
 }
 
 // After a repaint: the inline add-agent field comes back with its draft, and its caret and focus if the reader was
@@ -3387,21 +3425,20 @@ function restoreAddAgent(root) {
   // start of the sentence every time the row was rebuilt.
   const start = a.start;
   const end = a.end;
-  if (input.value !== a.value) input.value = a.value;
+  if (readBox(input) !== a.value) {
+    if (!restoreBoxDraft(input, a.value)) writeBox(input, a.value);
+  }
   if (!a.focused) return;
   // preventScroll for the same reason the reply box uses it: this runs on every repaint, and a bare focus() would
   // pull the page back to this box every few seconds while the reader had scrolled away.
   input.focus({ preventScroll: true });
-  const max = input.value.length;
+  const max = readBox(input).length;
   const s = Math.min(Math.max(0, Number.isFinite(start) ? start : max), max);
   const e = Math.min(Math.max(s, Number.isFinite(end) ? end : s), max);
-  try {
-    input.setSelectionRange(s, e);
-    a.start = s;
-    a.end = e;
-  } catch {
-    /* a node that is no longer a text field: nothing to restore */
-  }
+  // The caret is placed in the same serialized units the snapshot was taken in.
+  setCaretOffset(input, e);
+  a.start = s;
+  a.end = e;
 }
 
 // Renaming a session is a panel-side display name only: the Hermes thread id is identity (it is what
@@ -3502,24 +3539,19 @@ function focusReplyBox(thread) {
   // preventScroll: the caller has just positioned the card; the browser's own scroll-to-focus would
   // yank the page again a frame later.
   box.focus({ preventScroll: true });
-  const end = box.value.length;
-  try {
-    box.setSelectionRange(end, end);
-  } catch {
-    /* not a text field any more */
-  }
+  // The end of what the box HOLDS, a chip included: a pasted block sits at the end of the string the next
+  // keystroke will extend.
+  setCaretOffset(box, readBox(box).length);
   return document.activeElement === box;
 }
 
 // A real newline at the caret, for Shift+Enter. Doing it by hand rather than leaving it to the default
 // action keeps the caret and the saved draft in step, and works the same in both message boxes.
 function insertNewlineAtCaret(el) {
-  const start = el.selectionStart ?? el.value.length;
-  const end = el.selectionEnd ?? start;
-  el.value = `${el.value.slice(0, start)}\n${el.value.slice(end)}`;
-  const pos = start + 1;
-  el.setSelectionRange(pos, pos);
-  el.dispatchEvent(new Event("input", { bubbles: true }));
+  // A contenteditable host cannot be written with a value, so the newline is inserted at the caret instead
+  // — one implementation for both message boxes and the New-agent prompt (board/paste-chips.js). It fires
+  // the same input event the assignment used to, so the draft and the box's growth keep up.
+  insertNewlineAt(el);
 }
 
 // Open a console URL with the OS default browser. Doing it through the panel means it works even when
@@ -3618,13 +3650,17 @@ function queueReply(thread, text) {
 // rebuilds the card - the rebuild would otherwise put the text back into the new box from the saved draft.
 function queueReplyFromBox(thread) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-  const text = (box?.value || "").trim();
+  // readBox, not box.value: what is held is what the agent would receive, a chip being the text it holds.
+  const text = readBox(box).trim();
   if (!text) {
     if (box) box.focus();
     return false;
   }
   state.replyDrafts[thread] = "";
-  if (box) box.value = "";
+  if (box) {
+    writeBox(box, "");
+    clearBoxDraft(box);
+  } else clearBoxDraft(`reply:${thread}`);
   queueReply(thread, text);
   document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.focus();
   return true;
@@ -3651,7 +3687,7 @@ function steerFromBox(thread, turnId = null) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   const id = turnId || [...state.jobs.values()].find((j) => (j.thread || j.id) === thread && turnLive(j))?.id;
   if (!id) return Promise.resolve(false);
-  return steerTurn(thread, id, box?.value || "");
+  return steerTurn(thread, id, readBox(box));
 }
 
 function replyQueued(thread) {
@@ -4044,17 +4080,16 @@ function recallSpawnPrompt(step) {
   // Going forward with no walk in progress would just rewrite the same text and swallow the key.
   if (step < 0 && !(state.spawnNav && state.spawnNav.back > 0)) return false;
   // First Up captures what is in the box as the draft; later steps keep that original draft.
-  const nav = state.spawnNav && state.spawnNav.back > 0 ? state.spawnNav : { back: 0, stash: box.value };
+  // What the walk started from is read through readBox: a chip in the draft is part of what the reader had.
+  const nav = state.spawnNav && state.spawnNav.back > 0 ? state.spawnNav : { back: 0, stash: readBox(box) };
   const back = Math.max(0, Math.min(prompts.length, nav.back + step));
   const value = back === 0 ? nav.stash : prompts[prompts.length - back];
   state.spawnNav = { back, stash: nav.stash };
-  box.value = value;
-  const end = value.length;
-  try {
-    box.setSelectionRange(end, end);
-  } catch {
-    /* not a text field */
-  }
+  // A recalled prompt REPLACES what the box holds, chips included: the recalled text becomes the content,
+  // so it goes through the one writer and the previous draft's chip model goes with it.
+  writeBox(box, value);
+  clearBoxDraft(box);
+  setCaretOffset(box, value.length);
   return true;
 }
 
@@ -4063,7 +4098,7 @@ function recallReply(box, step) {
   if (!thread) return;
   const prompts = turnPrompts(thread);
   if (!prompts.length) return;
-  const nav = state.replyNav.get(thread) || { back: 0, stash: box.value };
+  const nav = state.replyNav.get(thread) || { back: 0, stash: readBox(box) };
   // `back` counts steps behind the draft: 0 = what you were typing, 1 = newest prompt, 2 = the one
   // before it, and so on.
   const back = Math.max(0, Math.min(prompts.length, nav.back + step));
@@ -4071,13 +4106,10 @@ function recallReply(box, step) {
   // `current` is what the recall put there: it is how the next Up knows the box is showing history rather than
   // the reader's own draft, so it may keep walking instead of only moving the caret.
   state.replyNav.set(thread, { back, stash: nav.stash, current: value });
-  box.value = value;
-  const end = value.length;
-  try {
-    box.setSelectionRange(end, end);
-  } catch {
-    /* not a text field */
-  }
+  // A recalled prompt replaces what the box holds, chips included: the model goes with the draft it made.
+  writeBox(box, value);
+  clearBoxDraft(box);
+  setCaretOffset(box, value.length);
   state.replyDrafts[thread] = value;
 }
 
@@ -4193,8 +4225,11 @@ function addAgentBarHtml({ key = "", path = "", name = "", project = "", value =
   }
   return (
     `<div class="add-agent-form">` +
-    `<input class="add-agent-input" type="text" ${attrs} value="${esc(value)}" spellcheck="false" autocomplete="off" data-form-type="other" data-1p-ignore data-bwignore data-lpignore="true"` +
-    ` placeholder="what should this agent do here?  Enter starts it · Esc puts the + back">` +
+    // A contenteditable host, like the reply box: this field is where a prompt is often pasted in from a
+    // document, so a paste that big collapses to a chip here too. It keeps the single-line behaviour it had
+    // as an <input> (data-single strips line breaks out of a short paste; Shift+Enter adds none).
+    `<div class="add-agent-input" contenteditable="true" role="textbox" data-single="1" ${attrs} data-chipbox="add:${esc(key)}" spellcheck="false" autocomplete="off" data-form-type="other" data-1p-ignore data-bwignore data-lpignore="true"` +
+    ` data-ph="what should this agent do here?  Enter starts it · Esc puts the + back"></div>` +
     `</div>`
   );
 }
@@ -4202,9 +4237,9 @@ function addAgentBarHtml({ key = "", path = "", name = "", project = "", value =
 // Same key in, same key out: the field replaces the bar in place so the row does not change height.
 function swapAddAgentBox(key, html) {
   const sel = `[data-add-agent-key="${CSS.escape(key)}"]`;
-  const input = document.querySelector(`input${sel}`);
-  const form = input?.closest(".add-agent-form") || null;
-  const btn = document.querySelector(`button${sel}`);
+  const field = document.querySelector(`.add-agent-input${sel}`);
+  const form = field?.closest(".add-agent-form") || null;
+  const btn = document.querySelector(`.btn-add-agent${sel}`);
   const current = form || btn;
   if (!current) return null;
   current.insertAdjacentHTML("afterend", html);
@@ -4232,7 +4267,7 @@ function openAddAgent(btn) {
   if (prev && prev.key !== key) swapAddAgentBox(prev.key, addAgentBarHtml({ ...prev, value: null }));
   state.addAgent = a;
   const fresh = swapAddAgentBox(key, addAgentBarHtml({ ...a, value: "" }));
-  fresh?.querySelector("input")?.focus({ preventScroll: true });
+  fresh?.querySelector(".add-agent-input")?.focus({ preventScroll: true });
 }
 
 // Esc, an empty blur, or a run that has started: the + comes back.
@@ -4249,7 +4284,7 @@ function closeAddAgent() {
 async function submitAddAgent(input) {
   const a = state.addAgent;
   if (!a) return;
-  const typed = String(input?.value ?? a.value ?? "").trim();
+  const typed = String((input ? readBox(input) : a.value) ?? "").trim();
   if (!typed) {
     input?.focus();
     return;
@@ -4275,14 +4310,16 @@ async function submitAddAgent(input) {
   resetSpawnDefaults();
   const box = $("job-prompt");
   if (box) {
-    box.value = typed;
+    // The field's text becomes the card's prompt — a pasted block travels as a chip, not as flattened
+    // text, so the run still receives every character of it.
+    transferBoxModel(`add:${a.key}`, box, typed);
     growReplyBox(box);
   }
   state.addAgent = null;
   swapAddAgentBox(a.key, addAgentBarHtml({ ...a, value: null }));
   await spawnAgent({ promptFocus: false });
   // spawnAgent clears the prompt on success and leaves it on a refusal, which is the only signal it gives back.
-  if (String($("job-prompt")?.value || "").trim()) {
+  if (String(readBox($("job-prompt")) || "").trim()) {
     const why = String($("spawn-msg")?.textContent || "").trim();
     showBanner(`could not start that agent — ${why || "the New agent card says why"}`);
   }
@@ -4299,10 +4336,24 @@ document.addEventListener(
   (e) => {
     const input = addAgentFieldOf(e);
     if (!input) return;
+    if (e.key === "Enter" && e.shiftKey) {
+      // This box is ONE LINE — it was an <input> until it learned to hold a chip — so Shift+Enter adds no
+      // line here, exactly as it added none before.
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
       void submitAddAgent(input);
+      return;
+    }
+    // Ctrl/Cmd/Alt+Enter means nothing in a one-line field — an <input> ignored it outright — so it is swallowed
+    // here rather than allowed to put a line break into a box that never had one.
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
       return;
     }
     if (e.key === "Escape") {
@@ -4319,7 +4370,7 @@ document.addEventListener(
 document.addEventListener("input", (e) => {
   const input = addAgentFieldOf(e);
   if (!input || !state.addAgent) return;
-  state.addAgent.value = input.value;
+  state.addAgent.value = readBox(input);
   rememberAddAgentCaret(input);
 });
 
@@ -4377,18 +4428,17 @@ function rememberAddAgentCaret(input) {
   // start of the text and the restore after the move would put it there. The value is already tracked by the input
   // event; only a field that is still on the page can say where the caret is.
   if (!input.isConnected) return;
-  a.value = input.value;
-  try {
-    a.start = input.selectionStart ?? a.value.length;
-    a.end = input.selectionEnd ?? a.value.length;
-  } catch {
-    /* not a text field any more */
-  }
+  a.value = readBox(input);
+  const at = caretOffset(input);
+  a.start = Math.min(at, a.value.length);
+  a.end = a.start;
 }
 
 async function sendReply(thread, preset = null) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-  const typed = String(preset ?? box?.value ?? "").trim();
+  // The one place a box's text is read. A chip serializes back to the text it swallowed, IN PLACE: quotes
+  // the reader put around it and the prose on either side arrive in the order they are on screen.
+  const typed = String(preset ?? (box ? readBox(box) : "")).trim();
   const attached = attachmentBlock(thread);
   if (!typed && !attached) return false;
   const text = typed + attached;
@@ -4416,8 +4466,14 @@ async function sendReply(thread, preset = null) {
     // so clear the box that is on the page now, not the one this function started with. A queued reply must not
     // wipe something the reader has since typed, hence the preset guard.
     const live = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-    if (live && (preset == null || !live.value.trim() || live.value.trim() === typed)) live.value = "";
-    if (box && box !== live && (preset == null || !box.value.trim())) box.value = "";
+    if (live && (preset == null || !readBox(live).trim() || readBox(live).trim() === typed)) {
+      writeBox(live, "");
+      clearBoxDraft(live);
+    }
+    if (box && box !== live && (preset == null || !readBox(box).trim())) {
+      writeBox(box, "");
+      clearBoxDraft(box);
+    }
     updateJob(d.job, { scroll: true });
     if (d.assistant && typeof applyAssistant === "function") applyAssistant(d.assistant);
     // Sending a reply is you switching to the new turn: fold everything before it, including turns
@@ -4470,7 +4526,10 @@ async function steerTurn(thread, id, text, btn = null) {
         state.replyDrafts[thread] = "";
         clearAttachments(thread);
         const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-        if (box) box.value = "";
+        if (box) {
+          writeBox(box, "");
+          clearBoxDraft(box);
+        }
         if (warn) warn.textContent = "this turn cannot take a steer right now — queued; it sends when the turn and its subagents are done";
         if (btn) btn.disabled = false;
         return true;
@@ -4484,7 +4543,10 @@ async function steerTurn(thread, id, text, btn = null) {
     state.replyDrafts[thread] = "";
     clearAttachments(thread);
     const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-    if (box) box.value = "";
+    if (box) {
+      writeBox(box, "");
+      clearBoxDraft(box);
+    }
     if (warn) {
       // A steer only lands at a tool boundary, and `delegate_task` is one call that can run for minutes: say what
       // it is waiting for, and what happens if the wait outlasts the turn.
@@ -5826,7 +5888,7 @@ async function retrySpawn() {
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     lastSpawnAttempt = null;
     $("spawn-msg").textContent = `spawned ${d.job.id}${d.job.runId ? ` · run ${String(d.job.runId).replace(/^run_/, "").slice(0, 8)}` : ""}${d.job.worktreePath ? ` · ${d.job.worktreePath}` : ""}`;
-    $("job-prompt").value = "";
+    clearSpawnPrompt();
     clearAttachments("spawn");
     updateJob(d.job, { scroll: true });
     revealSpawnedAgent(d.job);
@@ -5848,7 +5910,7 @@ async function recoverSpawnAfterTimeout(body) {
       (j) => String(j.prompt || "").trim() === wanted && Date.parse(j.startedAt || 0) >= cutoff,
     );
     if (!hit) return false;
-    $("job-prompt").value = "";
+    clearSpawnPrompt();
     rememberSpawnPrompt(wanted);
     $("spawn-msg").textContent = `spawned ${hit.id} — the reply was lost, but the turn did start`;
     updateJob(hit, { scroll: true });
@@ -5907,7 +5969,7 @@ async function spawnAgent({ promptFocus = true } = {}) {
     // The prompt now belongs to an agent: clear the box so the next one starts blank, and keep it in
     // history so a single Up brings it straight back. A REFUSED spawn keeps the text for editing.
     rememberSpawnPrompt(typed);
-    $("job-prompt").value = "";
+    clearSpawnPrompt();
     clearAttachments("spawn");
     if (promptFocus) $("job-prompt").focus();
     updateJob(d.job, { scroll: true });
@@ -6096,6 +6158,15 @@ function scrollCardUnderBar(card) {
   setTimeout(again, 120);
 }
 
+// Emptying the New-agent prompt empties what it held, chips included: the chip model goes with the text, so
+// a cleared box cannot bring back a chip the reader has already sent.
+function clearSpawnPrompt() {
+  const box = $("job-prompt");
+  if (!box) return;
+  writeBox(box, "");
+  clearBoxDraft(box);
+}
+
 function focusPromptWithoutScrolling() {
   const prompt = $("job-prompt");
   if (!prompt) return;
@@ -6156,7 +6227,8 @@ function focusSpawn(projectName) {
 
 function formValues() {
   return {
-    prompt: $("job-prompt").value,
+    // readBox: a chip in the box is the text it swallowed, in place, and the run must receive all of it.
+    prompt: readBox($("job-prompt")),
     // An explicitly edited location wins over the project picker (the server prefers `cwd`).
     cwd: $("job-cwd").value.trim() || undefined,
     // true = run in that directory as-is (an existing worktree), no new worktree created. The checkbox says
@@ -9887,16 +9959,19 @@ document.addEventListener("click", (e) => {
 // Enter in the prompt spawns, the way it does in every other box here. Shift+Enter is a newline, so a
 // multi-line prompt is still possible.
 $("job-prompt").addEventListener("keydown", (e) => {
-  // Up/Down walk what you have already spawned, shell style. Only from the very start (Up) or the very
-  // end (Down) of the text, so the arrows still move the caret inside a multi-line prompt.
+  // Up/Down walk what you have already spawned, shell style. Only from the very start (Up) or the very end
+  // (Down) of the TEXT — measured the way readBox measures it, so a chip counts as the text it swallowed
+  // and the caret keeps moving with it.
+  const box = e.target;
+  const boxText = readBox(box);
+  const at = caretOffset(box);
   if (e.key === "ArrowUp" && !e.shiftKey) {
-    const box = e.target;
     // A single-line prompt walks history from anywhere (that is shell behaviour, and the caret sits at
     // the END after typing). A multi-line prompt only walks when the caret is already at the start, so
     // Up still moves between its lines first.
-    const singleLine = !String(box.value).includes("\n");
-    const atStart = box.selectionStart === 0 && box.selectionEnd === 0;
-    if ((singleLine && box.selectionStart === box.selectionEnd) || atStart || !box.value) {
+    const singleLine = !boxText.includes("\n");
+    const atStart = at === 0;
+    if (singleLine || atStart || !boxText) {
       if (recallSpawnPrompt(1)) {
         e.preventDefault();
         return;
@@ -9904,10 +9979,9 @@ $("job-prompt").addEventListener("keydown", (e) => {
     }
   }
   if (e.key === "ArrowDown" && !e.shiftKey) {
-    const box = e.target;
-    const singleLine = !String(box.value).includes("\n");
-    const atEnd = box.selectionStart === box.value.length && box.selectionEnd === box.value.length;
-    if ((singleLine && box.selectionStart === box.selectionEnd) || atEnd) {
+    const singleLine = !boxText.includes("\n");
+    const atEnd = at >= boxText.length;
+    if (singleLine || atEnd) {
       if (recallSpawnPrompt(-1)) {
         e.preventDefault();
         return;
@@ -9917,7 +9991,8 @@ $("job-prompt").addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   e.preventDefault();
   e.stopPropagation();
-  // Shift+Enter is a newline: a prompt is often more than one line.
+  // Shift+Enter is a newline: a prompt is often more than one line. It is inserted AT THE CARET, which is
+  // the only way a contenteditable host can be given one.
   if (e.shiftKey) {
     insertNewlineAtCaret(e.target);
     return;
@@ -9927,8 +10002,12 @@ $("job-prompt").addEventListener("keydown", (e) => {
 
 // Typing ends the history walk, so the next Up starts from whatever is in the box now.
 $("job-prompt").addEventListener("input", () => {
-  if (state.spawnNav) state.spawnNav = { back: 0, stash: $("job-prompt").value };
+  if (state.spawnNav) state.spawnNav = { back: 0, stash: readBox($("job-prompt")) };
 });
+// A chip-bearing draft this tab mirrored before a reload comes back into the box it belongs to (#job-prompt is
+// static markup, so it is restored once, here, not by any render path — the reply boxes restore themselves
+// through restoreTyping, and the assistant's intro box through its own render).
+restoreChipBoxes(document);
 $("btn-pause").addEventListener("click", () => {
   state.paused = !state.paused;
   $("btn-pause").textContent = state.paused ? "Resume" : "Pause";
@@ -10836,7 +10915,7 @@ document.addEventListener("input", (e) => {
 // A narrower window means fewer characters per line and more wrapped lines: re-measure what has content.
 window.addEventListener("resize", () => {
   for (const box of document.querySelectorAll(".reply-box, #job-prompt")) {
-    if (box.value) growBoxToDraft(box, box.id === "job-prompt" ? SPAWN_MAX_LINES : REPLY_MAX_LINES);
+    if (readBox(box)) growBoxToDraft(box, box.id === "job-prompt" ? SPAWN_MAX_LINES : REPLY_MAX_LINES);
   }
 });
 
@@ -10974,15 +11053,19 @@ document.addEventListener("keydown", async (e) => {
   }
   const box = e.target.closest && e.target.closest(".reply-box");
   if (!box) return;
-  // Up/Down walk the thread's previous prompts, shell style: only from the very start (Up) or the very
-  // end (Down) of the text, so the arrows still move the caret inside a multi-line reply.
+  // Up/Down walk the thread's previous prompts, shell style: only from the very start (Up) or the very end
+  // (Down) of the text, so the arrows still move the caret inside a multi-line reply. The text AND the caret
+  // are measured the way readBox measures them, so a chip counts as the text it swallowed and the arrows
+  // behave exactly as they do in a box of the same text typed by hand.
   // A box still showing a recalled entry keeps walking, with the caret wherever the recall left it; a box the
   // reader has typed into only steps at the very start (Up) or the very end (Down), so the arrows stay usable
   // inside a multi-line reply.
   const nav = state.replyNav.get(box.dataset.reply);
-  const recalled = Boolean(nav && nav.back > 0 && box.value === nav.current);
-  const atStart = box.selectionStart === 0 && box.selectionEnd === 0;
-  const atEnd = box.selectionStart === box.value.length && box.selectionEnd === box.value.length;
+  const boxText = readBox(box);
+  const at = caretOffset(box);
+  const recalled = Boolean(nav && nav.back > 0 && boxText === nav.current);
+  const atStart = at === 0;
+  const atEnd = at >= boxText.length;
   if (e.key === "ArrowUp" && !e.shiftKey && (atStart || (recalled && atEnd))) {
     e.preventDefault();
     recallReply(box, 1);
@@ -11011,7 +11094,7 @@ document.addEventListener("keydown", async (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     const thread = box.dataset.reply;
-    const text = (box.value || "").trim();
+    const text = readBox(box).trim();
     // Enter is the Queue reply button's gesture: while the card offers that button - a turn is running, or a
     // finished turn whose subagents are still out - the text is held for the next turn rather than sent into a
     // busy thread. With nothing to wait for there is nothing to hold, and Enter sends.
@@ -11136,15 +11219,17 @@ document.addEventListener("input", (e) => {
   const box = e.target.closest && e.target.closest(".reply-box");
   if (!box) return;
   const thread = box.dataset.reply;
-  state.replyDrafts[thread] = box.value;
+  // readBox: the draft is the text the box HOLDS, chips serialized back in place — which is what a send
+  // would post, and what a rebuild replays.
+  state.replyDrafts[thread] = readBox(box);
   // Editing a recalled prompt ends the walk: what is in the box is now the reader's draft, and the next Up
   // should start from the newest prompt again rather than from wherever the recall had got to.
   const nav = state.replyNav.get(thread);
-  if (nav && nav.current !== undefined && box.value !== nav.current) {
-    state.replyNav.set(thread, { back: 0, stash: box.value });
+  if (nav && nav.current !== undefined && readBox(box) !== nav.current) {
+    state.replyNav.set(thread, { back: 0, stash: readBox(box) });
   }
   const sent = state.justSent.get(thread);
-  if (sent && box.value.trim() !== sent.text) state.justSent.delete(thread);
+  if (sent && readBox(box).trim() !== sent.text) state.justSent.delete(thread);
 });
 
 // A link in agent output is opened by the panel, not by navigating: capture phase, so the row and agent

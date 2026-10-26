@@ -552,7 +552,7 @@ button.chip:active { transform: translateY(1px); }
 
 /* ---- new-agent form ---- */
 .form { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
-.form textarea {
+.form textarea, .form #job-prompt {
   width: 100%;
   background: var(--surface);
   color: var(--text);
@@ -562,6 +562,9 @@ button.chip:active { transform: translateY(1px); }
   font: 13px/1.45 var(--mono);
   resize: vertical;
 }
+/* Three lines tall, which is what rows="3" was on the textarea this used to be: growBoxToDraft reads the
+   same number off data-rows and takes it from here. */
+.form #job-prompt { min-height: 74px; overflow-y: auto; }
 .form .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .form label { color: var(--dim); font-size: 11.5px; display: flex; gap: 5px; align-items: center; font-family: var(--mono); }
 .form input[type="text"], .form input:not([type]) {
@@ -947,7 +950,7 @@ button.btn-retry:disabled { color: var(--dimmer); border-color: var(--line); cur
 .btn-fix-first:disabled { color: var(--dimmer); border-color: var(--line); cursor: default; }
 
 /* A document is being dragged over the box that will carry its path. */
-textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
+textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 
 /* a tool's own output, shown under its call so the console says what actually happened */
 .jl-tool-out { color: var(--dim); padding-left: 14px; white-space: pre-wrap; }
@@ -1312,8 +1315,35 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
   font: 12.5px/1.45 var(--ui);
   /* It sizes itself from the draft (see growReplyBox): a drag handle would be overruled on the next keystroke. */
   resize: none;
+  /* rows="2" on the textarea this used to be: two lines of text, this box's own padding (which includes the
+     34px the send buttons sit in — see .reply-wrap .reply-box) and its border. Then it grows itself. */
+  min-height: 79px;
 }
 .reply-box:focus { outline: none; border-color: #2b5480; }
+/* ---- a pasted block, collapsed into one inline chip ------------------------------------------------
+   The box is contenteditable — a textarea cannot hold an inline widget — and the chip is a non-editable
+   atom inside it, so the caret steps over it, Backspace deletes it whole, and nothing inside it is ever
+   editable. Inline-BLOCK is the point: that is what lets the reader put quotes around it and keep typing. */
+.chipbox { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; cursor: text; }
+/* A div has no placeholder attribute: an empty box says what it is for through :empty. */
+.chipbox:empty::before { content: attr(data-ph); color: var(--dimmer); pointer-events: none; }
+.paste-chip {
+  display: inline-block; vertical-align: baseline; max-width: 100%;
+  margin: 0 1px; padding: 0 4px; border: 1px solid #5a4a2a; border-radius: 4px;
+  background: #2c2617; color: #ffd479;
+  font: 11.5px/1.5 var(--mono); white-space: nowrap; user-select: none; cursor: pointer;
+}
+.paste-chip:hover { border-color: #8a6f33; background: #38301d; }
+/* Unfolded, the chip takes the line it is on and shows the whole paste: read-only, wrapped, scrollable. */
+.paste-chip.is-open { display: block; white-space: normal; margin: 4px 0; padding: 0 6px 6px; cursor: default; }
+.paste-chip .pc-x { display: inline-block; margin-left: 5px; padding: 0 3px; color: var(--dimmer); cursor: pointer; font-weight: 700; }
+.paste-chip .pc-x:hover { color: #ffb3b3; }
+.paste-chip .pc-body { margin-top: 3px; }
+.paste-chip .pc-text {
+  max-height: 26vh; overflow: auto; padding: 5px 6px; border-radius: 4px;
+  background: #1a1710; border: 1px solid #3b3220; color: var(--text);
+  font: 11.5px/1.45 var(--term); white-space: pre-wrap; user-select: text; cursor: text;
+}
 /* Send sits inside the input, bottom left: the reply is one gesture, so the control lives in the box
    it submits. The box keeps a bottom pad so typed text never runs under it. */
 .reply-wrap { position: relative; display: block; }
@@ -1652,7 +1682,7 @@ body.modal-open { overflow: hidden; }
 .job.maximized .turn { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .job.maximized .turn.folded { display: block; flex: 0 0 auto; }
 .job.maximized .job-out { max-height: none; flex: 1; min-height: 0; }
-.job.maximized .reply-box { min-height: 46px; }
+.job.maximized .reply-box { min-height: 79px; }
 .job-cmd, .job-out, .job-foot { margin-left: 18px; }
 /* The usage readout sits directly under the reply box, not above it and not at the foot of the card: it
    starts where the box starts and ends its line. No left margin of its own; the send/steer buttons are
@@ -1923,15 +1953,19 @@ button.btn-row-agent.is-probing { opacity: .55; cursor: progress; }
    the reader keeps reading the row they were on. The prompt goes to the New agent card on Enter - the field is a
    shortcut into that path, not a second spawn form. */
 .add-agent-form { display: flex; width: 100%; margin: 8px 0 2px; }
+/* The field is a chipbox (board/paste-chips.js) rather than an <input>: a pasted block collapses to a chip
+   here too. It keeps its single line — line-height is the box's height, and a short paste arrives with its
+   line breaks stripped, exactly as an <input> did with them. */
 .add-agent-input {
-  width: 100%; height: 47px; padding: 0 14px;
+  width: 100%; min-height: 47px; padding: 0 14px; box-sizing: border-box;
   background: var(--addbar, #215f35); color: #fff;
   border: 1px solid var(--addbar-edge, #2c8148); border-radius: 6px;
   box-shadow: inset 0 1px 0 #ffffff1f;
-  font: 500 13.5px/47px var(--mono);
+  font: 500 13.5px/47px var(--mono); white-space: nowrap; overflow: hidden;
   outline: none;
 }
-.add-agent-input::placeholder { color: #ffffffa6; }
+.add-agent-input:empty::before { color: #ffffffa6; }
+.add-agent-input .paste-chip { line-height: 1.6; vertical-align: middle; }
 .add-agent-input:focus { border-color: var(--addbar-hover-edge, #319051); box-shadow: inset 0 0 0 2px #ffffff2e; }
 .add-agent-input:disabled { opacity: .7; cursor: progress; }
 .branch { color: #c8d1dc; }
@@ -2179,7 +2213,8 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
   border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px;
   font: 11.5px/1.45 var(--term); resize: vertical;
 }
-.as-first textarea { min-height: 58px; }
+.as-first textarea, .as-first #as-first-text { min-height: 58px; }
+.as-first #as-first-text { display: block; white-space: pre-wrap; word-break: break-word; }
 .as-first-actions { display: flex; gap: 8px; align-items: center; }
 
 .as-empty { padding: 16px 14px; color: var(--dimmer); font-size: 12px; }
@@ -2299,7 +2334,7 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 #as-chat > .job > .job-body > .turn.folded { flex: 0 0 auto; }
 #as-chat > .job > .job-body > .turn:not(.folded) .out-wrap { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 34px; }
 #as-chat > .job > .job-body > .turn:not(.folded) .job-out { max-height: none; flex: 1; min-height: 0; }
-#as-chat > .job .reply-box { min-height: 46px; }
+#as-chat > .job .reply-box { min-height: 79px; }
 
 /* Which rules the assistant wrote for itself. The reader's rules are their own answers; these are proposals,
    marked so a wrong one is obvious and deletable without wondering where it came from. */
