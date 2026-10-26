@@ -14,9 +14,11 @@ import { worktreeList } from "./lib/project.js";
 import { Store } from "./lib/store.js";
 import { Scheduler } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
-import { Jobs, hermesHome, isLiveJobStatus, makeThreadName, previewRequest } from "./lib/jobs.js";
+// isLiveJobStatus is main's: the 429 hold asks whether a card's run is live before it re-arms the timer.
+// previewRequest is not: this commit moves both previewRequest call sites into lib/features/spawn.js, so
+// server.js has no use for the name any more — the import keeps their new name and drops the moved one.
+import { Jobs, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js";
 import { gitIn, scanWorktree } from "./lib/scan.js";
-import { resolveExistingTarget, resolutionNote } from "./lib/spawn-target.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE } from "./lib/tree-names.js";
@@ -35,6 +37,7 @@ import { Assistant, ASSISTANT_THREAD } from "./lib/assistant.js";
 import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./lib/subagents.js";
 import { thinkingFor } from "./lib/thinking.js";
 import { modelCatalogue, refreshModelCatalogue } from "./lib/hermes-models.js";
+import { createSpawn } from "./lib/features/spawn.js";
 // HTTP framing lives in lib/http/: transport.js knows about req/res and nothing about worktrees,
 // and static.js serves public/. Both are handed the state they used to read by closure.
 import { authorised, handleStream, readBody, readRawBody, sendJson } from "./lib/http/transport.js";
@@ -178,19 +181,6 @@ async function patchPanelConfig(patch) {
   await writeFile(CONFIG_PATH, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
 }
 
-// A worktree branches from HEAD, so a repo with no commits cannot host one. Refuse with a reason up
-// front instead of letting the run start in a tree that cannot exist.
-async function spawnBlocker(cwd, target) {
-  if (target?.empty) {
-    return `${target.name} has no commits yet (unborn HEAD), so a worktree cannot be created there — make an initial commit first.`;
-  }
-  const head = await gitIn(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"], 15000);
-  if (head.ok) return null;
-  const err = String(head.err || head.out || "");
-  if (/not a git repository/i.test(err)) return `${cwd} is not a git repository — an agent works in a worktree, which needs one.`;
-  return `${cwd} has no commits yet (unborn HEAD), so a worktree cannot be created there — make an initial commit first.`;
-}
-
 let config = await loadConfig();
 let pool = new Pool(config.threads);
 const store = new Store();
@@ -319,6 +309,17 @@ function gonePointers(id) {
 // the host decides. Nothing here can approve anything by itself.
 const approvals = new Approvals({ onEvent: broadcast });
 
+// ---- spawning ---------------------------------------------------------------------------
+// The New-agent card, its preview and the assistant's spawner all ask the same question, so they
+// ask it in one place (lib/features/spawn.js), named `spawnFeature` because node:child_process
+// already owns `spawn` in this module. The two answers that go stale are passed as getters:
+// /api/reload replaces `config` wholesale, and every registry refresh replaces the project array.
+const spawnFeature = createSpawn({
+  getConfig: () => config,
+  getProjects: () => registry.projects,
+  jobs,
+});
+
 // The sentry + the assistant's own thread. It reads the same job summaries the page does, so nothing
 // here can see more than the board shows; its own clock is `settings.seconds`. `spawner` is the one act it
 // can perform beyond talk: a worker, in a worktree the panel cuts, exactly the way the New-agent card does.
@@ -330,7 +331,7 @@ assistant = new Assistant({
   // delegated children the gateway keeps in `state.db`, which never reach a parent's run stream.
   getRows: () => [...store.rows.values()],
   getChildren: () => subagentRoster({ dbPath: path.join(hermesHome(), "state.db") }),
-  spawner: assistantSpawnRun,
+  spawner: spawnFeature.assistantSpawnRun,
   // The one act this module cannot perform itself: a RESTART line's gateway/panel restart, queued by
   // the controller and run only once the turn that asked for it has ended.
   onRestart: (spec) => restart.request(spec),
@@ -405,75 +406,6 @@ setInterval(() => {
       sweepingOrphans = false;
     });
 }, 15_000).unref?.();
-
-// Start a worker on the assistant's behalf. Deliberately the same mechanics as the New-agent card —
-// registry for the project, gateway probe before anything is promised, `git rev-parse`/`worktree add` in
-// lib/jobs.js — but with no dry run and no model field, so the worker runs on the gateway default rather
-// than on the small model the assistant itself uses.
-async function assistantSpawnRun(spec = {}) {
-  const prompt = String(spec.prompt || "").trim();
-  if (!prompt) throw new Error("a spawn needs a prompt");
-  const transport = await jobs.probe();
-  if (!transport.reachable || !transport.capabilities?.runs) {
-    throw new Error(`the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}`);
-  }
-  const target = spec.project
-    ? registry.projects.find((p) => p.name === spec.project)
-    : projectForPath(spec.target);
-  if (spec.existing) {
-    // An agent in a directory that already exists: no tree is cut, and the card attaches to the git top level.
-    // The directory named is not taken on trust any more: the panel renames a finished run's worktree directory
-    // AND its branch after the thread title, so the path an assistant wrote down when it watched that worker
-    // finish, or a reader typed from an older report, is one rename out of date while the tree stands. Resolve
-    // it against git's own worktree list (lib/spawn-target.js) — one match is used and named on the card,
-    // several are an error that lists them, none keeps the refusal this line always gave.
-    const res = await resolveExistingTarget({
-      target: spec.target || target?.path,
-      // A path inside a project is that project's business; a branch or a bare worktree name carries no path to
-      // place, so the registry is the search space.
-      project: target,
-      projects: registry.projects,
-      thread: spec.thread || null,
-    });
-    if (!res.ok) throw new Error(res.error);
-    const cwd = res.path;
-    const blocked = await spawnBlocker(cwd, null);
-    const top = await gitIn(cwd, ["rev-parse", "--show-toplevel"]);
-    const ownerPath = top.ok && top.out ? top.out : cwd;
-    const norm = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-    // A resolved tree can name a project the line itself never did (a branch is not a path), and that project is
-    // what decides whether this run stays in the project's own checkout rather than a branch of its own.
-    const home = target || registry.projects.find((p) => p.name === res.project) || null;
-    const note = resolutionNote(res);
-    return jobs.create({
-      prompt,
-      cwd,
-      existing: true,
-      ownerPath,
-      ownerPending: false,
-      baseCheckout: Boolean(home && norm(ownerPath) === norm(home.path)),
-      // The card says which tree a stale name resolved to, not just that something ran.
-      note: note ? `SPAWN IN ${note}` : null,
-      origin: {
-        kind: "assistant-spawn",
-        where: "existing",
-        ...(res.resolved ? { resolvedFrom: res.asked, resolvedPath: res.path, resolvedHow: res.how } : {}),
-      },
-    });
-  }
-  if (!target) throw new Error(`unknown project: ${spec.target || spec.project || "(none)"}`);
-  const blocked = await spawnBlocker(target.path, target);
-  if (blocked) throw new Error(blocked);
-  return jobs.create({
-    prompt,
-    cwd: target.path,
-    project: target.name,
-    existing: false,
-    // The worktree appears a moment later; adoptFromJob files the card under its own row when it does.
-    ownerPending: true,
-    origin: { kind: "assistant-spawn", project: target.name },
-  });
-}
 
 const settingsOut = () => ({
   version: VERSION,
@@ -801,7 +733,7 @@ async function autoNameWorktree(evt) {
   // agent's to take, even if a job ever carries a worktree path that resolves there.
   if (j.baseCheckout) return;
   if (!["done", "failed", "cancelled", "interrupted"].includes(String(j.status))) return;
-  const project = projectForPath(j.worktreePath);
+  const project = spawnFeature.projectForPath(j.worktreePath);
   if (!project) return;
   // The project's own checkout is the parent of every tree cut from it and keeps the folder's name.
   if (normPathKey(project.path) === normPathKey(j.worktreePath)) return;
@@ -839,21 +771,6 @@ async function autoNameWorktree(evt) {
     autoNamingInFlight.delete(key);
   }
 }
-
-// Which project a directory belongs to: the innermost project root that contains it (a project can be nested inside
-// another checkout), matched on a path boundary so `…/app-other` is not inside `…/app`.
-const projectForPath = (dir) => {
-  const key = normPathKey(dir);
-  if (!key) return null;
-  let best = null;
-  for (const proj of registry.projects) {
-    const root = normPathKey(proj.path);
-    if (!root) continue;
-    if (key !== root && !key.startsWith(`${root}/`)) continue;
-    if (!best || root.length > normPathKey(best.path).length) best = proj;
-  }
-  return best;
-};
 
 // Rows are written by the scheduler, so their copy of the panel-agent state is as old as that
 // row's last scan (45-90s on a big fleet). Overlay it at snapshot time: a turn starting or
@@ -1425,82 +1342,23 @@ const server = createServer(async (req, res) => {
     if (route === "/api/agents/preview" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
-      const target = body?.project ? registry.projects.find((p) => p.name === body.project) : null;
-      const cwd = body?.cwd || target?.path || config.defaultCwd;
-      const blocked = await spawnBlocker(cwd, target);
-      // The thread name carries a random suffix, so the preview shows its shape.
-      const req0 = previewRequest({
-        ...(body || {}),
-        thread: makeThreadName(body?.prompt || ""),
-        // A preview that hides the clarify hint is not a preview of what will be sent.
-        clarifyInstruction: jobs.clarify?.instruction?.() || "",
-      });
-      return sendJson(res, 200, { transport: jobs.transportInfo(), request: req0, cwd, project: target?.name || null, blocked, command: `POST ${jobs.api.url}${req0.path}\n${JSON.stringify(req0.body, null, 1)}` });
+      return sendJson(res, 200, await spawnFeature.previewPayload(body));
     }
 
     if (route === "/api/agents" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
-      const pickerTarget = body.project ? registry.projects.find((p) => p.name === body.project) : null;
-      if (body.project && !pickerTarget) return sendJson(res, 400, { error: `unknown project: ${body.project}` });
-      // The directory is the ground truth: a cwd inside a known project overrides a stale project picker, so a spawn
-      // aimed at one worktree can never be checked, filed or cut against another project.
-      const cwdProject = projectForPath(body.cwd);
-      if (cwdProject && body.project !== cwdProject.name) body.project = cwdProject.name;
-      const target = cwdProject || pickerTarget;
-      if (body.dryRun) {
-        const req0 = previewRequest({ ...body, clarifyInstruction: jobs.clarify?.instruction?.() || "" });
-        return sendJson(res, 200, { dryRun: true, project: body.project || null, transport: jobs.transportInfo(), request: req0, cwd: body.cwd || target?.path || config.defaultCwd, command: `POST ${jobs.api.url}${req0.path}\n${JSON.stringify(req0.body, null, 1)}` });
-      }
+      // Which project, and which directory: the directory is the ground truth, so a stale project
+      // picker is corrected here, before anything downstream reads it.
+      const aimed = spawnFeature.targetForSpawn(body);
+      if (!aimed.ok) return sendJson(res, 400, { error: aimed.error });
+      if (aimed.project !== undefined) body.project = aimed.project;
+      if (body.dryRun) return sendJson(res, 200, spawnFeature.dryRunPayload(body, aimed.target));
       // Refuse before promising a job: a stopped gateway or a missing key is the answer to "why did
       // nothing happen", not a card that says "starting" forever.
-      const transport = await jobs.probe();
-      if (!transport.reachable || !transport.capabilities?.runs) {
-        return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}` });
-      }
-      let cwd = body.cwd || target?.path || config.defaultCwd;
-      // "existing": run in a directory that is already there (a worktree you picked), so no
-      // worktree is created and the agent's edits land directly in that tree.
-      const existing = Boolean(body.existing);
-      // A directory that is already there is still the first answer, but a missing one is no longer the end of
-      // the request: the panel renames a finished run's worktree directory and its branch after the thread
-      // title, so a path this card was holding can be one rename out of date while the tree stands. Resolved
-      // against git's own worktree list — one match is used and named on the card, several list themselves,
-      // none keeps the refusal this endpoint always gave.
-      let picked = null;
-      if (existing) {
-        picked = await resolveExistingTarget({ target: cwd, project: cwdProject || pickerTarget, projects: registry.projects });
-        if (!picked.ok) return sendJson(res, 400, { error: picked.error, candidates: picked.candidates });
-        cwd = picked.path;
-      }
-      const blocked = await spawnBlocker(cwd, existing ? null : target);
-      if (blocked) return sendJson(res, 400, { error: blocked, blocked });
-      // Attach to the worktree the spawn actually runs in, not to the directory that was typed: a cwd
-      // inside `…/lib` is still the same worktree, and an owner path matching no row would show up as
-      // unattached even though it is sitting in a tree we know.
-      let ownerPath = null;
-      if (existing) {
-        const top = await gitIn(cwd, ["rev-parse", "--show-toplevel"]);
-        ownerPath = top.ok && top.out ? top.out : cwd;
-      }
-      // A spawn that stays in the project's own checkout is not "an existing worktree": the card should
-      // say so, because that is the difference between an agent working in a branch of its own and one
-      // editing the tree the reader has checked out.
-      const norm = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-      // A resolved tree can belong to a project the typed directory never named (a branch is not a path).
-      const home = (picked?.project ? registry.projects.find((p) => p.name === picked.project) : null) || cwdProject || null;
-      const baseCheckout = Boolean(existing && home && norm(ownerPath || cwd) === norm(home.path));
-      const note = picked ? resolutionNote(picked) : "";
-      const job = await jobs.create({
-        ...body,
-        cwd,
-        existing,
-        ownerPath,
-        ownerPending: !existing,
-        baseCheckout,
-        // The card says which tree a stale path resolved to, not just that something ran.
-        note: note ? `SPAWN IN ${note}` : null,
-      });
+      const linked = await spawnFeature.linkSpawn(body, aimed.target, aimed.cwdProject);
+      if (!linked.ok) return sendJson(res, linked.status, linked.payload);
+      const job = await jobs.create({ ...body, ...linked.fields });
       return sendJson(res, 202, { job });
     }
 
@@ -2216,7 +2074,7 @@ const server = createServer(async (req, res) => {
       if (!info || !info.isDirectory()) return sendJson(res, 404, { error: `no such directory: ${worktree}` });
       // A worktree can live anywhere (`git worktree add ../tree`), so a path outside the project's own root is not an
       // error by itself: the row's project is the hint, and git's own worktree list is the proof that the hint is real.
-      let project = projectForPath(worktree) || registry.projects.find((p) => normPathKey(p.path) === normPathKey(worktree));
+      let project = spawnFeature.projectForPath(worktree) || registry.projects.find((p) => normPathKey(p.path) === normPathKey(worktree));
       let trees = project ? await worktreeList(project.path).catch(() => []) : [];
       if (!project) {
         const hinted = registry.projects.find((p) => p.name === String(body.project || "").trim());
