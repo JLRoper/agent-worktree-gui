@@ -219,6 +219,12 @@
           <input id="stabilize-reorder" type="checkbox" checked>
         </label>
 
+        <label class="settings-row" for="rank-window" title="How far back the board looks when it decides what is busiest — one window for every liveness ranking: the worktree rows in a project, the projects in a folder, the folders, and the agent cards in a worktree. A thing's place is its average rate of liveness events over this window (a console line, a job starting or finishing, an approval), so anything being hammered sits at the top, a single line moves nothing, and anything that goes quiet slides down as its events age out. The orders are recomputed on the board-reorder clock, never on each event, and a thing must out-rate the one above it by at least one event a minute before it takes that slot. 300 s (5 minutes) is the default; longer is slower and steadier. Saved in this browser.">
+          <span>Rank window <span class="settings-info">ⓘ</span></span>
+          <input id="rank-window" type="number" inputmode="numeric" step="30" min="30" max="3600">
+          <span class="settings-unit mono">s</span>
+        </label>
+
         <label class="settings-row settings-gap" for="anchor-hover" title="The hover anchor: the card the pointer is moving over keeps its screen position while other cards above it grow. It lingers for the seconds beside it after the pointer stops. Off, hovering chooses nothing and the anchor falls through to the next rule. Saved in this browser.">
           <span>Hover anchor <span class="settings-info">ⓘ</span></span>
           <input id="anchor-hover" type="checkbox" checked>

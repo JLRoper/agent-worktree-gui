@@ -38,6 +38,20 @@ const SHOW_OLD_KEY = "wtgui.showOldProjects";
 // the segments of every box that carries one. Read ONCE, above `state`, so a box can be restored from it
 // the moment it is rendered — the same reason TREENAMES_KEY lives up here.
 const boxChips = loadPasteChipState();
+
+// The row ranking averages a row's liveness over a SLIDING WINDOW of the events it receives, instead of keying
+// on the single newest one. Declared above `state` because the state literal reads the saved window below, and a
+// const further down would still be in its temporal dead zone at that moment.
+const RANK_WINDOW_KEY = "wm.rankWindowSeconds";
+const RANK_WINDOW_DEFAULT = 300;   // seconds: the five minutes the reader asked for
+const RANK_WINDOW_MIN = 30;
+const RANK_WINDOW_MAX = 3600;
+const RANK_EVENT_CAP = 400;        // hard cap on one row's ring, so an eight-hour session cannot grow it
+// Hysteresis: a row takes the slot above it only when its smoothed rate beats that row's by this many events
+// PER MINUTE. One console line is 0.2/min over the default window, so it can never twitch the order; a row being
+// hammered clears the margin comfortably, and a row that has gone quiet yields as its events age out.
+const RANK_MARGIN_PER_MIN = 1;
+
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
   // "Console size" stays the baseline for every card. Kept in memory so a repaint does not undo it.
@@ -169,12 +183,28 @@ const state = {
   // the worktree that owns that agent is being worked in right now, without waiting for the next scan to notice.
   // Key = worktree row key -> ms of the newest event seen for it.
   eventLife: new Map(),
+
+  // The sliding window behind the ranking: row key -> ms timestamps of the liveness events it has received,
+  // oldest first, pruned by the window and capped at RANK_EVENT_CAP. Bounded on purpose - an eight-hour session
+  // must not grow it - and the only thing that decides a row's smoothed score.
+  eventWindows: new Map(),
+  // Row keys whose window has been seeded once from the life the row already carried (its own lastAliveAt /
+  // lastEdit / lastCommit and its jobs' turn starts and ends), so a reload is not a fresh-start scramble.
+  rankSeeded: new Set(),
+  // ...and the same for a project's own activityAt, so a project's window is seeded once too.
+  rankProjSeeded: new Set(),
+  // The ranked row order per project, as of the last reorder tick: arrays of row keys, so the hysteresis pass
+  // can compare a row against the slot it is trying to take. Rebuilt on the reorder clock, never per event.
+  rankOrder: new Map(),
   // One green pulse per second per row, not one per line: a streaming turn emits dozens of lines a second, and
   // re-adding the class for each of them is a style pass each and a row that never stops being green.
   lastEventFlashAt: new Map(),
   // Whether an arriving event flashes the row and its project. The life clock and the ring restart happen either
   // way; this only decides whether the board says it out loud. Settings > Board.
   eventFlash: loadAnchorFlag(EVENT_FLASH_KEY, true),
+
+  // How far back the row ranking averages, in seconds. A per-browser Display setting beside Flash time.
+  rankWindowSeconds: loadRankSeconds(),
   // The reader's attention, tracked beside the geometry: the card under a moving pointer, and the card last
   // clicked / focused / typed in. Either one, while it is on screen and recent, wins over the reading line.
   hoverThread: null,
@@ -7708,15 +7738,400 @@ function pulseProject(project) {
   sec._flashT = setTimeout(() => sec.classList.remove("flash"), flashProjectMs() + 40);
 }
 
+// ---- the sliding average every liveness ranking is built on -----------------------------------
+// A row's "life" used to be the moment of its LAST event, which is a maximum: one console line promoted the row to
+// the top and the next line demoted it. The same shape drove the projects in a folder (newest activity wins) and
+// the agent cards inside a worktree (newest turn first). All of them now average over a sliding window instead -
+// the events in the last RANK_WINDOW seconds, as a rate per minute - so something being hammered sits high, a
+// single line moves nothing, and a thing that goes quiet slides down as its events age out.
+//
+// ONE engine serves all of them. `pushEventLife(windowKey, at)` records an event against a namespaced key
+// ("row:...", "proj:...", "agent:..."), `rankScore` turns that window into events per minute, and
+// `tickRankedOrder` advances one scope's order by ONE adjacent swap per reorder tick, with hysteresis. It is
+// bounded: every ring is capped at RANK_EVENT_CAP and pruned by the window, so a long session cannot grow it.
+
+function lifeRowKey(rowKey) {
+  return `row:${rowKey}`;
+}
+function lifeProjKey(project) {
+  return `proj:${project}`;
+}
+function lifeAgentKey(thread) {
+  return `agent:${thread}`;
+}
+
+function rankWindowMs() {
+  const n = Number(state.rankWindowSeconds);
+  return (Number.isFinite(n) && n > 0 ? n : RANK_WINDOW_DEFAULT) * 1000;
+}
+
+// One liveness event against a window key. Events arrive in time order, so the ring stays sorted and the prune is
+// a splice off the front (amortised O(1) per event); the cap bounds it even under a flood.
+function pushEventLife(windowKey, at) {
+  if (!windowKey) return;
+  const t = Number(at);
+  if (!Number.isFinite(t)) return;
+  let arr = state.eventWindows.get(windowKey);
+  if (!arr) {
+    arr = [];
+    state.eventWindows.set(windowKey, arr);
+  }
+  arr.push(t);
+  const cutoff = t - rankWindowMs();
+  let i = 0;
+  while (i < arr.length && arr[i] <= cutoff) i++;
+  if (i) arr.splice(0, i);
+  if (arr.length > RANK_EVENT_CAP) arr.splice(0, arr.length - RANK_EVENT_CAP);
+}
+
+// How many of the window's events are still inside it. The ring is sorted, so this is a scan of at most
+// RANK_EVENT_CAP entries - read-only, so it is safe to call from a comparator.
+function rankWindowCount(windowKey, now) {
+  const arr = state.eventWindows.get(windowKey);
+  if (!arr || !arr.length) return 0;
+  const cutoff = now - rankWindowMs();
+  let i = 0;
+  while (i < arr.length && arr[i] <= cutoff) i++;
+  return arr.length - i;
+}
+
+// The smoothed score: events per minute across the window. One console line in the default 300 s window is
+// 0.2/min; a burst of twenty in ten seconds is 4/min.
+function rankScore(windowKey, now) {
+  return rankWindowCount(windowKey, now) / (rankWindowMs() / 60000);
+}
+
+// Drop everything that has aged out of the window, and the windows and orders of things that are gone, so a long
+// session does not grow with time or with the fleet.
+function pruneRankWindows(now) {
+  const cutoff = now - rankWindowMs();
+  const liveProjects = new Set();
+  for (const r of state.rows.values()) liveProjects.add(r.project);
+  for (const [key, arr] of [...state.eventWindows]) {
+    let i = 0;
+    while (i < arr.length && arr[i] <= cutoff) i++;
+    if (i) arr.splice(0, i);
+    if (!arr.length) state.eventWindows.delete(key);
+  }
+  for (const key of [...state.rankSeeded]) if (!state.rows.has(key)) state.rankSeeded.delete(key);
+  for (const name of [...state.rankProjSeeded]) if (!state.projects.has(name)) state.rankProjSeeded.delete(name);
+  for (const scope of [...state.rankOrder.keys()]) {
+    const gone = scope.startsWith("rows:")
+      ? !liveProjects.has(scope.slice(5))
+      : scope.startsWith("agents:")
+        ? !state.rows.has(scope.slice(7))
+        : scope === "projects"
+          ? !state.projects.size
+          : scope === "folders"
+            ? !$("projects")
+            : true;
+    if (gone) state.rankOrder.delete(scope);
+  }
+}
+
+// ---- one ranked sequence, advanced a tick at a time ---------------------------------------------
+// `ids` are a scope's members (row keys, project names, thread names). `ctx` answers, per id: its `tier` (a
+// primary key that applies at once), its `score` (the smoothed rate over its own window), its `recency` evidence
+// and a `path` for the final tie-break. The stored order lives in state.rankOrder under `scope`.
+
+function rankIdealOrder(ids, ctx) {
+  return [...ids].sort(
+    (x, y) =>
+      ctx.tier(x) - ctx.tier(y) ||
+      ctx.score(y) - ctx.score(x) ||
+      ctx.recency(y) - ctx.recency(x) ||
+      String(ctx.path(x)).localeCompare(String(ctx.path(y))),
+  );
+}
+
+function tickRankedOrder(scope, ids, ctx) {
+  const set = new Set(ids);
+  if (!set.size) {
+    state.rankOrder.delete(scope);
+    return [];
+  }
+  const prev = (state.rankOrder.get(scope) || []).filter((k) => set.has(k));
+  if (!prev.length) {
+    const order = rankIdealOrder([...set], ctx);
+    state.rankOrder.set(scope, order);
+    return order;
+  }
+  const order = prev.slice();
+  // A member that has just appeared gets a slot at the end; the pass below lets it climb as it proves itself.
+  for (const id of set) if (!order.includes(id)) order.push(id);
+  const beats = (down, up) => {
+    const td = ctx.tier(down);
+    const tu = ctx.tier(up);
+    if (td !== tu) return td < tu;
+    const sd = ctx.score(down);
+    const su = ctx.score(up);
+    if (sd > su + RANK_MARGIN_PER_MIN) return true;
+    if (su > sd + RANK_MARGIN_PER_MIN) return false;
+    // Within the margin of each other: the existing recency evidence decides, then the path.
+    const rd = ctx.recency(down);
+    const ru = ctx.recency(up);
+    if (rd !== ru) return rd > ru;
+    return String(ctx.path(down)).localeCompare(String(ctx.path(up))) < 0;
+  };
+  // ONE pass of adjacent swaps in which each member moves at most one slot, so a burst climbs a place a tick and a
+  // burst that stops slides a place a tick, instead of either leaping.
+  const moved = new Set();
+  for (let i = 0; i < order.length - 1; i++) {
+    const up = order[i];
+    const down = order[i + 1];
+    if (moved.has(up) || moved.has(down)) continue;
+    if (beats(down, up)) {
+      order[i] = down;
+      order[i + 1] = up;
+      moved.add(up);
+      moved.add(down);
+    }
+  }
+  state.rankOrder.set(scope, order);
+  return order;
+}
+
+// The ids in the stored order, with tiers still applied at once (a running agent must not wait for a tick) and
+// anything the tick has not seen yet falling to the ideal comparison. With no tick yet - a first paint - the
+// seeded ideal order IS the order, which is what makes a reload come back smoothed rather than scrambled.
+function orderedByRank(scope, ids, ctx) {
+  if (ids.length < 2) return ids;
+  if (!state.rankOrder.has(scope)) tickRankedOrder(scope, ids, ctx);
+  const order = state.rankOrder.get(scope) || [];
+  const pos = new Map(order.map((k, i) => [k, i]));
+  return [...ids].sort((a, b) => {
+    const ta = ctx.tier(a);
+    const tb = ctx.tier(b);
+    if (ta !== tb) return ta - tb;
+    const pa = pos.has(a) ? pos.get(a) : order.length;
+    const pb = pos.has(b) ? pos.get(b) : order.length;
+    if (pa !== pb) return pa - pb;
+    return ctx.score(b) - ctx.score(a) || ctx.recency(b) - ctx.recency(a) || String(ctx.path(a)).localeCompare(String(ctx.path(b)));
+  });
+}
+
+// ---- the contexts: what each scope ranks on ------------------------------------------------------
+// Rows inside a project: our own running agents first (rowTier, untouched), then the row's own window, then the
+// existing recency evidence (lastAliveAt, which an event does NOT move), then the path.
+function rowRankCtx(now) {
+  const rowOf = (key) => state.rows.get(key);
+  return {
+    tier: (key) => { const r = rowOf(key); return r ? rowTier(r) : 2; },
+    score: (key) => rankScore(lifeRowKey(key), now),
+    recency: (key) => { const r = rowOf(key); return r ? lifeAt(r) : Number.NEGATIVE_INFINITY; },
+    path: (key) => { const r = rowOf(key); return r ? r.path : key; },
+  };
+}
+
+// Projects in a folder: the existing tier (a project an agent is busy in leads), then the project's own window,
+// then its newest activity, then the name.
+function projectRankCtx(rank, now) {
+  const at = (name) => rank.get(name) || { tier: 2, activity: 0 };
+  return {
+    tier: (name) => at(name).tier,
+    score: (name) => rankScore(lifeProjKey(name), now),
+    recency: (name) => at(name).activity,
+    path: (name) => String(name),
+  };
+}
+
+// A folder ranks on its busiest project: the best tier, the best rate, the newest activity.
+function folderRankCtx(byRoot, rank, now) {
+  const cache = new Map();
+  const info = (root) => {
+    if (cache.has(root)) return cache.get(root);
+    let tier = 2;
+    let score = 0;
+    let recency = 0;
+    for (const name of byRoot.get(root) || []) {
+      const r = rank.get(name) || { tier: 2, activity: 0 };
+      tier = Math.min(tier, r.tier);
+      recency = Math.max(recency, r.activity);
+      score = Math.max(score, rankScore(lifeProjKey(name), now));
+    }
+    const v = { tier, score, recency };
+    cache.set(root, v);
+    return v;
+  };
+  return {
+    tier: (root) => info(root).tier,
+    score: (root) => info(root).score,
+    recency: (root) => info(root).recency,
+    path: (root) => String(root),
+  };
+}
+
+// Agent cards inside one worktree: no tier (a card is not a worktree), the thread's own window, then its newest
+// turn start, then the thread id so the order is total.
+function agentRankCtx(row, now) {
+  const byThread = new Map(agentsFor(row).map((c) => [c.thread, c]));
+  const started = (t) => {
+    const c = byThread.get(t);
+    return c ? Number(Date.parse(c.latest?.startedAt || "")) || 0 : 0;
+  };
+  return {
+    tier: () => 0,
+    score: (t) => rankScore(lifeAgentKey(t), now),
+    recency: (t) => started(t),
+    path: (t) => String(t),
+  };
+}
+
+// ---- seeding: the first paint is the smoothed order, not a fresh-start scramble -------------------
+// Seed one row's windows from the life it ALREADY carries - its own lastAliveAt / lastEdit / lastCommit and the
+// start or end of any of its jobs' turns - into the row's window, its project's window, and each job's own agent
+// window. Seeded once per row key.
+function seedRankWindows(row) {
+  if (!row) return;
+  const key = keyOf(row.project, row.path);
+  if (state.rankSeeded.has(key)) return;
+  state.rankSeeded.add(key);
+  const now = Date.now();
+  const cutoff = now - rankWindowMs();
+  const stamps = [];
+  const perAgent = new Map();
+  const add = (v) => {
+    const t = Date.parse(v || "");
+    if (Number.isFinite(t) && t > cutoff && t <= now) stamps.push(t);
+  };
+  add(row.lastAliveAt);
+  add(row.lastEdit);
+  add(row.lastCommit);
+  const path = normPath(row.path).toLowerCase();
+  for (const j of state.jobs.values()) {
+    if (normPath(j.ownerPath || "").toLowerCase() !== path) continue;
+    add(j.startedAt);
+    add(j.endedAt);
+    const thread = j.thread || j.id;
+    if (!thread) continue;
+    const arr = perAgent.get(thread) || [];
+    for (const v of [j.startedAt, j.endedAt]) {
+      const t = Date.parse(v || "");
+      if (Number.isFinite(t) && t > cutoff && t <= now) arr.push(t);
+    }
+    if (arr.length) perAgent.set(thread, arr);
+  }
+  stamps.sort((a, b) => a - b);
+  for (const t of stamps) {
+    pushEventLife(lifeRowKey(key), t);
+    pushEventLife(lifeProjKey(row.project), t);
+  }
+  for (const [thread, arr] of perAgent) {
+    arr.sort((a, b) => a - b);
+    for (const t of arr) pushEventLife(lifeAgentKey(thread), t);
+  }
+}
+
+// A project's own activity is life for its window too, once.
+function seedProjectRank(project) {
+  if (!project || !project.name || state.rankProjSeeded.has(project.name)) return;
+  state.rankProjSeeded.add(project.name);
+  const t = Date.parse(project.activityAt || "");
+  const now = Date.now();
+  if (Number.isFinite(t) && t > now - rankWindowMs() && t <= now) pushEventLife(lifeProjKey(project.name), t);
+}
+
+// ---- the ticks: the order moves here and nowhere else --------------------------------------------
+function tickRowScope(project, now = Date.now()) {
+  const ids = [...state.rows.values()].filter((r) => r.project === project).map((r) => keyOf(r.project, r.path));
+  return tickRankedOrder(`rows:${project}`, ids, rowRankCtx(now));
+}
+
+function tickAgentScopes(project, now = Date.now()) {
+  for (const row of state.rows.values()) {
+    if (row.project !== project) continue;
+    const key = keyOf(row.project, row.path);
+    const threads = agentsFor(row).map((c) => c.thread);
+    if (!threads.length) {
+      state.rankOrder.delete(`agents:${key}`);
+      continue;
+    }
+    tickRankedOrder(`agents:${key}`, threads, agentRankCtx(row, now));
+  }
+}
+
+function tickProjectScopes(now = Date.now()) {
+  const host = $("projects");
+  if (!host) return;
+  const ids = [...state.projects.keys()];
+  const rank = projectRanks();
+  tickRankedOrder("projects", ids, projectRankCtx(rank, now));
+  const byRoot = new Map();
+  for (const name of ids) {
+    const root = rootOf(state.projects.get(name)) || "";
+    const arr = byRoot.get(root) || [];
+    arr.push(name);
+    byRoot.set(root, arr);
+  }
+  const roots = [...host.querySelectorAll("section.root-group")].map((g) => g.dataset.root).filter(Boolean);
+  if (roots.length) tickRankedOrder("folders", roots, folderRankCtx(byRoot, rank, now));
+}
+
+// The whole board, on the reorder clock: prune, advance every liveness scope one tick, and re-apply the orders.
+// Nothing here runs per event, so a line arriving cannot shuffle anything.
+function tickLivenessRanks(now = Date.now()) {
+  pruneRankWindows(now);
+  const projects = new Set([...state.rows.values()].map((r) => r.project));
+  for (const name of projects) {
+    tickRowScope(name, now);
+    tickAgentScopes(name, now);
+    reorder(name);
+    reorderAgentCards(name);
+  }
+  tickProjectScopes(now);
+  reorderProjects();
+}
+
+// The ranked order for the rows a caller is about to draw or move. Age-hidden rows are ranked too, so a row that
+// comes back takes its slot rather than appearing at the bottom.
+function applyRowRank(rows) {
+  if (!rows.length) return rows;
+  const project = rows[0].project;
+  const byKey = new Map(rows.map((r) => [keyOf(r.project, r.path), r]));
+  const all = [...state.rows.values()].filter((r) => r.project === project).map((r) => keyOf(r.project, r.path));
+  const order = orderedByRank(`rows:${project}`, all, rowRankCtx(Date.now()));
+  return order.map((k) => byKey.get(k)).filter(Boolean);
+}
+
+// Re-apply the agent-card order inside one project's open rows, in place, so a tick moves the cards without
+// rebuilding a transcript. Stabilize reordering (with a card open) wins, exactly as it does for rows.
+function reorderAgentCards(project) {
+  for (const [key, dEl] of state.detailEls) {
+    const row = state.rows.get(key);
+    if (!row || row.project !== project) continue;
+    const block = dEl.querySelector(".agents-block");
+    if (!block) continue;
+    const cards = [...block.children].filter((el) => el.classList.contains("job") && el.dataset.thread);
+    if (cards.length < 2) continue;
+    if (stabilizeOn() && rowHasOpenCard(cards.map((c) => c.dataset.thread))) continue;
+    const order = orderedByRank(`agents:${key}`, cards.map((c) => c.dataset.thread), agentRankCtx(row, Date.now()));
+    const pos = new Map(order.map((t, i) => [t, i]));
+    const sorted = [...cards].sort((a, b) => (pos.get(a.dataset.thread) ?? order.length) - (pos.get(b.dataset.thread) ?? order.length));
+    if (sorted.every((el, i) => el === cards[i])) continue;
+    const anchor = [...block.children].find((el) => !(el.classList.contains("job") && el.dataset.thread)) || null;
+    beginDomMove();
+    for (const el of sorted) block.insertBefore(el, anchor);
+    endDomMove();
+  }
+}
+
 // An event about a worktree is a sign of life in its own right: the age number starts again, the ring (which counts
 // toward the next read) restarts from now, and the row and its project take the green pulse - unless the reader has
 // switched that pulse off. Returns true when the event belonged to a row, so a caller can tell the difference.
 function noteEventLife(thread) {
+  const now = Date.now();
+  // Every event is life for THREE windows: the agent card itself, the worktree row that owns it, and that row's
+  // project. An unattached agent still has its own card, so it still ranks - it just has no row to light up.
+  pushEventLife(lifeAgentKey(thread), now);
   const key = rowKeyForThread(thread);
   if (!key) return false;
-  const now = Date.now();
   if (now > (state.eventLife.get(key) || 0)) state.eventLife.set(key, now);
   const row = state.rows.get(key);
+  // ...and the row's and project's windows, which is what those two RANKINGS average. The orders themselves are
+  // recomputed on the reorder clock (tickLivenessRanks), never here: an event still stamps life, pulses the row
+  // and repaints the age cell exactly as it did before.
+  pushEventLife(lifeRowKey(key), now);
+  if (row && row.project) pushEventLife(lifeProjKey(row.project), now);
   const cell = document.querySelector(`td.age[data-key="${CSS.escape(key)}"]`);
   if (cell && row) paintAgeCell(cell, row);
   if (state.eventFlash) {
@@ -7824,14 +8239,19 @@ function saveAnchorFlag(key, on) {
   }
 }
 
-function loadAnchorSeconds(key, fallback, min = 1, legacyKey = null) {
+function loadAnchorSeconds(key, fallback, min = 1, legacyKey = null, max = 600) {
   try {
     const raw = localStorage.getItem(key) ?? (legacyKey ? localStorage.getItem(legacyKey) : null);
     const n = Number(raw);
-    return Number.isFinite(n) && raw !== null && n >= min && n <= 600 ? Math.round(n) : fallback;
+    return Number.isFinite(n) && raw !== null && n >= min && n <= max ? Math.round(n) : fallback;
   } catch {
     return fallback;
   }
+}
+
+// The row-ranking window. Saved in this browser like the other Display numbers, and read while `state` is built.
+function loadRankSeconds() {
+  return loadAnchorSeconds(RANK_WINDOW_KEY, RANK_WINDOW_DEFAULT, RANK_WINDOW_MIN, null, RANK_WINDOW_MAX);
 }
 
 function saveAnchorSeconds(key, seconds) {
@@ -8782,12 +9202,9 @@ function pinOpenProjects(body, prevNames) {
 
 function sortedProjects() {
   const rank = projectRanks();
-  const at = (p) => rank.get(p.name) || { tier: 2, activity: 0 };
-  return [...state.projects.values()].sort((a, b) => {
-    const ra = at(a);
-    const rb = at(b);
-    return ra.tier - rb.tier || rb.activity - ra.activity || String(a.name).localeCompare(String(b.name));
-  });
+  const ctx = projectRankCtx(rank, Date.now());
+  const byName = new Map([...state.projects.values()].map((p) => [p.name, p]));
+  return orderedByRank("projects", [...byName.keys()], ctx).map((n) => byName.get(n)).filter(Boolean);
 }
 
 // Re-order the board live, one folder at a time. Only the projects the reader has OPEN hold their
@@ -8816,21 +9233,22 @@ function reorderProjects() {
   const typing = captureTyping(host);
   beginDomMove();
   const rank = projectRanks();
-  const at = (n) => rank.get(n) || { tier: 2, activity: 0 };
-  const cmp = (x, y) => {
-    const a = at(x.dataset.project);
-    const b = at(y.dataset.project);
-    return a.tier - b.tier || b.activity - a.activity || String(x.dataset.project).localeCompare(String(y.dataset.project));
-  };
+  const ctx = projectRankCtx(rank, Date.now());
   // An open project keeps its exact slot — opening one is you saying "this is the one I am reading",
   // so it must not slide out from under the cursor. Everything closed sorts into the gaps around it:
-  // one open project is no reason to hold the rest of the folder still.
+  // one open project is no reason to hold the rest of the folder still. The order itself is the stored
+  // smoothed one, so a project climbs or slides a place a tick rather than jumping on its newest line.
   const order = (els) => {
     const open = new Map();
     els.forEach((el, i) => {
       if (state.expandedProjects.has(el.dataset.project)) open.set(i, el);
     });
-    const free = els.filter((el) => !state.expandedProjects.has(el.dataset.project)).sort(cmp);
+    const byName = new Map(els.map((el) => [el.dataset.project, el]));
+    const ranked = orderedByRank("projects", els.map((el) => el.dataset.project), ctx);
+    const free = ranked
+      .filter((n) => !state.expandedProjects.has(n))
+      .map((n) => byName.get(n))
+      .filter(Boolean);
     const out = [];
     let f = 0;
     els.forEach((_, i) => out.push(open.has(i) ? open.get(i) : free[f++]));
@@ -8847,24 +9265,21 @@ function reorderProjects() {
   // Then the folders themselves, on the same ranking: a folder holding the project an agent is busy
   // in leads, then the one worked in most recently.
   const groups = [...host.querySelectorAll("section.root-group")];
-  const folderRank = (g) => {
-    let tier = 2;
-    let act = 0;
-    for (const s of g.querySelectorAll("section.project")) {
-      const r = at(s.dataset.project);
-      tier = Math.min(tier, r.tier);
-      act = Math.max(act, r.activity);
-    }
-    return { tier, act };
-  };
+  // A folder's rate is its busiest project's, and it is ranked the same smoothed way, on the same clock.
+  const byRoot = new Map();
+  for (const name of state.projects.keys()) {
+    const root = rootOf(state.projects.get(name)) || "";
+    const arr = byRoot.get(root) || [];
+    arr.push(name);
+    byRoot.set(root, arr);
+  }
+  const groupByRoot = new Map(groups.map((g) => [g.dataset.root || "", g]));
+  const ranked = orderedByRank("folders", groups.map((g) => g.dataset.root || ""), folderRankCtx(byRoot, rank, Date.now()))
+    .map((r) => groupByRoot.get(r))
+    .filter(Boolean);
   // A folder you are reading a project in holds its slot for the same reason the project does: the
   // folder sliding up takes the open section with it, which looks exactly like the section itself jumping.
   const holdsOpen = (g) => [...g.querySelectorAll("section.project")].some((s) => state.expandedProjects.has(s.dataset.project));
-  const ranked = groups.slice().sort((a, b) => {
-    const ra = folderRank(a);
-    const rb = folderRank(b);
-    return ra.tier - rb.tier || rb.act - ra.act || String(a.dataset.root || "").localeCompare(String(b.dataset.root || ""));
-  });
   const pinnedGroups = new Map();
   groups.forEach((g, i) => { if (holdsOpen(g)) pinnedGroups.set(i, g); });
   const freeGroups = ranked.filter((g) => !pinnedGroups.has(groups.indexOf(g)));
@@ -9305,15 +9720,22 @@ function rowHasOpenCard(threads) {
   return threads.some((t) => !state.collapsedJobs.has(t));
 }
 
-// The order the cards in one row were last painted in, with anything new appended. A frozen list keeps this; a list
-// that is free to sort ignores it.
+// The order the cards in one row show in. With Stabilize reordering on and a card open they keep the slots they
+// already have on screen; otherwise they are ranked by the same sliding average as everything else - the thread's
+// own liveness over the window, so a chatty agent sits at the top of its row, a card with one line stays put, and
+// one that goes quiet slides down. A frozen list keeps its remembered order.
 function orderedAgents(row, agents) {
   const key = keyOf(row.project, row.path);
-  if (!stabilizeOn() || !rowHasOpenCard(agents.map((c) => c.thread))) return agents;
-  const last = state.agentOrder.get(key);
-  if (!last || !last.length) return agents;
-  const pos = new Map(last.map((t, i) => [t, i]));
-  return [...agents].sort((a, b) => (pos.get(a.thread) ?? last.length) - (pos.get(b.thread) ?? last.length));
+  if (!agents.length) return agents;
+  if (stabilizeOn() && rowHasOpenCard(agents.map((c) => c.thread))) {
+    const last = state.agentOrder.get(key);
+    if (!last || !last.length) return agents;
+    const pos = new Map(last.map((t, i) => [t, i]));
+    return [...agents].sort((a, b) => (pos.get(a.thread) ?? last.length) - (pos.get(b.thread) ?? last.length));
+  }
+  const byThread = new Map(agents.map((c) => [c.thread, c]));
+  const order = orderedByRank(`agents:${key}`, [...byThread.keys()], agentRankCtx(row, Date.now()));
+  return order.map((t) => byThread.get(t)).filter(Boolean);
 }
 
 // Remember what was just painted, so the next frozen paint has an order to keep.
@@ -9342,7 +9764,7 @@ function reorder(name) {
   const mine = [...state.rows.values()].filter((r) => r.project === name);
   // The order if nothing were pinned: our running agents first, then everything by how recently it
   // showed life. This is what "latest movement at the top" means once all the accordions are closed.
-  const ranked = orderRows([...mine]).map((r) => keyOf(name, r.path));
+  const ranked = applyRowRank([...mine]).map((r) => keyOf(name, r.path));
   // An open row keeps its exact slot — opening it is you saying "I am reading this". Everything closed
   // sorts into the gaps around it, exactly how closed projects sort around an open one in a folder.
   const slotKeys = [...tbody.children].filter((el) => el.classList.contains("row")).map((el) => el.dataset.key);
@@ -9475,6 +9897,7 @@ function placeRow(project, row, { flash = false } = {}) {
   const isNew = !state.rows.has(key);
   noteScan(row);
   state.rows.set(key, row);
+  if (isNew) seedRankWindows(row);
   // A worktree that has just appeared can adopt the agents that were waiting in the unattached panel:
   // their owner path now resolves to a row. (A `-w` spawn is owned seconds before its row exists.)
   if (isNew) {
@@ -9654,7 +10077,7 @@ function renderProjectRows(name, { typing = null } = {}) {
   // Rows older than the age threshold are not built at all: the chart draws what it is showing, and the arrow in the
   // legend below it is what brings the rest back (see rowAgeHidden). The ranking above still sees them, so a row that
   // comes back to life takes its place in the order the moment it is drawn again.
-  const rowsInOrder = orderRows([...state.rows.values()].filter((r) => r.project === name && !rowAgeHidden(r)));
+  const rowsInOrder = applyRowRank([...state.rows.values()].filter((r) => r.project === name && !rowAgeHidden(r)));
   if (stabilizeOn() && projectHasOpenRow(name) && prevRowKeys.length) {
     const pos = new Map(prevRowKeys.map((k, i) => [k, i]));
     rowsInOrder.sort(
@@ -9904,6 +10327,8 @@ function applySnapshot(data) {
   for (const p of incomingProjects) {
     seen.add(p.name);
     state.projects.set(p.name, p);
+    // A project's own activityAt seeds its window once, so the folder order is smoothed from the first paint.
+    seedProjectRank(p);
     const wts = Array.isArray(p.worktrees) ? p.worktrees : [];
     if (!wts.length) continue;
     for (const [k, r] of [...state.rows]) if (r.project === p.name) state.rows.delete(k);
@@ -9911,6 +10336,8 @@ function applySnapshot(data) {
       const row = { ...w, project: p.name };
       state.rows.set(keyOf(p.name, w.path), row);
       noteScan(row);
+      // Seed the ranking windows from the life the row already carries, so the first paint is smoothed.
+      seedRankWindows(row);
     }
   }
   // A snapshot is authoritative about WHICH projects exist: the server drops a project when it
@@ -11741,7 +12168,10 @@ function startReorderClock() {
   state.reorderTimer = every > 0
     ? setInterval(() => {
         if (document.hidden) return;
-        reorderProjects();
+        // Every liveness ranking - rows, their projects, their folders and the agent cards - advances on this
+        // same clock, never on an event: each order is recomputed a tick at a time, and this is the only place
+        // any of them moves.
+        tickLivenessRanks();
       }, every * 1000)
     : null;
 }
@@ -12482,6 +12912,35 @@ function saveReorderSetting(value) {
   paintReorderSetting(clamped === Math.round(n) ? "saved" : `saved, clamped to ${REORDER_MAX} s`);
 }
 
+// ---- how far back the row ranking averages ------------------------------------------------
+function paintRankWindow() {
+  const input = $("rank-window");
+  if (input && document.activeElement !== input) input.value = String(state.rankWindowSeconds);
+}
+
+function saveRankWindow(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) {
+    paintRankWindow();
+    showBanner(`Rank window left at ${state.rankWindowSeconds} s — give a number of seconds`);
+    return;
+  }
+  // The window is shared by every liveness ranking: it is one answer to one question, how far back the board
+  // looks when it decides what is busiest.
+  const clamped = Math.max(RANK_WINDOW_MIN, Math.min(RANK_WINDOW_MAX, Math.round(n)));
+  try {
+    localStorage.setItem(RANK_WINDOW_KEY, String(clamped));
+  } catch {
+    /* private mode: the choice just will not persist */
+  }
+  state.rankWindowSeconds = clamped;
+  // An explicit change re-reads the evidence at once rather than easing over ticks: the reader asked for it.
+  state.rankOrder.clear();
+  tickLivenessRanks();
+  paintRankWindow();
+  showNote(`Rank window ${clamped} s — every liveness ranking (rows, projects, folders, agent cards) now averages over the last ${clamped} s`);
+}
+
 // ---- how many sessions the CLI's picker lists ------------------------------------------------
 // Not a panel preference and not a retention policy: the store keeps every session, and this is the
 // number the CLI's in-chat browser used to hardcode. It writes `sessions.list_limit`, which only the
@@ -12778,6 +13237,8 @@ function paintAnchorSettings() {
   if (touch) touch.checked = state.anchorTouch;
   if (touchSeconds) touchSeconds.value = String(state.anchorTouchSeconds);
   if (flash) flash.value = String(state.flashSeconds);
+  const rankWindow = $("rank-window");
+  if (rankWindow && document.activeElement !== rankWindow) rankWindow.value = String(state.rankWindowSeconds);
   if (eventFlash) eventFlash.checked = state.eventFlash;
   if (scanMode) scanMode.value = state.settings?.scanMode === "visible" ? "visible" : "all";
   applyFlashTime();
@@ -12930,6 +13391,17 @@ for (const b of document.querySelectorAll("[data-reorder-set]")) {
     if (input) input.value = String(reorderSeconds());
   });
 }
+
+// The rank window: a number of seconds, saved in this browser like the other Display rows.
+$("rank-window")?.addEventListener("change", (e) => saveRankWindow(e.target.value));
+$("rank-window")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    saveRankWindow(e.target.value);
+    e.target.blur();
+  }
+});
+paintRankWindow();
 startReorderClock();
 paintReorderSetting();
 
