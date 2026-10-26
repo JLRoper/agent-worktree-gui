@@ -1836,7 +1836,6 @@ const server = createServer(async (req, res) => {
       if (!thread) return sendJson(res, 400, { error: "thread is required" });
       const from = Number(url.searchParams.get("from"));
       const to = Number(url.searchParams.get("to"));
-      const { hermesHome } = await import("./lib/jobs.js");
       return sendJson(res, 200, {
         thread,
         blocks: thinkingFor(thread, {
@@ -1857,7 +1856,6 @@ const server = createServer(async (req, res) => {
       // that silently stops halfway through a longer run.
       const limit = Math.max(1, Math.min(60, Number(url.searchParams.get("n")) || 20));
       if (!thread || !tool) return sendJson(res, 400, { error: "thread and tool are required" });
-      const { hermesHome } = await import("./lib/jobs.js");
       const { toolResults } = await import("./lib/tool-results.js");
       const results = toolResults({ dbPath: path.join(hermesHome(), "state.db"), sessionId: thread, tool, from, to, limit });
       return sendJson(res, 200, { thread, tool, results });
@@ -1869,7 +1867,6 @@ const server = createServer(async (req, res) => {
       if (!thread) return sendJson(res, 400, { error: "thread is required" });
       const from = Number(url.searchParams.get("from"));
       const to = Number(url.searchParams.get("to"));
-      const { hermesHome } = await import("./lib/jobs.js");
       const out = collectPrompt(thread, {
         dbPath: path.join(hermesHome(), "state.db"),
         from: Number.isFinite(from) ? from : 0,
@@ -1883,7 +1880,6 @@ const server = createServer(async (req, res) => {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const session = String(url.searchParams.get("session") || "").trim();
       if (!session) return sendJson(res, 400, { error: "session is required" });
-      const { hermesHome } = await import("./lib/jobs.js");
       const out = childTranscript(session, { dbPath: path.join(hermesHome(), "state.db") });
       if (!out) return sendJson(res, 404, { error: "no such session" });
       return sendJson(res, 200, out);
@@ -1909,7 +1905,6 @@ const server = createServer(async (req, res) => {
       const job = jobs.firstOfThread(thread);
       const sessionId = job && job.sessionId;
       if (!sessionId) return sendJson(res, 404, { error: `no session recorded for ${thread}`, calls: [] });
-      const { hermesHome } = await import("./lib/jobs.js");
       const { recentToolCalls } = await import("./lib/tool-calls.js");
       const calls = recentToolCalls({
         dbPath: path.join(hermesHome(), "state.db"),
@@ -1930,7 +1925,6 @@ const server = createServer(async (req, res) => {
       const thread = String(url.searchParams.get("thread") || "").trim();
       // Children the run delegated: their sessions, their state and the last thing each one did. Polled while a
       // card is working, because the gateway does not put a child's work on the parent's event stream.
-      const { hermesHome } = await import("./lib/jobs.js");
       const dbPath = path.join(hermesHome(), "state.db");
       return thread
         ? sendJson(res, 200, { thread, subagents: subagentsFor(thread, { dbPath }) })
