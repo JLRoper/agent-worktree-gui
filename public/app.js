@@ -9329,11 +9329,20 @@ function todoBlockHtml(row, key) {
     .map((item) => {
       const editing = draft && draft.id === item.id;
       const glyph = TODO_GLYPH[item.status] || "?";
-      const who = [item.owner ? `owner ${item.owner}` : null, item.by ? `by ${item.by}` : null, todoAge(item.ageMs) ? `${todoAge(item.ageMs)} ago` : null]
-        .filter(Boolean)
-        .join(" · ");
-      const note = item.note ? `<span class="todo-note dim">${esc(item.note)}</span>` : "";
-      const files = (item.files || []).length ? `<span class="todo-files dimmer mono">${esc(item.files.join(" "))}</span>` : "";
+      // The facts about the item, ONE PER BULLET, as a nested list under its line. They used to be a single string
+      // ridden to the far right of a full-width line (`margin-left:auto`), so on a 1,400px row the owner and age sat a
+      // screen away from the words the reader was reading and both ends needed a zoomed-out browser. The fields are the
+      // store's own (lib/todos.js): owner, by, the age since it last changed, plus the optional note and files.
+      const age = todoAge(item.ageMs);
+      const facts = [];
+      if (item.owner) facts.push(`<li class="todo-fact" data-todo-fact="owner"><span class="todo-fact-label">owner</span> ${esc(item.owner)}</li>`);
+      if (item.by) facts.push(`<li class="todo-fact" data-todo-fact="by"><span class="todo-fact-label">by</span> ${esc(item.by)}</li>`);
+      if (age) facts.push(`<li class="todo-fact" data-todo-fact="updated"><span class="todo-fact-label">updated</span> ${esc(age)} ago</li>`);
+      if (item.note) facts.push(`<li class="todo-fact todo-note dim" data-todo-fact="note">${esc(item.note)}</li>`);
+      if ((item.files || []).length) facts.push(`<li class="todo-fact todo-files dimmer mono" data-todo-fact="files">${esc(item.files.join(" "))}</li>`);
+      const factsHtml = facts.length
+        ? `<ul class="todo-meta todo-facts mono" aria-label="who touched TODO #${item.id}, and when">${facts.join("")}</ul>`
+        : "";
       const text = editing
         ? `<input class="todo-edit" type="text" maxlength="400" data-todo-edit="${item.id}" data-todo-key="${esc(key)}" value="${esc(draft.text)}" aria-label="edit TODO #${item.id}">
            <button type="button" class="todo-btn on" data-todo-op="edit-save" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="save this item">save</button>
@@ -9346,13 +9355,15 @@ function todoBlockHtml(row, key) {
            <button type="button" class="todo-btn" data-todo-op="done" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="mark it done">✓</button>
            <button type="button" class="todo-btn" data-todo-op="drop" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="drop it — it no longer applies">⊘</button>
            ${item.status === "done" || item.status === "dropped" ? `<button type="button" class="todo-btn" data-todo-op="reopen" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="reopen it — back to todo">↺</button>` : ""}`;
+      // The LINE is unchanged — glyph, id, its words, its controls, in that order — and the facts hang under it.
       return `<li class="todo-item todo-${esc(item.status)}" data-todo-item="${item.id}">
-        <span class="todo-glyph" title="${esc(item.status)}">${glyph}</span>
-        <span class="todo-id mono dimmer">#${item.id}</span>
-        ${text}
-        ${actions}
-        <span class="todo-meta mono dimmer">${esc(who)}</span>
-        ${note}${files}
+        <div class="todo-line">
+          <span class="todo-glyph" title="${esc(item.status)}">${glyph}</span>
+          <span class="todo-id mono dimmer">#${item.id}</span>
+          ${text}
+          ${actions}
+        </div>
+        ${factsHtml}
       </li>`;
     })
     .join("");
