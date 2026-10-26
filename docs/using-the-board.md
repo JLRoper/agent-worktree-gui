@@ -263,8 +263,11 @@ Click a row to expand it. The detail is built not to bury the agents:
 
 - **Merge state** — folded to one line (`ON MAIN · branch main · 2 untracked · last commit 6m ago`). Open it for the
   full list: ancestor of remote main, cherry counts, branch reflog, whether the branch ever carried its own commits,
-  the remote branch, and columns for **Modified**, **Untracked** and **Commits not on remote main** with the diff
-  summary.
+  the remote branch, and then **every commit not on remote main** — one per line, short sha and subject, the full
+  width of the row, all of them however many there are (the list extends and the panel scrolls; nothing is clipped)
+  — under a heading carrying the diff summary. **Modified** and **Untracked** sit under that as one-line strips with
+  their counts: open either one to see its file names, and each folds on its own, without moving the other or the
+  strip the two of them sit in. A tree with nothing unmerged, or a clean one, shows no empty strip.
 - **Liveness evidence** — folded, with its strongest line still visible on the header. Open it to see why the row is
   live, or why it is not.
 - **Agents** — the cards owned by this worktree, each moved into place rather than rebuilt, so a running console keeps

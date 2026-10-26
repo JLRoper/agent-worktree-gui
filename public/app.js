@@ -177,6 +177,9 @@ const state = {
   turnCompact: new Set(),
   turnPage: new Map(), // thread -> how many pages of turns back from the newest (0 = newest page)
   gitOpen: new Set(), // row key -> the git/commit/diff accordion is unfolded
+  // row key + "::modified" / "::untracked" -> that one file-list strip inside merge state is unfolded. A Set of its
+  // own, so a strip opens and closes without touching the merge state strip around it or its sibling.
+  gitSubOpen: new Set(),
   pinnedTurns: new Set(), // turn id -> starred, so it also shows above the paged turns
   liveOpen: new Set(), // row key -> the liveness-evidence block is unfolded
   maximized: null, // thread id of the conversation pulled out to fill the window
@@ -7552,28 +7555,63 @@ function fillAgentSlots(root, reuse) {
   }
 }
 
+// One file-list strip inside merge state: a one-line head carrying its count, its names folded away until the
+// reader opens it. The fold's own key is the row's key plus the kind, so the two strips of a row (and the merge
+// state strip around them) each open and close on their own. Nothing is emitted for an empty list, so a clean
+// tree has no strips at all rather than two empty ones.
+function gitSubHtml(key, kind, title, count, items) {
+  const subKey = `${key}::${kind}`;
+  const open = state.gitSubOpen.has(subKey);
+  const what = kind === "modified" ? "changed" : "untracked";
+  return `<div class="git-sub${open ? "" : " collapsed"}" data-git-sub="${esc(subKey)}">
+        <div class="git-sub-head" data-toggle-git-sub="${esc(subKey)}" title="${open ? "fold" : "unfold"} the ${count} ${what} file${count === 1 ? "" : "s"}">
+          <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
+          <h4>${esc(title)} (${count})</h4>
+        </div>
+        <ul>${items.join("")}</ul>
+      </div>`;
+}
+
 function detailHtml(row) {
-  const parts = [];
   const dirty = row.dirtyFiles || [];
   const untr = row.untrackedFiles || [];
   const commits = row.unmergedCommits || [];
+  const pm = state.projects.get(row.project) || {};
+  // The key is what the folds in this row are remembered by (state.gitOpen, state.gitSubOpen), and the commit and
+  // file strips below are built before the rest of the row, so it is taken here rather than further down.
+  const key = keyOf(row.project, row.path);
+  // The commits this tree carries off remote main are the reason the row is worth opening, so they are a list of
+  // their own: full width of the row, one commit per line, and nothing is dropped when the list is long — the list
+  // extends and the panel scrolls, it is never clipped. It used to be one of three columns in a flex row, where a
+  // long commit list was cut off and a long file list was squeezed into 300px beside its neighbours.
+  const commitsBlock = commits.length
+    ? `<div class="git-commits">
+        <h4>Commits not on ${esc(pm.remoteRef || "remote main")}${row.diffSummary ? ` · ${esc(row.diffSummary)}` : ""}</h4>
+        <ul class="git-commits-list">${commits
+          .map((c) => `<li><span class="dimmer">${esc(c.sha)}</span> ${esc(c.subject)}</li>`)
+          .join("")}</ul>
+      </div>`
+    : "";
+  // Modified and Untracked were the other two columns of that flex row, and a tree with forty changed files turned
+  // into a wall of names above its agents. Each is a one-line strip now, carrying its count, and its names stay
+  // folded away until the reader opens it. A clean tree, or one with nothing unmerged, simply has no strips here.
+  const subStrips = [];
   if (dirty.length) {
-    parts.push(`<div class="col"><h4>Modified (${dirty.length})</h4><ul>${dirty.map((f) => `<li><span class="dimmer">${esc(f.code)}</span> ${esc(f.path)}</li>`).join("")}</ul></div>`);
+    subStrips.push(
+      gitSubHtml(
+        key,
+        "modified",
+        "Modified",
+        dirty.length,
+        dirty.map((f) => `<li><span class="dimmer">${esc(f.code)}</span> ${esc(f.path)}</li>`),
+      ),
+    );
   }
   if (untr.length) {
-    parts.push(`<div class="col"><h4>Untracked (${untr.length})</h4><ul>${untr.map((f) => `<li>${esc(f)}</li>`).join("")}</ul></div>`);
-  }
-  const pm = state.projects.get(row.project) || {};
-  if (commits.length) {
-    parts.push(
-      `<div class="col"><h4>Commits not on ${esc(pm.remoteRef || "remote main")}${row.diffSummary ? ` · ${esc(row.diffSummary)}` : ""}</h4><ul>${commits
-        .map((c) => `<li><span class="dimmer">${esc(c.sha)}</span> ${esc(c.subject)}</li>`)
-        .join("")}</ul></div>`,
-    );
+    subStrips.push(gitSubHtml(key, "untracked", "Untracked", untr.length, untr.map((f) => `<li>${esc(f)}</li>`)));
   }
   // The git side of the row (state, commit list, dirty files, diff summary) folds into one line:
   // opening a worktree is about seeing its agents and what is unmerged, not a wall of file names.
-  const key = keyOf(row.project, row.path);
   // Liveness evidence folds too; collapsed, its strongest line stays visible to the right of the
   // header, because "why is this row live" is the one thing worth seeing without unfolding.
   const liveLines = livenessLines(row);
@@ -7701,7 +7739,8 @@ function detailHtml(row) {
           <li class="git-summary-line">${esc(gitSummary)}</li>
           ${metaItems.map((m) => `<li>${m}</li>`).join("")}
         </ul>
-        ${parts.length ? `<div class="cols">${parts.join("")}</div>` : ""}
+        ${commitsBlock}
+        ${subStrips.join("")}
       </div>
     </div>
     ${liveBlock}
@@ -9883,6 +9922,26 @@ document.addEventListener("click", async (e) => {
       const chev = gitToggle.querySelector(".chev");
       if (chev) chev.textContent = open ? "\u25b8" : "\u25be";
       gitToggle.title = `${open ? "unfold" : "fold"} the git, commit and diff detail`;
+    }
+    return;
+  }
+  // The Modified / Untracked strips inside merge state fold on their own: each flips just its own class and its own
+  // chevron, so one opens without touching the merge state strip around it or its sibling, and nothing in the row
+  // is rebuilt (which would cost the agent cards their consoles and the reader their scroll position).
+  const subToggle = e.target.closest("[data-toggle-git-sub]");
+  if (subToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    const subKey = subToggle.dataset.toggleGitSub;
+    const sub = document.querySelector(`[data-git-sub="${CSS.escape(subKey)}"]`);
+    if (sub) {
+      const open = state.gitSubOpen.has(subKey);
+      if (open) state.gitSubOpen.delete(subKey);
+      else state.gitSubOpen.add(subKey);
+      sub.classList.toggle("collapsed", open);
+      const chev = subToggle.querySelector(".chev");
+      if (chev) chev.textContent = open ? "\u25b8" : "\u25be";
+      subToggle.title = `${open ? "unfold" : "fold"} the ${subKey.endsWith("::modified") ? "changed" : "untracked"} files`;
     }
     return;
   }
