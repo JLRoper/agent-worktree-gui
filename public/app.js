@@ -136,6 +136,10 @@ const state = {
   // The individual calls behind a collapsed "+ N commands" batch, once the reader has asked for them:
   // "<burst id>|<tool>" -> [{ name, summary }] read from the session transcript.
   batchCalls: new Map(),
+  // Which code boxes (a file's body, folded by default) the reader has opened: "<burst id>|<segment>|<at>".
+  // Kept here for the same reason toolGroupOpen is — every rebuild replaces the console's markup, and a box
+  // that snapped shut under the reader's cursor would read as the panel losing the click.
+  codeBoxOpen: new Set(),
   // Events are life. A line arriving in an agent's console, a job starting or ending, an approval: each one proves
   // the worktree that owns that agent is being worked in right now, without waiting for the next scan to notice.
   // Key = worktree row key -> ms of the newest event seen for it.
@@ -879,6 +883,13 @@ function turnSeqOf(j) {
 // so the arrow is optional and the glyph run is skipped before the name is taken.
 const TOOL_START_RE = /^(?:▸\s*)?(?:[\p{Extended_Pictographic}\uFE0F\u200D]+\s*)?([^\s·]+)/u;
 const TOOL_DONE_RE = /^\s*↳\s*([^\s·]+)/;
+// The argument a call line carries ("📖 read_file · docs/map.md"): what the tool was given. The console's own
+// rows use it, and a file's code box names the file from it.
+const toolCallArg = (text) => {
+  const s = String(text || "");
+  const sep = s.indexOf(" · ");
+  return sep >= 0 ? s.slice(sep + 3) : "";
+};
 
 // Index of the started tool call that has no result yet, or -1. Parallel calls interleave, so count
 // starts and completions per tool name rather than assuming the last line is the running one.
@@ -945,8 +956,12 @@ function isBookkeeping(l) {
 // A run of tool calls with nothing said in between is one burst. The console draws it as one row per tool with a
 // tally and the input of the last call - what the agent is doing, not every instance of it - while the full lines
 // stay one click away. Text ends the burst: the next tool call starts a fresh tally at that point in the transcript.
+// One console line. data-ltext/data-lkind carry the line itself rather than what it renders to, because a
+// burst rebuild reads the lines back out of the DOM (groupLines): a link, a running clock or a diff window's
+// markup must not change what the next render believes the line said.
 function lineHtml(l, live = "") {
-  return `<div class="jl jl-${esc(l.kind || "raw")}" data-lid="${esc(l.lid ?? "")}">${linkifyText(l.text)}${live}</div>`;
+  const kind = l.kind || "raw";
+  return `<div class="jl jl-${esc(kind)}" data-lid="${esc(l.lid ?? "")}" data-ltext="${esc(l.text ?? "")}" data-lkind="${esc(kind)}">${linkifyText(l.text)}${live}</div>`;
 }
 
 function burstGroups(lines) {
@@ -1033,8 +1048,11 @@ function groupLines(grp) {
   return [...grp.querySelectorAll(".tgrp-body .jl")]
     .filter((d) => !d.classList.contains("jl-store") && !d.classList.contains("jl-note") && !d.classList.contains("jl-panel"))
     .map((d) => ({
-      kind: (d.className.match(/jl-([a-z-]+)/) || [])[1] || "raw",
-      text: d.textContent,
+      // The line's own text, not the rendered text: a diff window draws one row per change and a code box
+      // holds its lines folded, and neither may cost the rebuild a line or invent one (the carried file label
+      // is not a .jl for exactly that reason).
+      kind: d.dataset.lkind || (d.className.match(/jl-([a-z-]+)/) || [])[1] || "raw",
+      text: d.dataset.ltext != null ? d.dataset.ltext : d.textContent,
     }));
 }
 
@@ -1264,8 +1282,9 @@ function linkBatchTail(text, tool, gkey) {
 
 function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", gofs = null) {
   const rows = toolBurstRows(lines);
-  // No recognisable call lines (a result whose start was trimmed away): show the plain lines rather than an empty box.
-  if (!rows.length) return lines.map((l) => lineHtml(l)).join("");
+  // No recognisable call lines (a result whose start was trimmed away): show the lines rather than an empty
+  // box. They still go through the one renderer, so a diff in a burst whose call lines were trimmed is a diff.
+  if (!rows.length) return consoleBodyHtml(lines, { tool: "", arg: "", codeOpen: state.codeBoxOpen, codeKey: String(key) });
   // The reader's own choice wins over the caller's default: a rebuild is not the reader closing the block.
   const gkey = toolGroupStateKey(key, lines, anchor);
   const saved = state.toolGroupOpen.get(gkey);
@@ -1310,30 +1329,53 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
     cursors.set(tool, i + 1);
     return rowsOut[i] || null;
   };
-  const storedHtml = (got) => {
+  const storedHtml = (got, tool = "", arg = "", boxKey = "") => {
     const all = String(got.text || "").split(LF);
     const cut = got.truncated && !/characters not shown/.test(got.text || "");
     if (!all.some((l) => l.trim())) return cut ? '<div class="jl jl-dim jl-note">  this result was cut before its text</div>' : "";
     const shown = all.slice(0, STORE_LINES);
     const more = all.length - shown.length;
     return (
-      shown.map((l) => `<div class="jl jl-store">${linkifyText(l)}</div>`).join("") +
+      // The stored rows are the tool's output, so they go through the same renderer the live preview does: a
+      // patch's diff is usually ONLY here (the run stream's preview for patch/write_file is empty on this
+      // gateway), and it must not be the one console path that draws a diff as plain lines.
+      consoleBodyHtml(
+        shown.map((l) => ({ kind: "store", text: l })),
+        { tool, arg, codeOpen: state.codeBoxOpen, codeKey: boxKey },
+      ) +
       (more > 0 ? `<div class="jl jl-dim jl-note">… ${more} more line(s) of this result</div>` : "") +
       (cut ? `<div class="jl jl-dim jl-note">… this result was cut</div>` : "")
     );
   };
+  // What the call behind a result was given: the burst's own call line carries it ("📖 read_file · docs/map.md"),
+  // and that argument is what a code box's header names the file from. Read from the lines the group was built
+  // with, so a rebuild from the DOM reads the same call line.
+  const callArgFor = (seg) => {
+    const at = lines.indexOf(seg.lines[0]);
+    for (let k = (at < 0 ? lines.length : at) - 1; k >= 0; k--) {
+      const l = lines[k];
+      if (l.kind !== "tool") continue;
+      const m = TOOL_START_RE.exec(String(l.text || ""));
+      if (m && m[1] === seg.tool) return toolCallArg(l.text);
+    }
+    return "";
+  };
   // A block that starts with a result header is a call's output; anything else is a call itself.
   const resultHead = (seg) => (seg.lines[0] && seg.lines[0].kind === "tool-out" ? TOOL_DONE_RE.exec(String(seg.lines[0].text || "")) : null);
   const liveTurn = turnLive(state.jobs.get(turnId));
-  const bodyOf = (seg) => {
-    const out = seg.lines.map((l) => lineHtml(l)).join("");
+  const bodyOf = (seg, si) => {
+    const arg = callArgFor(seg);
+    // One key per segment, so the reader's fold survives a rebuild of the burst and a burst holding two files
+    // keeps two independent boxes.
+    const boxKey = `${gkey}|${si}`;
+    const out = consoleBodyHtml(seg.lines, { tool: seg.tool, arg, codeOpen: state.codeBoxOpen, codeKey: boxKey });
     if (!resultHead(seg)) return out;
     // The cursor advances for EVERY result line, preview or not. A tool whose live previews are populated used to
     // return before consuming its row, so its rows piled up and were re-printed as "more stored result" at the end
     // while the next result line paired with the wrong row.
     const got = takeStored(seg.tool);
     if (seg.lines.slice(1).some((l) => String(l.text || "").trim())) return out;
-    if (got) return out + storedHtml(got);
+    if (got) return out + storedHtml(got, seg.tool, arg, boxKey);
     return out + `<div class="jl jl-dim jl-note">  ${liveTurn ? "no output in the session store yet" : "no output recorded for this call"}</div>`;
   };
   // No leftover list: the store's rows are paired per burst, so a group cannot know which rows belong to a burst
@@ -1355,7 +1397,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
     .join("");
   const body =
     (bodyLines.length > 0
-      ? segments.map((seg) => bodyOf(seg)).join("")
+      ? segments.map((seg, si) => bodyOf(seg, si)).join("")
       : `<div class="jl jl-dim">this run recorded nothing for ${esc(filter)}</div>`) + batchBlocks;
   const label = filter ? `all ${lines.length}` : `${lines.length} line${lines.length === 1 ? "" : "s"}`;
   return `<div class="tgrp" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gofs="${esc(JSON.stringify(Object.fromEntries(cursorsStart)))}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
@@ -5387,10 +5429,15 @@ function appendJobLine(evt) {
       const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
       if (line.mode === "set" && existing) {
         existing.innerHTML = linkifyText(line.text);
+        existing.dataset.ltext = String(line.text ?? "");
       } else {
         const div = document.createElement("div");
         div.className = `jl jl-${line.kind || "raw"}`;
         if (line.lid) div.dataset.lid = line.lid;
+        // The line's own text travels with it, the same way a rendered line carries it: a rebuild reads lines
+        // back out of the DOM, and this one must read as what was said rather than as what was drawn.
+        div.dataset.ltext = String(line.text ?? "");
+        div.dataset.lkind = String(line.kind || "raw");
         div.innerHTML = linkifyText(line.text);
         out.appendChild(div);
       }
@@ -10226,6 +10273,30 @@ document.addEventListener("click", async (e) => {
       return;
     }
     void answerRunQuestion(turnId, picked, qSend.dataset.qrequest, box);
+    return;
+  }
+  // A code box inside a burst: a file's body, folded until the reader asks for it. The fold is remembered by
+  // key (the burst plus the segment), because every rebuild replaces this markup and a box that snapped shut
+  // under the cursor would read as the panel losing the click.
+  const codeFold = e.target.closest("[data-code-fold]");
+  if (codeFold) {
+    e.preventDefault();
+    e.stopPropagation();
+    const box = codeFold.closest(".code-box");
+    const body = box && box.querySelector(".code-body");
+    if (body) {
+      const open = body.hidden;
+      body.hidden = !open;
+      box.classList.toggle("is-open", open);
+      codeFold.setAttribute("aria-expanded", open ? "true" : "false");
+      const caret = codeFold.querySelector(".code-caret");
+      if (caret) caret.textContent = open ? "▾" : "▸";
+      const key = codeFold.dataset.codeKey || "";
+      if (open) state.codeBoxOpen.add(key);
+      else state.codeBoxOpen.delete(key);
+      // A long-lived tab would otherwise keep one entry per box it ever opened.
+      while (state.codeBoxOpen.size > 500) state.codeBoxOpen.delete(state.codeBoxOpen.values().next().value);
+    }
     return;
   }
   // The "+ N commands" tail of a batch: before the row handler, because the button lives inside that row.
