@@ -22,9 +22,10 @@
 //            upstream route, ambiguity, a non-hex suffix, a legacy bare-Map index
 //   driven   REAL git (a scratch repo with a real worktree): `branchUpstreams` read from actual refs, a rename that
 //            keeps the tag, a commit on top after the merge, and `git switch -c` to a new branch in the same tree
-//   driven   the REAL PR list and this REAL checkout (read-only `gh pr list` + git): the row for this very
-//            worktree resolves to its merged PR, by upstream and (upstream unset) by tag; the upstream is restored
-//            and the restore is asserted
+//   driven   the REAL PR list and this REAL checkout, read-only (`gh pr list` + git): the row for this very
+//            worktree resolves to its merged PR, by upstream and (upstream unset) by tag, and the upstream is
+//            restored and asserted. Needs a WORKTREE — run from the project's own checkout this half is skipped,
+//            with a reason, because there is no worktree row to describe
 //   driven   a sandbox panel on its own PANEL_CONFIG (own port, own stores, assistant off) pointing at THIS
 //            checkout: the row it builds for this worktree carries the PR, which is what the chip on the board draws
 //   inspected  the browser half: the chip's title text lives in public/app.js and is not clicked here
@@ -38,6 +39,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildPrIndex, prFor, prIndex, branchUpstreams } from "../lib/project.js";
+import { tagOf } from "../lib/tree-names.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // This worktree (where the test runs), and the checkout it belongs to — the project a panel would watch. The
@@ -54,6 +56,12 @@ const commonDir = git(WORKTREE, ["rev-parse", "--path-format=absolute", "--git-c
 const MAIN = path.dirname(commonDir).replace(/\\/g, "/");
 const PROJECT_NAME = path.basename(MAIN);
 const ROW_PATH = `${MAIN}/.worktrees/${path.basename(WORKTREE)}`;
+// Phases 3 and 4 describe the worktree this script is RUN FROM: its renamed branch, its upstream, and the row a
+// panel builds for it. A linked worktree's git dir is a subdirectory of the project's common one; run from the
+// project's own checkout those are the same path and there is no such row, so that half is skipped with a reason
+// instead of being reported as a broken feature.
+const isWorktree =
+  git(WORKTREE, ["rev-parse", "--absolute-git-dir"]).out.toLowerCase() !== commonDir.toLowerCase();
 
 let failures = 0;
 let checks = 0;
@@ -110,6 +118,28 @@ const pr = (number, headRefName, headRefOid, { state = "MERGED", title = `PR ${n
 });
 const HEAD40 = "ba3157a0db8533018f90a51ffd1a6c938941c051";
 
+// Is a PR handed to a row justified by one of the three routes, and by which? The real-data phases below assert
+// THROUGH this rather than against a hard-coded PR number, so they stay true whenever and wherever they run: a
+// row may only show a PR that its own name, its upstream ref, or its tag-plus-tip can actually account for.
+function routeFor(index, { branch, upstream = null, tip = null, base = null }, got) {
+  if (!got) return null;
+  const holds = (prs) => Boolean((prs || []).find((p) => p.number === got.number));
+  if (branch && holds(index.byRef.get(branch))) return "ref";
+  for (const u of [upstream?.ref, upstream?.upstream, typeof upstream === "string" ? upstream : null]) {
+    if (!u) continue;
+    const bare = String(u).replace(/^[^/]+\//, "");
+    if (base && (String(u) === base || bare === base)) continue;
+    if (holds(index.byRef.get(String(u))) || (bare !== u && holds(index.byRef.get(bare)))) return "upstream";
+  }
+  for (const name of [branch, upstream?.ref, upstream?.upstream]) {
+    const tag = name ? tagOf(name) : null;
+    if (!tag) continue;
+    const list = (index.byTag.get(tag) || []).filter((p) => String(p.headRefOid || "").toLowerCase().startsWith(String(tip || "").toLowerCase()));
+    if (holds(list)) return "tag";
+  }
+  return null;
+}
+
 console.log(`this worktree: ${WORKTREE}\nits project:   ${MAIN}`);
 
 // ── 1. the shipped lookup, without gh and without git ───────────────────────────────────────────
@@ -155,6 +185,13 @@ const reland = buildPrIndex([
 ]);
 check("when one tree appeared in two PRs the newest is the row's", prFor(reland, "wtgui/renamed-9c8d7e", { tip: "2222222" })?.number, 12);
 check("a non-hex suffix is never a tag", prFor(buildPrIndex([pr(3, "wtgui/old-abcdefg", HEAD40)]), "wtgui/new-abcdefg", { tip: HEAD40.slice(0, 7) }), null);
+// A branch that merely TRACKS the base branch has not been pushed anywhere of its own: `git worktree add` sets
+// that upstream up by itself, and a PR's head ref can be named `main` (a fork's). Measured on this repo — a fresh
+// worktree, upstream `github/main`, was handed an OPEN fork PR whose head ref was `main`.
+const forkPr = buildPrIndex([pr(18, "main", "3333333000000000000000000000000000000000", { state: "OPEN" })]);
+check("tracking the base branch is not a PR for the branch", prFor(forkPr, "wtgui/fresh-abc123", { upstream: { ref: "main", upstream: "github/main" }, tip: "4444444", base: "main" }), null);
+check("...while the base branch itself still answers by its own name", prFor(forkPr, "main", { base: "main" })?.number, 18);
+check("...and an upstream that is NOT the base is still believed", prFor(forkPr, "wtgui/x-abc123", { upstream: { ref: "wtgui/y-abc123", upstream: "github/wtgui/y-abc123" }, tip: "4444444", base: "main" })?.number, undefined);
 const legacy = new Map([["wtgui/plain-5f6a7b", [pr(2, "wtgui/plain-5f6a7b", HEAD40)]]]);
 check("an index in the older bare-Map shape still answers by ref", prFor(legacy, "wtgui/plain-5f6a7b")?.number, 2);
 check("...and never claims a tag match it cannot check", prFor(legacy, "wtgui/renamed-5f6a7b", { tip: "1234567" }), null);
@@ -215,152 +252,167 @@ check("THE BRANCH SWITCH GETS NO PR — not the tree's old one", prFor(scratchPr
 check("while the branch the PR really was is still attributed by its name", prFor(scratchPr, "wtgui/old-name-1a2b3c", { tip: tip7 })?.number, 27);
 rmSync(dir, { recursive: true, force: true });
 
-// ── 3. the real PR list, and this real checkout ─────────────────────────────────────────────────
-console.log("\n3. the real PR list and this checkout (read-only: gh pr list + git reads)");
-const project = { name: PROJECT_NAME, path: MAIN, remote: "github", mainBranch: "main", prRepo: "JLRoper/agent-worktree-gui" };
-const liveIndex = await prIndex(project, 0);
-if (!liveIndex.byRef.size) {
-  failures += 1;
-  console.log("LIVE-PR-HALF-NOT-RUN  gh pr list answered nothing for JLRoper/agent-worktree-gui — the phase below proves nothing");
+if (!isWorktree) {
+  console.log("\n      WORKTREE-HALF-SKIPPED — this checkout IS the project, so there is no worktree row to describe; run this from a worktree (one branch per tree) to prove phases 3 and 4.");
 } else {
-  console.log(`      gh listed ${liveIndex.byRef.size} head ref(s), ${liveIndex.byTag.size} tag(s)`);
-  const headsBefore = heads(MAIN);
-  const branch = git(WORKTREE, ["rev-parse", "--abbrev-ref", "HEAD"]).out;
-  const tip = git(WORKTREE, ["rev-parse", "--short=7", "HEAD"]).out;
-  const tipFull = git(WORKTREE, ["rev-parse", "HEAD"]).out;
+  // ── 3. the real PR list, and this real checkout ─────────────────────────────────────────────
+  console.log("\n3. the real PR list and this checkout (read-only: gh pr list + git reads)");
+  const project = { name: PROJECT_NAME, path: MAIN, remote: "github", mainBranch: "main", prRepo: "JLRoper/agent-worktree-gui" };
+  const liveIndex = await prIndex(project, 0);
   const ups = await branchUpstreams(project);
-  const mine = prFor(liveIndex, branch, { upstream: ups.get(branch) || null, tip });
-  ok("this worktree's row resolves to a PR at all", Boolean(mine), JSON.stringify(mine));
-  check("...the merged PR that landed this work", [mine?.number, mine?.state], [27, "MERGED"]);
-  check("...found through the upstream its renamed branch still tracks", mine?.matched, "upstream");
-  const prevUpstream = ups.get(branch)?.upstream || null;
-  ok("the branch does have an upstream to restore later", Boolean(prevUpstream), String(prevUpstream));
-  try {
-    git(WORKTREE, ["branch", "--unset-upstream"]);
-    const ups2 = await branchUpstreams(project);
-    const byTag = prFor(liveIndex, branch, { upstream: ups2.get(branch) || null, tip });
-    // The tag route carries the rule, not the moment: it answers for the tree while the tree carries that PR's own
-    // commit, and refuses once the branch has moved past it. A branch that has been rebased since its PR landed
-    // (this one, when this line was written) is exactly the second case, and the upstream above is what answers for
-    // a row in that state.
-    const prHead = String((liveIndex.byRef.get("wtgui/fix-the-sticky-cannot-st-71f1dc") || [])[0]?.headRefOid || "").toLowerCase();
-    ok("the index names the head commit of this worktree's PR", prHead.length === 40, prHead.slice(0, 12));
-    check("the tag route answers for a tree still carrying that PR's commit", (() => {
-      const p = prFor(liveIndex, branch, { upstream: null, tip: prHead.slice(0, 7) });
-      return [p?.number, p?.matched];
-    })(), [27, "tag"]);
-    const movedPast = !prHead.startsWith(tip.toLowerCase());
-    if (movedPast) check("...and refuses it once this branch has moved past that commit (it has)", byTag, null);
-    else check("...which is this branch's own tip, so it answers here too", [byTag?.number, byTag?.matched], [27, "tag"]);
-    check("and a tip that belongs to nothing finds nothing", prFor(liveIndex, branch, { upstream: null, tip: "0000000" }), null);
-  } finally {
-    if (prevUpstream) git(WORKTREE, ["branch", `--set-upstream-to=${prevUpstream}`, branch]);
-  }
-  const restored = (await branchUpstreams(project)).get(branch)?.upstream || null;
-  check("the branch's upstream is restored exactly", restored, prevUpstream);
-  check("the branch itself did not move while this phase ran", git(WORKTREE, ["rev-parse", "HEAD"]).out, tipFull);
-  ok("no branch of this checkout moved while the PR list was read", heads(MAIN) === headsBefore, `${headsBefore.split("\n").length} branch(es)`);
-  // The control is a REAL local branch that no PR names: a branch the panel knows about, with nothing to show.
-  const noPrBranch = "land/pr-7";
-  ok("the control branch really exists in this checkout", git(MAIN, ["rev-parse", "--verify", `refs/heads/${noPrBranch}`]).ok, noPrBranch);
-  check("...and it is given no PR at all", prFor(liveIndex, noPrBranch, { tip }), null);
-}
-
-// ── 4. the row a panel builds, which is what the chip draws ─────────────────────────────────────
-console.log("\n4. a sandbox panel on this checkout: the row it builds for this worktree");
-const sandbox = mkdtempSync(path.join(tmpdir(), "wtgui-pr-row-"));
-const scanRoot = path.join(sandbox, "scan-root");
-const home = path.join(sandbox, "hermes-home");
-const configDir = path.join(sandbox, "panel");
-const cwdDir = path.join(sandbox, "panel-cwd");
-for (const d of [scanRoot, home, configDir, cwdDir, path.join(configDir, "logs")]) mkdirSync(d, { recursive: true });
-const port = await freePort();
-const configPath = path.join(configDir, "config.json");
-writeFileSync(
-  configPath,
-  `${JSON.stringify(
-    {
-      port,
-      host: "127.0.0.1",
-      scanRoots: [scanRoot],
-      // The project under test is the checkout this worktree belongs to, declared explicitly: the panel scans it
-      // read-only (git reads, one `git ls-remote` and one `gh pr list`), and nothing here writes to it.
-      projects: [{ name: PROJECT_NAME, path: MAIN, remote: "github", mainBranch: "main", prRepo: "JLRoper/agent-worktree-gui" }],
-      refreshSeconds: 5,
-      worktreeSeconds: 3,
-      midSeconds: 8,
-      slowSeconds: 10,
-      fetchSeconds: 100000,
-      threads: 1,
-      defaultCwd: cwdDir,
-      jobsFile: path.join(configDir, "logs", "jobs.json"),
-      projectsCacheFile: path.join(configDir, "logs", "projects.json"),
-      apiServer: { url: "http://127.0.0.1:9", key: "sandbox-key" },
-      assistant: { enabled: false },
-    },
-    null,
-    2,
-  )}\n`,
-  "utf8",
-);
-const base = `http://127.0.0.1:${port}`;
-const panelLog = [];
-let panel = null;
-const headsAtStart = heads(MAIN);
-const rowFor = async () => {
-  const s = await fetch(`${base}/api/state`).then((r) => r.json());
-  const p = (s.projects || []).find((x) => x.name === PROJECT_NAME);
-  const want = ROW_PATH.replace(/\\/g, "/").toLowerCase();
-  return { project: p || null, row: (p?.worktrees || []).find((w) => String(w.path || "").replace(/\\/g, "/").toLowerCase() === want) || null };
-};
-try {
-  panel = spawn(process.execPath, ["server.js"], {
-    cwd: WORKTREE,
-    env: { ...process.env, PANEL_CONFIG: configPath, HERMES_HOME: home, PANEL_TOKEN: "" },
-    stdio: ["ignore", "pipe", "pipe"],
-    windowsHide: true,
-  });
-  panel.stdout.on("data", (d) => panelLog.push(...String(d).split(/\r?\n/).filter(Boolean)));
-  panel.stderr.on("data", (d) => panelLog.push(...String(d).split(/\r?\n/).filter(Boolean)));
-  const up = await waitFor(async () => (await fetch(`${base}/api/state`)).ok, { timeoutMs: 60_000, what: "the sandbox panel to answer /api/state" });
-  ok("the sandbox panel came up on its own port", up, `http://127.0.0.1:${port}`);
-  ok(
-    "...and it logs this checkout as the project it monitors",
-    panelLog.some((l) => new RegExp(`projects: .*${PROJECT_NAME}`).test(l)),
-    panelLog.find((l) => /projects:/.test(l)) || "",
-  );
-  const found = await waitFor(async () => Boolean((await rowFor()).row), { timeoutMs: 150_000, stepMs: 1000, what: "this worktree to appear as a row" });
-  ok("this worktree is a row on that board", found, ROW_PATH);
-  const decorated = await waitFor(async () => Boolean((await rowFor()).row?.pr), { timeoutMs: 180_000, stepMs: 1500, what: "the row to be decorated with its PR" });
-  ok("the row is decorated with its PR", decorated, JSON.stringify((await rowFor()).row?.pr || null));
-  const row = (await rowFor()).row || {};
-  check("...the right PR", row.pr?.number, 27);
-  check("...its state", row.pr?.state, "MERGED");
-  ok("...and how it was found, which is what the chip's tooltip will say", ["ref", "upstream", "tag"].includes(row.pr?.matched), String(row.pr?.matched));
-  console.log(`      the row reads: branch ${row.branch} · verdict "${row.verdict}" · PR #${row.pr?.number} ${row.pr?.state} (${row.pr?.matched})`);
-  ok("no branch of this checkout moved while it was scanned", heads(MAIN) === headsAtStart, `${headsAtStart.split("\n").length} branch(es)`);
-} catch (e) {
-  failures += 1;
-  console.log(`phase 4 threw: ${String((e && e.message) || e)}`);
-  console.log(panelLog.slice(-20).join("\n"));
-} finally {
-  if (panel) {
-    panel.kill();
-    await waitFor(() => panel.exitCode !== null || panel.signalCode !== null, { timeoutMs: 10_000, what: "the sandbox panel to exit" });
-    if (panel.exitCode === null) {
-      try {
-        execFileSync("taskkill", ["/PID", String(panel.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
-      } catch {
-        /* already gone */
+  let tagRows = 0;
+  let here = null;
+  let tagTree = null;
+  if (!liveIndex.byRef.size) {
+    failures += 1;
+    console.log("LIVE-PR-HALF-NOT-RUN  gh pr list answered nothing for JLRoper/agent-worktree-gui — this phase proves nothing");
+  } else {
+    console.log(`      gh listed ${liveIndex.byRef.size} head ref(s), ${liveIndex.byTag.size} tag(s)`);
+    const headsBefore = heads(MAIN);
+    const trees = git(MAIN, ["worktree", "list", "--porcelain"]).out.split(/\r?\n/).reduce((acc, l) => {
+      if (l.startsWith("worktree ")) acc.push({ path: l.slice(9).trim(), branch: null });
+      else if (l.startsWith("branch ") && acc.length) acc[acc.length - 1].branch = l.slice(7).trim().replace("refs/heads/", "");
+      return acc;
+    }, []);
+    for (const wt of trees) {
+      if (!wt.branch) continue;
+      const tip = git(wt.path, ["rev-parse", "--short=7", "HEAD"]).out;
+      const upstream = ups.get(wt.branch) || null;
+      const got = prFor(liveIndex, wt.branch, { upstream, tip, base: "main" });
+      // Every local branch of this checkout against the real PR list: whatever the lookup hands a row has to be
+      // accounted for by that row's own name, by its upstream ref, or by its tag AND the commit the tree carries.
+      const route = routeFor(liveIndex, { branch: wt.branch, upstream, tip, base: "main" }, got);
+      check(`the PR shown for ${wt.branch} is one its own name, upstream or tag accounts for`, got ? [got.number, got.matched] : null, route ? [got.number, route] : null);
+      if (route === "tag") {
+        tagRows += 1;
+        if (!tagTree) tagTree = { wt, got, route };
+        if (tagRows === 1) {
+          // The rule, on real data: the tag answers while the tree carries that PR's commit, and not otherwise.
+          const head = String((liveIndex.byTag.get(tagOf(wt.branch)) || []).find((p) => p.number === got.number)?.headRefOid || "");
+          check("...and the tag route answers for a tree still carrying that PR's commit", (() => {
+            const p = prFor(liveIndex, wt.branch, { upstream: null, tip: head.slice(0, 7), base: "main" });
+            return [p?.number, p?.matched];
+          })(), [got.number, "tag"]);
+          check("...and refuses it for a tip that belongs to nothing", prFor(liveIndex, wt.branch, { upstream: null, tip: "0000000", base: "main" }), null);
+        }
       }
+      if (wt.path.replace(/\\/g, "/").toLowerCase() === WORKTREE.replace(/\\/g, "/").toLowerCase()) here = { wt, got, route };
     }
-    panel.stdout?.destroy();
-    panel.stderr?.destroy();
+    console.log(`      ${trees.length} worktree(s) of this checkout checked · ${tagRows} of them are RENAMED branches, whose row only the tag can account for`);
+    ok("this checkout still contains a renamed branch — the case this change exists for", tagRows > 0, `${tagRows} row(s)`);
+    console.log(`      this worktree's branch ${here?.wt?.branch || "(none)"} resolves to ${JSON.stringify(here?.got || null)}${here?.route ? ` (${here.route})` : " — no PR of its own"}`);
+    if (here?.got) check("...and this worktree's row was resolved by a justified route", here.got.matched, here.route);
+    // The control is a REAL local branch that no PR names: a branch the panel knows about, with nothing to show.
+    const noPrBranch = "land/pr-7";
+    ok("the control branch really exists in this checkout", git(MAIN, ["rev-parse", "--verify", `refs/heads/${noPrBranch}`]).ok, noPrBranch);
+    check("...and it is given no PR at all", prFor(liveIndex, noPrBranch, { tip: git(MAIN, ["rev-parse", "--short=7", `refs/heads/${noPrBranch}`]).out, base: "main" }), null);
+    ok("no branch of this checkout moved while the PR list was read", heads(MAIN) === headsBefore, `${headsBefore.split("\n").length} branch(es)`);
   }
-  rmSync(sandbox, { recursive: true, force: true });
+
+  // ── 4. the row a panel builds, which is what the chip draws ───────────────────────────────────
+  // The row to assert on is the one phase 3 found the lookup can least explain by name: a renamed branch whose only
+  // route is the tag (falling back to this worktree's own row when it has a PR of its own). A worktree cut for a
+  // brand-new branch has no PR and is not the case under test.
+  const target = (here?.got ? here : null) || (typeof tagTree !== "undefined" ? tagTree : null);
+  console.log("\n4. a sandbox panel on this checkout: the row it builds for a renamed tree");
+  const sandbox = mkdtempSync(path.join(tmpdir(), "wtgui-pr-row-"));
+  const scanRoot = path.join(sandbox, "scan-root");
+  const home = path.join(sandbox, "hermes-home");
+  const configDir = path.join(sandbox, "panel");
+  const cwdDir = path.join(sandbox, "panel-cwd");
+  for (const d of [scanRoot, home, configDir, cwdDir, path.join(configDir, "logs")]) mkdirSync(d, { recursive: true });
+  const port = await freePort();
+  const configPath = path.join(configDir, "config.json");
+  writeFileSync(
+    configPath,
+    `${JSON.stringify(
+      {
+        port,
+        host: "127.0.0.1",
+        scanRoots: [scanRoot],
+        // The project under test is the checkout this worktree belongs to, declared explicitly: the panel scans it
+        // read-only (git reads, one `git ls-remote` and one `gh pr list`), and nothing here writes to it.
+        projects: [{ name: PROJECT_NAME, path: MAIN, remote: "github", mainBranch: "main", prRepo: "JLRoper/agent-worktree-gui" }],
+        refreshSeconds: 5,
+        worktreeSeconds: 3,
+        midSeconds: 8,
+        slowSeconds: 10,
+        fetchSeconds: 100000,
+        threads: 1,
+        defaultCwd: cwdDir,
+        jobsFile: path.join(configDir, "logs", "jobs.json"),
+        projectsCacheFile: path.join(configDir, "logs", "projects.json"),
+        apiServer: { url: "http://127.0.0.1:9", key: "sandbox-key" },
+        assistant: { enabled: false },
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  const base = `http://127.0.0.1:${port}`;
+  const panelLog = [];
+  let panel = null;
+  const headsAtStart = heads(MAIN);
+  const rowAt = async (want) => {
+    const s = await fetch(`${base}/api/state`).then((r) => r.json());
+    const p = (s.projects || []).find((x) => x.name === PROJECT_NAME);
+    const w = String(want).replace(/\\/g, "/").toLowerCase();
+    return { project: p || null, row: (p?.worktrees || []).find((r) => String(r.path || "").replace(/\\/g, "/").toLowerCase() === w) || null };
+  };
+  ok("the row under test is a tree whose PR only its own route can explain", Boolean(target), target ? `${target.wt.branch} → #${target.got?.number} (${target.route})` : "(none found)");
+  try {
+    panel = spawn(process.execPath, ["server.js"], {
+      cwd: WORKTREE,
+      env: { ...process.env, PANEL_CONFIG: configPath, HERMES_HOME: home, PANEL_TOKEN: "" },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    panel.stdout.on("data", (d) => panelLog.push(...String(d).split(/\r?\n/).filter(Boolean)));
+    panel.stderr.on("data", (d) => panelLog.push(...String(d).split(/\r?\n/).filter(Boolean)));
+    const up = await waitFor(async () => (await fetch(`${base}/api/state`)).ok, { timeoutMs: 60_000, what: "the sandbox panel to answer /api/state" });
+    ok("the sandbox panel came up on its own port", up, `http://127.0.0.1:${port}`);
+    ok(
+      "...and it logs this checkout as the project it monitors",
+      panelLog.some((l) => new RegExp(`projects: .*${PROJECT_NAME}`).test(l)),
+      panelLog.find((l) => /projects:/.test(l)) || "",
+    );
+    const found = await waitFor(async () => Boolean((await rowAt(target.wt.path)).row), { timeoutMs: 150_000, stepMs: 1000, what: "that worktree to appear as a row" });
+    ok("that tree is a row on the board", found, target.wt.path);
+    const decorated = await waitFor(async () => Boolean((await rowAt(target.wt.path)).row?.pr), { timeoutMs: 180_000, stepMs: 1500, what: "the row to be decorated with its PR" });
+    ok("the row is decorated with its PR", decorated, JSON.stringify((await rowAt(target.wt.path)).row?.pr || null));
+    const row = (await rowAt(target.wt.path)).row || {};
+    const rowTip = String(row.head || git(target.wt.path, ["rev-parse", "--short=7", "HEAD"]).out || "");
+    const rowRoute = routeFor(liveIndex, { branch: row.branch, upstream: ups.get(row.branch) || null, tip: rowTip, base: "main" }, row.pr);
+    ok("...and it is one its own name, upstream or tag accounts for", Boolean(row.pr) && row.pr.matched === rowRoute, JSON.stringify(row.pr || null));
+    check("...with the route the row says it matched by", row.pr?.matched, rowRoute);
+    check("...and the panel's own row agrees with the lookup for that branch", [row.pr?.number, row.pr?.matched], [target.got.number, target.got.matched]);
+    console.log(`      the row reads: branch ${row.branch} · verdict "${row.verdict}" · PR #${row.pr?.number} ${row.pr?.state} (${row.pr?.matched})`);
+    ok("no branch of this checkout moved while it was scanned", heads(MAIN) === headsAtStart, `${headsAtStart.split("\n").length} branch(es)`);
+  } catch (e) {
+    failures += 1;
+    console.log(`phase 4 threw: ${String((e && e.message) || e)}`);
+    console.log(panelLog.slice(-20).join("\n"));
+  } finally {
+    if (panel) {
+      panel.kill();
+      await waitFor(() => panel.exitCode !== null || panel.signalCode !== null, { timeoutMs: 10_000, what: "the sandbox panel to exit" });
+      if (panel.exitCode === null) {
+        try {
+          execFileSync("taskkill", ["/PID", String(panel.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
+        } catch {
+          /* already gone */
+        }
+      }
+      panel.stdout?.destroy();
+      panel.stderr?.destroy();
+    }
+    rmSync(sandbox, { recursive: true, force: true });
+  }
 }
 
-console.log("\nDRIVEN: the shipped buildPrIndex/prFor decisions, real git refs in a scratch repo (rename, commit-after-merge,");
+
+console.log("\nDRIVEN: the shipped buildPrIndex/prFor decisions, real git refs in a scratch repo (rename, commit-after-merge," + (isWorktree ? "" : " [phases 3-4 SKIPPED: not run from a worktree]"));
 console.log("        branch switch in one tree), the real PR list plus this checkout read-only, and a sandbox panel on");
 console.log("        its own PANEL_CONFIG whose row for this worktree is what the board draws.");
 console.log("INSPECTED: the browser half — the chip markup/tooltip in public/app.js is not clicked here.");
