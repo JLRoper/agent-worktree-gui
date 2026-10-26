@@ -6731,14 +6731,24 @@ async function startMerge(btn) {
   }
 }
 
+// Why this row is showing that PR. The panel renames a worktree's branch after the thread slug, so a chip found
+// by the tree's tag has to say so — otherwise it cannot be told apart from one found by the branch's own name,
+// and that difference is the whole point of the tag route (a branch switched inside one tree gets no chip).
+function prMatchNote(pr) {
+  if (pr?.matched === "tag") return " · matched by the worktree tag: the panel renamed this branch, and it still carries that PR's commit";
+  if (pr?.matched === "upstream") return " · matched by the branch's upstream ref, which this branch still tracks";
+  return "";
+}
+
 function rowHtml(row) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   const dirty =
     row.dirty || row.untracked
       ? `<span class="dirty">${row.dirty}</span>${row.untracked ? ` <span class="dimmer">+${row.untracked}?</span>` : ""}`
       : `<span class="clean">clean</span>`;
+  const prTitle = row.pr ? `${row.pr.title || ""}${prMatchNote(row.pr)}` : "";
   const pr = row.pr
-    ? `<span class="${row.pr.state === "OPEN" ? "pr-open" : "pr-merged"}" title="${esc(row.pr.title || "")}">#${row.pr.number} ${esc(row.pr.state)}</span>`
+    ? `<span class="${row.pr.state === "OPEN" ? "pr-open" : "pr-merged"}" title="${esc(prTitle)}">#${row.pr.number} ${esc(row.pr.state)}</span>`
     : row.remoteBranch === "gone"
       ? `<span class="dimmer">none · branch gone</span>`
       : `<span class="dimmer">none</span>`;
