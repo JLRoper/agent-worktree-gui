@@ -44,12 +44,29 @@
 //
 // THE PAIRING RULE, AND WHY IT IS A BLOCK
 //
-// A hunk's changed lines are rendered as two sides: the left holds the before lines, the right the after. A
-// change block (a run of "-" lines immediately followed by a run of "+" lines) pairs index by index, so the
-// i-th removal sits on the same row as the i-th addition and both read as one modification: the left half
-// yellow, the right half green. A "-" left over after pairing is a pure removal (red), a "+" is always green.
-// Pairing a single "-" only with the "+" immediately after it would leave a two-for-two change reading as
-// "one modification, one deletion, one addition", which is not what the diff says.
+// A hunk's changed lines are rendered as two sides: the LEFT holds the after (new) lines, the RIGHT the before
+// (old) ones — the reader asked for the new side first, so a modification reads as "what it is now" on the left
+// and "what it was" on the right. A change block (a run of "-" lines immediately followed by a run of "+"
+// lines) pairs index by index, so the i-th removal sits on the same row as the i-th addition and both read as
+// one modification: the left half green, the right half yellow. A "-" left over after pairing is a pure removal
+// (red, drawn full width because there is no after half to sit beside); a "+" is always green and sits on the
+// LEFT with an empty right cell, so the columns still line up with the rows above and below. Pairing a single
+// "-" only with the "+" immediately after it would leave a two-for-two change reading as "one modification, one
+// deletion, one addition", which is not what the diff says.
+//
+// A paired row is therefore written after-then-before, which is the opposite of the diff's own order. The
+// read-back a burst rebuild runs (groupLines, in public/app.js) reads a row carrying data-lpair in the reverse
+// order, so a rebuild re-derives the lines the console was handed rather than the order they were drawn in:
+// read the other way round, a pair re-classifies as a lone addition plus a lone removal and the change redraws
+// as two rows.
+//
+// A HUNK THE PREVIEW CUT SHORT
+//
+// The gateway's live stream carries a preview of a tool result, not all of it, and the panel says so with a note
+// line. When that note lands while a diff is open, the frame draws it INSIDE itself at the cut edge, as a "cut"
+// row: the hunk above it is not the whole change, and the row says so in words instead of letting two lines read
+// as a finished hunk. The rest of such a result is not in these lines — the console asks the session store for
+// what the tool actually returned (public/app.js), and falls back to the cut row when the store has nothing.
 //
 // WHAT IT REACHES OUT FOR
 //
@@ -62,6 +79,15 @@
 // A line the gateway or the panel added under a result. It is never part of a diff or a file body, and it
 // always ends a run: "… 12 more line(s)" printed inside a hunk would read as a hunk line.
 const CF_NOTE_RE = /^\s*(?:…|\.\.\.)\s/;
+// The one note that means the DATA stopped rather than that the panel folded a tail: the gateway's own sentence
+// for a preview it cut ("… result truncated by the gateway — the live stream carries a preview of a tool
+// result, not all of it"). A hunk such a line lands in is not complete, so the frame has to say so.
+const CF_CUT_RE = /truncated by the gateway/;
+// A global, like consoleClassify and consoleFileOutput: public/app.js asks it before deciding whether the lines it
+// was handed are all there is of a result.
+function consoleCutNote(text) {
+  return CF_NOTE_RE.test(text) && CF_CUT_RE.test(text);
+}
 // `ls -l`, `dir`, `stat`: a mode string. The leading "-" is the trap this exists for.
 const CF_MODE_RE = /^[-dlbcps][rwxSsTt-]{9}[.+]?(?:\s|$)/;
 const CF_GIT_HEAD_RE = /^diff --(?:git|cc|combined) /;
@@ -86,7 +112,7 @@ const CF_SED_PRINT_RE = /^sed\s+-n\s+['"]?[\d,$]+p['"]?\s+(\S.*)$/;
 // it away would hide the whole result behind a header for no gain.
 const CF_CODE_MIN_LINES = 2;
 
-const CF_DIFF_CLASSES = new Set(["githead", "fileminus", "fileplus", "hunk", "ctx", "del", "mod", "add"]);
+const CF_DIFF_CLASSES = new Set(["githead", "fileminus", "fileplus", "hunk", "ctx", "del", "mod", "add", "cut"]);
 // A body line of a hunk, before pairing: "-" removed, "+" added, " " context.
 const CF_BODY_CLASS = { "-": "del", "+": "add", " ": "ctx" };
 
@@ -167,6 +193,13 @@ function consoleClassify(rows, { fileOutput = false } = {}) {
       continue;
     }
     const t = text[i];
+    // A preview the gateway cut, landing inside an open hunk: it belongs to that hunk as its cut edge, and it
+    // still ends the run — nothing after it is part of the same change.
+    if (inDiff && consoleCutNote(t)) {
+      cls[i] = "cut";
+      inDiff = false;
+      continue;
+    }
     // A blank context line in a unified diff is a single space, so only a line with nothing on it ends the
     // block: treating " " as empty cut every hunk that had a blank line in it.
     if (t === "" || CF_NOTE_RE.test(t) || CF_RESULT_HEAD_RE.test(t)) {
@@ -274,17 +307,24 @@ function consoleFileOutput(tool, arg) {
 const cfEsc = (s) => (typeof esc === "function" ? esc(s) : String(s ?? ""));
 const cfLink = (s) => (typeof linkifyText === "function" ? linkifyText(s) : cfEsc(s));
 // One console line, whatever block it lands in. data-ltext/data-lkind are how a burst rebuild reads its lines
-// back out of the DOM (groupLines): the cell's own text, never the rendered text of a link or a clock.
-function cfLine(row, extra = "") {
+// back out of the DOM (groupLines): the cell's own text, never the rendered text of a link or a clock. `shown`
+// overrides only what the reader sees — the chrome of a diff window shortens a path, and the line the console
+// drew stays in data-ltext.
+function cfLine(row, extra = "", shown = null) {
   const kind = String((row && row.kind) || "tool-out");
   const lid = row && row.lid != null && row.lid !== "" ? ` data-lid="${cfEsc(row.lid)}"` : "";
-  return `<div class="jl jl-${cfEsc(kind)}${extra ? ` ${extra}` : ""}" data-ltext="${cfEsc(cfText(row))}" data-lkind="${cfEsc(kind)}"${lid}>${cfLink(cfText(row))}</div>`;
+  const body = shown == null ? cfLink(cfText(row)) : cfEsc(shown);
+  return `<div class="jl jl-${cfEsc(kind)}${extra ? ` ${extra}` : ""}" data-ltext="${cfEsc(cfText(row))}" data-lkind="${cfEsc(kind)}"${lid}>${body}</div>`;
 }
-// A window's labels: the file headers and the hunk line. They stay console lines (so a rebuild keeps them)
-// but they are drawn as labels, not as content.
+// A window's labels: the file headers, the hunk line and the git/mode lines. They stay console lines (so a
+// rebuild keeps them) but they are the frame's own chrome, not rows of the change: the two file headers name the
+// same file, so each shows its own sign and the file's tail instead of two full paths, and the hunk line shows
+// the range it always did.
 function cfLabel(row, cls) {
   const tone = cls === "hunk" ? "is-hunk" : cls === "fileplus" ? "is-plus" : cls === "fileminus" ? "is-minus" : "is-meta";
-  return cfLine(row, `df-label ${tone}`);
+  const text = cfText(row);
+  const short = cls === "fileplus" || cls === "fileminus" ? `${text.slice(0, 3)} ${cfTailPath(cfDiffFile(row))}` : null;
+  return cfLine(row, `df-label ${tone}`, short);
 }
 const cfTailPath = (p) => (typeof tailPath === "function" ? tailPath(p, 3) : String(p || ""));
 function cfDiffFile(row) {
@@ -295,8 +335,23 @@ function cfDiffFile(row) {
     .trim();
 }
 
-// One framed diff window: labels on top, then the two sides. Every row is its own two-column grid, so a
-// modification's halves sit on one line and a lone removal or addition leaves the other side empty.
+// The cut edge of a hunk the gateway's preview stopped in the middle of. The panel's own note stays a console
+// line (a rebuild has to read it back, and it is the sentence that names the cause); the words beside it say what
+// the reader is looking at and where the rest of the result can be read.
+const CF_CUT_HINT =
+  " — cut here: the gateway's live preview stops mid-hunk, so this is NOT the whole change. The rest of this " +
+  "result is in this call's stored output (open its own row) or in the worker's report file.";
+function cfCutRow(row) {
+  const kind = cfEsc(String((row && row.kind) || "tool-out"));
+  return (
+    `<div class="jl jl-${kind} df-label df-cut" data-ltext="${cfEsc(cfText(row))}" data-lkind="${kind}">` +
+    `${cfLink(cfText(row))}<span class="df-cut-hint">${cfEsc(CF_CUT_HINT)}</span></div>`
+  );
+}
+
+// One framed diff window: the identifiers as a chrome strip on top, then the two sides. Every row is its own
+// two-column grid, so a modification's halves sit on one line, a lone addition leaves the right cell empty and a
+// cut row spans the window's width.
 function cfDiffWindow(labels, body, classes, pair, file) {
   const hasFileHead = labels.some((l) => classes[l.i] === "fileplus" || classes[l.i] === "fileminus");
   // Panel chrome, not a console line: no `jl` class and no data-ltext, so a burst rebuild does not read this
@@ -313,17 +368,23 @@ function cfDiffWindow(labels, body, classes, pair, file) {
       rows.push(`<div class="df-row">${cfLine(b.row, "df-c is-ctx")}</div>`);
       continue;
     }
+    if (c === "cut") {
+      rows.push(cfCutRow(b.row));
+      continue;
+    }
     if (c === "mod") {
+      // The after half is drawn first: the new side is the LEFT one. data-lpair is what the read-back reads the
+      // row back in the diff's own order by (see the module header).
       const at = pair[b.i];
-      const right = at == null ? null : body.find((x) => x.i === at);
-      rows.push(`<div class="df-row">${cfLine(b.row, "df-c is-mod")}${right ? cfLine(right.row, "df-c is-add") : ""}</div>`);
+      const after = at == null ? null : body.find((x) => x.i === at);
+      rows.push(`<div class="df-row" data-lpair="1">${after ? cfLine(after.row, "df-c is-add") : ""}${cfLine(b.row, "df-c is-mod")}</div>`);
       continue;
     }
     if (c === "add") {
-      // The left half of a pair was already drawn with it; a lone addition sits on the right, with an empty
-      // left cell so its column still lines up with the rows above and below.
+      // The right half of a pair was already drawn with it; a lone addition sits on the LEFT, with an empty
+      // right cell so its column still lines up with the rows above and below.
       if (pair[b.i] != null) continue;
-      rows.push(`<div class="df-row"><div class="df-c is-gap" aria-hidden="true"></div>${cfLine(b.row, "df-c is-add")}</div>`);
+      rows.push(`<div class="df-row">${cfLine(b.row, "df-c is-add")}<div class="df-c is-gap" aria-hidden="true"></div></div>`);
       continue;
     }
     if (c === "del") rows.push(`<div class="df-row">${cfLine(b.row, "df-c is-del")}</div>`);
@@ -436,4 +497,7 @@ window.WMApp.core.consoleFormat = {
   lineClasses: consoleLineClasses,
   bodyHtml: consoleBodyHtml,
   fileOutput: consoleFileOutput,
+  // Was this preview cut by the gateway? The console asks before it decides whether the lines it was handed are
+  // all there is of a result, so the wording of the note lives here and nowhere else.
+  cutNote: consoleCutNote,
 };

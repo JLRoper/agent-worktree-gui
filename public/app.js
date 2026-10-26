@@ -160,6 +160,11 @@ const state = {
   // Kept here for the same reason toolGroupOpen is — every rebuild replaces the console's markup, and a box
   // that snapped shut under the reader's cursor would read as the panel losing the click.
   codeBoxOpen: new Set(),
+  // Which tool calls the reader has folded: "<burst id>|<segment>". A call's own row is its handle, and the fold
+  // covers that call's output and nothing else. Kept here for the same reason codeBoxOpen is: a repaint or a
+  // burst rebuild replaces the markup, and a call that sprang back open under the reader's cursor would read as
+  // the panel losing the click.
+  callFolded: new Set(),
   // Events are life. A line arriving in an agent's console, a job starting or ending, an approval: each one proves
   // the worktree that owns that agent is being worked in right now, without waiting for the next scan to notice.
   // Key = worktree row key -> ms of the newest event seen for it.
@@ -1116,15 +1121,30 @@ function groupLines(grp) {
   // notes under it and an opened batch are all drawn UNDER a line, so counting them inflates the line tally and
   // turns them into console lines of their own on the next rebuild (an opened batch was re-absorbed as five
   // summaries that then satisfied "the preview carried this result").
-  return [...grp.querySelectorAll(".tgrp-body .jl")]
-    .filter((d) => !d.classList.contains("jl-store") && !d.classList.contains("jl-note") && !d.classList.contains("jl-panel"))
-    .map((d) => ({
-      // The line's own text, not the rendered text: a diff window draws one row per change and a code box
-      // holds its lines folded, and neither may cost the rebuild a line or invent one (the carried file label
-      // is not a .jl for exactly that reason).
-      kind: d.dataset.lkind || (d.className.match(/jl-([a-z-]+)/) || [])[1] || "raw",
-      text: d.dataset.ltext != null ? d.dataset.ltext : d.textContent,
-    }));
+  const read = (d) => ({
+    // The line's own text, not the rendered text: a diff window draws one row per change and a code box
+    // holds its lines folded, and neither may cost the rebuild a line or invent one (the carried file label
+    // is not a .jl for exactly that reason).
+    kind: d.dataset.lkind || (d.className.match(/jl-([a-z-]+)/) || [])[1] || "raw",
+    text: d.dataset.ltext != null ? d.dataset.ltext : d.textContent,
+  });
+  const out = [];
+  for (const d of grp.querySelectorAll(".tgrp-body .jl")) {
+    if (d.classList.contains("jl-store") || d.classList.contains("jl-note") || d.classList.contains("jl-panel")) continue;
+    // A modification is drawn with its AFTER line first (the reader asked for the new side on the left), which is
+    // the opposite of the order the diff had it in. A rebuild re-derives the diff from these lines, and a pair
+    // read back the other way round re-classifies as a lone addition plus a lone removal - every modification
+    // redrawn as two rows. So a row carrying data-lpair is read back in the diff's own order.
+    const row = d.parentElement;
+    const cells = row && row.dataset && row.dataset.lpair === "1" ? [...row.children] : null;
+    if (cells && cells.length === 2) {
+      if (d === cells[0]) continue; // read with its partner, below
+      out.push(read(cells[1]), read(cells[0]));
+      continue;
+    }
+    out.push(read(d));
+  }
+  return out;
 }
 
 // How many result lines of each tool the bursts already in this console have drawn. That count is where the NEXT
@@ -1434,21 +1454,84 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
   // A block that starts with a result header is a call's output; anything else is a call itself.
   const resultHead = (seg) => (seg.lines[0] && seg.lines[0].kind === "tool-out" ? TOOL_DONE_RE.exec(String(seg.lines[0].text || "")) : null);
   const liveTurn = turnLive(state.jobs.get(turnId));
+  // The stored row that belongs to THIS call. The store holds every result the turn returned for that tool and the
+  // console's own lines can cover only part of the turn (a restored card keeps its last lines), so a position is
+  // not an identity: the call line carries the file the tool was given, and a stored diff names the same file in
+  // its own "--- a/…" header. That file is what pairs them.
+  const pathKey = (p) => normPath(String(p || "")).replace(/^[ab]\//, "").toLowerCase();
+  const storedForFile = (tool, arg) => {
+    const want = pathKey(arg);
+    if (!want) return null;
+    for (const r of state.toolStore.get(`${turnId}|${tool}`)?.results || []) {
+      for (const l of String(r.text || "").split(LF).slice(0, 3)) {
+        if (pathKey(l.replace(/^[-+]{3}\s+/, "")) === want) return r;
+      }
+    }
+    return null;
+  };
+  // A call's own row is the handle for its output: the fold covers the lines under that row and nothing else, and
+  // the row's own text is still a console line inside it, so a rebuild reads the call back exactly as before.
+  const callBlockHtml = (callLine, callBody, key) => {
+    const folded = state.callFolded.has(key);
+    const n = (callBody.match(/data-ltext=/g) || []).length;
+    const label = `${n} line${n === 1 ? "" : "s"}`;
+    const what = folded ? "show" : "fold";
+    return (
+      `<div class="call${folded ? " is-folded" : ""}" data-call-key="${esc(key)}">` +
+      `<div class="call-head" title="${what} this call's output">` +
+      `<button type="button" class="call-fold" data-call-fold="1" data-call-key="${esc(key)}" aria-expanded="${folded ? "false" : "true"}"` +
+      ` aria-label="${what} this call's output (${label})">${folded ? "▸" : "▾"}</button>` +
+      consoleBodyHtml([callLine], { tool: "", arg: "", codeOpen: null, codeKey: "" }) +
+      `<span class="call-n">${label}</span>` +
+      `<span class="call-hint"${folded ? "" : " hidden"}>folded — click to read</span></div>` +
+      `<div class="call-body" data-copy-through${folded ? " hidden" : ""}>${callBody}</div>` +
+      `</div>`
+    );
+  };
   const bodyOf = (seg, si) => {
     const arg = callArgFor(seg);
     // One key per segment, so the reader's fold survives a rebuild of the burst and a burst holding two files
     // keeps two independent boxes.
     const boxKey = `${gkey}|${si}`;
-    const out = consoleBodyHtml(seg.lines, { tool: seg.tool, arg, codeOpen: state.codeBoxOpen, codeKey: boxKey });
-    if (!resultHead(seg)) return out;
+    // The result line ("  ↳ patch · 79.51s") is the console's own record of the result and stays whatever else
+    // is drawn under it.
+    const resultLine = resultHead(seg) ? seg.lines.slice(0, 1) : [];
+    const preview = resultHead(seg) ? seg.lines.slice(1) : seg.lines;
+    const render = (list) => consoleBodyHtml(list, { tool: seg.tool, arg, codeOpen: state.codeBoxOpen, codeKey: boxKey });
     // The cursor advances for EVERY result line, preview or not. A tool whose live previews are populated used to
     // return before consuming its row, so its rows piled up and were re-printed as "more stored result" at the end
     // while the next result line paired with the wrong row.
-    const got = takeStored(seg.tool);
-    if (seg.lines.slice(1).some((l) => String(l.text || "").trim())) return out;
-    if (got) return out + storedHtml(got, seg.tool, arg, boxKey);
-    return out + `<div class="jl jl-dim jl-note">  ${liveTurn ? "no output in the session store yet" : "no output recorded for this call"}</div>`;
+    const got = resultHead(seg) ? takeStored(seg.tool) : null;
+    let out = render(resultLine) + render(preview);
+    if (resultHead(seg)) {
+      // The gateway's live stream carries a PREVIEW of a result. When it was cut, these lines are not the whole
+      // answer, and the session store is where the rest of it is - it is where a patch's diff comes from in the
+      // first place. So the stored row for this call's own file is drawn in place of the cut preview, and the cut
+      // row the renderer put at the preview's edge stays as the honest answer only when the store has nothing.
+      const full = preview.some((l) => consoleCutNote(String(l.text || ""))) ? storedForFile(seg.tool, arg) : null;
+      if (full) out = render(resultLine) + storedHtml(full, seg.tool, arg, boxKey);
+      else if (!preview.some((l) => String(l.text || "").trim())) {
+        out += got ? storedHtml(got, seg.tool, arg, boxKey) : `<div class="jl jl-dim jl-note">  ${liveTurn ? "no output in the session store yet" : "no output recorded for this call"}</div>`;
+      }
+    }
+    return out;
   };
+  // A call and the result it produced are TWO segments: the panel draws the call when the tool starts and the
+  // result when it finishes, and a parallel batch interleaves them. The reader's handle is the call's own row, so
+  // a call segment followed by its own tool's result segment is rendered as one foldable block - the call line on
+  // top, that call's output under it, and nothing else on the card moving when it folds. A call whose result has
+  // not arrived yet has nothing to fold and is drawn as the plain line it always was.
+  const bodyParts = [];
+  for (let si = 0; si < segments.length; si++) {
+    const seg = segments[si];
+    const next = segments[si + 1];
+    if (seg.lines[0] && seg.lines[0].kind === "tool" && next && resultHead(next) && next.tool === seg.tool) {
+      bodyParts.push(callBlockHtml(seg.lines[0], bodyOf(next, si + 1), `${gkey}|${si}`));
+      si++;
+      continue;
+    }
+    bodyParts.push(bodyOf(seg, si));
+  }
   // No leftover list: the store's rows are paired per burst, so a group cannot know which rows belong to a burst
   // further down the turn — printing the rest of the array re-printed the NEXT burst's output under this one's last
   // result line (measured on a two-burst turn). A result line the console lost stays unshown; the call line is
@@ -1468,7 +1551,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
     .join("");
   const body =
     (bodyLines.length > 0
-      ? segments.map((seg, si) => bodyOf(seg, si)).join("")
+      ? bodyParts.join("")
       : `<div class="jl jl-dim">this run recorded nothing for ${esc(filter)}</div>`) + batchBlocks;
   const label = filter ? `all ${lines.length}` : `${lines.length} line${lines.length === 1 ? "" : "s"}`;
   return `<div class="tgrp" data-copy data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gofs="${esc(JSON.stringify(Object.fromEntries(cursorsStart)))}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
@@ -5228,6 +5311,13 @@ function copyShownText(el) {
   if (el.checkVisibility && !el.checkVisibility({ checkVisibilityCSS: true })) return "";
   // A folded block contributes its title line and nothing else, whatever its contents compute to.
   if (el.tagName === "DETAILS" && !el.open) return copyShownText(el.querySelector(":scope > summary"));
+  // A wrapper a renderer added for a fold is read THROUGH, not treated as a block of its own: a block's copy is
+  // trimmed at its edges, and applied to a tool call's output that would eat the leading spaces of whichever line
+  // happens to be first under the wrapper (a result line reads "  ↳ patch · 3.27s" on screen). The lines inside
+  // are the console's own text, so they are lifted exactly as they are shown.
+  if (el.hasAttribute && el.hasAttribute("data-copy-through")) {
+    return [...el.childNodes].map((k) => (k.nodeType === 3 ? k.nodeValue : k.nodeType === 1 ? copyShownText(k) : "")).join("\n");
+  }
   const display = cs.display;
   if (display === "flex" || display === "inline-flex" || display === "grid" || display === "inline-grid") {
     // A flex ROW lays its items out on one line - which is the whole reason this walk exists - while a
@@ -10870,6 +10960,44 @@ document.addEventListener("click", async (e) => {
       return;
     }
     void answerRunQuestion(turnId, picked, qSend.dataset.qrequest, box);
+    return;
+  }
+  // A tool call's own row: fold or unfold THAT call's output, and nothing else on the card. The caret is a real
+  // button (Tab reaches it, Enter and Space press it, and it carries aria-expanded) and the row around it is the
+  // same handle, so a press anywhere on the call line works. The press is stopped here so the burst's own row
+  // handler and the reply box's gestures never see a fold as a click on them, and the copy button is a sibling of
+  // this block rather than a child of it, so copying is not a fold.
+  const callRow = e.target.closest("[data-call-fold], .call-head");
+  if (callRow) {
+    const call = callRow.closest(".call");
+    const key = callRow.dataset.callKey || (call && call.dataset.callKey) || "";
+    const body = call && call.querySelector(":scope > .call-body");
+    // A press that was the end of a drag-select is a selection, not a fold: the reader who dragged across the
+    // call's text gets the selection and the fold left alone. A plain click collapses the selection on mousedown,
+    // so by the time it arrives here there is nothing to see.
+    const sel = document.getSelection ? document.getSelection() : null;
+    if (sel && !sel.isCollapsed && call && sel.containsNode && sel.containsNode(call, true)) return;
+    if (body && key) {
+      e.preventDefault();
+      e.stopPropagation();
+      const folded = !body.hidden;
+      body.hidden = folded;
+      call.classList.toggle("is-folded", folded);
+      const btn = call.querySelector("[data-call-fold]");
+      if (btn) {
+        btn.setAttribute("aria-expanded", folded ? "false" : "true");
+        btn.textContent = folded ? "\u25b8" : "\u25be";
+        btn.setAttribute("aria-label", `${folded ? "show" : "fold"} this call's output (${call.querySelector(".call-n")?.textContent || ""})`);
+      }
+      const hint = call.querySelector(".call-hint");
+      if (hint) hint.hidden = !folded;
+      const title = call.querySelector(".call-head");
+      if (title) title.title = `${folded ? "show" : "fold"} this call's output`;
+      if (folded) state.callFolded.add(key);
+      else state.callFolded.delete(key);
+      // One entry per call the reader ever folded; a long-lived tab should not keep every one of them forever.
+      while (state.callFolded.size > 500) state.callFolded.delete(state.callFolded.values().next().value);
+    }
     return;
   }
   // A code box inside a burst: a file's body, folded until the reader asks for it. The fold is remembered by

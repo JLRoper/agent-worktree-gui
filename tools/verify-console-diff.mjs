@@ -168,8 +168,35 @@ check("window: one framed window per hunk", (winHtml.match(/class="df-win"/g) ||
 ok("window: the diff headers and the hunk line are labels", winHtml.includes("df-label is-minus") && winHtml.includes("df-label is-plus") && winHtml.includes("df-label is-hunk"));
 ok("window: the hunk line's own text is kept as the label", winHtml.includes("@@ -1,3 +1,3 @@"));
 ok("window: the second window still names the file it is in", (winHtml.match(/df-lab-path/g) || []).length === 1, winHtml.match(/df-lab-path[^<]*/g));
-ok("window: a modification's two halves sit on one row", /<div class="df-row"><div class="jl jl-tool-out df-c is-mod"[^>]*>-before<\/div><div class="jl jl-tool-out df-c is-add"[^>]*>\+after<\/div><\/div>/.test(winHtml));
+// (b) the sides: the AFTER line is the row's first cell and the BEFORE line its second, so a modification reads as
+// what the file says now, on the left, then what it said, on the right. The row carries data-lpair because the
+// read-back (below, and groupLines in public/app.js) has to undo exactly that order.
+ok(
+  "window: a modification puts the new side on the left and the old one on the right",
+  /<div class="df-row" data-lpair="1"><div class="jl jl-tool-out df-c is-add"[^>]*>\+after<\/div><div class="jl jl-tool-out df-c is-mod"[^>]*>-before<\/div><\/div>/.test(winHtml),
+);
 ok("window: a pure removal is its own row", /<div class="df-row"><div class="jl jl-tool-out df-c is-del"[^>]*>-dropped<\/div><\/div>/.test(winHtml));
+ok(
+  "window: a lone addition sits on the left with the empty cell after it",
+  /<div class="df-row"><div class="jl jl-tool-out df-c is-add"[^>]*>\+extra<\/div><div class="df-c is-gap" aria-hidden="true"><\/div><\/div>/.test(winHtml),
+);
+// The tones did not move with the columns: green is still the added line, yellow the before half of a
+// modification and red a pure removal, wherever the cell sits.
+check(
+  "window: the tones keep their meanings on the swapped sides",
+  [...winHtml.matchAll(/class="jl jl-tool-out df-c (is-\w+)"[^>]*>([^<]*)/g)].map((m) => `${m[1]} ${m[2]}`),
+  [
+    "is-ctx  keep",
+    "is-add +after",
+    "is-mod -before",
+    "is-ctx  keep two",
+    "is-add +added",
+    "is-mod -gone",
+    "is-add +extra",
+    "is-del -dropped",
+    "is-ctx  tail",
+  ],
+);
 check("window: the second hunk pairs, leaves the extras alone and reds the leftover removal", CF.lineClasses(out(twoHunks)), [
   "fileminus",
   "fileplus",
@@ -198,12 +225,120 @@ check("determinism: two runs of the same rows agree", a, b);
 check("determinism: the markup agrees too", CF.bodyHtml(rows, { tool: "patch" }), CF.bodyHtml(out(twoHunks), { tool: "patch" }));
 ok("determinism: no clock and no randomness in the module", !/Date\.now|Math\.random|new Date/.test(src.replace(/^\/\/.*$/gm, "")));
 
-// The read-back a burst rebuild depends on: every line it drew is still readable, in source order, with its
-// own text — a window's two sides and a code box's folded body must not lose or reorder a line.
-const cells = [...winHtml.matchAll(/data-ltext="([^"]*)"/g)].map((m) => m[1]);
-check("read-back: every diff line survives in source order", cells, twoHunks);
+// ── (7) the read-back a burst rebuild depends on ───────────────────────────────────────────────────
+// Every line the console drew is still readable, in source order, with its own text — a window's two sides and a
+// code box's folded body must not lose or reorder a line. A modification is DRAWN after-then-before (the reader
+// asked for the new side on the left) and a row says so with data-lpair, so the harness reads such a row back the
+// way groupLines (public/app.js) does: the before cell first, exactly as the diff had it. Reading a pair the other
+// way round re-classifies as a lone addition plus a lone removal, and the change would redraw as two rows.
+const cellsInSourceOrder = (html) => {
+  // Walk the markup in order: a cell outside any row is a head label and reads as itself; the cells of a row are
+  // collected until the next row opens, and a row carrying data-lpair is read before-then-after.
+  const out2 = [];
+  const tok = /<div class="df-row"([^>]*)>|<div class="jl[^"]*" data-ltext="([^"]*)"/g;
+  let rowCells = null;
+  let lp = false;
+  const flush = () => {
+    if (!rowCells) return;
+    if (lp && rowCells.length === 2) out2.push(rowCells[1], rowCells[0]);
+    else out2.push(...rowCells);
+    rowCells = null;
+  };
+  let m;
+  while ((m = tok.exec(html))) {
+    if (m[0].startsWith('<div class="df-row"')) {
+      flush();
+      rowCells = [];
+      lp = / data-lpair="1"/.test(m[1]);
+      continue;
+    }
+    if (m[2] == null) continue;
+    // A row holds one cell (context, a lone removal) or two (a pair, a lone addition and its gap). A third cell
+    // belongs to whatever follows the row — the next window's hunk line is a head label with a data-ltext of its
+    // own — so the row is closed before it, which keeps the reading in source order either way.
+    if (rowCells && rowCells.length < 2) rowCells.push(m[2]);
+    else {
+      flush();
+      out2.push(m[2]);
+    }
+  }
+  flush();
+  return out2;
+};
+check("read-back: every diff line survives in source order", cellsInSourceOrder(winHtml), twoHunks);
 const boxCells = [...boxHtml.matchAll(/data-ltext="([^"]*)"/g)].map((m) => m[1]);
 check("read-back: the code box's lines survive, the header line first", boxCells, readBody);
+// The order the markup actually holds: the after cell first, the before cell second, and only for a pair.
+check(
+  "read-back: a pair is written after-then-before and marked, so the order can be undone",
+  [...winHtml.matchAll(/<div class="df-row"([^>]*)><div class="jl jl-tool-out df-c (is-\w+)"[^>]*>([^<]*)</g)]
+    .filter((m) => m[3] !== " keep" && m[3] !== " keep two" && m[3] !== " tail")
+    .map((m) => `${m[1].trim() || "(no marker)"} ${m[2]} ${m[3]}`),
+  ["data-lpair=\"1\" is-add +after", "data-lpair=\"1\" is-add +added", "(no marker) is-add +extra", "(no marker) is-del -dropped"],
+);
+
+// ── (8) the frame's body is the file's content, and a cut preview says so ──────────────────────────
+// The real preview rows of the docker-pods worker's patch on AGENTS.md, copied out of logs/jobs.json (job
+// c9202ee0, lines 34-40): the gateway cut it after two context lines of a 46-line addition.
+const agentsCut = [
+  "  ↳ patch · 79.51s",
+  "--- a/C:\\ProjectDevelopment\\heroes-js\\.worktrees\\docker-pods-per-run-acce-a6c573\\AGENTS.md",
+  "+++ b/C:\\ProjectDevelopment\\heroes-js\\.worktrees\\docker-pods-per-run-acce-a6c573\\AGENTS.md",
+  "@@ -36,6 +36,46 @@",
+  " - Identity in this repo's coordination is `.agentboard/{PID}.json` + the `.plans/` file + `.alock` PIDs.",
+  " - A user \"stop\" is a hard brake: execute only the literal instruction.",
+  "… result truncated by the gateway — the live stream carries a preview of a tool result, not all of it",
+];
+const cutHtml = CF.bodyHtml(out(agentsCut), { tool: "patch", arg: "C:/x/AGENTS.md" });
+// data-ltext is an attribute, so what a line holds is escaped in the markup and read back unescaped by the
+// browser (groupLines reads dataset.ltext). The checks below are on the markup, so they unescape the same way.
+const unesc = (s) => String(s).replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+// (a) the identifiers are the frame's own chrome and never a row of its body.
+const cutHead = cutHtml.slice(cutHtml.indexOf('class="df-head"'), cutHtml.indexOf('class="df-body"'));
+const cutBody = cutHtml.slice(cutHtml.indexOf('class="df-body"'));
+check(
+  "(a) the AGENTS.md case: the identifiers are in the frame's header",
+  [...cutHead.matchAll(/class="jl jl-tool-out df-label (is-\w+)"[^>]*>([^<]*)/g)].map((m) => `${m[1]} ${m[2]}`),
+  ["is-minus --- …/.worktrees/docker-pods-per-run-acce-a6c573/AGENTS.md", "is-plus +++ …/.worktrees/docker-pods-per-run-acce-a6c573/AGENTS.md", "is-hunk @@ -36,6 +36,46 @@"],
+);
+check(
+  "(a) the AGENTS.md case: every body row is a line of the file, and no @@/---/+++ row is one of them",
+  [...cutBody.matchAll(/data-ltext="([^"]*)"/g)].map((m) => unesc(m[1])).filter((t) => !/^… /.test(t)),
+  [
+    " - Identity in this repo's coordination is `.agentboard/{PID}.json` + the `.plans/` file + `.alock` PIDs.",
+    " - A user \"stop\" is a hard brake: execute only the literal instruction.",
+  ],
+);
+ok(
+  "(a) the AGENTS.md case: no identifier row anywhere in the body",
+  !/class="jl jl-tool-out df-label is-(?:minus|plus|hunk|meta)"/.test(cutBody) && !/data-ltext="(?:@@|---|\+\+\+|diff --git|index )/.test(cutBody),
+  cutBody.slice(0, 200),
+);
+// (c) the cut is drawn INSIDE the frame, at the edge it happened at, and names the cause and where the rest is.
+const cutRow = cutBody.match(/<div class="jl jl-tool-out df-label df-cut"[\s\S]*?<\/div>/);
+const cutText = cutRow ? unesc(cutRow[0]) : "";
+ok("(c) the AGENTS.md case: the cut is a row of the frame, not a line after it", Boolean(cutRow) && cutHtml.endsWith("</div></div>"));
+ok("(c) the AGENTS.md case: the row keeps the gateway's own sentence", cutText.includes("truncated by the gateway"));
+ok(
+  "(c) the AGENTS.md case: the row names the cause and where the rest can be seen",
+  /cut here: the gateway's live preview stops mid-hunk/.test(cutText) && /stored output \(open its own row\)/.test(cutText) && /worker's report file/.test(cutText),
+  cutText.slice(0, 260),
+);
+ok("(c) the AGENTS.md case: the note is still a console line a rebuild reads back", Boolean(cutRow) && cutRow[0].includes('data-ltext="… result truncated by the gateway'));
+// A note that is NOT the gateway's cut still ends the run and stays out of the window: the panel's own "more
+// line(s)" is a folded tail, not a truncated one, and it must not claim a hunk is incomplete.
+const moreHtml = CF.bodyHtml(out(["--- a/x.md", "+++ b/x.md", "@@ -1,2 +1,2 @@", " keep", "… 12 more line(s)"]), { tool: "patch" });
+ok("cut: the panel's own tail note is not a cut row", !moreHtml.includes("df-cut") && moreHtml.includes("… 12 more line(s)"));
+ok("cut: a cut note outside a hunk is left as a plain line", !CF.bodyHtml(out(["… result truncated by the gateway — the live stream carries a preview of a tool result, not all of it"]), {}).includes("df-cut"));
+check("cut: the classifier reads a cut inside a hunk as its own class", CF.lineClasses(out(agentsCut), {}), [
+  "plain",
+  "fileminus",
+  "fileplus",
+  "hunk",
+  "ctx",
+  "ctx",
+  "cut",
+]);
 
 console.log(failed ? `RESULT: ${failed} FAILED` : "RESULT: ALL PASS");
 process.exit(failed ? 1 : 0);
