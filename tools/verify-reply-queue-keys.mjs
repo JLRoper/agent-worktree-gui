@@ -1,34 +1,33 @@
-// Ctrl/Cmd+Enter in a reply box QUEUES the reply, proved by driving a panel of its own — and a real browser
-// over it, with real keydown events.
+// The reply box's two gestures — Enter holds the reply, Ctrl/Cmd+Enter steers the live turn — proved by driving a
+// panel of its own, and a real browser over it, with real keydown events.
 //
 //   node tools/verify-reply-queue-keys.mjs                       boot a sandbox panel from THIS checkout
 //   PANEL_URL=http://127.0.0.1:7331 node tools/verify-reply-queue-keys.mjs    drive a panel already running
 //
-// The reply box's Enter means two things depending on the card: with a turn running it steers that turn, and
-// with nothing running it sends the next one. Queue reply was the only way to say "hold this for later". This
-// script proves Ctrl+Enter (and ⌘+Enter) is that same press, and nothing else:
+// A card offers at most one of the two reply buttons: **Steer turn** while a turn is live, **Queue reply** while
+// there is something to wait for (a turn running, or a finished turn whose subagents are still out), and **Send
+// reply** when there is neither. Each keystroke is the button it stands for, and nothing else:
 //
-//   (1) Enter still steers a running turn — one POST /api/jobs/steer, nothing queued
-//   (2) Ctrl+Enter queues: no POST at all, the box empties, the queued entry is on the card with its
-//       "sends when the current turn finishes" line, and the Queue reply button is still the only other
-//       control that does it
-//   (3) the same while the button is offered for the other reason — a finished turn whose subagents are out
-//   (4) with no turn running and no subagent out there is nothing to hold, so Ctrl+Enter SENDS, and the
-//       request it makes is identical to the one plain Enter makes
-//   (5) Shift+Enter still inserts a newline, Ctrl+Shift+Enter never queues, an empty box is still ignored
-//       without an error, and the add-agent field, the model picker and a settings preset box are untouched
-//   (6) the placeholder and both buttons' titles name the gesture in each state
+//   (1) Enter is the Queue reply button's press: no request, the box empties, the queued entry is on the card with
+//       its "sends when the current turn finishes" line, and the button is still the only other control that does it
+//   (2) Ctrl/Cmd+Enter is the Steer turn button's press: one POST /api/jobs/steer naming the live turn, nothing held
+//   (3) the same while the button is offered for the other reason — a finished turn whose subagents are out: Enter
+//       holds it, and with no live turn to steer Ctrl+Enter means what Enter means
+//   (4) with no turn running and no subagent out there is nothing to hold and nothing to steer, so BOTH send, and
+//       the request each makes is identical
+//   (5) Shift+Enter still inserts a newline, Ctrl+Shift+Enter is a newline and never a gesture, an empty box is
+//       ignored without an error, and the add-agent field, the model picker and the settings boxes are untouched
+//   (6) the placeholder and both buttons' titles name the gesture each of them owns, in each state
 //
 // WHAT IS DRIVEN, AND WHAT IS ONLY INSPECTED
 //
 //   driven     a panel of its own (or PANEL_URL) plus headless Chromium over it, with real key presses
 //              (page.keyboard.press -> CDP Input.dispatchKeyEvent), and the page's own fetch stubbed so a
-//              "send" is recorded instead of starting a worker anywhere
-//   driven     the three card states, fabricated in the PAGE's own state (state.jobs + renderJobs) so a
-//              running turn, a finished turn with subagents out and an idle thread are all real renders of
-//              the shipped code rather than fixtures of it
-//   inspected  that the new branch sits behind the `.reply-box` guard and that the button's click path and
-//              the key branch call the SAME function — read off public/app.js, not measured here
+//              "send" or a "steer" is recorded instead of reaching a gateway
+//   driven     the three card states, fabricated in the PAGE's own state (state.jobs + renderJobs) so a running
+//              turn, a finished turn with subagents out and an idle thread are real renders of the shipped code
+//   inspected  that each branch sits behind the `.reply-box` guard, and that each button's click path and its
+//              keystroke call the SAME function — read off public/app.js, not measured here
 //
 // The browser half needs a Playwright install. Point the script at one with PANEL_PLAYWRIGHT_ROOT (a directory
 // holding node_modules/playwright, or the package itself); without one the script says BROWSER-HALF-NOT-RUN and
@@ -98,7 +97,6 @@ let dir = null;
 let panel = null;
 let base = LIVE;
 const panelLog = [];
-let configPath = null;
 
 async function startSandbox() {
   dir = mkdtempSync(path.join(tmpdir(), "wtgui-reply-keys-"));
@@ -108,7 +106,7 @@ async function startSandbox() {
   const cwdDir = path.join(dir, "panel-cwd");
   for (const d of [scanRoot, home, configDir, cwdDir, path.join(configDir, "logs")]) mkdirSync(d, { recursive: true });
   const port = await freePort();
-  configPath = path.join(configDir, "config.json");
+  const configPath = path.join(configDir, "config.json");
   writeFileSync(
     configPath,
     `${JSON.stringify(
@@ -191,14 +189,14 @@ function loadPlaywright() {
 const cardSel = `.job[data-thread="${THREAD}"]`;
 const boxSel = `${cardSel} .reply-box`;
 const queueBtnSel = `${cardSel} [data-queue-reply]`;
-const steerBtnSel = `${cardSel} .btn-steer-primary`;
-const sendBtnSel = `${cardSel} .btn-reply[data-thread="${THREAD}"]`;
+const steerBtnSel = `${cardSel} [data-steer]`;
 
 async function browserPhase(pw) {
   const pageErrors = [];
   const browser = await pw.chromium.launch({ headless: true });
   browserRef = browser;
   const context = await browser.newContext({ viewport: { width: 1500, height: 1000 } });
+
   // ---- the page-side probe: a recorded fetch, the three card states, and the box's own readings ----
   // Registered BEFORE the page navigates, and it also replaces EventSource. The page's live stream broadcasts
   // `jobs`, which CLEARS state.jobs — so a card fabricated here could be wiped mid-check by a broadcast that has
@@ -300,8 +298,9 @@ async function browserPhase(pw) {
       probe.titles = () => {
         const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
         const q = card?.querySelector("[data-queue-reply]");
-        const p = card?.querySelector(".btn-steer-primary") || card?.querySelector(".btn-reply[data-thread]");
-        return { queue: q ? q.title : null, primary: p ? p.title : null, primaryLabel: p ? p.textContent : null };
+        const s = card?.querySelector("[data-steer]");
+        const p = s || card?.querySelector(".btn-reply[data-thread]");
+        return { queue: q ? q.title : null, steer: s ? s.title : null, primary: p ? p.title : null, primaryLabel: p ? p.textContent : null };
       };
       probe.ghosts = () => {
         const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
@@ -322,7 +321,6 @@ async function browserPhase(pw) {
     .then(() => true)
     .catch(() => false);
   ok("browser: the page is loaded with the probe installed", ready);
-
 
   const press = async (combo, { focus = boxSel } = {}) => {
     await page.locator(focus).focus();
@@ -352,73 +350,85 @@ async function browserPhase(pw) {
   // ================= state A: a turn is running =====================================================
   console.log("\n== state A: a turn is running on this thread ==");
   ok("the card renders with its reply box", await card([{ id: "probe-a", status: "running" }]));
-  check("the Queue reply button is offered (this is the state the button exists for)", await page.locator(queueBtnSel).count(), 1);
+  check("the Steer turn button is offered (this is the state it exists for)", await page.locator(steerBtnSel).count(), 1);
+  check("the Queue reply button is offered beside it", await page.locator(queueBtnSel).count(), 1);
   check("the primary button is Steer turn", (await titles()).primaryLabel, "Steer turn");
   const titlesA = await titles();
   const placeholderA = await placeholder();
-  ok("(6) the placeholder names both gestures in this state", /Enter steers it/.test(placeholderA) && /Ctrl\+Enter/.test(placeholderA), placeholderA);
-  ok("(6) the Queue reply button's title names its gesture", /Ctrl\+Enter/.test(titlesA.queue), titlesA.queue);
-  ok("(6) the Steer turn button's title names its gesture", /\(Enter\)/.test(titlesA.primary), titlesA.primary);
+  ok("(6) the placeholder names both gestures in this state", /Ctrl\+Enter steers it/.test(placeholderA) && /Enter holds yours/.test(placeholderA), placeholderA);
+  ok("(6) the Steer turn button's title names its gesture", /\(Ctrl\+Enter\)/.test(titlesA.steer), titlesA.steer);
+  ok("(6) the Queue reply button's title names its gesture", /\(Enter\)/.test(titlesA.queue), titlesA.queue);
 
-  // (1) Enter steers, as today.
-  await clearPosts();
-  await type("steer this into the live turn");
-  await press("Enter");
-  const steered = await steerPosts();
-  check("(1) Enter posts one steer, and nothing else", (await posts()).length, 1);
-  check("(1) the steer names the running turn (the job the card shows as live)", steered[0]?.body?.id, "probe-a");
-  check("(1) and carries the typed text", steered[0]?.body?.text, "steer this into the live turn");
-  check("(1) Enter queued nothing", await queueOf(), []);
-  check("(1) the box is empty after the steer", await boxValue(), "");
-  const keyA = await lastKey();
-  ok("(1) the key that did it was a real Enter with no modifiers", keyA && keyA.key === "Enter" && !keyA.ctrl && !keyA.meta && !keyA.shift, JSON.stringify(keyA));
-
-  // (2) Ctrl+Enter queues — the box empties, the ghost entry is on the card, no request goes out.
+  // (1) Enter holds the reply — no request at all, the box empties, the ghost entry is on the card.
   await clearPosts();
   await type("hold this for the next turn");
-  await press("Control+Enter");
-  const keyCtrl = await lastKey();
-  ok("(2) the key the page saw was a real Ctrl+Enter", keyCtrl && keyCtrl.key === "Enter" && keyCtrl.ctrl === true && keyCtrl.shift === false, JSON.stringify(keyCtrl));
-  check("(2) Ctrl+Enter made no request at all", await posts(), []);
-  check("(2) the reply is queued", await queueOf(), ["hold this for the next turn"]);
-  check("(2) the box is empty", await boxValue(), "");
+  await press("Enter");
+  const keyEnter = await lastKey();
+  ok("(1) the key the page saw was a real Enter with no modifiers", keyEnter && keyEnter.key === "Enter" && !keyEnter.ctrl && !keyEnter.meta && !keyEnter.shift, JSON.stringify(keyEnter));
+  check("(1) Enter made no request at all", await posts(), []);
+  check("(1) the reply is held", await queueOf(), ["hold this for the next turn"]);
+  check("(1) the box is empty", await boxValue(), "");
   const ghostsA = await ghosts();
-  ok("(2) the queued entry is on the card, with its own line", ghostsA.length === 1 && /sends when the current turn finishes/.test(ghostsA[0]) && /hold this for the next turn/.test(ghostsA[0]), JSON.stringify(ghostsA));
-  check("(2) the queue count is on the card too", await page.locator(`${cardSel} .queue-note`).textContent(), "1 queued");
-  check("(2) the only control carrying the queue action is the Queue reply button", await page.locator(`${cardSel} [data-queue-reply]`).count(), 1);
-  check("(2) and it is a button, so the press is still there for the reader", await page.locator(queueBtnSel).evaluate((el) => el.tagName), "BUTTON");
-  // the button and the keystroke are one action: the button queues the next one.
+  ok("(1) the queued entry is on the card, with its own line", ghostsA.length === 1 && /sends when the current turn finishes/.test(ghostsA[0]) && /hold this for the next turn/.test(ghostsA[0]), JSON.stringify(ghostsA));
+  check("(1) the queue count is on the card too", await page.locator(`${cardSel} .queue-note`).textContent(), "1 queued");
+  check("(1) the only control carrying the queue action is the Queue reply button", await page.locator(`${cardSel} [data-queue-reply]`).count(), 1);
+  check("(1) and it is a button, so the press is still there for the reader", await page.locator(queueBtnSel).evaluate((el) => el.tagName), "BUTTON");
+  // the button and the keystroke are one action: the button holds the next one.
   await type("and this one from the button");
   await page.locator(queueBtnSel).click();
   await page.waitForTimeout(200);
-  check("(2) the Queue reply button queues the same way", await queueOf(), ["hold this for the next turn", "and this one from the button"]);
-  check("(2) still no request from either press", await posts(), []);
+  check("(1) the Queue reply button holds it the same way", await queueOf(), ["hold this for the next turn", "and this one from the button"]);
+  check("(1) still no request from either press", await posts(), []);
 
-  // (5) Shift+Enter is still a newline, Ctrl+Shift+Enter is still a newline and never a queue.
+  // (2) Ctrl+Enter steers the live turn — one POST, nothing held.
   await page.evaluate(() => { state.replyQueue.delete("wtgui-probe-reply-keys-4e71aa"); renderConversation("wtgui-probe-reply-keys-4e71aa"); });
+  await clearPosts();
+  await type("steer this into the live turn");
+  await press("Control+Enter");
+  const keyCtrl = await lastKey();
+  ok("(2) the key the page saw was a real Ctrl+Enter", keyCtrl && keyCtrl.key === "Enter" && keyCtrl.ctrl === true && keyCtrl.shift === false, JSON.stringify(keyCtrl));
+  const steered = await steerPosts();
+  check("(2) Ctrl+Enter posts one steer, and nothing else", (await posts()).length, 1);
+  check("(2) the steer names the running turn (the job the card shows as live)", steered[0]?.body?.id, "probe-a");
+  check("(2) and carries the typed text", steered[0]?.body?.text, "steer this into the live turn");
+  check("(2) Ctrl+Enter held nothing", await queueOf(), []);
+  check("(2) the box is empty after the steer", await boxValue(), "");
+  // the Steer turn button and the keystroke are one action.
+  await clearPosts();
+  await type("and this one from the button");
+  await page.locator(steerBtnSel).click();
+  await page.waitForTimeout(250);
+  const steeredByButton = await steerPosts();
+  check("(2) the Steer turn button steers the same way", steeredByButton[0]?.body?.text, "and this one from the button");
+  check("(2) and holds nothing either", await queueOf(), []);
+
+  // (5) Shift+Enter is still a newline, Ctrl+Shift+Enter is still a newline and never a gesture.
   await clearPosts();
   await type("line one");
   await press("Shift+Enter");
   const afterShift = await boxValue();
-  ok("(5) Shift+Enter inserts a newline instead of sending", /line one\n$/.test(afterShift), JSON.stringify(afterShift));
-  check("(5) Shift+Enter queued nothing and sent nothing", { q: await queueOf(), posts: await posts() }, { q: [], posts: [] });
+  ok("(5) Shift+Enter inserts a newline instead of acting", /line one\n$/.test(afterShift), JSON.stringify(afterShift));
+  check("(5) Shift+Enter held nothing and sent nothing", { q: await queueOf(), posts: await posts() }, { q: [], posts: [] });
   await press("Control+Shift+Enter");
   const keyCtrlShift = await lastKey();
-  check("(5) Ctrl+Shift+Enter queued nothing", await queueOf(), []);
-  check("(5) and sent nothing", await posts(), []);
+  check("(5) Ctrl+Shift+Enter held nothing", await queueOf(), []);
+  check("(5) and steered nothing", await posts(), []);
   ok("(5) the page saw Ctrl+Shift+Enter with shift down", keyCtrlShift && keyCtrlShift.shift === true && keyCtrlShift.ctrl === true, JSON.stringify(keyCtrlShift));
   ok("(5) it is the newline branch that ran, so the box grew a line", String(await boxValue()).split("\n").length >= 3, JSON.stringify(await boxValue()));
 
-  // (5) an empty box is still ignored, without an error.
+  // (5) an empty box is still ignored, without an error — for either gesture.
   await page.evaluate(() => { document.querySelector('.reply-box[data-reply="wtgui-probe-reply-keys-4e71aa"]').value = ""; state.replyDrafts["wtgui-probe-reply-keys-4e71aa"] = ""; });
   await clearPosts();
-  await press("Control+Enter");
-  check("(5) an empty box with Ctrl+Enter queues nothing", await queueOf(), []);
+  await press("Enter");
+  check("(5) an empty box with Enter holds nothing", await queueOf(), []);
   check("(5) and sends nothing", await posts(), []);
+  await press("Control+Enter");
+  check("(5) an empty box with Ctrl+Enter steers nothing", await queueOf(), []);
+  check("(5) and posts nothing", await posts(), []);
 
-  // ⌘+Enter: the Mac spelling of the same gesture.
+  // ⌘+Enter: the Mac spelling of the steer gesture.
   await clearPosts();
-  await type("queued from the command key");
+  await type("steered from the command key");
   await press("Meta+Enter");
   const keyMeta = await lastKey();
   if (keyMeta && keyMeta.meta === true) {
@@ -432,59 +442,71 @@ async function browserPhase(pw) {
     });
     await page.waitForTimeout(200);
     const dispatched = await lastKey();
-    ok("(2) a ⌘+Enter keydown (metaKey, dispatched on the box) queues", dispatched && dispatched.meta === true, JSON.stringify(dispatched));
+    ok("(2) a ⌘+Enter keydown (metaKey, dispatched on the box) steers", dispatched && dispatched.meta === true, JSON.stringify(dispatched));
   }
-  check("(2) ⌘+Enter queued the reply", await queueOf(), ["queued from the command key"]);
-  check("(2) ⌘+Enter made no request", await posts(), []);
+  const metaSteer = await steerPosts();
+  check("(2) ⌘+Enter steered the live turn", metaSteer[0]?.body?.text, "steered from the command key");
+  check("(2) ⌘+Enter held nothing", await queueOf(), []);
 
   // ================= state B: finished turn, subagents still out =====================================
   console.log("\n== state B: the turn is over, its subagents are still out ==");
   ok("the card renders with its reply box", await card([{ id: "probe-b", status: "done", subagents: [{ id: "sub-1", running: true, name: "worker" }] }]));
   check("the Queue reply button is offered for the second reason", await page.locator(queueBtnSel).count(), 1);
-  check("no turn is running, so the primary button is Send reply", (await titles()).primaryLabel, "Send reply");
+  check("no turn is live, so no Steer turn button is offered", await page.locator(steerBtnSel).count(), 0);
+  check("the primary button is Send reply", (await titles()).primaryLabel, "Send reply");
   const titlesB = await titles();
   const placeholderB = await placeholder();
-  ok("(6) the placeholder names the gesture in this state", /Ctrl\+Enter/.test(placeholderB) && /Enter sends now/.test(placeholderB), placeholderB);
-  ok("(6) the Queue reply button's title names its gesture", /Ctrl\+Enter/.test(titlesB.queue), titlesB.queue);
-  ok("(6) the Send reply button's title names its gesture and says why Ctrl+Enter differs", /\(Enter\)/.test(titlesB.primary) && /Ctrl\+Enter/.test(titlesB.primary), titlesB.primary);
+  ok("(6) the placeholder names the gesture in this state", /Enter holds yours until they finish/.test(placeholderB), placeholderB);
+  ok("(6) the Queue reply button's title names its gesture", /\(Enter\)/.test(titlesB.queue), titlesB.queue);
+  ok("(6) the Send reply button's title names no key, because no key sends here", /subagents this thread started are still out/.test(titlesB.primary) && !/\(Enter/.test(titlesB.primary), titlesB.primary);
   await clearPosts();
   await type("wait for the children, then this");
-  await press("Control+Enter");
-  check("(3) Ctrl+Enter queues while the subagents are out", await queueOf(), ["wait for the children, then this"]);
+  await press("Enter");
+  check("(3) Enter holds the reply while the subagents are out", await queueOf(), ["wait for the children, then this"]);
   check("(3) with no request at all", await posts(), []);
   const ghostsB = await ghosts();
   ok("(3) and the queued entry is on the card", ghostsB.length === 1 && /wait for the children, then this/.test(ghostsB[0]), JSON.stringify(ghostsB));
+  // No live turn to steer: Ctrl+Enter means what Enter means here.
+  await page.evaluate(() => { state.replyQueue.delete("wtgui-probe-reply-keys-4e71aa"); renderConversation("wtgui-probe-reply-keys-4e71aa"); });
+  await clearPosts();
+  await type("ctrl+enter with nothing to steer");
+  await press("Control+Enter");
+  check("(3) Ctrl+Enter with no live turn holds it too", await queueOf(), ["ctrl+enter with nothing to steer"]);
+  check("(3) and still makes no request", await posts(), []);
 
   // ================= state C: nothing running, no subagent out =======================================
-  console.log("\n== state C: nothing is running and no subagent is out — nothing to queue ==");
+  console.log("\n== state C: nothing is running and no subagent is out — nothing to hold, nothing to steer ==");
   ok("the card renders with its reply box", await card([{ id: "probe-c", status: "done" }]));
   check("no Queue reply button is offered", await page.locator(queueBtnSel).count(), 0);
+  check("no Steer turn button is offered", await page.locator(steerBtnSel).count(), 0);
   check("the primary button is Send reply", (await titles()).primaryLabel, "Send reply");
   const placeholderC = await placeholder();
-  ok("(6) the placeholder says what this state does, and promises no queue", /Enter to send/.test(placeholderC) && !/Ctrl\+Enter/.test(placeholderC), placeholderC);
-  await clearPosts();
-  await type("this is the next turn");
-  await press("Control+Enter");
-  const replyPostsCtrl = await replyPosts();
-  check("(4) Ctrl+Enter sends exactly one reply", replyPostsCtrl.length, 1);
-  check("(4) to this thread", replyPostsCtrl[0]?.body?.thread, THREAD);
-  check("(4) with the typed text", replyPostsCtrl[0]?.body?.text, "this is the next turn");
-  check("(4) and queued nothing", await queueOf(), []);
-  check("(4) the box is empty after the send", await boxValue(), "");
-  const afterCtrl = await posts();
-  // Same state again before the comparison: a sent reply paints a new running turn on the card (that is what the
-  // stubbed answer says a real one does), and comparing Enter with Ctrl+Enter has to start from the state the
-  // brief names - nothing running, nothing queued.
-  await card([{ id: "probe-c", status: "done" }]);
+  const titlesC = await titles();
+  ok("(6) the placeholder says what this state does, and promises no hold", /Enter or Ctrl\+Enter to send/.test(placeholderC), placeholderC);
+  ok("(6) and the Send reply button's title names both gestures", /\(Enter or Ctrl\+Enter\)/.test(titlesC.primary), titlesC.primary);
   await clearPosts();
   await type("this is the next turn");
   await press("Enter");
+  const replyPostsEnter = await replyPosts();
+  check("(4) Enter sends exactly one reply", replyPostsEnter.length, 1);
+  check("(4) to this thread", replyPostsEnter[0]?.body?.thread, THREAD);
+  check("(4) with the typed text", replyPostsEnter[0]?.body?.text, "this is the next turn");
+  check("(4) and held nothing", await queueOf(), []);
+  check("(4) the box is empty after the send", await boxValue(), "");
   const afterEnter = await posts();
-  check("(4) Enter makes the same request, character for character", JSON.stringify(afterEnter), JSON.stringify(afterCtrl));
-  ok("(4) so Ctrl+Enter and Enter are one behaviour where there is nothing to queue", afterEnter.length === 1 && afterEnter[0].url.includes("/api/agents/reply"), JSON.stringify(afterEnter.map((p) => p.url)));
+  // Same state again before the comparison: a sent reply paints a new running turn on the card (that is what the
+  // stubbed answer says a real one does), and comparing the two gestures has to start from the state the brief
+  // names - nothing running, nothing held.
+  await card([{ id: "probe-c", status: "done" }]);
+  await clearPosts();
+  await type("this is the next turn");
+  await press("Control+Enter");
+  const afterCtrl = await posts();
+  check("(4) Ctrl+Enter makes the same request, character for character", JSON.stringify(afterCtrl), JSON.stringify(afterEnter));
+  ok("(4) so both gestures are one behaviour where there is nothing to wait for", afterCtrl.length === 1 && afterCtrl[0].url.includes("/api/agents/reply"), JSON.stringify(afterCtrl.map((p) => p.url)));
 
   // ================= (5) the other boxes on the page are untouched ===================================
-  console.log("\n== the gesture is scoped to the reply box ==");
+  console.log("\n== the gestures are scoped to the reply box ==");
   await card([{ id: "probe-a2", status: "running" }]);
   await type("still the reply box's own text");
   // The settings dialog is closed on a fresh page, so open it the way the reader does before touching its
@@ -505,8 +527,8 @@ async function browserPhase(pw) {
     await page.locator(sel).focus();
     await page.keyboard.press("Control+Enter");
     await page.waitForTimeout(150);
-    check(`(5) Ctrl+Enter in ${what} queues nothing`, await queueOf(), []);
-    check(`(5) Ctrl+Enter in ${what} sends no reply`, (await replyPosts()).length, 0);
+    check(`(5) Ctrl+Enter in ${what} holds nothing`, await queueOf(), []);
+    check(`(5) Ctrl+Enter in ${what} steers nothing`, (await steerPosts()).length, 0);
     check(`(5) Ctrl+Enter in ${what} does nothing at all`, await posts(), []);
     check(`(5) the reply box still holds its own draft`, await boxValue(), "still the reply box's own text");
   }
@@ -525,14 +547,15 @@ async function browserPhase(pw) {
     await page.keyboard.type("gpt");
     await page.keyboard.press("Control+Enter");
     await page.waitForTimeout(150);
-    check("(5) Ctrl+Enter in the model picker's search queues nothing", await queueOf(), []);
-    check("(5) Ctrl+Enter in the model picker's search sends no reply", (await replyPosts()).length, 0);
+    check("(5) Ctrl+Enter in the model picker's search holds nothing", await queueOf(), []);
+    check("(5) Ctrl+Enter in the model picker's search steers nothing", (await steerPosts()).length, 0);
     check("(5) the reply box still holds its own draft", await boxValue(), "still the reply box's own text");
     note("(the picker's own Enter picks the highlighted model — unchanged, and its Ctrl+Enter was never the reply box's)");
     await page.keyboard.press("Escape");
   }
   check("(5) no page errors anywhere in this run", pageErrors, []);
   await browser.close();
+  browserRef = null;
 }
 
 // ---- what can only be read off the source --------------------------------------------------------
@@ -541,21 +564,30 @@ function sourceChecks() {
   const lines = src.split(/\r?\n/);
   const at = (needle) => lines.findIndex((l) => l.includes(needle));
   const guard = at('const box = e.target.closest && e.target.closest(".reply-box");');
-  const branch = at('&& queueOfferedFor(box)) {');
   const shiftBranch = at('if (e.key === "Enter" && e.shiftKey) {');
+  const ctrlBranch = at("&& steerOfferedFor(box)) {");
   const plainBranch = at('if (e.key === "Enter" && !e.shiftKey) {');
-  ok("inspected: the Ctrl/Cmd branch sits inside the `.reply-box` handler", guard > 0 && branch > guard, `guard line ${guard + 1}, branch line ${branch + 1}`);
-  ok("inspected: and after the Shift+Enter newline branch", shiftBranch > 0 && branch > shiftBranch, `shift line ${shiftBranch + 1}`);
-  ok("inspected: and before the plain Enter branch, which it falls through to", plainBranch > branch, `plain Enter line ${plainBranch + 1}`);
+  ok("inspected: both branches sit inside the `.reply-box` handler", guard > 0 && ctrlBranch > guard && plainBranch > guard, `guard line ${guard + 1}, Ctrl branch ${ctrlBranch + 1}, Enter branch ${plainBranch + 1}`);
+  ok("inspected: and after the Shift+Enter newline branch", shiftBranch > 0 && ctrlBranch > shiftBranch && plainBranch > shiftBranch, `shift line ${shiftBranch + 1}`);
+  ok("inspected: the Ctrl/Cmd branch is the steer one, and comes first", ctrlBranch > 0 && plainBranch > ctrlBranch, `steer at ${ctrlBranch + 1}, hold at ${plainBranch + 1}`);
   const defs = lines.filter((l) => l.includes("function queueReplyFromBox(")).length;
   const calls = lines.filter((l) => /queueReplyFromBox\(/.test(l) && !l.includes("function queueReplyFromBox(")).length;
   check("inspected: queueReplyFromBox is defined once", defs, 1);
-  check("inspected: and called from exactly two places — the button and the key branch", calls, 2);
+  check("inspected: and called from exactly two places — the button and the Enter branch", calls, 2);
+  const steerDefs = lines.filter((l) => l.includes("function steerFromBox(")).length;
+  const steerCalls = lines.filter((l) => /steerFromBox\(/.test(l) && !l.includes("function steerFromBox(")).length;
+  check("inspected: steerFromBox is defined once", steerDefs, 1);
+  check("inspected: and called from exactly two places — the button and the Ctrl/Cmd branch", steerCalls, 2);
   const clickAt = lines.findIndex((l) => l.includes('const queueBtn = e.target.closest("[data-queue-reply]");'));
   const clickCall = lines.findIndex((l, i) => i > clickAt && clickAt > 0 && l.includes("queueReplyFromBox(queueBtn.dataset.queueReply)"));
-  ok("inspected: the button's click path is that same call, with no body of its own", clickAt > 0 && clickCall > clickAt, `click path line ${clickAt + 1}, the call at ${clickCall + 1}`);
-  const oldBody = lines.some((l) => l.includes("// Clear the draft first: queueReply rebuilds the card"));
-  check("inspected: the button's old inline body is gone", oldBody, false);
+  ok("inspected: the Queue reply button's click path is that same call, with no body of its own", clickAt > 0 && clickCall > clickAt, `click path line ${clickAt + 1}, the call at ${clickCall + 1}`);
+  const steerClickAt = lines.findIndex((l) => l.includes('const steerBtn = e.target.closest("[data-steer]");'));
+  const steerClickCall = lines.findIndex((l, i) => i > steerClickAt && steerClickAt > 0 && l.includes("await steerFromBox("));
+  ok("inspected: the Steer turn button's click path is that same call too", steerClickAt > 0 && steerClickCall > steerClickAt, `click path line ${steerClickAt + 1}, the call at ${steerClickCall + 1}`);
+  const oldQueueBody = lines.some((l) => l.includes("// Clear the draft first: queueReply rebuilds the card"));
+  check("inspected: the Queue reply button's old inline body is gone", oldQueueBody, false);
+  const oldSteerBody = lines.some((l) => l.includes("await steerTurn(thread, steerBtn.dataset.steer"));
+  check("inspected: the Steer turn button's old inline body is gone", oldSteerBody, false);
 }
 
 // ---- run -----------------------------------------------------------------------------------------
@@ -594,10 +626,10 @@ try {
   console.log("key presses through CDP; the three card states built in the page's own state.jobs and rendered by the");
   console.log("shipped renderJobs/conversationHtml; every request the page would have made recorded by a stubbed fetch");
   console.log("(so no worker, no run and no steer ever left the page), and the keydowns themselves read back with their");
-  console.log("modifiers to prove the branch was reached by a real Ctrl+Enter.");
-  console.log("WHAT WAS INSPECTED, NOT DRIVEN: that the branch sits behind the .reply-box guard, that it precedes the");
-  console.log("plain Enter branch, and that the button's click path and the key branch call one shared function — read");
-  console.log("off public/app.js.");
+  console.log("modifiers to prove each branch was reached by a real Ctrl+Enter or Enter.");
+  console.log("WHAT WAS INSPECTED, NOT DRIVEN: that both branches sit behind the .reply-box guard, that the steer branch");
+  console.log("precedes the hold branch, and that each button's click path and its keystroke call one shared function —");
+  console.log("read off public/app.js.");
   if (!failures) console.log("REPLY-QUEUE-KEYS-OK");
 } catch (err) {
   failures += 1;

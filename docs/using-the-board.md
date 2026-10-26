@@ -438,13 +438,15 @@ a row of zeros. Token counts read in three significant digits, truncated (`636k 
 
 - It grows with the draft (up to about 18 lines, or 45% of the window) and the buttons ride its bottom edge.
 - **While a turn runs**, the primary button is **Steer turn**: the text goes into the live run and is read at the
-  agent's next tool boundary, so the turn changes course. `Enter` does the same.
+  agent's next tool boundary, so the turn changes course. `Ctrl+Enter` (`⌘+Enter` on a Mac) is that button's press
+  from the box itself.
 - **Queue reply** holds the text and sends it when the current turn finishes; queued replies show as ghost turns
-  (`queued · sends when the current turn finishes`). While subagents are out, queueing also waits for them.
-  `Ctrl+Enter` (`⌘+Enter` on a Mac) is that button's press from the box itself. With nothing to wait for — no turn
-  running and no subagent out — the button is not offered and `Ctrl+Enter` simply sends, exactly like `Enter`.
-- **Send reply** when nothing is running: the next turn on the same session, in the same directory. `Enter` sends,
-  `Shift+Enter` adds a line, `Up`/`Down` walk earlier prompts for that thread, shell style.
+  (`queued · sends when the current turn finishes`). While subagents are out, queueing also waits for them. `Enter`
+  is that button's press: while the card offers it, `Enter` holds the reply instead of sending it. With no live turn
+  to steer, `Ctrl+Enter` means the same thing there.
+- **Send reply** when nothing is running: the next turn on the same session, in the same directory. There is nothing
+  to steer and nothing to hold, so `Enter` and `Ctrl+Enter` both send. `Shift+Enter` adds a line, `Up`/`Down` walk
+  earlier prompts for that thread, shell style.
 - **Cancel turn** stops the live run (cooperative — the card settles as `cancelled` when the turn actually ends).
 - A steer that arrives after the last tool boundary comes back as `⇢ that steer missed the turn — it is in the box,
   unsent`; send it again to continue on the same thread.
@@ -520,8 +522,8 @@ only its own line so your comments and formatting survive.
 | `Enter` | Spawn prompt | Spawn the agent. |
 | `Shift+Enter` | Spawn prompt, reply box, question answer | A newline instead of sending. |
 | `Up` / `Down` | Spawn prompt, reply box | Walk earlier prompts for this thread/board. |
-| `Enter` | Reply box | Send — or **steer** when the turn is running. |
-| `Ctrl+Enter` (⌘+Enter) | Reply box | **Queue reply** — hold the text for the next turn instead of steering the running one. The same press as the **Queue reply** button, and it is offered in the same two states. |
+| `Enter` | Reply box | **Queue reply** while the card offers that button (a turn is running, or a finished turn's subagents are still out); otherwise send the next turn. |
+| `Ctrl+Enter` (⌘+Enter) | Reply box | **Steer turn** — send the text into the live turn. With no live turn to steer it means what `Enter` means. |
 | `Alt+Right` / `Alt+Left` | During NOT-RUNNING | Skip forward / go back. |
 | `Ctrl+,` | Anywhere | Settings. |
 | `Esc` | Anywhere | Close what is open: an artifacts list, Settings, a maximized card, a clone row, or a folder filter. |
