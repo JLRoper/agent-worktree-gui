@@ -81,6 +81,15 @@ drop with its reason and still start the spawn written after them, and a thread 
 injected job store must cost only the line that touched it — useful after touching how a finished turn's lines
 are read.
 
+`node tools/verify-leftover-holder.mjs` proves the `leftover` rule's holder check end to end in a sandbox of its
+own: a real panel from this worktree over two real git worktrees of a throwaway repo — one dirty with nobody in it,
+one dirty with a live run in it — with the panel's own scanner and sentry, and headless Chromium over the served
+board. The unheld tree must raise its leftover and the held tree must raise nothing, across a dozen ticks in which
+the held tree's own counts move (which is how the false alert used to re-fire, once per count). The live holder is
+seeded the way the board really gets one back: an interrupted card with a run id, re-attached by the boot reconcile
+against a stub Runs API. Point it at a Playwright install with `PANEL_PLAYWRIGHT_ROOT`; without one the browser half
+reports `BROWSER-HALF-NOT-RUN` and the rest still runs.
+
 `node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
 `--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
 ancestry cannot see the merge: the repository ruleset requires linear history, so a PR lands as a squash or a
@@ -580,9 +589,11 @@ shorter than the panel starts at its foot instead of leaving empty panel under i
   failure is the call that produced it plus the failing line with its numbers masked, so "npm test, 3 failures" in
   three replies is one alert and a clean turn breaks the streak; a tool the gateway marks only in its result header
   — `↳ terminal · error` — counts too), `leftover` (a worker ended and its tree still holds modified or
-  untracked files — read from the scanner's own row, never a second git pass; commits that are not on main are the
-  normal state of an agent's branch until you merge them, so they are named on the alert as context rather than
-  being a trigger)
+  untracked files, and no live run holds that tree any more — read from the scanner's own row, never a second git
+  pass; a tree a live run's cwd holds is that run's worktree, so a SPAWN IN into a just-finished tree edits files
+  that are work in progress and raises nothing, which is the check standing rule 16 asks a reader to make by hand;
+  commits that are not on main are the normal state of an agent's branch until you merge them, so they are named
+  on the alert as context rather than being a trigger)
   and `child` (a delegated subagent that has written nothing for `childQuietSeconds` — the wording is "no
   activity for 6m", never "hung": a long tool call looks the same; read from the gateway's session store, and
   only for threads this board is showing), plus `interrupted` (a thread whose latest turn ended `interrupted` —
