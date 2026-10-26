@@ -108,7 +108,7 @@ const state = {
   // so the position has to live outside the DOM or it comes back at the top.
   outScrolls: {},
   collapsedJobs: loadCollapsedJobs(),
-  closedDescs: loadClosedDescs(),
+  openDescs: loadOpenDescs(),
   expandedProjects: loadExpandedProjects(),
   collapsedFixed: loadCollapsedFixed(),
   collapsedRoots: loadCollapsedRoots(),
@@ -214,22 +214,28 @@ function saveCollapsedJobs() {
   }
 }
 
-// Which descriptions the reader has folded away, by row key. The block leads the worktree's detail and opens itself —
-// it says what the branch was for, which is worth one glance — but a reader who has read it should not have to fold it
-// again on every reload, so unlike the two strips under it (git detail, liveness) this one remembers.
-function loadClosedDescs() {
+// Which descriptions the reader has UNFOLDED, by row key. The block leads the worktree's detail and starts folded,
+// like the two strips under it (merge state, liveness): its folded peek says what the branch was for, which is the one
+// thing worth seeing without opening anything, and the full text was taking a block's worth of height above the agents.
+// Unfolding it is remembered, and only unfolding — the set starts empty, so a row nobody has opened is folded, and the
+// remembered state is the reader's own.
+//
+// A NEW key, not an inversion of the old `wm.closedDescs`. That set was written by a build where every description
+// started OPEN, so its contents describe a layout the board no longer has; read either way round it would fold or
+// unfold rows on this reader's behalf. An absent key means every row folded, which is now the default.
+function loadOpenDescs() {
   try {
-    return new Set(JSON.parse(localStorage.getItem("wm.closedDescs") || "[]"));
+    return new Set(JSON.parse(localStorage.getItem("wm.openDescs") || "[]"));
   } catch {
     return new Set();
   }
 }
 
-function saveClosedDescs() {
+function saveOpenDescs() {
   try {
-    localStorage.setItem("wm.closedDescs", JSON.stringify([...state.closedDescs]));
+    localStorage.setItem("wm.openDescs", JSON.stringify([...state.openDescs]));
   } catch {
-    /* no storage: the fold simply will not survive a reload */
+    /* no storage: the unfold simply will not survive a reload */
   }
 }
 
@@ -5403,12 +5409,27 @@ async function spawnAgent({ promptFocus = true } = {}) {
 // /api/models, which reads the provider list Hermes itself fetched — not a hardcoded menu.
 let modelsState = null;
 
+// What the CLI's own picker prints beside a model id, and this prints the same way: what the model
+// costs per million tokens in and out, then Artificial Analysis' coding rating out of ten. A model
+// with neither keeps its bare id. The units are stated once, on the select's own tooltip, rather than
+// repeated on every row.
+function modelPriceText(entry) {
+  if (!entry) return "";
+  const parts = [];
+  if (entry.input || entry.output) parts.push(`${entry.input || "?"} in / ${entry.output || "?"} out`);
+  if (entry.coding) parts.push(`code ${entry.coding}`);
+  return parts.join(" · ");
+}
+
 function modelOptionHtml(d) {
   const def = d?.defaultModel || null;
   const out = [`<option value="">${esc(def ? `(default: ${def})` : "(gateway default)")}</option>`];
   for (const p of d?.providers || []) {
     out.push(`<optgroup label="${esc(p.label)}">`);
-    for (const m of p.models) out.push(`<option value="${esc(m)}">${esc(m)}</option>`);
+    for (const m of p.models) {
+      const price = modelPriceText(p.pricing?.[m]);
+      out.push(`<option value="${esc(m)}">${esc(price ? `${m} — ${price}` : m)}</option>`);
+    }
     out.push("</optgroup>");
   }
   return out.join("");
@@ -5420,9 +5441,18 @@ function renderModelPicker(keep = "") {
   sel.innerHTML = modelOptionHtml(modelsState);
   if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
   const d = modelsState;
-  // Say how old the list is: it is a cache of what the provider advertised, not a live call.
+  // Say how old the list is: it is a cache of what the provider advertised, not a live call. The price
+  // and rating columns are the panel's own cache too, so they say their own age and where to rebuild
+  // them — a row with no price is a cache that has not been filled, not a model that costs nothing.
+  const freshness = d?.fetchedAt ? `list fetched ${relTime(d.fetchedAt)} ago` : "fetched at an unknown time";
+  const units = "in/out $ per Mtok · code = Artificial Analysis coding /10";
+  const priced = d?.pricedCount
+    ? `${d.pricedCount} priced, ${d.ratedCount || 0} with a coding rating (${units})` +
+      (d.pricingAge != null ? `, prices ${relTime(new Date(Date.now() - d.pricingAge * 1000).toISOString())} old` : "")
+    : "no prices yet — Settings → Gateway → Model prices → Refresh now rebuilds them";
   sel.title = d?.count
-    ? `${d.count} model${d.count === 1 ? "" : "s"} available to ${d.provider || "this account"}, list fetched ${d.fetchedAt ? `${relTime(d.fetchedAt)} ago` : "at an unknown time"}${d.staleDays > 7 ? " — stale, run: hermes model --refresh" : ""}`
+    ? `${d.count} model${d.count === 1 ? "" : "s"} available to ${d.provider || "this account"}, ${freshness}` +
+      `${d.staleDays > 7 ? " — stale, run: hermes model --refresh" : ""} · ${priced}`
     : "no provider list found in the Hermes home — a run falls back to the gateway's configured model";
 }
 
@@ -7572,6 +7602,21 @@ function gitSubHtml(key, kind, title, count, items) {
       </div>`;
 }
 
+// The description as bullets: one per sentence. The split is the SAME boundary lib/descriptions.js used to cut the
+// text down to two sentences in the first place (a full stop, question or bang mark, then whitespace and something
+// that can start a sentence), so the panel shows the sentences the server recognised rather than re-parsing the prose
+// its own way — and text with no sentence punctuation at all (the store's word-boundary fallback) stays one bullet.
+const DESC_SENTENCE_BREAK = /(?<=[.!?])\s+(?=[A-Z0-9"'([])/;
+
+function descLines(text) {
+  const all = String(text ?? "").trim();
+  if (!all) return [];
+  return all
+    .split(DESC_SENTENCE_BREAK)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 function detailHtml(row) {
   const dirty = row.dirtyFiles || [];
   const untr = row.untrackedFiles || [];
@@ -7699,10 +7744,16 @@ function detailHtml(row) {
   // What this branch was STARTED to do, in the words of its first run's own brief. The MERGE STATE below says where
   // the branch got to; this says what it was for, which is the question an old row actually raises. The text is the
   // server's (lib/descriptions.js, written down once per tree from the earliest run in it) — nothing here derives or
-  // summarises anything — and a tree the panel has no run for has no block at all, so the section simply goes away
-  // rather than standing there empty.
+  // summarises anything beyond cutting it into its own sentences — and a tree the panel has no run for has no block at
+  // all, so the section simply goes away rather than standing there empty.
+  //
+  // A bullet list, one bullet per sentence, and FOLDED to start with — the same shape as the two strips under it
+  // (`ul.git-list`, one fact per `<li>`, the head's own line repeated as the first item). Folded, the first bullet
+  // rides to the right of the header as the peek, exactly as the merge state's summary and the liveness block's first
+  // line do, so the three strips read as one column of one-line headers.
   const desc = row.description && row.description.text ? row.description : null;
-  const descOpen = desc ? !state.closedDescs.has(key) : false;
+  const descOpen = desc ? state.openDescs.has(key) : false;
+  const descBullets = desc ? descLines(desc.text) : [];
   const descFrom = desc?.from
     ? ["first run in this tree", desc.from.thread || null, desc.from.at ? `started ${relTime(desc.from.at)} ago` : null]
         .filter(Boolean)
@@ -7713,10 +7764,12 @@ function detailHtml(row) {
       <div class="desc-head" data-toggle-desc="${esc(key)}" title="${descOpen ? "fold" : "unfold"} what this branch was started to do">
         <span class="chev">${descOpen ? "\u25be" : "\u25b8"}</span>
         <h4>Description</h4>
-        ${descOpen ? "" : `<span class="desc-first mono">${esc(desc.text)}</span>`}
+        ${descOpen ? "" : `<span class="desc-first mono">${esc(descBullets[0] || desc.text)}</span>`}
       </div>
       <div class="desc-body">
-        <p class="desc-text">${esc(desc.text)}</p>
+        <ul class="git-list desc-list">
+          ${descBullets.map((line, i) => `<li${i === 0 ? ` class="git-summary-line"` : ""}>${esc(line)}</li>`).join("")}
+        </ul>
         ${descFrom ? `<div class="desc-from mono">${esc(descFrom)}</div>` : ""}
       </div>
     </div>`
@@ -9872,9 +9925,10 @@ document.addEventListener("click", async (e) => {
     }
     return;
   }
-  // What this branch was started to do folds like the two strips below it, except that its folded state is REMEMBERED
-  // (localStorage): this is the one block a reader dismisses on purpose, and putting it back on every reload would make
-  // the remembering pointless. Folded, it keeps its first line to the right of the header the way the other two do.
+  // What this branch was started to do folds like the two strips below it, except that its UNFOLDED state is
+  // REMEMBERED (localStorage, `wm.openDescs`): the block starts folded, so the remembering is what keeps a reader's
+  // opened rows open across a reload. Folded, it keeps its first bullet to the right of the header the way the other
+  // two strips keep their first line.
   const descToggle = e.target.closest("[data-toggle-desc]");
   if (descToggle) {
     e.preventDefault();
@@ -9882,27 +9936,27 @@ document.addEventListener("click", async (e) => {
     const key = descToggle.dataset.toggleDesc;
     const block = document.querySelector(`[data-desc-block="${CSS.escape(key)}"]`);
     if (block) {
-      const closed = state.closedDescs.has(key);
-      if (closed) state.closedDescs.delete(key);
-      else state.closedDescs.add(key);
-      saveClosedDescs();
-      block.classList.toggle("collapsed", !closed);
+      const open = state.openDescs.has(key);
+      if (open) state.openDescs.delete(key);
+      else state.openDescs.add(key);
+      saveOpenDescs();
+      block.classList.toggle("collapsed", open);
       const chev = descToggle.querySelector(".chev");
-      if (chev) chev.textContent = closed ? "\u25be" : "\u25b8";
+      if (chev) chev.textContent = open ? "\u25b8" : "\u25be";
       let first = descToggle.querySelector(".desc-first");
-      const text = block.querySelector(".desc-text");
-      if (!closed) {
-        if (!first && text) {
+      const lead = block.querySelector(".desc-body li");
+      if (open) {
+        if (!first && lead) {
           first = document.createElement("span");
           first.className = "desc-first mono";
-          first.textContent = text.textContent;
-          first.title = text.textContent;
+          first.textContent = lead.textContent;
+          first.title = lead.textContent;
           descToggle.appendChild(first);
         }
       } else if (first) {
         first.remove();
       }
-      descToggle.title = `${closed ? "fold" : "unfold"} what this branch was started to do`;
+      descToggle.title = `${open ? "unfold" : "fold"} what this branch was started to do`;
     }
     return;
   }
@@ -11157,6 +11211,7 @@ function toggleSettings(open = null) {
   void loadApprovalSetting();
   void loadSessionSetting();
   void loadProviderSetting();
+  void loadModelsSetting();
 }
 
 // ---- the provider endpoint every run talks to ------------------------------------------------
@@ -11270,6 +11325,92 @@ async function clearProviderKey(btn) {
     showBanner(d.key?.set ? "model.api_key removed — the .env key is used again" : "model.api_key removed — runs now have no key from config.yaml");
   } catch (e) {
     paintProviderSetting(e.message);
+  }
+}
+
+// ---- the model menu's prices and ratings -------------------------------------------------------
+// The dropdown's price and coding columns are this panel's own cache of what the gateway's model
+// inventory says. They are READ, never fetched, on the path that opens the menu — a cold endpoint
+// must not be able to hold a dropdown — so this is the one control that regenerates them: it makes
+// the gateway re-fetch every provider's live model list (the same file `hermes model --refresh`
+// writes) and rebuilds the cache from that answer, then refills the menu. The reply carries both
+// files' row counts and mtimes, and both are shown, because "it regenerated" and "it re-read the
+// same bytes" otherwise look identical from here.
+let modelsSetting = null;
+
+function modelAgeText(state) {
+  if (state.pricingAge === null || state.pricingAge === undefined) return "never built";
+  return `${relTime(new Date(Date.now() - state.pricingAge * 1000).toISOString())} old`;
+}
+
+function paintModelsSetting(error = null) {
+  const preview = $("models-preview");
+  const age = $("models-age");
+  const btn = $("btn-models-refresh");
+  if (!preview) return;
+  const s = modelsSetting;
+  if (!s) {
+    if (age) age.textContent = "—";
+    preview.textContent = error ? `NOT REGENERATED — ${error}` : "could not read the model list";
+    preview.classList.add("bad");
+    return;
+  }
+  if (age) age.textContent = modelAgeText(s);
+  if (btn) btn.disabled = false;
+  preview.textContent = error
+    ? `NOT REGENERATED — ${error}`
+    : `${s.count} model${s.count === 1 ? "" : "s"} · ${s.pricedCount || 0} priced · ${s.ratedCount || 0} rated · ${modelAgeText(s)}`;
+  preview.classList.toggle("bad", Boolean(error));
+  preview.title = error ? "" : `provider list: ${s.source}`;
+}
+
+async function loadModelsSetting() {
+  try {
+    const r = await apiFetch("/api/models");
+    modelsSetting = r.ok ? await r.json() : null;
+  } catch (e) {
+    modelsSetting = null;
+    paintModelsSetting(e.message);
+    return;
+  }
+  paintModelsSetting();
+}
+
+async function refreshModels() {
+  const btn = $("btn-models-refresh");
+  const preview = $("models-preview");
+  if (btn) btn.disabled = true;
+  if (preview) {
+    preview.textContent = "regenerating — re-fetching every provider's live model list…";
+    preview.classList.remove("bad");
+  }
+  try {
+    // Long: the gateway re-probes every authenticated provider before it answers.
+    const r = await apiFetch("/api/models/refresh", { method: "POST" }, { timeoutMs: 240000 });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      paintModelsSetting(d.error || `HTTP ${r.status}`);
+      return;
+    }
+    // Re-read through the same path the menu itself uses, so the dropdown is drawing the new file.
+    await loadModels();
+    await loadModelsSetting();
+    const b = d.before || {};
+    const a = d.after || {};
+    if (preview) {
+      preview.title =
+        `provider_models_cache.json: mtime ${b.models?.mtimeIso || "—"} → ${a.models?.mtimeIso || "—"}, ` +
+        `rows ${b.models?.rows ?? "?"} → ${a.models?.rows ?? "?"}\n${d.path || ""}`;
+    }
+    showBanner(
+      `model prices regenerated — provider cache ${b.models?.rows ?? "?"} → ${a.models?.rows ?? "?"} rows ` +
+        `(${b.models?.providers ?? "?"} → ${a.models?.providers ?? "?"} providers), prices ${b.pricing?.priced ?? "?"} → ` +
+        `${a.pricing?.priced ?? "?"} rows, ${a.pricing?.rated ?? "?"} rated`,
+    );
+  } catch (e) {
+    paintModelsSetting(e.message);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -11785,6 +11926,7 @@ $("btn-provider-default-url")?.addEventListener("click", () => {
   const url = $("provider-url");
   if (url) url.value = url.placeholder || "https://openrouter.ai/api/v1";
 });
+$("btn-models-refresh")?.addEventListener("click", () => void refreshModels());
 $("session-limit")?.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   e.preventDefault();

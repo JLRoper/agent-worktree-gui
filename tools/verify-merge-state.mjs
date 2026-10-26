@@ -31,7 +31,8 @@
 //                 independently of the merge state strip; the choice survives folding and unfolding merge state;
 //                 the clean tree gets no commit list and no strips, and the tree with commits but a clean working
 //                 tree gets a commit list and no strips; the Description strip above and the Liveness strip below
-//                 are still there, in that order, and the Description still folds from its own head; no page errors
+//                 are still there, in that order, still folded at rest and still opening from their own heads; no
+//                 page errors
 //   inspected     that lib/scan.js builds unmergedCommits from `git log --oneline` against the project's base ref —
 //                 read off the file, not re-derived here; this script asserts only what the row carries
 //
@@ -494,13 +495,15 @@ async function browserPhase(pw) {
   const shape = await page.evaluate((sel) => {
     const inner = document.querySelector(sel).querySelector(".detail-inner");
     const kids = [...inner.children];
+    const desc = inner.querySelector(".desc-block");
     return {
       order: kids.map((k) => k.className.split(" ")[0]),
-      desc: kids.indexOf(inner.querySelector(".desc-block")),
+      desc: kids.indexOf(desc),
       git: kids.indexOf(inner.querySelector(".git-block")),
       live: kids.indexOf(inner.querySelector(".live-block")),
-      descHead: inner.querySelector(".desc-block .desc-head h4")?.textContent || null,
-      descText: inner.querySelector(".desc-block .desc-text")?.textContent || null,
+      descHead: desc?.querySelector(".desc-head h4")?.textContent || null,
+      descText: [...(desc?.querySelectorAll(".desc-body li") || [])].map((li) => li.textContent).join(" "),
+      descFolded: Boolean(desc?.classList.contains("collapsed")),
       liveHead: inner.querySelector(".live-block .live-head h4")?.textContent || null,
     };
   }, mixed);
@@ -509,9 +512,12 @@ async function browserPhase(pw) {
   check("browser: its heading is untouched", shape.descHead, "Description");
   ok("browser: the Liveness strip is still there, below merge state", shape.live > shape.git && shape.live >= 0, `liveness at ${shape.live}, merge state at ${shape.git}`);
   check("browser: its heading is untouched", shape.liveHead, "Liveness evidence");
+  // The description strip is main's to own — folded at rest, opening from its own head. This change must not have
+  // moved it, changed its words or taken its click.
+  ok("browser: the Description strip is still folded at rest, the way the board draws it", shape.descFolded);
   await page.locator(`${mixed} .desc-head`).click();
   await page.waitForTimeout(100);
-  ok("browser: the Description strip still folds from its own head", (await page.locator(`${mixed} .desc-block`).getAttribute("class")).includes("collapsed"));
+  ok("browser: it still opens from its own head", !(await page.locator(`${mixed} .desc-block`).getAttribute("class")).includes("collapsed"));
   await page.locator(`${mixed} .desc-head`).click();
   await page.waitForTimeout(100);
 
@@ -642,7 +648,7 @@ try {
     console.log("built, and headless Chromium over the running panel — the commit list line by line and full width,");
     console.log("its long form unclipped, the two file strips one line each with their counts and their names hidden,");
     console.log("every open/close combination of the three folds, the clean tree's empty ones absent, and the");
-    console.log("Description and Liveness strips still there, in order, with zero page errors.");
+    console.log("Description and Liveness strips still there, in order, folded at rest, with zero page errors.");
     console.log("WHAT WAS INSPECTED, NOT DRIVEN: that unmergedCommits comes from `git log --oneline` against the base");
     console.log("ref — read off lib/scan.js; this script asserts only what the row carries. Nothing here re-derives the");
     console.log("expected HTML from the renderer, so the test cannot agree with any behaviour at all.");
