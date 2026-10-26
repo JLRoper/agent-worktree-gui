@@ -10,6 +10,7 @@
     "dev": "node --watch server.js",
     "hooks:install": "git config core.hooksPath .githooks",
     "branches": "node tools/merged-branches.mjs",
+    "audit:child-process": "node tools/child-process-audit.mjs",
     "test": "node --test test/*.test.js"
   },
   "engines": {

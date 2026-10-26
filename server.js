@@ -724,7 +724,7 @@ function worktreeDirName(name, tag) {
 // tree's (`.git/worktrees/<name>`). Asked of git rather than inferred from a path, so a checkout reached by a
 // different spelling, or a project whose registry path is not the top of the repo, is still recognised as main.
 async function isMainCheckout(dir) {
-  const gitDir = await execP("git", ["-C", dir, "rev-parse", "--absolute-git-dir"], { timeout: 20_000 })
+  const gitDir = await execP("git", ["-C", dir, "rev-parse", "--absolute-git-dir"], { timeout: 20_000, windowsHide: true })
     .then((r) => String(r.stdout || "").trim())
     .catch(() => "");
   return Boolean(gitDir) && normPathKey(path.dirname(gitDir)) === normPathKey(dir);
@@ -817,7 +817,7 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
   let moved = true;
   let whyNot = "";
   try {
-    await execP("git", ["-C", project.path, "worktree", "move", oldPath, newPath], { timeout: 90_000 });
+    await execP("git", ["-C", project.path, "worktree", "move", oldPath, newPath], { timeout: 90_000, windowsHide: true });
   } catch (e) {
     moved = false;
     whyNot = String((e && e.message) || e)
@@ -828,7 +828,7 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
   }
   // The branch the tree is actually on, not the store's copy of it: the store is a scan behind, and a second rename
   // seconds later would otherwise try to move a branch that no longer exists.
-  const oldBranch = await execP("git", ["-C", oldPath, "symbolic-ref", "--short", "HEAD"], { timeout: 20_000 })
+  const oldBranch = await execP("git", ["-C", oldPath, "symbolic-ref", "--short", "HEAD"], { timeout: 20_000, windowsHide: true })
     .then((r) => String(r.stdout || "").trim())
     .catch(() => row.branch || null);
   const newBranch = `wtgui/${dirName}`;
@@ -838,7 +838,7 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
     // this is a name: try again before giving up on the branch half.
     for (let attempt = 0; attempt < 3 && !branchRenamed; attempt += 1) {
       try {
-        await execP("git", ["-C", project.path, "branch", "-m", oldBranch, newBranch], { timeout: 30_000 });
+        await execP("git", ["-C", project.path, "branch", "-m", oldBranch, newBranch], { timeout: 30_000, windowsHide: true });
         branchRenamed = true;
       } catch {
         await new Promise((r) => setTimeout(r, 150));
@@ -2350,7 +2350,7 @@ const server = createServer(async (req, res) => {
       let recycleError = null;
       if (process.platform === "win32" && hadDirectory) {
         try {
-          await execP("powershell", ["-NoProfile", "-NonInteractive", "-Command", psCommand], { timeout: 90_000 });
+          await execP("powershell", ["-NoProfile", "-NonInteractive", "-Command", psCommand], { timeout: 90_000, windowsHide: true });
           recycled = !(await stillThere());
           if (!recycled) recycleError = "the Recycle Bin refused it — the directory is still there";
         } catch (e) {
@@ -2367,12 +2367,12 @@ const server = createServer(async (req, res) => {
       let gitError = null;
       if (await stillThere()) {
         try {
-          await execP("git", ["-C", project.path, "worktree", "remove", "--force", target], { timeout: 90_000 });
+          await execP("git", ["-C", project.path, "worktree", "remove", "--force", target], { timeout: 90_000, windowsHide: true });
         } catch (e) {
           gitError = String((e && e.message) || e);
         }
       }
-      await execP("git", ["-C", project.path, "worktree", "prune"], { timeout: 30_000 }).catch(() => {});
+      await execP("git", ["-C", project.path, "worktree", "prune"], { timeout: 30_000, windowsHide: true }).catch(() => {});
 
       const listing = await worktreeList(project.path).catch(() => null);
       const stillRegistered = listing ? listing.some((w) => path.resolve(w.path) === target) : null;
@@ -2443,7 +2443,10 @@ const server = createServer(async (req, res) => {
       try {
         // Detached, and no waiting: an editor stays open until the reader closes it, so an execFile
         // callback would hold this response (and the browser) hostage for the whole editing session.
-        const child = spawn(bin, args, { detached: true, stdio: "ignore" });
+        // windowsHide belongs with detached: a detached child is the one Windows gives its own console,
+        // so leaving it out here is a console window appearing next to the editor (and off a .cmd shim,
+        // the cmd.exe that hosts it).
+        const child = spawn(bin, args, { detached: true, stdio: "ignore", windowsHide: true });
         child.on("error", () => {});
         child.unref();
       } catch (e) {
