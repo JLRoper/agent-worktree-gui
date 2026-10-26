@@ -410,6 +410,10 @@ const chipState = (page, thread) =>
     // tells that pill apart from the plain one — the two read the same and are drawn the same, on purpose.
     const chip = card.querySelector("[data-reattach-job]");
     const plain = card.querySelector("button.pill-continue");
+    // The third shape a stopped-looking pill comes in: the COMPLETE chip a card whose latest turn is `done` wears
+    // (`data-complete-ask`). It is not a re-attach pill, and reading it here is what lets this harness say a finished
+    // card is left alone by this feature — tools/verify-complete-chip.mjs proves the chip itself in full.
+    const complete = card.querySelector("[data-complete-ask]");
     const running = card.querySelector(".pill-running");
     // Measured, not asserted by class name: "the same control as every stopped card" is about the ink.
     const ink = (el) => {
@@ -430,6 +434,9 @@ const chipState = (page, thread) =>
       plainText: plain ? plain.textContent.trim() : null,
       runningPill: running ? running.textContent.trim() : null,
       continuePill: plain ? plain.textContent.trim() : null,
+      completePill: complete ? complete.textContent.trim() : null,
+      completeClasses: complete ? [...complete.classList].sort() : null,
+      completeInk: ink(complete),
     };
   }, thread);
 const clickChip = (page, thread) => page.click(`.job[data-thread="${thread}"] .pill-reattach`);
@@ -487,13 +494,20 @@ try {
   check("...it carries the running pill instead", healthyState.runningPill, "running");
   const finishedState = await chipState(page, "wtgui-reattach-j-finished");
   check("a finished card has no re-attach pill", finishedState.chip, false);
-  check("...it keeps the ordinary not-running pill", finishedState.continuePill, "not-running\u21bb");
-  ok("...which is a plain continue pill, with no hook of its own", finishedState.continuePill === "not-running\u21bb" && !finishedState.chipClasses, JSON.stringify(finishedState.chipClasses));
-  const finishedInk = (await chipState(page, "wtgui-reattach-j-finished")).plainInk;
-  ok("the plain pill was measured for the comparison (a card in the same page carries it)", Boolean(finishedInk), String(finishedInk));
+  // The one status this harness's neighbour changed: a card whose latest turn is `done` no longer wears the amber
+  // not-running pill, so there is nothing here to nudge. It keeps the same pill in the same place, reads COMPLETE in the
+  // panel's green, and carries its own hook instead — proved end to end in tools/verify-complete-chip.mjs, and asserted
+  // here only so that a finished card is still visibly NOT a re-attach card.
+  check("...it carries the COMPLETE chip instead, not the not-running pill", finishedState.completePill, "complete");
+  check("...and no continue pill, so its press cannot nudge a finished agent", finishedState.continuePill, null);
+  ok("...a plain pill of the panel's own, with the re-attach hook nowhere on it", !finishedState.chipClasses && (finishedState.completeClasses || []).includes("pill") && !(finishedState.completeClasses || []).includes("pill-notrunning"), JSON.stringify(finishedState.completeClasses));
   const knownState = await chipState(page, "wtgui-reattach-j-known-gone");
   check("a card whose run the gateway has already disowned has no chip", knownState.chip, false);
   ok("...and still offers the ordinary continue pill", /not-running/.test(knownState.continuePill || ""), knownState.continuePill || "");
+  // The reference ink for the re-attach pill comes from a card that still carries the plain not-running pill: the COMPLETE
+  // chip is GREEN by design, so measuring the re-attach pill against it would prove the opposite of what this checks.
+  const finishedInk = knownState.plainInk;
+  ok("the plain pill was measured for the comparison (a card in the same page carries it)", Boolean(finishedInk), String(finishedInk));
 
   for (const id of chipCards) {
     const s = await chipState(page, `wtgui-reattach-${id}`);
