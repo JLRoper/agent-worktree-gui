@@ -552,7 +552,7 @@ button.chip:active { transform: translateY(1px); }
 
 /* ---- new-agent form ---- */
 .form { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
-.form textarea {
+.form textarea, .form #job-prompt {
   width: 100%;
   background: var(--surface);
   color: var(--text);
@@ -562,6 +562,9 @@ button.chip:active { transform: translateY(1px); }
   font: 13px/1.45 var(--mono);
   resize: vertical;
 }
+/* Three lines tall, which is what rows="3" was on the textarea this used to be: growBoxToDraft reads the
+   same number off data-rows and takes it from here. */
+.form #job-prompt { min-height: 74px; overflow-y: auto; }
 .form .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .form label { color: var(--dim); font-size: 11.5px; display: flex; gap: 5px; align-items: center; font-family: var(--mono); }
 .form input[type="text"], .form input:not([type]) {
@@ -748,6 +751,21 @@ button.pill-reattach:focus-visible { outline: 2px solid #6b7b8f; outline-offset:
 button.pill-reattach:disabled { cursor: progress; }
 /* While the gateway is being asked the glyph turns, exactly as the continue pill's does. */
 button.pill-reattach.is-starting .pill-again { animation: pill-again-spin .9s linear infinite; }
+/* The COMPLETE chip on a card whose latest turn is done: the same pill in the same place, at the same size — only the
+   colour and the word change, because a finished agent is not a stopped one. Green is the panel's own "finished happily"
+   colour (the RUNNING pill and a worktree row's MERGED use it), so nothing new is taught here. No refresh glyph: this pill
+   resumes nothing. Its press queues one ask for the board assistant instead of nudging the agent that already finished, and
+   `is-asked` is the short state change that says the ask landed. */
+button.pill-complete {
+  flex: none; align-self: center;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--ui); line-height: 1.5; cursor: pointer; vertical-align: middle;
+  color: #7ee787; border-color: #1f4a2a; background: var(--green-bg);
+}
+button.pill-complete:hover { border-color: #2f6b3d; background: #16301f; }
+button.pill-complete:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 1px; }
+button.pill-complete:disabled { cursor: progress; }
+button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); background: #20242c; }
 .pill.done { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
 .pill.failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .pill.cancelled, .pill.interrupted { color: var(--dim); background: #20242c; }
@@ -790,6 +808,61 @@ button.pill-reattach.is-starting .pill-again { animation: pill-again-spin .9s li
 .out-wrap > .to-bottom:active { transform: translate(-50%, 1px); }
 /* Scrolled to the newest line, or nothing to scroll: the chip fades out and stops taking clicks. */
 .out-wrap.is-at-end > .to-bottom { opacity: 0; pointer-events: none; }
+
+/* ---- the hover copy button -------------------------------------------------------------------------
+   One attribute, one mechanism: anything carrying `data-copy` is a block the reader can lift, and app.js
+   mounts a button into its corner itself - so a block another worker draws opts in by carrying the same
+   attribute, with nothing per-renderer. Hidden it is completely inert: out of the pointer's way, out of
+   the tab order and the accessibility tree, out of a selection dragged across the block, and always out
+   of the text flow - so revealing it reflows the block by nothing, and the gutter the block reserves for
+   it (below) is what keeps it off the block's own text, first line and fold chevron included. */
+.copy-block {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font: 11px/1 var(--mono);
+  color: #c3ccd8;
+  background: #161c24;
+  border: 1px solid #39424f;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity .14s ease, visibility .14s ease, color .14s ease, border-color .14s ease;
+}
+[data-copy] { position: relative; }
+/* The room the button needs, reserved whether or not it is showing so its appearance moves nothing:
+   the console's own text, a burst's call lines, a thinking block's title line. */
+[data-copy] > .job-out,
+[data-copy] > .tgrp-head,
+[data-copy] > summary { padding-right: 24px; }
+/* The reveal - the whole of it. A <details>'s button lives in its summary (the only part a folded one
+   renders), so both placements answer to the block being hovered. */
+[data-copy]:hover > .copy-block,
+[data-copy]:hover > summary > .copy-block { opacity: 1; visibility: visible; pointer-events: auto; }
+/* Nested blocks (a tool burst inside a console): only the block the pointer is actually in shows its
+   button, so hovering a burst never shows the console's as well. */
+[data-copy]:has([data-copy]:hover) > .copy-block:not(.is-copied):not(.is-failed) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.copy-block:hover { color: var(--text); border-color: #3a4353; }
+/* A confirmation stands on its own for a moment - the pointer may already have left the block, and it is
+   never the one a nested block's hover hides. */
+.copy-block.is-copied,
+.copy-block.is-failed { opacity: 1; visibility: visible; pointer-events: auto; }
+.copy-block.is-copied { color: #7ee787; border-color: #2f5f38; }
+.copy-block.is-failed { color: #ff9c94; border-color: #57262a; }
 
 .job-out {
   margin: 0;
@@ -892,7 +965,7 @@ button.btn-retry:disabled { color: var(--dimmer); border-color: var(--line); cur
 .btn-fix-first:disabled { color: var(--dimmer); border-color: var(--line); cursor: default; }
 
 /* A document is being dragged over the box that will carry its path. */
-textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
+textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 
 /* a tool's own output, shown under its call so the console says what actually happened */
 .jl-tool-out { color: var(--dim); padding-left: 14px; white-space: pre-wrap; }
@@ -1257,8 +1330,35 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
   font: 12.5px/1.45 var(--ui);
   /* It sizes itself from the draft (see growReplyBox): a drag handle would be overruled on the next keystroke. */
   resize: none;
+  /* rows="2" on the textarea this used to be: two lines of text, this box's own padding (which includes the
+     34px the send buttons sit in — see .reply-wrap .reply-box) and its border. Then it grows itself. */
+  min-height: 79px;
 }
 .reply-box:focus { outline: none; border-color: #2b5480; }
+/* ---- a pasted block, collapsed into one inline chip ------------------------------------------------
+   The box is contenteditable — a textarea cannot hold an inline widget — and the chip is a non-editable
+   atom inside it, so the caret steps over it, Backspace deletes it whole, and nothing inside it is ever
+   editable. Inline-BLOCK is the point: that is what lets the reader put quotes around it and keep typing. */
+.chipbox { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; cursor: text; }
+/* A div has no placeholder attribute: an empty box says what it is for through :empty. */
+.chipbox:empty::before { content: attr(data-ph); color: var(--dimmer); pointer-events: none; }
+.paste-chip {
+  display: inline-block; vertical-align: baseline; max-width: 100%;
+  margin: 0 1px; padding: 0 4px; border: 1px solid #5a4a2a; border-radius: 4px;
+  background: #2c2617; color: #ffd479;
+  font: 11.5px/1.5 var(--mono); white-space: nowrap; user-select: none; cursor: pointer;
+}
+.paste-chip:hover { border-color: #8a6f33; background: #38301d; }
+/* Unfolded, the chip takes the line it is on and shows the whole paste: read-only, wrapped, scrollable. */
+.paste-chip.is-open { display: block; white-space: normal; margin: 4px 0; padding: 0 6px 6px; cursor: default; }
+.paste-chip .pc-x { display: inline-block; margin-left: 5px; padding: 0 3px; color: var(--dimmer); cursor: pointer; font-weight: 700; }
+.paste-chip .pc-x:hover { color: #ffb3b3; }
+.paste-chip .pc-body { margin-top: 3px; }
+.paste-chip .pc-text {
+  max-height: 26vh; overflow: auto; padding: 5px 6px; border-radius: 4px;
+  background: #1a1710; border: 1px solid #3b3220; color: var(--text);
+  font: 11.5px/1.45 var(--term); white-space: pre-wrap; user-select: text; cursor: text;
+}
 /* Send sits inside the input, bottom left: the reply is one gesture, so the control lives in the box
    it submits. The box keeps a bottom pad so typed text never runs under it. */
 .reply-wrap { position: relative; display: block; }
@@ -1435,6 +1535,20 @@ button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: defau
 .ghost-head { display: flex; gap: 8px; align-items: baseline; font-size: 10.5px; color: var(--dim); }
 .ghost-badge { color: #ffd479; border: 1px dashed #6b4d16; border-radius: 4px; padding: 0 5px; font-size: 10px; letter-spacing: .04em; }
 .ghost-prompt { font: italic 12.5px/1.45 var(--ui); color: var(--text); margin-top: 4px; white-space: pre-wrap; }
+/* The held text is the handle for editing it in place, so it reads as one: a text caret over it, and a hover/focus
+   edge — nothing about the line moves when it becomes a textarea. */
+.ghost-prompt { cursor: text; border-radius: 5px; }
+.ghost-prompt:hover, .ghost-prompt:focus-visible { background: rgba(255, 212, 121, .07); outline: 1px dashed #4a4353; outline-offset: 2px; }
+/* The in-place editor the held text becomes: the same ghost block, undimmed, holding a box and its two actions. An
+   edit is not a send, so neither control here is drawn like a send. */
+.ghost-turn.editing { opacity: 1; }
+.ghost-edit { margin-top: 4px; }
+.ghost-edit-box { display: block; width: 100%; box-sizing: border-box; padding: 5px 7px; font: 12.5px/1.45 var(--mono); color: var(--text); background: #10141a; border: 1px solid #3a4353; border-radius: 6px; resize: vertical; }
+.ghost-edit-box:focus { outline: none; border-color: #6b4d16; }
+.ghost-edit-actions { display: flex; gap: 6px; margin-top: 5px; }
+.ghost-edit-actions button { padding: 1px 8px; font: 10.5px/1.6 var(--mono); background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; cursor: pointer; }
+.ghost-edit-actions .btn-edit-save { color: #ffd479; border-color: #6b4d16; }
+.ghost-edit-actions button:hover, .ghost-edit-actions button:focus-visible { background: rgba(255, 255, 255, .06); }
 /* what is waiting to go out, with how long it has been waiting */
 .queue-list { margin: 6px 0 0 18px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .queue-item { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px; color: var(--dim); min-width: 0; }
@@ -1583,7 +1697,7 @@ body.modal-open { overflow: hidden; }
 .job.maximized .turn { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .job.maximized .turn.folded { display: block; flex: 0 0 auto; }
 .job.maximized .job-out { max-height: none; flex: 1; min-height: 0; }
-.job.maximized .reply-box { min-height: 46px; }
+.job.maximized .reply-box { min-height: 79px; }
 .job-cmd, .job-out, .job-foot { margin-left: 18px; }
 /* The usage readout sits directly under the reply box, not above it and not at the foot of the card: it
    starts where the box starts and ends its line. No left margin of its own; the send/steer buttons are
@@ -1857,15 +1971,19 @@ button.btn-row-agent.is-probing { opacity: .55; cursor: progress; }
    the reader keeps reading the row they were on. The prompt goes to the New agent card on Enter - the field is a
    shortcut into that path, not a second spawn form. */
 .add-agent-form { display: flex; width: 100%; margin: 8px 0 2px; }
+/* The field is a chipbox (board/paste-chips.js) rather than an <input>: a pasted block collapses to a chip
+   here too. It keeps its single line — line-height is the box's height, and a short paste arrives with its
+   line breaks stripped, exactly as an <input> did with them. */
 .add-agent-input {
-  width: 100%; height: 47px; padding: 0 14px;
+  width: 100%; min-height: 47px; padding: 0 14px; box-sizing: border-box;
   background: var(--addbar, #215f35); color: #fff;
   border: 1px solid var(--addbar-edge, #2c8148); border-radius: 6px;
   box-shadow: inset 0 1px 0 #ffffff1f;
-  font: 500 13.5px/47px var(--mono);
+  font: 500 13.5px/47px var(--mono); white-space: nowrap; overflow: hidden;
   outline: none;
 }
-.add-agent-input::placeholder { color: #ffffffa6; }
+.add-agent-input:empty::before { color: #ffffffa6; }
+.add-agent-input .paste-chip { line-height: 1.6; vertical-align: middle; }
 .add-agent-input:focus { border-color: var(--addbar-hover-edge, #319051); box-shadow: inset 0 0 0 2px #ffffff2e; }
 .add-agent-input:disabled { opacity: .7; cursor: progress; }
 .branch { color: #c8d1dc; }
@@ -2113,7 +2231,8 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
   border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px;
   font: 11.5px/1.45 var(--term); resize: vertical;
 }
-.as-first textarea { min-height: 58px; }
+.as-first textarea, .as-first #as-first-text { min-height: 58px; }
+.as-first #as-first-text { display: block; white-space: pre-wrap; word-break: break-word; }
 .as-first-actions { display: flex; gap: 8px; align-items: center; }
 
 .as-empty { padding: 16px 14px; color: var(--dimmer); font-size: 12px; }
@@ -2233,7 +2352,7 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 #as-chat > .job > .job-body > .turn.folded { flex: 0 0 auto; }
 #as-chat > .job > .job-body > .turn:not(.folded) .out-wrap { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 34px; }
 #as-chat > .job > .job-body > .turn:not(.folded) .job-out { max-height: none; flex: 1; min-height: 0; }
-#as-chat > .job .reply-box { min-height: 46px; }
+#as-chat > .job .reply-box { min-height: 79px; }
 
 /* Which rules the assistant wrote for itself. The reader's rules are their own answers; these are proposals,
    marked so a wrong one is obvious and deletable without wondering where it came from. */
@@ -2242,3 +2361,54 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
   font-style: normal; font-size: 9.5px; letter-spacing: .03em; text-transform: uppercase;
   color: #c4b5fd; border: 1px solid #4b3a75; background: #241f38; border-radius: 99px; padding: 0 5px;
 }
+
+/* ---- the message board (the Messages tab) ---------------------------------------------------------
+   A conversation, so it is laid out as one: a thread per block, oldest at the top of it, and the two
+   directions told apart by a WORD before any colour ("assistant → wtgui-x" vs "wtgui-x → assistant"),
+   because a reader who cannot see the border colour still has to be able to tell which way it went. */
+.as-msg-bar { display: flex; flex-wrap: wrap; gap: 4px 9px; align-items: baseline; padding: 6px 8px; margin-bottom: 7px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); }
+.as-msg-window { font-size: 11.5px; font-weight: 600; color: var(--text); }
+.as-msg-cap { margin: -2px 0 7px; padding: 5px 8px; border: 1px solid #6b4d16; border-radius: 6px; background: var(--amber-bg); color: var(--amber); font-size: 11px; line-height: 1.4; }
+.as-msg-chips { display: flex; gap: 5px; margin-bottom: 8px; flex-wrap: wrap; }
+.as-msg-chips button {
+  border: 1px solid var(--line); background: var(--card); color: var(--dim);
+  font-size: 11px; padding: 3px 9px; border-radius: 999px; cursor: pointer;
+}
+.as-msg-chips button:hover { color: var(--text); }
+.as-msg-chips button.is-on { color: var(--text); border-color: #8fb8ff; background: #1b2432; }
+.as-msg-thread { border: 1px solid var(--line); border-radius: 7px; margin-bottom: 9px; background: var(--card); overflow: hidden; }
+.as-msg-thread.is-assistant { border-color: #3a3450; }
+.as-msg-thread-head { display: flex; align-items: center; gap: 7px; padding: 6px 9px; background: var(--panel-2); border-bottom: 1px solid var(--line); font-size: 11px; }
+.as-msg-thread-head .as-thread { max-width: 42%; font-size: 11px; }
+.as-msg-thread-head .as-ago { margin-left: auto; }
+.as-msg { padding: 7px 9px; border-bottom: 1px solid #1c222b; border-left: 3px solid #4a5568; }
+.as-msg:last-child { border-bottom: 0; }
+.as-msg.is-out { border-left-color: #58a6ff; }
+.as-msg.is-in { border-left-color: #7ee787; }
+.as-msg-head { display: flex; align-items: center; gap: 7px; font-size: 10.5px; flex-wrap: wrap; }
+.as-msg-dir { font-family: var(--mono); color: var(--text); font-size: 10.5px; }
+.as-msg-kind { font-family: var(--mono); text-transform: uppercase; letter-spacing: .04em; font-size: 9.5px; color: #8fb8ff; border: 1px solid #2b3b52; border-radius: 4px; padding: 0 4px; }
+.as-msg.is-in .as-msg-kind { color: #7ee787; border-color: #24452c; }
+.as-msg-src { font-size: 9.5px; letter-spacing: .03em; text-transform: uppercase; color: var(--amber); border: 1px solid #6b4d16; background: var(--amber-bg); border-radius: 4px; padding: 0 4px; }
+.as-msg-head .as-ago { margin-left: auto; }
+.as-msg-text { margin-top: 4px; font: 11.5px/1.5 var(--term); color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.as-msg-text.is-missing { color: var(--dimmer); font-style: italic; }
+.as-msg-cut { color: var(--dimmer); font-style: italic; }
+.as-msg-more { margin-top: 3px; border: 0; background: none; color: #8fb8ff; font-size: 10.5px; cursor: pointer; padding: 0; }
+.as-msg-more:hover { text-decoration: underline; }
+.as-msg-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.as-msg-meta span {
+  font-family: var(--mono); font-size: 10px; color: var(--dimmer);
+  border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
+}
+.as-msg-meta b { color: var(--text); font-weight: 400; }
+.as-msg-report { display: flex; align-items: center; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+.as-msg-path {
+  border: 1px solid var(--line); background: var(--console); color: var(--dim);
+  font-family: var(--mono); font-size: 10px; border-radius: 5px; padding: 2px 6px; cursor: pointer;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left;
+}
+.as-msg-path:hover { color: var(--text); border-color: #8fb8ff; }
+.as-msg-copy { border: 1px solid var(--line); background: var(--card); color: var(--dim); font-family: var(--mono); font-size: 10px; border-radius: 5px; padding: 2px 6px; cursor: pointer; }
+.as-msg-copy:hover { color: var(--text); }
+.as-msg-copy.is-copied { color: #7ee787; border-color: #2ea043; }

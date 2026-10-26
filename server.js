@@ -1300,6 +1300,22 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, assistant.state());
     }
 
+    // The message board between the assistant and the agents. Deliberately NOT part of the polled state:
+    // it is the whole seven-day conversation, it is only read while its tab is open, and it is built from
+    // the job store and the journal on every request (no cache to prune). The cap and the window travel
+    // with the answer, so the tab can say which one it is up against.
+    if (route === "/api/assistant/messages" && req.method === "GET") {
+      const q = new URL(req.url, "http://127.0.0.1").searchParams;
+      const days = Number(q.get("days"));
+      const cap = Number(q.get("cap"));
+      return sendJson(res, 200, {
+        messages: assistant.messages({
+          ...(Number.isFinite(days) && days > 0 ? { days: Math.min(30, days) } : {}),
+          ...(Number.isFinite(cap) && cap > 0 ? { cap: Math.min(2000, Math.round(cap)) } : {}),
+        }),
+      });
+    }
+
     // The continuity file — the long tier of the assistant's memory, injected into every turn. GET carries
     // the text (the polled state carries only its path, size and mtime, so a 20 KB body is not re-sent on
     // every board event); PUT replaces it whole. Too big is its own status: the module raises the cap
@@ -1770,6 +1786,21 @@ const server = createServer(async (req, res) => {
       // that will not answer: the press is a question the panel understood and cannot settle, and the card keeps its
       // verdict. A decision always comes back as 200 with the card it left behind.
       return sendJson(res, r.ok ? 200 : 400, r);
+    }
+
+    // The press on a finished card's COMPLETE chip: queue ONE ask for the board assistant and send nothing to the
+    // agent. It goes through the assistant's own wake queue — the path an alert handed over uses — and never through
+    // /api/assistant/say, which starts a turn at once and would talk over a run already in flight. The answer carries
+    // what the queue decided, so the chip can say the ask landed or say why it did not; a card this route cannot ask
+    // about (unknown, or no longer `done`) is a 400 with the reason.
+    if (route === "/api/jobs/ask-complete" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        return sendJson(res, 200, assistant.askAboutComplete(String(body?.id || "").trim()));
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e), ok: false });
+      }
     }
 
     // Answer a parked run's approval. The gateway validates the choice a second time, so a stale

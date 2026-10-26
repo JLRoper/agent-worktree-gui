@@ -34,6 +34,10 @@ const TREENAMES_KEY = "wtgui.treenames";
 // localStorage and then never read back - every reload held the stale rows again and pointed the arrow down.
 const SHOW_OLD_KEY = "wtgui.showOldProjects";
 
+// The chip-bearing drafts this tab already holds (board/paste-chips.js): each chip's own text by id, and
+// the segments of every box that carries one. Read ONCE, above `state`, so a box can be restored from it
+// the moment it is rendered — the same reason TREENAMES_KEY lives up here.
+const boxChips = loadPasteChipState();
 const state = {
   // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
   // "Console size" stays the baseline for every card. Kept in memory so a repaint does not undo it.
@@ -72,6 +76,13 @@ const state = {
   jobs: new Map(),
   jobLines: new Map(),
   replyDrafts: {},
+  // Pasted blocks collapsed into inline chips (board/paste-chips.js): id -> { text, lines }. The DOM holds
+  // the id only, so the text lives HERE, where a card rebuild and a reload can find it again — and
+  // boxModels is what those two replay: each box's own chip/text segments, keyed the way the box names
+  // itself (its data-chipbox), with the id counter bumped past whatever this tab already remembers.
+  pasteChips: boxChips.chips,
+  pasteChipSeq: boxChips.seq,
+  boxModels: boxChips.drafts,
   // Up/Down in a reply box walks this thread's previous prompts; this remembers how far back you are
   // and the draft you started from.
   replyNav: new Map(),
@@ -99,6 +110,11 @@ const state = {
   // Replies typed while the agent is still working, in the order they were written. They go out one
   // at a time as each turn finishes: Hermes refuses a second session on a thread already running.
   replyQueue: new Map(),
+  // The held reply the reader has open in the in-place editor, if any: `{ thread, at, original, text }`, where `at`
+  // is the entry's own identity in replyQueue — the entry a save writes back to, never a new entry. `original` is
+  // the text the editor opened on (what Escape, Cancel and a click away put back) and `text` follows the box as it
+  // is typed, so a repaint cannot throw a half-finished edit away.
+  replyEdit: null,
   // The entries the drain has taken out of `replyQueue` to send, by thread, so a × pressed after the send
   // can say "that one was already sent" instead of claiming a cancellation it did not make. The entry's own
   // identity only (`at`): it is a record of a press, not the queue's state, and it neither renders nor sends.
@@ -1455,8 +1471,8 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
       ? segments.map((seg, si) => bodyOf(seg, si)).join("")
       : `<div class="jl jl-dim">this run recorded nothing for ${esc(filter)}</div>`) + batchBlocks;
   const label = filter ? `all ${lines.length}` : `${lines.length} line${lines.length === 1 ? "" : "s"}`;
-  return `<div class="tgrp" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gofs="${esc(JSON.stringify(Object.fromEntries(cursorsStart)))}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
-      <div class="tgrp-head">${head}<button type="button" class="tgrp-more${filter ? " is-open" : ""}" data-tgrp-more="${esc(key)}" title="${filter ? "show every tool in this run, not just this one" : "show every call in this run of tools, with its output"}">${label}</button></div>
+  return `<div class="tgrp" data-copy data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gofs="${esc(JSON.stringify(Object.fromEntries(cursorsStart)))}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
+      <div class="tgrp-head" data-copy-text>${head}<button type="button" class="tgrp-more${filter ? " is-open" : ""}" data-tgrp-more="${esc(key)}" title="${filter ? "show every tool in this run, not just this one" : "show every call in this run of tools, with its output"}">${label}</button></div>
       <div class="tgrp-body"${openBody || filter ? "" : " hidden"}>${body}</div>
     </div>`;
 }
@@ -1506,7 +1522,7 @@ function turnBody(turn, copy = "") {
   return thinkHtml(turn, copy) +
     // `out-tab` carries the 18px left tab the console itself has, so the wrapper is the console's box: the chip
     // centred in the wrapper is centred in the console, not 9px off it.
-    `<div class="out-wrap out-tab"><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${toBottomBtnHtml()}</div>` +
+    `<div class="out-wrap out-tab" data-copy><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${toBottomBtnHtml()}</div>` +
     // The subagents this turn spawned, right under the console they ran beside: the delegation is the turn's own
     // work, not the card's, and a card with several turns would otherwise show the newest one's children under all
     // of them.
@@ -3221,6 +3237,17 @@ function conversationHtml(conv) {
         `not running: this panel lost its line to run ${latest.runId}, which may still be going in the gateway — click to pick this up. Still live: the card re-attaches to that run and can steer it again. Ended: the run's result is adopted. Forgotten: the card settles as interrupted and this thread is continued.`,
       )}">not-running<span class="pill-again" aria-hidden="true">\u21bb</span></button>`
     : "";
+  // A finished agent is not a stopped one, and the reader asked for the difference: when the card's latest turn is
+  // exactly `done` the pill reads COMPLETE in the panel's green and carries no refresh glyph, because nothing here is
+  // being resumed. Same pill, same place, same size — a word, a colour, and a press that queues one ask for the board
+  // assistant instead of nudging the agent that already finished. Every other status keeps the pill it has today, word
+  // for word: `failed` stays "exited", `cancelled`/`interrupted`/lost stay "not-running", and the re-attach pill's own
+  // path is untouched.
+  const completeChip = latest.status === "done"
+    ? `<button type="button" class="pill pill-complete" data-complete-ask="${esc(latest.id || thread)}" title="${esc(
+        `done · ${elapsed(latest)} — click to queue one ask for the board assistant: whether this really is complete (the commits, the PR, the report) and what has to happen next for this worktree. Nothing is sent to this agent.`,
+      )}">complete</button>`
+    : "";
   const hotFlash = state.hotFlash.thread === thread && Date.now() < state.hotFlash.until;
   return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}${jumped}${hotFlash ? " hot-flash" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}"${sizeVars ? ` style="${sizeVars}"` : ""}>
     <div class="job-head" data-toggle="${esc(thread)}" title="${collapsed ? "expand" : "minimize"} this conversation">
@@ -3228,7 +3255,8 @@ function conversationHtml(conv) {
       <span class="chev">${collapsed ? "\u25b8" : "\u25be"}</span>
       ${runningNow
         ? `<span class="pill pill-running" title="${esc(running ? `running ${elapsed(latest)}` : `this turn is ${latest.status}, but subagents it started are still running`)}">running</span>`
-        : detachedChip ||
+        : completeChip ||
+          detachedChip ||
           `<button class="pill pill-notrunning pill-continue${latest.status === "failed" ? " is-failed" : ""}" data-continue-thread="${esc(thread)}" type="button" title="${esc(
             `${latest.status} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""} — click to send this agent "${CONTINUE_TEXT}" and start its next turn`,
           )}">${latest.status === "failed" ? "exited" : "not-running"}<span class="pill-again" aria-hidden="true">\u21bb</span></button>`}
@@ -3264,20 +3292,27 @@ function conversationHtml(conv) {
       ${pinnedHtml}
       ${blocks.html}
       ${queued ? `<div class="ghost-turns">${queue
-        .map((q) => `<div class="ghost-turn"><div class="ghost-head mono"><span class="ghost-badge">queued</span><span class="queue-ago" data-queued-at="${q.at}">${fmtDur(Date.now() - q.at)}</span><span class="dimmer">sends when the current turn finishes</span><button class="ghost-cancel" type="button" data-queue-cancel="${esc(thread)}" data-queue-cancel-at="${q.at}" title="cancel this queued reply — it will not be sent, and if the reply box is empty its text comes back as your draft" aria-label="cancel this queued reply for ${esc(thread)}">✕</button></div><div class="ghost-prompt">${linkifyText(q.text)}</div></div>`)
+        .map((q) => ghostTurnHtml(thread, q, queuedEditFor(thread), !threadBusy(thread) && !childrenStillOut))
         .join("")}</div>` : ""}
       ${foot ? `<div class="job-foot">${foot}</div>` : ""}
       <div class="reply">
         <div class="reply-wrap">
           <div class="attach-chips" data-chips="${esc(thread)}">${attachmentChipsHtml(thread)}</div>
-          <textarea class="reply-box" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" data-reply="${esc(thread)}" rows="2" spellcheck="false"
-            placeholder="${running
+          <!-- A chip needs an inline atom, and a textarea cannot hold one: this box is contenteditable and
+               the chip is a non-editable span inside it. Nothing changes for the reader — Enter, Ctrl+Enter,
+               Shift+Enter, the ↑/↓ recall and the draft restore are the same gestures — and every reader of
+               its text goes through readBox(box) (board/paste-chips.js), which gives a chip's own text back
+               in place. The placeholder moved to data-ph, because :empty draws it on a div. -->
+          <div class="reply-box" contenteditable="true" role="textbox" aria-multiline="true"
+            data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off"
+            data-reply="${esc(thread)}" data-chipbox="reply:${esc(thread)}" data-rows="2" spellcheck="false"
+            data-ph="${running
               ? (inDelegate
                 ? "a subagent is out — a steer lands when delegate_task returns; Enter holds yours for the next turn"
                 : "a turn is running — Ctrl+Enter steers it; Enter holds yours for the next turn")
               : childrenStillOut
                 ? "this thread's subagents are still out — Enter holds yours until they finish"
-                : "Reply to this agent — continues the same Hermes thread, Enter or Ctrl+Enter to send"}"></textarea>
+                : "Reply to this agent — continues the same Hermes thread, Enter or Ctrl+Enter to send"}"></div>
           <div class="reply-actions">
             ${running
               ? `<button class="btn-reply btn-steer-primary" data-steer="${esc(runningTurn.id)}" type="button" title="${inDelegate ? "send this into the running turn (Ctrl+Enter) — it waits for delegate_task to return, and if the turn ends first it comes back to this box unsent" : "send this into the running turn (Ctrl+Enter) — the agent reads it at its next tool boundary and the turn carries on"}">Steer turn</button>`
@@ -3303,7 +3338,16 @@ function conversationHtml(conv) {
 
 function restoreReplyDraft(thread) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-  if (box && state.replyDrafts[thread]) box.value = state.replyDrafts[thread];
+  if (!box) return;
+  const draft = state.replyDrafts[thread];
+  if (draft) {
+    // One place decides what a rebuilt box comes back as: the chip model the panel is holding for this
+    // draft (a pasted block returns as a chip, with its text), else the draft's own text.
+    if (!restoreBoxDraft(box, draft)) writeBox(box, draft);
+    return;
+  }
+  // Nothing in memory: a chip-bearing draft this tab mirrored before a reload comes back here.
+  restorePersistedBox(box);
 }
 
 // Typing state inside a card, so a rebuild can put it back. Row events arrive every few seconds for a
@@ -3311,8 +3355,17 @@ function restoreReplyDraft(thread) {
 // thrown away mid-sentence and the cursor went with it.
 function captureTyping(root) {
   const el = document.activeElement;
-  if (!el || !root.contains(el) || !el.classList?.contains("reply-box")) return null;
-  return { thread: el.dataset.reply, value: el.value, start: el.selectionStart, end: el.selectionEnd };
+  if (!el || !root.contains(el)) return null;
+  // The held reply's editor is a textarea inside the card, so a repaint takes it away the same way it takes the reply
+  // box — and the reader can be mid-edit exactly when a turn ends. Captured here, put back in restoreTyping().
+  if (el.classList?.contains("ghost-edit-box")) {
+    return { edit: el.dataset.editThread, editAt: Number(el.dataset.editQueued) || 0, value: el.value, start: el.selectionStart, end: el.selectionEnd };
+  }
+  if (!el.classList?.contains("reply-box")) return null;
+  // The caret is captured in the units readBox measures in, so a chip in the draft cannot move it: the
+  // value is the serialized text, which is exactly what the send path posts.
+  const at = caretOffset(el);
+  return { thread: el.dataset.reply, value: readBox(el), start: at, end: at };
 }
 
 // What this thread's box just sent, and when: a repaint during the POST can capture the text before the reply
@@ -3330,12 +3383,12 @@ const REPLY_MAX_LINES = 18;
 const SPAWN_MAX_LINES = 14;
 
 function growBoxToDraft(box, maxLines) {
-  if (!box || box.tagName !== "TEXTAREA") return;
+  if (!box || (box.tagName !== "TEXTAREA" && !(box.dataset && box.dataset.chipbox))) return;
   const cs = getComputedStyle(box);
   const line = parseFloat(cs.lineHeight) || 18;
   const border = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
   const chrome = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + border;
-  const rows = Math.max(2, Number(box.getAttribute("rows")) || 2);
+  const rows = Math.max(2, Number(box.getAttribute("rows") || box.dataset.rows) || 2);
   const min = Math.round(rows * line + chrome);
   const max = Math.max(min, Math.min(Math.round(line * maxLines + chrome), Math.round(window.innerHeight * 0.45)));
   box.style.height = "auto"; // measure the content, not the box we are trying to size
@@ -3343,12 +3396,14 @@ function growBoxToDraft(box, maxLines) {
   const h = Math.max(min, Math.min(want, max));
   box.style.height = `${h}px`;
   box.style.overflowY = want > max + 1 ? "auto" : "hidden";
-  box.dataset.grownFor = String(box.value.length);
+  // The serialized length, not the DOM's: a chip is as long as the text it swallowed, which is what the
+  // box has to make room for.
+  box.dataset.grownFor = String(readBox(box).length);
 }
 
 // Grow without moving the page - unless the box is the one being typed in and it now runs off the bottom.
 function growReplyBox(box) {
-  if (!box || box.tagName !== "TEXTAREA") return;
+  if (!box || (box.tagName !== "TEXTAREA" && !(box.dataset && box.dataset.chipbox))) return;
   const maxLines = box.id === "job-prompt" ? SPAWN_MAX_LINES : REPLY_MAX_LINES;
   growBoxToDraft(box, maxLines);
   if (document.activeElement !== box) return;
@@ -3364,33 +3419,55 @@ function growReplyBox(box) {
 function restoreTyping(root, typing) {
   for (const box of root.querySelectorAll(".reply-box[data-reply]")) {
     const draft = state.replyDrafts[box.dataset.reply];
-    if (draft) box.value = draft;
+    // A rebuild hands back an empty box, so what it comes back as is decided here and nowhere else: the
+    // chip model the panel holds for this draft, else the draft's own text, else what this tab mirrored
+    // before a reload.
+    if (draft) {
+      if (!restoreBoxDraft(box, draft)) writeBox(box, draft);
+    } else restorePersistedBox(box);
     // A repaint builds the box at its default height: give a restored draft its room back. Keyed on length
     // so a board of quiet cards is not re-measured on every tick.
-    if (box.value && box.dataset.grownFor !== String(box.value.length)) growBoxToDraft(box, REPLY_MAX_LINES);
+    const held = readBox(box);
+    if (held && box.dataset.grownFor !== String(held.length)) growBoxToDraft(box, REPLY_MAX_LINES);
   }
   if (!typing) return;
+  // The held reply's editor: the textarea is rebuilt from state (edit.text follows the box), and this puts the caret
+  // and the focus back where the reader had them — so a turn ending mid-edit does not move the ground under them.
+  if (typing.edit) {
+    const box = root.querySelector(`.ghost-edit-box[data-edit-queued="${typing.editAt}"]`);
+    if (!box) return;
+    const edit = queuedEditFor(typing.edit);
+    if (edit && edit.at === typing.editAt) edit.text = typing.value;
+    box.value = typing.value;
+    box.focus({ preventScroll: true });
+    try {
+      box.setSelectionRange(typing.start, typing.end);
+    } catch {
+      /* a box that is no longer a text field: nothing to restore */
+    }
+    return;
+  }
   const box = root.querySelector(`.reply-box[data-reply="${CSS.escape(typing.thread)}"]`);
   if (!box) return;
   const sent = state.justSent.get(typing.thread);
   const stale = Boolean(sent && Date.now() - sent.at < 20000 && typing.value.trim() === sent.text);
   if (stale) {
     // The text in this snapshot is the text that was just sent: the box comes back empty, not refilled.
-    box.value = "";
+    writeBox(box, "");
+    clearBoxDraft(box);
     state.replyDrafts[typing.thread] = "";
   } else {
-    box.value = typing.value;
+    // The snapshot is what the reader had mid-sentence, chip and all: it comes back through the one writer.
+    if (!restoreBoxDraft(box, typing.value)) writeBox(box, typing.value);
     state.replyDrafts[typing.thread] = typing.value;
   }
   // preventScroll is the whole point here: this runs on every repaint, and a plain focus() scrolls the box
   // into view - which pulled the page back up to the reader's caret every few seconds while they had
   // scrolled away to read something lower on the board.
   box.focus({ preventScroll: true });
-  try {
-    box.setSelectionRange(typing.start, typing.end);
-  } catch {
-    /* a box that is no longer a text field: nothing to restore */
-  }
+  // A contenteditable host has no setSelectionRange: the caret is a serialized offset, which is the same
+  // measure the snapshot was taken in (a chip counts as the text it swallowed, so it cannot move it).
+  setCaretOffset(box, Number.isFinite(typing.end) ? typing.end : typing.start);
 }
 
 // After a repaint: the inline add-agent field comes back with its draft, and its caret and focus if the reader was
@@ -3405,21 +3482,20 @@ function restoreAddAgent(root) {
   // start of the sentence every time the row was rebuilt.
   const start = a.start;
   const end = a.end;
-  if (input.value !== a.value) input.value = a.value;
+  if (readBox(input) !== a.value) {
+    if (!restoreBoxDraft(input, a.value)) writeBox(input, a.value);
+  }
   if (!a.focused) return;
   // preventScroll for the same reason the reply box uses it: this runs on every repaint, and a bare focus() would
   // pull the page back to this box every few seconds while the reader had scrolled away.
   input.focus({ preventScroll: true });
-  const max = input.value.length;
+  const max = readBox(input).length;
   const s = Math.min(Math.max(0, Number.isFinite(start) ? start : max), max);
   const e = Math.min(Math.max(s, Number.isFinite(end) ? end : s), max);
-  try {
-    input.setSelectionRange(s, e);
-    a.start = s;
-    a.end = e;
-  } catch {
-    /* a node that is no longer a text field: nothing to restore */
-  }
+  // The caret is placed in the same serialized units the snapshot was taken in.
+  setCaretOffset(input, e);
+  a.start = s;
+  a.end = e;
 }
 
 // Renaming a session is a panel-side display name only: the Hermes thread id is identity (it is what
@@ -3520,24 +3596,19 @@ function focusReplyBox(thread) {
   // preventScroll: the caller has just positioned the card; the browser's own scroll-to-focus would
   // yank the page again a frame later.
   box.focus({ preventScroll: true });
-  const end = box.value.length;
-  try {
-    box.setSelectionRange(end, end);
-  } catch {
-    /* not a text field any more */
-  }
+  // The end of what the box HOLDS, a chip included: a pasted block sits at the end of the string the next
+  // keystroke will extend.
+  setCaretOffset(box, readBox(box).length);
   return document.activeElement === box;
 }
 
 // A real newline at the caret, for Shift+Enter. Doing it by hand rather than leaving it to the default
 // action keeps the caret and the saved draft in step, and works the same in both message boxes.
 function insertNewlineAtCaret(el) {
-  const start = el.selectionStart ?? el.value.length;
-  const end = el.selectionEnd ?? start;
-  el.value = `${el.value.slice(0, start)}\n${el.value.slice(end)}`;
-  const pos = start + 1;
-  el.setSelectionRange(pos, pos);
-  el.dispatchEvent(new Event("input", { bubbles: true }));
+  // A contenteditable host cannot be written with a value, so the newline is inserted at the caret instead
+  // — one implementation for both message boxes and the New-agent prompt (board/paste-chips.js). It fires
+  // the same input event the assignment used to, so the draft and the box's growth keep up.
+  insertNewlineAt(el);
 }
 
 // Open a console URL with the OS default browser. Doing it through the panel means it works even when
@@ -3636,13 +3707,17 @@ function queueReply(thread, text) {
 // rebuilds the card - the rebuild would otherwise put the text back into the new box from the saved draft.
 function queueReplyFromBox(thread) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-  const text = (box?.value || "").trim();
+  // readBox, not box.value: what is held is what the agent would receive, a chip being the text it holds.
+  const text = readBox(box).trim();
   if (!text) {
     if (box) box.focus();
     return false;
   }
   state.replyDrafts[thread] = "";
-  if (box) box.value = "";
+  if (box) {
+    writeBox(box, "");
+    clearBoxDraft(box);
+  } else clearBoxDraft(`reply:${thread}`);
   queueReply(thread, text);
   document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.focus();
   return true;
@@ -3669,11 +3744,201 @@ function steerFromBox(thread, turnId = null) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
   const id = turnId || [...state.jobs.values()].find((j) => (j.thread || j.id) === thread && turnLive(j))?.id;
   if (!id) return Promise.resolve(false);
-  return steerTurn(thread, id, box?.value || "");
+  return steerTurn(thread, id, readBox(box));
 }
 
 function replyQueued(thread) {
   return state.replyQueue.get(thread) || [];
+}
+
+// The held reply the reader has open in its own editor, if any. One editor at a time, and it names the entry by the
+// entry's own `at` — which is the identity everything here works in: a save writes back to that one entry, and an
+// edit never becomes a new queue entry with a new timestamp.
+function queuedEditFor(thread) {
+  const edit = state.replyEdit;
+  if (!edit) return null;
+  return thread && edit.thread !== thread ? null : edit;
+}
+
+// One held reply on the card: the badge, the age it has been waiting and the line saying when it goes out. Its text
+// is a ghost line — or, when this is the entry the reader has open, a textarea in that line's place, seeded with the
+// entry's text and nothing else about the card moved. The age is the entry's own `at` either way, so an edit does not
+// restart the clock: editing is not re-queueing.
+function ghostTurnHtml(thread, q, edit, freeToSend) {
+  // The head is the same for a held reply and for the one being edited — the badge, the age counting from the entry's
+  // own `at`, the line saying when it goes out, and the × that takes this ONE entry back (usable while it is being
+  // edited: the removal closes the editor with it).
+  const head = (when, editing) =>
+    `<div class="ghost-turn${editing ? " editing" : ""}"><div class="ghost-head mono"><span class="ghost-badge">queued</span><span class="queue-ago" data-queued-at="${q.at}">${fmtDur(Date.now() - q.at)}</span><span class="dimmer">${when}</span><button class="ghost-cancel" type="button" data-queue-cancel="${esc(thread)}" data-queue-cancel-at="${q.at}" title="cancel this queued reply — it will not be sent, and if the reply box is empty its text comes back as your draft" aria-label="cancel this queued reply for ${esc(thread)}">✕</button></div>`;
+  if (!edit || edit.at !== q.at) {
+    return `${head("sends when the current turn finishes", false)}<div class="ghost-prompt" data-edit-queued-open="${q.at}" data-edit-thread="${esc(thread)}" role="button" tabindex="0" title="click to edit this held reply">${linkifyText(q.text)}</div></div>`;
+  }
+  // An editor is open on this entry, so the line above it cannot keep promising a send: while the reader is in the
+  // box this reply is held, and the card says which hold it is — still waiting for the turn and its subagents, or free
+  // to go the moment it is saved.
+  const when = freeToSend
+    ? "the turn has finished — this held reply waits for your edit; save and it goes"
+    : "editing — it is not sent while you edit it; save sends it, Escape leaves it as it was";
+  return `${head(when, true)}<div class="ghost-edit" data-edit-for="${q.at}"><textarea class="ghost-edit-box mono" data-edit-queued="${q.at}" data-edit-thread="${esc(thread)}" rows="2" spellcheck="false" aria-label="edit this held reply">${esc(edit.text)}</textarea><div class="ghost-edit-actions mono"><button class="btn-edit-save" type="button" data-edit-save="${q.at}" data-edit-thread="${esc(thread)}" title="save this edit — the held reply becomes this text (Enter)">Save</button><button class="btn-edit-cancel" type="button" data-edit-cancel="${q.at}" data-edit-thread="${esc(thread)}" title="leave this held reply exactly as it was (Escape)">Cancel</button></div></div></div>`;
+}
+
+// Open the editor on one held reply, named by its own `at`. The text it opens on is remembered, so Escape, Cancel and
+// a click away all put that entry back exactly as it was: nothing the reader did not save can reach the queue. One
+// editor at a time — opening another leaves the first as it was.
+function openQueuedEdit(thread, at) {
+  const entry = replyQueued(thread).find((e) => e && e.at === at);
+  if (!entry) return false;
+  const already = queuedEditFor(null);
+  if (already && (already.thread !== thread || already.at !== at)) cancelQueuedEdit(already.thread, already.at);
+  state.replyEdit = { thread, at, original: entry.text, text: entry.text };
+  renderConversation(thread);
+  const box = document.querySelector(`.ghost-edit-box[data-edit-queued="${at}"][data-edit-thread="${CSS.escape(thread)}"]`);
+  if (box) {
+    box.focus({ preventScroll: true });
+    growReplyBox(box);
+    // The caret goes to the end: the reader clicked a held line to add to it, not to retype it.
+    try {
+      box.setSelectionRange(box.value.length, box.value.length);
+    } catch {
+      /* not a text field any more: nothing to place */
+    }
+  }
+  return true;
+}
+
+// Save the edit to the ONE entry it belongs to, found by its `at`: not a new queue entry, and not the thread's whole
+// queue. The entry keeps its place and its `at`, so its age carries on from when it was first held. Enter or the Save
+// button is the only thing that commits an edit — nothing here sends.
+function saveQueuedEdit(thread, at) {
+  const edit = queuedEditFor(thread);
+  if (!edit || edit.at !== at) return false;
+  const box = document.querySelector(`.ghost-edit-box[data-edit-queued="${at}"][data-edit-thread="${CSS.escape(thread)}"]`);
+  const text = String(box ? box.value : edit.text).trim();
+  state.replyEdit = null;
+  const q = replyQueued(thread);
+  const i = q.findIndex((e) => e && e.at === at);
+  if (i < 0) {
+    // The entry left the queue while the editor was open (the × stays usable mid-edit): there is nothing to write to.
+    renderConversation(thread);
+    return false;
+  }
+  if (!text) {
+    // An empty box is the reader saying the same thing the × says: that entry goes. Taken out by the same removal, so
+    // the queue has one way out rather than two — and nothing is sent.
+    takeQueuedReply(thread, at);
+    renderConversation(thread);
+    const warn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
+    if (warn) warn.textContent = "that held reply was saved empty — it is gone, and nothing was sent";
+    void drainReplyQueue(thread);
+    return true;
+  }
+  q[i] = { ...q[i], text };
+  state.replyQueue.set(thread, q);
+  renderConversation(thread);
+  // Sendable again the moment the edit is saved: if the turn and its subagents are already done, the drain sends it
+  // now; if they are not, it stays held exactly as it was and goes when they finish.
+  void drainReplyQueue(thread);
+  return true;
+}
+
+// Leave the edit: the entry goes back to the text it had when the editor opened, and nothing else on the card moves.
+// This is what Escape and Cancel do, and what clicking away does.
+function cancelQueuedEdit(thread, at) {
+  const edit = queuedEditFor(thread);
+  if (!edit || (at && edit.at !== at)) return false;
+  state.replyEdit = null;
+  renderConversation(thread);
+  return true;
+}
+
+// Take ONE held reply out of the queue, by its own identity: the removal an empty save makes and the removal the
+// entry's × makes — one path, so "it goes" means the same thing however it was asked for. No other held reply on the
+// thread is touched, and nothing is sent.
+function takeQueuedReply(thread, at) {
+  const q = replyQueued(thread);
+  const i = q.findIndex((e) => e && e.at === at);
+  if (i < 0) return null;
+  const [entry] = q.splice(i, 1);
+  if (!q.length) state.replyQueue.delete(thread);
+  else state.replyQueue.set(thread, q);
+  // An editor open on the entry that just left has nothing left to edit.
+  const edit = queuedEditFor(thread);
+  if (edit && edit.at === at) state.replyEdit = null;
+  return entry;
+}
+
+// Clicking anywhere outside the open editor means the same one thing every time: REVERT — exactly what Escape means.
+// An edit is therefore only ever committed by Enter or Save, an accidental click can never write text the reader had
+// not finished, and no click can send anything. The editor's own box and buttons are not "away".
+function revertEditOnClickAway(target) {
+  const edit = state.replyEdit;
+  if (!edit) return false;
+  if (target && target.closest && target.closest(`.ghost-edit[data-edit-for="${edit.at}"]`)) return false;
+  return cancelQueuedEdit(edit.thread, edit.at);
+}
+
+// The editor's own keys. Registered here, before the card's reply-box handler, so a keystroke in the editor is never
+// read as a gesture meant for the reply box: Enter saves, Shift+Enter stays the newline the textarea makes it, Escape
+// leaves the entry as it was. No key here sends and no key here steers.
+document.addEventListener("keydown", (e) => {
+  const box = e.target?.closest?.(".ghost-edit-box");
+  if (box) {
+    const thread = box.dataset.editThread;
+    const at = Number(box.dataset.editQueued) || 0;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelQueuedEdit(thread, at);
+      return;
+    }
+    if (e.key === "Enter") {
+      // Only a bare Enter saves. Shift+Enter is left alone: it stays the newline the textarea makes of it, exactly as
+      // it does in every other box on the page.
+      if (!e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        saveQueuedEdit(thread, at);
+      }
+    }
+    return;
+  }
+  // The held reply's own line is reachable from the keyboard, so the editor is not a mouse-only affordance.
+  const prompt = e.target?.closest?.("[data-edit-queued-open]");
+  if (prompt && (e.key === "Enter" || e.key === " ")) {
+    e.preventDefault();
+    e.stopPropagation();
+    openQueuedEdit(prompt.dataset.editThread, Number(prompt.dataset.editQueuedOpen) || 0);
+  }
+});
+
+// What the reader is typing, kept on state as they type it: a repaint (the turn ending, a subagent line landing)
+// rebuilds the card and the textarea with it, and the editor is drawn from this rather than from the DOM that went
+// away — so an edit in progress cannot be thrown out from under the reader.
+document.addEventListener("input", (e) => {
+  const box = e.target?.closest?.(".ghost-edit-box");
+  if (!box) return;
+  const edit = queuedEditFor(box.dataset.editThread);
+  if (!edit || edit.at !== (Number(box.dataset.editQueued) || 0)) return;
+  edit.text = box.value;
+  growReplyBox(box);
+});
+
+// Why a held reply must NOT be sent right now, asked in ONE place so the two reasons can never disagree about the
+// same entry:
+//   "cancelled" — the reader took that entry back: it is out of the queue (the × takes it out; a flagged entry is the
+//                 same answer), so it is never sent and the queue moves on without it
+//   "editing"   — the reader has that entry open in its editor: it stays exactly where it is, holding everything
+//                 behind it, and becomes sendable again when the edit is saved
+// The × and the editor only ever change the state this reads, and the drain has no second opinion of its own. Asked
+// about a held entry, the two answers it can give are "the reader is editing this" and ""; "cancelled" is what an entry
+// the drain captured but the queue no longer carries looks like, so a × that removes its entry (or one that flags it)
+// is answered here rather than by a check of the drain's own.
+function heldReplyBlocked(thread, entry) {
+  if (!entry) return "";
+  if (entry.cancelled) return "cancelled";
+  if (!replyQueued(thread).some((e) => e && e.at === entry.at)) return "cancelled";
+  const edit = queuedEditFor(thread);
+  return edit && edit.at === entry.at ? "editing" : "";
 }
 
 // The entries the drain has taken out of a thread's queue to send, newest last, so a × pressed after the send
@@ -3694,9 +3959,11 @@ function replyTakenByDrain(thread, at) {
 // accidental × gives the text back as the draft when that thread's reply box is EMPTY, and leaves a box that
 // already holds something alone (the reader's own words there are not ours to overwrite).
 function cancelQueuedReply(thread, at) {
-  const q = state.replyQueue.get(thread) || [];
-  const i = q.findIndex((entry) => entry && entry.at === at);
-  if (i < 0) {
+  // The removal is takeQueuedReply — the same one an empty save makes, so there is ONE way out of this queue and not
+  // two. It keys on the entry's own `at`, and it closes an editor left open on the entry it takes, which is what keeps
+  // the × working while the reader is editing one.
+  const entry = takeQueuedReply(thread, at);
+  if (!entry) {
     // The race, and the only two honest answers: the drain has already taken this entry out and its send is on
     // its way (the press cannot call it back, so say so), or it is simply not held here any more.
     const sent = replyTakenByDrain(thread, at);
@@ -3705,10 +3972,10 @@ function cancelQueuedReply(thread, at) {
     if (warn) warn.textContent = sent ? "that one was already sent" : "that queued reply is no longer held";
     return sent ? "sent" : "gone";
   }
-  const [entry] = q.splice(i, 1);
-  if (!q.length) state.replyQueue.delete(thread);
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-  const backToDraft = Boolean(box && !box.value.trim() && entry.text);
+  // The box's own text, read the one way a prompt box is read now (a chip is the text it swallowed): the
+  // answer decides whether the cancelled reply can come back as a draft.
+  const backToDraft = Boolean(box && !readBox(box).trim() && entry.text);
   if (backToDraft) state.replyDrafts[thread] = entry.text;
   renderConversation(thread);
   // After the repaint: a rebuild replaces the card and the warnline with it, so the note goes in last.
@@ -3738,10 +4005,26 @@ function threadBusy(thread) {
 
 async function drainReplyQueue(thread) {
   // The next entry is read here, then the queue is re-read at send time and that entry is looked up by its own
-  // identity (`at`). The turn finishing and the reader pressing a held reply's × can land in the same moment,
-  // and the press wins whenever the entry is still held: what the queue no longer carries is never sent.
+  // identity (`at`): the turn finishing and the reader working on a held reply can land in the same moment. ONE guard
+  // answers for both of the reasons an entry must not be sent — the reader took it back with its ×, or the reader has
+  // it open in its editor — so the queue has no second check that could disagree with either of them.
   const next = replyQueued(thread)[0];
   if (!next || threadBusy(thread) || childrenOut(thread)) return;
+  const blocked = heldReplyBlocked(thread, next);
+  if (blocked === "editing") {
+    // Held, not sent: the entry keeps its place and its age, the card says why it is waiting, and saving the edit is
+    // what makes it sendable again. Everything behind it waits with it, so the queue cannot re-order around it.
+    renderConversation(thread);
+    return;
+  }
+  if (blocked === "cancelled") {
+    // Gone, not sent: an entry the reader took back leaves the queue, and the queue moves on to the one behind it.
+    const rest = replyQueued(thread).filter((e) => e && !e.cancelled && e.at !== next.at);
+    if (rest.length) state.replyQueue.set(thread, rest);
+    else state.replyQueue.delete(thread);
+    renderConversation(thread);
+    return void drainReplyQueue(thread);
+  }
   const q = state.replyQueue.get(thread) || [];
   const i = q.findIndex((entry) => entry && entry.at === next.at);
   if (i < 0) return;
@@ -3856,17 +4139,16 @@ function recallSpawnPrompt(step) {
   // Going forward with no walk in progress would just rewrite the same text and swallow the key.
   if (step < 0 && !(state.spawnNav && state.spawnNav.back > 0)) return false;
   // First Up captures what is in the box as the draft; later steps keep that original draft.
-  const nav = state.spawnNav && state.spawnNav.back > 0 ? state.spawnNav : { back: 0, stash: box.value };
+  // What the walk started from is read through readBox: a chip in the draft is part of what the reader had.
+  const nav = state.spawnNav && state.spawnNav.back > 0 ? state.spawnNav : { back: 0, stash: readBox(box) };
   const back = Math.max(0, Math.min(prompts.length, nav.back + step));
   const value = back === 0 ? nav.stash : prompts[prompts.length - back];
   state.spawnNav = { back, stash: nav.stash };
-  box.value = value;
-  const end = value.length;
-  try {
-    box.setSelectionRange(end, end);
-  } catch {
-    /* not a text field */
-  }
+  // A recalled prompt REPLACES what the box holds, chips included: the recalled text becomes the content,
+  // so it goes through the one writer and the previous draft's chip model goes with it.
+  writeBox(box, value);
+  clearBoxDraft(box);
+  setCaretOffset(box, value.length);
   return true;
 }
 
@@ -3875,7 +4157,7 @@ function recallReply(box, step) {
   if (!thread) return;
   const prompts = turnPrompts(thread);
   if (!prompts.length) return;
-  const nav = state.replyNav.get(thread) || { back: 0, stash: box.value };
+  const nav = state.replyNav.get(thread) || { back: 0, stash: readBox(box) };
   // `back` counts steps behind the draft: 0 = what you were typing, 1 = newest prompt, 2 = the one
   // before it, and so on.
   const back = Math.max(0, Math.min(prompts.length, nav.back + step));
@@ -3883,13 +4165,10 @@ function recallReply(box, step) {
   // `current` is what the recall put there: it is how the next Up knows the box is showing history rather than
   // the reader's own draft, so it may keep walking instead of only moving the caret.
   state.replyNav.set(thread, { back, stash: nav.stash, current: value });
-  box.value = value;
-  const end = value.length;
-  try {
-    box.setSelectionRange(end, end);
-  } catch {
-    /* not a text field */
-  }
+  // A recalled prompt replaces what the box holds, chips included: the model goes with the draft it made.
+  writeBox(box, value);
+  clearBoxDraft(box);
+  setCaretOffset(box, value.length);
   state.replyDrafts[thread] = value;
 }
 
@@ -3964,6 +4243,61 @@ async function reattachCard(btn) {
   }
 }
 
+// The COMPLETE chip's press, on a card whose latest turn is `done`. It is deliberately NOT the continue pill: nothing is
+// sent to the agent that already finished (it is finished — nudging it is the one thing this press must not do), and the
+// panel does not start an assistant turn either, which would talk over a run already in flight. Instead one message is
+// QUEUED for the board assistant through the wake queue an alert handed over uses (POST /api/jobs/ask-complete ->
+// Assistant.askAboutComplete -> wake), so it lands in the assistant's next turn inside its hourly budget. The pill says
+// the ask happened; a queue that refuses it (the hourly budget, or an assistant switched off) says WHY on the card, in
+// the place a failed nudge already speaks, and the pill is then left as it was rather than claiming a success.
+async function askComplete(btn) {
+  const id = btn.dataset.completeAsk || "";
+  if (!id) return;
+  btn.disabled = true;
+  btn.classList.add("is-asking");
+  try {
+    const res = await apiFetch("/api/jobs/ask-complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) {
+      showBanner(out.error || `could not queue the check for the assistant (HTTP ${res.status})`);
+      return;
+    }
+    // Already asked and the assistant has not turned yet: the ask IS queued, so the chip says asked — but nothing was
+    // queued twice, and the card says so rather than letting a second press look like a second ask.
+    if (out.duplicate) {
+      markChipAsked(btn);
+      showNote(`that check is already in the assistant's queue (asked ${out.at || "just now"}) — nothing was queued twice`);
+      return;
+    }
+    // Refused: the wake queue would not take it. Never claim otherwise — the pill stays as it was and the card says why.
+    if (!out.queued) {
+      showBanner(out.reason || "the assistant's wake queue refused that ask — nothing was queued");
+      return;
+    }
+    markChipAsked(btn);
+    showNote(`queued one check for the board assistant — it is asked to look at ${out.thread || "that"} and say whether it is really complete`);
+  } catch (e) {
+    showBanner(`could not queue the check for the assistant — ${String((e && e.message) || e)}`);
+  } finally {
+    if (btn.isConnected) {
+      btn.disabled = false;
+      btn.classList.remove("is-asking");
+    }
+  }
+}
+
+// The chip's own short state change, so the reader can see the press landed without reading the card's footer. No glyph
+// either way: the not-running pill's ↻ says "this resumes something", which is exactly what this one does not do.
+function markChipAsked(btn) {
+  if (!btn || !btn.isConnected) return;
+  btn.classList.add("is-asked");
+  btn.textContent = "asked";
+}
+
 // The green ▶ on a worktree row: ask every agent in that worktree that is NOT running to carry on. One sentence each,
 // sent together; a running agent is left alone - a reply to it would queue behind its turn, which is not probing.
 async function probeWorktreeAgents(path, btn = null) {
@@ -4005,8 +4339,11 @@ function addAgentBarHtml({ key = "", path = "", name = "", project = "", value =
   }
   return (
     `<div class="add-agent-form">` +
-    `<input class="add-agent-input" type="text" ${attrs} value="${esc(value)}" spellcheck="false" autocomplete="off" data-form-type="other" data-1p-ignore data-bwignore data-lpignore="true"` +
-    ` placeholder="what should this agent do here?  Enter starts it · Esc puts the + back">` +
+    // A contenteditable host, like the reply box: this field is where a prompt is often pasted in from a
+    // document, so a paste that big collapses to a chip here too. It keeps the single-line behaviour it had
+    // as an <input> (data-single strips line breaks out of a short paste; Shift+Enter adds none).
+    `<div class="add-agent-input" contenteditable="true" role="textbox" data-single="1" ${attrs} data-chipbox="add:${esc(key)}" spellcheck="false" autocomplete="off" data-form-type="other" data-1p-ignore data-bwignore data-lpignore="true"` +
+    ` data-ph="what should this agent do here?  Enter starts it · Esc puts the + back"></div>` +
     `</div>`
   );
 }
@@ -4014,9 +4351,9 @@ function addAgentBarHtml({ key = "", path = "", name = "", project = "", value =
 // Same key in, same key out: the field replaces the bar in place so the row does not change height.
 function swapAddAgentBox(key, html) {
   const sel = `[data-add-agent-key="${CSS.escape(key)}"]`;
-  const input = document.querySelector(`input${sel}`);
-  const form = input?.closest(".add-agent-form") || null;
-  const btn = document.querySelector(`button${sel}`);
+  const field = document.querySelector(`.add-agent-input${sel}`);
+  const form = field?.closest(".add-agent-form") || null;
+  const btn = document.querySelector(`.btn-add-agent${sel}`);
   const current = form || btn;
   if (!current) return null;
   current.insertAdjacentHTML("afterend", html);
@@ -4044,7 +4381,7 @@ function openAddAgent(btn) {
   if (prev && prev.key !== key) swapAddAgentBox(prev.key, addAgentBarHtml({ ...prev, value: null }));
   state.addAgent = a;
   const fresh = swapAddAgentBox(key, addAgentBarHtml({ ...a, value: "" }));
-  fresh?.querySelector("input")?.focus({ preventScroll: true });
+  fresh?.querySelector(".add-agent-input")?.focus({ preventScroll: true });
 }
 
 // Esc, an empty blur, or a run that has started: the + comes back.
@@ -4061,7 +4398,7 @@ function closeAddAgent() {
 async function submitAddAgent(input) {
   const a = state.addAgent;
   if (!a) return;
-  const typed = String(input?.value ?? a.value ?? "").trim();
+  const typed = String((input ? readBox(input) : a.value) ?? "").trim();
   if (!typed) {
     input?.focus();
     return;
@@ -4087,14 +4424,16 @@ async function submitAddAgent(input) {
   resetSpawnDefaults();
   const box = $("job-prompt");
   if (box) {
-    box.value = typed;
+    // The field's text becomes the card's prompt — a pasted block travels as a chip, not as flattened
+    // text, so the run still receives every character of it.
+    transferBoxModel(`add:${a.key}`, box, typed);
     growReplyBox(box);
   }
   state.addAgent = null;
   swapAddAgentBox(a.key, addAgentBarHtml({ ...a, value: null }));
   await spawnAgent({ promptFocus: false });
   // spawnAgent clears the prompt on success and leaves it on a refusal, which is the only signal it gives back.
-  if (String($("job-prompt")?.value || "").trim()) {
+  if (String(readBox($("job-prompt")) || "").trim()) {
     const why = String($("spawn-msg")?.textContent || "").trim();
     showBanner(`could not start that agent — ${why || "the New agent card says why"}`);
   }
@@ -4111,10 +4450,24 @@ document.addEventListener(
   (e) => {
     const input = addAgentFieldOf(e);
     if (!input) return;
+    if (e.key === "Enter" && e.shiftKey) {
+      // This box is ONE LINE — it was an <input> until it learned to hold a chip — so Shift+Enter adds no
+      // line here, exactly as it added none before.
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
       e.preventDefault();
       e.stopPropagation();
       void submitAddAgent(input);
+      return;
+    }
+    // Ctrl/Cmd/Alt+Enter means nothing in a one-line field — an <input> ignored it outright — so it is swallowed
+    // here rather than allowed to put a line break into a box that never had one.
+    if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
       return;
     }
     if (e.key === "Escape") {
@@ -4131,7 +4484,7 @@ document.addEventListener(
 document.addEventListener("input", (e) => {
   const input = addAgentFieldOf(e);
   if (!input || !state.addAgent) return;
-  state.addAgent.value = input.value;
+  state.addAgent.value = readBox(input);
   rememberAddAgentCaret(input);
 });
 
@@ -4189,18 +4542,17 @@ function rememberAddAgentCaret(input) {
   // start of the text and the restore after the move would put it there. The value is already tracked by the input
   // event; only a field that is still on the page can say where the caret is.
   if (!input.isConnected) return;
-  a.value = input.value;
-  try {
-    a.start = input.selectionStart ?? a.value.length;
-    a.end = input.selectionEnd ?? a.value.length;
-  } catch {
-    /* not a text field any more */
-  }
+  a.value = readBox(input);
+  const at = caretOffset(input);
+  a.start = Math.min(at, a.value.length);
+  a.end = a.start;
 }
 
 async function sendReply(thread, preset = null) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-  const typed = String(preset ?? box?.value ?? "").trim();
+  // The one place a box's text is read. A chip serializes back to the text it swallowed, IN PLACE: quotes
+  // the reader put around it and the prose on either side arrive in the order they are on screen.
+  const typed = String(preset ?? (box ? readBox(box) : "")).trim();
   const attached = attachmentBlock(thread);
   if (!typed && !attached) return false;
   const text = typed + attached;
@@ -4228,8 +4580,14 @@ async function sendReply(thread, preset = null) {
     // so clear the box that is on the page now, not the one this function started with. A queued reply must not
     // wipe something the reader has since typed, hence the preset guard.
     const live = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-    if (live && (preset == null || !live.value.trim() || live.value.trim() === typed)) live.value = "";
-    if (box && box !== live && (preset == null || !box.value.trim())) box.value = "";
+    if (live && (preset == null || !readBox(live).trim() || readBox(live).trim() === typed)) {
+      writeBox(live, "");
+      clearBoxDraft(live);
+    }
+    if (box && box !== live && (preset == null || !readBox(box).trim())) {
+      writeBox(box, "");
+      clearBoxDraft(box);
+    }
     updateJob(d.job, { scroll: true });
     if (d.assistant && typeof applyAssistant === "function") applyAssistant(d.assistant);
     // Sending a reply is you switching to the new turn: fold everything before it, including turns
@@ -4282,7 +4640,10 @@ async function steerTurn(thread, id, text, btn = null) {
         state.replyDrafts[thread] = "";
         clearAttachments(thread);
         const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-        if (box) box.value = "";
+        if (box) {
+          writeBox(box, "");
+          clearBoxDraft(box);
+        }
         if (warn) warn.textContent = "this turn cannot take a steer right now — queued; it sends when the turn and its subagents are done";
         if (btn) btn.disabled = false;
         return true;
@@ -4296,7 +4657,10 @@ async function steerTurn(thread, id, text, btn = null) {
     state.replyDrafts[thread] = "";
     clearAttachments(thread);
     const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-    if (box) box.value = "";
+    if (box) {
+      writeBox(box, "");
+      clearBoxDraft(box);
+    }
     if (warn) {
       // A steer only lands at a tool boundary, and `delegate_task` is one call that can run for minutes: say what
       // it is waiting for, and what happens if the wait outlasts the turn.
@@ -4782,7 +5146,7 @@ function thinkHtml(turn, copy = "") {
   const blocks = entry?.blocks || [];
   const open = thinkOpenFor(turn, key);
   const meta = !entry ? "reading…" : blocks.length ? `${blocks.length} block${blocks.length === 1 ? "" : "s"}` : "none recorded";
-  return `<details class="think" data-think-turn="${esc(key)}"${open ? " open" : ""}>
+  return `<details class="think" data-copy data-think-turn="${esc(key)}"${open ? " open" : ""}>
     <summary><span class="think-title">🧠 thinking</span> <span class="think-meta mono">${esc(meta)}</span></summary>
     <div class="out-wrap"><div class="think-body">${
       blocks.length
@@ -4797,6 +5161,139 @@ function thinkHtml(turn, copy = "") {
     }</div>${toBottomBtnHtml()}</div>
   </details>`;
 }
+
+// ---- copy buttons ------------------------------------------------------------------------------
+// One mechanism for every "lift this block" affordance: an element carrying `data-copy` carries a small
+// button in its corner that appears while the pointer is over it and copies THAT BLOCK's own visible
+// text. The button is mounted here, by the observer below, never by the renderers - so a block another
+// worker draws (the console's code and diff windows) opts in by carrying the same attribute, and there
+// is no second mechanism to keep in step with this one.
+//
+// What a block copies is what it SHOWS: the reading goes through innerText, so a folded burst or a
+// folded reasoning block contributes only the lines on screen, never a hidden one. Every control inside
+// the block is taken out of that reading - this button's own label, the "N lines" and "+ N commands"
+// buttons, the jump-to-the-newest-line chip - because a control's label is chrome, not output.
+const COPY_SEL = "[data-copy]";
+const COPY_BTN_SEL = "[data-copy-btn]";
+const COPY_TEXT_SEL = "[data-copy-text]";
+const COPY_TITLE = "copy this block's text to the clipboard";
+const COPY_FLASH_MS = 1400;
+
+function copyButtonHtml() {
+  return `<button type="button" class="copy-block" data-copy-btn="1" title="${COPY_TITLE}" aria-label="${COPY_TITLE}">⧉</button>`;
+}
+
+// The one place a button is created. Idempotent: the button this inserts is itself a mutation, so the
+// observer below sees it, asks again, finds the button already there and stops.
+function mountCopyButtons(root) {
+  if (!root || root.nodeType !== 1) return;
+  const blocks = [];
+  if (root.matches?.(COPY_SEL)) blocks.push(root);
+  for (const el of root.querySelectorAll?.(COPY_SEL) || []) blocks.push(el);
+  for (const block of blocks) {
+    // A <details> renders only its summary while it is folded, so its button goes IN the summary: a folded
+    // block has to be copyable too, and what it copies is still its folded text.
+    const host = block.tagName === "DETAILS" ? block.querySelector(":scope > summary") || block : block;
+    if (host.querySelector(":scope > .copy-block")) continue;
+    host.insertAdjacentHTML("beforeend", copyButtonHtml());
+  }
+}
+
+// Generic by construction: ANY render path that puts a `[data-copy]` block on the page gets its button -
+// a card rebuilt from scratch, a console line appended by the run's stream, a pinned copy of a turn.
+const copyObserver = new MutationObserver((records) => {
+  for (const r of records) for (const node of r.addedNodes) if (node.nodeType === 1) mountCopyButtons(node);
+});
+copyObserver.observe(document.documentElement, { childList: true, subtree: true });
+mountCopyButtons(document.documentElement);
+
+// What a block copies: its own text, as the reader sees it. innerText alone will not do - a flex row (a
+// tool burst's call: glyph, name, tally, arguments, timer) has its items blockified, so innerText breaks
+// them onto five separate lines, and textContent ignores what is folded away altogether. So the walk
+// below keeps innerText's rules for what is SHOWN - a folded or hidden subtree contributes nothing - one
+// line box at a time, and lays a flex row's items out the way the reader sees them: one line, separated.
+const COPY_SKIP_TAGS = new Set(["SCRIPT", "STYLE", "TEMPLATE", "BUTTON"]);
+
+function copyBlockBox(el) {
+  const d = getComputedStyle(el).display;
+  return d !== "none" && d !== "contents" && !d.startsWith("inline");
+}
+
+function copyShownText(el) {
+  if (!el || el.nodeType !== 1) return "";
+  if (COPY_SKIP_TAGS.has(el.tagName)) return ""; // a control's label is chrome, never output
+  if (el.tagName === "BR") return "\n";
+  const cs = getComputedStyle(el);
+  if (cs.display === "none" || cs.visibility === "hidden" || el.hidden) return "";
+  if (el.checkVisibility && !el.checkVisibility({ checkVisibilityCSS: true })) return "";
+  // A folded block contributes its title line and nothing else, whatever its contents compute to.
+  if (el.tagName === "DETAILS" && !el.open) return copyShownText(el.querySelector(":scope > summary"));
+  const display = cs.display;
+  if (display === "flex" || display === "inline-flex" || display === "grid" || display === "inline-grid") {
+    // A flex ROW lays its items out on one line - which is the whole reason this walk exists - while a
+    // flex COLUMN or a grid stacks them, one line each. (A tool burst's head is a column: one row per
+    // tool, and its copy is one line per tool.)
+    const onOneLine = (display === "flex" || display === "inline-flex") && !String(cs.flexDirection || "").startsWith("column");
+    return [...el.children]
+      .map(copyShownText)
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .join(onOneLine ? " " : "\n");
+  }
+  const kids = [...el.childNodes];
+  // A line box - text and inline content only: innerText is exact for one, pre-wrap and all.
+  if (!kids.some((k) => k.nodeType === 1 && copyBlockBox(k))) return el.innerText;
+  return kids
+    .map((k) => (k.nodeType === 3 ? k.nodeValue : k.nodeType === 1 ? copyShownText(k) : ""))
+    .join("\n")
+    .replace(/[ \t]+(?=\r?\n)/g, "")
+    .replace(/(\r?\n){2,}/g, "\n")
+    .replace(/^[\s\r\n]+|[\s\r\n]+$/g, "");
+}
+
+// The part that IS the block's text, when the marked element is a wrapper: a tool burst's button sits on
+// the burst (so hovering anywhere in it finds one button) while a burst copies its CALL - the header and
+// its summary as rendered - and never its result lines. It is a DIRECT child: a burst inside a console
+// carries one of its own, and the console must not read it as its own text.
+function blockCopyText(block) {
+  return copyShownText(block.querySelector(`:scope > ${COPY_TEXT_SEL}`) || block);
+}
+
+function flashCopyButton(btn, ok) {
+  btn.textContent = ok ? "✓" : "✕";
+  btn.classList.toggle("is-copied", ok);
+  btn.classList.toggle("is-failed", !ok);
+  btn.title = ok ? "copied to the clipboard" : "the clipboard refused it - nothing was copied";
+  clearTimeout(btn._copyTimer);
+  btn._copyTimer = setTimeout(() => {
+    btn.textContent = "⧉";
+    btn.classList.remove("is-copied", "is-failed");
+    btn.title = COPY_TITLE;
+  }, COPY_FLASH_MS);
+}
+
+// The one delegated handler. It runs in the CAPTURE phase, so a press on the button is answered here and
+// never reaches the console's own click handlers; and a copy that fails says so (a cross) instead of
+// looking like the tick a successful one shows.
+document.addEventListener(
+  "click",
+  (e) => {
+    const target = e.target && e.target.closest ? e.target : null;
+    const btn = target ? target.closest(COPY_BTN_SEL) : null;
+    if (!btn) return;
+    const block = btn.closest(COPY_SEL);
+    if (!block) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // copyText() is the panel's own writer: the async clipboard where the origin is secure (loopback
+    // is), the select-and-execCommand path behind it, and `false` when neither of them worked.
+    void copyText(blockCopyText(block)).then(
+      (ok) => flashCopyButton(btn, ok),
+      () => flashCopyButton(btn, false),
+    );
+  },
+  true,
+);
 
 // A console follows its newest line unless the reader has deliberately gone back to read something older. This is the
 // default the panel promises, and it has to survive three things that used to fight over scrollTop: a card rebuild, a
@@ -5129,6 +5626,10 @@ function conversationSignature(conv) {
     // repainted in place by paintCardMeta().
     // Queued replies show as a note next to the buttons; a change must repaint the card.
     (state.replyQueue.get(conv.thread) || []).length,
+    // The held reply the reader has open in the in-place editor, by its `at`: opening it swaps that entry's line for a
+    // textarea and closing it puts the line back, so the card has to repaint on the open/close alone. The text being
+    // typed is deliberately NOT here — a keystroke must not rebuild the card the reader is typing in.
+    `e${queuedEditFor(conv.thread)?.at ?? ""}`,
     state.collapsedJobs.has(conv.thread) ? "c" : "o",
     state.maximized === conv.thread ? "m" : "-",
     isHomelessConv(conv) ? "h" : "-",
@@ -5501,7 +6002,7 @@ async function retrySpawn() {
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
     lastSpawnAttempt = null;
     $("spawn-msg").textContent = `spawned ${d.job.id}${d.job.runId ? ` · run ${String(d.job.runId).replace(/^run_/, "").slice(0, 8)}` : ""}${d.job.worktreePath ? ` · ${d.job.worktreePath}` : ""}`;
-    $("job-prompt").value = "";
+    clearSpawnPrompt();
     clearAttachments("spawn");
     updateJob(d.job, { scroll: true });
     revealSpawnedAgent(d.job);
@@ -5523,7 +6024,7 @@ async function recoverSpawnAfterTimeout(body) {
       (j) => String(j.prompt || "").trim() === wanted && Date.parse(j.startedAt || 0) >= cutoff,
     );
     if (!hit) return false;
-    $("job-prompt").value = "";
+    clearSpawnPrompt();
     rememberSpawnPrompt(wanted);
     $("spawn-msg").textContent = `spawned ${hit.id} — the reply was lost, but the turn did start`;
     updateJob(hit, { scroll: true });
@@ -5582,7 +6083,7 @@ async function spawnAgent({ promptFocus = true } = {}) {
     // The prompt now belongs to an agent: clear the box so the next one starts blank, and keep it in
     // history so a single Up brings it straight back. A REFUSED spawn keeps the text for editing.
     rememberSpawnPrompt(typed);
-    $("job-prompt").value = "";
+    clearSpawnPrompt();
     clearAttachments("spawn");
     if (promptFocus) $("job-prompt").focus();
     updateJob(d.job, { scroll: true });
@@ -5771,6 +6272,15 @@ function scrollCardUnderBar(card) {
   setTimeout(again, 120);
 }
 
+// Emptying the New-agent prompt empties what it held, chips included: the chip model goes with the text, so
+// a cleared box cannot bring back a chip the reader has already sent.
+function clearSpawnPrompt() {
+  const box = $("job-prompt");
+  if (!box) return;
+  writeBox(box, "");
+  clearBoxDraft(box);
+}
+
 function focusPromptWithoutScrolling() {
   const prompt = $("job-prompt");
   if (!prompt) return;
@@ -5831,7 +6341,8 @@ function focusSpawn(projectName) {
 
 function formValues() {
   return {
-    prompt: $("job-prompt").value,
+    // readBox: a chip in the box is the text it swallowed, in place, and the run must receive all of it.
+    prompt: readBox($("job-prompt")),
     // An explicitly edited location wins over the project picker (the server prefers `cwd`).
     cwd: $("job-cwd").value.trim() || undefined,
     // true = run in that directory as-is (an existing worktree), no new worktree created. The checkbox says
@@ -9564,16 +10075,19 @@ document.addEventListener("click", (e) => {
 // Enter in the prompt spawns, the way it does in every other box here. Shift+Enter is a newline, so a
 // multi-line prompt is still possible.
 $("job-prompt").addEventListener("keydown", (e) => {
-  // Up/Down walk what you have already spawned, shell style. Only from the very start (Up) or the very
-  // end (Down) of the text, so the arrows still move the caret inside a multi-line prompt.
+  // Up/Down walk what you have already spawned, shell style. Only from the very start (Up) or the very end
+  // (Down) of the TEXT — measured the way readBox measures it, so a chip counts as the text it swallowed
+  // and the caret keeps moving with it.
+  const box = e.target;
+  const boxText = readBox(box);
+  const at = caretOffset(box);
   if (e.key === "ArrowUp" && !e.shiftKey) {
-    const box = e.target;
     // A single-line prompt walks history from anywhere (that is shell behaviour, and the caret sits at
     // the END after typing). A multi-line prompt only walks when the caret is already at the start, so
     // Up still moves between its lines first.
-    const singleLine = !String(box.value).includes("\n");
-    const atStart = box.selectionStart === 0 && box.selectionEnd === 0;
-    if ((singleLine && box.selectionStart === box.selectionEnd) || atStart || !box.value) {
+    const singleLine = !boxText.includes("\n");
+    const atStart = at === 0;
+    if (singleLine || atStart || !boxText) {
       if (recallSpawnPrompt(1)) {
         e.preventDefault();
         return;
@@ -9581,10 +10095,9 @@ $("job-prompt").addEventListener("keydown", (e) => {
     }
   }
   if (e.key === "ArrowDown" && !e.shiftKey) {
-    const box = e.target;
-    const singleLine = !String(box.value).includes("\n");
-    const atEnd = box.selectionStart === box.value.length && box.selectionEnd === box.value.length;
-    if ((singleLine && box.selectionStart === box.selectionEnd) || atEnd) {
+    const singleLine = !boxText.includes("\n");
+    const atEnd = at >= boxText.length;
+    if (singleLine || atEnd) {
       if (recallSpawnPrompt(-1)) {
         e.preventDefault();
         return;
@@ -9594,7 +10107,8 @@ $("job-prompt").addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   e.preventDefault();
   e.stopPropagation();
-  // Shift+Enter is a newline: a prompt is often more than one line.
+  // Shift+Enter is a newline: a prompt is often more than one line. It is inserted AT THE CARET, which is
+  // the only way a contenteditable host can be given one.
   if (e.shiftKey) {
     insertNewlineAtCaret(e.target);
     return;
@@ -9604,8 +10118,12 @@ $("job-prompt").addEventListener("keydown", (e) => {
 
 // Typing ends the history walk, so the next Up starts from whatever is in the box now.
 $("job-prompt").addEventListener("input", () => {
-  if (state.spawnNav) state.spawnNav = { back: 0, stash: $("job-prompt").value };
+  if (state.spawnNav) state.spawnNav = { back: 0, stash: readBox($("job-prompt")) };
 });
+// A chip-bearing draft this tab mirrored before a reload comes back into the box it belongs to (#job-prompt is
+// static markup, so it is restored once, here, not by any render path — the reply boxes restore themselves
+// through restoreTyping, and the assistant's intro box through its own render).
+restoreChipBoxes(document);
 $("btn-pause").addEventListener("click", () => {
   state.paused = !state.paused;
   $("btn-pause").textContent = state.paused ? "Resume" : "Pause";
@@ -9624,6 +10142,34 @@ document.addEventListener("click", async (e) => {
   if (state.pendingFocus && !e.target.closest(`.job[data-thread="${CSS.escape(state.pendingFocus.thread)}"]`)) {
     state.pendingFocus = null;
   }
+  // The held reply's editor, its own three controls first, so a press inside the editor is never read as a fold, a
+  // send or a click away from itself: clicking the held text opens it, Save writes the edit back to that one entry,
+  // Cancel leaves that entry exactly as it was. None of the three sends anything.
+  const editSave = e.target.closest?.("[data-edit-save]");
+  if (editSave) {
+    e.preventDefault();
+    e.stopPropagation();
+    saveQueuedEdit(editSave.dataset.editThread, Number(editSave.dataset.editSave) || 0);
+    return;
+  }
+  const editCancel = e.target.closest?.("[data-edit-cancel]");
+  if (editCancel) {
+    e.preventDefault();
+    e.stopPropagation();
+    cancelQueuedEdit(editCancel.dataset.editThread, Number(editCancel.dataset.editCancel) || 0);
+    return;
+  }
+  // The held reply's text is the handle. A click on a link inside it still opens the link.
+  const editOpen = e.target.closest?.("[data-edit-queued-open]");
+  if (editOpen && !e.target.closest("a[data-open-url]")) {
+    e.preventDefault();
+    e.stopPropagation();
+    openQueuedEdit(editOpen.dataset.editThread, Number(editOpen.dataset.editQueuedOpen) || 0);
+    return;
+  }
+  // Clicking away from an open editor means REVERT, every time — the same one thing Escape means. Asked here, before
+  // any branch below can return, so a click on the card head, on another held reply or on empty page all mean it too.
+  revertEditOnClickAway(e.target);
   // The context readout right of the model: one click moves the session's ceiling to the next size.
   const ctxPick = e.target.closest?.("[data-context-pick]");
   if (ctxPick) {
@@ -10244,6 +10790,15 @@ document.addEventListener("click", async (e) => {
     void continueThread(continueBtn.dataset.continueThread || "", continueBtn);
     return;
   }
+  // The COMPLETE chip, on a card whose latest turn is done: queue one ask for the board assistant and send nothing to
+  // the agent. Its own hook (`data-complete-ask`), so it can never fall into the continue branch above.
+  const completeBtn = e.target.closest("[data-complete-ask]");
+  if (completeBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    void askComplete(completeBtn);
+    return;
+  }
   // The re-attach pill: ask the gateway about this one card's run and let the panel take the same decision its boot
   // reconcile takes. Nothing is drawn from the response — the decision emits the job events the card is repainted
   // from — so the press is answered in words, and a refusal says why instead of leaving a pill that looks broken.
@@ -10485,7 +11040,7 @@ document.addEventListener("input", (e) => {
 // A narrower window means fewer characters per line and more wrapped lines: re-measure what has content.
 window.addEventListener("resize", () => {
   for (const box of document.querySelectorAll(".reply-box, #job-prompt")) {
-    if (box.value) growBoxToDraft(box, box.id === "job-prompt" ? SPAWN_MAX_LINES : REPLY_MAX_LINES);
+    if (readBox(box)) growBoxToDraft(box, box.id === "job-prompt" ? SPAWN_MAX_LINES : REPLY_MAX_LINES);
   }
 });
 
@@ -10623,15 +11178,19 @@ document.addEventListener("keydown", async (e) => {
   }
   const box = e.target.closest && e.target.closest(".reply-box");
   if (!box) return;
-  // Up/Down walk the thread's previous prompts, shell style: only from the very start (Up) or the very
-  // end (Down) of the text, so the arrows still move the caret inside a multi-line reply.
+  // Up/Down walk the thread's previous prompts, shell style: only from the very start (Up) or the very end
+  // (Down) of the text, so the arrows still move the caret inside a multi-line reply. The text AND the caret
+  // are measured the way readBox measures them, so a chip counts as the text it swallowed and the arrows
+  // behave exactly as they do in a box of the same text typed by hand.
   // A box still showing a recalled entry keeps walking, with the caret wherever the recall left it; a box the
   // reader has typed into only steps at the very start (Up) or the very end (Down), so the arrows stay usable
   // inside a multi-line reply.
   const nav = state.replyNav.get(box.dataset.reply);
-  const recalled = Boolean(nav && nav.back > 0 && box.value === nav.current);
-  const atStart = box.selectionStart === 0 && box.selectionEnd === 0;
-  const atEnd = box.selectionStart === box.value.length && box.selectionEnd === box.value.length;
+  const boxText = readBox(box);
+  const at = caretOffset(box);
+  const recalled = Boolean(nav && nav.back > 0 && boxText === nav.current);
+  const atStart = at === 0;
+  const atEnd = at >= boxText.length;
   if (e.key === "ArrowUp" && !e.shiftKey && (atStart || (recalled && atEnd))) {
     e.preventDefault();
     recallReply(box, 1);
@@ -10660,7 +11219,7 @@ document.addEventListener("keydown", async (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     const thread = box.dataset.reply;
-    const text = (box.value || "").trim();
+    const text = readBox(box).trim();
     // Enter is the Queue reply button's gesture: while the card offers that button - a turn is running, or a
     // finished turn whose subagents are still out - the text is held for the next turn rather than sent into a
     // busy thread. With nothing to wait for there is nothing to hold, and Enter sends.
@@ -10785,15 +11344,17 @@ document.addEventListener("input", (e) => {
   const box = e.target.closest && e.target.closest(".reply-box");
   if (!box) return;
   const thread = box.dataset.reply;
-  state.replyDrafts[thread] = box.value;
+  // readBox: the draft is the text the box HOLDS, chips serialized back in place — which is what a send
+  // would post, and what a rebuild replays.
+  state.replyDrafts[thread] = readBox(box);
   // Editing a recalled prompt ends the walk: what is in the box is now the reader's draft, and the next Up
   // should start from the newest prompt again rather than from wherever the recall had got to.
   const nav = state.replyNav.get(thread);
-  if (nav && nav.current !== undefined && box.value !== nav.current) {
-    state.replyNav.set(thread, { back: 0, stash: box.value });
+  if (nav && nav.current !== undefined && readBox(box) !== nav.current) {
+    state.replyNav.set(thread, { back: 0, stash: readBox(box) });
   }
   const sent = state.justSent.get(thread);
-  if (sent && box.value.trim() !== sent.text) state.justSent.delete(thread);
+  if (sent && readBox(box).trim() !== sent.text) state.justSent.delete(thread);
 });
 
 // A link in agent output is opened by the panel, not by navigating: capture phase, so the row and agent
