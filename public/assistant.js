@@ -269,7 +269,10 @@
       </ul>
       ${off ? `<p class="as-hint">It is switched off in Settings — turn it on there to start.</p>` : ""}
       <div class="as-first">
-        <textarea id="as-first-text" rows="3" placeholder="Ask it something, or tell it what to watch…"${off ? " disabled" : ""}></textarea>
+        <!-- A chipbox like every other prompt box (board/paste-chips.js): a long paste collapses in place
+             here too. No data-single, so a multi-line paste keeps its lines; the placeholder is data-ph,
+             because :empty draws it and a div takes no placeholder attribute. -->
+        <div id="as-first-text" class="chipbox" contenteditable="true" role="textbox" aria-multiline="true" data-chipbox="as-first" spellcheck="false" data-ph="Ask it something, or tell it what to watch…"${off ? ' data-off="1"' : ""}></div>
         <div class="as-first-actions">
           <button id="btn-as-first" type="button" class="primary"${off ? " disabled" : ""}>Send to the assistant</button>
           <span class="as-hint">its own Hermes thread · it knows the board, not your repository</span>
@@ -286,6 +289,8 @@
       if (host.dataset.mode !== "intro") {
         host.dataset.mode = "intro";
         host.innerHTML = assistantIntroHtml();
+        // A pasted block the reader was writing here before a reload comes back as a chip, with its text.
+        restorePersistedBox(as$("as-first-text"));
       }
       return;
     }
@@ -770,7 +775,7 @@
       await asPost("/api/assistant/say", { text: t });
       // The intro box is gone once the card exists; clear it in case a repaint has not landed yet.
       const box = as$("as-first-text");
-      if (box) box.value = "";
+      if (box) writeBox(box, "");
       state.assistantTab = "chat";
       try {
         localStorage.setItem(TAB_KEY, "chat");
@@ -932,7 +937,8 @@
     }
 
     if (t.id === "btn-as-first") {
-      await say(as$("as-first-text")?.value, t);
+      // readBox: a chip pasted into the intro box is the text it swallowed.
+      await say(readBox(as$("as-first-text")), t);
       return;
     }
 
