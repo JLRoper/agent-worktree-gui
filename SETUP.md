@@ -38,6 +38,7 @@ too when the profile has one.
 | an OpenRouter key | `hermes auth`, or `$HERMES_HOME/.env` | **only** spawning agents |
 | `gh` | `gh auth status` | cloning (the repo is private) and PR columns |
 | the commit-subject hook | `git config core.hooksPath` prints `.githooks` | keeping `wip`-style subjects out of main's history — one install covers every worktree of the clone |
+| the version-bump hook | same `core.hooksPath` check, and `node tools/version.mjs suggest` runs | refusing a push of a branch whose own commits carry no version bump (`docs/versioning.md` is the scale) |
 
 `setup.cmd` (Windows) or `./setup.sh` (macOS/Linux) checks the first three and tells you what is
 missing.
@@ -47,12 +48,13 @@ missing.
     gh repo clone JLRoper/agent-worktree-gui        # private: needs gh auth
     # or, once public:  git clone https://github.com/JLRoper/agent-worktree-gui.git
 
-Then install the commit-subject hook once per clone — it is repo config, so one install covers every
-worktree of the clone:
+Then install the hooks once per clone — it is repo config, so one install covers every worktree of the
+clone. Both hooks live under `.githooks/` (the commit-subject one, and the pre-push one that refuses a branch
+whose own commits carry no version bump — see `docs/versioning.md`):
 
     npm run hooks:install          # git config core.hooksPath .githooks
-    # the index stores the script executable (100755); run chmod +x .githooks/commit-msg only
-    # if a non-Windows checkout ever loses the bit
+    # the index stores the scripts executable (100755); run chmod +x .githooks/commit-msg and
+    # chmod +x .githooks/pre-push only if a non-Windows checkout ever loses the bit
 
 ## 3. Configure — one file
 
@@ -143,6 +145,12 @@ Then open **http://127.0.0.1:7331**.
 7. `git commit --allow-empty -m wip` in a scratch clone → refused by the hook; a subject that names the
    change goes through. Then remove the scratch clone. The hook is local: it binds this machine only, and this
    repo has no CI, so nothing refuses a bad subject at PR time either.
+8. `node tools/verify-version-bump.mjs` → `VERIFY-VERSION-BUMP-OK`. It builds a throwaway repo with a bare
+   remote and proves the whole bump pipeline in it: `suggest` reads the level off the commit prefixes and says
+   so when one is missing, `check` refuses an unbumped branch and goes quiet once it is bumped, `apply` writes
+   `package.json` and nothing else, and a real `git push` is refused by `.githooks/pre-push` until the bump is
+   committed. Then bump your own branch — `node tools/version.mjs apply <level>` — in the same PR as the
+   change. `docs/versioning.md` has the scale.
 
 ## 6. Failure modes and what they mean
 
@@ -164,6 +172,10 @@ Then open **http://127.0.0.1:7331**.
   nothing refuses a bad subject at PR time either — and its own author can bypass it with
   `git commit --no-verify`. On a non-Windows clone also check `ls -l .githooks/commit-msg` for the
   executable bit.
+- **`pre-push: refused — <branch> would go out with no version bump`** — this branch's own commits carry a
+  code change but `package.json` still holds the version its base has: decide the level from the diff
+  (`docs/versioning.md`), run `node tools/version.mjs apply <patch|minor|major>`, commit it, push again. That
+  is deliberate, not something to go around: `git push --no-verify` bypasses it if the refusal is wrong.
 - **A row shows `ERROR`** — that worktree could not be read; the row detail names the reason.
 - **Windows-only bits**: the `:port` / `● board` liveness signals read `netstat` / `tasklist`. Off
   Windows those two stay dark; scanning, verdicts, spawning and replies all still work.
