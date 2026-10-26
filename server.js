@@ -35,7 +35,7 @@ import { hermesSessionTail } from "./lib/activity.js";
 import { Assistant, ASSISTANT_THREAD } from "./lib/assistant.js";
 import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./lib/subagents.js";
 import { thinkingFor } from "./lib/thinking.js";
-import { modelCatalogue } from "./lib/hermes-models.js";
+import { modelCatalogue, refreshModelCatalogue } from "./lib/hermes-models.js";
 
 // A file an agent produced is meant to be OPENED, and the shell association may hand a .md to a
 // browser. Prefer a text editor: Notepad++ when installed, else Windows' notepad (always present),
@@ -165,6 +165,10 @@ async function loadConfig() {
   // What each branch was started to do, extracted once from the earliest run in that tree: the same state-not-source
   // rule as the naming ledger, so a PANEL_CONFIG sandbox keeps its own copy of this too.
   if (!cfg.descriptionsFile) cfg.descriptionsFile = path.join(path.dirname(cfg.jobsFile), "descriptions.json");
+  // The model menu's price/rating half: what the dropdown decorates each row with, rebuilt only by the
+  // Settings refresh (POST /api/models/refresh). State, not source — beside the job store, so a sandbox
+  // config that names its own jobsFile gets its own copy.
+  if (!cfg.modelPricingFile) cfg.modelPricingFile = path.join(path.dirname(cfg.jobsFile), "model-prices.json");
   return cfg;
 }
 
@@ -1036,6 +1040,33 @@ function handleStream(req, res) {
   });
 }
 
+// ---- the model menu's prices, kept warm without ever blocking a read ---------------------------
+// The dropdown reads a cache file and nothing else, so the one thing that can refresh it is a
+// gateway call, and that call re-fetches every provider's live list. It is therefore deliberately
+// rare: at most one attempt per process minute, and only while the panel has no prices at all or has
+// not regenerated them for over a week. A press in Settings (POST /api/models/refresh) is the
+// deliberate path and is never throttled.
+const MODEL_PRICING_WARM_MS = 7 * 24 * 60 * 60 * 1000;
+let modelPricingWarm = null; // the in-flight warm, so a burst of page loads starts exactly one
+let modelPricingWarmTriedAt = 0;
+function warmModelPrices(cfg, catalogue) {
+  if (modelPricingWarm) return;
+  const ageSeconds = catalogue?.pricingAge;
+  const stale = !Number.isFinite(ageSeconds) || ageSeconds * 1000 > MODEL_PRICING_WARM_MS;
+  if (!stale || Date.now() - modelPricingWarmTriedAt < 60_000) return;
+  modelPricingWarmTriedAt = Date.now();
+  modelPricingWarm = refreshModelCatalogue({
+    home: hermesHome(),
+    pricingFile: cfg.modelPricingFile,
+    api: jobs.api,
+    log,
+  })
+    .catch((e) => log(`model prices: the background warm failed — ${String((e && e.message) || e)}`))
+    .finally(() => {
+      modelPricingWarm = null;
+    });
+}
+
 // Did this request come in over loopback — i.e. from the machine the panel runs on? That is the panel's
 // own UI, and it is the only caller allowed in without a token.
 function isLoopback(req) {
@@ -1232,9 +1263,34 @@ const server = createServer(async (req, res) => {
 
     // The models the New-agent form offers. Read from the gateway home, not from the run stream: the
     // provider's live list is what Hermes itself fetched, and a stale one is reported as stale rather
-    // than presented as truth.
+    // than presented as truth. Each row also carries the in/out price per Mtok and the 0-10 coding
+    // rating the shipped CLI picker shows — read from this panel's own cache file and NOT fetched
+    // here, so opening the menu can never wait on a cold endpoint.
     if (route === "/api/models" && req.method === "GET") {
-      return sendJson(res, 200, modelCatalogue());
+      const catalogue = modelCatalogue({ home: hermesHome(), pricingFile: config.modelPricingFile });
+      warmModelPrices(config, catalogue); // fire and forget: the answer above is file-only
+      return sendJson(res, 200, catalogue);
+    }
+
+    // Regenerate the menu rather than re-read it. The gateway re-fetches every authenticated
+    // provider's live /v1/models list and persists it — the same file `hermes model --refresh`
+    // writes, and the file the menu above lists from — and the panel then rebuilds its price/rating
+    // cache from that answer, having deleted its own copy first. Both files' row counts and mtimes
+    // come back with the reply, because "the press did something" is otherwise indistinguishable
+    // from "the page re-read the same bytes".
+    if (route === "/api/models/refresh" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      try {
+        const result = await refreshModelCatalogue({
+          home: hermesHome(),
+          pricingFile: config.modelPricingFile,
+          api: jobs.api,
+          log,
+        });
+        return sendJson(res, 200, result);
+      } catch (e) {
+        return sendJson(res, 502, { error: String((e && e.message) || e), ...((e && e.partial) || {}) });
+      }
     }
 
     // ---- the assistant: a sentry over this board, and one thread the reader talks to ----------------

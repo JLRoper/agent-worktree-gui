@@ -5400,12 +5400,27 @@ async function spawnAgent({ promptFocus = true } = {}) {
 // /api/models, which reads the provider list Hermes itself fetched — not a hardcoded menu.
 let modelsState = null;
 
+// What the CLI's own picker prints beside a model id, and this prints the same way: what the model
+// costs per million tokens in and out, then Artificial Analysis' coding rating out of ten. A model
+// with neither keeps its bare id. The units are stated once, on the select's own tooltip, rather than
+// repeated on every row.
+function modelPriceText(entry) {
+  if (!entry) return "";
+  const parts = [];
+  if (entry.input || entry.output) parts.push(`${entry.input || "?"} in / ${entry.output || "?"} out`);
+  if (entry.coding) parts.push(`code ${entry.coding}`);
+  return parts.join(" · ");
+}
+
 function modelOptionHtml(d) {
   const def = d?.defaultModel || null;
   const out = [`<option value="">${esc(def ? `(default: ${def})` : "(gateway default)")}</option>`];
   for (const p of d?.providers || []) {
     out.push(`<optgroup label="${esc(p.label)}">`);
-    for (const m of p.models) out.push(`<option value="${esc(m)}">${esc(m)}</option>`);
+    for (const m of p.models) {
+      const price = modelPriceText(p.pricing?.[m]);
+      out.push(`<option value="${esc(m)}">${esc(price ? `${m} — ${price}` : m)}</option>`);
+    }
     out.push("</optgroup>");
   }
   return out.join("");
@@ -5417,9 +5432,18 @@ function renderModelPicker(keep = "") {
   sel.innerHTML = modelOptionHtml(modelsState);
   if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
   const d = modelsState;
-  // Say how old the list is: it is a cache of what the provider advertised, not a live call.
+  // Say how old the list is: it is a cache of what the provider advertised, not a live call. The price
+  // and rating columns are the panel's own cache too, so they say their own age and where to rebuild
+  // them — a row with no price is a cache that has not been filled, not a model that costs nothing.
+  const freshness = d?.fetchedAt ? `list fetched ${relTime(d.fetchedAt)} ago` : "fetched at an unknown time";
+  const units = "in/out $ per Mtok · code = Artificial Analysis coding /10";
+  const priced = d?.pricedCount
+    ? `${d.pricedCount} priced, ${d.ratedCount || 0} with a coding rating (${units})` +
+      (d.pricingAge != null ? `, prices ${relTime(new Date(Date.now() - d.pricingAge * 1000).toISOString())} old` : "")
+    : "no prices yet — Settings → Gateway → Model prices → Refresh now rebuilds them";
   sel.title = d?.count
-    ? `${d.count} model${d.count === 1 ? "" : "s"} available to ${d.provider || "this account"}, list fetched ${d.fetchedAt ? `${relTime(d.fetchedAt)} ago` : "at an unknown time"}${d.staleDays > 7 ? " — stale, run: hermes model --refresh" : ""}`
+    ? `${d.count} model${d.count === 1 ? "" : "s"} available to ${d.provider || "this account"}, ${freshness}` +
+      `${d.staleDays > 7 ? " — stale, run: hermes model --refresh" : ""} · ${priced}`
     : "no provider list found in the Hermes home — a run falls back to the gateway's configured model";
 }
 
@@ -11098,6 +11122,7 @@ function toggleSettings(open = null) {
   void loadApprovalSetting();
   void loadSessionSetting();
   void loadProviderSetting();
+  void loadModelsSetting();
 }
 
 // ---- the provider endpoint every run talks to ------------------------------------------------
@@ -11211,6 +11236,92 @@ async function clearProviderKey(btn) {
     showBanner(d.key?.set ? "model.api_key removed — the .env key is used again" : "model.api_key removed — runs now have no key from config.yaml");
   } catch (e) {
     paintProviderSetting(e.message);
+  }
+}
+
+// ---- the model menu's prices and ratings -------------------------------------------------------
+// The dropdown's price and coding columns are this panel's own cache of what the gateway's model
+// inventory says. They are READ, never fetched, on the path that opens the menu — a cold endpoint
+// must not be able to hold a dropdown — so this is the one control that regenerates them: it makes
+// the gateway re-fetch every provider's live model list (the same file `hermes model --refresh`
+// writes) and rebuilds the cache from that answer, then refills the menu. The reply carries both
+// files' row counts and mtimes, and both are shown, because "it regenerated" and "it re-read the
+// same bytes" otherwise look identical from here.
+let modelsSetting = null;
+
+function modelAgeText(state) {
+  if (state.pricingAge === null || state.pricingAge === undefined) return "never built";
+  return `${relTime(new Date(Date.now() - state.pricingAge * 1000).toISOString())} old`;
+}
+
+function paintModelsSetting(error = null) {
+  const preview = $("models-preview");
+  const age = $("models-age");
+  const btn = $("btn-models-refresh");
+  if (!preview) return;
+  const s = modelsSetting;
+  if (!s) {
+    if (age) age.textContent = "—";
+    preview.textContent = error ? `NOT REGENERATED — ${error}` : "could not read the model list";
+    preview.classList.add("bad");
+    return;
+  }
+  if (age) age.textContent = modelAgeText(s);
+  if (btn) btn.disabled = false;
+  preview.textContent = error
+    ? `NOT REGENERATED — ${error}`
+    : `${s.count} model${s.count === 1 ? "" : "s"} · ${s.pricedCount || 0} priced · ${s.ratedCount || 0} rated · ${modelAgeText(s)}`;
+  preview.classList.toggle("bad", Boolean(error));
+  preview.title = error ? "" : `provider list: ${s.source}`;
+}
+
+async function loadModelsSetting() {
+  try {
+    const r = await apiFetch("/api/models");
+    modelsSetting = r.ok ? await r.json() : null;
+  } catch (e) {
+    modelsSetting = null;
+    paintModelsSetting(e.message);
+    return;
+  }
+  paintModelsSetting();
+}
+
+async function refreshModels() {
+  const btn = $("btn-models-refresh");
+  const preview = $("models-preview");
+  if (btn) btn.disabled = true;
+  if (preview) {
+    preview.textContent = "regenerating — re-fetching every provider's live model list…";
+    preview.classList.remove("bad");
+  }
+  try {
+    // Long: the gateway re-probes every authenticated provider before it answers.
+    const r = await apiFetch("/api/models/refresh", { method: "POST" }, { timeoutMs: 240000 });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      paintModelsSetting(d.error || `HTTP ${r.status}`);
+      return;
+    }
+    // Re-read through the same path the menu itself uses, so the dropdown is drawing the new file.
+    await loadModels();
+    await loadModelsSetting();
+    const b = d.before || {};
+    const a = d.after || {};
+    if (preview) {
+      preview.title =
+        `provider_models_cache.json: mtime ${b.models?.mtimeIso || "—"} → ${a.models?.mtimeIso || "—"}, ` +
+        `rows ${b.models?.rows ?? "?"} → ${a.models?.rows ?? "?"}\n${d.path || ""}`;
+    }
+    showBanner(
+      `model prices regenerated — provider cache ${b.models?.rows ?? "?"} → ${a.models?.rows ?? "?"} rows ` +
+        `(${b.models?.providers ?? "?"} → ${a.models?.providers ?? "?"} providers), prices ${b.pricing?.priced ?? "?"} → ` +
+        `${a.pricing?.priced ?? "?"} rows, ${a.pricing?.rated ?? "?"} rated`,
+    );
+  } catch (e) {
+    paintModelsSetting(e.message);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -11726,6 +11837,7 @@ $("btn-provider-default-url")?.addEventListener("click", () => {
   const url = $("provider-url");
   if (url) url.value = url.placeholder || "https://openrouter.ai/api/v1";
 });
+$("btn-models-refresh")?.addEventListener("click", () => void refreshModels());
 $("session-limit")?.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   e.preventDefault();
