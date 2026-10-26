@@ -26,7 +26,7 @@ function freePort() {
 
 // A panel with no projects, no gateway key and its own HERMES_HOME: it can answer HTTP but it
 // cannot spawn anything, which is exactly what a route test wants.
-export async function startPanel({ token = null, config = {} } = {}) {
+export async function startPanel({ token = null, config = {}, env = {} } = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-test-"));
   const repos = path.join(dir, "repos");
   await mkdir(repos, { recursive: true });
@@ -51,7 +51,6 @@ export async function startPanel({ token = null, config = {} } = {}) {
     // "empty scan root" then still holds every project the real panel discovered, /api/fetch sweeps
     // them over the network, and /api/reload resets the connection mid-sweep (ECONNRESET).
     projectsCacheFile: path.join(dir, "logs", "projects.json"),
-    ...(token ? { token } : {}),
     ...config,
   };
   await writeFile(cfgPath, JSON.stringify(cfg, null, 2), "utf8");
@@ -63,8 +62,12 @@ export async function startPanel({ token = null, config = {} } = {}) {
       ...process.env,
       PANEL_CONFIG: cfgPath,
       HERMES_HOME: path.join(dir, "hermes"),
+      // The write token comes from the environment and nowhere else: loadConfig() ignores a "token" key
+      // in config.json (loudly), so a sandbox that needs one sets PANEL_TOKEN for the child instead.
+      ...(token ? { PANEL_TOKEN: token } : {}),
       // A test must never reach the developer's own gateway.
       API_SERVER_KEY: "",
+      ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
