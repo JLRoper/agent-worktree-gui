@@ -8,13 +8,17 @@
 // The panel's own write-off made it worse: "the gateway still has run <id>, so it will finish on its own, but this
 // card cannot steer it" was the last word on that card, and nothing took it back once the run left the gateway.
 //
-// NOW. Such a card draws the NOT-RUNNABLE chip instead: status `interrupted`, a run id, and no 404 yet. Pressing it
-// asks the gateway about THAT run (POST /api/jobs/reattach) and the panel takes the decision its boot reconcile
-// takes (lib/jobs.js settleRestoredRun — one implementation, not two):
+// NOW. Such a card draws the SAME pill — same word, same amber, same refresh glyph, same place — and only its click
+// differs (the hook `data-reattach-job`): it asks the gateway about THAT run (POST /api/jobs/reattach) before it
+// starts anything, and the panel takes the decision its boot reconcile takes (lib/jobs.js settleRestoredRun — one
+// implementation, not two):
 //   * still live   -> the card re-attaches to that run, steers again, and its outcome is adopted when the run ends;
 //   * ended        -> the run's own result is adopted on the spot;
-//   * no record    -> the card settles as interrupted, the promise is gone, and its console names the tree the work
-//                     is in and the PR of its branch.
+//   * no record    -> the card settles as interrupted (promise gone, console naming the tree and the PR) AND the
+//                     thread is continued on the spot: the reader pressed one control and the work is picked up.
+//
+// The reader is not asked to learn a second control, and the label claims only what is true of the card in every
+// answer: it is not running here.
 //
 //   node tools/verify-reattach-chip.mjs
 //
@@ -129,7 +133,7 @@ function loadPlaywright() {
 // the one kind of answer that must leave a card's verdict alone.
 function makeStub() {
   const answers = new Map();
-  const seen = { status: [], events: [], steer: [], wakeRuns: 0 };
+  const seen = { status: [], events: [], steer: [], wakeRuns: 0, submitted: [] };
   const timers = [];
   const json = (code, body, res) => res.writeHead(code, { "Content-Type": "application/json" }).end(JSON.stringify(body));
   const readBody = (req) =>
@@ -150,6 +154,8 @@ function makeStub() {
       return json(200, { version: "sandbox-stub", features: { run_submission: true, run_events_sse: true, run_steer: true, run_stop: true, run_cwd: true } }, res);
     }
     if (url.pathname === "/v1/runs" && req.method === "POST") {
+      // Recorded, not just counted: the pick-up half of the not-found answer is proved by the run the panel ASKS for.
+      seen.submitted.push(await readBody(req));
       seen.wakeRuns += 1;
       return json(200, { run_id: `stub-wake-${seen.wakeRuns}`, status: "running" }, res);
     }
@@ -400,9 +406,17 @@ const chipState = (page, thread) =>
   page.evaluate((t) => {
     const card = document.querySelector(`.job[data-thread="${t}"]`);
     if (!card) return { card: false };
-    const chip = card.querySelector(".pill-reattach");
+    // The behavioural hook is what marks the pill whose click asks the gateway first, and it is how this script
+    // tells that pill apart from the plain one — the two read the same and are drawn the same, on purpose.
+    const chip = card.querySelector("[data-reattach-job]");
+    const plain = card.querySelector("button.pill-continue");
     const running = card.querySelector(".pill-running");
-    const cont = card.querySelector("button.pill-continue");
+    // Measured, not asserted by class name: "the same control as every stopped card" is about the ink.
+    const ink = (el) => {
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      return [cs.color, cs.backgroundColor, cs.borderTopColor, cs.borderTopStyle, cs.borderTopWidth, cs.textTransform].join("|");
+    };
     return {
       card: true,
       chip: Boolean(chip),
@@ -410,8 +424,12 @@ const chipState = (page, thread) =>
       chipTag: chip ? chip.tagName : null,
       chipType: chip ? chip.getAttribute("type") : null,
       chipTitle: chip ? chip.title : null,
+      chipClasses: chip ? [...chip.classList].sort() : null,
+      chipInk: ink(chip),
+      plainInk: ink(plain),
+      plainText: plain ? plain.textContent.trim() : null,
       runningPill: running ? running.textContent.trim() : null,
-      continuePill: cont ? cont.textContent.trim() : null,
+      continuePill: plain ? plain.textContent.trim() : null,
     };
   }, thread);
 const clickChip = (page, thread) => page.click(`.job[data-thread="${thread}"] .pill-reattach`);
@@ -468,19 +486,24 @@ try {
   check("a card that is running again has no chip", healthyState.chip, false);
   check("...it carries the running pill instead", healthyState.runningPill, "running");
   const finishedState = await chipState(page, "wtgui-reattach-j-finished");
-  check("a finished card has no chip", finishedState.chip, false);
+  check("a finished card has no re-attach pill", finishedState.chip, false);
   check("...it keeps the ordinary not-running pill", finishedState.continuePill, "not-running\u21bb");
+  ok("...which is a plain continue pill, with no hook of its own", finishedState.continuePill === "not-running\u21bb" && !finishedState.chipClasses, JSON.stringify(finishedState.chipClasses));
+  const finishedInk = (await chipState(page, "wtgui-reattach-j-finished")).plainInk;
+  ok("the plain pill was measured for the comparison (a card in the same page carries it)", Boolean(finishedInk), String(finishedInk));
   const knownState = await chipState(page, "wtgui-reattach-j-known-gone");
   check("a card whose run the gateway has already disowned has no chip", knownState.chip, false);
   ok("...and still offers the ordinary continue pill", /not-running/.test(knownState.continuePill || ""), knownState.continuePill || "");
 
   for (const id of chipCards) {
     const s = await chipState(page, `wtgui-reattach-${id}`);
-    check(`${id}: the chip is there, on a card whose run may still exist`, s.chip, true);
+    check(`${id}: the re-attach pill is there, on a card whose run may still exist`, s.chip, true);
     check("...it is a button, not a badge", [s.chipTag, s.chipType], ["BUTTON", "button"]);
-    ok("...labelled NOT-RUNNABLE", String(s.chipText || "").startsWith("NOT-RUNNABLE"), s.chipText);
-    ok("...and its tooltip says what pressing it will do", /not runnable here/.test(s.chipTitle || "") && /re-attaches/.test(s.chipTitle || ""), s.chipTitle);
-    check("...and the continue pill is gone from that card (it would start a second turn)", s.continuePill, null);
+    check("...and it reads not-running, the word every stopped card carries", s.chipText, "not-running\u21bb");
+    ok("...wearing that pill's own classes", (s.chipClasses || []).includes("pill") && (s.chipClasses || []).includes("pill-notrunning"), JSON.stringify(s.chipClasses));
+    check("...drawn in the plain not-running pill's own ink", s.chipInk, finishedInk);
+    ok("...while its tooltip says all three answers, and promises only the press", /click to pick this up/.test(s.chipTitle || "") && /re-attaches/.test(s.chipTitle || "") && /this thread is continued/.test(s.chipTitle || ""), s.chipTitle);
+    check("...and the plain continue pill is gone from that card (it would start a second turn)", s.continuePill, null);
   }
 
   // ── phase 3: the three answers, one press each ────────────────────────────────────────────────
@@ -529,7 +552,12 @@ try {
   ok("...and its notice promises nothing either", !/will finish on its own/.test(JSON.stringify(goneCard?.completion || {})));
   ok("...and the console names the tree the turn worked in", textOf(goneCard).includes(cwdDir), textOf(goneCard).slice(-260));
   ok("...and says the work on disk is untouched", /lost nothing on disk/.test(textOf(goneCard)), textOf(goneCard).slice(-200));
-  ok("...and the chip is gone, because there is nothing left to ask", await chipGone(page, "wtgui-reattach-j-chip-gone"));
+  ok("...and the pill stops asking the gateway, because there is nothing left to ask", await chipGone(page, "wtgui-reattach-j-chip-gone"));
+  const asked = () => stub.seen.submitted.filter((b) => String(b.session_id || "") === "wtgui-reattach-j-chip-gone");
+  const pickedUp = await waitFor(() => asked().length > 0, { timeoutMs: 20_000, what: "the press to continue the thread" });
+  ok("...and one press picks the work up: the thread is continued on the spot", pickedUp, JSON.stringify(stub.seen.submitted.map((b) => [b.session_id, String(b.input || "").slice(0, 50)])));
+  check("...with exactly one run asked for, not a second turn as well", asked().length, 1);
+  ok("...carrying the panel's own continue nudge, so the agent decides what is left", /Continue if you can, exit if you are done/.test(String(asked()[0]?.input || "")), String(asked()[0]?.input || "").slice(0, 160));
   check("no page error was thrown while the presses ran", pageErrors, []);
 
   console.log("\nphase 4 — the same press on a card owned by a row, and the branch it names");
@@ -583,7 +611,9 @@ try {
   await sleep(400);
   const savedText = readFileSync(jobsPath, "utf8");
   ok("...and the 404's verdict is what the store keeps", /the gateway no longer has run run_gone/.test(savedText));
-  ok("no wake run was ever posted to the gateway's stand-in (the assistant is off)", stub.seen.wakeRuns === 0, `wakeRuns ${stub.seen.wakeRuns}`);
+  // A wake is a run the panel posts into the assistant's own session; the only run asked for here is the pick-up the
+  // not-found press earned, so the check is on the session, not on the count.
+  ok("no wake was ever posted to the assistant's own session", !stub.seen.submitted.some((b) => String(b.session_id || "") === "panel-assistant"), JSON.stringify(stub.seen.submitted.map((b) => b.session_id)));
 } catch (e) {
   if (String((e && e.message) || e) === "BROWSER-HALF-NOT-RUN") {
     console.log("\nBROWSER-HALF-NOT-RUN  the client half of this change was not exercised in a browser.");
@@ -609,7 +639,8 @@ try {
 
 console.log(`\nDRIVEN: a real panel on PANEL_CONFIG :${port} over HTTP (GET /api/jobs, POST /api/jobs/reattach) against a`);
 console.log("        stub Runs API on an ephemeral port, and a real headless Chromium over the board it serves: the");
-console.log("        chip's presence/absence, three presses (one per gateway answer) and the write-off's own lines.");
+console.log("        pill's presence/absence and ink, three presses (one per gateway answer), the write-off's own lines,");
+console.log("        and the run the not-found press ASKS for — the pick-up — recorded off the stub.");
 console.log("INSPECTED: the PR's URL form — a sandbox has no gh-listed PR, so runGonePointerLines was called directly for");
 console.log("        that wording; the panel-driven presses above drove the wiring. :7331 and :8642 are never touched.");
 console.log(err ? `RESULT: threw — ${String(err.message || err)}` : failures ? `RESULT: ${failures} FAILED of ${checks}` : `RESULT: ALL PASS (${checks} checks)`);
