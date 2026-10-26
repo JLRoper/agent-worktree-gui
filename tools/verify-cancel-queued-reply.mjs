@@ -289,7 +289,12 @@ async function browserPhase(pw) {
         for (const t of turns) state.jobs.set(t.id, job(t));
         renderJobs();
         const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-        if (box) box.value = "";
+        if (box) {
+          // readBox/writeBox, not `.value`: the reply box is a contenteditable host now (it holds a pasted
+          // block as an inline chip), so it has no value to read or write.
+          window.WMApp.board.pasteChips.writeBox(box, "");
+          window.WMApp.board.pasteChips.clearBoxDraft(box);
+        }
         return Boolean(box);
       };
       // The panel's own path at the end of a turn: updateJob moves the status, and its statusChanged branch calls
@@ -307,7 +312,10 @@ async function browserPhase(pw) {
       };
       probe.queue = () => (state.replyQueue.get(thread) || []).map((q) => ({ text: q.text, at: q.at }));
       probe.sentRecord = () => (state.replySent.get(thread) || []).map((e) => e.at);
-      probe.boxValue = () => document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`)?.value ?? null;
+      probe.boxValue = () => {
+        const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+        return box ? window.WMApp.board.pasteChips.readBox(box) : null;
+      };
       probe.draft = () => state.replyDrafts[thread] ?? null;
       probe.warn = () => document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`)?.textContent ?? null;
       probe.note = () => {
