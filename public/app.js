@@ -108,7 +108,7 @@ const state = {
   // so the position has to live outside the DOM or it comes back at the top.
   outScrolls: {},
   collapsedJobs: loadCollapsedJobs(),
-  closedDescs: loadClosedDescs(),
+  openDescs: loadOpenDescs(),
   expandedProjects: loadExpandedProjects(),
   collapsedFixed: loadCollapsedFixed(),
   collapsedRoots: loadCollapsedRoots(),
@@ -187,189 +187,6 @@ const state = {
   assistant: null,
 };
 
-// The write routes demand x-panel-token whenever the request does NOT come from this machine — loopback
-// is the panel's own UI and is never challenged. A browser on another machine authenticates once by
-// opening the link with ?token=…: the value is remembered here, dropped from the address bar so a copied
-// or shared URL stops carrying it, and every fetch below then sends it. It is kept in localStorage too,
-// so a later reload without the query string still works.
-const PANEL_TOKEN_KEY = "wtgui.panelToken";
-const panelToken = (() => {
-  let fromUrl = "";
-  try {
-    fromUrl = new URLSearchParams(location.search).get("token") || "";
-  } catch {
-    /* unparsable location: fall back to what is remembered */
-  }
-  if (fromUrl) {
-    try {
-      localStorage.setItem(PANEL_TOKEN_KEY, fromUrl);
-    } catch {
-      /* private mode: this load still carries it in memory */
-    }
-    try {
-      const clean = new URL(location.href);
-      clean.searchParams.delete("token");
-      history.replaceState(null, "", `${clean.pathname}${clean.search}${clean.hash}`);
-    } catch {
-      /* tidying the URL is a courtesy, not a requirement */
-    }
-    return fromUrl;
-  }
-  try {
-    return localStorage.getItem(PANEL_TOKEN_KEY) || "";
-  } catch {
-    return "";
-  }
-})();
-
-// Every call to the panel's own server goes through here. A plain fetch has no deadline, so when the
-// server is restarting — a gateway bounce refuses or hangs connections for a while — the promise never
-// settles: the button stays disabled, no message appears, and the card is indistinguishable from a
-// frozen page. A timeout turns that into a sentence on screen.
-async function apiFetch(url, opts = {}, { timeoutMs = 20000 } = {}) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  // One wrapper means one place to attach the token: a route added later cannot forget to send it, and
-  // the local board (where the header is ignored) behaves exactly as before.
-  const headers = new Headers(opts.headers || {});
-  if (panelToken) headers.set("x-panel-token", panelToken);
-  try {
-    const res = await fetch(url, { ...opts, headers, signal: ctrl.signal });
-    if (res.status === 403) {
-      // Reached from another machine without a usable token. Say so, instead of letting it look like the
-      // panel is broken — reads are still allowed, so the board still draws and the action is the only
-      // thing that failed.
-      showBanner("This browser may only read the board: open the panel once with its ?token=… link to allow changes.");
-    }
-    return res;
-  } catch (e) {
-    if (e && e.name === "AbortError") {
-      throw new Error(`the panel server did not answer within ${Math.round(timeoutMs / 1000)}s — it may be restarting; try again`);
-    }
-    throw e;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-const $ = (id) => document.getElementById(id);
-const keyOf = (project, p) => `${project}::${p}`;
-const esc = (s) =>
-  String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-
-// A path as a card can afford to show it: forward slashes, and only the last few segments, prefixed
-// with an ellipsis when there is more. The whole path lives in the element's tooltip.
-function tailPath(p, keep = 3) {
-  const parts = normPath(p).split("/").filter(Boolean);
-  if (parts.length <= keep) return parts.join("/");
-  return `…/${parts.slice(-keep).join("/")}`;
-}
-
-function relTime(iso) {
-  if (!iso) return "—";
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return "—";
-  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}m`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h`;
-  return `${Math.round(h / 24)}d`;
-}
-
-// Precise duration for the life column: 1h24m12s, not "1h". Seconds matter there because the
-// number is the whole point of the column.
-function fmtDur(ms) {
-  const s = Math.max(0, Math.round(ms / 1000));
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  const rs = s % 60;
-  if (m < 60) return `${m}m${String(rs).padStart(2, "0")}s`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h${String(m % 60).padStart(2, "0")}m${String(rs).padStart(2, "0")}s`;
-  return `${Math.floor(h / 24)}d${String(h % 24).padStart(2, "0")}h`;
-}
-
-// Coarse on purpose: "4h ago" answers "when did I last use this", and a per-second figure on a stale
-// session would be noise. The exact moment is in the tooltip.
-function fmtAgo(ts) {
-  const t = typeof ts === "number" ? ts : Date.parse(String(ts || ""));
-  if (!Number.isFinite(t) || t <= 0) return "";
-  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
-  if (s < 90) return "just now";
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60);
-  if (h < 48) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
-}
-
-function elapsed(j) {
-  if (!j.startedAt) return "—";
-  const end = j.endedAt ? Date.parse(j.endedAt) : Date.now();
-  const s = Math.max(0, Math.round((end - Date.parse(j.startedAt)) / 1000));
-  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, "0")}s`;
-}
-
-// Row order inside a project: work that is happening right now comes first. Our own running agents
-// lead (that is the panel driving a process), then any other live session, then everything else
-// newest-life-first — the worktree that showed signs of life most recently sits at the top.
-function rowTier(row) {
-  if (panelFor(row)?.running) return 0;
-  if (isRowLive(row)) return 1;
-  return 2;
-}
-
-function lifeAt(row) {
-  const alive = Date.parse(row.lastAliveAt || "");
-  return Number.isFinite(alive) ? alive : Number.NEGATIVE_INFINITY; // never alive sorts last
-}
-
-// What counts as an agent moving in a row. The cheap scan fields (verdict, age, git tip) are the
-// scanner working, not the agent: a verdict flipping is not movement, and flashing green for it made
-// every poll look like progress.
-// The project's own checkout, on its main branch. Merges land here and a fast-forward rewrites file
-// mtimes, which read exactly like an agent working in the main tree — it is how main kept flashing
-// while the real work happened one directory down. Main rows therefore move on agent evidence
-// (sessions, board entries, ports, cards) and on nothing else.
-function isMainWorktree(project, row) {
-  const main = state.projects.get(project)?.mainBranch;
-  return Boolean(main && row.branch && row.branch === main);
-}
-
-function movementKey(row, { onMain = false } = {}) {
-  const s = row.signals || {};
-  const h = s.hermes || {};
-  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-  const cl = s.claude || {};
-  const sessions = `${(h.titles || []).join("|")}#${num(h.running)}#${(cl.titles || []).join("|")}#${num(cl.running)}`;
-  const idle = (h.idleList || []).map((x) => `${x.id}:${num(x.lastActivityAt)}`).join("|");
-  const board = (s.board?.entries || []).map((e) => e.pid).join("|");
-  const ports = (s.ports?.listening || []).join("|");
-  // Only what a card is DOING, never how many cards there are: the count and the thread list are
-  // omitted from some row events, so `0/0` flipping to `0/10` read as movement on every refresh and
-  // every row pulsed green. A start is still movement; a bookkeeping total is not.
-  const cards = num(s.panel?.running);
-  const files = onMain ? "" : s.files?.at || "";
-  return `${sessions}#${idle}#${board}#${ports}#${cards}#${files}`;
-}
-
-function orderRows(rows) {
-  return rows.sort(
-    (a, b) => rowTier(a) - rowTier(b) || lifeAt(b) - lifeAt(a) || String(a.name).localeCompare(String(b.name)),
-  );
-}
-
-function verdictClass(v) {
-  const s = String(v || "");
-  if (s.startsWith("MERGED")) return "merged";
-  if (s === "ON MAIN") return "onmain";
-  if (s.startsWith("NO COMMITS") || s.startsWith("EMPTY REPO")) return "nocommits";
-  if (s.startsWith("UNMERGED")) return "unmerged";
-  return "error";
-}
-
 // ---------------- agents ----------------
 function jobLines(id) {
   return state.jobLines.get(id) || [];
@@ -394,22 +211,28 @@ function saveCollapsedJobs() {
   }
 }
 
-// Which descriptions the reader has folded away, by row key. The block leads the worktree's detail and opens itself —
-// it says what the branch was for, which is worth one glance — but a reader who has read it should not have to fold it
-// again on every reload, so unlike the two strips under it (git detail, liveness) this one remembers.
-function loadClosedDescs() {
+// Which descriptions the reader has UNFOLDED, by row key. The block leads the worktree's detail and starts folded,
+// like the two strips under it (merge state, liveness): its folded peek says what the branch was for, which is the one
+// thing worth seeing without opening anything, and the full text was taking a block's worth of height above the agents.
+// Unfolding it is remembered, and only unfolding — the set starts empty, so a row nobody has opened is folded, and the
+// remembered state is the reader's own.
+//
+// A NEW key, not an inversion of the old `wm.closedDescs`. That set was written by a build where every description
+// started OPEN, so its contents describe a layout the board no longer has; read either way round it would fold or
+// unfold rows on this reader's behalf. An absent key means every row folded, which is now the default.
+function loadOpenDescs() {
   try {
-    return new Set(JSON.parse(localStorage.getItem("wm.closedDescs") || "[]"));
+    return new Set(JSON.parse(localStorage.getItem("wm.openDescs") || "[]"));
   } catch {
     return new Set();
   }
 }
 
-function saveClosedDescs() {
+function saveOpenDescs() {
   try {
-    localStorage.setItem("wm.closedDescs", JSON.stringify([...state.closedDescs]));
+    localStorage.setItem("wm.openDescs", JSON.stringify([...state.openDescs]));
   } catch {
-    /* no storage: the fold simply will not survive a reload */
+    /* no storage: the unfold simply will not survive a reload */
   }
 }
 
@@ -1044,28 +867,6 @@ function turnSeqOf(j) {
   turns.sort((a, b) => (Date.parse(a.startedAt || "") || 0) - (Date.parse(b.startedAt || "") || 0) || (a.turn || 0) - (b.turn || 0));
   const i = turns.findIndex((x) => x.id === j.id);
   return i < 0 ? j.turn || "?" : i + 1;
-}
-
-// URLs in agent output become links. They are opened by the panel (POST /api/open-url) rather than by
-// navigating, so a webview host cannot swallow the click and the link lands in the OS default browser.
-const OUT_URL_RE = /https?:\/\/[^\s<>"'`\u001b]+/g;
-
-function linkifyText(text) {
-  return esc(text ?? "").replace(OUT_URL_RE, (raw) => {
-    let url = raw;
-    let tail = "";
-    // Sentence punctuation after a URL belongs to the sentence, not to the link.
-    while (url && /[.,;:!?)\]]$/.test(url)) {
-      tail = url.slice(-1) + tail;
-      url = url.slice(0, -1);
-    }
-    // Looks like a real host: a dotted name, an IP, or localhost — a dev agent prints
-    // http://localhost:5173/ constantly, and that is exactly the link worth clicking.
-    const host = url.replace(/^https?:\/\//, "").split(/[/:?#]/)[0].toLowerCase();
-    const plausible = host === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(".");
-    if (!plausible) return raw;
-    return `<a class="out-link" href="${url}" target="_blank" rel="noreferrer noopener" data-open-url="${url}" title="open in your browser">${url}</a>${tail}`;
-  });
 }
 
 // A tool that runs for minutes is the one thing that makes a healthy turn look frozen — a 159 s
@@ -5639,12 +5440,27 @@ async function spawnAgent({ promptFocus = true } = {}) {
 // /api/models, which reads the provider list Hermes itself fetched — not a hardcoded menu.
 let modelsState = null;
 
+// What the CLI's own picker prints beside a model id, and this prints the same way: what the model
+// costs per million tokens in and out, then Artificial Analysis' coding rating out of ten. A model
+// with neither keeps its bare id. The units are stated once, on the select's own tooltip, rather than
+// repeated on every row.
+function modelPriceText(entry) {
+  if (!entry) return "";
+  const parts = [];
+  if (entry.input || entry.output) parts.push(`${entry.input || "?"} in / ${entry.output || "?"} out`);
+  if (entry.coding) parts.push(`code ${entry.coding}`);
+  return parts.join(" · ");
+}
+
 function modelOptionHtml(d) {
   const def = d?.defaultModel || null;
   const out = [`<option value="">${esc(def ? `(default: ${def})` : "(gateway default)")}</option>`];
   for (const p of d?.providers || []) {
     out.push(`<optgroup label="${esc(p.label)}">`);
-    for (const m of p.models) out.push(`<option value="${esc(m)}">${esc(m)}</option>`);
+    for (const m of p.models) {
+      const price = modelPriceText(p.pricing?.[m]);
+      out.push(`<option value="${esc(m)}">${esc(price ? `${m} — ${price}` : m)}</option>`);
+    }
     out.push("</optgroup>");
   }
   return out.join("");
@@ -5656,9 +5472,18 @@ function renderModelPicker(keep = "") {
   sel.innerHTML = modelOptionHtml(modelsState);
   if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
   const d = modelsState;
-  // Say how old the list is: it is a cache of what the provider advertised, not a live call.
+  // Say how old the list is: it is a cache of what the provider advertised, not a live call. The price
+  // and rating columns are the panel's own cache too, so they say their own age and where to rebuild
+  // them — a row with no price is a cache that has not been filled, not a model that costs nothing.
+  const freshness = d?.fetchedAt ? `list fetched ${relTime(d.fetchedAt)} ago` : "fetched at an unknown time";
+  const units = "in/out $ per Mtok · code = Artificial Analysis coding /10";
+  const priced = d?.pricedCount
+    ? `${d.pricedCount} priced, ${d.ratedCount || 0} with a coding rating (${units})` +
+      (d.pricingAge != null ? `, prices ${relTime(new Date(Date.now() - d.pricingAge * 1000).toISOString())} old` : "")
+    : "no prices yet — Settings → Gateway → Model prices → Refresh now rebuilds them";
   sel.title = d?.count
-    ? `${d.count} model${d.count === 1 ? "" : "s"} available to ${d.provider || "this account"}, list fetched ${d.fetchedAt ? `${relTime(d.fetchedAt)} ago` : "at an unknown time"}${d.staleDays > 7 ? " — stale, run: hermes model --refresh" : ""}`
+    ? `${d.count} model${d.count === 1 ? "" : "s"} available to ${d.provider || "this account"}, ${freshness}` +
+      `${d.staleDays > 7 ? " — stale, run: hermes model --refresh" : ""} · ${priced}`
     : "no provider list found in the Hermes home — a run falls back to the gateway's configured model";
 }
 
@@ -7791,6 +7616,21 @@ function fillAgentSlots(root, reuse) {
   }
 }
 
+// The description as bullets: one per sentence. The split is the SAME boundary lib/descriptions.js used to cut the
+// text down to two sentences in the first place (a full stop, question or bang mark, then whitespace and something
+// that can start a sentence), so the panel shows the sentences the server recognised rather than re-parsing the prose
+// its own way — and text with no sentence punctuation at all (the store's word-boundary fallback) stays one bullet.
+const DESC_SENTENCE_BREAK = /(?<=[.!?])\s+(?=[A-Z0-9"'([])/;
+
+function descLines(text) {
+  const all = String(text ?? "").trim();
+  if (!all) return [];
+  return all
+    .split(DESC_SENTENCE_BREAK)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 function detailHtml(row) {
   const parts = [];
   const dirty = row.dirtyFiles || [];
@@ -7900,10 +7740,16 @@ function detailHtml(row) {
   // What this branch was STARTED to do, in the words of its first run's own brief. The MERGE STATE below says where
   // the branch got to; this says what it was for, which is the question an old row actually raises. The text is the
   // server's (lib/descriptions.js, written down once per tree from the earliest run in it) — nothing here derives or
-  // summarises anything — and a tree the panel has no run for has no block at all, so the section simply goes away
-  // rather than standing there empty.
+  // summarises anything beyond cutting it into its own sentences — and a tree the panel has no run for has no block at
+  // all, so the section simply goes away rather than standing there empty.
+  //
+  // A bullet list, one bullet per sentence, and FOLDED to start with — the same shape as the two strips under it
+  // (`ul.git-list`, one fact per `<li>`, the head's own line repeated as the first item). Folded, the first bullet
+  // rides to the right of the header as the peek, exactly as the merge state's summary and the liveness block's first
+  // line do, so the three strips read as one column of one-line headers.
   const desc = row.description && row.description.text ? row.description : null;
-  const descOpen = desc ? !state.closedDescs.has(key) : false;
+  const descOpen = desc ? state.openDescs.has(key) : false;
+  const descBullets = desc ? descLines(desc.text) : [];
   const descFrom = desc?.from
     ? ["first run in this tree", desc.from.thread || null, desc.from.at ? `started ${relTime(desc.from.at)} ago` : null]
         .filter(Boolean)
@@ -7914,10 +7760,12 @@ function detailHtml(row) {
       <div class="desc-head" data-toggle-desc="${esc(key)}" title="${descOpen ? "fold" : "unfold"} what this branch was started to do">
         <span class="chev">${descOpen ? "\u25be" : "\u25b8"}</span>
         <h4>Description</h4>
-        ${descOpen ? "" : `<span class="desc-first mono">${esc(desc.text)}</span>`}
+        ${descOpen ? "" : `<span class="desc-first mono">${esc(descBullets[0] || desc.text)}</span>`}
       </div>
       <div class="desc-body">
-        <p class="desc-text">${esc(desc.text)}</p>
+        <ul class="git-list desc-list">
+          ${descBullets.map((line, i) => `<li${i === 0 ? ` class="git-summary-line"` : ""}>${esc(line)}</li>`).join("")}
+        </ul>
         ${descFrom ? `<div class="desc-from mono">${esc(descFrom)}</div>` : ""}
       </div>
     </div>`
@@ -9306,162 +9154,6 @@ function showNote(msg) {
   }, 4000);
 }
 
-function setStream(label, cls = "ok") {
-  $("stream-state").textContent = label;
-  $("health").className = `dot ${cls}`;
-}
-
-function connect() {
-  if (state.es) state.es.close();
-  const es = new EventSource("/api/stream");
-  state.es = es;
-  es.addEventListener("open", () => setStream("● live"));
-  es.addEventListener("snapshot", (e) => {
-    const d = JSON.parse(e.data);
-    state.lastEventAt = Date.now();
-    applySnapshot(d.data ? d.data : d);
-  });
-  es.addEventListener("row", (e) => {
-    const evt = JSON.parse(e.data);
-    state.events += 1;
-    state.lastEventAt = Date.now();
-    // Liveness-only updates repaint the row but do not flash it: evidence blinks on and off
-    // far more often than git state moves, and flashing for that is just noise.
-    queueRow(evt.project, evt.row, { flash: evt.changed !== false && !evt.livenessOnly });
-  });
-  es.addEventListener("project", (e) => {
-    const evt = JSON.parse(e.data);
-    const cur = state.projects.get(evt.project.name) || {};
-    state.projects.set(evt.project.name, { ...cur, ...evt.project });
-    refreshChips(evt.project.name);
-    const sec = document.querySelector(`section.project[data-project="${CSS.escape(evt.project.name)}"]`);
-    if (!sec) {
-      renderAll();
-      return;
-    }
-    // Replace only the section's own markup, then immediately repaint its rows: swapping the
-    // whole section used to leave an empty <tbody> behind until the next full re-render,
-    // which is what made the worktree table vanish for seconds at a time.
-    // Read the page position BEFORE anything leaves the document. Reading scrollY forces a layout, and a layout with
-    // this project's rows detached is exactly what clamps the reader upward when they are near the bottom of the page.
-    const pageY = window.scrollY;
-    // And the caret, for the same reason: this section is about to leave the page, taking the reply box the reader
-    // is typing in with it. Once it is detached there is no focus left to capture, so it is read here and handed to
-    // the row repaint below, which puts it back in the box it rebuilds.
-    const typing = captureTyping(sec);
-    // The section swap below takes every card and the inline add-agent field out of the page for an instant; bracketed
-    // so their blur does not read as the reader leaving, and both are restored by the row repaint.
-    beginDomMove();
-    const oldBody = sec.querySelector(`[data-tbody="${CSS.escape(evt.project.name)}"]`);
-    const oldRows = oldBody ? [...oldBody.childNodes] : [];
-    const holder = document.createElement("div");
-    holder.innerHTML = projectSection(evt.project.name);
-    const freshHolder = holder.firstElementChild;
-    // A project event replaces the whole section. If it was mid-flash (it had just moved because an
-    // agent started in it), the replacement would silently drop the highlight.
-    if (sec.classList.contains("flash")) {
-      freshHolder.classList.add("flash");
-      clearTimeout(freshHolder._flashT);
-      freshHolder._flashT = setTimeout(() => freshHolder.classList.remove("flash"), flashProjectMs() + 40);
-    }
-    sec.replaceWith(freshHolder);
-    // The fresh section arrives with an empty tbody. Put the rows that were on screen straight back into it, before
-    // anything measures, so the document never lays out with the project missing: the swap takes the section out and
-    // the rows back in between two statements, and nothing in between reads the layout.
-    const newBody = freshHolder.querySelector(`[data-tbody="${CSS.escape(evt.project.name)}"]`);
-    if (oldRows.length && newBody) newBody.replaceChildren(...oldRows);
-    state.tbodyEls.set(evt.project.name, newBody);
-    if (window.scrollY !== pageY) {
-      const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
-      window.scrollTo({ top: Math.min(pageY, maxY) });
-    }
-    renderProjectRows(evt.project.name, { typing });
-    endDomMove();
-    restoreAddAgent(freshHolder);
-    // A project whose rows really did grow or shrink moves the document. This handler is one synchronous step, so a
-    // scroll that moved under it is a clamp, not the reader: put them back before the board re-sorts under them.
-    if (window.scrollY !== pageY) {
-      const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
-      window.scrollTo({ top: Math.min(pageY, maxY) });
-    }
-    reorderProjects();
-  });
-  es.addEventListener("drop", (e) => {
-    const evt = JSON.parse(e.data);
-    removeRow(evt.project, evt.path);
-  });
-  es.addEventListener("job", (e) => {
-    state.lastEventAt = Date.now();
-    const job = JSON.parse(e.data).job;
-    updateJob(job);
-    // A job being created, re-statused or finished is news about the worktree that owns it.
-    if (job) noteEventLife(job.thread || job.id);
-  });
-  es.addEventListener("jobline", (e) => {
-    const evt = JSON.parse(e.data);
-    appendJobLine(evt);
-    // Every line an agent writes is proof that its worktree is being worked in right now - the freshest sign of
-    // life there is, and one the scanner only finds out about on its next pass.
-    noteEventLife(state.jobs.get(evt.id)?.thread || evt.thread || evt.id);
-  });
-  es.addEventListener("approval", (e) => {
-    const r = JSON.parse(e.data).request;
-    if (!r || !r.id) return;
-    state.approvals.set(r.id, r);
-    renderApprovals();
-    // The agent that is blocked now says "waiting on you" instead of just "running".
-    if (r.thread) {
-      noteEventLife(r.thread);
-      renderConversation(r.thread);
-    }
-  });
-  es.addEventListener("approval-answered", (e) => {
-    const evt = JSON.parse(e.data);
-    const r = state.approvals.get(evt.id);
-    state.approvals.delete(evt.id);
-    renderApprovals();
-    if (r && r.thread) {
-      noteEventLife(r.thread);
-      renderConversation(r.thread);
-    }
-  });
-  es.addEventListener("jobs", (e) => {
-    state.lastEventAt = Date.now();
-    state.jobs.clear();
-    for (const j of JSON.parse(e.data).jobs) state.jobs.set(j.id, j);
-    scheduleRenderJobs();
-    repaintAgentState();
-  });
-  // The sentry's own state: a new alert, a dismissed one, a watch closing, a settings change from another tab.
-  es.addEventListener("assistant", (e) => {
-    state.lastEventAt = Date.now();
-    const d = JSON.parse(e.data);
-    if (d.assistant && typeof applyAssistant === "function") applyAssistant(d.assistant);
-  });
-  es.addEventListener("heartbeat", (e) => {
-    state.pool = JSON.parse(e.data).pool;
-  });
-  es.addEventListener("error", () => setStream("reconnecting…", "warn"));
-}
-
-async function resync() {
-  try {
-    applySnapshot(await apiFetch("/api/state").then((r) => r.json()));
-  } catch (e) {
-    showBanner(`Cannot reach the server: ${e.message}`);
-    setStream("offline", "bad");
-  }
-}
-
-async function post(route) {
-  try {
-    await apiFetch(route, { method: "POST" });
-    await resync();
-  } catch (e) {
-    showBanner(`${route}: ${e.message}`);
-  }
-}
-
 $("btn-refresh").addEventListener("click", () => post("/api/refresh"));
 $("btn-reset-colors").addEventListener("click", () => {
   const n = state.projectHues.size;
@@ -9610,129 +9302,6 @@ document.addEventListener(
   },
   true,
 );
-
-// ---- documents pasted into a prompt ------------------------------------------------
-// The gateway's runs API has no attachment field, so a document is stored by the panel and its absolute
-// path is appended to the prompt at SEND time. On screen it is a chip above the box — `[name] ×` — so the
-// thing you typed is not buried under a paragraph of machine text.
-const spawnAttachments = []; // the New-agent box's list; it lives in static markup, so no re-render to survive
-
-function attachmentsFor(ctx) {
-  return ctx === "spawn" ? spawnAttachments : state.replyAttachments.get(ctx) || [];
-}
-
-function setAttachments(ctx, list) {
-  if (ctx === "spawn") {
-    spawnAttachments.length = 0;
-    spawnAttachments.push(...list);
-  } else if (list.length) {
-    state.replyAttachments.set(ctx, list);
-  } else {
-    state.replyAttachments.delete(ctx);
-  }
-}
-
-function fmtBytes(n) {
-  const bytes = Number(n) || 0;
-  return bytes >= 1024 * 1024 ? `${(bytes / (1024 * 1024)).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
-
-function attachmentChipsHtml(ctx) {
-  return attachmentsFor(ctx)
-    .map(
-      (a) =>
-        `<span class="attach-chip mono" data-open-path="${esc(a.path)}" title="open ${esc(a.path)} in Notepad++">[${esc(a.name)}]<button type="button" class="chip-x" data-chip-remove="${esc(a.path)}" data-chip-ctx="${esc(ctx)}" title="remove this attachment">\u00d7</button></span>`,
-    )
-    .join("");
-}
-
-function renderChips(ctx) {
-  const el =
-    ctx === "spawn"
-      ? document.getElementById("spawn-chips")
-      : document.querySelector(`.attach-chips[data-chips="${CSS.escape(ctx)}"]`);
-  if (!el) return;
-  el.innerHTML = attachmentChipsHtml(ctx);
-}
-
-// What the agent actually receives: the chip stays a chip, the path travels with the message.
-function attachmentBlock(ctx) {
-  return attachmentsFor(ctx)
-    .map((a) => {
-      const how = /^image\//.test(String(a.type)) ? "use vision_analyze on it" : "read_file it";
-      return `\n\nAttachment: ${a.path} (${a.type || "unknown type"}, ${fmtBytes(a.bytes)}) — ${how} before answering.`;
-    })
-    .join("");
-}
-
-function clearAttachments(ctx) {
-  setAttachments(ctx, []);
-  renderChips(ctx);
-}
-
-async function attachFiles(files, box) {
-  const ctx = box.id === "job-prompt" ? "spawn" : box.dataset.reply || null;
-  if (!ctx) return;
-  for (const file of files) {
-    if (!file) continue;
-    if (!file.size) {
-      if (ctx === "spawn") $("spawn-msg").textContent = `${file.name || "file"} is empty`;
-      continue;
-    }
-    try {
-      const res = await apiFetch(
-        "/api/attachments",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": file.type || "application/octet-stream",
-            "x-filename": encodeURIComponent(file.name || "pasted-file"),
-          },
-          body: file,
-        },
-        { timeoutMs: 120000 },
-      );
-      const d = await res.json();
-      if (!res.ok) throw new Error(d.error || `HTTP ${res.status}`);
-      setAttachments(ctx, [...attachmentsFor(ctx), d]);
-      renderChips(ctx);
-    } catch (e) {
-      const warn = ctx === "spawn" ? $("spawn-msg") : document.querySelector(`[data-reply-warn="${CSS.escape(ctx)}"]`);
-      if (warn) warn.textContent = `attachment failed: ${e.message}`;
-    }
-  }
-}
-
-function attachTarget(el) {
-  return el && el.closest ? el.closest("#job-prompt, .reply-box") : null;
-}
-
-document.addEventListener("paste", (e) => {
-  const box = attachTarget(e.target);
-  const files = [...((e.clipboardData && e.clipboardData.files) || [])];
-  if (!box || !files.length) return; // text pastes stay text
-  e.preventDefault();
-  void attachFiles(files, box);
-});
-
-document.addEventListener("dragover", (e) => {
-  const box = attachTarget(e.target);
-  if (!box || !e.dataTransfer || ![...(e.dataTransfer.types || [])].includes("Files")) return;
-  e.preventDefault();
-  box.classList.add("drop-target");
-});
-document.addEventListener("dragleave", (e) => {
-  const box = attachTarget(e.target);
-  if (box) box.classList.remove("drop-target");
-});
-document.addEventListener("drop", (e) => {
-  const box = attachTarget(e.target);
-  const files = [...((e.dataTransfer && e.dataTransfer.files) || [])];
-  if (!box || !files.length) return;
-  e.preventDefault();
-  box.classList.remove("drop-target");
-  void attachFiles(files, box);
-});
 
 // "make the first commit" on an unborn-HEAD refusal: one empty local commit, then the spawn the button was
 // offered for runs again. No push, no file invented for the repo.
@@ -10351,9 +9920,10 @@ document.addEventListener("click", async (e) => {
     }
     return;
   }
-  // What this branch was started to do folds like the two strips below it, except that its folded state is REMEMBERED
-  // (localStorage): this is the one block a reader dismisses on purpose, and putting it back on every reload would make
-  // the remembering pointless. Folded, it keeps its first line to the right of the header the way the other two do.
+  // What this branch was started to do folds like the two strips below it, except that its UNFOLDED state is
+  // REMEMBERED (localStorage, `wm.openDescs`): the block starts folded, so the remembering is what keeps a reader's
+  // opened rows open across a reload. Folded, it keeps its first bullet to the right of the header the way the other
+  // two strips keep their first line.
   const descToggle = e.target.closest("[data-toggle-desc]");
   if (descToggle) {
     e.preventDefault();
@@ -10361,27 +9931,27 @@ document.addEventListener("click", async (e) => {
     const key = descToggle.dataset.toggleDesc;
     const block = document.querySelector(`[data-desc-block="${CSS.escape(key)}"]`);
     if (block) {
-      const closed = state.closedDescs.has(key);
-      if (closed) state.closedDescs.delete(key);
-      else state.closedDescs.add(key);
-      saveClosedDescs();
-      block.classList.toggle("collapsed", !closed);
+      const open = state.openDescs.has(key);
+      if (open) state.openDescs.delete(key);
+      else state.openDescs.add(key);
+      saveOpenDescs();
+      block.classList.toggle("collapsed", open);
       const chev = descToggle.querySelector(".chev");
-      if (chev) chev.textContent = closed ? "\u25be" : "\u25b8";
+      if (chev) chev.textContent = open ? "\u25b8" : "\u25be";
       let first = descToggle.querySelector(".desc-first");
-      const text = block.querySelector(".desc-text");
-      if (!closed) {
-        if (!first && text) {
+      const lead = block.querySelector(".desc-body li");
+      if (open) {
+        if (!first && lead) {
           first = document.createElement("span");
           first.className = "desc-first mono";
-          first.textContent = text.textContent;
-          first.title = text.textContent;
+          first.textContent = lead.textContent;
+          first.title = lead.textContent;
           descToggle.appendChild(first);
         }
       } else if (first) {
         first.remove();
       }
-      descToggle.title = `${closed ? "fold" : "unfold"} what this branch was started to do`;
+      descToggle.title = `${open ? "unfold" : "fold"} what this branch was started to do`;
     }
     return;
   }
@@ -11264,192 +10834,6 @@ document.addEventListener(
   { passive: false },
 );
 
-// ---- NOT-RUNNING (the hot-agent rotation) --------------------------------------------------
-// A rotation through the agents that are waiting on you: a card whose latest turn is NOT running has said what
-// it wanted and is sitting there. Turning this on opens the first one, puts the caret in its reply box and
-// flashes that box amber; Enter sends and moves to the next, Alt+Right skips one, Alt+Left steps back. The box
-// flashes on every hop, not just the first, so the eye can follow the caret through the list.
-
-function hotWaiting() {
-  return conversations().filter((c) => {
-    const t = c.latest || {};
-    return t.status !== "running" && t.status !== "starting";
-  });
-}
-
-function hotCandidates() {
-  const waiting = hotWaiting();
-  // Visible cards first, in the order the board shows them, then everything else newest-first: a folded
-  // project has no cards in the DOM and those agents are just as waiting.
-  const rank = new Map([...document.querySelectorAll(".agents-block .job")].map((el, i) => [el.dataset.thread, i]));
-  const dom = waiting.filter((c) => rank.has(c.thread)).sort((a, b) => rank.get(a.thread) - rank.get(b.thread));
-  const rest = waiting
-    .filter((c) => !rank.has(c.thread))
-    .sort((a, b) => Date.parse(b.latest?.startedAt || 0) - Date.parse(a.latest?.startedAt || 0));
-  return [...dom, ...rest].map((c) => c.thread);
-}
-
-function hotRowFor(thread) {
-  for (const row of state.rows.values()) {
-    if (agentsFor(row).some((c) => c.thread === thread)) return row;
-  }
-  return null;
-}
-
-function hotStillWaiting(thread) {
-  const conv = conversations().find((c) => c.thread === thread);
-  if (!conv) return false;
-  const t = conv.latest || {};
-  return t.status !== "running" && t.status !== "starting";
-}
-
-// The whole card flashes, not just the box: the rotation moves the reader's attention to a panel, and a ring
-// around the panel is what says "this one". The caret still lands in the reply box.
-function flashHotCard(thread) {
-  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
-  if (!card) return;
-  const until = Date.now() + 1300;
-  state.hotFlash = { thread, until };
-  card.classList.remove("hot-flash");
-  void card.offsetWidth; // restart it even when the last flash is still fading
-  card.classList.add("hot-flash");
-  clearTimeout(state.hotFlashTimer);
-  state.hotFlashTimer = setTimeout(() => {
-    state.hotFlash = { thread: null, until: 0 };
-    document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)?.classList.remove("hot-flash");
-  }, 1300);
-}
-
-function paintHotButton() {
-  const btn = $("btn-hot");
-  if (!btn) return;
-  const h = state.hot;
-  btn.classList.toggle("on", h.on);
-  btn.textContent = h.on ? `NOT-RUNNING ${Math.min(h.cursor + 1, h.stack.length)}/${h.stack.length}` : "NOT-RUNNING";
-  btn.title = h.on
-    ? "NOT-RUNNING is on — Enter sends and moves to the next agent that is waiting on you, Alt+Right skips, Alt+Left goes back. Click to stop."
-    : "NOT-RUNNING — step through the agents that are not running and are waiting on you: each one is opened, its reply box focused and flashed amber. Enter sends and moves on; Alt+Right skips; Alt+Left goes back.";
-}
-
-// Open exactly the path to one card and close everything else: after Collapse all the project is only "open"
-// in state, and the folder holding it is still shut - an open project inside a closed folder is not on screen,
-// which is why the counter moved and nothing appeared. The rotation keeps one project visible at a time.
-function hotOpenPath(row) {
-  const project = row.project;
-  for (const name of [...state.expandedProjects]) {
-    if (name !== project) toggleProject(name);
-  }
-  const sec = document.querySelector(`section.project[data-project="${CSS.escape(project)}"]`);
-  const root = sec?.closest("section.root-group")?.dataset.root;
-  if (root && state.collapsedRoots.has(root)) {
-    state.collapsedRoots.delete(root);
-    saveCollapsedRoots();
-    applyRootCollapse(root);
-    paintCollapseAll();
-  }
-  if (!state.expandedProjects.has(project)) toggleProject(project);
-  const key = keyOf(project, row.path);
-  if (!state.expanded.has(key)) {
-    document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
-  }
-}
-
-function hotFocus(thread) {
-  const row = hotRowFor(thread);
-  if (!row) return false;
-  hotOpenPath(row);
-  let card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
-  if (!card) return false;
-  if (card.classList.contains("collapsed")) {
-    // Unfolding repaints the card, so the node we clicked is replaced: re-query or every step after this
-    // (scroll, focus, flash) runs against a detached element and does nothing visible.
-    card.querySelector(".job-head")?.click();
-    card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`) || card;
-  }
-  scrollCardUnderBar(card);
-  const box = card.querySelector(".reply-box");
-  if (box) {
-    try {
-      box.focus({ preventScroll: true });
-    } catch {
-      box.focus();
-    }
-    const end = box.value.length;
-    if (box.setSelectionRange) box.setSelectionRange(end, end);
-  }
-  flashHotCard(thread);
-  return true;
-}
-
-function hotStep(dir) {
-  const h = state.hot;
-  if (!h.on) return;
-  if (dir > 0) {
-    let i = h.cursor;
-    while (i + 1 < h.stack.length) {
-      i += 1;
-      if (hotStillWaiting(h.stack[i]) && hotFocus(h.stack[i])) {
-        h.cursor = i;
-        paintHotButton();
-        return;
-      }
-    }
-    const next = hotCandidates().find((t) => !h.stack.includes(t));
-    if (!next) {
-      showBanner("NOT-RUNNING: no agents are waiting for input");
-      return;
-    }
-    h.stack.push(next);
-    h.cursor = h.stack.length - 1;
-    hotFocus(next);
-    paintHotButton();
-    return;
-  }
-  let i = h.cursor;
-  while (i - 1 >= 0) {
-    i -= 1;
-    if (hotStillWaiting(h.stack[i]) && hotFocus(h.stack[i])) {
-      h.cursor = i;
-      paintHotButton();
-      return;
-    }
-  }
-}
-
-function hotToggle() {
-  const h = state.hot;
-  h.on = !h.on;
-  if (!h.on) {
-    h.stack = [];
-    h.cursor = -1;
-    paintHotButton();
-    return;
-  }
-  const list = hotCandidates();
-  if (!list.length) {
-    h.on = false;
-    paintHotButton();
-    showBanner("NOT-RUNNING: no agents are waiting for input");
-    return;
-  }
-  h.stack = [list[0]];
-  h.cursor = 0;
-  paintHotButton();
-  hotFocus(list[0]);
-}
-
-// Enter in the hot card: the reply is on its way, so fold that project away and step on.
-function hotAfterSend(thread) {
-  if (!state.hot.on) return;
-  const row = hotRowFor(thread);
-  if (row && state.expandedProjects.has(row.project)) toggleProject(row.project);
-  hotStep(1);
-}
-
-$("btn-hot")?.addEventListener("click", (e) => {
-  e.stopPropagation();
-  hotToggle();
-});
 window.addEventListener("keydown", (e) => {
   if (!state.hot.on || !e.altKey) return;
   if (e.key === "ArrowRight") {
@@ -11801,6 +11185,7 @@ function toggleSettings(open = null) {
   void loadApprovalSetting();
   void loadSessionSetting();
   void loadProviderSetting();
+  void loadModelsSetting();
 }
 
 // ---- the provider endpoint every run talks to ------------------------------------------------
@@ -11914,6 +11299,92 @@ async function clearProviderKey(btn) {
     showBanner(d.key?.set ? "model.api_key removed — the .env key is used again" : "model.api_key removed — runs now have no key from config.yaml");
   } catch (e) {
     paintProviderSetting(e.message);
+  }
+}
+
+// ---- the model menu's prices and ratings -------------------------------------------------------
+// The dropdown's price and coding columns are this panel's own cache of what the gateway's model
+// inventory says. They are READ, never fetched, on the path that opens the menu — a cold endpoint
+// must not be able to hold a dropdown — so this is the one control that regenerates them: it makes
+// the gateway re-fetch every provider's live model list (the same file `hermes model --refresh`
+// writes) and rebuilds the cache from that answer, then refills the menu. The reply carries both
+// files' row counts and mtimes, and both are shown, because "it regenerated" and "it re-read the
+// same bytes" otherwise look identical from here.
+let modelsSetting = null;
+
+function modelAgeText(state) {
+  if (state.pricingAge === null || state.pricingAge === undefined) return "never built";
+  return `${relTime(new Date(Date.now() - state.pricingAge * 1000).toISOString())} old`;
+}
+
+function paintModelsSetting(error = null) {
+  const preview = $("models-preview");
+  const age = $("models-age");
+  const btn = $("btn-models-refresh");
+  if (!preview) return;
+  const s = modelsSetting;
+  if (!s) {
+    if (age) age.textContent = "—";
+    preview.textContent = error ? `NOT REGENERATED — ${error}` : "could not read the model list";
+    preview.classList.add("bad");
+    return;
+  }
+  if (age) age.textContent = modelAgeText(s);
+  if (btn) btn.disabled = false;
+  preview.textContent = error
+    ? `NOT REGENERATED — ${error}`
+    : `${s.count} model${s.count === 1 ? "" : "s"} · ${s.pricedCount || 0} priced · ${s.ratedCount || 0} rated · ${modelAgeText(s)}`;
+  preview.classList.toggle("bad", Boolean(error));
+  preview.title = error ? "" : `provider list: ${s.source}`;
+}
+
+async function loadModelsSetting() {
+  try {
+    const r = await apiFetch("/api/models");
+    modelsSetting = r.ok ? await r.json() : null;
+  } catch (e) {
+    modelsSetting = null;
+    paintModelsSetting(e.message);
+    return;
+  }
+  paintModelsSetting();
+}
+
+async function refreshModels() {
+  const btn = $("btn-models-refresh");
+  const preview = $("models-preview");
+  if (btn) btn.disabled = true;
+  if (preview) {
+    preview.textContent = "regenerating — re-fetching every provider's live model list…";
+    preview.classList.remove("bad");
+  }
+  try {
+    // Long: the gateway re-probes every authenticated provider before it answers.
+    const r = await apiFetch("/api/models/refresh", { method: "POST" }, { timeoutMs: 240000 });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      paintModelsSetting(d.error || `HTTP ${r.status}`);
+      return;
+    }
+    // Re-read through the same path the menu itself uses, so the dropdown is drawing the new file.
+    await loadModels();
+    await loadModelsSetting();
+    const b = d.before || {};
+    const a = d.after || {};
+    if (preview) {
+      preview.title =
+        `provider_models_cache.json: mtime ${b.models?.mtimeIso || "—"} → ${a.models?.mtimeIso || "—"}, ` +
+        `rows ${b.models?.rows ?? "?"} → ${a.models?.rows ?? "?"}\n${d.path || ""}`;
+    }
+    showBanner(
+      `model prices regenerated — provider cache ${b.models?.rows ?? "?"} → ${a.models?.rows ?? "?"} rows ` +
+        `(${b.models?.providers ?? "?"} → ${a.models?.providers ?? "?"} providers), prices ${b.pricing?.priced ?? "?"} → ` +
+        `${a.pricing?.priced ?? "?"} rows, ${a.pricing?.rated ?? "?"} rated`,
+    );
+  } catch (e) {
+    paintModelsSetting(e.message);
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -12429,6 +11900,7 @@ $("btn-provider-default-url")?.addEventListener("click", () => {
   const url = $("provider-url");
   if (url) url.value = url.placeholder || "https://openrouter.ai/api/v1";
 });
+$("btn-models-refresh")?.addEventListener("click", () => void refreshModels());
 $("session-limit")?.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   e.preventDefault();

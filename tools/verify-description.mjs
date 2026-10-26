@@ -6,8 +6,9 @@
 // answer: a run's brief is in the job store next to the cwd it ran in, so the EARLIEST run in a tree is that branch's
 // stated goal. lib/descriptions.js extracts the opening of that brief verbatim and writes it down once, keyed on the
 // six-hex tag a rename keeps; server.js harvests it on the events that can add a row or a job and decorates the
-// snapshot with it; public/app.js renders it as a folded strip ABOVE MERGE STATE, open by default, closable, and —
-// unlike the two strips under it — remembering that it was closed.
+// snapshot with it; public/app.js renders it as a strip ABOVE MERGE STATE — a bullet list, one bullet per sentence,
+// FOLDED to start with like the two strips under it, unfolding from its own head, and remembering the rows a reader
+// UNFOLDED (localStorage `wm.openDescs`).
 //
 // Everything below happens in a sandbox of its own: a throwaway repo with three hand-cut worktrees, a throwaway
 // HERMES_HOME, its own PANEL_CONFIG with its own port, its own logs and job store, and a STUB gateway on an ephemeral
@@ -25,8 +26,11 @@
 //   driven        the snapshot: /api/state carries the record's text on the row — and carries NO description at all
 //                 for the worktree that has never had a run
 //   driven        the browser (Playwright, headless Chromium, resizing nothing): the strip renders above MERGE STATE
-//                 with the record's own words, folds from its own header, is still folded after a reload, reopens, and
-//                 is simply absent for the tree with no run — with no page errors
+//                 as a bullet list — one bullet per sentence, in the merge state's own list — with the record's own
+//                 words; a freshly expanded row shows it FOLDED with its first bullet on the head line, like the two
+//                 strips under it (which stay exactly as they were); clicking the head unfolds it, the unfold survives
+//                 a reload, a second click folds it again and that survives too; a stale `wm.closedDescs` from the
+//                 older build has no say; and the strip is simply absent for the tree with no run — no page errors
 //   inspected     the per-render cost — that the extraction sits BEHIND the "does this tree have a record" check (and
 //                 so is not re-derived per render) is read off server.js, not measured: the test measures only that
 //                 the written record's bytes do not change while the panel keeps scanning
@@ -206,6 +210,20 @@ const PROMPT_LIVE =
   "Prove that a live run's own brief reaches the description of the tree it cut. " +
   "The harvest reads the panel's job store, not a fixture. CANARY-LIVE-THIRD-SENTENCE";
 const EXPECT_LIVE = "Prove that a live run's own brief reaches the description of the tree it cut. The harvest reads the panel's job store, not a fixture.";
+// The strip is a bullet list, one bullet per sentence, so the expected shape is written out here as the LITERAL
+// sentences — never by calling the splitter, or the test would agree with any splitting at all.
+const EXPECT_GOAL_LINES = [
+  "Make the merge-state strip say what a branch was started to do, in the words of the run that started it.",
+  "The words come from that run's own brief, never from the branch as it looks now.",
+];
+const EXPECT_PLAIN_LINES = [
+  "Give a hand-cut worktree with no tag in its name its own description too.",
+  "Its record falls back to the path.",
+];
+const EXPECT_LIVE_LINES = [
+  "Prove that a live run's own brief reaches the description of the tree it cut.",
+  "The harvest reads the panel's job store, not a fixture.",
+];
 const PROMPT_FOLLOW = "A follow-up run into a tree that already has its description. CANARY-GAMMA-THIRD-SENTENCE";
 
 const JOB_GOAL = { id: "aaaa1111", thread: "wtgui-fixture-goal-aaaa11", prompt: PROMPT_GOAL, at: "2026-01-01T00:00:00.000Z" };
@@ -381,16 +399,23 @@ function loadPlaywright() {
 }
 
 let browserFailures = 0;
-async function browserPhase(pw) {
+async function browserPhase(pw, { liveTree = null } = {}) {
   const pageErrors = [];
   const browser = await pw.chromium.launch({ headless: true });
+  // The row key the browser half works on, read before the context exists: the harness seeds the STALE
+  // `wm.closedDescs` (what the older build left behind) against this very row, so the check that it has no say is
+  // about a key that would have folded this row if it were still read.
+  const seedRow = (await state()).projects?.find((p) => p.name === PROJECT)?.worktrees?.find((w) => norm(w.path) === norm(TREE_GOAL));
+  if (!seedRow) throw new Error(`no row for ${TREE_GOAL} in /api/state`);
+  const keyGoal0 = `${PROJECT}::${seedRow.path}`;
   const context = await browser.newContext({ viewport: { width: 1400, height: 1000 } });
   // Harness setup, not part of what is asserted: a fresh browser has no remembered layout, so the sandbox project
-  // would open collapsed and none of its rows would be on the page. The CLOSED state of the description is a real
-  // click below; this only opens the folder.
-  await context.addInitScript((project) => {
-    localStorage.setItem("wm.expandedProjects", JSON.stringify([project]));
-  }, PROJECT);
+  // would open collapsed and none of its rows would be on the page. The CLOSED state of the description is the
+  // DEFAULT below, not a click; this only opens the folder — and seeds the legacy key, which must not matter.
+  await context.addInitScript((o) => {
+    localStorage.setItem("wm.expandedProjects", JSON.stringify([o.project]));
+    localStorage.setItem("wm.closedDescs", JSON.stringify([o.key]));
+  }, { project: PROJECT, key: keyGoal0 });
   const page = await context.newPage();
   page.on("pageerror", (e) => pageErrors.push(`pageerror: ${String((e && e.message) || e)}`));
   page.on("console", (m) => {
@@ -425,12 +450,64 @@ async function browserPhase(pw) {
 
   await page.goto(base, { waitUntil: "domcontentloaded" });
   const keyGoal = await openRow(TREE_GOAL);
+  check("browser: the row the harness seeded its stale key against", keyGoal, keyGoal0);
   const sel = `tr.detail[data-detail="${keyGoal}"]`;
   const descSel = `${sel} .desc-block`;
+  const gitSel = `${sel} .git-block`;
+  const liveSel = `${sel} .live-block`;
+  // Folded, in the page's own terms: the block carries `collapsed` and its body has no box.
+  const isFolded = async (blockSel, bodySel) =>
+    (await page.locator(blockSel).getAttribute("class")).includes("collapsed") && !(await page.locator(`${blockSel} ${bodySel}`).isVisible());
 
   ok("browser: the worktree's detail carries a description strip", (await page.locator(descSel).count()) === 1);
   check("browser: the strip's heading", await page.locator(`${descSel} .desc-head h4`).textContent(), "Description");
-  check("browser: the strip says the record's own words", await page.locator(`${descSel} .desc-text`).textContent(), EXPECT_GOAL);
+
+  // ---- (2) a freshly expanded row shows the strip FOLDED with its one-line peek on the head line, the way the two
+  // strips under it behave folded — and those two are untouched by any of this.
+  ok(
+    "browser: a freshly expanded row shows the description FOLDED",
+    await isFolded(descSel, ".desc-body"),
+    await page.locator(descSel).getAttribute("class"),
+  );
+  check("browser: nothing has been unfolded, so nothing is remembered yet", await page.evaluate(() => localStorage.getItem("wm.openDescs")), null);
+  ok(
+    "browser: the stale wm.closedDescs naming THIS row is on disk and has no say",
+    String(await page.evaluate(() => localStorage.getItem("wm.closedDescs"))).includes(keyGoal),
+    await page.evaluate(() => localStorage.getItem("wm.closedDescs")),
+  );
+  check("browser: folded, its one-line peek is the head's first bullet", await page.locator(`${descSel} .desc-first`).textContent(), EXPECT_GOAL_LINES[0]);
+  check("browser: merge state, under it, is folded the same way (unchanged)", await isFolded(gitSel, ".git-body"), true);
+  check("browser: and so is liveness (unchanged)", await isFolded(liveSel, "ul"), true);
+  check(
+    "browser: all three folded strips keep a peek on their head line",
+    await page.evaluate((s) => {
+      const shown = (sel2) => {
+        const el = document.querySelector(sel2);
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      };
+      return {
+        desc: shown(`${s} .desc-block .desc-first`),
+        git: shown(`${s} .git-block .git-summary`),
+        live: shown(`${s} .live-block .live-first`),
+      };
+    }, sel),
+    { desc: true, git: true, live: true },
+  );
+  const shotFolded = await shot("description-folded-on-expand.png");
+
+  // ---- (1) opened, it is a bullet list in the merge state's own list: same column, size and colour.
+  await page.locator(`${descSel} .desc-head`).click();
+  ok("browser: clicking the head unfolds the strip", !(await page.locator(descSel).getAttribute("class")).includes("collapsed"));
+  ok(
+    "browser: and the unfold is remembered in the browser",
+    String(await page.evaluate(() => localStorage.getItem("wm.openDescs"))).includes(keyGoal),
+    await page.evaluate(() => localStorage.getItem("wm.openDescs")),
+  );
+  check("browser: the strip's body carries the shared fact list (ul.git-list)", await page.locator(`${descSel} .desc-body ul.git-list.desc-list`).count(), 1);
+  check("browser: one bullet per sentence, in the record's own words", await page.locator(`${descSel} .desc-list li`).allTextContents(), EXPECT_GOAL_LINES);
+  check("browser: the head's own line is the list's first bullet", await page.locator(`${descSel} .desc-list li`).first().getAttribute("class"), "git-summary-line");
   ok(
     "browser: the strip names the run the words came from",
     (await page.locator(`${descSel} .desc-from`).textContent()).includes(JOB_GOAL.thread),
@@ -451,40 +528,71 @@ async function browserPhase(pw) {
     (await page.locator(`${sel} .git-head h4`).textContent()) === "Merge state",
     await page.locator(`${sel} .git-head h4`).textContent(),
   );
-  ok(
-    "browser: the strip opens by itself",
-    !(await page.locator(descSel).getAttribute("class")).includes("collapsed") && Boolean(await page.locator(`${descSel} .desc-body`).boundingBox()),
+  // The other two strips are unfolded here only to compare against them: geometry needs them laid out.
+  await page.locator(`${gitSel} .git-head`).click();
+  await page.locator(`${liveSel} .live-head`).click();
+  const shape = await page.evaluate((s) => {
+    const read = (li) => {
+      const cs = getComputedStyle(li);
+      return { font: cs.fontFamily, size: cs.fontSize, colour: cs.color, x: Math.round(li.getBoundingClientRect().x) };
+    };
+    const all = (sel2) => [...document.querySelectorAll(sel2)].map(read);
+    return { desc: all(`${s} .desc-list li`), git: all(`${s} .git-list li`), live: all(`${s} .live-block ul li`) };
+  }, sel);
+  const descLead = shape.desc[0];
+  const descRest = shape.desc[1] || shape.desc[0];
+  const gitLead = shape.git[0];
+  const gitRest = shape.git[1] || shape.git[0];
+  check(
+    "browser: a description bullet is the merge state's bullet, in family, size and colour",
+    { font: descRest.font, size: descRest.size, colour: descRest.colour },
+    { font: gitRest.font, size: gitRest.size, colour: gitRest.colour },
   );
-  check("browser: nothing has been dismissed yet", await page.evaluate(() => localStorage.getItem("wm.closedDescs")), null);
-  const shotOpen = await shot("description-open.png");
+  check(
+    "browser: and its first bullet is the merge state's own brighter first bullet",
+    { font: descLead.font, size: descLead.size, colour: descLead.colour },
+    { font: gitLead.font, size: gitLead.size, colour: gitLead.colour },
+  );
+  check(
+    "browser: every bullet sits in the merge state's own column",
+    [...new Set(shape.desc.map((d) => d.x))],
+    [shape.git[0].x],
+  );
+  note(
+    `measured: description ${descRest.size} ${descRest.colour} at x=${descRest.x} · merge state ${gitRest.size} ${gitRest.colour} at x=${gitRest.x} · liveness ${shape.live[0].size} ${shape.live[0].colour} at x=${shape.live[0].x}`,
+  );
+  note(
+    "(those two strips are not identical to each other today: merge state's bullets are 11.5px on the dimmer colour, liveness's 12px on the brighter one and 3px further right. The description takes the MERGE STATE's — the list class it shares, and the strip it sits directly above.)",
+  );
+  const shotOpen = await shot("description-unfolded.png");
 
-  // ---- fold it: the state the reader produces, and the one that has to survive a reload.
-  await page.locator(`${descSel} .desc-head`).click();
-  ok("browser: clicking the head folds the strip", (await page.locator(descSel).getAttribute("class")).includes("collapsed"));
-  check("browser: the folded strip hides its body", await page.locator(`${descSel} .desc-body`).isVisible(), false);
-  ok(
-    "browser: the fold is remembered in the browser",
-    String(await page.evaluate(() => localStorage.getItem("wm.closedDescs"))).includes(keyGoal),
-    await page.evaluate(() => localStorage.getItem("wm.closedDescs")),
-  );
-  ok(
-    "browser: folded, its first line still shows",
-    (await page.locator(`${descSel} .desc-first`).textContent()).startsWith("Make the merge-state strip say"),
-  );
-
+  // ---- (3) the choice survives a reload — and it is the UNFOLD that is remembered, not a fold: the two strips under
+  // it come back folded, exactly as they do today.
   await page.reload({ waitUntil: "domcontentloaded" });
   const keyAfterReload = await openRow(TREE_GOAL);
   check("browser: the same row after a reload", keyAfterReload, keyGoal);
   ok(
-    "browser: it is STILL folded after a reload",
-    (await page.locator(descSel).getAttribute("class")).includes("collapsed") && !(await page.locator(`${descSel} .desc-body`).isVisible()),
+    "browser: the row the reader UNFOLDED is still unfolded after a reload",
+    !(await page.locator(descSel).getAttribute("class")).includes("collapsed") && (await page.locator(`${descSel} .desc-body`).isVisible()),
   );
-  const shotClosed = await shot("description-closed-after-reload.png");
+  check(
+    "browser: while the two strips under it are folded again, unchanged",
+    { git: await isFolded(gitSel, ".git-body"), live: await isFolded(liveSel, "ul") },
+    { git: true, live: true },
+  );
+  const shotOpenReload = await shot("description-unfolded-after-reload.png");
 
-  // ---- and it opens again, which is what makes the remembering a fold rather than a one-way door.
+  // ---- and it folds again, which is what makes the remembering a fold rather than a one-way door.
   await page.locator(`${descSel} .desc-head`).click();
-  ok("browser: clicking again reopens it", !(await page.locator(descSel).getAttribute("class")).includes("collapsed"));
-  check("browser: and the dismissed mark is gone again", await page.evaluate(() => localStorage.getItem("wm.closedDescs")), "[]");
+  ok("browser: clicking again folds it", await isFolded(descSel, ".desc-body"));
+  check("browser: and the unfolded mark is gone again", await page.evaluate(() => localStorage.getItem("wm.openDescs")), "[]");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await openRow(TREE_GOAL);
+  ok(
+    "browser: a reload after that shows it folded, with the peek back on the head line",
+    (await isFolded(descSel, ".desc-body")) && (await page.locator(`${descSel} .desc-first`).textContent()) === EXPECT_GOAL_LINES[0],
+  );
+  const shotClosed = await shot("description-folded-after-reload.png");
 
   // ---- the tree with no run degrades to nothing, and merge state is untouched by that.
   const keyNone = await openRow(TREE_NONE);
@@ -495,19 +603,29 @@ async function browserPhase(pw) {
     (await page.locator(`${noneSel} .git-head h4`).textContent()) === "Merge state",
   );
   // The hand-cut tree has no six-hex tag to key a record on, so this is the path-keyed half of the store reaching the
-  // page as well.
+  // page as well — and it starts folded and lists its sentences like the tagged one.
   const keyPlain = await openRow(TREE_PLAIN);
-  check(
-    "browser: a hand-cut tree (no tag) gets its description too",
-    await page.locator(`tr.detail[data-detail="${keyPlain}"] .desc-text`).textContent(),
-    EXPECT_PLAIN,
-  );
+  const plainSel = `tr.detail[data-detail="${keyPlain}"] .desc-block`;
+  ok("browser: a hand-cut tree (no tag) starts folded too", await isFolded(plainSel, ".desc-body"));
+  await page.locator(`${plainSel} .desc-head`).click();
+  check("browser: a hand-cut tree's description, one bullet per sentence", await page.locator(`${plainSel} .desc-list li`).allTextContents(), EXPECT_PLAIN_LINES);
   const shotSecond = await shot("description-second-tree.png");
+
+  // ---- and the description a LIVE run wrote for the tree it cut reads the same way.
+  if (liveTree) {
+    const keyLive = await openRow(liveTree);
+    const liveDesc = `tr.detail[data-detail="${keyLive}"] .desc-block`;
+    ok("browser: the tree a live run cut carries the strip", (await page.locator(liveDesc).count()) === 1);
+    await page.locator(`${liveDesc} .desc-head`).click();
+    check("browser: with the live run's own words as bullets", await page.locator(`${liveDesc} .desc-list li`).allTextContents(), EXPECT_LIVE_LINES);
+  } else {
+    note("(no live-cut tree to check in the browser: the live phase above did not cut one)");
+  }
 
   check("browser: no page errors", pageErrors, []);
   browserFailures = failures;
   await browser.close();
-  return { shotOpen, shotClosed, shotSecond };
+  return { shotFolded, shotOpen, shotOpenReload, shotClosed, shotSecond };
 }
 
 // ---- the phases ----------------------------------------------------------------------------------
@@ -599,15 +717,15 @@ try {
   await sleep(4000); // several harvest passes' worth, with the follow-up run live in that tree
   check("the tree's description is unchanged, text and write time alike", JSON.stringify(recordFor(TREE_GOAL)), recBefore);
 
-  console.log("\n== the browser: above MERGE STATE, closable, and it stays closed ==");
+  console.log("\n== the browser: a bullet list, folded on expand, unfolded and remembered ==");
   const pw = loadPlaywright();
   if (!pw) {
     console.log("BROWSER-HALF-NOT-RUN  the client half of this change was not exercised in a browser.");
     note("re-run with a Playwright install, e.g. PANEL_PLAYWRIGHT_ROOT=<dir with node_modules/playwright> node tools/verify-description.mjs");
     failures += 1;
   } else {
-    shots = await browserPhase(pw);
-    if (shots?.shotOpen) note(`screenshots: ${shots.shotOpen} · ${shots.shotClosed} · ${shots.shotSecond}`);
+    shots = await browserPhase(pw, { liveTree: newTree });
+    if (shots?.shotOpen) note(`screenshots: ${shots.shotFolded} · ${shots.shotOpen} · ${shots.shotOpenReload} · ${shots.shotClosed} · ${shots.shotSecond}`);
   }
 
   console.log("\n== summary ==");
@@ -615,8 +733,10 @@ try {
   if (shots?.shotOpen) {
     console.log("\nWHAT WAS DRIVEN: a sandbox panel booted over a seeded job store (the record, the earliest-run choice,");
     console.log("the unchanged-bytes check), a real POST /api/agents to a stub gateway (the live half), a real POST into an");
-    console.log("existing tree (the follow-up), and headless Chromium over the running panel (placement above merge state,");
-    console.log("the fold, the reload, the reopen, the no-run tree, zero page errors).");
+    console.log("existing tree (the follow-up), and headless Chromium over the running panel: the bullets and their measured");
+    console.log("family/size/colour/column against the merge state's own list, the fold on a fresh expand, the click that");
+    console.log("unfolds it, the reload that keeps it open, the click that folds it again, the stale legacy key, the no-run");
+    console.log("tree, and zero page errors.");
     console.log("WHAT WAS INSPECTED, NOT DRIVEN: that the extraction sits behind the 'already has a record' guard rather");
     console.log("than running per render — read off server.js; the test measures only that the written file does not change.");
   }

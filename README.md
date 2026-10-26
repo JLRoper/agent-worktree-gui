@@ -60,8 +60,9 @@ sandbox `$HERMES_HOME`, stub gateway, throwaway repo — useful after touching a
 
 `node tools/verify-description.mjs` proves the `DESCRIPTION` strip above MERGE STATE — the record's earliest-run
 choice, the live half through a real spawn against a stub gateway, and the whole client half in headless Chromium
-(above MERGE STATE, open by default, folded after a reload, absent for a tree with no run) — useful after touching
-`lib/descriptions.js`, the harvest in `server.js` or that strip in `public/app.js`.
+(bullets matching the merge state's own list, folded on a fresh expand, unfolded by a click and still unfolded
+after a reload, folded again by a second click, a stale legacy key with no say, absent for a tree with no run) —
+useful after touching `lib/descriptions.js`, the harvest in `server.js` or that strip in `public/app.js`.
 
 `node tools/verify-action-harvest.mjs` drives three real assistant turns through a stub gateway whose stream
 carries the reply the way the live one does — one paragraph per text line — and then reads the job store and the
@@ -227,7 +228,8 @@ branch of this repository is renamed.
 
 The other half of a row's git story sits above MERGE STATE: a `DESCRIPTION` strip quoting the opening of the
 **earliest** run's brief in that tree — what the branch was started to do, in the reader's own words, rather
-than what the branch looks like now. Two sentences of it, verbatim, plus a dim line naming the run it came from.
+than what the branch looks like now. Two sentences of it, verbatim, as a **bullet list — one bullet per
+sentence** — plus a dim line naming the run it came from.
 
 The text is extracted once and written down beside the job store (`logs/descriptions.json`, see
 `lib/descriptions.js`), keyed on the six-hex tag a rename keeps, for the same reason the naming ledger is: the
@@ -236,17 +238,24 @@ moment a tree's earliest brief aged out. The first record for a tree also **wins
 same tree ("land it and write the report") is not what the branch was for, so it cannot rewrite the goal. The
 record carries the tree's full path and branch alongside the tag, so the file says which tree it describes.
 
-The strip opens itself and folds from its own header like the two under it, and unlike them the fold is
-remembered per row in `localStorage` (`wm.closedDescs`) — a reader who has read the goal does not want it back
-on every reload. Nothing is invented: a brief with no sentences is cut at a word boundary, the panel's own
-"Work in …" wrapper is stripped, and a tree the panel has no run for renders **no strip at all**.
+The strip is the same kind of thing as the two under it: `ul.git-list`, one fact per `<li>`, with the head's
+own line repeated as the first bullet and riding on the head line while folded. It starts **folded** — the
+first bullet is what a reader wants without opening anything, and three one-line heads cost a row far less
+height than a block of prose above the agents. Unlike the two strips under it, the rows a reader **unfolded**
+are remembered per row in `localStorage` (`wm.openDescs`, an absent key meaning every row folded). That is a
+new key rather than an inversion of the older `wm.closedDescs`: the old set was written by a build where every
+strip started open, so it describes a layout the board no longer has. Nothing is invented: a brief with no
+sentences is cut at a word boundary, the panel's own "Work in …" wrapper is stripped, and a tree the panel has
+no run for renders **no strip at all**.
 
 `node tools/verify-description.mjs` proves it in a sandbox of its own — a seeded job store (two runs in one
 tree, one in a hand-cut tree with no tag, and a tree with no runs at all), a real `POST /api/agents` against a
 stub gateway for the live half, another into an existing tree to show the goal is not rewritten, and headless
-Chromium (Playwright) over the running panel for the placement above MERGE STATE, the fold, the reloaded
-state, the reopen and the absent strip. Point it at a Playwright install with `PANEL_PLAYWRIGHT_ROOT`; without
-one it reports `BROWSER-HALF-NOT-RUN` and fails rather than passing on a half that never ran.
+Chromium (Playwright) over the running panel for the bullets and their measured family, size, colour and column
+against the merge state's own list, the fold on a fresh expand, the click that unfolds it, the reload that
+keeps it open, the click that folds it again, a stale legacy key, and the absent strip. Point it at a Playwright
+install with `PANEL_PLAYWRIGHT_ROOT`; without one it reports `BROWSER-HALF-NOT-RUN` and fails rather than
+passing on a half that never ran.
 
 ### Agents
 

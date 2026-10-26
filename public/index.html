@@ -310,6 +310,13 @@
           <button type="button" id="btn-provider-clear" title="remove model.api_key from config.yaml — the OPENROUTER_API_KEY in .env is used again">clear key</button>
           <button type="button" id="btn-provider-default-url" title="put the OpenRouter default URL back in the box (Save writes it)">default URL</button>
         </div>
+
+        <div class="settings-row settings-gap" id="models-row" title="The model menu's own columns: what each model costs per million tokens in and out, and Artificial Analysis' coding rating out of ten. Both come from the gateway's model inventory — the same numbers the CLI's own model picker shows — and the panel keeps its own copy so opening the menu never waits on a provider. A model Artificial Analysis has not benchmarked carries no rating at all, and a router's 'not priced' sentinel is shown as nothing rather than as a number. Pressing the button makes the gateway re-fetch every provider's live model list, rebuilds that copy from the answer, and refills the model menu in the New agent card.">
+          <span>Model prices <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono" id="models-age">…</span>
+          <button id="btn-models-refresh" type="button" title="regenerate: re-fetch every provider's live model list from the gateway, rebuild the price and rating cache, and refill the model menu">Refresh now</button>
+        </div>
+        <div class="settings-preview mono" id="models-preview">…</div>
       </div>
 
     </div>
@@ -392,6 +399,17 @@
     <span>Config: <code>config.json</code> — scanRoots, projects, cadences, <code>dormantSeconds</code>, <code>host</code> (loopback by default).</span>
   </footer>
 
+  <!-- The client is a set of classic scripts, not modules: there is no bundler in this repo, and
+       public/assistant.js reads app.js's own globals by name (esc, conversations, conversationHtml), so an
+       ES-module split is not available to us. Order therefore matters and is read bottom-up: each script's
+       top-level declarations have to exist before the next one is evaluated, because app.js both calls these
+       helpers from its own top-level code and runs its boot wiring the moment it loads. The extracted modules
+       are listed in dependency order (see .agentboard/refactor-research/frontend-app-js.md §5). -->
+  <script src="/core/dom-format.js"></script>
+  <script src="/board/attachments.js"></script>
+  <script src="/board/hot.js"></script>
+  <script src="/core/transport.js"></script>
+  <script src="/core/sse.js"></script>
   <script src="/app.js"></script>
   <!-- The assistant's floating panel. Loaded after app.js on purpose: it reads that file's own state and card
        renderer, so the assistant's card is a real card rather than a second implementation of one. -->

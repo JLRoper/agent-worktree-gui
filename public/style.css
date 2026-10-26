@@ -512,10 +512,10 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
   font: 12px var(--mono);
   max-width: 240px;
 }
-/* The model picker carries provider-qualified ids ("anthropic/claude-sonnet-5.5"); the shared
-   240px cap cuts them off, and this is the one select in the form whose value is read before
-   spawning. */
-.form select#job-model { min-width: 210px; max-width: 320px; }
+/* The model picker carries provider-qualified ids ("anthropic/claude-sonnet-5.5") and now a price
+   and coding-rating column beside each one; the shared 240px cap cut them off, and this is the one
+   select in the form whose value is read before spawning. */
+.form select#job-model { min-width: 210px; max-width: 460px; }
 .project.armed { box-shadow: 0 0 0 2px #2ea04380; transition: box-shadow .2s; }
 .project-head.meta-line { padding-top: 6px; padding-bottom: 6px; }
 
@@ -1413,19 +1413,23 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
 .git-block.collapsed .git-body { display: none; }
 .git-body { padding: 4px 0 0 28px; }
 /* The merge-state facts are a bullet list, one fact per line: as a single "·"-joined run the reader had to find
-   "cherry" inside it, and the head's summary (first bullet when open) is just another fact in the same list. */
-.git-body .git-list { margin: 0 0 6px; padding-left: 15px; }
-.git-body .git-list li { font: 11.5px/1.6 var(--mono); color: var(--dim); }
-.git-body .git-list li.git-summary-line { color: #c8d1dc; }
+   "cherry" inside it, and the head's summary (first bullet when open) is just another fact in the same list. The
+   description's bullets are the SAME list — one sentence per line — and are styled from here rather than from a rule
+   of their own, which is what keeps the two strips' bullets identical in family, size and colour. The first bullet of
+   each carries `git-summary-line`: it is the same role in both, the line the head shows while folded, repeated as the
+   list's first item, and it is the brighter of the two colours. */
+.git-body .git-list, .desc-body .git-list { margin: 0 0 6px; padding-left: 15px; }
+.git-body .git-list li, .desc-body .git-list li { font: 11.5px/1.6 var(--mono); color: var(--dim); }
+.git-body .git-list li.git-summary-line, .desc-body .git-list li.git-summary-line { color: #c8d1dc; }
 /* Folded, the summary rides on the head line. Unfolded, it drops into the list as its first bullet and the head
    keeps just its title - done in CSS so the toggle stays a class flip and the detail is not re-rendered to
    rearrange one span. */
 .git-block:not(.collapsed) .git-head .git-summary { display: none; }
-/* WHAT THIS BRANCH WAS STARTED TO DO: the one strip ABOVE merge state. Same shape as the two under it — a chevron, a
-   small-caps title, a one-line peek while folded — because it is the same kind of thing, and the four strips a
-   worktree's detail opens with should read as one column. What differs is the fold: it is remembered per row
-   (localStorage), so a reader who has read the goal does not get it back on the next reload, and the text itself is a
-   sentence or two rather than a field list. */
+/* WHAT THIS BRANCH WAS STARTED TO DO: the strip ABOVE merge state. Same shape as the two under it — a chevron, a
+   small-caps title, a one-line peek while folded, and, open, a bullet list of its own sentences — because it is the
+   same kind of thing, and the three strips a worktree's detail opens with should read as one column. What differs is
+   the fold: it starts FOLDED (the peek is what a reader wants without opening anything) and the UNFOLD is remembered
+   per row (localStorage), so the rows a reader opened stay open across a reload. */
 .desc-block { margin-bottom: 6px; }
 .desc-head { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0; }
 .desc-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
@@ -1435,7 +1439,6 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
 .desc-block.collapsed .desc-body { display: none; }
 .desc-block:not(.collapsed) .desc-head .desc-first { display: none; }
 .desc-body { padding: 2px 0 4px 28px; }
-.desc-text { margin: 0; font-size: 12.5px; line-height: 1.55; color: #c8d1dc; max-width: 96ch; }
 /* Which run the words came from, and when: the description is quoted from that brief, never written for the board. */
 .desc-from { margin-top: 3px; font-size: 11px; color: var(--dimmer); }
 /* the agent mark at the head of every agent row (parent row only, turns keep their own chevron) */
@@ -1911,12 +1914,11 @@ tr.detail > td > .detail-inner > .desc-block h4,
 tr.detail > td > .detail-inner > .git-block h4,
 tr.detail > td > .detail-inner > .live-block h4 { margin: 0; font-size: 10.5px; }
 tr.detail > td > .detail-inner > .git-summary, tr.detail > td > .detail-inner > .live-first { font-size: 11px; }
-/* The description's own text and its folded peek, in the sizes the two strips below it use. The prose (not a fact
-   list) sits on the title's own indent instead of the 28px a bullet list uses, so the three strips read as one
-   column under their three headings. */
+/* The description's own text and its folded peek, in the sizes the two strips below it use. Its bullets are the
+   shared fact list (`.desc-body .git-list`, styled with the merge state's), on the same 28px indent the two strips'
+   lists use, so the three strips read as one column under their three headings. */
 tr.detail > td > .detail-inner > .desc-block .desc-first { font-size: 11px; }
-tr.detail > td > .detail-inner > .desc-block .desc-body { padding: 0 0 6px 20px; }
-tr.detail > td > .detail-inner > .desc-block .desc-text { font-size: 12px; }
+tr.detail > td > .detail-inner > .desc-block .desc-body { padding: 0 0 6px 28px; }
 tr.detail > td > .detail-inner > .live-block { padding-bottom: 6px; border-bottom: 1px solid #262f3c; margin-bottom: 8px; }
 tr.detail h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
 tr.detail ul { margin: 0 0 12px; padding-left: 18px; }
