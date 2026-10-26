@@ -10,17 +10,17 @@ start at all.
 
 ## Point an agent at it
 
-The repo is private, so an agent needs `gh` to reach it. Paste this, substituting that machine's
-repo directory:
+The repo is public, so raw URLs work unauthenticated and one line is enough — paste this, substituting
+that machine's repo directory:
+
+> Fetch https://raw.githubusercontent.com/JLRoper/agent-worktree-gui/main/SETUP.md and follow it.
+
+If it is ever made private again the raw URL stops working and the agent needs `gh` to clone instead
+(`gh repo edit JLRoper/agent-worktree-gui --visibility public` is the way back):
 
 > Clone `JLRoper/agent-worktree-gui` with `gh` (it is private), then follow `SETUP.md` inside the
 > clone: set `scanRoots` = `TODO: where your repos live`, start it, run the verification steps in
 > section 5, and tell me the URL to open.
-
-Make the repo public (`gh repo edit JLRoper/agent-worktree-gui --visibility public`) and one line is
-enough instead, since raw URLs then work unauthenticated:
-
-> Fetch https://raw.githubusercontent.com/JLRoper/agent-worktree-gui/main/SETUP.md and follow it.
 
 One thing a clone does **not** carry: the panel's own operating skill lives in the **Hermes profile's
 skills directory**, not in this repo — on the author's machine that is
@@ -39,17 +39,25 @@ too when the profile has one.
 | git | `git --version` | every scan (the panel shells out to git) |
 | Hermes CLI | `hermes --version` | **only** spawning agents; monitoring works without it |
 | an OpenRouter key | `hermes auth`, or `$HERMES_HOME/.env` | **only** spawning agents |
-| `gh` | `gh auth status` | cloning (the repo is private) and PR columns |
-| the commit-subject hook | `git config core.hooksPath` prints `.githooks` | keeping `wip`-style subjects out of main's history — one install covers every worktree of the clone |
-| the version-bump hook | same `core.hooksPath` check, and `node tools/version.mjs suggest` runs | refusing a push of a branch whose own commits carry no version bump (`docs/versioning.md` is the scale) |
+| `gh` | `gh auth status` | **only** PR columns: the panel runs `gh pr list` for a project that names a `prRepo`. Missing or unauthenticated, the PR column reads none and every other column still works — measured on a box with no `gh` installed at all. Cloning does not need it; the repo is public |
+| the commit-subject hook | in the **clone root**, `git config core.hooksPath` prints `.githooks`; nothing printed means `npm run hooks:install` was never run | keeping `wip`-style subjects out of main's history — one install covers every worktree of the clone |
+| the version-bump hook | the same `core.hooksPath` check, and `node tools/version.mjs suggest` runs | refusing a push of a branch whose own commits carry no version bump (`docs/versioning.md` is the scale). Install it **before** the panel cuts a worktree — see below |
 
 `setup.cmd` (Windows) or `./setup.sh` (macOS/Linux) checks the first three and tells you what is
 missing.
 
+Read the `core.hooksPath` check from the clone root, never from inside a worktree. A worktree the
+panel cut prints an absolute `<common-dir>/wtgui-hooks` — that is the panel's own push guard, which is
+what the worktree is supposed to run, and not evidence that the two hooks are missing. Whether the
+guard still runs the version gate is written beside it: `wtgui-guard.json` records the hooks path the
+guard found (`previousHooksPath`) and `chain` holds the `pre-push` it chains. An empty `chain` means
+that worktree pushes with no version gate — the state of every worktree cut before `hooks:install`
+ran, because the guard can only chain a `pre-push` that existed when it took the hooks path.
+
 ## 2. Clone
 
-    gh repo clone JLRoper/agent-worktree-gui        # private: needs gh auth
-    # or, once public:  git clone https://github.com/JLRoper/agent-worktree-gui.git
+    git clone https://github.com/JLRoper/agent-worktree-gui.git
+    gh repo clone JLRoper/agent-worktree-gui        # only if it is private again: needs gh auth
 
 Then install the hooks once per clone — it is repo config, so one install covers every worktree of the
 clone. Both hooks live under `.githooks/` (the commit-subject one, and the pre-push one that refuses a branch
@@ -68,7 +76,7 @@ Edit `config.json`. Only `scanRoots` normally matters:
 | `scanRoots` | the directory your repos live in. Every git repo directly under it becomes a project. Defaults to the folder the panel sits in. |
 | `port`, `host` | bind address. `127.0.0.1` keeps it local. `0.0.0.0` puts the board on the LAN or tailnet: a remote browser authenticates once by opening `http://<this-machine>:7331/?token=…`, but only writes are gated — reads stay open to anyone who can reach the port, so never expose it to a public network. |
 | `PANEL_TOKEN` (environment, not a key here) | the secret behind `?token=…`. Set it in the environment the panel inherits — `setx PANEL_TOKEN "<43 random chars>"` on Windows, then restart the panel — and keep it out of `config.json`, which is tracked by git. With it unset, writes from other machines are refused. |
-| `projects` | optional per-repo overrides: `remote` name, `mainBranch`, `prRepo` (for PR lookups). |
+| `projects` | optional per-repo overrides: `remote` name, `mainBranch`, `prRepo` (for PR lookups — that column needs `gh` on PATH) |
 | `hermesBin`, `defaultCwd` | optional; auto-detected. |
 
 No `config.json`? The panel starts on defaults and logs that it did, so a bare `node server.js`
@@ -92,8 +100,14 @@ decides whether the tool is *offered*; the gateway **build** decides whether a q
 delivered, and install is not configuration:
 
 ```bash
-node tools/check-gateway-clarify.mjs --probe   # 0 = the route is there, 1 = it is not
+node tools/check-gateway-clarify.mjs --probe   # 0 = route there, 1 = absent, 2 = undecided (see section 5)
 ```
+
+**Current builds ship the route.** Measured on Hermes Agent v0.22.4: `gateway/platforms/api_server_runs.py`
+registers `POST /v1/runs/{run_id}/clarify`, so a current install needs the config line above and no
+patch. The probe cannot confirm that on this box — an auth layer answers `403` to the `OPTIONS` probe
+and to its approval control alike, so it exits `2` and settles nothing (section 5 says how to settle
+it against the source). Older builds are the case the next paragraph covers.
 
 A build without the Runs API clarify route hands the agent the tool and refuses every call with
 `Clarify tool is not available in this execution context.` — the box can never appear, however the
@@ -138,8 +152,13 @@ Then open **http://127.0.0.1:7331**.
    whether the tool is offered, and it is easy to miss because everything else works without it
    (section 6). It is **not** sufficient on its own: the installed build must also carry the Runs API
    clarify route, or the tool is offered and refuses every call. Check that half too —
-   `node tools/check-gateway-clarify.mjs --probe` → exit `0` (the route is there; `1` means the
-   gateway needs a newer build, and the script prints the command).
+   `node tools/check-gateway-clarify.mjs --probe` → exit `0` the route is there, `1` it is absent,
+   `2` undecided. Read the exit code before the verdict line: `2` means something in front of the
+   router answered `403` to both the clarify probe and its approval control, so the probe settled
+   nothing and it is not a verdict against the build. Settle that case against the build itself —
+   the route is a line in the gateway's runs module:
+   `grep -c 'v1/runs/{run_id}/clarify' "$HERMES_HOME/hermes-agent/gateway/platforms/api_server_runs.py"`
+   → nonzero means it is there.
 6. `node tools/merged-branches.mjs` → every local branch, the PR that owns it and a verdict. Read the
    verdicts; never `git branch --merged main`. The ruleset requires linear history, so a merged PR's commits
    are re-created and its branch stays "ahead by N" forever — **"ahead by N" is never a merge signal in this
@@ -170,6 +189,10 @@ Then open **http://127.0.0.1:7331**.
   has no `clarify` tool and its question is only text in the console. Set the line in section 3 and
   restart the gateway. A question already asked in prose cannot be retro-answered — the run has to ask
   again.
+- **The PR column reads `none` for a project that has pull requests** — `gh` is missing or
+  unauthenticated (`gh auth status`), or that project names no `prRepo` in `config.json`. The panel
+  runs `gh pr list --repo <prRepo>` and swallows the failure, so the column goes quiet rather than
+  showing a wrong state. This is the only thing `gh` is for.
 - **A commit landed with a subject like "wip"** — the hook is not installed in this clone: run
   `npm run hooks:install`. A local hook binds this machine and this clone only — this repo has no CI, so
   nothing refuses a bad subject at PR time either — and its own author can bypass it with
