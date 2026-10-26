@@ -143,6 +143,10 @@ const state = {
   outScrolls: {},
   collapsedJobs: loadCollapsedJobs(),
   openDescs: loadOpenDescs(),
+  // Which worktrees' TODO sections the reader unfolded (localStorage, `wm.openTodos`), and the reader's in-flight
+  // add/edit text (module state, never persisted: a half-typed item is not something to bring back a reload later).
+  todoOpen: loadOpenTodos(),
+  todoDraft: null,
   expandedProjects: loadExpandedProjects(),
   collapsedFixed: loadCollapsedFixed(),
   collapsedRoots: loadCollapsedRoots(),
@@ -299,6 +303,25 @@ function loadOpenDescs() {
 function saveOpenDescs() {
   try {
     localStorage.setItem("wm.openDescs", JSON.stringify([...state.openDescs]));
+  } catch {
+    /* no storage: the unfold simply will not survive a reload */
+  }
+}
+
+// Which TODO sections the reader has unfolded, by row key. The section starts FOLDED — that is the whole point of it:
+// collapsed it reads the OLDEST incomplete item and a done/total count, which is the one line worth having on the row
+// without opening anything. Unfolding is remembered (and only unfolding), so a row nobody has opened stays folded.
+function loadOpenTodos() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem("wm.openTodos") || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveOpenTodos() {
+  try {
+    localStorage.setItem("wm.openTodos", JSON.stringify([...state.todoOpen]));
   } catch {
     /* no storage: the unfold simply will not survive a reload */
   }
@@ -9186,6 +9209,177 @@ function descLines(text) {
     .filter(Boolean);
 }
 
+// ---- the worktree's TODO list -----------------------------------------------------------------------------------
+// The section the reader asked for. FOLDED it reads the OLDEST incomplete item — the lowest id whose status is todo or
+// doing — with a done/total count beside it, and deliberately NOT the most recently touched item: finishing out of
+// order is the normal case, so "what is the first thing still open" is the only line worth having without opening
+// anything. UNFOLDED it lists every item with its status glyph, its owner and its age, and offers the four things a
+// reader can do to one — add, edit, complete, drop — plus reopening.
+//
+// The list itself is the server's (lib/todos.js holds it, keyed on the row, and the assistant and every agent in the
+// tree write to it); nothing here derives a status or invents an item.
+const TODO_GLYPH = { todo: "\u25a1", doing: "\u25b6", done: "\u2713", dropped: "\u2298" };
+
+// A duration the way the row's other strips say them: seconds under a minute and a half, then minutes, hours, days.
+function todoAge(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  const s = Math.round(ms / 1000);
+  if (s < 90) return `${s}s`;
+  const m = Math.round(s / 60);
+  if (m < 90) return `${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 48) return `${h}h`;
+  return `${Math.round(h / 24)}d`;
+}
+
+// The oldest incomplete item, from the row's own copy. The SAME rule the server applies (lib/todos.js `oldestOpen`),
+// restated here because the folded line must not need a round trip — and because the harness can drive it directly.
+function todoOldest(todo) {
+  let best = null;
+  for (const item of todo?.items || []) {
+    if (item.status !== "todo" && item.status !== "doing") continue;
+    if (!best || Number(item.id) < Number(best.id)) best = item;
+  }
+  return best;
+}
+
+// One item as one line: its id (the number every agent is told to write), its glyph, its words, and who and how long.
+function todoLine(item) {
+  if (!item) return "";
+  const bits = [String(item.status || "todo")];
+  if (item.owner) bits.push(String(item.owner));
+  const age = todoAge(item.ageMs);
+  if (age) bits.push(age);
+  return `#${item.id} ${TODO_GLYPH[item.status] || "?"} ${item.text} · ${bits.join(" · ")}`;
+}
+
+// The folded line's peek, recomputed from the row's own state — used when the section is folded again in place (the
+// head must go back to the OLDEST item still open, not to whatever was drawn last).
+function todoPeekFor(key) {
+  const todo = state.rows.get(key)?.todo;
+  if (!todo) return "";
+  const oldest = todoOldest(todo);
+  if (oldest) return todoLine(oldest);
+  const done = Number(todo.done) || 0;
+  const total = Number(todo.total) || 0;
+  return `nothing open — ${done}/${total} done${todo.dropped ? `, ${todo.dropped} dropped` : ""}`;
+}
+
+// Repaint ONE row's detail, in place, so a draft swap (the reader opening an input) lands without rebuilding the
+// project. The node is rebuilt from state, so everything else in the row keeps its own remembered fold.
+function repaintTodoBlock(key) {
+  const row = state.rows.get(key);
+  const detail = state.detailEls.get(key) || document.querySelector(`tr.detail[data-detail="${CSS.escape(key)}"]`);
+  if (!row || !detail) return;
+  const holder = document.createElement("div");
+  holder.innerHTML = detailHtml(row);
+  const fresh = holder.firstElementChild;
+  if (!fresh) return;
+  detail.replaceWith(fresh);
+  state.detailEls.set(key, fresh);
+  const input = fresh.querySelector(".todo-edit, .todo-add-input");
+  if (input && typeof input.focus === "function") {
+    input.focus();
+    input.select?.();
+  }
+}
+
+// The reader's own write to a worktree's list. Every op goes through here: it is stamped `by: "reader"` by the route,
+// a refusal comes back WITH its reason (shown as a banner, so a press that did nothing is never silent), and a write
+// that landed re-reads the board so the strip and its counts are the server's own numbers.
+async function todoPost(body) {
+  try {
+    const r = await apiFetch("/api/todos", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || d.ok === false) {
+      showBanner(`TODO: ${d.error || `HTTP ${r.status}`}`);
+      return null;
+    }
+    if (d.message) showNote(d.message);
+    await resync();
+    return d;
+  } catch (err) {
+    showBanner(`TODO: ${err.message}`);
+    return null;
+  }
+}
+
+function todoBlockHtml(row, key) {
+  const todo = row.todo;
+  if (!todo || !(todo.items || []).length) return "";
+  const open = state.todoOpen.has(key);
+  const oldest = todoOldest(todo);
+  const done = Number(todo.done) || 0;
+  const total = Number(todo.total) || (todo.items || []).length;
+  const count = `${done}/${total}`;
+  // The folded line: the count, then the OLDEST item still open. With nothing open it says so rather than showing the
+  // last thing that moved.
+  const peek = oldest
+    ? todoLine(oldest)
+    : `nothing open — ${done}/${total} done${todo.dropped ? `, ${todo.dropped} dropped` : ""}`;
+  const draft = state.todoDraft && state.todoDraft.key === key ? state.todoDraft : null;
+  const itemHtml = (todo.items || [])
+    .map((item) => {
+      const editing = draft && draft.id === item.id;
+      const glyph = TODO_GLYPH[item.status] || "?";
+      const who = [item.owner ? `owner ${item.owner}` : null, item.by ? `by ${item.by}` : null, todoAge(item.ageMs) ? `${todoAge(item.ageMs)} ago` : null]
+        .filter(Boolean)
+        .join(" · ");
+      const note = item.note ? `<span class="todo-note dim">${esc(item.note)}</span>` : "";
+      const files = (item.files || []).length ? `<span class="todo-files dimmer mono">${esc(item.files.join(" "))}</span>` : "";
+      const text = editing
+        ? `<input class="todo-edit" type="text" maxlength="400" data-todo-edit="${item.id}" data-todo-key="${esc(key)}" value="${esc(draft.text)}" aria-label="edit TODO #${item.id}">
+           <button type="button" class="todo-btn on" data-todo-op="edit-save" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="save this item">save</button>
+           <button type="button" class="todo-btn" data-todo-op="edit-cancel" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="leave it as it was">cancel</button>`
+        : `<span class="todo-text">${esc(item.text)}</span>
+           <button type="button" class="todo-btn" data-todo-op="edit-start" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="edit this item (stored as by: reader)">✎</button>`;
+      const actions = editing
+        ? ""
+        : `<button type="button" class="todo-btn" data-todo-op="doing" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="claim it — doing">▶</button>
+           <button type="button" class="todo-btn" data-todo-op="done" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="mark it done">✓</button>
+           <button type="button" class="todo-btn" data-todo-op="drop" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="drop it — it no longer applies">⊘</button>
+           ${item.status === "done" || item.status === "dropped" ? `<button type="button" class="todo-btn" data-todo-op="reopen" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="reopen it — back to todo">↺</button>` : ""}`;
+      return `<li class="todo-item todo-${esc(item.status)}" data-todo-item="${item.id}">
+        <span class="todo-glyph" title="${esc(item.status)}">${glyph}</span>
+        <span class="todo-id mono dimmer">#${item.id}</span>
+        ${text}
+        ${actions}
+        <span class="todo-meta mono dimmer">${esc(who)}</span>
+        ${note}${files}
+      </li>`;
+    })
+    .join("");
+  const journal = (todo.journal || [])
+    .slice(-6)
+    .map((j) => `<li>${esc(`${j.by || "?"} ${j.op || ""}${j.id ? ` #${j.id}` : ""}${j.text ? `: ${j.text}` : ""}`)}</li>`)
+    .join("");
+  const addOpen = Boolean(draft && draft.id === null);
+  const addHtml = `<div class="todo-add">
+      ${
+        addOpen
+          ? `<input class="todo-add-input" type="text" maxlength="400" data-todo-add-input="${esc(key)}" value="${esc(draft.text)}" placeholder="what has to happen" aria-label="add a TODO item">
+             <button type="button" class="todo-btn on" data-todo-op="add-save" data-todo-key="${esc(key)}" title="add it to this worktree's list (stored as by: reader)">add</button>
+             <button type="button" class="todo-btn" data-todo-op="add-cancel" data-todo-key="${esc(key)}" title="cancel">cancel</button>`
+          : `<button type="button" class="todo-btn add" data-todo-op="add-start" data-todo-key="${esc(key)}" title="add an item to this worktree's TODO list">+ add</button>`
+      }
+    </div>`;
+  // The head is a real <button>, so the section is keyboard reachable (Tab to it, Enter or Space to unfold) — the two
+  // strips under it are click-only, and the brief asks for this one to be reachable.
+  return `<div class="todo-block${open ? "" : " collapsed"}" data-todo-block="${esc(key)}">
+    <button type="button" class="todo-head" data-toggle-todo="${esc(key)}" aria-expanded="${open ? "true" : "false"}" title="${open ? "fold" : "unfold"} this worktree's TODO list — folded it reads the OLDEST item still open">
+      <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
+      <span class="todo-title">TODO</span>
+      <span class="todo-count mono" title="${done} done of ${total}">${count}</span>
+      ${open ? "" : `<span class="todo-first mono" title="${esc(peek)}">${esc(peek)}</span>`}
+    </button>
+    <div class="todo-body">
+      <ul class="git-list todo-list">${itemHtml}</ul>
+      ${journal ? `<div class="todo-journal mono dimmer"><span>journal</span><ul>${journal}</ul></div>` : ""}
+      ${addHtml}
+    </div>
+  </div>`;
+}
+
 function detailHtml(row) {
   const dirty = row.dirtyFiles || [];
   const untr = row.untrackedFiles || [];
@@ -9352,6 +9546,7 @@ function detailHtml(row) {
   // while the left was flush. (The delete confirmation row below already spans 10.)
   return `<tr class="detail" data-detail="${esc(key)}"><td colspan="10"><div class="detail-inner">
     ${descBlock}
+    ${todoBlockHtml(row, key)}
     <div class="git-block${gitOpen ? "" : " collapsed"}" data-git-block="${esc(key)}">
       <div class="git-head" data-toggle-git="${esc(key)}" title="${gitOpen ? "fold" : "unfold"} the merge state, commit and diff detail">
         <span class="chev">${gitOpen ? "\u25be" : "\u25b8"}</span>
@@ -11577,6 +11772,85 @@ document.addEventListener("click", async (e) => {
       }
       descToggle.title = `${open ? "unfold" : "fold"} what this branch was started to do`;
     }
+    return;
+  }
+  // The TODO section folds like the strips around it, and its unfold is REMEMBERED (localStorage, `wm.openTodos`) —
+  // the section starts folded, so the remembering is what keeps a reader's opened rows open across a reload. The head
+  // is a <button>, so this also runs on Enter/Space; nothing else in the row is rebuilt.
+  const todoToggle = e.target.closest("[data-toggle-todo]");
+  if (todoToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    const key = todoToggle.dataset.toggleTodo;
+    const block = document.querySelector(`[data-todo-block="${CSS.escape(key)}"]`);
+    if (block) {
+      const open = state.todoOpen.has(key);
+      if (open) state.todoOpen.delete(key);
+      else state.todoOpen.add(key);
+      saveOpenTodos();
+      block.classList.toggle("collapsed", open);
+      const chev = todoToggle.querySelector(".chev");
+      if (chev) chev.textContent = open ? "\u25b8" : "\u25be";
+      todoToggle.setAttribute("aria-expanded", open ? "false" : "true");
+      let first = todoToggle.querySelector(".todo-first");
+      if (open) {
+        // Folded again: the OLDEST item still open goes back on the head line (never the last one that moved).
+        if (!first) {
+          first = document.createElement("span");
+          first.className = "todo-first mono";
+          todoToggle.appendChild(first);
+        }
+        first.textContent = todoPeekFor(key);
+        first.title = first.textContent;
+      } else if (first) {
+        first.remove();
+      }
+      todoToggle.title = `${open ? "unfold" : "fold"} this worktree's TODO list — folded it reads the OLDEST item still open`;
+    }
+    return;
+  }
+  // The reader's own buttons on a TODO item: add, edit, complete, drop, reopen. Every one of them is a POST to
+  // /api/todos stamped `by: "reader"`, and a refusal (an id that is not in the list, empty text) comes back as a
+  // banner rather than as a press that silently did nothing.
+  const todoBtn = e.target.closest("[data-todo-op]");
+  if (todoBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const op = String(todoBtn.dataset.todoOp || "");
+    const key = String(todoBtn.dataset.todoKey || "");
+    const cut = key.indexOf("::");
+    const project = cut < 0 ? key : key.slice(0, cut);
+    const path = cut < 0 ? "" : key.slice(cut + 2);
+    const id = todoBtn.dataset.todoId ? Number(todoBtn.dataset.todoId) : null;
+    const block = document.querySelector(`[data-todo-block="${CSS.escape(key)}"]`);
+    const draftText = () => String(block?.querySelector(".todo-edit, .todo-add-input")?.value ?? "").trim();
+    if (op === "add-start" || op === "edit-start") {
+      const row = state.rows.get(key);
+      const item = op === "edit-start" ? (row?.todo?.items || []).find((i) => Number(i.id) === id) : null;
+      state.todoDraft = { key, id: op === "edit-start" ? id : null, text: item?.text || "" };
+      if (!state.todoOpen.has(key)) {
+        state.todoOpen.add(key);
+        saveOpenTodos();
+      }
+      repaintTodoBlock(key);
+      return;
+    }
+    if (op === "add-cancel" || op === "edit-cancel") {
+      state.todoDraft = null;
+      repaintTodoBlock(key);
+      return;
+    }
+    if (op === "add-save" || op === "edit-save") {
+      const text = draftText();
+      if (!text) {
+        showBanner("a TODO item needs some text");
+        return;
+      }
+      state.todoDraft = null;
+      void todoPost({ project, path, op: op === "add-save" ? "add" : "edit", id: op === "add-save" ? null : id, text });
+      return;
+    }
+    void todoPost({ project, path, op, id });
     return;
   }
   // The git / commit / diff accordion inside a worktree's detail row: fold and unfold in place, so
