@@ -8042,10 +8042,10 @@ function tickAgentScopes(project, now = Date.now()) {
     if (row.project !== project) continue;
     const key = keyOf(row.project, row.path);
     const threads = agentsFor(row).map((c) => c.thread);
-    if (!threads.length) {
-      state.rankOrder.delete(`agents:${key}`);
-      continue;
-    }
+    // A row with no cards right now keeps whatever order it had: the card list is empty for a moment (a repaint, a
+    // resync) far more often than it is really gone, and forgetting the order would make every card climb again
+    // from the bottom. The scope dies with its row, in pruneRankWindows.
+    if (!threads.length) continue;
     tickRankedOrder(`agents:${key}`, threads, agentRankCtx(row, now));
   }
 }
