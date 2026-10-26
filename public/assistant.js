@@ -87,6 +87,9 @@
   state.assistantTab = state.assistantTab || readTab();
   state.assistantSeenAt = state.assistantSeenAt ?? seenAt();
   state.assistantPinned = state.assistantPinned ?? readFlag(PIN_KEY, false);
+  // Maximized is a mode of the float, not a saved position: a reload puts the panel back to the window it
+  // remembered rather than covering the board after a refresh (Esc is the way out, not F5).
+  state.assistantFull = false;
 
   let dragState = null;
 
@@ -95,12 +98,15 @@
   function placeAssistant() {
     const el = as$("assistant");
     if (!el) return;
+    // Maximized, the frame is the viewport: `inset: 0` in CSS owns it, and any remembered rect written here
+    // would fight it.
+    if (state.assistantFull) return;
     const r = state.assistantRect || readRect();
     if (!r) return;
     const maxW = window.innerWidth - 16;
     const maxH = window.innerHeight - 16;
     const w = Math.max(320, Math.min(r.w, maxW));
-    const h = Math.max(220, Math.min(r.h, maxH));
+    const h = Math.max(320, Math.min(r.h, maxH));
     el.style.width = `${w}px`;
     el.style.height = `${h}px`;
     el.style.left = `${Math.max(8, Math.min(r.x, window.innerWidth - w - 8))}px`;
@@ -116,6 +122,76 @@
     return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
   }
 
+  // The chat's scroll box: the card's body, and the only thing in the float that scrolls.
+  function chatBody() {
+    const host = as$("as-chat");
+    return host ? host.querySelector(":scope > .job > .job-body") : null;
+  }
+
+  // A conversation shorter than the panel belongs at the panel's foot, not at its top with the composer
+  // stranded below the fold: the panel opens on the turn the reader just sent, the way the board's maximized
+  // card does. A reader who has scrolled up keeps their place — `chatPinned` follows their scroll, and only a
+  // forced pin (opening the panel, maximizing, switching back to Chat) overrides it.
+  let chatPinned = true;
+  function pinChatToBottom(force = false) {
+    const body = chatBody();
+    if (!body) return;
+    if (!force && !chatPinned) return;
+    const toFoot = () => {
+      body.scrollTop = body.scrollHeight;
+    };
+    toFoot();
+    requestAnimationFrame(toFoot);
+  }
+
+  // Maximize/restore. The reader gets an explicit control instead of the resize grip, which can only grow
+  // the float toward the bottom-right and so cannot make a right-anchored panel fill the window.
+  function paintAssistantMax() {
+    const btn = as$("btn-as-max");
+    const el = as$("assistant");
+    const on = Boolean(state.assistantFull);
+    if (btn) {
+      btn.classList.toggle("is-on", on);
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.textContent = on ? "\u2921" : "\u2922";
+      btn.title = on
+        ? "restore the assistant to a floating window (Esc, or double-click the header)"
+        : "maximize the assistant to the whole window (double-click the header; Esc restores)";
+    }
+    if (el) el.classList.toggle("as-full", on);
+    const close = as$("btn-as-close");
+    if (close) close.title = on ? "close — Esc puts the float back first" : "close (Esc) — it keeps watching while closed";
+  }
+
+  function setAssistantFull(on) {
+    const el = as$("assistant");
+    if (!el) return;
+    const next = Boolean(on);
+    if (next === Boolean(state.assistantFull)) return;
+    if (next) {
+      // Remember the frame to come back to, then hand the geometry to the stylesheet.
+      const r = currentRect();
+      if (r) {
+        state.assistantRect = r;
+        writeRect(r);
+      }
+      state.assistantFull = true;
+      el.style.width = "";
+      el.style.height = "";
+      el.style.left = "";
+      el.style.top = "";
+      el.style.right = "";
+      el.style.bottom = "";
+      paintAssistantMax();
+      pinChatToBottom(true);
+      return;
+    }
+    state.assistantFull = false;
+    paintAssistantMax();
+    placeAssistant();
+    pinChatToBottom(true);
+  }
+
   function toggleAssistant(open = !state.assistantOpen) {
     state.assistantOpen = Boolean(open);
     writeFlag(OPEN_KEY, state.assistantOpen);
@@ -129,6 +205,10 @@
       markSeen();
       renderAssistant();
       paintAssistantBadge();
+      pinChatToBottom(true);
+    } else if (state.assistantFull) {
+      // A closed panel reopens as the float, not as the whole window.
+      setAssistantFull(false);
     }
   }
 
@@ -303,6 +383,9 @@
       p.classList.toggle("hidden", p.dataset.pane !== state.assistantTab);
     }
     renderAssistantChat();
+    // Coming back to Chat lands on the foot, where the composer is — the turns only scroll while the reader
+    // scrolls them.
+    if (state.assistantTab === "chat") pinChatToBottom();
     if (state.assistantTab === "alerts") renderAssistantAlerts();
     else if (state.assistantTab === "watches") renderAssistantWatches();
     else if (state.assistantTab === "messages") renderAssistantMessages();
@@ -364,6 +447,10 @@
     const prevScrolls = captureScrolls(host);
     const held = captureCardSelection();
     const typing = captureTyping(host);
+    // The card body is the float's only scroller, and captureScrolls only knows the consoles: keep its
+    // position too, or a repaint mid-read drops the transcript back to its first turn.
+    const prevTop = chatBody()?.scrollTop ?? 0;
+    const wasPinned = chatPinned;
     const pageY = window.scrollY;
     host.innerHTML = conversationHtml(conv);
     const fresh = host.firstElementChild;
@@ -375,6 +462,11 @@
     restoreTyping(host, typing);
     restoreCardSelection(held);
     settleScrolls(host);
+    if (wasPinned) pinChatToBottom(true);
+    else {
+      const body = chatBody();
+      if (body) body.scrollTop = prevTop;
+    }
     // The panel is fixed, so a rebuild can never move the page — but a focus() inside it can, and this keeps
     // that promise local instead of relying on every callee remembering preventScroll.
     if (window.scrollY !== pageY) window.scrollTo({ top: pageY });
@@ -1079,6 +1171,9 @@
     const b = e.target.closest("[data-as-tab]");
     if (!b) return;
     state.assistantTab = b.dataset.asTab;
+    // Coming back to Chat is a jump to the newest turn: the reader left the transcript to look at an alert,
+    // and returning them to a scroll position that is no longer where the conversation is helps nobody.
+    if (state.assistantTab === "chat") chatPinned = true;
     try {
       localStorage.setItem(TAB_KEY, state.assistantTab);
     } catch {
@@ -1428,6 +1523,7 @@
 
     const onDown = (mode) => (e) => {
       if (e.button !== 0) return;
+      if (state.assistantFull) return; // maximized, the frame is the viewport: Esc or a double-click restores
       if (mode === "move" && e.target.closest("button,input,select,textarea")) return;
       const r = el.getBoundingClientRect();
       dragState = { mode, px: e.clientX, py: e.clientY, x: r.left, y: r.top, w: r.width, h: r.height };
@@ -1441,9 +1537,11 @@
       const dx = e.clientX - d.px;
       const dy = e.clientY - d.py;
       if (d.mode === "move") {
-        const maxX = window.innerWidth - 80;
-        const maxY = window.innerHeight - 40;
-        const x = Math.max(8 - d.w + 120, Math.min(d.x + dx, maxX));
+        // Keep the whole float inside the window. The old clamp allowed `8 - width + 120`, which let the left
+        // edge sit ~160px off-screen — the tabs and the first characters of every transcript row went with it.
+        const maxX = Math.max(8, window.innerWidth - Math.min(d.w, window.innerWidth - 16) - 8);
+        const maxY = Math.max(8, window.innerHeight - Math.min(d.h, window.innerHeight - 16) - 8);
+        const x = Math.max(8, Math.min(d.x + dx, maxX));
         const y = Math.max(8, Math.min(d.y + dy, maxY));
         el.style.left = `${x}px`;
         el.style.top = `${y}px`;
@@ -1452,7 +1550,7 @@
         return;
       }
       const w = Math.max(340, Math.min(d.w + dx, window.innerWidth - d.x - 8));
-      const h = Math.max(260, Math.min(d.h + dy, window.innerHeight - d.y - 8));
+      const h = Math.max(320, Math.min(d.h + dy, window.innerHeight - d.y - 8));
       el.style.width = `${w}px`;
       el.style.height = `${h}px`;
     };
@@ -1473,12 +1571,38 @@
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
+
+    // Double-click the header: the gesture the reader already makes on a window's title bar. Buttons in the
+    // head (pin / maximize / close) keep their own clicks.
+    head.addEventListener("dblclick", (e) => {
+      if (e.target.closest("button,input,select,textarea")) return;
+      e.preventDefault();
+      setAssistantFull(!state.assistantFull);
+    });
+
+    const maxBtn = as$("btn-as-max");
+    if (maxBtn) maxBtn.addEventListener("click", () => setAssistantFull(!state.assistantFull));
   })();
+
+  // Which way the chat is being read: the reader's own scroll decides whether a repaint lands on the newest
+  // turn or holds their place. Ours (pinChatToBottom) lands at the bottom, which is what "pinned" means.
+  document.addEventListener(
+    "scroll",
+    (e) => {
+      const body = e.target;
+      if (!body?.matches?.("#as-chat > .job > .job-body")) return;
+      chatPinned = body.scrollTop + body.clientHeight >= body.scrollHeight - 8;
+    },
+    true,
+  );
 
   // Keep the panel on screen when the window shrinks: a remembered position from a 4K screen must not open
   // half outside a laptop screen.
   window.addEventListener("resize", () => {
     if (!state.assistantOpen) return;
+    // Maximized, the frame follows the viewport through CSS — writing the measured rect here would overwrite
+    // the window the reader comes back to with the fullscreen size.
+    if (state.assistantFull) return;
     placeAssistant();
     const r = currentRect();
     if (r) {
@@ -1521,8 +1645,15 @@
     if (e.key !== "Escape") return;
     const el = as$("assistant");
     if (!el || el.hidden) return;
-    // Esc closes the float only when the caret is in it: a reader dismissing something on the board, or a
-    // model popup, must not lose the panel.
+    // Maximized, Esc puts the float back — wherever the caret is, since the panel is the whole window and the
+    // reader is almost always typing in its composer.
+    if (state.assistantFull) {
+      e.preventDefault();
+      setAssistantFull(false);
+      return;
+    }
+    // Otherwise Esc closes the float only when the caret is in it: a reader dismissing something on the
+    // board, or a model popup, must not lose the panel.
     if (document.activeElement && el.contains(document.activeElement)) {
       e.preventDefault();
       toggleAssistant(false);
@@ -1540,6 +1671,7 @@
     as$("btn-assistant")?.classList.toggle("is-on", state.assistantOpen);
     placeAssistant();
     paintAssistantPin();
+    paintAssistantMax();
     paintAssistantBadge();
     paintAggressive();
     if (state.assistantOpen) renderAssistant();

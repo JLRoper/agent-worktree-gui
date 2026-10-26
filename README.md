@@ -562,8 +562,11 @@ for the approval window — agent processes are not spawned from here any more.
 
 **✧ Assistant** in the header opens a floating panel that can be dragged, resized and closed (position and
 size are remembered; `Ctrl+Shift+A` toggles it, `Esc` closes it when the caret is in it). It is a window, not a
-strip of content: drag it larger and the card fills it — the turns take the new room, the open turn's console grows
-with it, and the composer stays at the foot. Only the turns scroll. It is two things:
+strip of content: `⤢` in its header maximizes it to the whole window, `⤡` puts the float back, double-clicking the
+header toggles the two and `Esc` restores the float from fullscreen. Both shapes lay out the same way — header, tabs
+and the card's own head are fixed rows, the transcript is the only scroller, and the composer is pinned at the foot,
+so the box you type in is on screen at any panel height with the last message directly above it. A conversation
+shorter than the panel starts at its foot instead of leaving empty panel under its last turn. It is two things:
 
 - **A sentry** that runs in the panel's own process, on `settings.seconds` (default 5 s), over the same job
   summaries the cards are drawn from. It costs no tokens and it is always awake. Thirteen rules:

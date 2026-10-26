@@ -31,13 +31,14 @@
        dragged, resized and closed. It is deliberately not modal — the reader keeps reading the board while
        it is open, and its alerts are a badge and a list, never a window that steals the caret. -->
   <aside id="assistant" class="assistant" hidden aria-label="assistant">
-    <div class="as-head" id="as-drag" title="drag to move">
+    <div class="as-head" id="as-drag" title="drag to move — double-click to maximize, double-click again (or Esc) to restore">
       <span class="as-glyph">✧</span>
       <strong>Assistant</strong>
       <span class="as-mode mono" id="as-mode">draft-only</span>
       <span class="spacer"></span>
       <span class="chips" id="as-chips"></span>
       <button id="btn-as-pin" type="button" class="as-pin" aria-pressed="false" title="pin the assistant open — while it is pinned a click elsewhere on the board leaves it up; unpinned, that click closes it like the ✕">📌</button>
+      <button id="btn-as-max" type="button" class="as-max" aria-pressed="false" title="maximize the assistant to the whole window (double-click the header; Esc restores)">⤢</button>
       <button id="btn-as-close" type="button" title="close (Esc) — it keeps watching while closed">✕</button>
     </div>
     <div class="as-tabs" id="as-tabs">

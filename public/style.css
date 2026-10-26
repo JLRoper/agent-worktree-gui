@@ -2331,13 +2331,29 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 
 .assistant {
   position: fixed; right: 16px; top: 74px; z-index: 90;
-  width: 480px; height: min(72vh, 780px); min-width: 340px; min-height: 260px;
+  /* The floor is the height the shell needs: head + tabs + card head + composer. Below that the composer
+     could not be on screen at all, and a chat whose box you cannot reach is not a smaller version of this one. */
+  width: 480px; height: min(72vh, 780px); min-width: 340px; min-height: 320px;
   max-width: calc(100vw - 24px); max-height: calc(100vh - 90px);
   display: flex; flex-direction: column;
   background: var(--panel); border: 1px solid #33415a; border-radius: 10px;
   box-shadow: 0 18px 48px #000b; overflow: hidden;
 }
 .assistant[hidden] { display: none; }
+/* Maximized: the float IS the window. `inset: 0` with auto width/height overrides the remembered rect (the JS
+   clears its inline size on the way in and puts it back on the way out), the panel covers the board's topbar
+   so nothing of its head or tabs can be shaved by the page chrome, and with no border radius the shell is the
+   viewport edge. Above the topbar (10) and the Settings panel (120), below nothing. */
+.assistant.as-full {
+  inset: 0;
+  width: auto; height: auto; max-width: none; max-height: none;
+  border: 0; border-radius: 0; box-shadow: none; z-index: 200;
+}
+.assistant.as-full .as-head { cursor: default; }
+.assistant.as-full .as-resize { display: none; }
+/* The shell rows never share the panel's height with the transcript: they keep their natural height and the
+   body takes what is left, at every panel size. */
+.assistant .as-head, .assistant .as-tabs { flex: none; }
 .as-head {
   display: flex; align-items: center; gap: 8px; padding: 7px 10px;
   background: linear-gradient(180deg, #1a2230, #141a23);
@@ -2357,6 +2373,12 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 #btn-as-pin { border: 1px solid transparent; background: none; color: var(--dim); font-size: 12px; line-height: 1; cursor: pointer; padding: 1px 4px; border-radius: 5px; filter: grayscale(1); opacity: .7; }
 #btn-as-pin:hover { color: var(--text); filter: none; opacity: 1; }
 #btn-as-pin.is-on { color: #c8a6ff; border-color: #55407a; background: #2a2044; filter: none; opacity: 1; }
+/* Maximize sits between the pin and the ✕, the same size and the same quiet colour: `⤢` to fill the window,
+   `⤡` to put the float back. It is the explicit control the resize grip never was — the grip can only grow the
+   float toward the bottom-right corner, so a right-anchored panel tops out ~480px wide on a 1920 screen. */
+#btn-as-max { border: 1px solid transparent; background: none; color: var(--dim); font: 13px/1 var(--ui); cursor: pointer; padding: 1px 5px; border-radius: 5px; }
+#btn-as-max:hover { color: var(--text); border-color: var(--line); }
+#btn-as-max.is-on { color: #8fb8ff; border-color: #2b3b52; background: #1b2432; }
 .assistant.is-pinned { border-color: #55407a; }
 .as-head .chips { display: flex; gap: 5px; }
 
@@ -2489,27 +2511,33 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-qcheck input { margin: 0; accent-color: #a78bfa; }
 .as-qcheck.on { border-color: #a78bfa; background: #241f38; }
 
-/* The float is a window, not a strip of content: when it is resized the card fills it, the open turn takes
-   the new room, the console grows with it, and the composer stays at the foot. Scoped to #as-chat — the board
-   keeps its natural card height, and Alerts/Watches/Pad/Settings keep scrolling as before. */
+/* The float is a window, not a strip of content: head, tabs and the card's own head are fixed rows, the
+   transcript is the only scroller, and the composer sits at the foot of the panel at every size. Scoped to
+   #as-chat — the board keeps its natural card height, and Alerts/Watches/Pad/Settings keep scrolling as before. */
 .as-body:has(#as-chat:not(.hidden)) { display: flex; flex-direction: column; overflow: hidden; }
 #as-chat.as-pane:not(.hidden) { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 #as-chat > .job { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 #as-chat > .job > .job-head { flex: none; }
-/* The usage strip and the composer are INSIDE .job-body (which is the scroller), not siblings of it: pin
-   them to the bottom of the scrollport so the box you type in cannot scroll away with the turns. */
-#as-chat > .job > .job-body > .job-foot,
-#as-chat > .job > .job-body > .reply { position: sticky; bottom: 0; background: var(--panel); }
-#as-chat > .job > .job-body > .job-foot { z-index: 1; }
-#as-chat > .job > .job-body > .reply { z-index: 2; box-shadow: 0 -10px 14px -8px #000c; }
 #as-chat > .job > .job-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
-/* Grow into spare room, never shrink: a turn shorter than its content would clip the console, so the body
-   scrolls instead. `flex: 1 0 auto` is the whole difference between "the window got taller" and "the
-   conversation got shorter". */
-#as-chat > .job > .job-body > .turn:not(.folded) { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 0; }
+/* A spacer before the turns, so a conversation shorter than the panel starts at its foot instead of leaving
+   dead panel under the last line. It is a flex item with no content: it takes exactly the free room, and 0
+   when the transcript overflows (shrink 0, basis 0), so a tall conversation still scrolls from its first
+   line and nothing above it becomes unreachable. */
+#as-chat > .job > .job-body::before { content: ""; flex: 1 0 auto; }
+/* The composer is the last thing in the scrollport and is pinned there: while the conversation is longer
+   than the panel it stays on the scrollport's foot, and the spacer above puts it there when it is shorter.
+   Opaque and above the turns it covers — the box you type in must never be scrollable away. */
+#as-chat > .job > .job-body > .reply { position: sticky; bottom: 0; z-index: 2; flex: none; background: var(--panel); box-shadow: 0 -10px 14px -8px #000c; }
+/* The usage strip stays in flow just above the composer: two items both pinned to `bottom: 0` overlay each
+   other, which is how the stats line was drawn underneath the reply box. */
+#as-chat > .job > .job-body > .job-foot { position: static; flex: none; }
+/* Natural height, never grow: a turn that grows into spare room leaves a blank console under the last line
+   (the "empty panel below the transcript" report). It must not shrink either, or a scrolling body squeezes
+   the console below its content — `flex: 0 0 auto` is both halves of that. */
+#as-chat > .job > .job-body > .turn:not(.folded) { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 0; }
 #as-chat > .job > .job-body > .turn.folded { flex: 0 0 auto; }
-#as-chat > .job > .job-body > .turn:not(.folded) .out-wrap { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 34px; }
-#as-chat > .job > .job-body > .turn:not(.folded) .job-out { max-height: none; flex: 1; min-height: 0; }
+#as-chat > .job > .job-body > .turn:not(.folded) .out-wrap { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 34px; }
+#as-chat > .job > .job-body > .turn:not(.folded) .job-out { max-height: none; flex: 0 0 auto; min-height: 0; }
 #as-chat > .job .reply-box { min-height: 79px; }
 
 /* Which rules the assistant wrote for itself. The reader's rules are their own answers; these are proposals,
