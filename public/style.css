@@ -2302,7 +2302,49 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
   font: 700 10.5px/17px var(--ui); text-align: center;
 }
 #assistant-badge[hidden] { display: none; }
+/* A spawn card is not another alert: it is a worker that has NOT started, waiting on the reader's click. It
+   gets its own count beside the alert count, in the violet every spawn card already wears, and it pulses once
+   the card is past the two-minute mark — the number alone was what the reader read as "the agents failed". */
+.as-spawn-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 5px; margin-left: 3px;
+  border-radius: 9px; background: var(--violet); color: #1a1226;
+  font: 700 10.5px/17px var(--ui); text-align: center; letter-spacing: .02em;
+}
+.as-spawn-badge[hidden] { display: none; }
+.as-spawn-badge.is-late { background: var(--amber); color: #2a1c0c; box-shadow: 0 0 0 1px #ffb36b55; }
 .btn-assistant.is-hot { border-color: #8fb8ff; color: #dbebff; box-shadow: 0 0 0 1px #8fb8ff33; }
+
+/* ---- the spawn strip: the board's top line while a card is waiting ---------------------------------
+   A spawn card exists only as an alert, so the board itself used to show nothing at all for it. This strip is
+   the board's own answer: one row per waiting card, a Start button per row, and the oldest waiting first. It
+   is deliberately not a second Alerts list — the button is here, and "Discard" stays in the float. */
+.spawn-strip {
+  border: 1px solid #4a3a6e; border-left: 3px solid var(--violet);
+  border-radius: 10px; background: linear-gradient(180deg, #1d1729, var(--panel));
+  margin-bottom: 18px; padding: 9px 12px;
+}
+.spawn-strip[hidden] { display: none; }
+.spawn-strip-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.spawn-strip-title { font-size: 12.5px; font-weight: 700; color: #ecd9ff; }
+.spawn-strip-title .as-spawn-badge { margin-left: 4px; vertical-align: 1px; }
+.spawn-strip-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 7px; }
+.spawn-strip-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--card);
+}
+.spawn-strip-row.is-late { border-color: #6b4a1f; background: linear-gradient(180deg, #241d12, var(--card)); }
+.spawn-strip-what { font-size: 12px; color: var(--text); }
+.spawn-strip-prompt {
+  font-family: var(--mono); font-size: 11px; color: var(--dim);
+  flex: 1 1 220px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.spawn-strip-age { font-family: var(--mono); font-size: 10.5px; color: var(--dimmer); }
+.spawn-strip-row.is-late .spawn-strip-age { color: var(--amber); }
+.spawn-strip-note { font-size: 10.5px; color: var(--dimmer); }
+/* A refusal from the Spawn route lands on its own row (a dirty tree, an unknown project, the gateway down):
+   red, on its own line, with the card still there to retry. */
+.spawn-strip-err { flex: 1 1 100%; font-size: 11px; color: var(--red); }
+.spawn-strip .spacer { flex: 1; }
 
 /* Aggressive mode: the header's second assistant button. It reads as a switch, not a link — the pill beside
    the label says which way it is thrown, so the state is legible without colour alone. */
@@ -2369,6 +2411,9 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-tabs button.is-on { color: var(--text); background: var(--panel); border-color: var(--line); }
 .as-n { font-family: var(--mono); font-size: 10px; color: var(--dimmer); margin-left: 2px; }
 .as-tabs button.is-on .as-n { color: var(--text); }
+/* The Alerts tab's second count: how many of those are spawn cards waiting for a click. */
+.as-n.is-spawn { color: var(--violet); }
+.as-n.is-spawn[hidden] { display: none; }
 
 .as-body { flex: 1; overflow: auto; min-height: 0; }
 .as-pane { padding: 8px; }
@@ -2401,6 +2446,16 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-alert.is-info { border-left-color: var(--blue); }
 /* A spawn card is the only alert whose button changes the repository, so it does not look like a notice. */
 .as-alert.is-spawn { border-left-color: var(--violet); background: linear-gradient(180deg, #1c1828, var(--card)); }
+/* The card a strip press jumped to: a short ring, then back to the card's own colour. */
+.as-alert.is-flash { box-shadow: 0 0 0 2px var(--violet); }
+/* Group headings inside the pane. Spawn cards are drawn first, under their own heading, because an unclicked
+   card is a worker that has not started rather than another finding to read. */
+.as-group-head {
+  display: flex; align-items: baseline; gap: 6px; margin: 2px 0 7px;
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer);
+}
+.as-group-head.is-spawn { color: #ecd9ff; }
+.as-group-head .as-gap { flex: 1; }
 .as-alert-head { display: flex; align-items: center; gap: 7px; font-size: 10.5px; }
 .as-rule { font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em; color: #8fb8ff; }
 .as-rule.is-warn { color: var(--amber); }

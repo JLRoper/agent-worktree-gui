@@ -566,7 +566,7 @@ strip of content: drag it larger and the card fills it — the turns take the ne
 with it, and the composer stays at the foot. Only the turns scroll. It is two things:
 
 - **A sentry** that runs in the panel's own process, on `settings.seconds` (default 5 s), over the same job
-  summaries the cards are drawn from. It costs no tokens and it is always awake. Thirteen rules:
+  summaries the cards are drawn from. It costs no tokens and it is always awake. Fifteen rules:
   `loop` (the same tool with the same input N times, read-only helpers held to a higher bar), `errorloop`
   (identical failing output), `quiet` (a running turn with no new output — a long build looks exactly like
   this, so it only journals by default), `approval` (parked longer than the threshold), `question` (a turn
@@ -586,7 +586,11 @@ with it, and the composer stays at the foot. Only the turns scroll. It is two th
   a turn stopped without finishing, usually a panel restart; an interrupted turn a later turn has taken over is
   history and does not fire. It alerts rather than wakes by default, because one restart rewrites every running
   turn as interrupted at once and would spend the whole hourly wake budget in a single pass; raise it per rule
-  under **Settings → Per-rule escalation** when a cut-off turn is worth the assistant's opinion). Every alert
+  under **Settings → Per-rule escalation** when a cut-off turn is worth the assistant's opinion), plus
+  `spawnidle` (a spawn card has waited two minutes for a click — nothing has started, and the alert names the
+  turn and the prompt) and `spawnlost` (a turn wrote a SPAWN line and neither a worker nor a card exists for it
+  two minutes later — the charter's unexplained failure, now a journal line with the line's own words). Both
+  ship at `alert`; raise either in Settings when a lost line is worth a wake. Every alert
   carries the evidence it was built from — counts,
   the repeated call, the failing line, the command being waited on — because "it looks stuck" is not
   actionable.
@@ -700,6 +704,27 @@ then the run. The worker gets the gateway default model (the assistant's small m
 work), the card is tagged `↳ started by the assistant`, and the new thread is put on the watchlist automatically
 so "spawned" later reads as "and here is how it ended".
 
+**An unclicked card is a worker that has not started, and it used to be invisible.** A spawn card exists only as
+an alert: no job, no row, no card, so the board drew nothing for it and the only sign was a number on the header
+badge — inside an 80-deep Alerts list. Four cards created in one evening (19:54, 19:57, 19:58, 20:00) all sat
+`open` while the reader concluded the agents had failed to spawn. So all three surfaces now say it:
+
+- a **spawn strip** at the top of the board (`#spawn-strip`, above **New agent**): `N spawn cards waiting`, one
+  row per card oldest-first, each with the prompt it would run, how long it has waited, a **Create worktree &
+  start** button and **Open card** — the same POST the float's card makes, and nothing starts by itself;
+- the header's badge gains a **separate spawn count** (`4 spawn`, amber and pulsing once the oldest card is past
+  two minutes) beside the total-alert count, and the Alerts tab shows both counts;
+- the float's Alerts tab draws **spawn cards first**, under their own heading, oldest waiting first.
+
+Both halves are watched on a two-minute clock (`SPAWN_WATCH_MS`, `checkSpawns` in `lib/assistant.js`): a card
+still open after it raises `spawnidle` — *"spawn card unclicked for 2m"*, naming the turn and the prompt — and a
+turn's SPAWN line that produced no job and no card raises `spawnlost`. The debt is recorded **before** the line is
+carried out and written to `assistant.json` at once (`spawnIntents`), so a restart mid-harvest cannot lose it; the
+sentry also re-reads the prose of the assistant's own finished turns for a SPAWN line the harvest never saw (the
+stream can deliver the last paragraph after the turn is marked harvested), and a line the debt list already shows
+as settled is never reported twice. The digest handed to the assistant every turn carries the waiting cards and the
+lost lines outright, so it cannot read an empty board as "queued".
+
 The assistant acts by writing plain lines in a reply, and every such line in it is read — wherever it sits among the paragraphs, not only the one the reply ends on:
 
     TO <thread>: the reply to that worker
@@ -769,7 +794,8 @@ with the line and the reason (`spawn-failed`, `send-failed`, `watch-failed`, `ru
 
 **The scratchpad** is one JSON file beside the job store (`assistantFile`, default
 `logs/assistant.json`): `settings`, `notes` (freeform, read every turn), `rules` (standing answers),
-`watches`, persisted `alerts` (so a restart does not shout twice) and a capped `journal`. It is written
+`watches`, persisted `alerts` (so a restart does not shout twice), the spawn debt (`spawnIntents` — every SPAWN
+line and whether it became a card, a job or nothing) and a capped `journal`. It is written
 through a temp file + rename, and a second panel instance with its own `jobsFile` keeps its own.
 The panel's **Scratchpad** tab edits the notes and rules; **Watches** adds and removes watches; **Alerts**
 dismisses one, hands it to the assistant, or opens the agent. A watch with a deadline carries a live countdown
