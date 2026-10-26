@@ -364,9 +364,26 @@ for (const f of [cfgNew, cfgOld]) ok(`the config ${path.basename(path.dirname(f)
 // A DETACHED WORKTREE of the pre-change commit, cut beside the sandbox rather than inside the repo's own .worktrees/ so
 // the live board cannot grow a row for it, and removed in the finally below. It runs that commit's own server.js, lib/
 // and public/ — the pill markup and the ink it draws are main's, not a copy this script reconstructed.
-const beforeSha = process.env.PANEL_BEFORE_SHA || git(ROOT, ["rev-parse", "HEAD~1"]).out;
-const baseApp = git(ROOT, ["show", `${beforeSha}:public/app.js`]);
-ok(`a pre-change build was found (${beforeSha.slice(0, 8)})`, baseApp.ok && !baseApp.out.includes("pill-complete"), baseApp.ok ? "its public/app.js carries no pill-complete" : baseApp.err);
+// HEAD~1 is NOT good enough once a branch has merged main into itself: the merge commit's first parent is the branch's own
+// commit, which carries the change. So walk back from HEAD until a commit's public/app.js really has no chip in it — the
+// first commit on this history that predates the change. PANEL_BEFORE_SHA overrides it (a reviewer pointing at a release).
+const baseFind = (() => {
+  if (process.env.PANEL_BEFORE_SHA) {
+    const sha = process.env.PANEL_BEFORE_SHA;
+    const app = git(ROOT, ["show", `${sha}:public/app.js`]);
+    return app.ok && !app.out.includes("pill-complete") ? { sha, app } : { sha, app, refused: true };
+  }
+  const revs = git(ROOT, ["rev-list", "--first-parent", "-40", "HEAD"]);
+  for (const sha of String(revs.out || "").split("\n").map((s) => s.trim()).filter(Boolean)) {
+    const app = git(ROOT, ["show", `${sha}:public/app.js`]);
+    if (app.ok && !app.out.includes("pill-complete")) return { sha, app };
+  }
+  return { sha: "", app: { ok: false, out: "", err: "no commit on this branch predates the chip" } };
+})();
+const beforeSha = baseFind.sha;
+const baseApp = baseFind.app;
+ok(`a pre-change build was found (${(beforeSha || "none").slice(0, 8)})`, baseApp.ok && !String(baseApp.out).includes("pill-complete"), baseApp.ok ? "its public/app.js carries no pill-complete" : baseApp.err);
+if (!beforeSha) throw new Error("no pre-change commit to compare against — set PANEL_BEFORE_SHA");
 const cut = git(ROOT, ["worktree", "add", "--detach", oldRoot, beforeSha]);
 ok(`the pre-change build was cut as a worktree of this repo at ${beforeSha.slice(0, 8)}`, cut.ok && git(oldRoot, ["rev-parse", "HEAD"]).out === beforeSha, cut.ok ? git(oldRoot, ["rev-parse", "HEAD"]).out.slice(0, 8) : cut.err);
 ok("...carrying that commit's own server.js, lib/ and public/ (not this checkout's)", readFileSync(path.join(oldRoot, "server.js"), "utf8").length > 1000 && !readFileSync(path.join(oldRoot, "public", "app.js"), "utf8").includes("pill-complete") && !readFileSync(path.join(oldRoot, "lib", "assistant.js"), "utf8").includes("askAboutComplete"));
