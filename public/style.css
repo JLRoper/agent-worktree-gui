@@ -2198,6 +2198,31 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 #assistant-badge[hidden] { display: none; }
 .btn-assistant.is-hot { border-color: #8fb8ff; color: #dbebff; box-shadow: 0 0 0 1px #8fb8ff33; }
 
+/* Aggressive mode: the header's second assistant button. It reads as a switch, not a link — the pill beside
+   the label says which way it is thrown, so the state is legible without colour alone. */
+.btn-aggressive { display: inline-flex; align-items: center; gap: 6px; }
+.btn-aggressive #aggressive-state {
+  display: inline-block; min-width: 22px; padding: 0 5px;
+  border: 1px solid currentColor; border-radius: 9px; opacity: .65;
+  font: 700 9.5px/13px var(--ui); text-align: center; text-transform: uppercase; letter-spacing: .04em;
+}
+.btn-aggressive.is-on { border-color: #ffb36b; color: #ffe4c7; box-shadow: 0 0 0 1px #ffb36b55; }
+.btn-aggressive.is-on #aggressive-state { opacity: 1; background: #ffb36b; border-color: #ffb36b; color: #2a1c0c; }
+
+/* The settings a running aggressive mode holds. Greyed, with the reason on the label, so the reader can tell a
+   disabled knob from a knob they set themselves — and the note at the top of the tab says where to switch it off. */
+.as-held { border-color: #ffb36b55; }
+.as-held h4 { color: #ffb36b; }
+.as-held-label { opacity: .55; }
+.as-held-label::after { content: " (held)"; font-style: italic; opacity: .8; }
+#aggressive-msg {
+  position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+  z-index: 120; max-width: min(560px, 90vw); padding: 6px 12px; border-radius: 8px;
+  background: #2a2f3a; border: 1px solid #ffb36b66; color: #ffe4c7;
+  font: 12px/1.4 var(--ui); box-shadow: 0 6px 20px #0006;
+}
+#aggressive-msg[hidden] { display: none; }
+
 .assistant {
   position: fixed; right: 16px; top: 74px; z-index: 90;
   width: 480px; height: min(72vh, 780px); min-width: 340px; min-height: 260px;
