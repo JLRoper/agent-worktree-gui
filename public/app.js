@@ -3319,11 +3319,17 @@ function conversationHtml(conv) {
   // its console names the tree the work is in and the PR. It is drawn only while the run MAY still exist — once the
   // gateway has said it has no record of this run (runGone), there is nothing left to ask, and the settled wording
   // stands alone.
+  // The pill the reader already knows, for a card this panel has no line to. It still reads "not-running" — that is
+  // the state, and the press is the same press: pick this up. What differs is behind the click. This one asks the
+  // gateway about the run it lost BEFORE starting anything: still live -> the card re-attaches to that run and
+  // steers it again; ended -> the run's own result is adopted; forgotten -> the card settles honestly and the thread
+  // is continued, which is the pick-up that was asked for. It is only drawn while the run may still exist; once the
+  // gateway has said it has no record of it (runGone) there is nothing left to ask, and the ordinary pill stands.
   const runMayStillExist = latest.status === "interrupted" && Boolean(latest.runId) && !latest.runGone;
   const detachedChip = runMayStillExist
-    ? `<button type="button" class="pill pill-notrunnable pill-reattach" data-reattach-job="${esc(latest.id || thread)}" title="${esc(
-        `this card is not runnable here: the panel lost the stream while run ${latest.runId} may still be going in the gateway — click to ask it. Still live: the card re-attaches to that run and can steer it again. Ended: the run's result is adopted. Forgotten: the card settles as interrupted and names the worktree and PR.`,
-      )}">NOT-RUNNABLE<span class="pill-again" aria-hidden="true">\u21bb</span></button>`
+    ? `<button type="button" class="pill pill-notrunning pill-reattach" data-reattach-job="${esc(latest.id || thread)}" title="${esc(
+        `not running: this panel lost its line to run ${latest.runId}, which may still be going in the gateway — click to pick this up. Still live: the card re-attaches to that run and can steer it again. Ended: the run's result is adopted. Forgotten: the card settles as interrupted and this thread is continued.`,
+      )}">not-running<span class="pill-again" aria-hidden="true">\u21bb</span></button>`
     : "";
   const hotFlash = state.hotFlash.thread === thread && Date.now() < state.hotFlash.until;
   return `<div class="job${collapsed ? " collapsed" : ""}${maximized ? " maximized" : ""}${jumped}${hotFlash ? " hot-flash" : ""}" data-thread="${esc(thread)}" data-id="${esc(thread)}" data-sig="${esc(conversationSignature(conv))}"${sizeVars ? ` style="${sizeVars}"` : ""}>
@@ -3936,16 +3942,21 @@ async function reattachCard(btn) {
       showBanner(out.error || `could not ask the gateway about that run (HTTP ${res.status})`);
       return;
     }
+    // Forgotten: the card is settled, and there is nothing here left to watch — so the press finishes what it
+    // promised. The thread is continued on the spot, exactly as the same pill does on every other stopped card, and
+    // the settled card keeps the tree and the PR on its console for whatever the agent cannot remember.
+    if (out.action === "gone") {
+      showNote(`the gateway has no record of run ${out.runId} — the card is settled, and this agent is being picked up`);
+      const thread = btn.closest(".job")?.dataset.thread || "";
+      if (thread) await continueThread(thread, null);
+      return;
+    }
     showNote(
       out.action === "reattached"
         ? `the gateway still has run ${out.runId} — this card is re-attached to it and can steer it again`
         : out.action === "adopted"
           ? `the gateway had already finished run ${out.runId} — its result is on the card`
-          : out.action === "gone"
-            ? out.already
-              ? `the gateway has no record of run ${out.runId} — the card already says so`
-              : `the gateway has no record of run ${out.runId} — the card settled as interrupted, with the worktree and PR named`
-            : `asked the gateway about run ${out.runId || "this turn"}`,
+          : `asked the gateway about run ${out.runId || "this turn"}`,
     );
   } catch (e) {
     showBanner(`could not ask the gateway about that run — ${String((e && e.message) || e)}`);

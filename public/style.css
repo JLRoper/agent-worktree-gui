@@ -731,20 +731,18 @@ button.pill-continue:disabled { cursor: progress; }
 /* While the nudge is being sent the glyph turns: "starting" without pretending to a status the panel does not know. */
 button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s linear infinite; }
 @keyframes pill-again-spin { to { transform: rotate(360deg); } }
-/* The NOT-RUNNABLE chip. A card whose stream this panel lost, and whose run the gateway may still have, cannot be
-   continued here: the not-running pill would start a SECOND turn while the first may be going. So the pill becomes a
-   statement the reader can press — dim and dashed like the interrupted status it belongs to, with the same refresh
-   glyph on its right (the only part that says "this reacts to a click"). Pressing it asks the gateway about that one
-   run: still live, the card re-attaches and steers again; ended, its result is adopted; forgotten, the card settles
-   as interrupted and names the worktree and PR. */
-.pill.pill-notrunnable { color: var(--dim); border-color: #3a3f49; border-style: dashed; background: #20242c; }
+/* The re-attach pill is the not-running pill: same word, same amber, same refresh glyph, same place on the card.
+   The reader is not asked to learn a second control for a card that is not running, and the state is the same one
+   the word already names. Only the CLICK differs, which is what this hook class carries: it asks the gateway about
+   the run this panel lost before it starts anything (still live -> the card re-attaches; ended -> the result is
+   adopted; forgotten -> the card settles and the thread is continued). */
 button.pill-reattach {
   flex: none; align-self: center;
   display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--ui); line-height: 1.5; cursor: pointer; vertical-align: middle;
 }
 button.pill-reattach .pill-again { font-size: 12px; line-height: 1; opacity: .8; }
-button.pill-reattach:hover { border-color: #6b7b8f; background: #262b33; }
+button.pill-reattach:hover { border-color: #6f5a1e; background: #33290f; }
 button.pill-reattach:hover .pill-again { opacity: 1; }
 button.pill-reattach:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 1px; }
 button.pill-reattach:disabled { cursor: progress; }
