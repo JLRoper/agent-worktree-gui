@@ -5,7 +5,6 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { gzipSync as zlibGzipSync } from "node:zlib";
 import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { cpus } from "node:os";
 import path from "node:path";
@@ -15,13 +14,15 @@ import { worktreeList } from "./lib/project.js";
 import { Store } from "./lib/store.js";
 import { Scheduler } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
-import { Jobs, hermesHome, makeThreadName, previewRequest } from "./lib/jobs.js";
+// isLiveJobStatus is main's: the 429 hold asks whether a card's run is live before it re-arms the timer.
+// previewRequest is not: this commit moves both previewRequest call sites into lib/features/spawn.js, so
+// server.js has no use for the name any more — the import keeps their new name and drops the moved one.
+import { Jobs, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js";
 import { gitIn, scanWorktree } from "./lib/scan.js";
-import { resolveExistingTarget, resolutionNote } from "./lib/spawn-target.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE } from "./lib/tree-names.js";
-import { Descriptions, describeFromPrompt } from "./lib/descriptions.js";
+import { createDescriptions } from "./lib/features/descriptions.js";
 import { auditRepo } from "./lib/hermes-worktrees.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
@@ -36,6 +37,11 @@ import { Assistant, ASSISTANT_THREAD } from "./lib/assistant.js";
 import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./lib/subagents.js";
 import { thinkingFor } from "./lib/thinking.js";
 import { modelCatalogue, refreshModelCatalogue } from "./lib/hermes-models.js";
+import { createSpawn } from "./lib/features/spawn.js";
+// HTTP framing lives in lib/http/: transport.js knows about req/res and nothing about worktrees,
+// and static.js serves public/. Both are handed the state they used to read by closure.
+import { authorised, handleStream, readBody, readRawBody, sendJson } from "./lib/http/transport.js";
+import { serveStatic } from "./lib/http/static.js";
 
 // A file an agent produced is meant to be OPENED, and the shell association may hand a .md to a
 // browser. Prefer a text editor: Notepad++ when installed, else Windows' notepad (always present),
@@ -68,7 +74,6 @@ async function editorFor(target) {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const execP = promisify(execFile);
-const PUBLIC_DIR = path.join(HERE, "public");
 // The panel's version is declared once, in package.json: read it here so the page can say which
 // build is running without a second copy to keep in step.
 const VERSION = await readFile(path.join(HERE, "package.json"), "utf8")
@@ -78,15 +83,6 @@ const VERSION = await readFile(path.join(HERE, "package.json"), "utf8")
 // a sandbox or a demo you can click around in without touching the real one:
 //   set PANEL_CONFIG=C:\path\to\panel-config.json && node server.js
 const CONFIG_PATH = process.env.PANEL_CONFIG ? path.resolve(process.env.PANEL_CONFIG) : path.join(HERE, "config.json");
-
-const TYPES = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-};
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
@@ -185,87 +181,6 @@ async function patchPanelConfig(patch) {
   await writeFile(CONFIG_PATH, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
 }
 
-const gzip = (buf) => zlibGzipSync(buf, { level: 6 });
-
-function acceptsGzip(req) {
-  return /\bgzip\b/.test(String((req && req.headers["accept-encoding"]) || ""));
-}
-
-function sendJson(res, code, body) {
-  const req = res.req;
-  const text = JSON.stringify(body);
-  const raw = Buffer.from(text);
-  const head = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", Vary: "Accept-Encoding" };
-  // /api/state is half a megabyte of JSON and the page asks for it periodically; gzip costs a few
-  // ms of CPU and removes ~90% of the bytes and most of the client's parse time.
-  if (raw.length > 2048 && acceptsGzip(req)) {
-    const gz = gzip(raw);
-    res.writeHead(code, { ...head, "Content-Encoding": "gzip", "Content-Length": gz.length });
-    return res.end(gz);
-  }
-  res.writeHead(code, { ...head, "Content-Length": raw.length });
-  res.end(raw);
-}
-
-// Attachments arrive as raw bytes (no multipart parser here): the filename rides in x-filename, so the
-// body is exactly the file.
-function readRawBody(req, limit) {
-  return new Promise((resolve, reject) => {
-    let size = 0;
-    const chunks = [];
-    req.on("data", (d) => {
-      size += d.length;
-      if (size > limit) {
-        reject(Object.assign(new Error(`attachment is larger than ${Math.round(limit / (1024 * 1024))} MB`), { tooLarge: true }));
-        req.destroy();
-        return;
-      }
-      chunks.push(d);
-    });
-    req.on("end", () => resolve(Buffer.concat(chunks)));
-    req.on("error", reject);
-  });
-}
-
-function readBody(req, limit = 256 * 1024) {
-  return new Promise((resolve, reject) => {
-    let size = 0;
-    const chunks = [];
-    req.on("data", (d) => {
-      size += d.length;
-      if (size > limit) {
-        reject(new Error("body too large"));
-        req.destroy();
-        return;
-      }
-      chunks.push(d);
-    });
-    req.on("end", () => {
-      const raw = Buffer.concat(chunks).toString("utf8");
-      if (!raw) return resolve({});
-      try {
-        resolve(JSON.parse(raw));
-      } catch (e) {
-        reject(new Error(`invalid JSON body: ${e.message}`));
-      }
-    });
-    req.on("error", reject);
-  });
-}
-
-// A worktree branches from HEAD, so a repo with no commits cannot host one. Refuse with a reason up
-// front instead of letting the run start in a tree that cannot exist.
-async function spawnBlocker(cwd, target) {
-  if (target?.empty) {
-    return `${target.name} has no commits yet (unborn HEAD), so a worktree cannot be created there — make an initial commit first.`;
-  }
-  const head = await gitIn(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"], 15000);
-  if (head.ok) return null;
-  const err = String(head.err || head.out || "");
-  if (/not a git repository/i.test(err)) return `${cwd} is not a git repository — an agent works in a worktree, which needs one.`;
-  return `${cwd} has no commits yet (unborn HEAD), so a worktree cannot be created there — make an initial commit first.`;
-}
-
 let config = await loadConfig();
 let pool = new Pool(config.threads);
 const store = new Store();
@@ -346,7 +261,7 @@ const jobs = new Jobs({
     void autoNameWorktree(evt).catch(() => {});
     // A run that just arrived (or changed) is a new chance to learn what a tree was started to do: the earliest
     // brief in a tree is in this store, and a harvest is collapsed into one pass per couple of seconds.
-    guard("description harvest", () => harvestDescriptions());
+    guard("description harvest", () => descriptions.harvest());
     guard("assistant observation", () => assistant?.observe(evt));
   },
   onLog: log,
@@ -394,6 +309,17 @@ function gonePointers(id) {
 // the host decides. Nothing here can approve anything by itself.
 const approvals = new Approvals({ onEvent: broadcast });
 
+// ---- spawning ---------------------------------------------------------------------------
+// The New-agent card, its preview and the assistant's spawner all ask the same question, so they
+// ask it in one place (lib/features/spawn.js), named `spawnFeature` because node:child_process
+// already owns `spawn` in this module. The two answers that go stale are passed as getters:
+// /api/reload replaces `config` wholesale, and every registry refresh replaces the project array.
+const spawnFeature = createSpawn({
+  getConfig: () => config,
+  getProjects: () => registry.projects,
+  jobs,
+});
+
 // The sentry + the assistant's own thread. It reads the same job summaries the page does, so nothing
 // here can see more than the board shows; its own clock is `settings.seconds`. `spawner` is the one act it
 // can perform beyond talk: a worker, in a worktree the panel cuts, exactly the way the New-agent card does.
@@ -405,7 +331,7 @@ assistant = new Assistant({
   // delegated children the gateway keeps in `state.db`, which never reach a parent's run stream.
   getRows: () => [...store.rows.values()],
   getChildren: () => subagentRoster({ dbPath: path.join(hermesHome(), "state.db") }),
-  spawner: assistantSpawnRun,
+  spawner: spawnFeature.assistantSpawnRun,
   // The one act this module cannot perform itself: a RESTART line's gateway/panel restart, queued by
   // the controller and run only once the turn that asked for it has ended.
   onRestart: (spec) => restart.request(spec),
@@ -481,75 +407,6 @@ setInterval(() => {
     });
 }, 15_000).unref?.();
 
-// Start a worker on the assistant's behalf. Deliberately the same mechanics as the New-agent card —
-// registry for the project, gateway probe before anything is promised, `git rev-parse`/`worktree add` in
-// lib/jobs.js — but with no dry run and no model field, so the worker runs on the gateway default rather
-// than on the small model the assistant itself uses.
-async function assistantSpawnRun(spec = {}) {
-  const prompt = String(spec.prompt || "").trim();
-  if (!prompt) throw new Error("a spawn needs a prompt");
-  const transport = await jobs.probe();
-  if (!transport.reachable || !transport.capabilities?.runs) {
-    throw new Error(`the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}`);
-  }
-  const target = spec.project
-    ? registry.projects.find((p) => p.name === spec.project)
-    : projectForPath(spec.target);
-  if (spec.existing) {
-    // An agent in a directory that already exists: no tree is cut, and the card attaches to the git top level.
-    // The directory named is not taken on trust any more: the panel renames a finished run's worktree directory
-    // AND its branch after the thread title, so the path an assistant wrote down when it watched that worker
-    // finish, or a reader typed from an older report, is one rename out of date while the tree stands. Resolve
-    // it against git's own worktree list (lib/spawn-target.js) — one match is used and named on the card,
-    // several are an error that lists them, none keeps the refusal this line always gave.
-    const res = await resolveExistingTarget({
-      target: spec.target || target?.path,
-      // A path inside a project is that project's business; a branch or a bare worktree name carries no path to
-      // place, so the registry is the search space.
-      project: target,
-      projects: registry.projects,
-      thread: spec.thread || null,
-    });
-    if (!res.ok) throw new Error(res.error);
-    const cwd = res.path;
-    const blocked = await spawnBlocker(cwd, null);
-    const top = await gitIn(cwd, ["rev-parse", "--show-toplevel"]);
-    const ownerPath = top.ok && top.out ? top.out : cwd;
-    const norm = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-    // A resolved tree can name a project the line itself never did (a branch is not a path), and that project is
-    // what decides whether this run stays in the project's own checkout rather than a branch of its own.
-    const home = target || registry.projects.find((p) => p.name === res.project) || null;
-    const note = resolutionNote(res);
-    return jobs.create({
-      prompt,
-      cwd,
-      existing: true,
-      ownerPath,
-      ownerPending: false,
-      baseCheckout: Boolean(home && norm(ownerPath) === norm(home.path)),
-      // The card says which tree a stale name resolved to, not just that something ran.
-      note: note ? `SPAWN IN ${note}` : null,
-      origin: {
-        kind: "assistant-spawn",
-        where: "existing",
-        ...(res.resolved ? { resolvedFrom: res.asked, resolvedPath: res.path, resolvedHow: res.how } : {}),
-      },
-    });
-  }
-  if (!target) throw new Error(`unknown project: ${spec.target || spec.project || "(none)"}`);
-  const blocked = await spawnBlocker(target.path, target);
-  if (blocked) throw new Error(blocked);
-  return jobs.create({
-    prompt,
-    cwd: target.path,
-    project: target.name,
-    existing: false,
-    // The worktree appears a moment later; adoptFromJob files the card under its own row when it does.
-    ownerPending: true,
-    origin: { kind: "assistant-spawn", project: target.name },
-  });
-}
-
 const settingsOut = () => ({
   version: VERSION,
   refreshSeconds: config.refreshSeconds,
@@ -584,93 +441,29 @@ const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "
 // the point of it. Either way the six-hex tag is kept and the 409 stands while an agent is running in the tree.
 const treeNames = new TreeNames({ file: config.treeNamesFile, log });
 
-// What a branch was STARTED to do travels with the snapshot the way its name does: the row carries the record's own
-// text and where it came from, and no row carries a description for a tree the panel has no run for — the section is
-// then simply absent, which is the honest answer, not an empty box.
-function withDescriptions(snap) {
-  for (const project of snap.projects || []) {
-    for (const row of project.worktrees || []) {
-      const rec = descriptions.forTree({ project: project.name, path: row.path, branch: row.branch });
-      if (!rec || !rec.text) {
-        delete row.description;
-        continue;
-      }
-      row.description = { text: rec.text, from: rec.from || null, at: rec.at || null };
-    }
-  }
-  return snap;
-}
-
-// ---- what a branch was STARTED to do -------------------------------------------------------------------------------
-// The extraction lives in lib/descriptions.js and is written down once per tree; this is the half that has to see the
-// panel's own two stores to run it — a row (which tree, in which project) and a job (the brief, and when it started).
-// It runs on the events that can ADD either, never on render: /api/state reads a record, it does not build one.
-const descriptions = new Descriptions({ file: config.descriptionsFile, log });
-let descHarvestTimer = null;
-
-// The earliest run in each tree, out of the panel's own job store. A tree is reached by the path a run CUT
-// (`worktreePath`) or by the directory it ran in (`cwd`); a follow-up run into an existing tree carries only the
-// latter, which is why both are tried.
-function earliestRunPerTree() {
-  const earliest = new Map();
-  for (const j of jobs.jobs.values()) {
-    const started = String(j.startedAt || "");
-    for (const p of [j.worktreePath, j.cwd]) {
-      const n = normPathKey(p);
-      if (!n) continue;
-      const prev = earliest.get(n);
-      if (!prev || started < String(prev.startedAt || "")) earliest.set(n, j);
-    }
-  }
-  return earliest;
-}
-
-// One pass: give every tree that HAS a run, and no record yet, the opening of its earliest run's brief.
-function harvestDescriptionsNow() {
-  const earliest = earliestRunPerTree();
-  if (!earliest.size) return 0;
-  let added = 0;
-  for (const [key, row] of store.rows) {
-    const cut = key.indexOf("::");
-    const where = { project: cut < 0 ? key : key.slice(0, cut), path: row.path, branch: row.branch };
-    // Asked BEFORE any text is derived. An extraction per harvest is the per-render cost this module exists to
-    // avoid, and it is the RECORD — not the job store — that decides what a tree's description is.
-    if (descriptions.isDescribed(where)) continue;
-    const j = earliest.get(normPathKey(row.path));
-    const text = describeFromPrompt(j && j.prompt);
-    if (!text) continue;
-    const rec = descriptions.remember(where, {
-      text,
-      from: { thread: j.thread || null, job: j.id || null, at: j.startedAt || null },
-      // Which tree the words describe, in full: the key is the identity a rename keeps, and this is what a reader of
-      // the file (or a check comparing two trees) can actually look up.
-      path: row.path,
-      branch: row.branch || null,
-    });
-    if (rec) added += 1;
-  }
-  return added;
-}
-
-// Collapsed into one pass per couple of seconds — a scan writes a row per worktree and a live turn emits an event per
-// line, and neither is a reason to re-walk the store. A pass that recorded something broadcasts, so the new section
-// reaches the board without waiting for the next scan to happen to mention that row.
-function harvestDescriptions(delay = 1500) {
-  if (descHarvestTimer) return;
-  descHarvestTimer = setTimeout(() => {
-    descHarvestTimer = null;
-    const added = guard("description harvest", harvestDescriptionsNow) || 0;
-    if (added) broadcast({ type: "snapshot", data: snapshot() });
-  }, delay);
-  descHarvestTimer.unref?.();
-}
+// ---- what a branch was STARTED to do --------------------------------------------------------------
+// The extraction and the record file live in lib/descriptions.js; the pass that has to see a row and a
+// job at once lives in lib/features/descriptions.js. Only the wiring stays here, in the composition
+// root and in this order: a subscriber list is not something a feature module should own.
+const descriptions = createDescriptions({
+  getConfig: () => config,
+  // The RAW maps, not list()/rowsFor(): the earliest brief in a tree needs `prompt` and `startedAt`,
+  // which those projections trim on purpose.
+  getJobs: () => jobs.jobs,
+  getRows: () => store.rows,
+  normPathKey,
+  snapshot,
+  broadcast,
+  guard,
+  log,
+});
 
 // The two events that can add what a harvest needs — a row written by a scan, a job arriving or changing — plus one
 // pass at boot, because a panel started over a store whose trees were all scanned long ago has no row event coming.
 store.onEvent((evt) => {
-  if (evt?.type === "row") harvestDescriptions();
+  if (evt?.type === "row") descriptions.harvest();
 });
-harvestDescriptions(2500);
+descriptions.harvest(2500);
 
 function worktreeDirName(name, tag) {
   const slug = String(name || "")
@@ -755,7 +548,7 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
     .list()
     .find(
       (j) =>
-        (j.status === "running" || j.status === "starting") &&
+        isLiveJobStatus(j.status) &&
         [j.cwd, j.ownerPath, j.worktreePath].filter(Boolean).some((p) => path.resolve(p) === oldPath),
     );
   if (busy) return { error: `an agent is running in that worktree (${busy.id}) — stop it first`, status: 409 };
@@ -876,7 +669,7 @@ async function autoNameWorktree(evt) {
   // agent's to take, even if a job ever carries a worktree path that resolves there.
   if (j.baseCheckout) return;
   if (!["done", "failed", "cancelled", "interrupted"].includes(String(j.status))) return;
-  const project = projectForPath(j.worktreePath);
+  const project = spawnFeature.projectForPath(j.worktreePath);
   if (!project) return;
   // The project's own checkout is the parent of every tree cut from it and keeps the folder's name.
   if (normPathKey(project.path) === normPathKey(j.worktreePath)) return;
@@ -892,7 +685,7 @@ async function autoNameWorktree(evt) {
   // Only when the tree is idle: moving a directory out from under a running turn is what git refuses.
   const busy = jobs
     .list()
-    .some((x) => (x.status === "running" || x.status === "starting") && normPathKey(x.ownerPath || x.cwd) === normPathKey(j.worktreePath));
+    .some((x) => isLiveJobStatus(x.status) && normPathKey(x.ownerPath || x.cwd) === normPathKey(j.worktreePath));
   if (busy) return;
   const title = jobs.sessionInfoFor(j.thread).title;
   if (!title) return;
@@ -914,21 +707,6 @@ async function autoNameWorktree(evt) {
     autoNamingInFlight.delete(key);
   }
 }
-
-// Which project a directory belongs to: the innermost project root that contains it (a project can be nested inside
-// another checkout), matched on a path boundary so `…/app-other` is not inside `…/app`.
-const projectForPath = (dir) => {
-  const key = normPathKey(dir);
-  if (!key) return null;
-  let best = null;
-  for (const proj of registry.projects) {
-    const root = normPathKey(proj.path);
-    if (!root) continue;
-    if (key !== root && !key.startsWith(`${root}/`)) continue;
-    if (!best || root.length > normPathKey(best.path).length) best = proj;
-  }
-  return best;
-};
 
 // Rows are written by the scheduler, so their copy of the panel-agent state is as old as that
 // row's last scan (45-90s on a big fleet). Overlay it at snapshot time: a turn starting or
@@ -990,7 +768,7 @@ function withTreeNames(snap) {
 }
 
 function snapshot() {
-  return withDescriptions(
+  return descriptions.withDescriptions(
     withTreeNames(
       withLiveAgents({
         ...store.snapshot({ settings: settingsOut() }),
@@ -1025,21 +803,6 @@ const heartbeat = setInterval(() => {
   }
 }, 5000);
 
-function handleStream(req, res) {
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream; charset=utf-8",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-  });
-  res.write(`event: snapshot\ndata: ${JSON.stringify(snapshot())}\n\n`);
-  clients.add(res);
-  log(`client connected (${clients.size} streaming)`);
-  req.on("close", () => {
-    clients.delete(res);
-    log(`client disconnected (${clients.size} streaming)`);
-  });
-}
-
 // ---- the model menu's prices, kept warm without ever blocking a read ---------------------------
 // The dropdown reads a cache file and nothing else, so the one thing that can refresh it is a
 // gateway call, and that call re-fetches every provider's live list. It is therefore deliberately
@@ -1065,32 +828,6 @@ function warmModelPrices(cfg, catalogue) {
     .finally(() => {
       modelPricingWarm = null;
     });
-}
-
-// Did this request come in over loopback — i.e. from the machine the panel runs on? That is the panel's
-// own UI, and it is the only caller allowed in without a token.
-function isLoopback(req) {
-  const addr = String((req.socket && req.socket.remoteAddress) || "").toLowerCase().replace(/^::ffff:/, "");
-  return addr === "::1" || addr.startsWith("127.");
-}
-
-// Loopback is allowed exactly as before, so the local board is untouched. Anything else — the LAN, a
-// tailnet — is allowed only when the panel holds a token (PANEL_TOKEN, from the environment, never
-// config.json) AND the request sends it in x-panel-token; with no token configured off-machine writes
-// are refused outright. Every write route
-// can spawn a process or write a file, so an unauthenticated one reachable from another host is remote
-// code execution — the refusal has to be the default, not something a route has to remember.
-// A refusal is logged with the address it came from: a 403 nobody can see is a bug report nobody can act on.
-function authorised(req) {
-  if (isLoopback(req)) return true;
-  const addr = (req.socket && req.socket.remoteAddress) || "?";
-  if (!config.token) {
-    log(`write refused from ${addr}: no PANEL_TOKEN in the environment, so non-loopback writes are off`);
-    return false;
-  }
-  if (req.headers["x-panel-token"] === config.token) return true;
-  log(`write refused from ${addr}: missing or wrong x-panel-token`);
-  return false;
 }
 
 const cleanPath = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "");
@@ -1173,7 +910,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/settings/sessions" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const state = await sessionSettings();
       if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
@@ -1203,7 +940,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/settings/approvals" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const state = approvalState({ gatewayUrl: jobs.api.url });
       if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
@@ -1237,7 +974,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/settings/provider" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const state = providerState();
       if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
@@ -1279,7 +1016,7 @@ const server = createServer(async (req, res) => {
     // come back with the reply, because "the press did something" is otherwise indistinguishable
     // from "the page re-read the same bytes".
     if (route === "/api/models/refresh" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       try {
         const result = await refreshModelCatalogue({
           home: hermesHome(),
@@ -1324,7 +1061,7 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { charter: assistant.charterPayload(), assistant: assistant.state() });
     }
     if (route === "/api/assistant/charter" && req.method === "PUT") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       let body;
       try {
         body = await readBody(req);
@@ -1344,7 +1081,7 @@ const server = createServer(async (req, res) => {
     // A message from the reader. The board digest and the scratchpad are attached to the run's input by
     // the module, so the card shows the sentence the reader typed.
     if (route === "/api/assistant/say" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const text = String(body.text || "").trim();
       if (!text) return sendJson(res, 400, { error: "text is required" });
@@ -1357,7 +1094,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/assistant/settings" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       return sendJson(res, 200, { settings: assistant.setSettings(body), assistant: assistant.state() });
     }
@@ -1365,7 +1102,7 @@ const server = createServer(async (req, res) => {
     // Dismiss an alert, or hand it to the assistant (one digest, rate limited). Nothing here answers an
     // approval: that stays on the agent's own card, where the gateway validates the choice.
     if (route === "/api/assistant/alert" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const alert = assistant.alertAction(String(body.id || ""), String(body.action || ""));
@@ -1377,7 +1114,7 @@ const server = createServer(async (req, res) => {
 
     // The reader pressing Send on a draft: the one path that posts into a worker's thread by hand.
     if (route === "/api/assistant/answer" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const job = await assistant.answerThread(String(body.thread || ""), body.text, {
@@ -1395,7 +1132,7 @@ const server = createServer(async (req, res) => {
     // Answer a question the run is parked on (the `clarify` tool). Not a reply: it settles the prompt the
     // gateway is holding, so the turn resumes where it stopped.
     if (route === "/api/assistant/answer-question" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const result = await assistant.answerParked(String(body.id || ""), body.answer);
@@ -1410,7 +1147,7 @@ const server = createServer(async (req, res) => {
     // card the assistant proposed; the spec form is the same act without a card. Both go through the one
     // spawner, so neither can skip the gateway probe or the unborn-HEAD refusal.
     if (route === "/api/assistant/spawn" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const spec = body.id ? assistant.pendingSpawn(String(body.id)) : body;
@@ -1424,7 +1161,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/assistant/watch" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const watch = assistant.addWatch(body, "reader");
@@ -1434,13 +1171,13 @@ const server = createServer(async (req, res) => {
       }
     }
     if (route === "/api/assistant/watch/remove" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       return sendJson(res, 200, { watches: assistant.removeWatch(String(body.id || "")), assistant: assistant.state() });
     }
 
     if (route === "/api/assistant/rule" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const rules = assistant.addRule(body.text);
@@ -1450,13 +1187,13 @@ const server = createServer(async (req, res) => {
       }
     }
     if (route === "/api/assistant/rule/remove" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       return sendJson(res, 200, { rules: assistant.removeRule(String(body.id || "")), assistant: assistant.state() });
     }
 
     if (route === "/api/assistant/notes" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       return sendJson(res, 200, { notes: assistant.setNotes(body.text), assistant: assistant.state() });
     }
@@ -1464,7 +1201,7 @@ const server = createServer(async (req, res) => {
     // One sentry pass on demand. Used by the page after a change that should be judged at once, and by
     // the verification probes instead of waiting for the clock.
     if (route === "/api/assistant/check" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       assistant.tick();
       return sendJson(res, 200, { assistant: assistant.state() });
     }
@@ -1514,7 +1251,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/approvals" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const request = approvals.present(body || {});
@@ -1526,7 +1263,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/approvals/answer" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const r = approvals.answer(body.id, body.choice, body.by || "ui");
       return sendJson(res, r.ok ? 200 : 409, r);
@@ -1539,84 +1276,25 @@ const server = createServer(async (req, res) => {
 
     // Preview the exact request that would be sent — the confirm affordance.
     if (route === "/api/agents/preview" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
-      const target = body?.project ? registry.projects.find((p) => p.name === body.project) : null;
-      const cwd = body?.cwd || target?.path || config.defaultCwd;
-      const blocked = await spawnBlocker(cwd, target);
-      // The thread name carries a random suffix, so the preview shows its shape.
-      const req0 = previewRequest({
-        ...(body || {}),
-        thread: makeThreadName(body?.prompt || ""),
-        // A preview that hides the clarify hint is not a preview of what will be sent.
-        clarifyInstruction: jobs.clarify?.instruction?.() || "",
-      });
-      return sendJson(res, 200, { transport: jobs.transportInfo(), request: req0, cwd, project: target?.name || null, blocked, command: `POST ${jobs.api.url}${req0.path}\n${JSON.stringify(req0.body, null, 1)}` });
+      return sendJson(res, 200, await spawnFeature.previewPayload(body));
     }
 
     if (route === "/api/agents" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
-      const pickerTarget = body.project ? registry.projects.find((p) => p.name === body.project) : null;
-      if (body.project && !pickerTarget) return sendJson(res, 400, { error: `unknown project: ${body.project}` });
-      // The directory is the ground truth: a cwd inside a known project overrides a stale project picker, so a spawn
-      // aimed at one worktree can never be checked, filed or cut against another project.
-      const cwdProject = projectForPath(body.cwd);
-      if (cwdProject && body.project !== cwdProject.name) body.project = cwdProject.name;
-      const target = cwdProject || pickerTarget;
-      if (body.dryRun) {
-        const req0 = previewRequest({ ...body, clarifyInstruction: jobs.clarify?.instruction?.() || "" });
-        return sendJson(res, 200, { dryRun: true, project: body.project || null, transport: jobs.transportInfo(), request: req0, cwd: body.cwd || target?.path || config.defaultCwd, command: `POST ${jobs.api.url}${req0.path}\n${JSON.stringify(req0.body, null, 1)}` });
-      }
+      // Which project, and which directory: the directory is the ground truth, so a stale project
+      // picker is corrected here, before anything downstream reads it.
+      const aimed = spawnFeature.targetForSpawn(body);
+      if (!aimed.ok) return sendJson(res, 400, { error: aimed.error });
+      if (aimed.project !== undefined) body.project = aimed.project;
+      if (body.dryRun) return sendJson(res, 200, spawnFeature.dryRunPayload(body, aimed.target));
       // Refuse before promising a job: a stopped gateway or a missing key is the answer to "why did
       // nothing happen", not a card that says "starting" forever.
-      const transport = await jobs.probe();
-      if (!transport.reachable || !transport.capabilities?.runs) {
-        return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}` });
-      }
-      let cwd = body.cwd || target?.path || config.defaultCwd;
-      // "existing": run in a directory that is already there (a worktree you picked), so no
-      // worktree is created and the agent's edits land directly in that tree.
-      const existing = Boolean(body.existing);
-      // A directory that is already there is still the first answer, but a missing one is no longer the end of
-      // the request: the panel renames a finished run's worktree directory and its branch after the thread
-      // title, so a path this card was holding can be one rename out of date while the tree stands. Resolved
-      // against git's own worktree list — one match is used and named on the card, several list themselves,
-      // none keeps the refusal this endpoint always gave.
-      let picked = null;
-      if (existing) {
-        picked = await resolveExistingTarget({ target: cwd, project: cwdProject || pickerTarget, projects: registry.projects });
-        if (!picked.ok) return sendJson(res, 400, { error: picked.error, candidates: picked.candidates });
-        cwd = picked.path;
-      }
-      const blocked = await spawnBlocker(cwd, existing ? null : target);
-      if (blocked) return sendJson(res, 400, { error: blocked, blocked });
-      // Attach to the worktree the spawn actually runs in, not to the directory that was typed: a cwd
-      // inside `…/lib` is still the same worktree, and an owner path matching no row would show up as
-      // unattached even though it is sitting in a tree we know.
-      let ownerPath = null;
-      if (existing) {
-        const top = await gitIn(cwd, ["rev-parse", "--show-toplevel"]);
-        ownerPath = top.ok && top.out ? top.out : cwd;
-      }
-      // A spawn that stays in the project's own checkout is not "an existing worktree": the card should
-      // say so, because that is the difference between an agent working in a branch of its own and one
-      // editing the tree the reader has checked out.
-      const norm = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-      // A resolved tree can belong to a project the typed directory never named (a branch is not a path).
-      const home = (picked?.project ? registry.projects.find((p) => p.name === picked.project) : null) || cwdProject || null;
-      const baseCheckout = Boolean(existing && home && norm(ownerPath || cwd) === norm(home.path));
-      const note = picked ? resolutionNote(picked) : "";
-      const job = await jobs.create({
-        ...body,
-        cwd,
-        existing,
-        ownerPath,
-        ownerPending: !existing,
-        baseCheckout,
-        // The card says which tree a stale path resolved to, not just that something ran.
-        note: note ? `SPAWN IN ${note}` : null,
-      });
+      const linked = await spawnFeature.linkSpawn(body, aimed.target, aimed.cwdProject);
+      if (!linked.ok) return sendJson(res, linked.status, linked.payload);
+      const job = await jobs.create({ ...body, ...linked.fields });
       return sendJson(res, 202, { job });
     }
 
@@ -1625,7 +1303,7 @@ const server = createServer(async (req, res) => {
     // refuses with that reason. This is the one-line fix that reason asks for: an EMPTY commit, so no
     // file is invented for the repo, and never a push — the commit stays local.
     if (route === "/api/repo/first-commit" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const target = path.resolve(String(body.path || "").trim());
       const info = await stat(target).catch(() => null);
@@ -1664,7 +1342,7 @@ const server = createServer(async (req, res) => {
     // gateway's runs API has no attachment field, but the agent has file tools — and an absolute path
     // is independent of the run's cwd, which this gateway does not honour anyway.
     if (route === "/api/attachments" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const LIMIT = 25 * 1024 * 1024;
       let bytes;
       try {
@@ -1695,7 +1373,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/threads/model" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const thread = String(body.thread || "").trim();
       if (!thread) return sendJson(res, 400, { error: "thread is required" });
@@ -1703,7 +1381,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/threads/context" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const thread = String(body.thread || "").trim();
       if (!thread) return sendJson(res, 400, { error: "thread is required" });
@@ -1711,7 +1389,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/agents/reply" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const text = String(body.text || "").trim();
       if (!text) return sendJson(res, 400, { error: "reply text is required" });
@@ -1756,7 +1434,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/jobs/cancel" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       return sendJson(res, 200, { ok: jobs.cancel(String(body.id || "")) });
     }
@@ -1764,7 +1442,7 @@ const server = createServer(async (req, res) => {
     // Steer a turn that is already running: the text is injected at the agent's next tool boundary,
     // so it can change course without ending the turn. 409 means it crossed the last boundary.
     if (route === "/api/jobs/steer" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const r = await jobs.steer(String(body.id || ""), body.text ?? body.input);
       // A steer lands inside the turn that is already running, so its documents belong to that turn's
@@ -1778,7 +1456,7 @@ const server = createServer(async (req, res) => {
     // looked up only here, because only this answer leaves the reader with nothing left to click: a run the gateway
     // has forgotten settles as interrupted, and the card has to name the tree the work is in and its PR.
     if (route === "/api/jobs/reattach" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const id = String(body?.id || "").trim();
       const r = await jobs.reattachNow(id, { pointers: gonePointers(id) });
@@ -1794,7 +1472,7 @@ const server = createServer(async (req, res) => {
     // what the queue decided, so the chip can say the ask landed or say why it did not; a card this route cannot ask
     // about (unknown, or no longer `done`) is a 400 with the reason.
     if (route === "/api/jobs/ask-complete" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         return sendJson(res, 200, assistant.askAboutComplete(String(body?.id || "").trim()));
@@ -1806,7 +1484,7 @@ const server = createServer(async (req, res) => {
     // Answer a parked run's approval. The gateway validates the choice a second time, so a stale
     // card cannot widen what the host allows.
     if (route === "/api/jobs/approve" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const r = await jobs.approve(String(body.id || ""), body.choice, body.requestId ?? body.request_id);
       // 409 for "there is nothing to answer any more" — the gateway's own verdict on a prompt it has let go, and
@@ -1818,7 +1496,7 @@ const server = createServer(async (req, res) => {
     // gateway re-validates the prompt id against the run's pending controls and its execution
     // generation, so a stale card cannot answer a question that has already been settled.
     if (route === "/api/jobs/answer" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const r = await jobs.answerQuestion(String(body.id || ""), body.answer, body.requestId ?? body.request_id);
       return sendJson(res, r.ok ? 200 : r.code === "approval_not_pending" ? 409 : 400, r);
@@ -1831,12 +1509,11 @@ const server = createServer(async (req, res) => {
     // it — never automatically, because a tree accumulates every session ever run in it and the
     // board must not refill with all of them at once.
     if (route === "/api/thinking" && req.method === "GET") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const thread = String(url.searchParams.get("thread") || "").trim();
       if (!thread) return sendJson(res, 400, { error: "thread is required" });
       const from = Number(url.searchParams.get("from"));
       const to = Number(url.searchParams.get("to"));
-      const { hermesHome } = await import("./lib/jobs.js");
       return sendJson(res, 200, {
         thread,
         blocks: thinkingFor(thread, {
@@ -1848,7 +1525,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/tool-results" && req.method === "GET") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const thread = String(url.searchParams.get("thread") || "").trim();
       const tool = String(url.searchParams.get("tool") || "").trim();
       const from = Number(url.searchParams.get("from")) || 0;
@@ -1857,19 +1534,17 @@ const server = createServer(async (req, res) => {
       // that silently stops halfway through a longer run.
       const limit = Math.max(1, Math.min(60, Number(url.searchParams.get("n")) || 20));
       if (!thread || !tool) return sendJson(res, 400, { error: "thread and tool are required" });
-      const { hermesHome } = await import("./lib/jobs.js");
       const { toolResults } = await import("./lib/tool-results.js");
       const results = toolResults({ dbPath: path.join(hermesHome(), "state.db"), sessionId: thread, tool, from, to, limit });
       return sendJson(res, 200, { thread, tool, results });
     }
 
     if (route === "/api/subagents/collect" && req.method === "GET") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const thread = String(url.searchParams.get("thread") || "").trim();
       if (!thread) return sendJson(res, 400, { error: "thread is required" });
       const from = Number(url.searchParams.get("from"));
       const to = Number(url.searchParams.get("to"));
-      const { hermesHome } = await import("./lib/jobs.js");
       const out = collectPrompt(thread, {
         dbPath: path.join(hermesHome(), "state.db"),
         from: Number.isFinite(from) ? from : 0,
@@ -1880,10 +1555,9 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/subagents/console" && req.method === "GET") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const session = String(url.searchParams.get("session") || "").trim();
       if (!session) return sendJson(res, 400, { error: "session is required" });
-      const { hermesHome } = await import("./lib/jobs.js");
       const out = childTranscript(session, { dbPath: path.join(hermesHome(), "state.db") });
       if (!out) return sendJson(res, 404, { error: "no such session" });
       return sendJson(res, 200, out);
@@ -1895,7 +1569,7 @@ const server = createServer(async (req, res) => {
     if (route === "/api/tool-calls" && req.method === "GET") {
       // Same rule as the child-console read: this returns transcript text, so it is behind the panel token when one
       // is configured.
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const thread = String(url.searchParams.get("thread") || "").trim();
       const tool = String(url.searchParams.get("tool") || "").trim();
       const limit = Math.max(1, Math.min(20, Number(url.searchParams.get("n")) || 8));
@@ -1909,7 +1583,6 @@ const server = createServer(async (req, res) => {
       const job = jobs.firstOfThread(thread);
       const sessionId = job && job.sessionId;
       if (!sessionId) return sendJson(res, 404, { error: `no session recorded for ${thread}`, calls: [] });
-      const { hermesHome } = await import("./lib/jobs.js");
       const { recentToolCalls } = await import("./lib/tool-calls.js");
       const calls = recentToolCalls({
         dbPath: path.join(hermesHome(), "state.db"),
@@ -1926,11 +1599,10 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/subagents" && req.method === "GET") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const thread = String(url.searchParams.get("thread") || "").trim();
       // Children the run delegated: their sessions, their state and the last thing each one did. Polled while a
       // card is working, because the gateway does not put a child's work on the parent's event stream.
-      const { hermesHome } = await import("./lib/jobs.js");
       const dbPath = path.join(hermesHome(), "state.db");
       return thread
         ? sendJson(res, 200, { thread, subagents: subagentsFor(thread, { dbPath }) })
@@ -1955,7 +1627,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/sessions/revive" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const sessionId = String(body.sessionId || "").trim();
       const target = cleanPath(body.path);
@@ -1993,7 +1665,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/jobs/attach" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const thread = String(body.thread || "").trim();
       const target = String(body.path || "").trim();
@@ -2025,7 +1697,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/jobs/label" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const thread = String(body.thread || "").trim();
       if (!thread) return sendJson(res, 400, { error: "thread is required" });
@@ -2038,7 +1710,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/jobs/clear" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const thread = String(body.thread || "").trim();
       if (thread) {
@@ -2060,7 +1732,7 @@ const server = createServer(async (req, res) => {
       // Every POST goes through authorised(): with the panel reachable off this machine, "this route
       // forgot to check" is not a thing the next route should be able to repeat. Loopback is exempt, so
       // the local board is unaffected.
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       await scheduler.fastPass();
       return sendJson(res, 200, { ok: true });
     }
@@ -2081,7 +1753,7 @@ const server = createServer(async (req, res) => {
     // Refresh everything, or only what is on screen. Server-side: the scans happen here, so the choice has to
     // outlive a tab and apply to whichever browser is open.
     if (route === "/api/settings/scan" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const mode = String(body.mode || "").toLowerCase() === "visible" ? "visible" : "all";
       try {
@@ -2103,7 +1775,7 @@ const server = createServer(async (req, res) => {
     // panel's own config.json, so it survives a restart and applies to whichever browser is open — and it is the
     // config.json the reader edits by hand. `days: 0` shows everything.
     if (route === "/api/settings/age" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const days = ageDaysFrom(body.days);
       try {
@@ -2121,7 +1793,7 @@ const server = createServer(async (req, res) => {
     // hands a string to the operating system, so nothing else may pass. execFile (no shell) means the
     // URL can never become part of a command line.
     if (route === "/api/open-url" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       let parsed;
       try {
@@ -2149,7 +1821,7 @@ const server = createServer(async (req, res) => {
     // Delete a deliverable. The confirmation lives in the UI; this only acts on a path or URL the panel
     // itself recorded, so a stray string from the page can never delete an arbitrary file.
     if (route === "/api/jobs/artifact/delete" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const key = String(body.key || body.path || body.url || "").trim();
       const hit = jobs.findArtifact(key);
@@ -2171,7 +1843,7 @@ const server = createServer(async (req, res) => {
     // Remove a worktree from the board: the directory goes to the Windows Recycle Bin (recoverable), then
     // git's own bookkeeping is pruned. Never the project's own checkout, never a tree with a live agent.
     if (route === "/api/worktree/delete" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const projectName = String(body.project || "").trim();
       const target = path.resolve(String(body.path || "").trim());
@@ -2186,7 +1858,7 @@ const server = createServer(async (req, res) => {
         .list()
         .find(
           (j) =>
-            (j.status === "running" || j.status === "starting") &&
+            isLiveJobStatus(j.status) &&
             [j.cwd, j.ownerPath].filter(Boolean).some((p) => path.resolve(p) === target),
         );
       if (busy) return sendJson(res, 409, { error: `an agent is running in that worktree (${busy.id})` });
@@ -2288,7 +1960,7 @@ const server = createServer(async (req, res) => {
 
     // Open a file an agent produced for the reader. Not a URL: a real path, opened in an editor.
     if (route === "/api/open-path" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const target = path.resolve(String(body.path || "").trim());
       const info = await stat(target).catch(() => null);
@@ -2309,7 +1981,7 @@ const server = createServer(async (req, res) => {
     // One worktree, read now — the next-read ring on a row is a button. Refused while that row is
     // already being read: two scans of one worktree at once is exactly what the pool prevents.
     if (route === "/api/refresh/row" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const projectName = String(body.project || "").trim();
       const rowPath = String(body.path || "").trim();
@@ -2329,7 +2001,7 @@ const server = createServer(async (req, res) => {
     // claims is re-read here, from git, before a run exists. The prompt is lib/merge-prompt.js (the script the agent
     // is held to); `dryRun` hands it back for a preview without starting anything.
     if (route === "/api/worktree/merge" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const asked = String(body.path || "").trim();
       if (!asked) return sendJson(res, 400, { error: "path is required" });
@@ -2338,7 +2010,7 @@ const server = createServer(async (req, res) => {
       if (!info || !info.isDirectory()) return sendJson(res, 404, { error: `no such directory: ${worktree}` });
       // A worktree can live anywhere (`git worktree add ../tree`), so a path outside the project's own root is not an
       // error by itself: the row's project is the hint, and git's own worktree list is the proof that the hint is real.
-      let project = projectForPath(worktree) || registry.projects.find((p) => normPathKey(p.path) === normPathKey(worktree));
+      let project = spawnFeature.projectForPath(worktree) || registry.projects.find((p) => normPathKey(p.path) === normPathKey(worktree));
       let trees = project ? await worktreeList(project.path).catch(() => []) : [];
       if (!project) {
         const hinted = registry.projects.find((p) => p.name === String(body.project || "").trim());
@@ -2371,7 +2043,7 @@ const server = createServer(async (req, res) => {
       // One merge agent per worktree: a second would race the first over the same base branch.
       const live = jobs
         .list()
-        .find((j) => ["running", "starting"].includes(String(j.status)) && normPathKey(j.ownerPath || j.cwd) === normPathKey(worktree) && String(j.label || "").startsWith("MERGING into "));
+        .find((j) => isLiveJobStatus(j.status) && normPathKey(j.ownerPath || j.cwd) === normPathKey(worktree) && String(j.label || "").startsWith("MERGING into "));
       if (live) return sendJson(res, 409, { error: `an agent is already merging this worktree (${live.label || live.thread})` });
       const list = await gitIn(worktree, ["log", "--oneline", "-20", `${baseRef}..HEAD`], 20000);
       const commitList = list.ok ? list.out.split("\n").filter(Boolean) : [];
@@ -2418,7 +2090,7 @@ const server = createServer(async (req, res) => {
     // already named (replacing a name is the point), and it writes down who asked and when - the naming ledger's
     // record is what stops every later automatic rename of this tree.
     if (route === "/api/worktree/rename" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const out = await renameWorktree({
         projectName: String(body.project || "").trim(),
@@ -2435,7 +2107,7 @@ const server = createServer(async (req, res) => {
     // project's base branch. It renames NOTHING - the row's ✦ shows this name, the commits behind it and where they
     // came from, and the rename itself is the reader's second click on /api/worktree/rename above.
     if (route === "/api/worktree/suggest-name" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const projectName = String(body.project || "").trim();
       const project = scheduler.getProjects().find((p) => p.name === projectName);
@@ -2482,7 +2154,7 @@ const server = createServer(async (req, res) => {
     // Responds as soon as git finishes; discovery picks the new repo up on the next pass (the
     // refresh below is deliberately not awaited — probing 94 repos would stall the response).
     if (route === "/api/clone" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "");
       const rootNorm = norm(body.root);
@@ -2517,7 +2189,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/fetch" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       // Fire and forget: a sweep across every project is minutes of git work, and the button must not
       // hold the request open for it. Rows update over SSE as each fetch lands.
       void scheduler
@@ -2528,7 +2200,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/reload" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       config = await loadConfig();
       scheduler.stop();
       pool.close();
@@ -2550,7 +2222,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/restart" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       try {
         const record = restart.request({ target: body.target, reason: body.reason, waitFor: body.waitFor || body.thread });
@@ -2561,29 +2233,9 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    if (route === "/api/stream") return handleStream(req, res);
+    if (route === "/api/stream") return handleStream(req, res, { clients, snapshot });
 
-    const rel = route === "/" ? "index.html" : route.replace(/^\/+/, "");
-    const filePath = path.join(PUBLIC_DIR, rel);
-    if (!filePath.startsWith(PUBLIC_DIR)) {
-      res.writeHead(403).end("forbidden");
-      return;
-    }
-    try {
-      const body = await readFile(filePath);
-      const type = TYPES[path.extname(filePath)] || "application/octet-stream";
-      const head = { "Content-Type": type, "Cache-Control": "no-store", Vary: "Accept-Encoding" };
-      // app.js is ~80KB of text the client parses on every load; gzip is free at this size.
-      if (body.length > 2048 && /^(text\/|application\/(javascript|json))/.test(type) && acceptsGzip(req)) {
-        const gz = gzip(body);
-        res.writeHead(200, { ...head, "Content-Encoding": "gzip", "Content-Length": gz.length });
-        return res.end(gz);
-      }
-      res.writeHead(200, { ...head, "Content-Length": body.length });
-      res.end(body);
-    } catch {
-      res.writeHead(404, { "Content-Type": "text/plain" }).end("not found");
-    }
+    return serveStatic(req, res, route);
   } catch (e) {
     sendJson(res, 400, { error: String((e && e.message) || e) });
   }

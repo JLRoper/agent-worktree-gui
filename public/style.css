@@ -923,6 +923,24 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
 .jl-note { font-style: italic; }
 .jl-store { color: var(--dim); white-space: pre-wrap; word-break: break-word; }
 .tgrp-body { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--line); }
+/* One tool call and its output. The call's own row is the handle for the fold: the caret is a real button (so Tab
+   reaches it and Enter/Space press it) and the row around it does the same thing, which is why the caret is small
+   and quiet. Folded, the row is the whole call: its own line plus the line count. The fold covers this call's
+   output and nothing else - the rest of the card is not touched by it. */
+.call { margin: 1px 0; }
+.call-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; border-radius: 3px; cursor: pointer; }
+.call-head:hover { background: rgba(255, 255, 255, .035); }
+.call-head > .jl { flex: 1 1 auto; min-width: 0; }
+.call-fold {
+  flex: none; width: 15px; padding: 0; border: 0; background: none; color: var(--dimmer);
+  font: inherit; line-height: inherit; text-align: left; cursor: pointer;
+}
+.call-fold:hover { color: var(--text); }
+.call-fold:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.call-n { flex: none; color: var(--dimmer); font-size: .92em; }
+.call-hint { flex: none; color: var(--dimmer); font-size: .92em; font-style: italic; }
+.call.is-folded .call-head > .jl { color: #c8a6ff; }
+.call-body { min-width: 0; }
 /* Pasted documents, as chips above the box: [name.txt] ×. The path is what the agent gets, so it
    lives in the tooltip rather than in the sentence being typed. */
 .attach-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
@@ -973,10 +991,11 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 .jl-dim { color: var(--dimmer); font-style: italic; }
 .jl-raw { color: var(--dim); }
 
-/* A unified diff, drawn as a window per hunk (core/console-format.js builds it). The head keeps the file
-   headers and the @@ line as labels — the reader has to be able to see WHICH file and which hunk without
-   reading the body. The body is a two-column grid: the before side on the left, the after side on the right,
-   so a modification's two halves sit on one row and read as one change.
+/* A unified diff, drawn as a window per hunk (core/console-format.js builds it). The head is the frame's own
+   chrome: the identifiers (the file headers, the @@ line, a git/mode line) sit on it as a compact wrapped strip,
+   never as rows of the body — the body is the file's changed lines and nothing else. The body is a two-column
+   grid: the AFTER side on the left, the BEFORE side on the right, so a modification's two halves sit on one row
+   and read as one change with what the file says now first.
    Both sides WRAP. A diff line is often 200+ characters (a minified line, a long path) and the console is a
    few hundred pixels wide: with `nowrap` the window would scroll sideways and the reader would lose the
    alignment that is the whole point of two sides. minmax(0, 1fr) is load-bearing — a bare 1fr refuses to
@@ -991,7 +1010,9 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 }
 .df-head {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
   padding: 4px 8px;
   background: #161d26;
   border-bottom: 1px solid var(--line);
@@ -1009,7 +1030,8 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 /* Context is the unchanged surroundings: quiet, and spanning both sides so it reads as a separator between
    changes rather than as a line of either side. */
 .df-c.is-ctx { grid-column: 1 / -1; padding-left: 8px; color: var(--dimmer); }
-/* A modification: the before half yellow, the after half green. A pure removal is red, a pure addition green. */
+/* A modification: the after half green on the left, the before half yellow on the right. A pure removal is red,
+   drawn full width, and a pure addition green on the left with its right cell left empty. */
 .df-c.is-mod { color: #f0c674; background: rgba(210, 153, 34, .10); padding-left: 8px; }
 .df-c.is-del { color: #ff9c94; background: rgba(229, 83, 75, .10); padding-left: 8px; }
 .df-c.is-add { color: #7ee787; background: rgba(46, 160, 67, .10); padding-left: 8px; }
@@ -1021,6 +1043,11 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 .df-label.is-plus { color: #7ee787; }
 .df-label.is-hunk { color: #9ecbff; }
 .df-lab-path { font-style: italic; }
+/* The cut edge of a hunk the gateway's preview stopped in the middle of: the frame's own sentence that this is
+   not the whole change, and where the rest of the result can be read. It spans the window's width, because it is
+   about the hunk above it rather than a line of either side. */
+.df-cut { padding: 2px 8px 3px; color: var(--dim); background: rgba(210, 153, 34, .07); border-top: 1px dashed rgba(210, 153, 34, .35); }
+.df-cut-hint { color: #e0b341; font-style: italic; }
 
 /* A file printed into the console that is NOT a diff: the same window shape, its header naming the file, and
    folded by default — the reader can see that a file was printed, and which one, without reading it. */
@@ -1743,6 +1770,9 @@ tr.row td.name button, tr.row td.name .chip, tr.row td.branch button { user-sele
 .pv-status.is-run { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
 .pv-status.is-failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .pv-status.is-interrupted { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+/* A turn held on the gateway's 429 cap: amber like an interrupted turn — it is neither running nor failed —
+   but not the SAME chip, so "waiting for a slot" can never be read as "this turn died". */
+.pv-status.is-waiting { color: #d9b3ff; border-color: #452f5c; background: #241a33; }
 .pv-meta { flex: none; color: var(--dimmer); }
 .pv-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
