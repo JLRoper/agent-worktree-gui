@@ -2267,6 +2267,43 @@ function contextSegHtml(stats, thread, contextLimit) {
   return `<button type="button" class="stat stat-ctx${over ? " is-over" : ""}" data-context-pick="${esc(thread)}" title="${esc(why)}">${esc(shown)}<span class="stat-caret">\u2304</span></button>`;
 }
 
+// Dollars, at the size they actually come in. A session often costs well under a cent, and "$0.00" for a
+// session that did cost something reads as free: anything under a cent is shown as such. Above a thousand the
+// cents stop meaning anything and the figure is rounded with its thousands separated.
+function fmtUsd(usd) {
+  const n = Number(usd);
+  if (!Number.isFinite(n) || n < 0) return "";
+  if (n === 0) return "$0.00";
+  if (n < 0.01) return "<$0.01";
+  if (n >= 1000) return `$${Math.round(n).toLocaleString("en-US")}`;
+  return `$${n.toFixed(2)}`;
+}
+
+// What this session has spent, in tokens and in dollars — the session's own cumulative totals, which is not
+// the same thing as how full its context is. The context bar beside this legitimately falls when the
+// transcript is compacted; these two must not, so they are read from the store's cumulative counters and are
+// never derived from the context figure. The `~` is this readout's own mark for an estimate (the panel's
+// cached prices, or the gateway's own estimate); without it the figure is what was actually billed.
+function usageSegHtml(stats) {
+  const hasIn = Number.isFinite(stats.input_tokens);
+  const hasOut = Number.isFinite(stats.output_tokens);
+  if (!hasIn && !hasOut) return "";
+  const tokens = `\u2211 ${fmtTok(stats.input_tokens || 0)} in / ${fmtTok(stats.output_tokens || 0)} out`;
+  const money = Number.isFinite(stats.cost_usd) ? `${stats.cost_estimated ? "~" : ""}${fmtUsd(stats.cost_usd)}` : "";
+  const why = [
+    `${tokens} is this session's cumulative token total — every call's share added up, not how full the context is now` +
+      (stats.cache_read_tokens ? `, and ${fmtTok(stats.cache_read_tokens)} prompt tokens were read back from the prompt cache besides` : "") +
+      ` — so it keeps rising when the transcript is compressed and is the same figure after a panel restart`,
+    money ? `${money} is what this session has cost: ${stats.cost_note || "priced from the store"}` : stats.cost_note || "",
+    stats.cost_other_usd
+      ? `${fmtUsd(stats.cost_other_usd)} more has gone on this session's own background review, compaction and approvals — recorded by the store separately, and not part of the counts above`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("; ");
+  return `<span class="stat stat-usage" title="${esc(why)}">${esc(money ? `${tokens} \u00b7 ${money}` : tokens)}</span>`;
+}
+
 function statsLine(stats, model = null, thread = "", contextLimit = null) {
   // The model is a control even when there are no numbers to put beside it: it is the one place a session's model can
   // be changed, and a card whose run left no usage still needs to say (and offer) it.
@@ -2283,10 +2320,13 @@ function statsLine(stats, model = null, thread = "", contextLimit = null) {
   const known = Number.isFinite(stats.context_used) && Number.isFinite(stats.context_max) && stats.context_max > 0;
   // Kept out of `segs`: that list is escaped when it is joined, and this one is markup (a button).
   const ctxSeg = known ? contextSegHtml(stats, thread, contextLimit) : "";
+  // The bar itself is held apart from the rest of `segs` so the session's cumulative counts can sit directly
+  // beside it — the pair reads as "how full the context is now, and how much has gone through it altogether".
+  let bar = "";
   if (known) {
-    if (pct !== null) segs.push(`${contextBar(pct)} ${mark}${Math.round(pct)}%`);
+    if (pct !== null) bar = `${contextBar(pct)} ${mark}${Math.round(pct)}%`;
   } else if (pct !== null) {
-    segs.push(`${mark}${Math.round(pct)}%`);
+    bar = `${mark}${Math.round(pct)}%`;
   }
   if (Number.isFinite(stats.cache_hit_pct)) segs.push(`\u25ce ${stats.cache_hit_pct.toFixed(1)}%`);
   // Latency and throughput are the two figures the store does not record: they are computed over the
@@ -2301,12 +2341,16 @@ function statsLine(stats, model = null, thread = "", contextLimit = null) {
   // the same square meant "an agent lives here" and "this transcript was compacted N times". A double arrow
   // pressed down reads as "condensed" and collides with nothing.
   if (Number.isFinite(stats.compressions)) segs.push(`\u21ca ${stats.compressions}`);
-  if (!segs.length) return "";
+  const usageSeg = usageSegHtml(stats);
+  if (!segs.length && !bar && !usageSeg) return "";
   // The model leads the line: these figures describe what that model did, and the id's owner prefix is
   // dropped for width (the full id stays in the tooltip).
   const modelSeg = model ? modelSegHtml(model, thread) : "";
-  const title = "this session's usage: context occupancy, prompt-cache hit rate, and \u21ca = how many times the transcript was compacted into a summary; latency and t/s are estimated from the turn's wall clock (~)";
-  const body = [modelSeg, ctxSeg, segs.map((s) => `<span class="stat">${esc(s)}</span>`).join('<span class="stat-sep">\u2502</span>')]
+  const title =
+    "this session's usage: context occupancy, prompt-cache hit rate, and \u21ca = how many times the transcript was compacted into a summary; " +
+    "latency and t/s are estimated from the turn's wall clock (~). \u2211 in / out are this session's cumulative token totals — not the current context occupancy — so they keep rising when the transcript is compacted; " +
+    "the dollar figure beside them is what the session has cost, and a ~ in front of it means an estimate (hover it to see which price it came from)";
+  const body = [modelSeg, ctxSeg, bar ? `<span class="stat">${esc(bar)}</span>` : "", usageSeg, segs.map((s) => `<span class="stat">${esc(s)}</span>`).join('<span class="stat-sep">\u2502</span>')]
     .filter(Boolean)
     .join('<span class="stat-sep">\u2502</span>');
   // A span, not a div: the readout belongs on the footer line with the outcome and the token count,
