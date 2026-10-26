@@ -854,9 +854,14 @@ Watches without a deadline, and finished ones, say so instead.
   (`docs/hermes-runs-api-knobs.diff`) is not applied, or was lost to `hermes update`. The chip says
   `gateway ignores per-run cwd` when this is the case.
 - **A tool result in the console is cut short** — the run stream carries a *preview* of each tool
-  result, not all of it. The gateway caps it at 8000 chars by default (`HERMES_RUN_PREVIEW_CHARS` on
-  the gateway process changes it); the console unwraps the JSON envelope, prints the text, and ends
-  with `… result truncated by the gateway` when it was cut.
+  result, not all of it. The gateway caps it at **500 chars** by default (`preview[:497] + "..."`, cut
+  mid-line); `HERMES_RUN_PREVIEW_CHARS` on the gateway process raises it — `0` = full — and a running
+  gateway needs a restart for that to take effect. The console unwraps the JSON envelope, prints the
+  text, and ends with `… result truncated by the gateway` when it was cut. Nothing is lost: the whole
+  result is stored verbatim in `state.db` (`messages.content`, `role='tool'`) and `lib/tool-results.js`
+  already reads it back. Measured numbers, the exact lines, and the CLI spawn path's own separate
+  5,000-char cap (`HERMES_STREAM_TOOL_CAP`): [docs/tool-output-truncation.md](docs/tool-output-truncation.md),
+  re-measurable with `node tools/measure-tool-output-cap.mjs`.
 - **A flagged command runs without asking** — check `approvals.mode` (`smart` waves many through)
   and `security.approval.transport` (must be `builtin` for runs).
 - **No stats row above a reply box, or an agent writing outside its worktree** — the same cause:
