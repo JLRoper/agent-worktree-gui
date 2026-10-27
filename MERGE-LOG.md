@@ -45,7 +45,15 @@ actually on this branch, one per branch name, in the order they were made.
   branch's `4 spawn` text with its amber `is-late`, then main's plain number with `is-stuck`, last one
   winning). They are one painter now, carrying the page's own card count and the server watchdog's
   `unstarted` verdict on the same pill.
-- The branch is LOCAL ONLY: no push, no PR, main not moved.
+- The branch was built LOCAL ONLY — no push, no PR, main not moved — and stayed that way for the whole
+  merge. The reader then asked for it on the remote, so the first push of
+  `wtgui/create-local-integration-branch-merging-f59422` to `origin` happened after this log was
+  written: the panel's permission box parked it (`rw_mvr4nzsi_804edo`) and the reader answered
+  "this session", which is a grant for this tree only — the setting itself is still local-only, so the
+  next tree will ask again. That session grant is why the commit carrying this paragraph pushed without
+  a second box. No pull request was opened; GitHub offered
+  https://github.com/JLRoper/agent-worktree-gui/pull/new/wtgui/create-local-integration-branch-merging-f59422
+- `main` is still at d8ae753: this branch is 56 commits ahead of it and nothing was merged back.
 - Open question for the reader: `land/pr-model-picker` has no PR-side code in it — all four of its commits
   are the picker and its price data. The "picker half" was its already-landed pair (shared picker + 0.12.0
   bump, both `-` under `git cherry`); the two price commits are merged here.
