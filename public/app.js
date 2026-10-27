@@ -7877,28 +7877,168 @@ function verdictHtml(row) {
     )}">${text}</span>`;
   }
   const base = baseBranchOf(row);
+  const parent = mergeParentOf(row);
   return `<button type="button" class="${cls} merge-start" ${attrs} title="${esc(
-    `start an agent here that merges ${row.branch || "this branch"} into ${base}: fast-forward first, then a rebase or a real merge, ` +
-      `never dropping ${base}'s own code; it runs the unit, integration and Playwright tests on a port of its own, ` +
-      `pushes only when they pass, and stops every server it started`,
+    mergeChooserTitle(row, parent),
   )}">${text}<span class="merge-glyph" aria-hidden="true">\u21e5</span></button>`;
 }
 // ---- end merge control
 
+// ---- the UNMERGED chip's chooser ---------------------------------------------------------------
+// The chip used to start a merge agent on the press. It now opens three outcomes and starts NOTHING until one of them
+// is clicked, because "land this" is not one decision: a child cut from a turnover branch belongs ON that branch (a
+// roll-up, done in the parent's own worktree), a child that has nowhere local to go belongs on a PR, and a child whose
+// parent is master or unknown is a question for the reader — the panel must not invent an answer to it.
+//
+// `parent` is the branch this tree was cut from and `parentSource` says how sure that is: "cut" (the panel watched it),
+// "backfilled" (guessed from a shared ticket id in the branch name) or "unknown". Only a "cut" record may drive a
+// write, so a backfilled parent is SHOWN and the roll button is disabled with the reason in the popover.
+function mergeParentOf(row) {
+  const main = baseBranchOf(row);
+  const parent = String(row?.parent || "").trim();
+  const source = String(row?.parentSource || "unknown");
+  const isMain = !parent || parent === main || /^(master|main|trunk|develop)$/i.test(parent);
+  // "Local branch" excludes master/main: rolling into those is what the merge agent and the PR path are for.
+  const local = Boolean(parent) && !isMain;
+  return {
+    parent: parent || null,
+    sha: row?.parentSha || null,
+    source,
+    main,
+    isMain,
+    local,
+    // A roll-up writes INSIDE the parent's worktree. Only a recorded cut may do that, never a guess.
+    rollable: local && source === "cut",
+  };
+}
+
+function mergeChooserTitle(row, parent) {
+  if (parent.rollable) {
+    return `choose what happens to ${row.branch || "this branch"}: roll it into ${parent.parent} (fast-forward or merge, inside that branch's own worktree), ` +
+      `open a PR, or ask where it should go — nothing happens until you pick one`;
+  }
+  if (parent.local) {
+    return `${row.branch || "this branch"} looks like it belongs on ${parent.parent}, but that parent is a ${parent.source} guess — ` +
+      `the panel will not merge on a guess: open a PR, or say where it should go`;
+  }
+  return `choose what happens to ${row.branch || "this branch"}: open a PR, or ask where it should go — ` +
+    `its parent is ${parent.parent ? `${parent.parent} (a main branch)` : "unknown"}, which is never a roll-up target`;
+}
+
+let mergeChooser = null; // { key, el, at }
+
+function closeMergeChooser() {
+  if (!mergeChooser) return;
+  try {
+    mergeChooser.el.remove();
+  } catch {
+    /* already gone with a repaint */
+  }
+  mergeChooser = null;
+}
+
+// The popover. Appended to the body and positioned against the chip, so a table repaint under it cannot take it out —
+// and so the reader can still read the choice while the row it belongs to re-ranks.
+function openMergeChooser(key) {
+  const row = state.rows.get(key);
+  if (!row) return;
+  closeMergeChooser();
+  const parent = mergeParentOf(row);
+  const chip = document.querySelector(`[data-merge-start="${CSS.escape(key)}"]`);
+  const notes = [];
+  if (parent.rollable) notes.push(`fast-forward or merge inside ${parent.parent}'s own worktree — never the main branch`);
+  else if (parent.local) notes.push(`${parent.parent} is a ${parent.source} guess, so rolling is refused: a guess may not drive a merge`);
+  else if (parent.parent) notes.push(`${parent.parent} is a main branch — the turnover destination is a PR, not a roll`);
+  else notes.push(`no parent was recorded for this tree, and the panel will not invent one`);
+  const btn = (choice, label, extra = "", disabled = false) =>
+    `<button type="button" class="mc-choice${extra}" data-merge-choice="${choice}" data-mc-key="${esc(key)}"${disabled ? " disabled" : ""}>${esc(label)}</button>`;
+  const el = document.createElement("div");
+  el.className = "merge-chooser";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", "what should happen to this branch");
+  el.dataset.mcKey = key;
+  el.innerHTML =
+    `<div class="mc-head">${esc(row.branch || "this branch")}${parent.parent ? ` <span class="mc-from">cut from ${esc(parent.parent)}${parent.sha ? ` @ ${esc(String(parent.sha).slice(0, 8))}` : ""}${parent.source === "cut" ? "" : ` · ${esc(parent.source)}`}</span>` : ""}</div>` +
+    (parent.rollable
+      ? btn("roll", `Roll into ${parent.parent}`, " is-roll")
+      : btn("roll", parent.parent ? `Roll into ${parent.parent}` : "Roll into its parent", " is-roll", true)) +
+    btn("pr", "Open a PR", " is-pr") +
+    btn("ask", "Where should this go?", " is-ask") +
+    `<div class="mc-note">${esc(notes.join(" · "))}</div>`;
+  document.body.appendChild(el);
+  const rect = chip ? chip.getBoundingClientRect() : null;
+  if (rect) {
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - el.offsetWidth - 8));
+    const top = rect.bottom + 6 + el.offsetHeight > window.innerHeight ? Math.max(8, rect.top - el.offsetHeight - 6) : rect.bottom + 6;
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+  }
+  mergeChooser = { key, el, at: Date.now() };
+}
+
+// One click, one outcome. Nothing here runs on the press that opened the chooser.
+async function chooseMergeOutcome(what, key) {
+  const row = state.rows.get(key);
+  if (!row) return;
+  const parent = mergeParentOf(row);
+  if (what === "pr") {
+    // The existing path, unchanged: the merge agent does the landing (and the PR) exactly as it always has.
+    return startMerge({ key, project: row.project, path: row.path, label: row.verdict || "" });
+  }
+  if (what === "ask") {
+    try {
+      const r = await apiFetch(
+        "/api/worktree/parent-question",
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: row.project, path: row.path, branch: row.branch || null, note: parent.rollable ? `asked instead of rolling into ${parent.parent}` : "no parent the panel may write to", by: "the reader (chip)" }) },
+        { timeoutMs: 30000 },
+      );
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      showBanner(`asked where ${row.branch || "this tree"} should go — recorded, nothing was started`);
+    } catch (e) {
+      showBanner(`could not record the question — ${String(e.message || e)}`);
+    }
+    return;
+  }
+  if (what !== "roll") return;
+  const inFlight = mergeInFlight.get(key) || 0;
+  if (Date.now() - inFlight < 15000) return;
+  mergeInFlight.set(key, Date.now());
+  try {
+    const r = await apiFetch(
+      "/api/worktree/rollup",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: row.project, path: row.path, parent: parent.parent, branch: row.branch || null, confirm: true }) },
+      { timeoutMs: 120000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    showBanner(`rolled ${row.branch || "the branch"} into ${d.parentBranch || parent.parent} (${d.method || "merge"}${d.sha ? ` ${d.sha}` : ""})`);
+    await resync();
+  } catch (e) {
+    mergeInFlight.delete(key);
+    showBanner(`could not roll ${row.branch || "the branch"} into ${parent.parent} — ${String(e.message || e)}`);
+  }
+}
+
 // One click, and the agent is the server's business: this only says where. A repaint can replace the button between
 // press and release (the board rebuilds the table on every scan), so the click is taken at pointerup in the delegated
 // handler and the request is keyed on the row, not on the node.
-async function startMerge(btn) {
-  const path = btn.dataset.mergePath || "";
-  const project = btn.dataset.mergeProject || "";
+async function startMerge(target) {
+  // A target, not a button: the chooser has no chip to read the row's facts from (the chip may be a rebuilt node, or
+  // gone), and the row key is what names the request either way.
+  const path = String(target?.path || "");
+  const project = String(target?.project || "");
   if (!path) return;
-  const key = btn.dataset.mergeStart || keyOf(project, path);
+  const key = target?.key || keyOf(project, path);
   if (Date.now() - (mergeInFlight.get(key) || 0) < 15000) return;
   mergeInFlight.set(key, Date.now());
-  const label = btn.dataset.mergeLabel || btn.textContent || "";
-  btn.disabled = true;
-  btn.classList.add("is-starting");
-  btn.textContent = "starting…";
+  const label = String(target?.label || "");
+  const btn = target?.btn && target.btn.isConnected ? target.btn : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add("is-starting");
+    btn.textContent = "starting…";
+  }
   try {
     const r = await apiFetch(
       "/api/worktree/merge",
@@ -7917,7 +8057,7 @@ async function startMerge(btn) {
     mergeInFlight.delete(key);
     showBanner(`could not start the merge — ${String(e.message || e)}`);
   } finally {
-    if (btn.isConnected) {
+    if (btn && btn.isConnected) {
       btn.disabled = false;
       btn.classList.remove("is-starting");
       btn.textContent = label;
@@ -12626,6 +12766,9 @@ document.addEventListener("keydown", async (e) => {
 // A press on the merge chip is remembered until the release: the verdict cell above is rebuilt on every scan.
 document.addEventListener("pointerdown", (e) => {
   const btn = e.target.closest && e.target.closest(".merge-start[data-merge-start]");
+  // A press on the chooser's own buttons is not a press on the chip: clearing here would drop the press that a
+  // repaint between press and release has to survive.
+  if (e.target.closest?.(".merge-chooser")) return;
   mergePress = btn ? { key: btn.dataset.mergeStart, at: Date.now() } : null;
 });
 
@@ -12671,25 +12814,47 @@ document.addEventListener("pointerup", (e) => {
     answerNameConfirm(action, nameConfirm.dataset.nameTreeYes || nameConfirm.dataset.nameTreeEdit || nameConfirm.dataset.nameTreeNo);
     return;
   }
-  // The UNMERGED chip starts a merge agent - the same swallowed-click failure as the buttons above, on the busiest
-  // table in the panel. Taken here, matched on the row rather than on the node: a scan repaint that replaces the
-  // button mid-press lands the release on the cell it rebuilt, and the key recorded at press still names the row.
+  // A choice in the chip's chooser. Taken at release for the same reason as everything above, and matched on the KEY
+  // recorded when the popover opened: the row it was drawn from re-ranks under the cursor, but the key still names it.
+  const choice = e.target.closest && e.target.closest("[data-merge-choice][data-mc-key]");
+  if (choice && !choice.disabled) {
+    e.preventDefault();
+    const key = choice.dataset.mcKey;
+    const what = choice.dataset.mergeChoice;
+    closeMergeChooser();
+    void chooseMergeOutcome(what, key);
+    return;
+  }
+  // A release inside the popover that is not one of its buttons (the head, the note) must not fall through and
+  // re-open the chooser under itself.
+  if (e.target.closest?.(".merge-chooser")) return;
+
+  // The UNMERGED chip opens the chooser - and this is the swallowed-click fix. The old code only honoured a release
+  // that landed on a `td.verdict`, so a repaint that MOVED the row (the board re-ranks on every scan) dropped the
+  // press whenever the finger ended up over another cell of the same row: the reader clicked and nothing happened.
+  // The match is the row now, not the cell - and the key recorded at press still names it even when the chip itself
+  // was rebuilt out of existence.
   const mergeBtn = e.target.closest && e.target.closest(".merge-start[data-merge-start]");
   if (mergeBtn && !mergeBtn.disabled) {
     e.preventDefault();
     mergePress = null;
-    void startMerge(mergeBtn);
+    openMergeChooser(mergeBtn.dataset.mergeStart);
     return;
   }
   const pressed = mergePress;
   mergePress = null;
-  if (pressed && Date.now() - pressed.at < 2000 && e.target.closest?.("td.verdict")) {
-    const built = document.querySelector(`[data-merge-start="${CSS.escape(pressed.key)}"]`);
-    if (built && !built.disabled && built.closest("tr.row")?.dataset.key === pressed.key) {
+  if (pressed && Date.now() - pressed.at < 3000) {
+    const rowEl = document.querySelector(`tr.row[data-key="${CSS.escape(pressed.key)}"]`);
+    const landedOn = e.target.closest && e.target.closest("tr.row[data-key]");
+    const onThatRow = Boolean(rowEl) && (rowEl.contains(e.target) || (landedOn && landedOn.dataset.key === pressed.key));
+    if (onThatRow) {
       e.preventDefault();
-      void startMerge(built);
+      openMergeChooser(pressed.key);
+      return;
     }
   }
+  // Any other release closes the popover: the chooser is a decision the reader is looking at, not a mode.
+  closeMergeChooser();
 });
 
 // Multi-select ticks and a typed answer are the reader's scratch state until they send: keep them where a
