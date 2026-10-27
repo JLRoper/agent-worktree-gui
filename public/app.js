@@ -80,6 +80,12 @@ const state = {
   confirmEls: new Map(),
   tbodyEls: new Map(),
   settings: {},
+  // Where this board's links go (server: lib/hosts.js). `{hosts, projects, file, seedFile, warnings}`; the per-project
+  // entry says which host a project resolves to and why it does not, and the header's chip reads it.
+  hosts: null,
+  // The open host-mapping strip, by project: { project, host, coords, line, error, busy }. Kept here, not only in the
+  // DOM, so a snapshot repaint (every few seconds) does not wipe the proposal the reader is looking at.
+  hostPanel: null,
   spawn: {},
   paused: false,
   es: null,
@@ -146,6 +152,9 @@ const state = {
   // Which worktrees' TODO sections the reader unfolded (localStorage, `wm.openTodos`), and the reader's in-flight
   // add/edit text (module state, never persisted: a half-typed item is not something to bring back a reload later).
   todoOpen: loadOpenTodos(),
+  // Which TODO items' fact bullets the reader unfolded, keyed "<row key>::<item id>" (localStorage,
+  // `wm.openTodoFacts`). An item nobody has opened is collapsed — see loadOpenTodoFacts.
+  todoFactsOpen: loadOpenTodoFacts(),
   todoDraft: null,
   expandedProjects: loadExpandedProjects(),
   collapsedFixed: loadCollapsedFixed(),
@@ -322,6 +331,28 @@ function loadOpenTodos() {
 function saveOpenTodos() {
   try {
     localStorage.setItem("wm.openTodos", JSON.stringify([...state.todoOpen]));
+  } catch {
+    /* no storage: the unfold simply will not survive a reload */
+  }
+}
+
+// Which TODO ITEMS the reader has unfolded the facts under, by row key + item id ("<key>::<item id>"). The bullets
+// are up to three lines about one item and two of them repeat the same worker string, so on a twelve-item list they
+// were thirty-six lines of repetition around the twelve lines worth reading. They start COLLAPSED and only an item
+// whose own disclosure was pressed opens. Like the section itself, only unfolding is remembered — an item nobody has
+// opened stays folded — and this is a NEW key, because no earlier build wrote one and an absent key must mean
+// "every item folded" rather than re-opening a list on the reader's behalf.
+function loadOpenTodoFacts() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem("wm.openTodoFacts") || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveOpenTodoFacts() {
+  try {
+    localStorage.setItem("wm.openTodoFacts", JSON.stringify([...state.todoFactsOpen]));
   } catch {
     /* no storage: the unfold simply will not survive a reload */
   }
@@ -953,6 +984,75 @@ function jobStatusClass(j) {
   if (s === "interrupted") return "interrupted";
   if (s === "running") return "run";
   return "quiet";
+}
+
+// ---- the live pulse ---------------------------------------------------------------------------
+// A live card used to say "running" and nothing else, so a model that was thinking with no tool call yet left
+// the reader watching a blank row. This is the panel's HEARTBEAT on the run's event stream: it says what the
+// last thing it heard was, and how long ago - never that the agent is thinking about anything, and never any
+// reasoning text. The word is the only claim it makes; the age is the only number it shows.
+//
+// Five states, and they are five different facts:
+//   stream     a text delta arrived after the last tool boundary - text is arriving now ("thinking 2s")
+//   tool       a tool is in flight: named, because waiting on a command is not waiting on tokens
+//   silent     nothing for a while, still pulsing: the run is live, its last event is old ("thinking 1m 10s")
+//   no signal  the gateway has sent NO event since the run started - that is a gateway not sending, not an
+//              agent thinking, and the pulse says so instead of pretending to read a mind
+//   polled     this gateway does not advertise run_events_sse: there is no stream to judge, and a 15s poll
+//              must never read as a stalled model
+//
+// `live` comes from lib/jobs.js (`summary().live`, and on every console line), so the pulse is drawn from what
+// the subscriber actually received - a card cannot claim events the panel never saw.
+const PULSE_SILENT_SECONDS = 20; // past this, "thinking 2s" would be a lie: it is silence with a live run
+
+function livePulse(j) {
+  // A held turn (the gateway's 429 cap) has no run yet; its own head already says what it is waiting for.
+  if (!j || !j.live || !turnLive(j) || isWaiting(j)) return null;
+  const now = Date.now();
+  const started = Number(j.live.startedAt) || Date.parse(j.startedAt || "") || now;
+  const last = Number(j.live.lastEventAt) || null;
+  const age = last ? Math.max(0, (now - last) / 1000) : null;
+  const ago = fmtSeconds(age ?? (now - started) / 1000);
+  if (j.live.stream === "off") {
+    return {
+      cls: "is-poll",
+      text: "polled · every 15s",
+      title: "this gateway does not advertise run_events_sse, so the card is polled every 15s instead of streamed - a quiet minute here is the poll, not a stuck model",
+    };
+  }
+  if (!j.live.events) {
+    return {
+      cls: "is-nosignal",
+      text: `no events yet · ${ago}`,
+      title: `this run is live but the gateway has sent no event at all in ${ago} - that is the gateway not sending, not an agent thinking`,
+    };
+  }
+  const tool = j.live.tool?.name;
+  if (tool) {
+    return {
+      cls: "is-tool",
+      text: `${tool} · ${ago}`,
+      title: `${tool} is running - the last event from this run's stream was ${ago} ago. The pulse is the panel's heartbeat on that stream, not the agent's thoughts`,
+    };
+  }
+  if (j.live.streaming && age !== null && age < PULSE_SILENT_SECONDS) {
+    return {
+      cls: "is-stream",
+      text: `thinking ${ago}`,
+      title: `text is streaming: the last delta arrived ${ago} ago. The pulse is the panel's heartbeat on the run's stream, not the agent's thoughts`,
+    };
+  }
+  return {
+    cls: "is-silent",
+    text: `thinking ${ago}`,
+    title: `nothing from this run's stream for ${ago} - the run is still live in the gateway and this panel still holds its stream. The pulse is a heartbeat, not the agent's thoughts`,
+  };
+}
+
+function livePulseHtml(j) {
+  const p = livePulse(j);
+  if (!p) return "";
+  return `<span class="live-pulse ${p.cls}" data-live-pulse="${esc(j.thread || j.id)}" title="${esc(p.title)}"><span class="pulse-dot" aria-hidden="true"></span><span class="pulse-text">${esc(p.text)}</span></span>`;
 }
 
 function jobPreviewHtml(j) {
@@ -2905,18 +3005,19 @@ function closeModelPop() {
   modelPopAnchorEl = null;
 }
 
-function popAnchor(thread, kind) {
+// The readout the context popup belongs to. The model picker no longer comes through here: it is
+// core/model-menu.js's portal, which tracks its own trigger.
+function popAnchor(thread) {
   if (!thread) return null;
   if (modelPopAnchorEl && modelPopAnchorEl.isConnected) return modelPopAnchorEl;
-  const attr = kind === "context" ? "data-context-pick" : "data-model-pick";
-  return document.querySelector(`[${attr}="${CSS.escape(thread)}"]`);
+  return document.querySelector(`[data-context-pick="${CSS.escape(thread)}"]`);
 }
 
 // Put the panel under whatever the reader double-clicked, clamped to the window. Called after opening and again
 // after every repaint that could have moved the control.
 function positionModelPop() {
   if (!modelPop || !modelPopTarget) return true;
-  const btn = popAnchor(modelPopTarget.thread, modelPopTarget.kind);
+  const btn = popAnchor(modelPopTarget.thread);
   if (!btn || !btn.isConnected) {
     closeModelPop();
     return false;
@@ -2951,81 +3052,22 @@ function positionModelPop() {
   return true;
 }
 
-function modelChoices() {
-  const d = modelsState;
-  const out = [{ id: "", label: `(default${d?.defaultModel ? `: ${String(d.defaultModel).split("/").pop()}` : ""})`, group: "" }];
-  for (const p of d?.providers || []) {
-    for (const m of p.models || []) out.push({ id: String(m), label: String(m), group: p.label || "" });
-  }
-  return out;
-}
+// The list is core/model-menu.js's, over the one price table /api/models serves. Nothing here reads a
+// price file of its own: a second copy of the table is how two pickers start quoting different numbers.
 
+// The readout opens THE picker, not a copy of it: same rows in the same order, same prices, same rating,
+// same search and keyboard — and a pick is what pickModel already stored. A session whose model has left
+// the catalogue still gets its row, checked, so the list never reads "nothing is chosen" while one is.
 function openModelPop(thread, anchor) {
+  // The context ceiling and the model list are two popovers on the same readout; opening one closes the other.
   closeModelPop();
-  modelPopAnchorEl = anchor || null;
-  const pop = document.createElement("div");
-  pop.className = "model-pop";
-  pop.innerHTML = `<input class="model-search mono" data-1p-ignore autocomplete="off" spellcheck="false" placeholder="search ${modelChoices().length - 1} models…" />
-    <div class="model-list mono"></div>`;
-  document.body.appendChild(pop);
-  modelPop = pop;
-  modelPopTarget = { kind: "model", thread };
-  positionModelPop();
-  const search = pop.querySelector(".model-search");
-  const list = pop.querySelector(".model-list");
   const current = [...state.jobs.values()].find((j) => (j.thread || j.id) === thread)?.effectiveModel || "";
-  let sel = 0;
-
-  const paint = (q) => {
-    const s = String(q || "").trim().toLowerCase();
-    const hits = modelChoices().filter((c) => !s || c.label.toLowerCase().includes(s) || c.group.toLowerCase().includes(s));
-    sel = 0;
-    if (!hits.length) {
-      list.innerHTML = `<div class="model-none dimmer">no model matches "${esc(q)}"</div>`;
-      return;
-    }
-    let group = null;
-    list.innerHTML = hits
-      .map((c, i) => {
-        const head = c.group && c.group !== group ? `<div class="model-group dimmer">${esc(c.group)}</div>` : "";
-        group = c.group || group;
-        const win = c.id ? modelsState?.contexts?.[c.id] : null;
-        const winText = win ? ` <span class="model-ctx-n">${esc(fmtTokens(win))}</span>` : "";
-        return `${head}<button type="button" class="model-item${i === 0 ? " is-sel" : ""}${c.id === current ? " is-current" : ""}" data-model="${esc(c.id)}" title="${esc(c.id || "gateway default")}${win ? ` — context window ${fmtTokens(win)}` : ""}">${esc(c.label)}${winText}${c.id === current ? " ✓" : ""}</button>`;
-      })
-      .join("");
-  };
-
-  const move = (d) => {
-    const items = [...list.querySelectorAll(".model-item")];
-    if (!items.length) return;
-    items[sel]?.classList.remove("is-sel");
-    sel = (sel + d + items.length) % items.length;
-    items[sel].classList.add("is-sel");
-    items[sel].scrollIntoView({ block: "nearest" });
-  };
-
-  paint("");
-  search.addEventListener("input", () => paint(search.value));
-  search.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape") {
-      ev.preventDefault();
-      closeModelPop();
-    } else if (ev.key === "Enter") {
-      ev.preventDefault();
-      const items = [...list.querySelectorAll(".model-item")];
-      const pick = items[sel] || items[0];
-      if (pick) void pickModel(thread, pick.dataset.model);
-    } else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
-      ev.preventDefault();
-      move(ev.key === "ArrowDown" ? 1 : -1);
-    }
+  const extra = current ? [{ id: current, name: `${current} (not in the catalogue)` }] : [];
+  ModelMenu.open(anchor, {
+    rows: ModelMenu.rowsFor(modelsState, { extra }),
+    value: current,
+    onPick: (id) => void pickModel(thread, id),
   });
-  list.addEventListener("click", (ev) => {
-    const b = ev.target.closest(".model-item");
-    if (b) void pickModel(thread, b.dataset.model);
-  });
-  search.focus();
 }
 
 // ---- the context ceiling ----------------------------------------------------------------------
@@ -3788,6 +3830,7 @@ function conversationHtml(conv) {
           `<button class="pill pill-notrunning pill-continue${latest.status === "failed" ? " is-failed" : ""}" data-continue-thread="${esc(thread)}" type="button" title="${esc(
             `${latest.status} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""} — click to send this agent "${CONTINUE_TEXT}" and start its next turn`,
           )}">${latest.status === "failed" ? "exited" : "not-running"}<span class="pill-again" aria-hidden="true">\u21bb</span></button>`}
+      ${livePulseHtml(latest)}
       ${whenHtml}
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       ${runApproval && !waitingApproval ? `<span class="sig sig-approval" title="this run is parked on a flagged command — answer it in the card below">waiting on approval</span>` : ""}
@@ -6549,6 +6592,12 @@ document.addEventListener("scroll", endFollowOnScroll, { passive: true, capture:
 document.addEventListener("touchmove", endFollowOnScroll, { passive: true });
 
 function appendJobLine(evt) {
+  // The run's live numbers ride the line they belong to: a jobline frame carries them (lib/jobs.js emitLine),
+  // so the pulse's age advances with the output instead of needing a summary frame per token.
+  if (evt.live) {
+    const job = state.jobs.get(evt.id);
+    if (job) job.live = evt.live;
+  }
   const line = evt.line || {};
   const buf = state.jobLines.get(evt.id) || [];
   // mode "set" = the agent is still writing the same paragraph; that line grows in place
@@ -6755,29 +6804,29 @@ async function spawnAgent({ promptFocus = true } = {}) {
 // /api/models, which reads the provider list Hermes itself fetched — not a hardcoded menu.
 let modelsState = null;
 
-// What the CLI's own picker prints beside a model id, and this prints the same way: what the model
-// costs per million tokens in and out, then Artificial Analysis' coding rating out of ten. A model
-// with neither keeps its bare id. The units are stated once, on the select's own tooltip, rather than
-// repeated on every row.
-function modelPriceText(entry) {
-  if (!entry) return "";
-  const parts = [];
-  if (entry.input || entry.output) parts.push(`${entry.input || "?"} in / ${entry.output || "?"} out`);
-  if (entry.coding) parts.push(`code ${entry.coding}`);
-  return parts.join(" · ");
-}
-
-function modelOptionHtml(d) {
-  const def = d?.defaultModel || null;
-  const out = [`<option value="">${esc(def ? `(default: ${def})` : "(gateway default)")}</option>`];
-  for (const p of d?.providers || []) {
-    out.push(`<optgroup label="${esc(p.label)}">`);
-    for (const m of p.models) {
-      const price = modelPriceText(p.pricing?.[m]);
-      out.push(`<option value="${esc(m)}">${esc(price ? `${m} — ${price}` : m)}</option>`);
+// The rows themselves are the shared picker's (core/model-menu.js): it walks the catalogue in the
+// provider order the page already uses, and it prints each row's price and 0-10 rating from the one
+// table /api/models serves. Both model fields build their options with this function, so the board's
+// select, the assistant's select and the floating list can never disagree about a row or its price.
+// `selected` marks the row inline (the assistant's select is rebuilt from HTML, so it cannot rely on
+// setting .value afterwards); `extra` keeps a saved value the catalogue no longer lists visible and checked.
+function modelOptionHtml(d, { selected = "", extra = [] } = {}) {
+  const out = [];
+  let group = null;
+  for (const r of ModelMenu.rowsFor(d, { extra })) {
+    const sel = r.id === selected ? " selected" : "";
+    if (!r.id) {
+      out.push(`<option value=""${sel}>${esc(r.name)}</option>`);
+      continue;
     }
-    out.push("</optgroup>");
+    if ((r.group || "") !== group) {
+      if (group) out.push("</optgroup>");
+      group = r.group || "";
+      if (group) out.push(`<optgroup label="${esc(group)}">`);
+    }
+    out.push(`<option value="${esc(r.id)}"${sel}>${esc(ModelMenu.optionText(r))}</option>`);
   }
+  if (group) out.push("</optgroup>");
   return out.join("");
 }
 
@@ -6787,19 +6836,23 @@ function renderModelPicker(keep = "") {
   sel.innerHTML = modelOptionHtml(modelsState);
   if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
   const d = modelsState;
-  // Say how old the list is: it is a cache of what the provider advertised, not a live call. The price
-  // and rating columns are the panel's own cache too, so they say their own age and where to rebuild
-  // them — a row with no price is a cache that has not been filled, not a model that costs nothing.
+  // Say how old the list is: it is a cache of what the provider advertised, not a live call. The prices
+  // and ratings are the panel's own table too, so they date each layer separately — a row with no price
+  // is a table that has not been filled, not a model that costs nothing.
   const freshness = d?.fetchedAt ? `list fetched ${relTime(d.fetchedAt)} ago` : "fetched at an unknown time";
-  const units = "in/out $ per Mtok · code = Artificial Analysis coding /10";
+  const units = "in/out $ per Mtok · ★ = Artificial Analysis /10";
+  const snapshotAt = d?.pricingSnapshotAt ? String(d.pricingSnapshotAt).slice(0, 10) : "";
   const priced = d?.pricedCount
-    ? `${d.pricedCount} priced, ${d.ratedCount || 0} with a coding rating (${units})` +
-      (d.pricingAge != null ? `, prices ${relTime(new Date(Date.now() - d.pricingAge * 1000).toISOString())} old` : "")
+    ? `${d.pricedCount} priced, ${d.ratedCount || 0} rated 0-10 (${units})` +
+      (d.pricingAge != null ? `, prices ${relTime(new Date(Date.now() - d.pricingAge * 1000).toISOString())} old` : "") +
+      (d.ratedFromSnapshot && snapshotAt ? `, the OpenRouter snapshot of ${snapshotAt} filling the gaps` : "")
     : "no prices yet — Settings → Gateway → Model prices → Refresh now rebuilds them";
   sel.title = d?.count
     ? `${d.count} model${d.count === 1 ? "" : "s"} available to ${d.provider || "this account"}, ${freshness}` +
       `${d.staleDays > 7 ? " — stale, run: hermes model --refresh" : ""} · ${priced}`
     : "no provider list found in the Hermes home — a run falls back to the gateway's configured model";
+  // The floating list is what the reader clicks; the select beneath it is the value and the form's own row.
+  ModelMenu.attach(sel, { models: () => modelsState });
 }
 
 async function loadModels() {
@@ -7465,6 +7518,9 @@ function agentBadgeHtml(row) {
 function deletableWithoutAsking(key) {
   const row = state.rows.get(key);
   if (!row) return false;
+  // A locked row never deletes straight through, whatever its verdict says: the lock is the reader's, and a delete
+  // that skipped the question is exactly the click the lock exists to stop.
+  if (row.lock?.locked) return false;
   if (row.verdictStale) return false;
   if (row.dirty || row.untracked) return false;
   const verdict = String(row.verdict || "");
@@ -7483,6 +7539,25 @@ function showWorktreeConfirm(key) {
   const rowEl = document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
   const row = state.rows.get(key);
   if (!rowEl || !row) return;
+  // THE LOCK: the question is replaced by the refusal, in the same place the Delete button would have been. It is
+  // loud on purpose — the sentence names the lock and says where to remove it — and there is no Delete button to
+  // press, because a button that always fails is worse than no button. The server refuses the same call with the
+  // same words (409), so a script or an agent that never saw this row is refused too.
+  if (row.lock?.locked) {
+    const held = document.createElement("tr");
+    held.className = "row-confirm row-locked";
+    held.dataset.confirmRow = key;
+    held.innerHTML = `<td colspan="10">
+        <div class="row-confirm-cell">
+          <span class="rc-msg"><span class="rc-lock">${"\u{1F512}"} locked</span> <b>${esc(row.name)}</b> <span class="dimmer">cannot be deleted:</span> ${esc(row.lock.reason || "this worktree is locked by the reader")}</span>
+          <span class="rc-actions"><button class="btn-del-no" type="button" data-del-tree-no="${esc(key)}">Close</button></span>
+        </div>
+      </td>`;
+    rowEl.after(held);
+    state.confirmEls.set(key, held);
+    showBanner(`🔒 ${row.lock.reason || "this worktree is locked — unlock it in the row first"}`);
+    return;
+  }
   const confirm = document.createElement("tr");
   confirm.className = "row-confirm";
   confirm.dataset.confirmRow = key;
@@ -7595,6 +7670,38 @@ async function confirmDeleteWorktree(key) {
       yes.disabled = false;
       yes.textContent = "Delete";
     }
+  }
+}
+
+// ---- the reader's lock: one press, one scope -----------------------------------------------
+// `scope` is "tree" (this worktree) or "branch" (the branch it is on, and every worktree cut from it later). The
+// server owns the answer: it writes logs/locks.json, broadcasts a snapshot, and returns the state it now holds, so the
+// button paints what is true rather than what was hoped for. A refusal is a banner, never a silent no-op.
+async function toggleWorktreeLock(scope, key) {
+  const row = state.rows.get(key);
+  if (!row) return;
+  const btn = document.querySelector(`[data-lock-scope="${scope}"][data-lock-tree="${CSS.escape(key)}"]`);
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch("/api/worktree/lock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: row.project, path: row.path, branch: row.branch || null, scope }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showBanner(`lock: ${d.error || `HTTP ${r.status}`}`);
+      return;
+    }
+    showBanner(d.say || (d.locked ? "locked" : "unlocked"));
+    // The snapshot the write broadcast repaints this tab too, but a tab whose stream hiccuped would keep the old
+    // emoji: re-read once so the row this reader is looking at is right either way.
+    await resync();
+  } catch (e) {
+    showBanner(`lock: ${e.message}`);
+  } finally {
+    const again = document.querySelector(`[data-lock-scope="${scope}"][data-lock-tree="${CSS.escape(key)}"]`);
+    if (again) again.disabled = false;
   }
 }
 
@@ -7877,28 +7984,168 @@ function verdictHtml(row) {
     )}">${text}</span>`;
   }
   const base = baseBranchOf(row);
+  const parent = mergeParentOf(row);
   return `<button type="button" class="${cls} merge-start" ${attrs} title="${esc(
-    `start an agent here that merges ${row.branch || "this branch"} into ${base}: fast-forward first, then a rebase or a real merge, ` +
-      `never dropping ${base}'s own code; it runs the unit, integration and Playwright tests on a port of its own, ` +
-      `pushes only when they pass, and stops every server it started`,
+    mergeChooserTitle(row, parent),
   )}">${text}<span class="merge-glyph" aria-hidden="true">\u21e5</span></button>`;
 }
 // ---- end merge control
 
+// ---- the UNMERGED chip's chooser ---------------------------------------------------------------
+// The chip used to start a merge agent on the press. It now opens three outcomes and starts NOTHING until one of them
+// is clicked, because "land this" is not one decision: a child cut from a turnover branch belongs ON that branch (a
+// roll-up, done in the parent's own worktree), a child that has nowhere local to go belongs on a PR, and a child whose
+// parent is master or unknown is a question for the reader — the panel must not invent an answer to it.
+//
+// `parent` is the branch this tree was cut from and `parentSource` says how sure that is: "cut" (the panel watched it),
+// "backfilled" (guessed from a shared ticket id in the branch name) or "unknown". Only a "cut" record may drive a
+// write, so a backfilled parent is SHOWN and the roll button is disabled with the reason in the popover.
+function mergeParentOf(row) {
+  const main = baseBranchOf(row);
+  const parent = String(row?.parent || "").trim();
+  const source = String(row?.parentSource || "unknown");
+  const isMain = !parent || parent === main || /^(master|main|trunk|develop)$/i.test(parent);
+  // "Local branch" excludes master/main: rolling into those is what the merge agent and the PR path are for.
+  const local = Boolean(parent) && !isMain;
+  return {
+    parent: parent || null,
+    sha: row?.parentSha || null,
+    source,
+    main,
+    isMain,
+    local,
+    // A roll-up writes INSIDE the parent's worktree. Only a recorded cut may do that, never a guess.
+    rollable: local && source === "cut",
+  };
+}
+
+function mergeChooserTitle(row, parent) {
+  if (parent.rollable) {
+    return `choose what happens to ${row.branch || "this branch"}: roll it into ${parent.parent} (fast-forward or merge, inside that branch's own worktree), ` +
+      `open a PR, or ask where it should go — nothing happens until you pick one`;
+  }
+  if (parent.local) {
+    return `${row.branch || "this branch"} looks like it belongs on ${parent.parent}, but that parent is a ${parent.source} guess — ` +
+      `the panel will not merge on a guess: open a PR, or say where it should go`;
+  }
+  return `choose what happens to ${row.branch || "this branch"}: open a PR, or ask where it should go — ` +
+    `its parent is ${parent.parent ? `${parent.parent} (a main branch)` : "unknown"}, which is never a roll-up target`;
+}
+
+let mergeChooser = null; // { key, el, at }
+
+function closeMergeChooser() {
+  if (!mergeChooser) return;
+  try {
+    mergeChooser.el.remove();
+  } catch {
+    /* already gone with a repaint */
+  }
+  mergeChooser = null;
+}
+
+// The popover. Appended to the body and positioned against the chip, so a table repaint under it cannot take it out —
+// and so the reader can still read the choice while the row it belongs to re-ranks.
+function openMergeChooser(key) {
+  const row = state.rows.get(key);
+  if (!row) return;
+  closeMergeChooser();
+  const parent = mergeParentOf(row);
+  const chip = document.querySelector(`[data-merge-start="${CSS.escape(key)}"]`);
+  const notes = [];
+  if (parent.rollable) notes.push(`fast-forward or merge inside ${parent.parent}'s own worktree — never the main branch`);
+  else if (parent.local) notes.push(`${parent.parent} is a ${parent.source} guess, so rolling is refused: a guess may not drive a merge`);
+  else if (parent.parent) notes.push(`${parent.parent} is a main branch — the turnover destination is a PR, not a roll`);
+  else notes.push(`no parent was recorded for this tree, and the panel will not invent one`);
+  const btn = (choice, label, extra = "", disabled = false) =>
+    `<button type="button" class="mc-choice${extra}" data-merge-choice="${choice}" data-mc-key="${esc(key)}"${disabled ? " disabled" : ""}>${esc(label)}</button>`;
+  const el = document.createElement("div");
+  el.className = "merge-chooser";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", "what should happen to this branch");
+  el.dataset.mcKey = key;
+  el.innerHTML =
+    `<div class="mc-head">${esc(row.branch || "this branch")}${parent.parent ? ` <span class="mc-from">cut from ${esc(parent.parent)}${parent.sha ? ` @ ${esc(String(parent.sha).slice(0, 8))}` : ""}${parent.source === "cut" ? "" : ` · ${esc(parent.source)}`}</span>` : ""}</div>` +
+    (parent.rollable
+      ? btn("roll", `Roll into ${parent.parent}`, " is-roll")
+      : btn("roll", parent.parent ? `Roll into ${parent.parent}` : "Roll into its parent", " is-roll", true)) +
+    btn("pr", "Open a PR", " is-pr") +
+    btn("ask", "Where should this go?", " is-ask") +
+    `<div class="mc-note">${esc(notes.join(" · "))}</div>`;
+  document.body.appendChild(el);
+  const rect = chip ? chip.getBoundingClientRect() : null;
+  if (rect) {
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - el.offsetWidth - 8));
+    const top = rect.bottom + 6 + el.offsetHeight > window.innerHeight ? Math.max(8, rect.top - el.offsetHeight - 6) : rect.bottom + 6;
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+  }
+  mergeChooser = { key, el, at: Date.now() };
+}
+
+// One click, one outcome. Nothing here runs on the press that opened the chooser.
+async function chooseMergeOutcome(what, key) {
+  const row = state.rows.get(key);
+  if (!row) return;
+  const parent = mergeParentOf(row);
+  if (what === "pr") {
+    // The existing path, unchanged: the merge agent does the landing (and the PR) exactly as it always has.
+    return startMerge({ key, project: row.project, path: row.path, label: row.verdict || "" });
+  }
+  if (what === "ask") {
+    try {
+      const r = await apiFetch(
+        "/api/worktree/parent-question",
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: row.project, path: row.path, branch: row.branch || null, note: parent.rollable ? `asked instead of rolling into ${parent.parent}` : "no parent the panel may write to", by: "the reader (chip)" }) },
+        { timeoutMs: 30000 },
+      );
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      showBanner(`asked where ${row.branch || "this tree"} should go — recorded, nothing was started`);
+    } catch (e) {
+      showBanner(`could not record the question — ${String(e.message || e)}`);
+    }
+    return;
+  }
+  if (what !== "roll") return;
+  const inFlight = mergeInFlight.get(key) || 0;
+  if (Date.now() - inFlight < 15000) return;
+  mergeInFlight.set(key, Date.now());
+  try {
+    const r = await apiFetch(
+      "/api/worktree/rollup",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: row.project, path: row.path, parent: parent.parent, branch: row.branch || null, confirm: true }) },
+      { timeoutMs: 120000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    showBanner(`rolled ${row.branch || "the branch"} into ${d.parentBranch || parent.parent} (${d.method || "merge"}${d.sha ? ` ${d.sha}` : ""})`);
+    await resync();
+  } catch (e) {
+    mergeInFlight.delete(key);
+    showBanner(`could not roll ${row.branch || "the branch"} into ${parent.parent} — ${String(e.message || e)}`);
+  }
+}
+
 // One click, and the agent is the server's business: this only says where. A repaint can replace the button between
 // press and release (the board rebuilds the table on every scan), so the click is taken at pointerup in the delegated
 // handler and the request is keyed on the row, not on the node.
-async function startMerge(btn) {
-  const path = btn.dataset.mergePath || "";
-  const project = btn.dataset.mergeProject || "";
+async function startMerge(target) {
+  // A target, not a button: the chooser has no chip to read the row's facts from (the chip may be a rebuilt node, or
+  // gone), and the row key is what names the request either way.
+  const path = String(target?.path || "");
+  const project = String(target?.project || "");
   if (!path) return;
-  const key = btn.dataset.mergeStart || keyOf(project, path);
+  const key = target?.key || keyOf(project, path);
   if (Date.now() - (mergeInFlight.get(key) || 0) < 15000) return;
   mergeInFlight.set(key, Date.now());
-  const label = btn.dataset.mergeLabel || btn.textContent || "";
-  btn.disabled = true;
-  btn.classList.add("is-starting");
-  btn.textContent = "starting…";
+  const label = String(target?.label || "");
+  const btn = target?.btn && target.btn.isConnected ? target.btn : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add("is-starting");
+    btn.textContent = "starting…";
+  }
   try {
     const r = await apiFetch(
       "/api/worktree/merge",
@@ -7917,7 +8164,7 @@ async function startMerge(btn) {
     mergeInFlight.delete(key);
     showBanner(`could not start the merge — ${String(e.message || e)}`);
   } finally {
-    if (btn.isConnected) {
+    if (btn && btn.isConnected) {
       btn.disabled = false;
       btn.classList.remove("is-starting");
       btn.textContent = label;
@@ -7957,18 +8204,31 @@ function branchCellHtml(row) {
   return `<span class="branch-plain" title="${esc(why)}">${name}</span>${localOnly ? ` <span class="branch-local" title="${esc(why)}">local</span>` : ""}`;
 }
 
+// The PR cell: the number and state are the server's (row.pr), and the PAGE is the project's host record — `row.prUrl`
+// is built by the same template as the branch cell, so `.../pull-requests/12` and `.../pull/12` both come out right
+// without this file knowing which host it is looking at. No URL (an unmapped project, or a host whose pull template
+// cannot be filled): the same chip, plain, with the reason in its title. Never an `<a>` around a guessed page.
+function prCellHtml(row) {
+  if (!row.pr) {
+    return row.remoteBranch === "gone" ? `<span class="dimmer">none · branch gone</span>` : `<span class="dimmer">none</span>`;
+  }
+  const cls = row.pr.state === "OPEN" ? "pr-open" : "pr-merged";
+  const text = `#${row.pr.number} ${row.pr.state}`;
+  const why = row.prUrl ? "" : row.prWhy ? ` · no PR page: ${row.prWhy}` : "";
+  const title = `${row.pr.title || ""}${prMatchNote(row.pr)}${why}`;
+  if (row.prUrl) {
+    return `<a class="pr-link ${cls}" href="${esc(row.prUrl)}" target="_blank" rel="noopener" title="${esc(`${text} — open this PR${why}`)}">${esc(text)}</a>`;
+  }
+  return `<span class="${cls}" title="${esc(title)}">${esc(text)}</span>`;
+}
+
 function rowHtml(row) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   const dirty =
     row.dirty || row.untracked
       ? `<span class="dirty">${row.dirty}</span>${row.untracked ? ` <span class="dimmer">+${row.untracked}?</span>` : ""}`
       : `<span class="clean">clean</span>`;
-  const prTitle = row.pr ? `${row.pr.title || ""}${prMatchNote(row.pr)}` : "";
-  const pr = row.pr
-    ? `<span class="${row.pr.state === "OPEN" ? "pr-open" : "pr-merged"}" title="${esc(prTitle)}">#${row.pr.number} ${esc(row.pr.state)}</span>`
-    : row.remoteBranch === "gone"
-      ? `<span class="dimmer">none · branch gone</span>`
-      : `<span class="dimmer">none</span>`;
+  const pr = prCellHtml(row);
   const badge = verdictHtml(row);
   // The project's own checkout is not a worktree anyone may delete or rename from here: it keeps the folder's name.
   const isProjectRoot = isProjectRootRow(row);
@@ -7989,14 +8249,40 @@ function rowHtml(row) {
   // the name came from, and the rename is the reader's second click.
   const nameFromWorkBtn = isProjectRoot
     ? ""
-    : `<button class="btn-row-name-work" data-name-tree="${esc(keyOf(row.project, row.path))}" data-name-project="${esc(row.project)}" data-name-path="${esc(row.path)}" title="name this worktree from the work in it — reads its commits and its diff against ${esc(baseBranchOf(row))} and offers a name built from them (asks first; the branch is renamed and the six-hex tag kept)${namedLine ? ` · ${esc(namedLine)}` : ""}">\u2726</button>`;
+    : `<button class="btn-row-name-work" data-name-tree="${esc(keyOf(row.project, row.path))}" data-name-project="${esc(row.project)}" data-name-path="${esc(row.path)}" title="name this worktree from the work in it — reads its commits and its diff against ${esc(baseBranchOf(row))} and offers a name built from them (asks first; the branch is renamed and the six-hex tag kept) · the panel's own naming stops at the branch's first commit and never moves a published branch, so this is how a tree that already has work gets a name${namedLine ? ` · ${esc(namedLine)}` : ""}">\u2726</button>`;
   // One ✕ per row, and whether it needs the question at all: merged + clean deletes straight away.
   const delKey = keyOf(row.project, row.path);
   const delDirect = !isProjectRoot && deletableWithoutAsking(delKey);
-  return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
+  const lock = row.lock || null;
+  const lockKeyAttr = esc(keyOf(row.project, row.path));
+  // The reader's lock, as an emoji on the row itself (lib/locks.js). TWO toggles, because the two scopes are a real
+  // difference: the padlock beside the name is THIS worktree, the one in the branch cell is the BRANCH — and the
+  // branch one keeps protecting trees cut from it later, which is the whole point of locking a turnover branch. Each
+  // shows its own bit truthfully, so a tree protected only by its branch reads 🔓 beside the name and 🔒 beside the
+  // branch, and neither can be mistaken for the other. A locked row also carries `is-locked` on the <tr>, so the
+  // state is visible without reading a tooltip.
+  const treeLocked = Boolean(lock?.tree);
+  // The branch's NAME lives in `lock.branch`; the boolean lives in `lock.branchLocked`. Reading the name as a truthy
+  // lock made every row with a branch draw as a locked branch.
+  const branchLockedByBranch = Boolean(lock?.branchLocked);
+  const lockTitle = treeLocked
+    ? `${lock.line || "🔒 this worktree is locked"} — click to unlock it. Nothing may delete it while it is locked.`
+    : branchLockedByBranch
+      ? `this worktree is not locked itself, but ${lock.branch ? `branch ${lock.branch}` : "its branch"} is (see the 🔒 in the branch cell) — click to lock this worktree as well`
+      : "lock this worktree — a locked worktree can never be deleted: not by this row's ✕, not by a merge agent, not by any route";
+  const treeLockBtn = `<button class="btn-row-lock${treeLocked ? " is-locked" : ""}" type="button" data-lock-scope="tree" data-lock-tree="${lockKeyAttr}"
+    title="${esc(lockTitle)}" aria-pressed="${treeLocked ? "true" : "false"}" aria-label="lock this worktree">${treeLocked ? "\u{1F512}" : "\u{1F513}"}</button>`;
+  const branchLockTitle = branchLockedByBranch
+    ? `${lock.line || "🔒 this branch is locked"} — click to unlock it. Every worktree on ${lock.branch || "this branch"}, now and later, is protected while it is locked.`
+    : "lock this BRANCH — protects this worktree and every worktree created on the branch later (a turnover branch stays protected as trees come and go)";
+  const branchLockBtn = isProjectRoot
+    ? ""
+    : `<button class="btn-row-lock btn-branch-lock${branchLockedByBranch ? " is-locked" : ""}" type="button" data-lock-scope="branch" data-lock-tree="${lockKeyAttr}"
+      title="${esc(branchLockTitle)}" aria-pressed="${branchLockedByBranch ? "true" : "false"}" aria-label="lock this branch">${branchLockedByBranch ? "\u{1F512}" : "\u{1F513}"}</button>`;
+  return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     <td class="name"><div class="name-line"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${nameFromWorkBtn}${agentBadgeHtml(row)}</div></td>
-    <td class="mono branch">${branchCellHtml(row)}</td>
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${treeLockBtn}${renameBtn}${nameFromWorkBtn}${agentBadgeHtml(row)}</div></td>
+    <td class="mono branch">${branchCellHtml(row)}${branchLockBtn}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
     <td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>
@@ -9454,7 +9740,12 @@ function repaintTodoBlock(key) {
   const row = state.rows.get(key);
   const detail = state.detailEls.get(key) || document.querySelector(`tr.detail[data-detail="${CSS.escape(key)}"]`);
   if (!row || !detail) return;
-  const holder = document.createElement("div");
+  // A <tbody> holder, like every other path that builds a <tr class="detail">. Parsed inside a <div> the `<tr>` start
+  // tag is dropped by the HTML parser, so `firstElementChild` came back as the inner `<div class="detail-inner">` and
+  // `replaceWith` put THAT in the tbody: the row's detail stopped being a `tr.detail[data-detail]`, every selector that
+  // follows one (placeRow, the sweep, a second unfold) missed it, and the reader's fold was carried by a node the panel
+  // could no longer find. One edit or add on any row did it.
+  const holder = document.createElement("tbody");
   holder.innerHTML = detailHtml(row);
   const fresh = holder.firstElementChild;
   if (!fresh) return;
@@ -9505,6 +9796,10 @@ function todoBlockHtml(row, key) {
     .map((item) => {
       const editing = draft && draft.id === item.id;
       const glyph = TODO_GLYPH[item.status] || "?";
+      // The facts under this item are a disclosure of its OWN: folded unless the reader opened this item, and the key
+      // carries the row as well as the id, so two worktrees' item #2 never share a fold.
+      const factsKey = `${key}::${item.id}`;
+      const factsOpen = state.todoFactsOpen.has(factsKey);
       // The facts about the item, ONE PER BULLET, as a nested list under its line. They used to be a single string
       // ridden to the far right of a full-width line (`margin-left:auto`), so on a 1,400px row the owner and age sat a
       // screen away from the words the reader was reading and both ends needed a zoomed-out browser. The fields are the
@@ -9531,9 +9826,15 @@ function todoBlockHtml(row, key) {
            <button type="button" class="todo-btn" data-todo-op="done" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="mark it done">✓</button>
            <button type="button" class="todo-btn" data-todo-op="drop" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="drop it — it no longer applies">⊘</button>
            ${item.status === "done" || item.status === "dropped" ? `<button type="button" class="todo-btn" data-todo-op="reopen" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="reopen it — back to todo">↺</button>` : ""}`;
-      // The LINE is unchanged — glyph, id, its words, its controls, in that order — and the facts hang under it.
-      return `<li class="todo-item todo-${esc(item.status)}" data-todo-item="${item.id}">
+      // The item's own line is unchanged — glyph, id, its words, its controls — with ONE control in front of it: the
+      // disclosure that folds its facts away. The facts still hang under the line, in the same list, indented the same
+      // way; only whether they are showing is new, and that is the reader's to decide per item.
+      const factsToggle = facts.length
+        ? `<button type="button" class="todo-facts-btn" data-toggle-todo-facts="${item.id}" data-todo-key="${esc(key)}" aria-expanded="${factsOpen ? "true" : "false"}" aria-label="${factsOpen ? "hide" : "show"} the facts for TODO #${item.id}" title="${factsOpen ? "hide" : "show"} what the panel knows about TODO #${item.id} — its owner, who touched it and when"><span class="chev">${factsOpen ? "\u25be" : "\u25b8"}</span></button>`
+        : "";
+      return `<li class="todo-item todo-${esc(item.status)}${facts.length && !factsOpen ? " collapsed" : ""}" data-todo-item="${item.id}">
         <div class="todo-line">
+          ${factsToggle}
           <span class="todo-glyph" title="${esc(item.status)}">${glyph}</span>
           <span class="todo-id mono dimmer">#${item.id}</span>
           ${text}
@@ -10086,6 +10387,132 @@ ${projects.map((p) => projectSection(p.name)).join("\n")}
   </section>`;
 }
 
+// ---- where a project's branches and PRs live: the header's chip and its Discover strip -------------------------
+// The board links a branch and a PR to whatever host the project's mapping names (logs/hosts.json, lib/hosts.js). That
+// mapping is data, so it has to be visible and fillable from the page: the chip says which host a project resolves to
+// (or that it has none, and why), and pressing it reads the project's own remote and offers the mapping it implies.
+// The proposal is never written until the reader presses the button that writes it — a mapping the panel guessed is
+// not a mapping, and a guessed URL is worse than the plain text this whole feature replaced.
+function hostChipHtml(name) {
+  const v = state.hosts?.projects?.[name];
+  if (!v) return "";
+  const coords = v.coordinates ? Object.values(v.coordinates).filter(Boolean).join("/") : "";
+  const label = v.host ? `host: ${v.host}` : "no host";
+  const title = v.host
+    ? `links come from ${v.host}${coords ? ` (${coords})` : ""}${v.landing ? " · its landing doctrine is in the merge prompt" : " · no landing doctrine"}${v.links?.repo ? ` · ${v.links.repo}` : ""} — click to change or re-discover the mapping`
+    : `${v.why} — click to read this project's remote and propose a mapping for you to confirm`;
+  return `<button type="button" class="btn-host${v.host ? " is-mapped" : " is-unmapped"}" data-host-project="${esc(name)}" title="${esc(title)}">${esc(label)}${coords ? ` <span class="host-coords">${esc(coords)}</span>` : ""}</button>`;
+}
+
+function hostPanelHtml(name) {
+  const panel = state.hostPanel;
+  if (!panel || panel.project !== name) return "";
+  const ids = Object.keys(state.hosts?.hosts || {});
+  const opts = ids.length ? ids.map((id) => `<option value="${esc(id)}"${id === panel.host ? " selected" : ""}>${esc(id)}</option>`).join("") : `<option value="">(no host records)</option>`;
+  return `<div class="host-form" data-host-form="${esc(name)}">
+      <span class="mono host-line${panel.error ? " clone-err" : ""}" data-host-line>${esc(panel.line || "")}</span>
+      <label class="host-field">host <select data-host-select="${esc(name)}"${panel.busy ? " disabled" : ""}>${opts}</select></label>
+      <label class="host-field">coordinates <input type="text" class="mono" data-host-coords="${esc(name)}" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" placeholder="owner/repo or PROJECT/slug" value="${esc(panel.coords || "")}"${panel.busy ? " disabled" : ""}></label>
+      <button type="button" data-host-save="${esc(name)}"${panel.busy ? " disabled" : ""}>Use this mapping</button>
+      <button type="button" data-host-cancel="${esc(name)}">Cancel</button>
+    </div>`;
+}
+
+function repaintHostPanel(name) {
+  const sec = document.querySelector(`section.project[data-project="${CSS.escape(name)}"]`);
+  if (!sec) return;
+  const html = hostPanelHtml(name);
+  const old = sec.querySelector("[data-host-form]");
+  if (old) {
+    if (html) old.outerHTML = html;
+    else old.remove();
+    return;
+  }
+  if (!html) return;
+  const head = sec.querySelector(".project-head.meta-line");
+  if (head) head.insertAdjacentHTML("afterend", html);
+}
+
+async function proposeHostMapping(name) {
+  // A second press on the same chip closes the strip; it is a toggle, not a dialog.
+  if (state.hostPanel?.project === name) {
+    state.hostPanel = null;
+    repaintHostPanel(name);
+    return;
+  }
+  const current = state.hosts?.projects?.[name] || {};
+  state.hostPanel = { project: name, host: current.host || "", coords: "", line: "reading the remote…", busy: true };
+  repaintHostPanel(name);
+  try {
+    const res = await apiFetch("/api/hosts/propose", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: name }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (state.hostPanel?.project !== name) return;
+    if (!res.ok) {
+      state.hostPanel = { ...state.hostPanel, busy: false, error: true, line: out.error || `could not read the remote (HTTP ${res.status})` };
+      repaintHostPanel(name);
+      return;
+    }
+    const prop = out.proposal || {};
+    const coords = prop.ok ? Object.values(prop.coordinates || {}).filter(Boolean).join("/") : "";
+    state.hostPanel = {
+      project: name,
+      host: prop.ok ? prop.host : current.host || Object.keys(state.hosts?.hosts || {})[0] || "",
+      coords,
+      busy: false,
+      error: !prop.ok,
+      line: prop.ok
+        ? `proposed from ${prop.remoteUrl} → ${prop.host} · ${coords} — confirm to write it`
+        : `no proposal: ${prop.why || "unknown reason"}`,
+    };
+    repaintHostPanel(name);
+    document.querySelector(`[data-host-coords="${CSS.escape(name)}"]`)?.focus();
+  } catch (e) {
+    if (state.hostPanel?.project !== name) return;
+    state.hostPanel = { ...state.hostPanel, busy: false, error: true, line: `could not read the remote: ${e.message}` };
+    repaintHostPanel(name);
+  }
+}
+
+async function saveHostMapping(name) {
+  const panel = state.hostPanel;
+  if (!panel || panel.project !== name) return;
+  const host = document.querySelector(`[data-host-select="${CSS.escape(name)}"]`)?.value || panel.host;
+  const coords = document.querySelector(`[data-host-coords="${CSS.escape(name)}"]`)?.value ?? panel.coords;
+  if (!host) {
+    state.hostPanel = { ...panel, error: true, line: "pick a host id first — logs/hosts.json and hosts.seed.json define them" };
+    repaintHostPanel(name);
+    return;
+  }
+  state.hostPanel = { ...panel, busy: true, error: false, line: "writing the mapping…" };
+  repaintHostPanel(name);
+  try {
+    const res = await apiFetch("/api/hosts/mapping", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: name, host, coordinates: String(coords || "").trim() }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      state.hostPanel = { ...state.hostPanel, busy: false, error: true, line: out.error || `could not write the mapping (HTTP ${res.status})` };
+      repaintHostPanel(name);
+      return;
+    }
+    state.hostPanel = null;
+    repaintHostPanel(name);
+    showBanner(`host mapping: ${name} → ${host}${out.mapping?.links?.repo ? ` (${out.mapping.links.repo})` : ""}`);
+    // The rows carry their link as a scan result, so the cells catch up on the next pass; this resync brings the new
+    // chip and the project's own coordinates back immediately.
+    void resync();
+  } catch (e) {
+    state.hostPanel = { ...state.hostPanel, busy: false, error: true, line: `could not write the mapping: ${e.message}` };
+    repaintHostPanel(name);
+  }
+}
+
 function projectSection(name) {
   const p = state.projects.get(name) || { name };
   const open = state.expandedProjects.has(name);
@@ -10109,8 +10536,9 @@ function projectSection(name) {
     </div>
     <div class="project-head meta-line">
       <span class="mono dim">${mainLine}</span><span class="spacer"></span>${board}${tip}
-      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>
+      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}
     </div>
+    ${hostPanelHtml(name)}
     <div class="wt-scroll">
       <table><thead><tr>
         <th>Worktree</th><th>Branch</th><th>Tip</th><th>Ahead / Behind</th><th>Cherry</th>
@@ -11012,6 +11440,7 @@ function applySnapshot(data) {
   // sections on screen are still valid and a full re-render would be pure cost.
   const beforeSig = [...state.projects.keys()].sort().join("|");
   state.settings = data.settings || state.settings;
+  if (data.hosts) state.hosts = data.hosts;
   if (Array.isArray(data.scanRoots)) state.scanRoots = data.scanRoots;
   if (data.spawn) {
     state.spawn = data.spawn;
@@ -11021,7 +11450,7 @@ function applySnapshot(data) {
     $("chip-key").title = t.error || `${t.url || ""}${caps.version ? ` · hermes ${caps.version}` : ""}`;
     $("chip-bin").textContent = String(t.url || "").replace(/^https?:\/\//, "") || "no gateway";
     $("chip-bin").title = caps.runCwd
-      ? "the gateway honours per-run cwd, so agents work in their own worktree"
+      ? "the gateway advertises per-run cwd — measured 2026-10-27: it is accepted, and a run's tools still start in the gateway's directory, so the prompt carries the path too"
       : "the gateway ignores per-run cwd (hermes-runs-api-knobs.diff not applied) — agents run in the gateway's directory";
     syncProjectPicker(data.spawn.projects || []);
   }
@@ -11278,6 +11707,13 @@ document.addEventListener(
   true,
 );
 
+// A TODO item's disclosure is a pointer gesture, not a place to put the caret. The item being edited keeps its edit
+// box open right above the facts, and a plain button's mousedown would blur it (and take the caret mid-word); the
+// click still fires — only the focus/selection default is cancelled — and Tab + Enter/Space still reach the control.
+document.addEventListener("mousedown", (e) => {
+  if (e.target.closest?.("[data-toggle-todo-facts]")) e.preventDefault();
+});
+
 // "make the first commit" on an unborn-HEAD refusal: one empty local commit, then the spawn the button was
 // offered for runs again. No push, no file invented for the repo.
 document.addEventListener("click", async (e) => {
@@ -11467,9 +11903,19 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     const key = delTree.dataset.delTree;
-    // Merged and clean: nothing here that main does not already have, so no question.
+    // Merged and clean: nothing here that main does not already have, so no question. A locked row never gets here
+    // (deletableWithoutAsking says no) — it goes to showWorktreeConfirm, which shows the refusal instead.
     if (deletableWithoutAsking(key)) void confirmDeleteWorktree(key);
     else showWorktreeConfirm(key);
+    return;
+  }
+  // The reader's lock: one press per scope, and the row repaints from the snapshot the server broadcasts. The button
+  // is answered on the release for the same reason the delete is — the board re-ranks rows under the cursor.
+  const lockBtn = e.target.closest("[data-lock-scope]");
+  if (lockBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    void toggleWorktreeLock(lockBtn.dataset.lockScope === "branch" ? "branch" : "tree", lockBtn.dataset.lockTree);
     return;
   }
   const renameTree = e.target.closest("[data-rename-tree]");
@@ -11622,6 +12068,30 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     e.preventDefault();
     void cloneIntoRoot(rgo.dataset.cloneGo);
+    return;
+  }
+  // The host chip and its Discover strip. The chip sits inside the project header, whose click toggles the section,
+  // so every one of these stops propagation — pressing "host: sefl-bitbucket" must not also collapse the project.
+  const rhost = e.target.closest("[data-host-project]");
+  if (rhost) {
+    e.stopPropagation();
+    e.preventDefault();
+    void proposeHostMapping(rhost.dataset.hostProject);
+    return;
+  }
+  const rhsave = e.target.closest("[data-host-save]");
+  if (rhsave) {
+    e.stopPropagation();
+    e.preventDefault();
+    void saveHostMapping(rhsave.dataset.hostSave);
+    return;
+  }
+  const rhcancel = e.target.closest("[data-host-cancel]");
+  if (rhcancel) {
+    e.stopPropagation();
+    e.preventDefault();
+    state.hostPanel = null;
+    repaintHostPanel(rhcancel.dataset.hostCancel);
     return;
   }
   // The clear button inside the folder search box: restore the full list and put the caret back.
@@ -12001,6 +12471,30 @@ document.addEventListener("click", async (e) => {
       }
       todoToggle.title = `${open ? "unfold" : "fold"} this worktree's TODO list — folded it reads the OLDEST item still open`;
     }
+    return;
+  }
+  // One item's fact bullets: a disclosure of its own, and a class flip rather than a repaint — so nothing else in the
+  // block moves, an item the reader is editing keeps its caret, and the toggle never reaches the row's own fold (the
+  // row ignores clicks on a <button> anyway, and this stops the event here as well). The control is a real <button>,
+  // so Tab reaches it and Enter/Space fire this same click. Remembered per worktree + item, never defaulted open.
+  const factsToggle = e.target.closest?.("[data-toggle-todo-facts]");
+  if (factsToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    const key = String(factsToggle.dataset.todoKey || "");
+    const id = String(factsToggle.dataset.toggleTodoFacts || "");
+    const factsKey = `${key}::${id}`;
+    const item = factsToggle.closest(".todo-item");
+    const open = state.todoFactsOpen.has(factsKey);
+    if (open) state.todoFactsOpen.delete(factsKey);
+    else state.todoFactsOpen.add(factsKey);
+    saveOpenTodoFacts();
+    item?.classList.toggle("collapsed", open);
+    const chev = factsToggle.querySelector(".chev");
+    if (chev) chev.textContent = open ? "\u25b8" : "\u25be";
+    factsToggle.setAttribute("aria-expanded", open ? "false" : "true");
+    factsToggle.setAttribute("aria-label", `${open ? "show" : "hide"} the facts for TODO #${id}`);
+    factsToggle.title = `${open ? "show" : "hide"} what the panel knows about TODO #${id} — its owner, who touched it and when`;
     return;
   }
   // The reader's own buttons on a TODO item: add, edit, complete, drop, reopen. Every one of them is a POST to
@@ -12626,6 +13120,9 @@ document.addEventListener("keydown", async (e) => {
 // A press on the merge chip is remembered until the release: the verdict cell above is rebuilt on every scan.
 document.addEventListener("pointerdown", (e) => {
   const btn = e.target.closest && e.target.closest(".merge-start[data-merge-start]");
+  // A press on the chooser's own buttons is not a press on the chip: clearing here would drop the press that a
+  // repaint between press and release has to survive.
+  if (e.target.closest?.(".merge-chooser")) return;
   mergePress = btn ? { key: btn.dataset.mergeStart, at: Date.now() } : null;
 });
 
@@ -12671,25 +13168,47 @@ document.addEventListener("pointerup", (e) => {
     answerNameConfirm(action, nameConfirm.dataset.nameTreeYes || nameConfirm.dataset.nameTreeEdit || nameConfirm.dataset.nameTreeNo);
     return;
   }
-  // The UNMERGED chip starts a merge agent - the same swallowed-click failure as the buttons above, on the busiest
-  // table in the panel. Taken here, matched on the row rather than on the node: a scan repaint that replaces the
-  // button mid-press lands the release on the cell it rebuilt, and the key recorded at press still names the row.
+  // A choice in the chip's chooser. Taken at release for the same reason as everything above, and matched on the KEY
+  // recorded when the popover opened: the row it was drawn from re-ranks under the cursor, but the key still names it.
+  const choice = e.target.closest && e.target.closest("[data-merge-choice][data-mc-key]");
+  if (choice && !choice.disabled) {
+    e.preventDefault();
+    const key = choice.dataset.mcKey;
+    const what = choice.dataset.mergeChoice;
+    closeMergeChooser();
+    void chooseMergeOutcome(what, key);
+    return;
+  }
+  // A release inside the popover that is not one of its buttons (the head, the note) must not fall through and
+  // re-open the chooser under itself.
+  if (e.target.closest?.(".merge-chooser")) return;
+
+  // The UNMERGED chip opens the chooser - and this is the swallowed-click fix. The old code only honoured a release
+  // that landed on a `td.verdict`, so a repaint that MOVED the row (the board re-ranks on every scan) dropped the
+  // press whenever the finger ended up over another cell of the same row: the reader clicked and nothing happened.
+  // The match is the row now, not the cell - and the key recorded at press still names it even when the chip itself
+  // was rebuilt out of existence.
   const mergeBtn = e.target.closest && e.target.closest(".merge-start[data-merge-start]");
   if (mergeBtn && !mergeBtn.disabled) {
     e.preventDefault();
     mergePress = null;
-    void startMerge(mergeBtn);
+    openMergeChooser(mergeBtn.dataset.mergeStart);
     return;
   }
   const pressed = mergePress;
   mergePress = null;
-  if (pressed && Date.now() - pressed.at < 2000 && e.target.closest?.("td.verdict")) {
-    const built = document.querySelector(`[data-merge-start="${CSS.escape(pressed.key)}"]`);
-    if (built && !built.disabled && built.closest("tr.row")?.dataset.key === pressed.key) {
+  if (pressed && Date.now() - pressed.at < 3000) {
+    const rowEl = document.querySelector(`tr.row[data-key="${CSS.escape(pressed.key)}"]`);
+    const landedOn = e.target.closest && e.target.closest("tr.row[data-key]");
+    const onThatRow = Boolean(rowEl) && (rowEl.contains(e.target) || (landedOn && landedOn.dataset.key === pressed.key));
+    if (onThatRow) {
       e.preventDefault();
-      void startMerge(built);
+      openMergeChooser(pressed.key);
+      return;
     }
   }
+  // Any other release closes the popover: the chooser is a decision the reader is looking at, not a mode.
+  closeMergeChooser();
 });
 
 // Multi-select ticks and a typed answer are the reader's scratch state until they send: keep them where a
@@ -12925,6 +13444,21 @@ setInterval(() => {
     // nothing else repaints it while it waits (the gateway sends no events for a POST it refused).
     if (j.status !== "running" && j.status !== "starting" && !isWaiting(j)) continue;
     const card = document.querySelector(`.job[data-thread="${CSS.escape(j.thread || j.id)}"]`);
+    // The pulse's age is the one thing on this card that has to move without an event: the whole point of it
+    // is to say how long the silence is, and nothing arrives while it is silent. Rewritten in place - a rebuilt
+    // node would take the card's layout with it every second.
+    const pulse = card ? livePulse(j) : null;
+    for (const el of card?.querySelectorAll(".live-pulse") || []) {
+      if (!pulse) {
+        el.remove();
+        continue;
+      }
+      const txt = el.querySelector(".pulse-text");
+      if (txt && txt.textContent !== pulse.text) txt.textContent = pulse.text;
+      if (el.title !== pulse.title) el.title = pulse.title;
+      const cls = `live-pulse ${pulse.cls}`;
+      if (el.className !== cls) el.className = cls;
+    }
     // The clock is its own span. Replacing the whole foot here deleted the stats strip one second
     // after the card rendered it: a running card showed "running 42s" and nothing else, while every
     // settled sibling had its numbers.

@@ -22,6 +22,7 @@
   "defaultCwd": "C:/ProjectDevelopment/heroes-js",
   "jobMaxRuntimeSeconds": 3600,
   "hermesBin": null,
+  "remoteBranchPolicy": "local-only",
   "projects": [
     {
       "name": "heroes-js",
@@ -29,6 +30,16 @@
       "remote": "github",
       "mainBranch": "main",
       "prRepo": "JLRoper/vigilant-palm-tree",
+      "remoteBranchPolicy": "allow",
+      "worktrees": null
+    },
+    {
+      "name": "agent-worktree-gui",
+      "path": "C:/ProjectDevelopment/agent-worktree-gui",
+      "remote": "github",
+      "mainBranch": "main",
+      "prRepo": "JLRoper/agent-worktree-gui",
+      "remoteBranchPolicy": "allow",
       "worktrees": null
     }
   ]
