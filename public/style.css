@@ -1788,6 +1788,20 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
    facts sit. The left rule is what makes the nesting visible at a glance: bullets hang off the item they describe. */
 .todo-item { display: block; padding: 1px 0 3px; }
 .todo-line { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
+/* The disclosure that folds ONE item's facts away, in front of its line so what it opens starts at the same left edge
+   as the words it belongs to. FOLDED is an item's default: the facts are up to three bullets about one item and two of
+   them carry the same worker string, so a twelve-item list was thirty-six lines of repetition around the twelve lines
+   worth reading. Each item opens on its own, and the choice is remembered per worktree + item (localStorage,
+   `wm.openTodoFacts`). The chevron takes the UI font on purpose: `▸`/`▾` in the mono stack render as nothing on
+   Windows, and the item's line is set in mono. */
+.todo-item .todo-facts-btn {
+  flex: none; font: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; color: var(--dimmer);
+  line-height: 1;
+}
+.todo-item .todo-facts-btn .chev { font-family: var(--ui); font-size: 11px; line-height: 1; display: inline-block; width: 11px; }
+.todo-item .todo-facts-btn:hover .chev { color: var(--text); }
+.todo-item .todo-facts-btn:focus-visible { outline: 1px solid var(--text); outline-offset: 2px; }
+.todo-item.collapsed .todo-meta { display: none; }
 .todo-item .todo-glyph { flex: none; color: var(--dimmer); }
 .todo-item.todo-done .todo-text, .todo-item.todo-dropped .todo-text { color: var(--dimmer); text-decoration: line-through; }
 .todo-item.todo-doing .todo-glyph { color: var(--text); }

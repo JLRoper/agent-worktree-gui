@@ -9,3 +9,4 @@ Base: main @ d8ae753 (0.11.2). Each entry is one merge commit, tested after it l
 | 3 | wtgui/reconcile-assistant-command-lines-agains-75c2c2 | c9bc76e | conflict: README.md (kept audit paragraphs + main's once-only rename wording) | 77/77 pass |
 | 4 | wtgui/version-static-assets-with-content-hash-6f26a9 | 0a4a797 | conflict: package.json (kept main's 0.11.2) | 94/94 pass |
 | 5 | wtgui/subscribe-panel-to-run-event-stream-1e310c | a95c768 | version restored to 0.11.2 | 96/96 pass |
+| 6 | wtgui/make-todo-fact-lines-collapsible-by-defa-90909d | b554f80 | conflicts: package.json (0.11.2), server.js (kept ledger + git gates; cut/skipped both off the named line) | 96/96 pass |

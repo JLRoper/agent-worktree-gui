@@ -152,6 +152,9 @@ const state = {
   // Which worktrees' TODO sections the reader unfolded (localStorage, `wm.openTodos`), and the reader's in-flight
   // add/edit text (module state, never persisted: a half-typed item is not something to bring back a reload later).
   todoOpen: loadOpenTodos(),
+  // Which TODO items' fact bullets the reader unfolded, keyed "<row key>::<item id>" (localStorage,
+  // `wm.openTodoFacts`). An item nobody has opened is collapsed — see loadOpenTodoFacts.
+  todoFactsOpen: loadOpenTodoFacts(),
   todoDraft: null,
   expandedProjects: loadExpandedProjects(),
   collapsedFixed: loadCollapsedFixed(),
@@ -328,6 +331,28 @@ function loadOpenTodos() {
 function saveOpenTodos() {
   try {
     localStorage.setItem("wm.openTodos", JSON.stringify([...state.todoOpen]));
+  } catch {
+    /* no storage: the unfold simply will not survive a reload */
+  }
+}
+
+// Which TODO ITEMS the reader has unfolded the facts under, by row key + item id ("<key>::<item id>"). The bullets
+// are up to three lines about one item and two of them repeat the same worker string, so on a twelve-item list they
+// were thirty-six lines of repetition around the twelve lines worth reading. They start COLLAPSED and only an item
+// whose own disclosure was pressed opens. Like the section itself, only unfolding is remembered — an item nobody has
+// opened stays folded — and this is a NEW key, because no earlier build wrote one and an absent key must mean
+// "every item folded" rather than re-opening a list on the reader's behalf.
+function loadOpenTodoFacts() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem("wm.openTodoFacts") || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveOpenTodoFacts() {
+  try {
+    localStorage.setItem("wm.openTodoFacts", JSON.stringify([...state.todoFactsOpen]));
   } catch {
     /* no storage: the unfold simply will not survive a reload */
   }
@@ -8084,7 +8109,7 @@ function rowHtml(row) {
   // the name came from, and the rename is the reader's second click.
   const nameFromWorkBtn = isProjectRoot
     ? ""
-    : `<button class="btn-row-name-work" data-name-tree="${esc(keyOf(row.project, row.path))}" data-name-project="${esc(row.project)}" data-name-path="${esc(row.path)}" title="name this worktree from the work in it — reads its commits and its diff against ${esc(baseBranchOf(row))} and offers a name built from them (asks first; the branch is renamed and the six-hex tag kept)${namedLine ? ` · ${esc(namedLine)}` : ""}">\u2726</button>`;
+    : `<button class="btn-row-name-work" data-name-tree="${esc(keyOf(row.project, row.path))}" data-name-project="${esc(row.project)}" data-name-path="${esc(row.path)}" title="name this worktree from the work in it — reads its commits and its diff against ${esc(baseBranchOf(row))} and offers a name built from them (asks first; the branch is renamed and the six-hex tag kept) · the panel's own naming stops at the branch's first commit and never moves a published branch, so this is how a tree that already has work gets a name${namedLine ? ` · ${esc(namedLine)}` : ""}">\u2726</button>`;
   // One ✕ per row, and whether it needs the question at all: merged + clean deletes straight away.
   const delKey = keyOf(row.project, row.path);
   const delDirect = !isProjectRoot && deletableWithoutAsking(delKey);
@@ -9549,7 +9574,12 @@ function repaintTodoBlock(key) {
   const row = state.rows.get(key);
   const detail = state.detailEls.get(key) || document.querySelector(`tr.detail[data-detail="${CSS.escape(key)}"]`);
   if (!row || !detail) return;
-  const holder = document.createElement("div");
+  // A <tbody> holder, like every other path that builds a <tr class="detail">. Parsed inside a <div> the `<tr>` start
+  // tag is dropped by the HTML parser, so `firstElementChild` came back as the inner `<div class="detail-inner">` and
+  // `replaceWith` put THAT in the tbody: the row's detail stopped being a `tr.detail[data-detail]`, every selector that
+  // follows one (placeRow, the sweep, a second unfold) missed it, and the reader's fold was carried by a node the panel
+  // could no longer find. One edit or add on any row did it.
+  const holder = document.createElement("tbody");
   holder.innerHTML = detailHtml(row);
   const fresh = holder.firstElementChild;
   if (!fresh) return;
@@ -9600,6 +9630,10 @@ function todoBlockHtml(row, key) {
     .map((item) => {
       const editing = draft && draft.id === item.id;
       const glyph = TODO_GLYPH[item.status] || "?";
+      // The facts under this item are a disclosure of its OWN: folded unless the reader opened this item, and the key
+      // carries the row as well as the id, so two worktrees' item #2 never share a fold.
+      const factsKey = `${key}::${item.id}`;
+      const factsOpen = state.todoFactsOpen.has(factsKey);
       // The facts about the item, ONE PER BULLET, as a nested list under its line. They used to be a single string
       // ridden to the far right of a full-width line (`margin-left:auto`), so on a 1,400px row the owner and age sat a
       // screen away from the words the reader was reading and both ends needed a zoomed-out browser. The fields are the
@@ -9626,9 +9660,15 @@ function todoBlockHtml(row, key) {
            <button type="button" class="todo-btn" data-todo-op="done" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="mark it done">✓</button>
            <button type="button" class="todo-btn" data-todo-op="drop" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="drop it — it no longer applies">⊘</button>
            ${item.status === "done" || item.status === "dropped" ? `<button type="button" class="todo-btn" data-todo-op="reopen" data-todo-id="${item.id}" data-todo-key="${esc(key)}" title="reopen it — back to todo">↺</button>` : ""}`;
-      // The LINE is unchanged — glyph, id, its words, its controls, in that order — and the facts hang under it.
-      return `<li class="todo-item todo-${esc(item.status)}" data-todo-item="${item.id}">
+      // The item's own line is unchanged — glyph, id, its words, its controls — with ONE control in front of it: the
+      // disclosure that folds its facts away. The facts still hang under the line, in the same list, indented the same
+      // way; only whether they are showing is new, and that is the reader's to decide per item.
+      const factsToggle = facts.length
+        ? `<button type="button" class="todo-facts-btn" data-toggle-todo-facts="${item.id}" data-todo-key="${esc(key)}" aria-expanded="${factsOpen ? "true" : "false"}" aria-label="${factsOpen ? "hide" : "show"} the facts for TODO #${item.id}" title="${factsOpen ? "hide" : "show"} what the panel knows about TODO #${item.id} — its owner, who touched it and when"><span class="chev">${factsOpen ? "\u25be" : "\u25b8"}</span></button>`
+        : "";
+      return `<li class="todo-item todo-${esc(item.status)}${facts.length && !factsOpen ? " collapsed" : ""}" data-todo-item="${item.id}">
         <div class="todo-line">
+          ${factsToggle}
           <span class="todo-glyph" title="${esc(item.status)}">${glyph}</span>
           <span class="todo-id mono dimmer">#${item.id}</span>
           ${text}
@@ -11501,6 +11541,13 @@ document.addEventListener(
   true,
 );
 
+// A TODO item's disclosure is a pointer gesture, not a place to put the caret. The item being edited keeps its edit
+// box open right above the facts, and a plain button's mousedown would blur it (and take the caret mid-word); the
+// click still fires — only the focus/selection default is cancelled — and Tab + Enter/Space still reach the control.
+document.addEventListener("mousedown", (e) => {
+  if (e.target.closest?.("[data-toggle-todo-facts]")) e.preventDefault();
+});
+
 // "make the first commit" on an unborn-HEAD refusal: one empty local commit, then the spawn the button was
 // offered for runs again. No push, no file invented for the repo.
 document.addEventListener("click", async (e) => {
@@ -12248,6 +12295,30 @@ document.addEventListener("click", async (e) => {
       }
       todoToggle.title = `${open ? "unfold" : "fold"} this worktree's TODO list — folded it reads the OLDEST item still open`;
     }
+    return;
+  }
+  // One item's fact bullets: a disclosure of its own, and a class flip rather than a repaint — so nothing else in the
+  // block moves, an item the reader is editing keeps its caret, and the toggle never reaches the row's own fold (the
+  // row ignores clicks on a <button> anyway, and this stops the event here as well). The control is a real <button>,
+  // so Tab reaches it and Enter/Space fire this same click. Remembered per worktree + item, never defaulted open.
+  const factsToggle = e.target.closest?.("[data-toggle-todo-facts]");
+  if (factsToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    const key = String(factsToggle.dataset.todoKey || "");
+    const id = String(factsToggle.dataset.toggleTodoFacts || "");
+    const factsKey = `${key}::${id}`;
+    const item = factsToggle.closest(".todo-item");
+    const open = state.todoFactsOpen.has(factsKey);
+    if (open) state.todoFactsOpen.delete(factsKey);
+    else state.todoFactsOpen.add(factsKey);
+    saveOpenTodoFacts();
+    item?.classList.toggle("collapsed", open);
+    const chev = factsToggle.querySelector(".chev");
+    if (chev) chev.textContent = open ? "\u25b8" : "\u25be";
+    factsToggle.setAttribute("aria-expanded", open ? "false" : "true");
+    factsToggle.setAttribute("aria-label", `${open ? "show" : "hide"} the facts for TODO #${id}`);
+    factsToggle.title = `${open ? "show" : "hide"} what the panel knows about TODO #${id} — its owner, who touched it and when`;
     return;
   }
   // The reader's own buttons on a TODO item: add, edit, complete, drop, reopen. Every one of them is a POST to

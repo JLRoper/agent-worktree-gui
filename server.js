@@ -876,6 +876,69 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
       };
     }
   }
+  // ---- the name belongs to the work once there is work --------------------------------------------
+  // A tree is named BEFORE its work exists, and that is a rule now rather than a hope. Two gates, both read from git
+  // rather than from the store (the store is a scan behind, and a rename is the irreversible half of this):
+  //
+  //   * the branch is published — it exists on the project's remote. A remote branch and any PR are keyed on the
+  //     name, so moving it silently detaches the row from both. Refused even for the deliberate ✦; the reader can
+  //     still rename it themselves.
+  //   * the automatic half (`once`) stops at the branch's first own commit. Measured on this board: one tree's
+  //     rename landed 95 seconds AFTER its second commit, leaving a directory named one thing and a branch named
+  //     another, and 12 of 180 rows sit in that split state. After the first commit the name is part of the work.
+  const branchNow = await execP("git", ["-C", oldPath, "symbolic-ref", "--short", "HEAD"], { timeout: 20_000, windowsHide: true })
+    .then((r) => String(r.stdout || "").trim())
+    .catch(() => "");
+  if (project.remote && branchNow) {
+    const published = await execP("git", ["-C", project.path, "rev-parse", "--verify", "--quiet", `refs/remotes/${project.remote}/${branchNow}`], { timeout: 20_000, windowsHide: true })
+      .then((r) => Boolean(String(r.stdout || "").trim()))
+      .catch(() => false);
+    if (published) {
+      return {
+        error: `${branchNow} is already on the remote (${project.remote}/${branchNow}) — its name is published, so the panel will not move it. Rename it yourself with \`git branch -m\` if it really has to change.`,
+        status: 409,
+      };
+    }
+  }
+  if (once && branchNow) {
+    const baseRef = project.remote ? `${project.remote}/${project.mainBranch}` : project.mainBranch || null;
+    const ahead = baseRef
+      ? await execP("git", ["-C", oldPath, "rev-list", "--count", `${baseRef}..HEAD`], { timeout: 30_000, windowsHide: true })
+          .then((r) => Number.parseInt(String(r.stdout || "").trim(), 10))
+          .catch(() => Number.NaN)
+      : Number.NaN;
+    // Unknown is not zero: a branch whose base cannot be read is one the panel cannot prove is empty.
+    if (!Number.isFinite(ahead) || ahead > 0) {
+      const why = Number.isFinite(ahead)
+        ? `the branch already carries ${ahead} commit${ahead === 1 ? "" : "s"} of its own`
+        : "the branch's base could not be read, so it cannot be proved to carry no work";
+      // Written down, not merely returned: the sweeper asks again after every restart, and a tree this rule spared
+      // must not be offered a new name each time. `skipped` keeps it off the board's `named` line — the tree was not
+      // renamed, so it must not claim it was (`withTreeNames`).
+      const skippedRec = treeNames.record(key, {
+        name: base,
+        dir: base,
+        branch: branchNow,
+        tag,
+        by: by || "the panel",
+        how: `${why} — the name stays`,
+        at: new Date().toISOString(),
+        skipped: true,
+        claimedOnly: false,
+        from: base,
+      });
+      log(`naming ${oldPath}: refused — ${why}; a tree is named before its work is committed, not after`);
+      return {
+        ok: true,
+        unchanged: true,
+        skipped: `${why} — a tree is named before its work is committed, not after`,
+        named: skippedRec,
+        path: oldPath.replace(/\\/g, "/"),
+        branch: branchNow,
+        jobs: 0,
+      };
+    }
+  }
   const wanted = String(name || "").trim().replace(new RegExp(`-${tag}$`, "i"), "");
   const dirName = worktreeDirName(wanted, tag);
   if (!dirName) return { error: "a name is required", status: 400 };
@@ -952,6 +1015,9 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
       cut: true,
       cutRun: run || null,
       claimedOnly: true,
+      // A claim is a real attempt at a name: clear any earlier `skipped` mark, or a tree that was spared once
+      // would keep claiming it had been named and hide its own name from the board.
+      skipped: false,
     });
   }
   // The branch the tree is actually on, read BEFORE the directory is moved: after `worktree move` the old path is
@@ -962,30 +1028,36 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
     .then((r) => String(r.stdout || "").trim())
     .catch(() => row.branch || null);
   // Windows will not rename a directory that any process has open, and an agent's shell lives in its tree long after
-  // its turn ends — so the directory move is best-effort and the branch rename is the part that always lands.
-  let moved = true;
+  // its turn ends — so the directory move is best-effort and the branch rename is the part that lands. Both halves
+  // are retried: a file indexer, a scan worker or a ref lock holds one of them for a moment, and one retry each is
+  // what keeps a transient lock from leaving a tree's name and its branch disagreeing.
+  let moved = false;
   let whyNot = "";
-  try {
-    await execP("git", ["-C", project.path, "worktree", "move", oldPath, newPath], { timeout: 90_000, windowsHide: true });
-  } catch (e) {
-    moved = false;
-    whyNot = String((e && e.message) || e)
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .pop() || "the directory is held open";
+  for (let attempt = 0; attempt < 3 && !moved; attempt += 1) {
+    try {
+      await execP("git", ["-C", project.path, "worktree", "move", oldPath, newPath], { timeout: 90_000, windowsHide: true });
+      moved = true;
+    } catch (e) {
+      whyNot =
+        String((e && e.message) || e)
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .pop() || "the directory is held open";
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 250));
+    }
   }
   const newBranch = `wtgui/${dirName}`;
   let branchRenamed = false;
   if (oldBranch && oldBranch !== newBranch) {
     // A scan running in a worker thread can hold a ref lock for a moment ("cannot lock ref"), and the whole point of
-    // this is a name: try again before giving up on the branch half.
-    for (let attempt = 0; attempt < 3 && !branchRenamed; attempt += 1) {
+    // this is a name: try again, longer than a scan's tick, before giving up on the branch half.
+    for (let attempt = 0; attempt < 6 && !branchRenamed; attempt += 1) {
       try {
         await execP("git", ["-C", project.path, "branch", "-m", oldBranch, newBranch], { timeout: 30_000, windowsHide: true });
         branchRenamed = true;
       } catch {
-        await new Promise((r) => setTimeout(r, 150));
+        await new Promise((r) => setTimeout(r, 300));
       }
     }
   }
@@ -1014,6 +1086,9 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
         claimedOnly: false,
       });
     }
+    // Said out loud: a rename that did not land is the one case a reader (or a harness) cannot see from the board, and
+    // the reason is otherwise only in the code.
+    log(`naming ${oldPath}: the directory would not move (${whyNot}) and the branch would not move either — nothing was renamed`);
     const scanned = await scheduler.scanOne(project, finalPath.replace(/\\/g, "/"), "full").catch(() => null);
     return {
       ok: true,
@@ -1045,6 +1120,9 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
     at: new Date().toISOString(),
     moved,
     from: base,
+    claimedOnly: false,
+    // A rename that actually landed is the tree's name: clear any `skipped` mark left by an earlier refusal.
+    skipped: false,
   });
   return {
     ok: true,
@@ -1158,7 +1236,10 @@ function withTreeNames(snap) {
       const rec = treeNames.forTree({ project: project.name, path: row.path, branch: row.branch });
       // A cut record is a tree waiting for its one name, not a tree that has one: the row must not claim a name
       // nobody has given it yet (the tooltip is the only place this shows, and it would say "named by run …").
-      if (!rec || namingState(rec) === "cut") {
+      // A `skipped` record says the panel looked and LEFT THE NAME ALONE (the branch already carried its own
+      // commits): it is written so the title sweep stops asking, not because a name landed, so the row must not
+      // claim to have been named either. The ledger keeps the reason for anyone reading the file.
+      if (!rec || namingState(rec) === "cut" || rec.skipped) {
         delete row.named;
         continue;
       }
