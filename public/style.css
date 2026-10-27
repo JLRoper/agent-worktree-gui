@@ -2302,6 +2302,17 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
   font: 700 10.5px/17px var(--ui); text-align: center;
 }
 #assistant-badge[hidden] { display: none; }
+/* The spawn card badge: its own count, beside the alert count and never folded into it. A spawn card is an act
+   waiting on the reader (one press cuts a worktree), and it is the one thing on this board that is invisible
+   until somebody presses it — so it is counted here, and the watchdog's verdict turns the number red. */
+#assistant-spawn-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 4px; margin-left: 2px;
+  border: 1px solid #56d36455; border-radius: 9px; background: #1f3a2b; color: #b7f7d0;
+  font: 700 10.5px/15px var(--ui); text-align: center;
+}
+#assistant-spawn-badge::before { content: "⧗"; margin-right: 3px; font-weight: 400; }
+#assistant-spawn-badge[hidden] { display: none; }
+#assistant-spawn-badge.is-stuck { border-color: var(--red); background: #3d1618; color: #ffd7d5; }
 .btn-assistant.is-hot { border-color: #8fb8ff; color: #dbebff; box-shadow: 0 0 0 1px #8fb8ff33; }
 
 /* Aggressive mode: the header's second assistant button. It reads as a switch, not a link — the pill beside
@@ -2423,6 +2434,18 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-alert.is-info { border-left-color: var(--blue); }
 /* A spawn card is the only alert whose button changes the repository, so it does not look like a notice. */
 .as-alert.is-spawn { border-left-color: var(--violet); background: linear-gradient(180deg, #1c1828, var(--card)); }
+/* …and the one the watchdog has looked at and found nothing behind: red edge, red chip, and a banner above the
+   list. A card that never became a worker is not another notice in the inbox — it is a worktree that was never
+   cut, which is why it is counted on its own badge and says so in words here too. */
+.as-alert.is-stuck { border-left-color: var(--red); box-shadow: inset 0 0 0 1px #ff7b7233; }
+.as-stuck-chip {
+  font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: #ffd7d5; background: #4d1a1d; border: 1px solid var(--red); border-radius: 99px; padding: 0 6px;
+}
+.as-stuck-banner {
+  margin: 0 0 8px; padding: 7px 9px; border: 1px solid var(--red); border-radius: 6px;
+  background: var(--red-bg); color: #ffb4ae; font-size: 11.5px; line-height: 1.45;
+}
 .as-alert-head { display: flex; align-items: center; gap: 7px; font-size: 10.5px; }
 .as-rule { font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em; color: #8fb8ff; }
 .as-rule.is-warn { color: var(--amber); }
