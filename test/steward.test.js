@@ -168,7 +168,10 @@ test("a legacy tree is recovered from its own reflog before anything is guessed"
   // to the ticket heuristic, which would be free to name one of its own children instead.
   const turnover = book.get("p", "dmr-9-turnover");
   assert.equal(turnover.parent, null);
-  assert.match(turnover.why, /main branch|Created from HEAD|reflog/i);
+  // Whichever refusal git leaves us with, it has to be a refusal and not a sibling named as a parent: its own reflog
+  // says `Created from HEAD` (that is all `checkout -b` writes), so the answer comes from the heuristic's direction
+  // check — the child was cut FROM this branch.
+  assert.match(turnover.why, /cut FROM this branch|main branch|reflog/i);
 });
 
 test("backfill refuses to guess when no ticket is shared, or when two candidates are equally near", () => {

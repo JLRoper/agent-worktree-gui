@@ -2934,10 +2934,11 @@ const server = createServer(async (req, res) => {
 });
 
 // ---- legacy trees get a parent, slowly ---------------------------------------------------------------------------
-// A tree the panel did not cut has no record, so its parent can only be guessed from the branch name (lib/parents.js
-// backfill). That is git work per unresolved branch, it changes only when somebody branches or merges, and a guess can
-// never drive a write — so it runs on its own slow clock over the trees the board is actually showing, never on a scan
-// tick, and never in the boot path (the board must come up before this).
+// A tree the panel did not cut has no record, so its parent is reconstructed (lib/parents.js): from the branch's own
+// reflog when git still has the creation line, and from the ticket id in its name when it does not. That is git work
+// per unresolved branch, it changes only when somebody branches or merges, and a reconstruction can never drive a
+// write — so it runs on its own slow clock over the trees the board is actually showing, never on a scan tick, and
+// never in the boot path (the board must come up before this).
 let parentsWarmAt = 0;
 async function warmParents() {
   if (Date.now() - parentsWarmAt < config.stewardRefreshSeconds * 1000) return;
