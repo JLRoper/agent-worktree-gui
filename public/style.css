@@ -2239,6 +2239,45 @@ td.branch .branch-plain { color: #9aa6b4; }
 .badge.merge-start.is-merging,
 .badge.merge-start.is-starting { opacity: .7; background: var(--red-bg); border-color: #57262a; color: #ff9c94; }
 
+/* The chip's chooser: three outcomes, no write until one is clicked. It is a popover on the body (not inside the cell)
+   because the board rebuilds the table on every scan and a re-rank would take a nested popover with it. The three
+   buttons are drawn as a stack rather than a row: "Roll into <parent>" and "Open a PR" are different destinations,
+   and a reader picking one should see the other two whole. */
+.merge-chooser {
+  position: fixed;
+  z-index: 60;
+  min-width: 260px;
+  max-width: 380px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #14171c;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .55);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mc-head { font-size: 11px; color: var(--dim); padding: 2px 4px 4px; line-height: 1.4; }
+.mc-from { display: block; color: var(--dimmer); font-family: var(--mono); font-size: 10px; margin-top: 2px; }
+.mc-choice {
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #1b1f26;
+  color: var(--fg);
+  cursor: pointer;
+}
+.mc-choice:hover { background: #222833; border-color: #3a4250; }
+.mc-choice:focus-visible { outline: 2px solid #6ea8fe; outline-offset: 1px; }
+.mc-choice:disabled { cursor: default; opacity: .55; }
+.mc-choice.is-roll:not(:disabled) { border-color: #4f6d3a; color: #b8e08a; }
+.mc-choice.is-roll:not(:disabled):hover { background: #1d2419; }
+.mc-choice.is-ask { color: var(--dim); }
+.mc-note { font-size: 10px; color: var(--dimmer); padding: 2px 4px; line-height: 1.45; }
+
 .clean { color: #7ee787; }
 .dirty { color: #f0c674; }
 .pr-open { color: #f0c674; }

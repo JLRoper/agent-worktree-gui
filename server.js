@@ -29,6 +29,8 @@ import { WorktreeNaming } from "./lib/worktree-naming.js";
 import { Locks, describeLock } from "./lib/locks.js";
 import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
+import { ParentBook } from "./lib/parents.js";
+import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees, writePlan } from "./lib/steward.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
 import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyLabel } from "./lib/remote-writes.js";
@@ -185,6 +187,19 @@ async function loadConfig() {
   // row. State, not source, and beside the job store for the same reason as the two records above: a PANEL_CONFIG
   // sandbox gets its own copy. NEVER inside the worktree, where it would be git noise and a merge conflict.
   if (!cfg.todosFile) cfg.todosFile = path.join(path.dirname(cfg.jobsFile), "todos.json");
+  // Where each worktree was cut from: the branch (the parent) and the sha that ref resolved to. Git keeps no such
+  // record, so this file IS the record — beside the job store, state not source, and a PANEL_CONFIG sandbox keeps its
+  // own copy like every other ledger here.
+  if (!cfg.parentsFile) cfg.parentsFile = path.join(path.dirname(cfg.jobsFile), "parents.json");
+  // The steward's plan files (one .plan.md + one .plan.json per project), and the ledger of "where should this go?"
+  // questions. Both are state: a sandbox that names its own jobsFile gets its own plans.
+  if (!cfg.stewardDir) cfg.stewardDir = path.dirname(cfg.jobsFile);
+  if (!cfg.stewardQuestionsFile) cfg.stewardQuestionsFile = path.join(path.dirname(cfg.jobsFile), "steward-questions.json");
+  // `steward.prodBranch` names the one branch a roll-up must never be done inline: production is handed to a worker
+  // (or a TO), never merged by editing a tree. null means this project has no such branch.
+  cfg.steward = cfg.steward && typeof cfg.steward === "object" ? cfg.steward : {};
+  if (!("prodBranch" in cfg.steward)) cfg.steward.prodBranch = null;
+  cfg.stewardRefreshSeconds = Number(cfg.stewardRefreshSeconds) > 0 ? Number(cfg.stewardRefreshSeconds) : 300;
   // The model menu's price/rating half: what the dropdown decorates each row with, rebuilt only by the
   // Settings refresh (POST /api/models/refresh). State, not source — beside the job store, so a sandbox
   // config that names its own jobsFile gets its own copy.
@@ -727,6 +742,11 @@ const treeNamesReady = seedTreeNamesAtBoot();
 // wears it as an emoji, so an agent reading the board sees the lock without opening anything.
 const locks = new Locks({ file: config.locksFile, log });
 
+// Where every tree the panel cuts was cut from (lib/parents.js), and the ledger of trees nobody can place. Both are
+// read by the /api/state row through the scheduler's scan context, so the board and the steward never disagree.
+const parents = new ParentBook({ file: config.parentsFile, onLog: log });
+const questions = new Questions({ file: config.stewardQuestionsFile });
+
 const descriptions = createDescriptions({
   getConfig: () => config,
   // The RAW maps, not list()/rowsFor(): the earliest brief in a tree needs `prompt` and `startedAt`,
@@ -775,6 +795,10 @@ const todos = new TodoLists({
 // The two writers that need the store: lib/jobs.js prepends the list to a worker's brief and harvests the run's own
 // last words; the assistant seeds a tree and keeps the list honest against what a worker actually did.
 jobs.todos = todos;
+// The parent book: the panel records every tree it cuts (lib/jobs.js), the scheduler hands the answer to each scan so
+// the row carries it, and the steward + the UNMERGED chip read it from there.
+jobs.parents = parents;
+scheduler.parents = parents;
 if (assistant) {
   assistant.todos = todos;
   // …and the one thing the assistant cannot do itself: tell the page a list moved. The assistant's own TODO lines are
@@ -1320,6 +1344,23 @@ function withTreeNames(snap) {
     }
   }
   return snap;
+}
+
+// ---- the steward's own reads ------------------------------------------------------------------------------------
+// One project, re-read from git and classified: the parent book is refreshed first, because a plan that guessed a
+// different parent from the board would be two answers to one question, and the row is the one the reader is looking
+// at. Cost is a handful of git calls per local branch, which is why nothing here runs on a scan tick.
+async function stewardProject(name) {
+  const project = (registry.projects || []).find((p) => p.name === name) || null;
+  if (!project) return { status: 404, error: `unknown project: ${name || "(none)"}` };
+  const rows = store.rowsFor(project.name) || [];
+  const branches = rows.map((r) => r.branch).filter(Boolean);
+  await parents.refresh({ project: project.name, repoDir: project.path, mainBranch: project.mainBranch, branches });
+  const map = new Map();
+  for (const rec of parents.state(project.name)) map.set(rec.branch, rec);
+  const entries = await inspectProject({ project: project.name, repoDir: project.path, rows, parents: map, mainBranch: project.mainBranch });
+  const plan = buildPlan({ project: project.name, repoDir: project.path, entries, questions: questions.list(project.name), mainBranch: project.mainBranch });
+  return { project, rows, map, entries, plan };
 }
 
 function snapshot() {
@@ -1907,6 +1948,124 @@ const server = createServer(async (req, res) => {
       // show the new chip at once, and a resync from the page refreshes the rows.
       broadcast({ type: "hosts", hosts: hosts.state() });
       return sendJson(res, 200, { ok: true, project: project.name, mapping: view, file: hostsFile.file || null });
+    }
+
+    // ---- the steward: every local branch of one project, classified --------------------------------------------
+    // Stage 3 of this feature, and it ACTS ON NOTHING. GET answers the last plan file; POST re-reads the repo and
+    // writes a fresh one (the .md the reader can open, the .json the page reads). The plan says what it would delete,
+    // what it would roll and what it needs the reader to answer.
+    if (route === "/api/steward" && req.method === "GET") {
+      const name = String(url.searchParams.get("project") || "").trim();
+      const plan = name ? readPlan(config.stewardDir, name) : null;
+      if (!plan) return sendJson(res, 404, { error: `no plan yet for ${name || "(no project)"} — POST /api/steward to write one` });
+      return sendJson(res, 200, { ...plan, parents: parents.state(name) });
+    }
+
+    if (route === "/api/steward" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const name = String(body.project || "").trim();
+      const out = await stewardProject(name);
+      if (out.error) return sendJson(res, out.status || 400, { error: out.error });
+      const written = writePlan(config.stewardDir, out.plan);
+      log(`steward: ${name} — ${out.plan.counts.total} branch(es): ${out.plan.counts.delete} to delete, ${out.plan.counts.roll} to roll, ${out.plan.counts.ask} need an answer → ${written.md}`);
+      return sendJson(res, 200, { ...out.plan, file: written.md, text: written.text, parents: parents.state(name) });
+    }
+
+    // The only writer. A dry run is the default: `confirm: true` alone is not enough — the body must name the plan
+    // the reader was looking at (`planAt`), and the entries are re-read from git before anything is touched.
+    if (route === "/api/steward/apply" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const name = String(body.project || "").trim();
+      const out = await stewardProject(name);
+      if (out.error) return sendJson(res, out.status || 400, { error: out.error });
+      const file = readPlan(config.stewardDir, name);
+      const listing = await stewardWorktrees(out.project.path);
+      const result = await applyPlan({
+        plan: file,
+        fresh: out.plan,
+        expectedAt: body.planAt ? String(body.planAt) : null,
+        repoDir: out.project.path,
+        trees: listing.trees,
+        dryRun: body.dryRun !== false && body.confirm !== true,
+        confirm: body.confirm === true,
+        prodBranch: config.steward.prodBranch,
+        onLog: log,
+      });
+      if (!result.ok) return sendJson(res, 409, result);
+      if (result.dryRun) log(`steward apply (dry run): ${name} — ${result.delete.length} would be deleted, ${result.roll.length} would be rolled`);
+      else {
+        log(`steward apply: ${name} — deleted ${result.deleted.length}, rolled ${result.rolled.length}, refused ${result.refused.length}`);
+        broadcast({ type: "snapshot", data: snapshot() });
+      }
+      return sendJson(res, 200, result);
+    }
+
+    // ---- rolling one child into its parent ---------------------------------------------------------------------
+    // The UNMERGED chip's first outcome. The merge happens inside the PARENT's own worktree, serialised per parent
+    // branch (lib/locks.js), and is refused outright when the parent is master/main, when the parent is a guess rather
+    // than a recorded cut, or when the parent branch is the project's production branch (that is a worker's or a TO's
+    // job, never a merge run from here).
+    if (route === "/api/worktree/rollup" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const project = (registry.projects || []).find((p) => p.name === String(body.project || "").trim()) || null;
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${body.project || "(none)"}` });
+      const row = store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(body.path)) || null;
+      if (!row) return sendJson(res, 404, { error: `no row for ${body.path || "(no path)"} in ${project.name}` });
+      const rec = parents.get(project.name, row.branch) || null;
+      const parentBranch = String(body.parent || rec?.parent || "").trim();
+      // One gate, shared with lib/steward.js, so the chip and the steward cannot disagree about what may be written.
+      // The parent named by the request must be the parent on record: a body cannot promote a row to a rollable one.
+      if (parentBranch && rec && rec.parent && parentBranch !== rec.parent) {
+        return sendJson(res, 409, { error: `refused: ${parentBranch} is not ${row.branch || "this branch"}'s recorded parent (${rec.parent})` });
+      }
+      const listing = await stewardWorktrees(project.path);
+      const parentWorktree = parentWorktreeOf(listing.trees, parentBranch);
+      const gate = rollGate({ parentBranch, parentSource: rec?.parentSource || "unknown", mainBranch: project.mainBranch, prodBranch: config.steward.prodBranch, parentWorktree });
+      if (!gate.ok) return sendJson(res, 409, gate);
+      if (body.confirm !== true) {
+        return sendJson(res, 428, { error: `nothing was rolled: confirming starts a merge into ${parentBranch} in its own worktree`, parent: parentBranch, branch: row.branch, preview: true });
+      }
+      const out = await rollUp({
+        repoDir: project.path,
+        parentBranch,
+        parentWorktree,
+        childBranch: row.branch,
+        mainBranch: project.mainBranch,
+        prodBranch: config.steward.prodBranch,
+        parentSource: rec?.parentSource || "unknown",
+        dryRun: body.dryRun === true,
+      });
+      if (!out.ok) return sendJson(res, 409, out);
+      log(`rollup: ${row.branch} → ${parentBranch} in ${project.name} (${out.method}${out.sha ? ` ${out.sha}` : ""})`);
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, out);
+    }
+
+    // "Where should this go?" — the chip's third outcome, and the only thing it does: write the question down and
+    // start nothing. It lands in the ledger the steward's plan reads, so the next plan lists it under "needs you".
+    if (route === "/api/worktree/parent-question" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const project = (registry.projects || []).find((p) => p.name === String(body.project || "").trim()) || null;
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${body.project || "(none)"}` });
+      const row = store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(body.path)) || null;
+      const question = questions.ask({
+        project: project.name,
+        path: body.path || row?.path || "",
+        branch: body.branch || row?.branch || null,
+        note: String(body.note || "").slice(0, 300),
+        by: String(body.by || "the reader").slice(0, 80),
+      });
+      log(`steward: question recorded for ${question.branch || question.path} in ${project.name} — nothing was started`);
+      return sendJson(res, 202, { ok: true, question, started: false });
+    }
+
+    if (route === "/api/parents" && req.method === "GET") {
+      const name = String(url.searchParams.get("project") || "").trim();
+      return sendJson(res, 200, { project: name || null, parents: parents.state(name || null) });
     }
 
     if (route === "/api/stats") {
@@ -3213,6 +3372,43 @@ const server = createServer(async (req, res) => {
     return sendJson(res, status, { error: status >= 500 ? `the panel could not answer that: ${detail}` : detail });
   }
 });
+
+// ---- legacy trees get a parent, slowly ---------------------------------------------------------------------------
+// A tree the panel did not cut has no record, so its parent is reconstructed (lib/parents.js): from the branch's own
+// reflog when git still has the creation line, and from the ticket id in its name when it does not. That is git work
+// per unresolved branch, it changes only when somebody branches or merges, and a reconstruction can never drive a
+// write — so it runs on its own slow clock over the trees the board is actually showing, never on a scan tick, and
+// never in the boot path (the board must come up before this).
+let parentsWarmAt = 0;
+async function warmParents() {
+  if (Date.now() - parentsWarmAt < config.stewardRefreshSeconds * 1000) return;
+  // A pass with nothing to look at must not spend the whole window: the first one fires 20 s in, and on a slow boot
+  // discovery has not finished by then, so a pass that returned here after setting the clock left every legacy tree
+  // reading "unknown" for the next five minutes. The configured projects are known at boot, so they are the fallback.
+  const projects = (registry.projects?.length ? registry.projects : config.projects) || [];
+  if (!projects.length) return;
+  parentsWarmAt = Date.now();
+  let learned = 0;
+  let guessed = 0;
+  for (const project of projects) {
+    // The whole REPO, never the rows the board happens to be showing: this pass exists to fill in every legacy tree,
+    // and a board that has only scanned the project's own checkout so far used to hand it [`master`] — one branch,
+    // resolved, window spent, and every other tree still reading "unknown" five minutes later. `refresh()` starts from
+    // the repo's own branch list anyway; what it skips cheaply is the branches it already has an answer for.
+    try {
+      const out = await parents.refresh({ project: project.name, repoDir: project.path, mainBranch: project.mainBranch });
+      learned += out.learned || 0;
+      guessed += parents.state(project.name).filter((r) => r.parentSource === "backfilled").length;
+    } catch (e) {
+      log(`parent backfill for ${project.name} failed: ${String((e && e.message) || e)}`);
+    }
+  }
+  if (learned) log(`parents: ${learned} branch(es) resolved (${guessed} backfilled guess(es) in total — a guess never drives a write)`);
+}
+setInterval(() => void warmParents(), Math.max(30_000, config.stewardRefreshSeconds * 500));
+// First pass 20s in: late enough that the board is up (the boot pass is local git only), early enough that a legacy
+// tree stops reading "unknown" within one screen of the panel opening.
+setTimeout(() => void warmParents(), 20_000).unref?.();
 
 server.listen(config.port, config.host, () => {
   log(`agent-worktree-gui on http://${config.host}:${config.port}`);
