@@ -21,7 +21,7 @@ Base: main @ d8ae753 (0.11.2). Each entry is one merge commit, tested after it l
 | — | land/tree-naming-rule | skipped | no-op: `git cherry HEAD` marks 097627c `-` (patch-id f4479148 = 90909d's 0978556, merged as eaed59f); the only `+` is its 0.14.1 bump | — |
 | 14 | feature/shared-model-menu | c664232 | conflict: package.json only (kept 0.11.2); new public/core/model-menu.js, app.js/assistant.js/index.html/style.css auto-merged | 147/147 pass |
 | 15 | land/spawn-cards-visible | b8dc24b | `-s ours`: verified superseded by merge 12 (its 4 tests ⊂ this tree's 6; same `noteSpawnIntent`/`settleSpawnIntent`/`checkSpawns`/`spawnIntents`; no `spawnidle`, so its "Fourteen rules" is our "Fifteen"). Also deduped the ✧ Assistant row in docs/using-the-board.md, which merge 12 had left twice | 147/147 pass |
-| 16 | land/pr-model-picker (picker/price half only) | 36e7760 | conflicts: .gitignore (kept both), package.json (0.11.2), public/style.css (branch's rating/price columns; spawn-strip block intact), public/app.js (`modelOptionHtml` gains `{selected, extra}`), public/core/model-menu.js add/add (branch's superset), docs/using-the-board.md. Its shared-picker commit + 0.12.0 bump were `-` under `git cherry` (d0a10ef/3c5833d). `lib/model-prices.js` is a pure superset of main's | 147/147 pass; tools/verify-model-prices.mjs 67/67 |
+| 16 | land/pr-model-picker (picker/price half only) | 5d345a1 | conflicts: .gitignore (kept both), package.json (0.11.2), public/style.css (branch's rating/price columns; spawn-strip block intact), public/app.js (`modelOptionHtml` gains `{selected, extra}`), public/core/model-menu.js add/add (branch's superset), docs/using-the-board.md. Its shared-picker commit + 0.12.0 bump were `-` under `git cherry` (d0a10ef/3c5833d). `lib/model-prices.js` is a pure superset of main's | 147/147 pass; tools/verify-model-prices.mjs 67/67 |
 
 Note on the commit column: rows 2–11 were recorded by the previous run with ids from a pass that was
 superseded (those commits still exist but no branch contains them). The ids above are the merge commits
@@ -39,7 +39,8 @@ actually on this branch, one per branch name, in the order they were made.
   (1417 ms) and passed on the next full run — a timing test that is flaky under parallel load, not a
   regression from these merges.
 - `package.json` was held at main's 0.11.2 through every merge (branch bumps 0.11.3 → 0.14.1 were all
-  dropped); the single bump is the commit after this one.
+  dropped). The single bump is the last commit on the branch: 0.12.0 — minor, because the integration
+  carries features (spawn cards, the shared model picker with prices and ratings).
 - The branch is LOCAL ONLY: no push, no PR, main not moved.
 - Open question for the reader: `land/pr-model-picker` has no PR-side code in it — all four of its commits
   are the picker and its price data. The "picker half" was its already-landed pair (shared picker + 0.12.0
