@@ -346,6 +346,25 @@
         <div class="settings-preview mono" id="models-preview">…</div>
       </div>
 
+      <div class="settings-group">
+        <h3 class="settings-group-head" title="A panel that restarted (or whose public/ was edited while it ran) serves a new build. This is what this tab does about it — and what it refuses to do while you are mid-sentence or an agent is mid-turn.">Updates</h3>
+
+        <label class="settings-row" for="update-mode" title="off — never look; a manual press on Check now still works. prompt (the default) — poll the panel every 30s and, when it is serving a different build, offer a Reload chip. auto — take the reload as soon as the page is idle. Either mode HOLDS the reload while a reply box or a held draft has text, or while a turn is still streaming, so nothing you typed and nothing an agent is writing is thrown away. Saved in this browser.">
+          <span>Update check <span class="settings-info">ⓘ</span></span>
+          <select id="update-mode">
+            <option value="off">off</option>
+            <option value="prompt" selected>prompt — offer a reload</option>
+            <option value="auto">auto — reload when idle</option>
+          </select>
+        </label>
+
+        <div class="settings-row settings-gap" id="update-row" title="The build this tab loaded, and the build the panel is serving now. A panel restart or an edit under public/ moves the second one; the first only moves when this page reloads.">
+          <span>Panel build <span class="settings-info mono" id="build-version">…</span></span>
+          <button id="btn-check-update" type="button" title="ask GET /api/build now and offer the reload if the answer is a different build — works even with Update check set to off">Check now</button>
+        </div>
+        <div class="settings-preview mono" id="update-preview">…</div>
+      </div>
+
     </div>
   </div>
 
@@ -449,6 +468,9 @@
   <script src="/core/transport.js"></script>
   <script src="/core/sse.js"></script>
   <script src="/app.js"></script>
+  <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
+       the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->
+  <script src="/core/update-check.js"></script>
   <!-- The assistant's floating panel. Loaded after app.js on purpose: it reads that file's own state and card
        renderer, so the assistant's card is a real card rather than a second implementation of one. -->
   <script src="/assistant.js"></script>

@@ -887,6 +887,7 @@ Watches without a deadline, and finished ones, say so instead.
 | Method | Route | Notes |
 | --- | --- | --- |
 | GET | `/api/health`, `/api/config`, `/api/stats` | settings / scheduler / pool |
+| GET | `/api/build` | the build this process is serving: `{version, bootedAt, computedAt, uptimeSeconds, files}` — a short hash over `index.html`, every script/stylesheet it loads and everything under `public/core`, plus the per-file sha256. The shell's asset URLs carry `version`; the page polls this to learn the panel restarted (or that `public/` was edited under it) |
 | GET | `/api/state` | full snapshot (projects, worktrees, jobs, spawn info) |
 | GET | `/api/cleanup?project=NAME[&fresh=1]` | on-demand `hermes worktree list --json` audit for one repo: trees, external trees (`locked`/`missing`), per-branch keep/reap verdict + reason. ~6s, cached 10 min |
 | GET/POST | `/api/hosts` · `/api/hosts/propose` · `/api/hosts/mapping` | where a project's branches and PRs live. GET: the merged mapping (`hosts` records, the file pair, warnings, and each project's `view`). POST `propose` `{project}`: read that project's own remote and return the mapping it implies — writes nothing. POST `mapping` `{project, host, coordinates}`: write ONE project into `logs/hosts.json`, leaving every other record alone. Tokens, precedence and the landing doctrine: `docs/hosts.md` |
