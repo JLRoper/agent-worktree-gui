@@ -1262,6 +1262,36 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 tr.row:hover .btn-row-rename,
 tr.row:hover .btn-row-name-work { opacity: .9; }
 
+/* The reader's lock, on the row itself: an emoji rather than a glyph, because it has to be legible to a person
+   scanning a column and to an agent reading the board's own markup. Quiet while unlocked (a board of rows must not
+   look like a board of buttons) and impossible to miss while locked. */
+.btn-row-lock {
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 3px;
+  margin-left: 2px;
+  cursor: pointer;
+  opacity: .38;
+  vertical-align: 1px;
+  filter: grayscale(1);
+}
+.btn-row-lock:hover { background: #232b3a; border-color: var(--line); opacity: 1; filter: none; }
+.btn-row-lock.is-locked { opacity: 1; filter: none; }
+.btn-row-lock:disabled { opacity: .4; cursor: progress; }
+tr.row:hover .btn-row-lock { opacity: .85; }
+/* The branch toggle lives in the branch cell, right after the branch name, so "this branch is locked" is read
+   where the branch is read. */
+.btn-branch-lock { margin-left: 4px; font-size: 10px; }
+/* A locked row says so at rest: the name is drawn in the lock's own amber, so the state survives a glance down the
+   column without any tooltip being opened. */
+tr.row.is-locked td.name .row-name { color: #e8c07a; }
+tr.row.is-locked { box-shadow: inset 2px 0 0 #6b5324; }
+/* The refusal shown in place of the delete question. Same row chrome, in the lock's ink rather than the delete's red,
+   because nothing was deleted and the answer is "unlock it first", not "are you sure". */
+tr.row-confirm.row-locked td { background: #1b170d; border-top-color: #6b5324; border-bottom-color: #6b5324; color: #f0e0b8; }
+tr.row-confirm .rc-lock { color: #e8c07a; font-weight: 600; }
 /* A delete that has been accepted but has not finished scanning: the x stays put, greyed and click-proof,
    so the click is visibly registered and cannot be repeated. */
 .btn-del-tree.pending, .btn-del-tree:disabled {
