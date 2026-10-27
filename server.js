@@ -24,7 +24,8 @@ import { Jobs, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js
 import { gitIn, scanWorktree } from "./lib/scan.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
-import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE } from "./lib/tree-names.js";
+import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE, autoNameRefusal, namingState } from "./lib/tree-names.js";
+import { WorktreeNaming } from "./lib/worktree-naming.js";
 import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
@@ -205,6 +206,10 @@ async function patchPanelConfig(patch) {
 let config = await loadConfig();
 let pool = new Pool(config.threads);
 const store = new Store();
+// A tree's name is the panel's fact, never git's. The ledger of which trees have a name, who gave it and when
+// (lib/tree-names.js) is read before anything can rename a tree and written the moment the panel learns one:
+// at the cut for a tree this panel makes, at first sight for a tree that was already there.
+const treeNames = new TreeNames({ file: config.treeNamesFile, log });
 const registry = new ProjectRegistry({
   getConfig: () => config,
   store,
@@ -220,6 +225,8 @@ let scheduler = new Scheduler({
   getProjects: () => registry.projects,
   panelAgents: () => jobs.agentPaths(),
   panelThreads: () => jobs.panelRunThreads(),
+  // Every worktree a listing turns up, before it becomes a row: the naming ledger's seeding (see seedTreeName).
+  onWorktreeSeen: (project, tree) => seedTreeName(project, tree),
 });
 
 const clients = new Set();
@@ -272,14 +279,20 @@ let restart = null;
 // Declared before the job stream that feeds it: a job event arrives on the same tick as construction,
 // and the observer is optional until the assistant exists.
 let assistant = null;
+// Declared before the job stream that feeds it. The naming policy itself is created below, once the ledger and the
+// panel's own worktree cut are wired; an event that arrives before then is not lost — the 10-second title sweep
+// emits again for any card that still has no name.
+let naming = null;
 const jobs = new Jobs({
   config,
   onEvent: (evt) => {
     guard("event broadcast", () => broadcast(evt));
     guard("worktree adopt", () => adoptFromJob(evt));
-    // A turn that just ended is the first moment the session has a name of its own, and the tree is idle: give the
-    // worktree that name. Swallowed on purpose - a rename is never worth failing a job event over.
-    void autoNameWorktree(evt).catch(() => {});
+    // Every event that carries a session title is a chance to give a tree the name its run chose for it — the
+    // sweep that emits on the first title, the run's own events, and the settle that follows. The policy (which
+    // tree, which run, and the ledger that allows it exactly once) is lib/worktree-naming.js; a rename is never
+    // worth failing a job event over, so the whole call is fire-and-forget.
+    guard("worktree naming", () => void naming?.consider(evt?.job));
     // A run that just arrived (or changed) is a new chance to learn what a tree was started to do: the earliest
     // brief in a tree is in this store, and a harvest is collapsed into one pass per couple of seconds.
     guard("description harvest", () => descriptions.harvest());
@@ -604,11 +617,74 @@ const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "
 // the panel's own bookkeeping - the jobs that ran there (a run's body carries its cwd), the store's row, and the row
 // the board draws.
 //
-// A tree is named ONCE, and the record of that (who, when — lib/tree-names.js) is what stops a name churning. The
-// automatic half of this (`once: true`, from a finished turn's title) refuses a tree the ledger already knows;
-// the deliberate half (the ✎ and the ✦ in the row, i.e. a reader asking) does not, because replacing a name is
-// the point of it. Either way the six-hex tag is kept and the 409 stands while an agent is running in the tree.
-const treeNames = new TreeNames({ file: config.treeNamesFile, log });
+// A tree is named ONCE, and the record of that (who, when — lib/tree-names.js, constructed above) is what stops a
+// name churning. There are exactly two ways a name is written: the automatic half (`once: true`, from the run that
+// CUT the tree, the moment its session title first exists) and the deliberate half (the ✎ and the ✦ in the row, i.e.
+// a reader asking), which may replace a name because replacing a name is the point of it. A tree the panel found
+// rather than cut is seeded under the name it was found with and is never the automatic half's to move. Either way
+// the six-hex tag is kept and the 409 stands while an agent is running in the tree.
+//
+// Seeding is what makes the first of those safe. Every tree the panel enumerates and has never recorded is written
+// down under its CURRENT name, attributed to the panel, before a run can be offered the chance to rename it: the
+// fleet that existed when the ledger shipped has no entry, and "no entry" used to read exactly like "a tree waiting
+// for its one name" — so nothing but the job's own `existing` flag stood between those trees and a rename, and a flag
+// set wrong moved a tree the reader considers fixed.
+function seedTreeName(project, tree) {
+  try {
+    const dir = String(tree?.path || "").replace(/\\/g, "/").replace(/\/+$/, "");
+    if (!dir) return false;
+    // The project's own checkout is not a tree the panel names, and `renameWorktree` refuses it by this same
+    // comparison. A record for it would also put "named by the panel" on the one row whose name is the folder's.
+    if (normPathKey(project?.path) && normPathKey(project.path) === normPathKey(dir)) return false;
+    const name = path.basename(dir);
+    const branch = String(tree?.branch || "").replace(/^refs\/heads\//, "") || null;
+    const key = treeKey({ project: project?.name, path: dir, branch });
+    const rec = treeNames.seed(key, {
+      name,
+      dir,
+      branch,
+      tag: tagOf(dir) || tagOf(branch) || null,
+      by: "the panel",
+      how: "seeded — this tree was already here the first time the panel listed it, so its name is the one it had",
+      at: new Date().toISOString(),
+    });
+    if (rec) log(`tree-names: seeded ${project?.name || "?"}::${name} as it was found — this name is fixed`);
+    return Boolean(rec);
+  } catch (e) {
+    log(`tree-names: could not seed ${tree?.path || "a tree"}: ${String((e && e.message) || e)}`);
+    return false;
+  }
+}
+
+// One `git worktree list` per project at boot, so the fleet that predates the ledger is written down before the
+// first job event is considered for naming. Bounded in time and width, and it never rejects: a project whose git
+// cannot answer is seeded by its own discovery pass instead, which calls the same hook on every listing.
+async function seedTreeNamesAtBoot({ timeoutMs = 30_000, width = 4 } = {}) {
+  const started = Date.now();
+  const projects = (registry.projects || []).slice();
+  let next = 0;
+  let seeded = 0;
+  const lane = async () => {
+    while (next < projects.length && Date.now() - started < timeoutMs) {
+      const project = projects[next++];
+      if (!project?.path) continue;
+      try {
+        const trees = await worktreeList(project.path);
+        for (const t of trees) if (seedTreeName(project, t)) seeded += 1;
+      } catch {
+        /* no answer from git here: discovery will seed this project's trees on its next listing */
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(width, projects.length)) }, lane));
+  if (seeded) log(`tree-names: ${seeded} tree(s) had no record and now do — their names are fixed from here`);
+  else log(`tree-names: ${treeNames.size} tree(s) on record, nothing to seed at boot`);
+  return seeded;
+}
+
+// Started here, before the job store is constructed: a restored run's event can name a tree the moment the store
+// loads, and that must not beat the seeding. WorktreeNaming awaits this before it decides anything.
+const treeNamesReady = seedTreeNamesAtBoot();
 
 const descriptions = createDescriptions({
   getConfig: () => config,
@@ -730,7 +806,7 @@ async function isMainCheckout(dir) {
   return Boolean(gitDir) && normPathKey(path.dirname(gitDir)) === normPathKey(dir);
 }
 
-async function renameWorktree({ projectName, target, name, by = null, how = null, once = false }) {
+async function renameWorktree({ projectName, target, name, by = null, how = null, once = false, run = null }) {
   const project = scheduler.getProjects().find((p) => p.name === projectName);
   if (!project) return { error: `unknown project: ${projectName}`, status: 404 };
   const oldPath = path.resolve(String(target || ""));
@@ -749,16 +825,19 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
   const tag = ((WORKTREE_TAG_RE.exec(base) || [])[1] || randomUUID().slice(0, 6)).toLowerCase();
   // The tag is also the tree's identity for the naming ledger, and it is the same key before and after a rename —
   // which is exactly what the old in-memory Set of paths could not say, its key going stale the moment the first
-  // rename landed. A tree already in the ledger keeps its name: this is the automatic path asking (`once`), and a
-  // second run in the same tree is not allowed to rename the directory or the branch under the first one.
+  // rename landed. This is the automatic path asking (`once`), so the LEDGER decides: only the run that cut this tree
+  // may give it its one name, only until one lands, and a tree that was seeded (found, not cut) or already named has
+  // an entry that can never qualify. `job.existing` is never consulted — a flag set wrong is how a tree the reader
+  // considers fixed got moved.
   const key = treeKey({ project: projectName, path: oldPath });
   if (once) {
     const named = treeNames.get(key);
-    if (named) {
+    const refusal = autoNameRefusal(named, run);
+    if (refusal) {
       return {
         ok: true,
         unchanged: true,
-        skipped: `already named by ${named.by || "the panel"}`,
+        skipped: refusal,
         named,
         path: oldPath.replace(/\\/g, "/"),
         branch: row.branch || null,
@@ -771,9 +850,10 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
   if (!dirName) return { error: "a name is required", status: 400 };
   const newPath = path.join(project.path, ".worktrees", dirName);
   if (path.resolve(newPath) === oldPath) {
-    // Already called that, so there is nothing to move — but a tree that has never been written down still gets
-    // its record here, or the automatic half would keep trying the same rename for the rest of the tree's life.
-    const named = treeNames.record(key, {
+    // Already called that, so there is nothing to move — but the name still has to be settled here, or the automatic
+    // half would keep trying the same rename for the rest of the tree's life. Written through settle() so the entry
+    // stops being "a cut tree waiting for its one name" whatever it was before.
+    const named = treeNames.settle(key, {
       name: dirName,
       dir: dirName,
       branch: row.branch || null,
@@ -787,7 +867,35 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
   const taken = await stat(newPath)
     .then((s) => s.isDirectory())
     .catch(() => false);
-  if (taken) return { error: `${dirName} already exists`, status: 409 };
+  if (taken) {
+    // The automatic half spends its one chance HERE rather than trying the same taken name on every later event: the
+    // tree is settled under the name it already has, and the row says why. The reader's own rename does not settle
+    // anything — a 409 leaves the tree exactly as eligible as it was, and it stays that way until it is renamed.
+    if (once) {
+      const named = treeNames.settle(key, {
+        name: base,
+        dir: base,
+        branch: row.branch || null,
+        tag,
+        by: "the panel",
+        how: `left under its first name — ${dirName} was already taken`,
+        at: new Date().toISOString(),
+        collision: true,
+        moved: false,
+      });
+      return {
+        ok: true,
+        unchanged: true,
+        collision: true,
+        path: oldPath.replace(/\\/g, "/"),
+        branch: row.branch || null,
+        jobs: 0,
+        named,
+        warning: `${dirName} already exists — the tree keeps its first name`,
+      };
+    }
+    return { error: `${dirName} already exists`, status: 409 };
+  }
   // A running agent holds the tree as its cwd, and git refuses to move a worktree something is standing in.
   const busy = jobs
     .list()
@@ -797,9 +905,10 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
         [j.cwd, j.ownerPath, j.worktreePath].filter(Boolean).some((p) => path.resolve(p) === oldPath),
     );
   if (busy) return { error: `an agent is running in that worktree (${busy.id}) — stop it first`, status: 409 };
-  // Claim it BEFORE the git work, and only for the automatic half: two events of one finished turn settle within a
-  // second of each other, and both of them would otherwise find an un-named tree and rename it. The claim is rolled
-  // back below if nothing lands, so a tree is never frozen under a name it did not get.
+  // Claim it BEFORE the git work, and only for the automatic half: two events of one turn settle within a second of
+  // each other, and both of them would otherwise find a tree whose one name has not landed yet. The claim keeps the
+  // cut marker (so the tree is still this run's to name if the git work dies with the process) and is settled below
+  // once something lands, so a tree is never frozen under a name it did not get.
   if (once) {
     treeNames.record(key, {
       name: dirName,
@@ -809,9 +918,18 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
       by: by || "the panel",
       how: how || "the automatic rename",
       at: new Date().toISOString(),
+      cut: true,
+      cutRun: run || null,
       claimedOnly: true,
     });
   }
+  // The branch the tree is actually on, read BEFORE the directory is moved: after `worktree move` the old path is
+  // gone, so the same question asked there can only fall back to the store — and a row that discovery has not
+  // scanned yet has no branch at all, which left the directory renamed and the branch behind. Git is the authority
+  // and it is asked while it can still answer.
+  const oldBranch = await execP("git", ["-C", oldPath, "symbolic-ref", "--short", "HEAD"], { timeout: 20_000, windowsHide: true })
+    .then((r) => String(r.stdout || "").trim())
+    .catch(() => row.branch || null);
   // Windows will not rename a directory that any process has open, and an agent's shell lives in its tree long after
   // its turn ends — so the directory move is best-effort and the branch rename is the part that always lands.
   let moved = true;
@@ -826,11 +944,6 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
       .filter(Boolean)
       .pop() || "the directory is held open";
   }
-  // The branch the tree is actually on, not the store's copy of it: the store is a scan behind, and a second rename
-  // seconds later would otherwise try to move a branch that no longer exists.
-  const oldBranch = await execP("git", ["-C", oldPath, "symbolic-ref", "--short", "HEAD"], { timeout: 20_000, windowsHide: true })
-    .then((r) => String(r.stdout || "").trim())
-    .catch(() => row.branch || null);
   const newBranch = `wtgui/${dirName}`;
   let branchRenamed = false;
   if (oldBranch && oldBranch !== newBranch) {
@@ -851,10 +964,25 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
     scheduler.store.dropRow(projectName, row.path);
     broadcast({ type: "drop", project: projectName, path: row.path });
   }
-  // Nothing of the rename landed (the directory is held open AND the branch would not move): hand the tree back so a
-  // later run may name it, rather than leaving a claim on a tree that is still called what it was.
+  // Nothing of the rename landed (the directory is held open AND the branch would not move): hand the tree back as the
+  // cut tree it still is, rather than leaving a claim on a name it never got. Handing it back to the CUT state (not
+  // forgetting it) keeps "this run cut it, nobody has named it" intact: a later event of the same run may try again,
+  // and a seed — which would fix the name for good — can never slip in behind it.
   if (!moved && !branchRenamed) {
-    if (once) treeNames.forget(key);
+    if (once) {
+      treeNames.record(key, {
+        name: base,
+        dir: base,
+        branch: oldBranch || row.branch || null,
+        tag,
+        by: "the panel",
+        how: "cut for this run — its one name did not land, so it is still this run's to give",
+        at: new Date().toISOString(),
+        cut: true,
+        cutRun: run || null,
+        claimedOnly: false,
+      });
+    }
     const scanned = await scheduler.scanOne(project, finalPath.replace(/\\/g, "/"), "full").catch(() => null);
     return {
       ok: true,
@@ -871,10 +999,12 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
   const scanned = await scheduler.scanOne(project, finalPath.replace(/\\/g, "/"), "full").catch(() => null);
   const finalBranch = (scanned && scanned.branch) || (branchRenamed ? newBranch : oldBranch);
   // The record follows the tree: a name with no tag gets one here (rename keeps a tag, and makes one when the tree
-  // had none), so the key changes with the name and the old one is dropped.
+  // had none), so the key changes with the name and the old one is dropped. settle() — not record() — is the write
+  // that says the name is final: it clears the cut marker so no later event, and no later run, can give this tree
+  // another one.
   const keyAfter = treeKey({ project: projectName, path: finalPath });
   if (keyAfter !== key) treeNames.forget(key);
-  const named = treeNames.record(keyAfter, {
+  const named = treeNames.settle(keyAfter, {
     name: path.basename(finalPath),
     dir: path.basename(finalPath),
     branch: finalBranch || null,
@@ -884,7 +1014,6 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
     at: new Date().toISOString(),
     moved,
     from: base,
-    claimedOnly: false,
   });
   return {
     ok: true,
@@ -899,59 +1028,60 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
 }
 
 // A tree is named from the prompt, and Hermes names the session from the work itself a moment later ("Fix delete
-// worktree button not removing directory"). Once that name exists and the tree is idle, the tree takes it - the
-// agent's own name for the job beats the reader's first sentence cut at 24 characters. ONCE PER TREE, and that
-// "once" is a record rather than a hope (lib/tree-names.js): a second run started into the same tree must not be
-// able to rename the directory or the branch under the first one, and neither may the second, third and fourth
-// event of one finished turn - each of which used to walk past the old in-memory Set because the first rename had
-// already moved the path that Set was keyed on.
-const autoNamingInFlight = new Set();
-async function autoNameWorktree(evt) {
-  if (evt?.type !== "job") return;
-  const j = evt.job;
-  if (!j || !j.worktreePath || j.existing || j.reply) return;
-  // A base-checkout run lives in the project's own checkout, whose name is the folder's name. It is never the
-  // agent's to take, even if a job ever carries a worktree path that resolves there.
-  if (j.baseCheckout) return;
-  if (!["done", "failed", "cancelled", "interrupted"].includes(String(j.status))) return;
-  const project = spawnFeature.projectForPath(j.worktreePath);
-  if (!project) return;
-  // The project's own checkout is the parent of every tree cut from it and keeps the folder's name.
-  if (normPathKey(project.path) === normPathKey(j.worktreePath)) return;
-  const key = treeKey({ project: project.name, path: j.worktreePath });
-  // Already named - by the run that cut the tree, or by the reader - so the name stays. This is the whole of the
-  // fix for a shared tree: nothing here can rename it a second time, whoever is running in it.
-  const already = treeNames.get(key);
-  if (already) return;
-  // Two events of one turn settle within a second of each other and land here on the same tick: the ledger is
-  // written by renameWorktree itself (it claims the tree before touching git), and this is only the guard for the
-  // moment before that write.
-  if (autoNamingInFlight.has(key)) return;
-  // Only when the tree is idle: moving a directory out from under a running turn is what git refuses.
-  const busy = jobs
-    .list()
-    .some((x) => isLiveJobStatus(x.status) && normPathKey(x.ownerPath || x.cwd) === normPathKey(j.worktreePath));
-  if (busy) return;
-  const title = jobs.sessionInfoFor(j.thread).title;
-  if (!title) return;
-  autoNamingInFlight.add(key);
-  try {
-    // The rename's own refusal is logged rather than swallowed: a tree that misses its name because the row had not
-    // been scanned yet looks exactly like one that was never named, and the sweep that offers the name runs once.
-    const out = await renameWorktree({
-      projectName: project.name,
-      target: j.worktreePath,
-      name: title,
-      once: true,
-      by: `run ${j.id} (${j.thread})`,
-      how: `Hermes named the session “${title}” at the end of its turn`,
-    }).catch((e) => ({ error: String((e && e.message) || e) }));
-    if (out?.error) log(`auto-naming ${j.worktreePath}: ${out.error}`);
-    else if (out?.skipped) log(`auto-naming ${j.worktreePath}: ${out.skipped}`);
-  } finally {
-    autoNamingInFlight.delete(key);
-  }
-}
+// worktree button not removing directory"). The reader wants the tree to take that name the moment the session is
+// first named — not at the end of a later turn — so the policy is asked on every job event that carries a title.
+// ONCE PER TREE, and that "once" is the ledger rather than a hope (lib/tree-names.js): the panel records the tree at
+// the cut with the id of the run that cut it, only that record is eligible, and a rename settles it. A tree that was
+// already here is seeded under the name it was found with and never enters this path at all.
+naming = new WorktreeNaming({
+  ledger: treeNames,
+  // The project a tree belongs to, by path — the same lookup the board uses to place a row.
+  projectForPath: (p) => spawnFeature.projectForPath(p),
+  // The title from the event's own summary (jobs.summary carries it), falling back to the session store for an event
+  // that arrived before Hermes wrote the name — the 10-second sweep emits again as soon as it has one.
+  titleFor: (job) => job.title || jobs.sessionInfoFor(job.thread).title,
+  // A tree a live run is standing in cannot be moved by git, so the attempt waits for the settle rather than fail.
+  isBusy: (dir) => jobs.list().some((x) => isLiveJobStatus(x.status) && normPathKey(x.ownerPath || x.cwd) === normPathKey(dir)),
+  rename: (args) => renameWorktree(args),
+  log,
+  // The boot backfill: a tree that was here before this process must be written down before any restored run's
+  // title is considered, or "no entry" would let it through.
+  ready: treeNamesReady,
+});
+
+// The cut half of the ledger, called by lib/jobs.js around `git worktree add`: BEFORE the directory exists the tree is
+// recorded as this run's to name, and if git then fails the record is handed back. Injected here because the ledger
+// and the project registry are this file's, and lib/jobs.js must stay usable without either.
+jobs.naming = {
+  cut: ({ repoDir, path: tree, branch, tag, run, thread }) => {
+    const project = registry.projects.find((p) => normPathKey(p.path) === normPathKey(repoDir));
+    if (!project?.name) return null; // not a project the panel watches: discovery will seed it instead
+    const key = treeKey({ project: project.name, path: tree, branch });
+    const rec = treeNames.claimCut(key, {
+      name: path.basename(tree),
+      dir: path.basename(tree),
+      branch: branch || null,
+      tag: tag || tagOf(tree) || null,
+      by: `run ${run || "?"} (${thread || "?"})`,
+      how: "cut by this panel — its one name is the run's to give",
+      at: new Date().toISOString(),
+      cutRun: run || null,
+      cutThread: thread || null,
+    });
+    if (rec?.cut) log(`tree-names: ${project.name}::${path.basename(tree)} is cut for run ${run || "?"} — one name allowed`);
+    return rec;
+  },
+  release: ({ repoDir, path: tree, tag, run }) => {
+    const project = registry.projects.find((p) => normPathKey(p.path) === normPathKey(repoDir));
+    if (!project?.name) return false;
+    const key = treeKey({ project: project.name, path: tree });
+    // Only the record THIS cut wrote is withdrawn: a tree that already had one (seeded, named, cut by another run)
+    // is not this run's to erase, and a failed `git worktree add` must not leave a claim on a directory nobody made.
+    const rec = treeNames.get(key);
+    if (!rec?.cut || (rec.cutRun && run && String(rec.cutRun) !== String(run))) return false;
+    return treeNames.forget(key);
+  },
+};
 
 // Rows are written by the scheduler, so their copy of the panel-agent state is as old as that
 // row's last scan (45-90s on a big fleet). Overlay it at snapshot time: a turn starting or
@@ -995,7 +1125,9 @@ function withTreeNames(snap) {
   for (const project of snap.projects || []) {
     for (const row of project.worktrees || []) {
       const rec = treeNames.forTree({ project: project.name, path: row.path, branch: row.branch });
-      if (!rec) {
+      // A cut record is a tree waiting for its one name, not a tree that has one: the row must not claim a name
+      // nobody has given it yet (the tooltip is the only place this shows, and it would say "named by run …").
+      if (!rec || namingState(rec) === "cut") {
         delete row.named;
         continue;
       }
@@ -2726,7 +2858,7 @@ const server = createServer(async (req, res) => {
       scheduler.stop();
       pool.close();
       pool = new Pool(config.threads);
-      scheduler = new Scheduler({ config, store, pool, registry, getProjects: () => registry.projects, panelAgents: () => jobs.agentPaths(), panelThreads: () => jobs.panelRunThreads() });
+      scheduler = new Scheduler({ config, store, pool, registry, getProjects: () => registry.projects, panelAgents: () => jobs.agentPaths(), panelThreads: () => jobs.panelRunThreads(), onWorktreeSeen: (project, tree) => seedTreeName(project, tree) });
       await registry.refresh();
       await scheduler.start();
       broadcast({ type: "snapshot", data: snapshot() });
