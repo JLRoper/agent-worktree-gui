@@ -2951,12 +2951,12 @@ async function warmParents() {
   let learned = 0;
   let guessed = 0;
   for (const project of projects) {
-    const rows = store.rowsFor(project.name) || [];
-    const branches = rows.map((r) => r.branch).filter(Boolean);
-    // No rows yet (the boot pass has not reached this project) is NOT a reason to skip it: refresh() works from the
-    // repo's own branch list, and the first pass used to be wasted on exactly the projects that needed it most.
+    // The whole REPO, never the rows the board happens to be showing: this pass exists to fill in every legacy tree,
+    // and a board that has only scanned the project's own checkout so far used to hand it [`master`] — one branch,
+    // resolved, window spent, and every other tree still reading "unknown" five minutes later. `refresh()` starts from
+    // the repo's own branch list anyway; what it skips cheaply is the branches it already has an answer for.
     try {
-      const out = await parents.refresh({ project: project.name, repoDir: project.path, mainBranch: project.mainBranch, branches });
+      const out = await parents.refresh({ project: project.name, repoDir: project.path, mainBranch: project.mainBranch });
       learned += out.learned || 0;
       guessed += parents.state(project.name).filter((r) => r.parentSource === "backfilled").length;
     } catch (e) {
