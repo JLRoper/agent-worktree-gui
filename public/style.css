@@ -759,6 +759,35 @@ button.pill-continue:disabled { cursor: progress; }
 /* While the nudge is being sent the glyph turns: "starting" without pretending to a status the panel does not know. */
 button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s linear infinite; }
 @keyframes pill-again-spin { to { transform: rotate(360deg); } }
+/* ---- the running card's pulse -------------------------------------------------------------------
+   The heartbeat on a live run's event stream (app.js livePulse): a looping dot and the last thing the panel
+   actually heard. It is a heartbeat, not a thought bubble - the tooltip says so in the agent's own card - and
+   the two quiet states are drawn differently on purpose: "no events yet" is the gateway not sending (amber,
+   attention), while a silent stream is a live run between events (grey, still pulsing). "polled" is the third
+   kind of not-knowing: a gateway with no event stream, where the card is read every 15s and nothing here can
+   judge the model. The pulse never carries reasoning text and never says what the agent is thinking. */
+.live-pulse {
+  display: inline-flex; align-items: center; gap: 5px;
+  flex: none; align-self: center;
+  font-family: var(--mono); font-size: 11px; line-height: 1.4;
+  padding: 1px 7px 1px 6px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--dim);
+  white-space: nowrap; user-select: none;
+}
+.live-pulse .pulse-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+  animation: livepulse 1.4s ease-in-out infinite;
+}
+.live-pulse .pulse-text { font-variant-numeric: tabular-nums; }
+.live-pulse.is-stream { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
+.live-pulse.is-tool { color: #86c5ff; border-color: #1e3a56; background: var(--blue-bg); }
+.live-pulse.is-silent { color: var(--dim); border-color: var(--line); background: transparent; }
+.live-pulse.is-nosignal { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+.live-pulse.is-poll { color: var(--dimmer); border-style: dashed; background: transparent; }
+.live-pulse.is-poll .pulse-dot { animation: none; opacity: .5; }
+@keyframes livepulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.72); } }
+/* A looping dot is exactly what this asks to turn off. The state word and the age stay: only the motion goes. */
+@media (prefers-reduced-motion: reduce) { .live-pulse .pulse-dot { animation: none; } }
 /* The re-attach pill is the not-running pill: same word, same amber, same refresh glyph, same place on the card.
    The reader is not asked to learn a second control for a card that is not running, and the state is the same one
    the word already names. Only the CLICK differs, which is what this hook class carries: it asks the gateway about

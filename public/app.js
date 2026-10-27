@@ -961,6 +961,75 @@ function jobStatusClass(j) {
   return "quiet";
 }
 
+// ---- the live pulse ---------------------------------------------------------------------------
+// A live card used to say "running" and nothing else, so a model that was thinking with no tool call yet left
+// the reader watching a blank row. This is the panel's HEARTBEAT on the run's event stream: it says what the
+// last thing it heard was, and how long ago - never that the agent is thinking about anything, and never any
+// reasoning text. The word is the only claim it makes; the age is the only number it shows.
+//
+// Five states, and they are five different facts:
+//   stream     a text delta arrived after the last tool boundary - text is arriving now ("thinking 2s")
+//   tool       a tool is in flight: named, because waiting on a command is not waiting on tokens
+//   silent     nothing for a while, still pulsing: the run is live, its last event is old ("thinking 1m 10s")
+//   no signal  the gateway has sent NO event since the run started - that is a gateway not sending, not an
+//              agent thinking, and the pulse says so instead of pretending to read a mind
+//   polled     this gateway does not advertise run_events_sse: there is no stream to judge, and a 15s poll
+//              must never read as a stalled model
+//
+// `live` comes from lib/jobs.js (`summary().live`, and on every console line), so the pulse is drawn from what
+// the subscriber actually received - a card cannot claim events the panel never saw.
+const PULSE_SILENT_SECONDS = 20; // past this, "thinking 2s" would be a lie: it is silence with a live run
+
+function livePulse(j) {
+  // A held turn (the gateway's 429 cap) has no run yet; its own head already says what it is waiting for.
+  if (!j || !j.live || !turnLive(j) || isWaiting(j)) return null;
+  const now = Date.now();
+  const started = Number(j.live.startedAt) || Date.parse(j.startedAt || "") || now;
+  const last = Number(j.live.lastEventAt) || null;
+  const age = last ? Math.max(0, (now - last) / 1000) : null;
+  const ago = fmtSeconds(age ?? (now - started) / 1000);
+  if (j.live.stream === "off") {
+    return {
+      cls: "is-poll",
+      text: "polled · every 15s",
+      title: "this gateway does not advertise run_events_sse, so the card is polled every 15s instead of streamed - a quiet minute here is the poll, not a stuck model",
+    };
+  }
+  if (!j.live.events) {
+    return {
+      cls: "is-nosignal",
+      text: `no events yet · ${ago}`,
+      title: `this run is live but the gateway has sent no event at all in ${ago} - that is the gateway not sending, not an agent thinking`,
+    };
+  }
+  const tool = j.live.tool?.name;
+  if (tool) {
+    return {
+      cls: "is-tool",
+      text: `${tool} · ${ago}`,
+      title: `${tool} is running - the last event from this run's stream was ${ago} ago. The pulse is the panel's heartbeat on that stream, not the agent's thoughts`,
+    };
+  }
+  if (j.live.streaming && age !== null && age < PULSE_SILENT_SECONDS) {
+    return {
+      cls: "is-stream",
+      text: `thinking ${ago}`,
+      title: `text is streaming: the last delta arrived ${ago} ago. The pulse is the panel's heartbeat on the run's stream, not the agent's thoughts`,
+    };
+  }
+  return {
+    cls: "is-silent",
+    text: `thinking ${ago}`,
+    title: `nothing from this run's stream for ${ago} - the run is still live in the gateway and this panel still holds its stream. The pulse is a heartbeat, not the agent's thoughts`,
+  };
+}
+
+function livePulseHtml(j) {
+  const p = livePulse(j);
+  if (!p) return "";
+  return `<span class="live-pulse ${p.cls}" data-live-pulse="${esc(j.thread || j.id)}" title="${esc(p.title)}"><span class="pulse-dot" aria-hidden="true"></span><span class="pulse-text">${esc(p.text)}</span></span>`;
+}
+
 function jobPreviewHtml(j) {
   const word = jobStatusWord(j);
   const cls = jobStatusClass(j);
@@ -3794,6 +3863,7 @@ function conversationHtml(conv) {
           `<button class="pill pill-notrunning pill-continue${latest.status === "failed" ? " is-failed" : ""}" data-continue-thread="${esc(thread)}" type="button" title="${esc(
             `${latest.status} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""} — click to send this agent "${CONTINUE_TEXT}" and start its next turn`,
           )}">${latest.status === "failed" ? "exited" : "not-running"}<span class="pill-again" aria-hidden="true">\u21bb</span></button>`}
+      ${livePulseHtml(latest)}
       ${whenHtml}
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
       ${runApproval && !waitingApproval ? `<span class="sig sig-approval" title="this run is parked on a flagged command — answer it in the card below">waiting on approval</span>` : ""}
@@ -6555,6 +6625,12 @@ document.addEventListener("scroll", endFollowOnScroll, { passive: true, capture:
 document.addEventListener("touchmove", endFollowOnScroll, { passive: true });
 
 function appendJobLine(evt) {
+  // The run's live numbers ride the line they belong to: a jobline frame carries them (lib/jobs.js emitLine),
+  // so the pulse's age advances with the output instead of needing a summary frame per token.
+  if (evt.live) {
+    const job = state.jobs.get(evt.id);
+    if (job) job.live = evt.live;
+  }
   const line = evt.line || {};
   const buf = state.jobLines.get(evt.id) || [];
   // mode "set" = the agent is still writing the same paragraph; that line grows in place
@@ -11168,7 +11244,7 @@ function applySnapshot(data) {
     $("chip-key").title = t.error || `${t.url || ""}${caps.version ? ` · hermes ${caps.version}` : ""}`;
     $("chip-bin").textContent = String(t.url || "").replace(/^https?:\/\//, "") || "no gateway";
     $("chip-bin").title = caps.runCwd
-      ? "the gateway honours per-run cwd, so agents work in their own worktree"
+      ? "the gateway advertises per-run cwd — measured 2026-10-27: it is accepted, and a run's tools still start in the gateway's directory, so the prompt carries the path too"
       : "the gateway ignores per-run cwd (hermes-runs-api-knobs.diff not applied) — agents run in the gateway's directory";
     syncProjectPicker(data.spawn.projects || []);
   }
@@ -13096,6 +13172,21 @@ setInterval(() => {
     // nothing else repaints it while it waits (the gateway sends no events for a POST it refused).
     if (j.status !== "running" && j.status !== "starting" && !isWaiting(j)) continue;
     const card = document.querySelector(`.job[data-thread="${CSS.escape(j.thread || j.id)}"]`);
+    // The pulse's age is the one thing on this card that has to move without an event: the whole point of it
+    // is to say how long the silence is, and nothing arrives while it is silent. Rewritten in place - a rebuilt
+    // node would take the card's layout with it every second.
+    const pulse = card ? livePulse(j) : null;
+    for (const el of card?.querySelectorAll(".live-pulse") || []) {
+      if (!pulse) {
+        el.remove();
+        continue;
+      }
+      const txt = el.querySelector(".pulse-text");
+      if (txt && txt.textContent !== pulse.text) txt.textContent = pulse.text;
+      if (el.title !== pulse.title) el.title = pulse.title;
+      const cls = `live-pulse ${pulse.cls}`;
+      if (el.className !== cls) el.className = cls;
+    }
     // The clock is its own span. Replacing the whole foot here deleted the stats strip one second
     // after the card rendered it: a running card showed "running 42s" and nothing else, while every
     // settled sibling had its numbers.

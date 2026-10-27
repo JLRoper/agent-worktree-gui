@@ -3024,7 +3024,7 @@ server.listen(config.port, config.host, () => {
       log(`agent transport UNREACHABLE: ${t.error} — spawns will be refused until the gateway is back`);
       return; // nothing to ask: every restored turn keeps its interrupted verdict, which is the safe one
     }
-    log(`agent transport ready: hermes ${t.capabilities?.version || "?"} · runs ${t.capabilities?.runs ? "yes" : "no"} · steer ${t.capabilities?.steer ? "yes" : "no"} · per-run cwd ${t.capabilities?.runCwd ? "yes (patched gateway)" : "NO (stock gateway — agents run in the gateway's directory)"}`);
+    log(`agent transport ready: hermes ${t.capabilities?.version || "?"} · runs ${t.capabilities?.runs ? "yes" : "no"} · steer ${t.capabilities?.steer ? "yes" : "no"} · per-run cwd ${t.capabilities?.runCwd ? "advertised (a run's tools still start in the gateway's directory — measured 2026-10-27)" : "NO (stock gateway — agents run in the gateway's directory)"}`);
     // What the gateway did with the turns this panel lost in a restart. `load()` stamps them `interrupted`
     // without asking, and a run that finished in the meantime must not keep reading "may still be live".
     try {
