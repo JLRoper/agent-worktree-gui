@@ -747,6 +747,21 @@ The assistant acts by writing plain lines in a reply, and every such line in it 
     SPAWN <project> | what the new worker should do
     SPAWN IN <directory, worktree directory name, or branch> | what the worker should do in that tree  (no new worktree)
 
+**Every command line is reconciled against what the panel actually did with it.** Each kind already journals its own
+refusals — a busy thread, a TODO id that does not exist, a WATCH with no such thread, a RESTART with no key — so the
+audit is not a second vocabulary: it counts. Every turn of the assistant's own gets one ledger
+(`lib/assistant/audit.js`, persisted in `assistant.json`): the lines `parseActions` read per kind, the outcome each
+one got as it was carried out (applied, or refused — with the journal line that says why), and a third count for lines
+that begin with a known prefix and miss its grammar, which used to be dropped with no journal line at all
+(`TO wtgui-x without a colon` is recorded as unparsed instead of vanishing). When parsed exceeds applied plus refused,
+the sentry raises a red card naming the turn, the kind and the missing count, and writes `command-unactioned` to the
+journal, which `digest()` carries beside `spawn-unstarted` — the board cannot show a line that did nothing, and a
+model re-reading its own prose otherwise believes it acted. The parsed side comes from the turn's own lines, which
+outlive the process in the job store, so a turn a restart cut in half is reconciled by the **next** pass instead of
+being carried out by nobody. **Settings → command audit** is `off` (the default: nothing is read), `report` (the red
+card and the journal line), or `enforce` (the same, and the lines nothing accounted for are carried out once on the
+following pass — a line that already ran is never replayed).
+
 **A SPAWN IN name that is out of date is resolved, not refused.** The panel renames a finished run's worktree
 directory and its branch after the thread title once, on the run that got the tree first (`renameWorktree` — the
 slug is rebuilt from the title, the six-hex tag kept; every later run in that tree leaves the name alone, see
