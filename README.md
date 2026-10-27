@@ -822,6 +822,15 @@ ended it — so no card is left with neither a done nor an interrupted verdict. 
 is proved with **one real turn through the gateway, never with its port**, and only then is the assistant woken
 once with the completion payload of everything the restart interrupted.
 
+A turn is not proof that anything was restarted: the gateway that was already there answers it perfectly well.
+So a restart is accepted only when `gateway_state.json` reports a **different pid** within 30 s of the command.
+`hermes gateway restart` is a service-manager verb and the board's gateway is a foreground `gateway run`, so
+the command can exit 0 having done nothing; when the pid does not move the panel stops the recorded pid and
+starts the recorded argv itself (`python -m hermes_cli.main gateway run …`, detached, with `HERMES_HOME` set,
+from the checkout the argv came from). If the pid still does not move, the restart is recorded as a **failure**
+with the reason `the gateway process never changed`, in the journal and in `logs/gateway-restart.log` — a false
+success there once had the board reporting a sixteen-hour-old gateway as freshly restarted.
+
 A panel restart hands the port over: the outgoing process writes what was running into `restart.json` beside
 the job store, spawns a detached helper (`lib/panel-restart.cjs`) that waits for the old pid to exit and only
 then starts `server.js` (and writes `logs/server.pid`), and exits through the same path a signal uses. The
@@ -830,6 +839,15 @@ panel did *not* ask for: if runs stop reporting while the panel is still up — 
 longer knows their run ids — each lost run is marked interrupted once and the assistant is told once, with the
 same payload each time. A gateway restart is invisible from the outside (its port answers either way), which is
 why the sweep asks the runs themselves and why the proof is a real turn.
+
+Giving a card the interrupted verdict is not stopping its run. The run lives in the gateway, and one whose
+client is gone keeps executing — holding a concurrency slot and a `session_turn_lease` nobody will release:
+nine of them once filled every slot until the gateway was bounced by hand. So every interrupt path also POSTs
+`/v1/runs/<id>/stop`, taking **404 and 409 as already gone**, journalling each attempt and its answer and never
+letting a failed stop hold up the verdict. The same ask is made once at boot for any run the panel inherited
+that was issued to an **earlier gateway identity** (a run id belongs to one process's memory), after the boot
+reconcile has had its chance to re-attach the runs the current gateway still holds — those are live work and
+are never stopped.
 Each finished turn is harvested exactly once (keyed by turn id, persisted): a turn's title landing or a panel
 restart re-emits the same job, and re-reading its lines would otherwise start a second worker.
 

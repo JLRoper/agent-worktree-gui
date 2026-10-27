@@ -210,6 +210,21 @@ console.log("\n1. the queue — the action runs after the turn that asked for it
 // The provider key the preflight wants, in a fake HERMES_HOME.
 writeFileSync(path.join(homeDir, ".env"), "OPENROUTER_API_KEY=sk-or-v1-0000000000000000000000000000\n");
 
+// The gateway's own record of which process is running. A restart's verdict is now (the pid changed) AND (a
+// real turn passed): a command that leaves the same pid running is a FAILED restart, whatever it exited with.
+// So the stub "restart" below replaces this record the way a real one would.
+const statePath = path.join(homeDir, "gateway_state.json");
+const writeGatewayState = (pid) =>
+  writeFileSync(statePath, JSON.stringify({
+    pid,
+    kind: "hermes-gateway",
+    argv: [path.join(dir, "hermes-agent", "hermes_cli", "main.py"), "gateway", "run", "--quiet"],
+    start_time: pid * 10,
+    gateway_state: "running",
+  }));
+writeGatewayState(1000);
+const bumpGatewayPid = () => writeGatewayState(JSON.parse(readFileSync(statePath, "utf8")).pid + 1);
+
 // The turn that asks for the restart: a real run, deliberately not on the assistant's own thread so it is
 // the ONLY thing holding the queue (the stub keeps it going until the test settles it).
 const REQUESTER = "wtgui-requester";
@@ -223,6 +238,7 @@ const controller = makeController({
     restartedAt = Date.now();
     capabilitiesAtRestart = stub.state.capabilitiesCalls;
     stub.state.capabilities503 = 1; // the new process is not answering yet
+    bumpGatewayPid(); // a real restart replaces the process, and the pid guard is what says so
     return { command: "hermes gateway restart (stub)", pid: 4242, at: new Date().toISOString() };
   },
 });
@@ -249,7 +265,10 @@ ok("the queued restart ran once the turn ended", await waitFor(() => restartedAt
 ok("...and only after that turn ended", restartedAt > requestedAt + 1_000, `queued at +0ms, ran at +${restartedAt - requestedAt}ms`);
 ok("...and only once the panel had settled that turn", jobs.jobs.get(requesterTurn.id).status !== "running", jobs.jobs.get(requesterTurn.id).status);
 ok("...and the whole restart finished", await waitFor(() => controller.state().last !== null && controller.state().running === null, 40_000), JSON.stringify(controller.state().running));
-await sleep(400);
+// The wake is coalesced on a 150 ms timer and then sent as a run of its own, so it lands after the verdict,
+// never inside it: wait for the post instead of guessing how long "after" is.
+await waitFor(() => stub.state.posts.some((p) => p.session === ASSISTANT_THREAD), 10_000);
+await sleep(200);
 
 console.log("\n2. the preflight — a provider key has to be in $HERMES_HOME/.env");
 const noKey = providerKeyCheck(homeNoKey);
