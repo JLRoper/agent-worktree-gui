@@ -183,6 +183,17 @@ same worktree, so the cheap and expensive passes can never race into the same ro
 consecutive discovery passes, and never when that call itself failed or came back empty — a
 transient git hiccup cannot blank the table. New worktrees appear on the next discovery pass.
 
+**A row is a tree this project OWNS**, and ownership is the folder, not the repository. `git worktree list` answers
+for the whole *repository*, so a tree cut from this repo anywhere on disk is in its answer — a lander's comparison
+trees under `%LOCALAPPDATA%\hermes\cache\scratch\land-check\`, or anything `git worktree add ../…` left beside the
+checkout — and boarding those drew bare basenames with no tag, detached HEADs and duplicated `land/*` branches as if
+they were this project's work. Only a path at or under the project's own folder becomes a row: a tree outside it is
+absent from the header counts, from the UNMERGED arithmetic and from the merge / rename / delete controls rather than
+drawn and explained away, because every one of those controls hangs off a row and none of them would be right for a
+tree the panel cannot name. `outsideTrees` on the project record (`/api/state`) carries how many the last discovery
+left off, the panel log names them, and a row an earlier build already boarded outside the project is dropped on the
+next discovery pass instead of after the usual two — the two-pass grace is for a git hiccup about a tree still owned.
+
 Per-worktree verdict:
 
 | Verdict | Meaning |
@@ -222,6 +233,13 @@ same tree cannot rename it: it would move the directory and the branch out from 
 lives there, which is how one worktree ended up with a directory named one thing, a branch named another,
 and three live cards each spelling a different branch. The same record is what the board's row reads, so
 the tooltip on `✎` says who named the tree and when.
+
+A tree whose directory carries **no `-<hex6>` tag** is never renamed, automatically or by hand: the tag is the
+ledger key and the one part of the name a rename keeps, so a bare name would have to be given an invented tag (a
+second identity for a tree that already had one) and its record keyed on a path the rename then moves out from under
+itself. `POST /api/worktree/rename` and `POST /api/worktree/suggest-name` both answer `400 … carries no -<hex6> tag`,
+and the automatic half skips the tree entirely (logging the reason once); rename the directory yourself if it needs
+another name. A directory that *is* six hex counts as the tag being named, which is the same answer.
 
 Two buttons sit beside the worktree name, and neither is automatic:
 

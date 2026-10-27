@@ -1,7 +1,6 @@
 // Static + JSON + SSE server for the worktree monitor, plus Stage-1 agent spawning.
 // The HTTP layer never runs git: the scheduler scans in worker threads and the
 // store holds the results. Spawned agents go through lib/jobs.js.
-import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
@@ -24,7 +23,7 @@ import { Jobs, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js
 import { gitIn, scanWorktree } from "./lib/scan.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
-import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE } from "./lib/tree-names.js";
+import { TreeNames, describeNaming, tagOf, treeKey, renameRefusal } from "./lib/tree-names.js";
 import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
@@ -743,10 +742,17 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
   }
   const row = scheduler.store.rowsFor(projectName).find((r) => path.resolve(r.path) === oldPath);
   if (!row) return { error: `not a worktree row of ${projectName}: ${oldPath}`, status: 404 };
+  // A rename keys the naming ledger on the six-hex tag and keeps that tag as the one part of the name it does not
+  // rebuild, so a directory carrying none has no identity to rename by — lib/tree-names.js `renameRefusal` has the
+  // full reason. Refused here, before anything is claimed or moved, for the automatic half and the deliberate one
+  // alike. The old code invented a tag for a bare name, which gave the tree a second identity and a ledger record
+  // keyed on a path the rename then moved out from under itself.
+  const refusal = renameRefusal(oldPath);
+  if (refusal) return { error: refusal, status: 400 };
   const base = path.basename(oldPath);
   // Keep the six-hex tag: it is what tells two trees named alike apart, and it makes a repeated rename a no-op
-  // instead of a second suffix.
-  const tag = ((WORKTREE_TAG_RE.exec(base) || [])[1] || randomUUID().slice(0, 6)).toLowerCase();
+  // instead of a second suffix. `tagOf` also reads a directory that IS six hex, which is the tag being named.
+  const tag = tagOf(base);
   // The tag is also the tree's identity for the naming ledger, and it is the same key before and after a rename —
   // which is exactly what the old in-memory Set of paths could not say, its key going stale the moment the first
   // rename landed. A tree already in the ledger keeps its name: this is the automatic path asking (`once`), and a
@@ -906,6 +912,9 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
 // event of one finished turn - each of which used to walk past the old in-memory Set because the first rename had
 // already moved the path that Set was keyed on.
 const autoNamingInFlight = new Set();
+// Trees whose directory carries no tag, logged once each. A run emits many events, and a refusal repeated on every
+// one of them buries the line that says why.
+const taglessTreesLogged = new Set();
 async function autoNameWorktree(evt) {
   if (evt?.type !== "job") return;
   const j = evt.job;
@@ -918,6 +927,17 @@ async function autoNameWorktree(evt) {
   if (!project) return;
   // The project's own checkout is the parent of every tree cut from it and keeps the folder's name.
   if (normPathKey(project.path) === normPathKey(j.worktreePath)) return;
+  // A tree whose directory carries no -<hex6> tag is never fed to the rename (lib/tree-names.js `renameRefusal`):
+  // its ledger key would be its path, and a rename moves that path, so the record would guard nothing. A tree the
+  // panel cut always carries one; this is the hand-cut tree a run was pointed at.
+  const tagless = renameRefusal(j.worktreePath);
+  if (tagless) {
+    if (!taglessTreesLogged.has(j.worktreePath)) {
+      taglessTreesLogged.add(j.worktreePath);
+      log(`auto-naming ${j.worktreePath}: ${tagless}`);
+    }
+    return;
+  }
   const key = treeKey({ project: project.name, path: j.worktreePath });
   // Already named - by the run that cut the tree, or by the reader - so the name stays. This is the whole of the
   // fix for a shared tree: nothing here can rename it a second time, whoever is running in it.
@@ -2640,6 +2660,10 @@ const server = createServer(async (req, res) => {
       if (normPathKey(dir) === normPathKey(project.path) || (await isMainCheckout(dir))) {
         return sendJson(res, 400, { error: "that is the project's own checkout, not a worktree — its name is the project folder's" });
       }
+      // The naming path, so it obeys the rename's rule: an untagged directory has no tag for the offered name to
+      // keep, and `Name it` would post a rename that refuses. Say so here rather than offering a name that cannot land.
+      const refusal = renameRefusal(dir);
+      if (refusal) return sendJson(res, 400, { error: refusal });
       // The tag every rename keeps, so the name this offers is already the whole directory name the row would get.
       const tag = tagOf(dir) || tagOf(row.branch) || null;
       const picked = await suggestWorktreeName({

@@ -176,6 +176,8 @@ opens and closes the project. Settings → Display → **Project colours** shows
 
 ### The worktree table
 
+Rows are the trees this project **owns**: its own checkout and the worktrees inside its folder. `git worktree list` answers for the whole *repository*, so a tree of the same repo that sits somewhere else on disk — a scratch comparison tree a landing run cut, a tree checked out beside the project — is in git's answer but is **not** a row here: it is left out of the header counts, the UNMERGED arithmetic and the merge / rename / delete controls, which belong to this project's work. The project record's `outsideTrees` in `/api/state` and a line in the panel log say how many the last discovery left off, so the exclusion is inspectable rather than silent.
+
 | Column | Meaning |
 | --- | --- |
 | **Worktree** | The directory name, a green **▶** that **probes** the agents already in it (see below), and the `⧉ N` badge for agents this panel has in it (with `running` / `awaiting approval` when they are busy). Clicking the badge opens the row and its cards; the **+** bar in the row starts a new agent there. |
