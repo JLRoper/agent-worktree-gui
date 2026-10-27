@@ -303,10 +303,10 @@
   // Two counts, because they are two different facts: N things need a look, and of those M are SPAWN cards —
   // workers that have NOT started. The second number is the one the reader missed while four cards sat open
   // behind a single badge, and it turns amber once the oldest is past the two minutes the server escalates on.
+  // The spawn badge itself is painted by `paintSpawnBadge` (one writer for one element).
   function paintAssistantBadge() {
     const btn = as$("btn-assistant");
     const badge = as$("assistant-badge");
-    const spawnBadge = as$("assistant-spawn-badge");
     if (!btn || !badge) return;
     const alerts = state.assistant?.alerts || [];
     // Two numbers for two different things, and neither double-counted: the badge above counts NOTICES (spawn
@@ -320,14 +320,6 @@
     const m = cards.length;
     const oldest = cards.reduce((t, a) => Math.min(t, Date.parse(a.at) || Date.now()), Date.now());
     const late = m > 0 && Date.now() - oldest >= SPAWN_WATCH_MS;
-    if (spawnBadge) {
-      spawnBadge.hidden = m === 0;
-      spawnBadge.textContent = m > 99 ? "99+" : `${m} spawn`;
-      spawnBadge.classList.toggle("is-late", late);
-      spawnBadge.title = m
-        ? `${m} spawn card${m === 1 ? "" : "s"} waiting for your click — nothing has started${late ? ` · the oldest has waited ${waited(Date.now() - oldest)}` : ""}`
-        : "";
-    }
     const newest = plain.reduce((t, a) => Math.max(t, Date.parse(a.at) || 0), 0);
     btn.classList.toggle("is-hot", (n > 0 && newest > (state.assistantSeenAt || 0)) || late);
     const spawnWords = m ? ` — ${m} of them ${m === 1 ? "is a spawn card" : "are spawn cards"} waiting for a click, so nothing has started` : "";
@@ -337,26 +329,35 @@
     paintSpawnBadge();
   }
 
-  // The spawn badge. A spawn card is the one thing on this board that changes the repository when it is pressed,
-  // and the one thing that is invisible while nobody presses it: no job, no thread, no row. So it gets its own
-  // count in the header, next to the alerts one, and the watchdog's verdict turns it red rather than being a
-  // line in a list the reader has to remember to open.
+  // The spawn badge: ONE element, one painter, two facts joined — how many cards are waiting (the page's own
+  // list, so the badge and the strip can never disagree) and what the server's watchdog has found among them
+  // (`spawnCards.unstarted`: a card past its deadline with no run behind it). The count is the number the
+  // reader missed while four cards sat open; amber says the oldest has waited past the window, red says the
+  // watchdog looked and found nothing behind one. Neither is folded into the alert count beside it: a card is
+  // the reader's pending act, not a notice about the board.
   function paintSpawnBadge() {
     const el = as$("assistant-spawn-badge");
     if (!el) return;
     const s = state.assistant?.spawnCards || { open: 0, unstarted: 0 };
-    const n = Number(s.open) || 0;
     const stuck = Number(s.unstarted) || 0;
-    el.hidden = n === 0;
-    el.textContent = n > 99 ? "99+" : String(n);
+    const cards = spawnCards();
+    // The server's count is the fallback while its state is the only thing that has arrived (a socket replay of
+    // `state` before any tab repainted its list); the page's own list wins as soon as it has rows.
+    const m = cards.length || Number(s.open) || 0;
+    const oldest = cards.reduce((t, a) => Math.min(t, Date.parse(a.at) || Date.now()), Date.now());
+    const late = m > 0 && (cards.length ? Date.now() - oldest >= SPAWN_WATCH_MS : false);
+    el.hidden = m === 0;
+    el.textContent = m > 99 ? "99+" : `${m} spawn`;
+    el.classList.toggle("is-late", late && !stuck);
     el.classList.toggle("is-stuck", stuck > 0);
-    if (!n) {
+    if (!m) {
       el.title = "";
       return;
     }
     const due = s.nextDueAt ? Math.max(0, s.nextDueAt - Date.now()) : 0;
     el.title =
-      `${n} spawn card${n === 1 ? "" : "s"} waiting on you — press one to start that worker` +
+      `${m} spawn card${m === 1 ? "" : "s"} waiting for your click — nothing has started` +
+      (late ? ` · the oldest has waited ${waited(Date.now() - oldest)}` : "") +
       (stuck ? ` · ${stuck} never started and the watchdog has said so` : due ? ` · checked again in ${Math.ceil(due / 1000)}s` : "") +
       (s.autoStart ? " · auto-start is ON: a card with no run is started once when its check comes round" : "");
   }

@@ -41,6 +41,10 @@ actually on this branch, one per branch name, in the order they were made.
 - `package.json` was held at main's 0.11.2 through every merge (branch bumps 0.11.3 → 0.14.1 were all
   dropped). The single bump is the last commit on the branch: 0.12.0 — minor, because the integration
   carries features (spawn cards, the shared model picker with prices and ratings).
+- One cleanup after the union: merge 12 left TWO writers for the `#assistant-spawn-badge` element (the
+  branch's `4 spawn` text with its amber `is-late`, then main's plain number with `is-stuck`, last one
+  winning). They are one painter now, carrying the page's own card count and the server watchdog's
+  `unstarted` verdict on the same pill.
 - The branch is LOCAL ONLY: no push, no PR, main not moved.
 - Open question for the reader: `land/pr-model-picker` has no PR-side code in it — all four of its commits
   are the picker and its price data. The "picker half" was its already-landed pair (shared picker + 0.12.0
