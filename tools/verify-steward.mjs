@@ -134,7 +134,12 @@ async function main() {
     // The cut record is on disk at boot; the GUESS is filled in by the panel's own slow parent pass (20s in), so this
     // waits for the row to say "backfilled" rather than sampling one instant and calling it the answer.
     let rows = [];
-    const until = Date.now() + 75_000;
+    // A COLD BOOT ON THIS BOX IS SLOWER THAN THE PANEL'S OWN FIRST SCAN. The parent book is filled 20 s in, but the
+    // rows that carry it come from the scheduler, and the scheduler does not start until the assistant seed, the
+    // transport probe and the session store have all timed out — measured at 72 s here. A 75 s deadline therefore
+    // raced the first row pass and made this check pass or fail on boot timing; three minutes is about the row, not
+    // the clock.
+    const until = Date.now() + 180_000;
     while (Date.now() < until) {
       const r = await fetch(`${panel.base}/api/state`);
       const state = await r.json();
