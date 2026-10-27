@@ -48,7 +48,8 @@ import { createSpawn } from "./lib/features/spawn.js";
 // HTTP framing lives in lib/http/: transport.js knows about req/res and nothing about worktrees,
 // and static.js serves public/. Both are handed the state they used to read by closure.
 import { authorised, handleStream, readBody, readRawBody, sendJson } from "./lib/http/transport.js";
-import { serveStatic } from "./lib/http/static.js";
+import { serveStatic, PUBLIC_DIR } from "./lib/http/static.js";
+import { createBuild } from "./lib/build-version.js";
 
 // A file an agent produced is meant to be OPENED, and the shell association may hand a .md to a
 // browser. Prefer a text editor: Notepad++ when installed, else Windows' notepad (always present),
@@ -92,6 +93,12 @@ const VERSION = await readFile(path.join(HERE, "package.json"), "utf8")
 const CONFIG_PATH = process.env.PANEL_CONFIG ? path.resolve(process.env.PANEL_CONFIG) : path.join(HERE, "config.json");
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+
+// The versioned static bundle: one hash over everything the shell loads, computed here at boot and
+// re-read when a file under public/ moves. The shell's asset URLs carry it and GET /api/build
+// answers with it — that is how a tab open since yesterday learns the panel changed.
+const build = createBuild({ publicDir: PUBLIC_DIR, log });
+const buildAtBoot = await build.current();
 
 // How old a worktree's last activity has to be before the chart holds its row out of the view it opens on (the row
 // is never lost — one arrow on that chart shows every tree again). Measured from ACTIVITY, never from when the
@@ -1134,6 +1141,12 @@ const server = createServer(async (req, res) => {
   try {
     if (route === "/api/health") {
       return sendJson(res, 200, { ok: true, host: config.host, projects: registry.projects.map((p) => p.name), settings: settingsOut(), clients: clients.size });
+    }
+
+    // The build this process is serving: the page carries the version it loaded with, polls this,
+    // and offers (or takes) a reload when the two part company. A read, like every other GET here.
+    if (route === "/api/build" && req.method === "GET") {
+      return sendJson(res, 200, await build.info());
     }
 
     if (route === "/api/config") {
@@ -2756,7 +2769,7 @@ const server = createServer(async (req, res) => {
 
     if (route === "/api/stream") return handleStream(req, res, { clients, snapshot });
 
-    return serveStatic(req, res, route);
+    return serveStatic(req, res, route, build);
   } catch (e) {
     // The answer may already be on the wire (a static file half-written, an SSE client that died
     // mid-write). sendJson there throws ERR_HTTP_HEADERS_SENT *inside* the catch, which rejects the
@@ -2776,6 +2789,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(config.port, config.host, () => {
   log(`agent-worktree-gui on http://${config.host}:${config.port}`);
+  log(`static build ${buildAtBoot.version || "(unversioned)"} — ${Object.keys(buildAtBoot.files).length} file(s) hashed; the shell is no-store, its assets carry ?v= and are cached hard`);
   // Binding off loopback is a deliberate act, so say out loud what it opens and whether the token that
   // guards it is there at all. Reads are still open to anyone who can reach the port.
   if (!["127.0.0.1", "localhost", "::1"].includes(String(config.host).toLowerCase())) {

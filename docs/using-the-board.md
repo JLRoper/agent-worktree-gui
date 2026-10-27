@@ -518,6 +518,8 @@ setting):
 | Board | Grey flash | A row that was re-read with nothing changed flashes grey. Green — a sign of life — always flashes. |
 | Board | Flash on events | An event about the worktree (a console line, a job starting or finishing, an approval) counts as life and flashes the row; off, the ring still restarts but the board does not pulse. |
 | Board | Refresh | Which projects the panel re-reads: **everything**, or **only on screen** (the window plus half a screen either side). In "only on screen" it reads nothing while no page is open, and scrolling a stale project into view reads it at once. Saved in this panel's `config.json`, so it applies to every browser and survives a restart. |
+| Updates | Update check | What this tab does when the panel is serving a different build than the one it loaded: **off**, **prompt** (the default — a chip offers the reload), or **auto** (reload as soon as the page is idle). Both modes hold the reload while a reply box or a held draft has text, or while a turn is streaming. Saved in this browser. |
+| Updates | Panel build · Check now | The build this tab is running, and what the panel serves now. **Check now** asks `GET /api/build` at once — it works even with the check set to off. |
 
 **Written to the gateway's `config.yaml`** (the gateway re-reads them; a row whose file is not reachable from this
 machine is disabled, and its note gives the reason):
@@ -577,6 +579,7 @@ only its own line so your comments and formatting survive.
 | Verdict / PR / commit detail | The expensive per-row fields | every 60 s |
 | Fetch | `git fetch --prune` per project | every 10 min |
 | Client resync | Full snapshot fallback (also every 30 s if the stream goes quiet) | every 30 s |
+| Panel build | `GET /api/build` — the version this tab loaded vs the one the panel is serving | every 30 s (setting: off / prompt / auto) |
 
 Rows flash when something moved: green for a sign of life or a row that moved up the order, grey for a re-read with
 nothing new. A **collapsed** project's outline and title bar flash green along with the row inside it; an open
@@ -590,6 +593,13 @@ immediately. The config line then ends with `refresh on screen only`.
 
 Configured in `config.json` (`liveSeconds`, `worktreeSeconds`, `dormantSeconds`, `slowSeconds`, `fetchSeconds`,
 `refreshSeconds`), and the footer prints the values in use.
+
+The panel's own build is separate from all of that. `index.html` is served `no-store` and every script and stylesheet
+it loads carries a `?v=` hash of the bytes; a restarted panel (or an edit under `public/` while it runs) is a new
+version, and the open tab learns it from `GET /api/build`. Settings → **Updates** decides what happens: **off** never
+looks, **prompt** (the default) offers a reload chip, **auto** takes it. Either mode **holds** the reload while a reply
+box or a held draft has text, or while a turn is still streaming — the chip says which — so a reload never throws away
+something you typed or an agent is writing. **Check now** asks at once, even with the setting off.
 
 ---
 

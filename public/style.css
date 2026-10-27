@@ -151,6 +151,24 @@ button.primary:hover { background: #24466a; }
 
 .banner { margin: 10px 16px 0; padding: 8px 12px; border-radius: 6px; background: var(--red-bg); border: 1px solid #57262a; color: #ffb4ae; font-size: 13px; }
 .banner.ok { background: var(--green-bg); border-color: #1f4a2a; color: #b7f7c1; }
+/* ---- the update chip ----
+   A different build than the one this tab loaded is an interruption the reader can decline, so it
+   is a chip and not a window: bottom-left, clear of the approvals dock (bottom-right) and the
+   assistant (top-right). The Reload button is disabled while a draft or a streaming turn holds it,
+   and its text says which — the panel never reloads over something the reader cannot get back. */
+.update-chip {
+  position: fixed; left: 16px; bottom: 16px; z-index: 60;
+  display: flex; align-items: center; gap: 10px;
+  max-width: min(720px, calc(100vw - 32px));
+  padding: 8px 11px;
+  background: var(--panel-2); border: 1px solid #4a3a17; border-left: 3px solid var(--amber);
+  border-radius: 8px; box-shadow: 0 10px 26px #0008;
+  color: var(--text); font-size: 12px;
+}
+.update-chip .uc-text { color: var(--dim); }
+.update-chip button { padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
+.update-chip button:hover { border-color: #3b4757; }
+.update-chip button:disabled { color: var(--dimmer); cursor: default; }
 /* settings panel: a small popover under the top bar */
 /* A fixed panel with a scrolling body: the head stays put (and the close button with it) however far down the
    reader is. The body owns the scrollbar so the rounded border is never clipped by it. */
