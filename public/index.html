@@ -16,7 +16,7 @@
     <div class="controls">
       <span class="meta" id="stream-state">—</span>
       <span class="meta" id="stream-rate"></span>
-      <button id="btn-assistant" type="button" class="btn-assistant" title="assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)">✧ Assistant<span id="assistant-badge" hidden>0</span><span id="assistant-spawn-badge" hidden title="spawn cards waiting on you">0</span></button>
+      <button id="btn-assistant" type="button" class="btn-assistant" title="assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)">✧ Assistant<span id="assistant-badge" hidden>0</span><span id="assistant-spawn-badge" class="as-spawn-badge" hidden>0</span></button>
       <button id="btn-aggressive" type="button" class="btn-aggressive" aria-pressed="false" title="aggressive assistant — spends more tokens: the assistant wakes on everything, monitors and checks every live card, and keeps pushing until the fleet is waiting on something outside. While it is on it holds the waking, monitoring and acting settings; switching it off puts your own values back (Alt+Shift+A)">⚡ Aggressive<span id="aggressive-state">off</span></button>
       <button id="btn-hot" type="button" title="NOT-RUNNING — step through the agents that are not running and are waiting on you: each one is opened, its reply box focused and flashed amber. Enter sends and moves on; Alt+Right skips; Alt+Left goes back.">NOT-RUNNING</button>
       <button id="btn-collapse-all" type="button" title="collapse every folder and project section">Collapse all</button>
@@ -43,7 +43,7 @@
     </div>
     <div class="as-tabs" id="as-tabs">
       <button type="button" data-as-tab="chat" class="is-on" title="the assistant itself — a normal agent card, with its own thread">Chat</button>
-      <button type="button" data-as-tab="alerts" title="what it noticed and what is waiting on you">Alerts <span class="as-n" id="as-alert-n">0</span></button>
+      <button type="button" data-as-tab="alerts" title="what it noticed and what is waiting on you — spawn cards waiting for a click sit at the top">Alerts <span class="as-n" id="as-alert-n">0</span><span class="as-n is-spawn" id="as-spawn-n" hidden>0</span></button>
       <button type="button" data-as-tab="watches" title="what it is keeping an eye on, and until when">Watches <span class="as-n" id="as-watch-n">0</span></button>
       <button type="button" data-as-tab="messages" title="the message board between it and the agents — what it sent them and what they sent back, thread by thread, over the last 7 days">Messages</button>
       <button type="button" data-as-tab="pad" title="the server-side scratchpad: notes, standing rules and the journal">Scratchpad</button>
@@ -371,6 +371,11 @@
   <div id="banner" class="banner hidden"></div>
 
   <main>
+    <!-- Spawn cards waiting for a click: a worker the assistant proposed and nothing has started yet. It sits
+         at the top of the board on purpose — an unclicked card used to exist only as a number on the header
+         badge, inside an 80-deep Alerts list, and four of them read as "the agents never spawned". -->
+    <div id="spawn-strip" class="spawn-strip" hidden aria-live="polite"></div>
+
     <section class="project" id="newagent">
       <div class="project-head" data-toggle-fixed="newagent" title="minimize this card">
         <span class="chev">▾</span>

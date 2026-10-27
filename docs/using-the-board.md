@@ -20,6 +20,7 @@ cuts a worktree, a row's ✕ removes one, the folder **+** clones a repo). Every
 | Top bar | Liveness dot, stream state and rate, and the page's own controls. Sticky: it stays on screen while you scroll. |
 | **New agent** | The spawn form. Its header line always says what a spawn will do (a new worktree, or a run in a directory as it is). |
 | **Unattached agents** | Agent cards whose directory is not a worktree on the board — or none at all. |
+| **Spawn cards waiting** | A strip above **New agent**, only while the assistant has proposed workers nobody has clicked yet (see *Spawn cards*). |
 | Folders → projects → worktrees | One accordion per scan root, every git repo under it, a table row per worktree. |
 | Agent cards | Inside an expanded worktree row: the conversation, its console, its reply box. |
 | Approvals dock | Bottom-right, over the board, only while something is waiting on you outside a card. |
@@ -38,6 +39,8 @@ cuts a worktree, a row's ✕ removes one, the folder **+** clones a repo). Every
 | **NOT-RUNNING** | Steps through the agents that are not running and are waiting on you. See below. |
 | **✧ Assistant** | Opens the assistant float (`A` / `Ctrl+Shift+A`). Its purple badge counts the alerts that need a look; the `⧗` badge beside it counts spawn cards — worktrees the assistant proposed that only a press will start. That `⧗` count turns red once a card has been pending about two minutes with no run behind it. |
 | **Collapse all** | Folds the whole tree — every folder, project, worktree row, card and turn. The button then reads **Expand all**. Same as `Ctrl+[` / `Ctrl+]`. |
+| **✧ Assistant** | Opens the floating assistant panel (`A` or `Ctrl+Shift+A`). Its badge counts the open alerts; a second pill counts the **spawn cards** waiting for a click (`4 spawn`), amber once the oldest has waited over two minutes. |
+| **⚡ Aggressive** | Switches the assistant's aggressive profile on or off. Its pill reads `on`/`off`, so the state does not depend on colour. |
 | **Refresh now** | Forces a fast scan now instead of waiting for the next tick. With Settings → Board → **Refresh** set to "only on screen", it reads only the projects in view. |
 | **Fetch remotes** | Runs `git fetch <remote> --prune` in every project. The only routine gesture that touches git refs. |
 | **Pause** | Freezes the page: closes the live stream, so nothing updates. The button reads **Resume**, which reconnects and resyncs. |
@@ -117,6 +120,29 @@ answering. The chip's `✕` removes it before sending.
 The card appears under the row of the worktree it was created for, immediately — not after the next scan. An agent
 started in a project's own checkout (no new worktree) is filed on the project's base row and tagged *in the project
 checkout (no worktree)*.
+
+### Spawn cards
+
+The assistant proposes a worker by writing a `SPAWN` line; with `create worktrees` set to **ask** (the default)
+that line becomes a card, and **nothing has started** until you press its Start button. A card is not an agent:
+it has no job, no row and no card on the board, so it is shown where you cannot miss it:
+
+- **The strip at the top of the board** says `N spawn cards waiting`, one row per card, oldest first. A row shows
+  the tree it would use, the prompt the worker would be given, how long it has waited, **Create worktree & start**
+  (or **Start worker there**, for a card aimed at a tree that already exists) and **Open card**. Pressing Start is
+  the same action as the button inside the assistant panel; nothing here starts by itself, and a refusal (a dirty
+  tree, an unknown project, the gateway down) is printed on the row in red while the card stays for a retry.
+- **The header's ✧ Assistant button** carries two counts: the open alerts, and a violet `N spawn` pill for the
+  cards. The pill turns amber once the oldest card has waited more than two minutes. **Review in Alerts** in the
+  strip opens the panel on its Alerts tab with the card in view.
+- **The Alerts tab** draws spawn cards first, under `spawn cards waiting`, before the other alerts.
+
+Two minutes is a watched deadline, not just a colour: a card still open raises **“spawn card unclicked for 2m”**
+(naming the turn that proposed it and the first 60 characters of its prompt) so the assistant sees it in its own
+digest; and a turn whose `SPAWN` line produced *neither* a worker nor a card is journaled as a lost line and
+alerted the same way. Both are rules in **Settings → Per-rule escalation** (`spawn card not clicked`, `lost SPAWN
+line`), so either can be raised to a wake. To clear a card without starting it, open it and press **Discard** —
+that is the only thing that cancels a proposal.
 
 ---
 
@@ -647,6 +673,7 @@ something you typed or an agent is writing. **Check now** asks at once, even wit
 | Rows stop moving | The page may be paused, or the stream `reconnecting…`/`offline`. **Resume** or **Refresh now**. |
 | A project's numbers look old while it is off screen | With Settings → Board → Refresh: **only on screen**, off-screen projects are not read until you scroll them into view — and nothing is read at all while no page is open. |
 | A worktree will not delete | An agent run is live in it — stop the run first. |
+| The assistant says it started a worker but nothing appeared | Look at the strip above **New agent** and at the `N spawn` pill on ✧ Assistant: in **ask** mode a SPAWN line is a card waiting for a click, not a run. If neither a card nor a worker exists two minutes after the turn, the journal carries a **lost SPAWN line** and the Alerts tab an alert naming the turn. |
 | A column is too narrow or too wide | Drag the edge between two column headers (the pair trades width); **double-click** any edge to go back to the measured split. Widths are remembered in this browser, so a reset is per browser too. |
 | `revive` is refused | That session already has a card on the board. |
 | A console result is cut short | The run stream carries a preview, not the full payload. See the README's troubleshooting section. |

@@ -16,6 +16,9 @@
   const SEEN_KEY = "wm.assistantSeenAt";
   const PIN_KEY = "wm.assistantPinned";
   const TABS = ["chat", "alerts", "watches", "messages", "pad", "charter", "settings"];
+  // Mirrors lib/assistant/config.js's SPAWN_WATCH_MS: the server escalates a card at two minutes, so the strip
+  // and the badges turn amber on the same clock the alert is raised on rather than on a second opinion.
+  const SPAWN_WATCH_MS = 120_000;
 
   // Ticks on a multi-select question outlive a repaint: the alerts pane is rebuilt whenever the assistant's
   // state changes, and a selection that vanishes on the next job event is the same bug as a lost draft.
@@ -24,6 +27,15 @@
   const stripRecommended = (c) => String(c).replace(/\s*\(Recommended\)\s*$/i, "");
 
   const as$ = (id) => document.getElementById(id);
+
+  // One line, at most n characters, for a prompt shown inside a control: a card's prompt can be 2,000
+  // characters and a strip row is one line.
+  const oneLine = (s, n = 90) => {
+    const t = String(s ?? "").replace(/\s+/g, " ").trim();
+    return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+  };
+  // The waiting time as the strip states it, in the card's own units: "48s", "3m12s".
+  const waited = (ms) => fmtDur(Math.max(0, Number(ms) || 0));
 
   function readFlag(key, fallback) {
     try {
@@ -268,6 +280,7 @@
     state.assistant = data;
     if (data.thread) state.assistantThread = data.thread;
     paintAssistantBadge();
+    paintSpawnStrip();
     paintAggressive();
     // The card has to exist even while the float is closed: app.js's renderConversation finds it by thread
     // anywhere in the document, and that is what keeps a running turn current instead of frozen.
@@ -275,21 +288,47 @@
     if (state.assistantOpen) renderAssistant();
   }
 
+  // The waiting spawn cards, oldest first: the strip and the badges all read this one list.
+  function spawnCards() {
+    return (state.assistant?.alerts || []).filter((a) => a.spawn && typeof a.spawn.prompt === "string");
+  }
+  function spawnAge(a) {
+    return Date.now() - (Date.parse(a.at) || Date.now());
+  }
+
+  // Two counts, because they are two different facts: N things need a look, and of those M are SPAWN cards —
+  // workers that have NOT started. The second number is the one the reader missed while four cards sat open
+  // behind a single badge, and it turns amber once the oldest is past the two minutes the server escalates on.
   function paintAssistantBadge() {
     const btn = as$("btn-assistant");
     const badge = as$("assistant-badge");
+    const spawnBadge = as$("assistant-spawn-badge");
     if (!btn || !badge) return;
     const alerts = state.assistant?.alerts || [];
-    // Spawn cards are counted on their own badge, below: two numbers for two different things, and neither of
-    // them double-counted. A card is an act waiting on the reader, not a notice about the board.
+    // Two numbers for two different things, and neither double-counted: the badge above counts NOTICES (spawn
+    // cards excluded — a card is an act waiting on the reader, not a notice about the board), and the spawn badge
+    // counts cards waiting on a press.
     const plain = alerts.filter((a) => !a.spawn);
     const n = plain.length;
     badge.hidden = n === 0;
     badge.textContent = n > 99 ? "99+" : String(n);
+    const cards = spawnCards();
+    const m = cards.length;
+    const oldest = cards.reduce((t, a) => Math.min(t, Date.parse(a.at) || Date.now()), Date.now());
+    const late = m > 0 && Date.now() - oldest >= SPAWN_WATCH_MS;
+    if (spawnBadge) {
+      spawnBadge.hidden = m === 0;
+      spawnBadge.textContent = m > 99 ? "99+" : `${m} spawn`;
+      spawnBadge.classList.toggle("is-late", late);
+      spawnBadge.title = m
+        ? `${m} spawn card${m === 1 ? "" : "s"} waiting for your click — nothing has started${late ? ` · the oldest has waited ${waited(Date.now() - oldest)}` : ""}`
+        : "";
+    }
     const newest = plain.reduce((t, a) => Math.max(t, Date.parse(a.at) || 0), 0);
-    btn.classList.toggle("is-hot", n > 0 && newest > (state.assistantSeenAt || 0));
+    btn.classList.toggle("is-hot", (n > 0 && newest > (state.assistantSeenAt || 0)) || late);
+    const spawnWords = m ? ` — ${m} of them ${m === 1 ? "is a spawn card" : "are spawn cards"} waiting for a click, so nothing has started` : "";
     btn.title = n
-      ? `assistant — ${n} thing${n === 1 ? "" : "s"} on the board need${n === 1 ? "s" : ""} a look (A or Ctrl+Shift+A)`
+      ? `assistant — ${n} thing${n === 1 ? "" : "s"} on the board need${n === 1 ? "s" : ""} a look${spawnWords} (A or Ctrl+Shift+A)`
       : "assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)";
     paintSpawnBadge();
   }
@@ -316,6 +355,116 @@
       `${n} spawn card${n === 1 ? "" : "s"} waiting on you — press one to start that worker` +
       (stuck ? ` · ${stuck} never started and the watchdog has said so` : due ? ` · checked again in ${Math.ceil(due / 1000)}s` : "") +
       (s.autoStart ? " · auto-start is ON: a card with no run is started once when its check comes round" : "");
+  }
+
+  // ---- the spawn strip --------------------------------------------------------------------------
+  //
+  // A spawn card is a worker that has not started, and the board draws nothing for it: no job, no row, no
+  // card. Four of them sat open for an evening (19:54, 19:57, 19:58, 20:00) behind the badge number, and the
+  // reader concluded the agents had failed to spawn. This strip is the board's own answer — above every
+  // project, one row per waiting card, the Start button on the row. It starts NOTHING by itself: every button
+  // here is the same POST the float's own card makes.
+
+  let spawnStripSig = "";
+
+  function paintSpawnStrip() {
+    const host = as$("spawn-strip");
+    if (!host) return;
+    const cards = spawnCards().sort((a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0));
+    if (!cards.length) {
+      if (!host.hidden) {
+        host.hidden = true;
+        host.innerHTML = "";
+      }
+      spawnStripSig = "";
+      return;
+    }
+    // Repaint only when the strip would look different. The board polls every few seconds, and a button
+    // rebuilt under the reader's pointer is a press that lands on nothing (the panel's own rebuild rule).
+    const sig = cards.map((a) => `${a.id}@${Math.floor(spawnAge(a) / 60_000)}`).join(",");
+    if (sig === spawnStripSig) return;
+    spawnStripSig = sig;
+    const late = cards.filter((a) => spawnAge(a) >= SPAWN_WATCH_MS).length;
+    host.hidden = false;
+    host.innerHTML = `<div class="spawn-strip-head">
+        <span class="spawn-strip-title">${cards.length} spawn card${cards.length === 1 ? "" : "s"} waiting</span>
+        <span class="spawn-strip-note">${late ? `<b>${late} unclicked for over 2 minutes</b> · ` : ""}the assistant proposed ${cards.length === 1 ? "a worker" : "these workers"} — nothing runs until you press Start</span>
+        <span class="spacer"></span>
+        <button id="btn-spawn-review" type="button" title="open the assistant on its Alerts tab, where the spawn cards are drawn first">Review in Alerts</button>
+      </div>
+      <div class="spawn-strip-rows">${cards.map(spawnStripRow).join("")}</div>`;
+  }
+
+  function spawnStripRow(a) {
+    const age = spawnAge(a);
+    const late = age >= SPAWN_WATCH_MS;
+    const prompt = String(a.spawn.prompt || "");
+    return `<div class="spawn-strip-row${late ? " is-late" : ""}" data-spawn-row="${esc(a.id)}">
+        <span class="spawn-strip-what">${esc(a.title || "spawn a worker")}</span>
+        <span class="spawn-strip-prompt" title="${esc(prompt)}">“${esc(oneLine(prompt, 90))}”</span>
+        <span class="spawn-strip-age">waiting ${esc(waited(age))}${late ? " · unclicked 2m+" : ""}</span>
+        <button type="button" class="primary" data-spawn-start="${esc(a.id)}" title="cut the worktree (or use that tree) and start the worker — ${esc(oneLine(prompt, 160))}">${a.spawn.existing ? "Start worker there" : "Create worktree &amp; start"}</button>
+        <button type="button" data-spawn-review="${esc(a.id)}" title="open this card in the assistant's Alerts tab">Open card</button>
+      </div>`;
+  }
+
+  // Open the float on Alerts with one card (or the top of the list) in view. The pane is inside the float's
+  // own scroller, so this is a scrollIntoView, not a page jump.
+  function openAlertsAt(id = null) {
+    state.assistantTab = "alerts";
+    try {
+      localStorage.setItem(TAB_KEY, "alerts");
+    } catch {
+      /* not fatal */
+    }
+    toggleAssistant(true);
+    requestAnimationFrame(() => {
+      const sel = id ? `#as-alerts [data-alert="${CSS.escape(id)}"]` : "#as-alerts";
+      const el = document.querySelector(sel);
+      if (!el) return;
+      el.scrollIntoView({ block: "nearest" });
+      if (!id) return;
+      el.classList.add("is-flash");
+      setTimeout(() => el.classList.remove("is-flash"), 1600);
+    });
+  }
+
+  // The one act a spawn card has, from either surface: the strip's row or the float's card. Never called by a
+  // timer — `data-spawn-start` exists because the reader pressed it.
+  async function startSpawnCard(id, button = null) {
+    if (!id) return;
+    const was = button?.textContent;
+    if (button) {
+      button.disabled = true;
+      button.textContent = "cutting the worktree…";
+    }
+    try {
+      const d = await asPost("/api/assistant/spawn", { id }, { timeoutMs: 150_000 });
+      showNote(`worker started · ${d.job?.thread || d.job?.id || ""}`);
+      if (d.assistant) applyAssistant(d.assistant);
+      renderAssistantAlerts(true);
+      renderAssistant();
+    } catch (err) {
+      // The error belongs where the reader is looking, on both surfaces, and the strip keeps its row so the
+      // card can be retried (a refusal names what is wrong with the tree or the gateway).
+      const slot = document.querySelector(`[data-as-err="${CSS.escape(id)}"]`);
+      if (slot) slot.textContent = err.message;
+      const row = document.querySelector(`[data-spawn-row="${CSS.escape(id)}"]`);
+      if (row) {
+        let line = row.querySelector(".spawn-strip-err");
+        if (!line) {
+          line = document.createElement("span");
+          line.className = "spawn-strip-err as-err";
+          row.appendChild(line);
+        }
+        line.textContent = err.message;
+      }
+      if (button) button.textContent = was;
+    } finally {
+      if (button) button.disabled = false;
+      paintSpawnStrip();
+      paintAssistantBadge();
+    }
   }
 
   // The header's aggressive switch. The SERVER owns the record of what the mode changed — this only paints what
@@ -389,11 +538,20 @@
       modeEl.textContent = mode === "draft" ? "draft-only" : mode === "auto-safe" ? "auto-safe" : "auto";
       modeEl.className = `as-mode mono${mode === "auto" ? " is-auto" : mode === "auto-safe" ? " is-safe" : ""}`;
     }
-    // The tab's count is the alert count, not the spawn card count: the spawn cards have the header badge, and a
-    // number that silently included them is how a card nobody started stayed invisible.
+    // The tab's count is the alert count LESS the spawn cards: the spawn cards have their own strip and badge,
+    // and a number that silently included them is how a card nobody started stayed invisible.
     const openAlerts = (a?.alerts || []).filter((x) => !x.spawn).length;
+    const spawnOpen = spawnCards().length;
     const liveWatches = (a?.watches || []).filter((w) => w.state !== "done").length;
     if (as$("as-alert-n")) as$("as-alert-n").textContent = String(openAlerts);
+    // The Alerts tab carries the same split the header does: how many of the open alerts are spawn cards.
+    if (as$("as-spawn-n")) {
+      as$("as-spawn-n").textContent = spawnOpen ? `${spawnOpen} spawn` : "0";
+      as$("as-spawn-n").hidden = spawnOpen === 0;
+      as$("as-spawn-n").title = spawnOpen
+        ? `${spawnOpen} spawn card${spawnOpen === 1 ? "" : "s"} waiting for a click — nothing has started`
+        : "";
+    }
     if (as$("as-watch-n")) as$("as-watch-n").textContent = String(liveWatches);
     if (as$("as-chips")) {
       as$("as-chips").innerHTML = [
@@ -644,7 +802,24 @@
     const banner = stuck.length
       ? `<div class="as-stuck-banner" role="alert"><b>${stuck.length} spawn card${stuck.length === 1 ? "" : "s"} never started${stuck.length === 1 ? "" : "s"}.</b> ${stuck.length === 1 ? "The card" : "Each card"} below named a worktree and no worker was ever started in it — press ${stuck.length === 1 ? "it" : "one"} to start that worker, or discard ${stuck.length === 1 ? "it" : "it"} so it stops asking.</div>`
       : "";
-    host.innerHTML = `${banner}${alerts.map(alertHtml).join("")}`;
+    // Spawn cards first. They are the only alerts with a button that changes the repository, and the reason
+    // they were missed is that they sat among eighty findings — the oldest waiting first, so the card that has
+    // been ignored longest is the one at the top.
+    const spawns = alerts.filter((a) => a.spawn).sort((a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0));
+    const others = alerts.filter((a) => !a.spawn);
+    const parts = [];
+    if (spawns.length) {
+      const latish = spawns.filter((a) => spawnAge(a) >= SPAWN_WATCH_MS).length;
+      parts.push(
+        `<div class="as-group-head is-spawn">spawn cards waiting <span class="as-gap"></span><span>${spawns.length}${latish ? ` · ${latish} over 2m` : ""}</span></div>`,
+        spawns.map(alertHtml).join(""),
+      );
+    }
+    if (others.length) {
+      if (spawns.length) parts.push(`<div class="as-group-head">other alerts <span class="as-gap"></span><span>${others.length}</span></div>`);
+      parts.push(others.map(alertHtml).join(""));
+    }
+    host.innerHTML = `${banner}${parts.join("")}`;
   }
 
   // ---- watches --------------------------------------------------------------------------------
@@ -1203,6 +1378,21 @@
   // ---- wiring ---------------------------------------------------------------------------------
 
   as$("btn-assistant")?.addEventListener("click", () => toggleAssistant());
+  // The strip is the board's own copy of the spawn cards, so it lives outside the float and gets its own
+  // listener. Its Start is the card's own POST; "Open card" only moves the float, and starts nothing.
+  as$("spawn-strip")?.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.dataset.spawnStart) {
+      startSpawnCard(b.dataset.spawnStart, b);
+      return;
+    }
+    if (b.dataset.spawnReview) {
+      openAlertsAt(b.dataset.spawnReview);
+      return;
+    }
+    if (b.id === "btn-spawn-review") openAlertsAt();
+  });
   // The aggressive switch is its own button beside the Assistant one: it does not open the float, it changes how
   // the assistant behaves. The server answers whether anything changed, and the note beside it says so.
   as$("btn-aggressive")?.addEventListener("click", () => setAggressiveMode(!state.assistant?.aggressive?.on));
@@ -1268,23 +1458,10 @@
       return;
     }
 
+    // The card's Start, and the strip's, are one function: the same POST, the same 150 s budget (a worktree
+    // cut is slower than apiFetch's 20 s default), the same error landing where the reader is looking.
     if (t.dataset.asSpawn) {
-      const id = t.dataset.asSpawn;
-      t.disabled = true;
-      const was = t.textContent;
-      t.textContent = "cutting the worktree…";
-      try {
-        const d = await asPost("/api/assistant/spawn", { id }, { timeoutMs: 150_000 });
-        showNote(`worker started · ${d.job?.thread || d.job?.id || ""}`);
-        renderAssistantAlerts(true);
-        renderAssistant();
-      } catch (err) {
-        const slot = document.querySelector(`[data-as-err="${CSS.escape(id)}"]`);
-        if (slot) slot.textContent = err.message;
-        t.textContent = was;
-      } finally {
-        t.disabled = false;
-      }
+      startSpawnCard(t.dataset.asSpawn, t);
       return;
     }
 
