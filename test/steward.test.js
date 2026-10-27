@@ -150,6 +150,27 @@ test("backfill: a legacy tree is guessed from a shared ticket id, with a merge-b
   assert.deepEqual(cand.candidates, []);
 });
 
+test("a legacy tree is recovered from its own reflog before anything is guessed", async () => {
+  const repo = makeRepo("reflog");
+  git(repo, "checkout", "-q", "-b", "dmr-9-turnover");
+  commit(repo, "t.txt", "t\n", "turnover");
+  // Cut the way a person cuts one: the reflog keeps git's own note of the start ref.
+  const child = cut(repo, "dmr-9-child", "dmr-9-turnover");
+  commit(child, "c.txt", "c\n", "child");
+
+  const book = new ParentBook({ file: path.join(repo, "parents.json") });
+  await book.refresh({ project: "p", repoDir: repo, mainBranch: "master" });
+  const rec = book.get("p", "dmr-9-child");
+  assert.equal(rec.parent, "dmr-9-turnover", "the reflog names the cut ref exactly");
+  assert.equal(rec.parentSource, "backfilled", "recovered is still not the same thing as watched: no write may follow");
+  assert.match(rec.why, /reflog/i, "and the row says where the answer came from");
+  // The turnover branch itself was created from master, which is a destination, never a parent — and it is NOT handed
+  // to the ticket heuristic, which would be free to name one of its own children instead.
+  const turnover = book.get("p", "dmr-9-turnover");
+  assert.equal(turnover.parent, null);
+  assert.match(turnover.why, /main branch|Created from HEAD|reflog/i);
+});
+
 test("backfill refuses to guess when no ticket is shared, or when two candidates are equally near", () => {
   assert.deepEqual(pickBackfill({ branch: "wtgui/a-b-c", candidates: [] }).parent, null);
   const tie = pickBackfill({
