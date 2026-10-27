@@ -2,3 +2,5 @@ logs/
 node_modules/
 *.log
 .worktrees/
+__pycache__/
+data/aa-rating-pages.json

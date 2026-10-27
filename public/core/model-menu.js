@@ -1,8 +1,10 @@
 // ---- one model picker for the whole page --------------------------------------------------------
-// Two fields name a model: the spawn card's model select (#job-model) and the assistant's own model
-// setting (select[data-as-set="model"]). A native <select> can only print text, so it can never show
-// what the panel already knows about a row — the price per million tokens in and out, the Artificial
-// Analysis coding rating, the context window. This is the one picker both of them open.
+// Three fields name a model: the spawn card's model select (#job-model), the assistant's own model
+// setting (select[data-as-set="model"]), and a card's model readout. A native <select> can only print
+// text, so it can never show what the panel already knows about a row — the price per million tokens in
+// and out, the 0-10 Artificial Analysis rating, the context window. This is the one picker all of them
+// open, and it reads ONE table (/api/models' providers[].pricing), so no call site carries a second copy
+// of the prices or of the row order.
 //
 // The popup is a PORTAL: appended to <body> rather than to the field, so it paints over the assistant
 // float (z-index 90) and the settings panel (120) instead of being clipped by their overflow. It anchors
@@ -37,13 +39,40 @@
   // is closed rather than left pointing at a detached control whose `change` would never reach the panel.
   const keyOf = (s) => (s?.dataset?.asSet ? `set:${s.dataset.asSet}` : `id:${s?.id || ""}`);
 
-  // The text the native option (and so the closed trigger) has always carried: what the model costs per
-  // million tokens in and out, then its coding rating. Kept byte-for-byte as the CLI's own picker prints it.
+  // A row's 0-10 rating, whichever benchmark supplied it: the gateway's coding index (a string) or the
+  // committed OpenRouter snapshot's Intelligence Index (a number). Never both on one row — the table has
+  // one rating field per model — and never a zero for an unrated model.
+  function ratingOf(row) {
+    if (!row) return null;
+    if (typeof row.rating === "number" && Number.isFinite(row.rating)) return row.rating;
+    const coding = Number(row.coding);
+    return row.coding && Number.isFinite(coding) ? coding : null;
+  }
+
+  function ratingText(row) {
+    const r = ratingOf(row);
+    return r === null ? "" : `★${Number(r.toFixed(1))}`;
+  }
+
+  // What the rating means, for the row's tooltip. Naming the benchmark matters: two Artificial Analysis
+  // indices are 0-10 and a star with no source behind it could be either.
+  function ratingTitle(row) {
+    const r = ratingOf(row);
+    if (r === null) return "";
+    const which = row.ratingSource === "intelligence" ? "Intelligence Index" : "coding index";
+    return `Artificial Analysis ${which} ${Number(r.toFixed(1))}/10${row.ratingEstimated ? " (estimated)" : ""}`;
+  }
+
+  // The text the native option (and so the closed trigger) carries: what the model costs per million
+  // tokens in and out, then its rating. Both model fields build their option text with this, so the
+  // board's trigger and the assistant's cannot print different prices for the same row.
   function priceText(row) {
     if (!row) return "";
     const parts = [];
-    if (row.input || row.output) parts.push(`${row.input || "?"} in / ${row.output || "?"} out`);
-    if (row.coding) parts.push(`code ${row.coding}`);
+    if (row.variable) parts.push("variable");
+    else if (row.input || row.output) parts.push(`${row.input || "?"} in / ${row.output || "?"} out`);
+    const star = ratingText(row);
+    if (star) parts.push(star);
     return parts.join(" · ");
   }
 
@@ -52,6 +81,36 @@
   function priceCell(row) {
     if (!row || (!row.input && !row.output)) return "";
     return `${row.input || "?"} / ${row.output || "?"}`;
+  }
+
+  // A row's price tooltip: the rates, the average when the table knows it, and the unit stated once.
+  // "variable" is a router OpenRouter does not quote, which is not the same as free.
+  function priceTitle(row) {
+    if (!row) return "";
+    if (row.variable) return "variable pricing (router) — OpenRouter does not quote a rate";
+    if (!row.input && !row.output) return "";
+    const bits = [`input ${row.input || "?"}`, `output ${row.output || "?"}`];
+    if (typeof row.average === "number") bits.push(`average ${formatRate(row.average)}`);
+    return `${bits.join(" · ")} per 1M tokens`;
+  }
+
+  // What a native <option> prints for a row. The default row carries its own label; every other row is its
+  // id, then the price and rating the shared table knows. One formatter, so the board's select, the
+  // assistant's select and the trigger beside each print the same line.
+  function optionText(row) {
+    if (!row) return "";
+    if (!row.id) return row.name;
+    const price = priceText(row);
+    return price ? `${row.id} — ${price}` : row.id;
+  }
+
+  // A per-million rate as money, for the averages the table carries as numbers. Mirrors lib/model-prices.js's
+  // formatRate so a snapshot row and a cache row print the same way.
+  function formatRate(n) {
+    if (typeof n !== "number" || !Number.isFinite(n)) return "?";
+    if (n === 0) return "free";
+    if (n >= 1) return `$${n.toFixed(2)}`;
+    return `$${String(Number(n.toFixed(5)))}`;
   }
 
   // The rows, in the provider's own order — the same walk the spawn form's <optgroup> list does, so the
@@ -68,9 +127,16 @@
           id: String(m),
           name: String(m),
           group: p.label || p.id || "",
+          // Everything the one price table says about this row, carried as-is: the rates the trigger and
+          // the menu print, and the rating whichever benchmark supplied it.
           input: entry?.input || "",
           output: entry?.output || "",
           coding: entry?.coding || "",
+          rating: typeof entry?.rating === "number" ? entry.rating : null,
+          ratingSource: entry?.ratingSource || "",
+          ratingEstimated: Boolean(entry?.ratingEstimated),
+          average: typeof entry?.average === "number" ? entry.average : null,
+          variable: Boolean(entry?.variable),
           context: Number.isFinite(ctx) && ctx > 0 ? ctx : null,
         });
       }
@@ -169,14 +235,14 @@
         const head = r.group && r.group !== group ? `<div class="model-group dimmer">${esc(r.group)}</div>` : "";
         group = r.group || group;
         const on = r.id === current;
-        const star = r.coding
-          ? `<span class="model-rating" title="Artificial Analysis coding rating ${esc(r.coding)}/10">★${esc(r.coding)}</span>`
+        const star = ratingOf(r) !== null
+          ? `<span class="model-rating" title="${esc(ratingTitle(r))}">${esc(ratingText(r))}</span>`
           : "";
         const win = r.context
           ? `<span class="model-ctx-n" title="context window ${esc(fmtTokens(r.context))} tokens">${esc(fmtTokens(r.context))}</span>`
           : "";
         const cash = priceCell(r)
-          ? `<span class="model-price" title="${esc(`${priceText(r)} · in/out $ per Mtok`)}">${esc(priceCell(r))}</span>`
+          ? `<span class="model-price${r.variable ? " is-variable" : ""}" title="${esc(priceTitle(r))}">${esc(priceCell(r))}</span>`
           : "";
         const tick = on ? '<span class="model-check">✓</span>' : "";
         return (
@@ -342,5 +408,5 @@
     true,
   );
 
-  window.ModelMenu = { attach, close, open, rowsFor, priceText, priceCell, sync };
+  window.ModelMenu = { attach, close, open, rowsFor, optionText, priceText, priceCell, priceTitle, ratingText, ratingTitle, ratingOf, sync };
 })();

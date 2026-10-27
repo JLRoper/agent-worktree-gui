@@ -318,7 +318,14 @@ from the provider list Hermes itself fetched (`provider_models_cache.json`, refr
 `hermes model --refresh`), grouped by provider, with `(default: <the configured model>)` first — that
 entry sends no `model` field at all, so the run uses the gateway's own model. The menu's tooltip says
 how many models and how old the list is; a provider that was never picked falls back to the catalogue
-that ships with Hermes.
+that ships with Hermes. Each entry also carries a 0-10 `★rating` and its price in and out per 1M tokens,
+from ONE table (`providers[].pricing` on `/api/models`) composed in `lib/model-prices.js`: the panel's
+own copy of the gateway's inventory, as rebuilt by Settings → Gateway → Model prices → **Refresh now**,
+with the repo's committed `data/openrouter-model-prices.json` filling what that inventory does not price
+and the 0-10 benchmark rating it does not carry (`python tools/openrouter-prices.py` refreshes the
+snapshot; stdlib only, no key needed for either public source). The spawn form, the assistant's model
+setting and a card's model readout all open the same list from that one table; with no price anywhere the
+rows simply show no prices or ratings, never a zero.
 
 The gateway has to be up and keyed:
 `POST /api/agents` answers **503** with the gateway's own reason rather than creating a card that
@@ -866,7 +873,7 @@ Watches without a deadline, and finished ones, say so instead.
 | GET | `/api/sessions?path=` | the Hermes sessions the scheduler attributes to one worktree row: `{id, title, matched, lastActivityAt, onBoard}`. The same answer the row's "idle session" claim comes from |
 | POST | `/api/sessions/revive` | `{sessionId, path}` → a job record for a session the board has no card for (the run itself lives in the gateway; a reply continues it). **404** when the store does not attribute that session to that row, **409** when it already has a card |
 | GET/POST | `/api/settings/sessions` | the CLI's session-list length: GET reports `sessions.list_limit`, the store's real size (sessions, messages, by source) and whether the local CLI patch that reads the key is installed; POST `{listLimit}` rewrites that one line in `config.yaml`. **400** outside 1–500 |
-| GET | `/api/models` | the New-agent model menu: `{defaultModel, provider, count, fetchedAt, staleDays, providers:[{id,label,models}]}` — the provider list Hermes itself fetched, grouped, with the configured default first in its group. Falls back to the shipped catalogue when no provider was ever picked |
+| GET | `/api/models` | the model menu: `{defaultModel, provider, count, fetchedAt, staleDays, providers:[{id,label,models,pricing}], pricingAt, pricingAge, pricingSource, pricingSnapshotAt, pricedCount, ratedCount, ratedFromSnapshot}` — the provider list Hermes itself fetched, grouped, with the configured default first in its group. Falls back to the shipped catalogue when no provider was ever picked. `pricing` is the ONE price table, per provider: model id → `{input, output, average?, coding?, rating?, ratingSource?, variable?}` — in/out USD per 1M tokens (the gateway's own strings) plus a 0-10 rating, absent rather than zero when nothing has priced or scored that model. It is composed by `lib/model-prices.js` from the panel's cache over the committed `data/openrouter-model-prices.json`, so both model fields and a card's readout quote the same numbers |
 | GET | `/api/assistant` | the sentry's whole state: settings, rule definitions, alerts, watches, notes, journal, wake counter and the current board digest |
 | POST | `/api/assistant/say` | `{text}` → one turn on the assistant's own thread (`panel-assistant`), with the scratchpad and board digest attached to the input. **409** while its previous turn is still running |
 | POST | `/api/assistant/settings` | `{autonomy, model, seconds, repeatLimit, quietSeconds, approvalSeconds, contextPercent, maxWakesPerHour, spawnAutoStart, rules:{id: escalation}}` — applied immediately, saved in the scratchpad |

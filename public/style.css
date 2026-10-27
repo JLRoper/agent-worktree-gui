@@ -1176,8 +1176,13 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 .model-pop-shared .model-item { display: flex; align-items: baseline; gap: 8px; }
 .model-pop-shared .model-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
 .model-pop-shared .model-ctx-n { padding-left: 0; }
+/* The rating column: 0-10, gold so it does not read as part of the price. A model the benchmark has not
+   scored shows nothing here, not a zero. */
 .model-rating { flex: none; color: #d9a441; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+/* The price column: in/out USD per million tokens, quiet — it informs the choice, it is not the point of
+   the row. `variable` marks a router whose rate OpenRouter does not quote, which is not "free". */
 .model-price { flex: none; color: var(--dimmer); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.model-price.is-variable { font-style: italic; }
 .model-check { flex: none; color: #c8a6ff; }
 /* The closed state of a model field: the text the native select printed, as the thing you click. The select is
    still in the DOM (hidden) because it is the value and the control whose `change` the panel listens for. */

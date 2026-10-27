@@ -66,7 +66,7 @@ Everything happens on the **New agent** card.
 | Prompt | The first turn. `Enter` spawns, `Shift+Enter` adds a line, `Up`/`Down` walk the prompts you have spawned before. Paste or drop a file into it to attach that file (see below). |
 | **start in** | The directory. Usually filled in by aiming, but you can type any path. |
 | **project** | Which project the work belongs to. Changing it points **start in** at that project and re-ticks **create workspace** — the picker is not a display field. |
-| **model** | `(default)` uses the gateway's configured model. The list is what the provider advertises, grouped by provider, and each row carries the price per million tokens in and out, the context window, and the coding rating where the catalogue has one — click the field to open it, type to filter, `Enter` takes the highlighted row. The assistant's own model setting opens the same list. |
+| **model** | `(default)` uses the gateway's configured model. The list is what the provider advertises, grouped by provider, and each row carries the price per million tokens in and out, the context window, and a 0-10 Artificial Analysis rating where a benchmark has scored it — click the field to open it, type to filter, `Enter` takes the highlighted row. The assistant's own model setting and a card's model readout open the same list, from the same one price table. A model nothing has priced or scored shows no columns, not a zero. |
 | **budget s** | The run's wall-clock budget (`1800` by default). |
 | **max turns** | Optional ceiling on turns; blank means the gateway's own default. |
 | **skills** | Disabled: a run does not carry a skills list yet. |
@@ -432,7 +432,8 @@ deepseek-v4.1-flash-1017 │ 101K/1.05M⌄ │ █········· 10% │ ◎
 ```
 
 - **model** — double-click for the model picker (search as you type; the current choice is marked; the next turn uses
-  it).
+  it). Each row shows a `★` 0-10 Artificial Analysis rating when one exists, the context window, and `$input/$output`
+  per 1M tokens; the tooltip says which index the rating came from and gives the average price.
 - **used/ceiling⌄** — click to step the ceiling the card measures against. The ladder is built from the model's real
   window: the window itself, then three quarters, a half and a quarter of it, plus whichever of 1M, 400K, 200K and
   128K fit under it — biggest first, wrapping back to the window (which stores "no ceiling"). Sizes above the model's

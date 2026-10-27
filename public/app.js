@@ -2905,18 +2905,19 @@ function closeModelPop() {
   modelPopAnchorEl = null;
 }
 
-function popAnchor(thread, kind) {
+// The readout the context popup belongs to. The model picker no longer comes through here: it is
+// core/model-menu.js's portal, which tracks its own trigger.
+function popAnchor(thread) {
   if (!thread) return null;
   if (modelPopAnchorEl && modelPopAnchorEl.isConnected) return modelPopAnchorEl;
-  const attr = kind === "context" ? "data-context-pick" : "data-model-pick";
-  return document.querySelector(`[${attr}="${CSS.escape(thread)}"]`);
+  return document.querySelector(`[data-context-pick="${CSS.escape(thread)}"]`);
 }
 
 // Put the panel under whatever the reader double-clicked, clamped to the window. Called after opening and again
 // after every repaint that could have moved the control.
 function positionModelPop() {
   if (!modelPop || !modelPopTarget) return true;
-  const btn = popAnchor(modelPopTarget.thread, modelPopTarget.kind);
+  const btn = popAnchor(modelPopTarget.thread);
   if (!btn || !btn.isConnected) {
     closeModelPop();
     return false;
@@ -2951,81 +2952,22 @@ function positionModelPop() {
   return true;
 }
 
-function modelChoices() {
-  const d = modelsState;
-  const out = [{ id: "", label: `(default${d?.defaultModel ? `: ${String(d.defaultModel).split("/").pop()}` : ""})`, group: "" }];
-  for (const p of d?.providers || []) {
-    for (const m of p.models || []) out.push({ id: String(m), label: String(m), group: p.label || "" });
-  }
-  return out;
-}
+// The list is core/model-menu.js's, over the one price table /api/models serves. Nothing here reads a
+// price file of its own: a second copy of the table is how two pickers start quoting different numbers.
 
+// The readout opens THE picker, not a copy of it: same rows in the same order, same prices, same rating,
+// same search and keyboard — and a pick is what pickModel already stored. A session whose model has left
+// the catalogue still gets its row, checked, so the list never reads "nothing is chosen" while one is.
 function openModelPop(thread, anchor) {
+  // The context ceiling and the model list are two popovers on the same readout; opening one closes the other.
   closeModelPop();
-  modelPopAnchorEl = anchor || null;
-  const pop = document.createElement("div");
-  pop.className = "model-pop";
-  pop.innerHTML = `<input class="model-search mono" data-1p-ignore autocomplete="off" spellcheck="false" placeholder="search ${modelChoices().length - 1} models…" />
-    <div class="model-list mono"></div>`;
-  document.body.appendChild(pop);
-  modelPop = pop;
-  modelPopTarget = { kind: "model", thread };
-  positionModelPop();
-  const search = pop.querySelector(".model-search");
-  const list = pop.querySelector(".model-list");
   const current = [...state.jobs.values()].find((j) => (j.thread || j.id) === thread)?.effectiveModel || "";
-  let sel = 0;
-
-  const paint = (q) => {
-    const s = String(q || "").trim().toLowerCase();
-    const hits = modelChoices().filter((c) => !s || c.label.toLowerCase().includes(s) || c.group.toLowerCase().includes(s));
-    sel = 0;
-    if (!hits.length) {
-      list.innerHTML = `<div class="model-none dimmer">no model matches "${esc(q)}"</div>`;
-      return;
-    }
-    let group = null;
-    list.innerHTML = hits
-      .map((c, i) => {
-        const head = c.group && c.group !== group ? `<div class="model-group dimmer">${esc(c.group)}</div>` : "";
-        group = c.group || group;
-        const win = c.id ? modelsState?.contexts?.[c.id] : null;
-        const winText = win ? ` <span class="model-ctx-n">${esc(fmtTokens(win))}</span>` : "";
-        return `${head}<button type="button" class="model-item${i === 0 ? " is-sel" : ""}${c.id === current ? " is-current" : ""}" data-model="${esc(c.id)}" title="${esc(c.id || "gateway default")}${win ? ` — context window ${fmtTokens(win)}` : ""}">${esc(c.label)}${winText}${c.id === current ? " ✓" : ""}</button>`;
-      })
-      .join("");
-  };
-
-  const move = (d) => {
-    const items = [...list.querySelectorAll(".model-item")];
-    if (!items.length) return;
-    items[sel]?.classList.remove("is-sel");
-    sel = (sel + d + items.length) % items.length;
-    items[sel].classList.add("is-sel");
-    items[sel].scrollIntoView({ block: "nearest" });
-  };
-
-  paint("");
-  search.addEventListener("input", () => paint(search.value));
-  search.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape") {
-      ev.preventDefault();
-      closeModelPop();
-    } else if (ev.key === "Enter") {
-      ev.preventDefault();
-      const items = [...list.querySelectorAll(".model-item")];
-      const pick = items[sel] || items[0];
-      if (pick) void pickModel(thread, pick.dataset.model);
-    } else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
-      ev.preventDefault();
-      move(ev.key === "ArrowDown" ? 1 : -1);
-    }
+  const extra = current ? [{ id: current, name: `${current} (not in the catalogue)` }] : [];
+  ModelMenu.open(anchor, {
+    rows: ModelMenu.rowsFor(modelsState, { extra }),
+    value: current,
+    onPick: (id) => void pickModel(thread, id),
   });
-  list.addEventListener("click", (ev) => {
-    const b = ev.target.closest(".model-item");
-    if (b) void pickModel(thread, b.dataset.model);
-  });
-  search.focus();
 }
 
 // ---- the context ceiling ----------------------------------------------------------------------
@@ -6755,16 +6697,19 @@ async function spawnAgent({ promptFocus = true } = {}) {
 // /api/models, which reads the provider list Hermes itself fetched — not a hardcoded menu.
 let modelsState = null;
 
-// The rows themselves are the shared picker's (core/model-menu.js): it walks the catalogue in this same
-// provider order, so the floating list the reader picks from and the select the form posts from can never
-// disagree. What the CLI's own picker prints beside an id is unchanged — in/out per million tokens, then
-// Artificial Analysis' coding rating out of ten — and the units are stated once, on the trigger's tooltip.
-function modelOptionHtml(d) {
+// The rows themselves are the shared picker's (core/model-menu.js): it walks the catalogue in the
+// provider order the page already uses, and it prints each row's price and 0-10 rating from the one
+// table /api/models serves. Both model fields build their options with this function, so the board's
+// select, the assistant's select and the floating list can never disagree about a row or its price.
+// `selected` marks the row inline (the assistant's select is rebuilt from HTML, so it cannot rely on
+// setting .value afterwards); `extra` keeps a saved value the catalogue no longer lists visible and checked.
+function modelOptionHtml(d, { selected = "", extra = [] } = {}) {
   const out = [];
   let group = null;
-  for (const r of ModelMenu.rowsFor(d)) {
+  for (const r of ModelMenu.rowsFor(d, { extra })) {
+    const sel = r.id === selected ? " selected" : "";
     if (!r.id) {
-      out.push(`<option value="">${esc(r.name)}</option>`);
+      out.push(`<option value=""${sel}>${esc(r.name)}</option>`);
       continue;
     }
     if ((r.group || "") !== group) {
@@ -6772,8 +6717,7 @@ function modelOptionHtml(d) {
       group = r.group || "";
       if (group) out.push(`<optgroup label="${esc(group)}">`);
     }
-    const price = ModelMenu.priceText(r);
-    out.push(`<option value="${esc(r.id)}">${esc(price ? `${r.id} — ${price}` : r.id)}</option>`);
+    out.push(`<option value="${esc(r.id)}"${sel}>${esc(ModelMenu.optionText(r))}</option>`);
   }
   if (group) out.push("</optgroup>");
   return out.join("");
@@ -6785,14 +6729,16 @@ function renderModelPicker(keep = "") {
   sel.innerHTML = modelOptionHtml(modelsState);
   if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
   const d = modelsState;
-  // Say how old the list is: it is a cache of what the provider advertised, not a live call. The price
-  // and rating columns are the panel's own cache too, so they say their own age and where to rebuild
-  // them — a row with no price is a cache that has not been filled, not a model that costs nothing.
+  // Say how old the list is: it is a cache of what the provider advertised, not a live call. The prices
+  // and ratings are the panel's own table too, so they date each layer separately — a row with no price
+  // is a table that has not been filled, not a model that costs nothing.
   const freshness = d?.fetchedAt ? `list fetched ${relTime(d.fetchedAt)} ago` : "fetched at an unknown time";
-  const units = "in/out $ per Mtok · code = Artificial Analysis coding /10";
+  const units = "in/out $ per Mtok · ★ = Artificial Analysis /10";
+  const snapshotAt = d?.pricingSnapshotAt ? String(d.pricingSnapshotAt).slice(0, 10) : "";
   const priced = d?.pricedCount
-    ? `${d.pricedCount} priced, ${d.ratedCount || 0} with a coding rating (${units})` +
-      (d.pricingAge != null ? `, prices ${relTime(new Date(Date.now() - d.pricingAge * 1000).toISOString())} old` : "")
+    ? `${d.pricedCount} priced, ${d.ratedCount || 0} rated 0-10 (${units})` +
+      (d.pricingAge != null ? `, prices ${relTime(new Date(Date.now() - d.pricingAge * 1000).toISOString())} old` : "") +
+      (d.ratedFromSnapshot && snapshotAt ? `, the OpenRouter snapshot of ${snapshotAt} filling the gaps` : "")
     : "no prices yet — Settings → Gateway → Model prices → Refresh now rebuilds them";
   sel.title = d?.count
     ? `${d.count} model${d.count === 1 ? "" : "s"} available to ${d.provider || "this account"}, ${freshness}` +

@@ -1046,13 +1046,16 @@
 
   // ---- settings -------------------------------------------------------------------------------
 
+  // The assistant's select is built by the board's own option builder (public/app.js), over the shared
+  // picker's rows and the one price table: same ids, same order, same price and rating text as the spawn
+  // form. Nothing about models is decided here. A saved model the catalogue no longer lists is handed in
+  // as an extra row, so it renders checked instead of vanishing under a save.
   function modelOptionsHtml(selected) {
-    const choices = typeof modelChoices === "function" ? modelChoices() : [{ id: "", label: "(default)" }];
-    // A model the catalogue no longer lists must still render, or saving the panel would silently replace it.
-    if (selected && !choices.some((c) => c.id === selected)) choices.push({ id: selected, label: `${selected} (not in the catalogue)` });
-    return choices
-      .map((c) => `<option value="${esc(c.id)}"${c.id === selected ? " selected" : ""}>${esc(c.label)}${c.group ? ` · ${esc(c.group)}` : ""}</option>`)
-      .join("");
+    if (typeof modelOptionHtml !== "function") return `<option value="">(default)</option>`;
+    const d = typeof modelsState === "undefined" ? null : modelsState;
+    const known = (d?.providers || []).some((p) => (p.models || []).includes(selected));
+    const extra = selected && !known ? [{ id: selected, name: `${selected} (not in the catalogue)` }] : [];
+    return modelOptionHtml(d, { selected, extra });
   }
 
   // A saved model the catalogue no longer lists still gets a row in the shared picker — checked, so the list
