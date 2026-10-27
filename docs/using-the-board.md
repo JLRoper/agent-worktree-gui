@@ -112,6 +112,17 @@ Paste or drop a file into the spawn prompt or any reply box. The file is stored 
 above the box: `[name]×`. The agent is handed the path and told to `read_file` it (images: `vision_analyze`) before
 answering. The chip's `✕` removes it before sending.
 
+### A SPAWN line that produced nothing
+
+The other half of a proposal going quiet is worse than a card nobody clicks: a `SPAWN` line the assistant wrote and
+the panel read, but which left no job, no card and no journal entry, used to look exactly like a line that was never
+written. Every line a turned-in turn carries is now recorded as a debt and settled by whatever it became — a card, a
+run, a skip, a refusal. A debt still owed two minutes later raises **“a SPAWN line produced nothing”**: an alert
+naming the turn, the line and the prompt, a `spawnlost` journal entry, and a line in the assistant's own digest, so
+a model cannot read an empty board as “queued”. It is a rule in **Settings → Per-rule escalation**, so it can be
+raised to a wake. Only lines from turns that ended after the panel booted are re-read: a panel left up for a week
+does not relitigate its history on startup.
+
 ### Where the card lands
 
 The card appears under the row of the worktree it was created for, immediately — not after the next scan. An agent

@@ -578,7 +578,7 @@ so the box you type in is on screen at any panel height with the last message di
 shorter than the panel starts at its foot instead of leaving empty panel under its last turn. It is two things:
 
 - **A sentry** that runs in the panel's own process, on `settings.seconds` (default 5 s), over the same job
-  summaries the cards are drawn from. It costs no tokens and it is always awake. Thirteen rules:
+  summaries the cards are drawn from. It costs no tokens and it is always awake. Fourteen rules:
   `loop` (the same tool with the same input N times, read-only helpers held to a higher bar), `errorloop`
   (identical failing output), `quiet` (a running turn with no new output — a long build looks exactly like
   this, so it only journals by default), `approval` (parked longer than the threshold), `question` (a turn
@@ -600,7 +600,10 @@ shorter than the panel starts at its foot instead of leaving empty panel under i
   a turn stopped without finishing, usually a panel restart; an interrupted turn a later turn has taken over is
   history and does not fire. It alerts rather than wakes by default, because one restart rewrites every running
   turn as interrupted at once and would spend the whole hourly wake budget in a single pass; raise it per rule
-  under **Settings → Per-rule escalation** when a cut-off turn is worth the assistant's opinion). Every alert
+  under **Settings → Per-rule escalation** when a cut-off turn is worth the assistant's opinion), and `spawnlost`
+(a turn's SPAWN line that became neither a card nor a run two minutes after that turn ended — the failure the
+charter lists as unexplained; only turns that ended after the panel booted are re-read, so a long-running panel
+does not relitigate its history). Every alert
   carries the evidence it was built from — counts,
   the repeated call, the failing line, the command being waited on — because "it looks stuck" is not
   actionable.
@@ -736,6 +739,17 @@ assistant's Settings tab) is the other half: with it on, the deadline starts the
 `startSpawn` the button uses — **one** attempt, recorded before it is made, so a refusal (gateway down, unborn
 HEAD) goes back to the reader as a red card rather than a second try. A card the reader discarded is never started
 by either path.
+
+**The other half of that silence is a SPAWN line that produced nothing at all.** A card is at least a card; a
+line that was read and carried out but left no job, no card and no journal entry looked exactly like a line that
+was never written, and nothing watched for it. Every SPAWN line a turned-in turn carries is now recorded as a debt
+(`spawnIntents`, written to `assistant.json` *before* the line is carried out, so a restart in between cannot lose
+it) and settled by whatever the line became — a card, a run, an explicit skip, a refusal. A debt still owed two
+minutes later raises `spawnlost` — "a SPAWN line produced nothing" — in the journal and in the alert list, naming
+the turn, the line and the prompt it asked for, once. The sentry also re-reads the assistant's own finished turns
+for a line the harvest never saw (the stream can deliver a last paragraph after the turn was marked harvested) and
+never re-litigates a turn that ended before the panel booted. Waiting cards and vanished lines are both in
+`digest()`, so a model cannot read an empty board as "queued".
 
 The assistant acts by writing plain lines in a reply, and every such line in it is read — wherever it sits among the paragraphs, not only the one the reply ends on:
 
