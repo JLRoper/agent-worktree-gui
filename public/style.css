@@ -1202,8 +1202,10 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 .model-ctx-n { color: var(--dimmer); font-size: 10.5px; padding-left: 6px; }
 .model-hint { font-size: 10.5px; padding: 4px 7px 6px; }
 .ctx-pop .model-item.is-current { color: #c8a6ff; }
-/* The picker: a search box and the list, floating under the readout. */
-.model-pop { position: fixed; z-index: 40; width: 360px; max-height: 320px; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 10px 26px #0008; overflow: hidden; }
+/* The picker: a search box and the list, floating under the readout. It is portaled onto <body>, so its z-index
+   has to out-rank every panel it can be opened over — the assistant float (90) and Settings (120) included —
+   or the list would open behind the thing the reader is picking for. */
+.model-pop { position: fixed; z-index: 200; width: 360px; max-height: 320px; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 10px 26px #0008; overflow: hidden; }
 .model-search::selection { background: #4b3a6b; color: #ecd9ff; }
 .model-search { border: 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--text); font-size: 12px; padding: 7px 9px; outline: none; }
 /* Opened upwards (no room below the label): the list goes above the search bar so the box you type in stays
@@ -1215,6 +1217,24 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 .model-item { display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: 5px; color: var(--text); font-size: 12px; padding: 4px 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .model-item:hover, .model-item.is-sel { background: #241d33; color: #ecd9ff; }
 .model-item.is-current { color: #c8a6ff; }
+/* The shared picker (core/model-menu.js) is a table of columns, not a line of prose: the id takes the room it
+   needs and the rest sit flush right, in the same order on the board and in the assistant's settings. */
+.model-pop-shared { width: 430px; }
+.model-pop-shared .model-item { display: flex; align-items: baseline; gap: 8px; }
+.model-pop-shared .model-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.model-pop-shared .model-ctx-n { padding-left: 0; }
+.model-rating { flex: none; color: #d9a441; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.model-price { flex: none; color: var(--dimmer); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.model-check { flex: none; color: #c8a6ff; }
+/* The closed state of a model field: the text the native select printed, as the thing you click. The select is
+   still in the DOM (hidden) because it is the value and the control whose `change` the panel listens for. */
+select.model-native { display: none; }
+.model-trigger { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 7px; font: 12px var(--mono); min-width: 210px; max-width: 460px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.model-trigger:hover { border-color: #3a4352; }
+.model-trigger:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
+.model-trigger:disabled { opacity: .55; cursor: default; }
+.model-trigger.is-default { color: var(--dim); }
+.as-group .model-trigger { min-width: 0; max-width: 300px; font-size: 11.5px; padding: 4px 6px; }
 .model-none { padding: 8px; font-size: 12px; }
 /* A turn that answers a subagent delivery: the attribution rides on the turn head, not in the transcript. */
 .turn-origin { flex: none; white-space: nowrap; color: #c8a6ff; border: 1px solid #3d3350; background: #241d33; border-radius: 4px; padding: 0 5px; font-size: 10.5px; }

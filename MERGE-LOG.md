@@ -16,9 +16,10 @@ Base: main @ d8ae753 (0.11.2). Each entry is one merge commit, tested after it l
 | 10 | wtgui/build-project-steward-for-branch-rollbac-667552 | aaadf78 | conflicts: locks.js add/add (reader Locks kept, writer queue added as WriterLocks), jobs.js makeWorktree (ledger cut + startRef/parents), server.js routes (both kept) | 129/129 pass |
 | 11 | wtgui/give-workers-per-project-branch-landing-b902b4 | 7596d42 | conflicts: README, jobs.js makeWorktree (ledger + startRef + ParentBook + treeParents), server.js config (kept both) | 132/132 pass |
 | 12 | wtgui/make-spawn-cards-impossible-to-miss-dacabc | 4853122 | conflicts: README.md, lib/assistant.js, lib/assistant/store-file.js, package.json (0.11.2), public/assistant.js, public/index.html, public/style.css (all UU), lib/assistant/config.js (MM) — union of main's command audit + spawn watchdog with the branch's strip, own badge, Alerts grouping and `spawnIntents`; duplicate `SPAWN_WATCH_MS` export deduped. `bootedAt` initialised again; `noteSpawnIntent`/`settleSpawnIntent` wired into the audited spawn path (which kept `mark`/`settleLine`), `addSpawnAlert` handed the turn | 138/138 pass |
-| 13 | wtgui/audit-local-branches-against-origin-main-f2a70a | (this commit) | clean: lib/store.js + test/store.test.js; version restored to 0.11.2 | 147/147 pass |
+| 13 | wtgui/audit-local-branches-against-origin-main-f2a70a | 50838e0 | clean: lib/store.js + test/store.test.js; version restored to 0.11.2 | 147/147 pass |
 | — | land/pr-todo-folds | skipped | no-op: `git cherry HEAD` marks 6900000 `-` (patch-id 78ee1cd2 = 90909d's 58a1a60, merged as eaed59f); the only `+` is its 0.14.0 bump | — |
 | — | land/tree-naming-rule | skipped | no-op: `git cherry HEAD` marks 097627c `-` (patch-id f4479148 = 90909d's 0978556, merged as eaed59f); the only `+` is its 0.14.1 bump | — |
+| 14 | feature/shared-model-menu | 48bd761 | conflict: package.json only (kept 0.11.2); new public/core/model-menu.js, app.js/assistant.js/index.html/style.css auto-merged | 147/147 pass |
 
 Note on the commit column: rows 2–11 were recorded by the previous run with ids from a pass that was
 superseded (those commits still exist but no branch contains them). The ids above are the merge commits

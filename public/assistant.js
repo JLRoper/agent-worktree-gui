@@ -257,6 +257,10 @@
     // The two header buttons toggle for themselves: closing here first would make their own click reopen (or,
     // for the aggressive switch, dismiss the panel the reader is reading while it changes how it behaves).
     if (e.target?.closest?.("#btn-assistant, #btn-aggressive")) return;
+    // The shared model picker is portaled onto <body> on purpose — it has to paint over this float — so a press
+    // on its rows is "outside" by containment while still belonging to the panel: it picks a model, it does not
+    // dismiss the panel that pick is being made in.
+    if (e.target?.closest?.(".model-pop")) return;
     if (state.assistantPinned) return;
     toggleAssistant(false);
   }
@@ -1226,6 +1230,16 @@
       .join("");
   }
 
+  // A saved model the catalogue no longer lists still gets a row in the shared picker — checked, so the list
+  // never reads as "nothing is chosen" while a model is in force.
+  function assistantModelExtra(value) {
+    const id = String(value || "");
+    if (!id) return [];
+    const d = typeof modelsState === "undefined" ? null : modelsState;
+    const known = (d?.providers || []).some((p) => (p.models || []).includes(id));
+    return known ? [] : [{ id, name: `${id} (not in the catalogue)` }];
+  }
+
   function renderAssistantSettings(force = false) {
     const host = as$("as-settings");
     if (!host || !state.assistant) return;
@@ -1310,6 +1324,14 @@
         </div>
         <div class="as-help">${a.wakes.lastHour}/${a.wakes.limit} wakes in the last hour${a.wakePending ? ` · ${a.wakePending} queued behind the running turn` : ""} · scratchpad at ${esc(a.settings.model || "(gateway default model)")}</div>
       </div>`;
+    // The model field is the shared picker (core/model-menu.js), not a native select: a select can only print
+    // text, so it can never show a row's price, coding rating or context window — and a popup opened inside this
+    // float would be clipped by its overflow instead of painting over it. The select stays in the DOM as the
+    // control whose `change` the delegated [data-as-set] handler below answers.
+    ModelMenu.attach(host.querySelector('select[data-as-set="model"]'), {
+      models: () => (typeof modelsState === "undefined" ? null : modelsState),
+      extra: assistantModelExtra,
+    });
   }
 
   // ---- talking to the server -------------------------------------------------------------------
