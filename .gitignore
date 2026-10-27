@@ -3,3 +3,5 @@ node_modules/
 *.log
 .worktrees/
 .steward-logs/
+__pycache__/
+data/aa-rating-pages.json

@@ -15,11 +15,13 @@ Base: main @ d8ae753 (0.11.2). Each entry is one merge commit, tested after it l
 | 9 | wtgui/stop-board-showing-deleted-worktrees-32ac68 | f268180 | conflicts: scheduler (discover→reconcile, kept ownership filter + seeding), server imports (kept ledger + Locks); lifecycle fixtures moved inside <repo>/.worktrees; board tests call reconcile | 114/114 pass |
 | 10 | wtgui/build-project-steward-for-branch-rollbac-667552 | aaadf78 | conflicts: locks.js add/add (reader Locks kept, writer queue added as WriterLocks), jobs.js makeWorktree (ledger cut + startRef/parents), server.js routes (both kept) | 129/129 pass |
 | 11 | wtgui/give-workers-per-project-branch-landing-b902b4 | 7596d42 | conflicts: README, jobs.js makeWorktree (ledger + startRef + ParentBook + treeParents), server.js config (kept both) | 132/132 pass |
-| 12 | wtgui/make-spawn-cards-impossible-to-miss-dacabc | 4853122 | conflicts: README.md, lib/assistant.js, lib/assistant/store-file.js, package.json (0.11.2), public/assistant.js, public/index.html, public/style.css (all UU), lib/assistant/config.js (MM) — union of main's command audit + spawn watchdog with the branch's strip, own badge, Alerts grouping and `spawnIntents`; duplicate `SPAWN_WATCH_MS` export deduped. `bootedAt` initialised again; `noteSpawnIntent`/`settleSpawnIntent` wired into the audited spawn path (which kept `mark`/`settleLine`), `addSpawnAlert` handed the turn | 138/138 pass |
+| 12 | wtgui/make-spawn-cards-impossible-to-miss-dacabc | 31325d9 | conflicts: README.md, lib/assistant.js, lib/assistant/store-file.js, package.json (0.11.2), public/assistant.js, public/index.html, public/style.css (all UU), lib/assistant/config.js (MM) — union of main's command audit + spawn watchdog with the branch's strip, own badge, Alerts grouping and `spawnIntents`; duplicate `SPAWN_WATCH_MS` export deduped. `bootedAt` initialised again; `noteSpawnIntent`/`settleSpawnIntent` wired into the audited spawn path (which kept `mark`/`settleLine`), `addSpawnAlert` handed the turn | 138/138 pass |
 | 13 | wtgui/audit-local-branches-against-origin-main-f2a70a | 50838e0 | clean: lib/store.js + test/store.test.js; version restored to 0.11.2 | 147/147 pass |
 | — | land/pr-todo-folds | skipped | no-op: `git cherry HEAD` marks 6900000 `-` (patch-id 78ee1cd2 = 90909d's 58a1a60, merged as eaed59f); the only `+` is its 0.14.0 bump | — |
 | — | land/tree-naming-rule | skipped | no-op: `git cherry HEAD` marks 097627c `-` (patch-id f4479148 = 90909d's 0978556, merged as eaed59f); the only `+` is its 0.14.1 bump | — |
-| 14 | feature/shared-model-menu | 48bd761 | conflict: package.json only (kept 0.11.2); new public/core/model-menu.js, app.js/assistant.js/index.html/style.css auto-merged | 147/147 pass |
+| 14 | feature/shared-model-menu | c664232 | conflict: package.json only (kept 0.11.2); new public/core/model-menu.js, app.js/assistant.js/index.html/style.css auto-merged | 147/147 pass |
+| 15 | land/spawn-cards-visible | b8dc24b | `-s ours`: verified superseded by merge 12 (its 4 tests ⊂ this tree's 6; same `noteSpawnIntent`/`settleSpawnIntent`/`checkSpawns`/`spawnIntents`; no `spawnidle`, so its "Fourteen rules" is our "Fifteen"). Also deduped the ✧ Assistant row in docs/using-the-board.md, which merge 12 had left twice | 147/147 pass |
+| 16 | land/pr-model-picker (picker/price half only) | 36e7760 | conflicts: .gitignore (kept both), package.json (0.11.2), public/style.css (branch's rating/price columns; spawn-strip block intact), public/app.js (`modelOptionHtml` gains `{selected, extra}`), public/core/model-menu.js add/add (branch's superset), docs/using-the-board.md. Its shared-picker commit + 0.12.0 bump were `-` under `git cherry` (d0a10ef/3c5833d). `lib/model-prices.js` is a pure superset of main's | 147/147 pass; tools/verify-model-prices.mjs 67/67 |
 
 Note on the commit column: rows 2–11 were recorded by the previous run with ids from a pass that was
 superseded (those commits still exist but no branch contains them). The ids above are the merge commits
@@ -30,11 +32,15 @@ actually on this branch, one per branch name, in the order they were made.
 - Merge 12 was half-applied when the previous run hit its iteration cap: seven UU files plus
   `lib/assistant/config.js` at MM, and `test/spawn-cards.test.js` failing because the kept (audited)
   spawn path never called `noteSpawnIntent`. Both finished here; the test was fixed, not deleted.
-- `package.json` is still main's 0.11.2 — the version bump is the last step, once every merge is in.
+- Every branch on the list is now in: merges 12–16 plus the two verified no-ops (rows marked `—`).
+  Nothing is left to merge.
+- `node --test test/*.test.js` is 147/147 after the last merge. One earlier full-suite run failed
+  `push-guard.test.js: an env-granted push neither asks the panel nor parks` at 3002 ms; it passes alone
+  (1417 ms) and passed on the next full run — a timing test that is flaky under parallel load, not a
+  regression from these merges.
+- `package.json` was held at main's 0.11.2 through every merge (branch bumps 0.11.3 → 0.14.1 were all
+  dropped); the single bump is the commit after this one.
 - The branch is LOCAL ONLY: no push, no PR, main not moved.
-- Still to merge, in order: `wtgui/audit-local-branches-against-origin-main-f2a70a`, `land/pr-todo-folds`,
-  `land/tree-naming-rule`, `feature/shared-model-menu`, `land/spawn-cards-visible`, then the picker half
-  of `land/pr-model-picker` only.
-- Before `land/pr-todo-folds` and `land/tree-naming-rule`: `git cherry` + `git patch-id` against
-  `wtgui/make-todo-fact-lines-collapsible-by-defa-90909d` (merge 6) — the previous run found them
-  patch-identical, which would make both no-ops.
+- Open question for the reader: `land/pr-model-picker` has no PR-side code in it — all four of its commits
+  are the picker and its price data. The "picker half" was its already-landed pair (shared picker + 0.12.0
+  bump, both `-` under `git cherry`); the two price commits are merged here.
