@@ -2799,6 +2799,17 @@ server.listen(config.port, config.host, () => {
     } catch (e) {
       log(`reconcile of restored turns failed: ${String((e && e.message) || e)}`);
     }
+    // ...and the runs the reconcile could not give back to a live card because the gateway answering now is
+    // not the process that was issued them. A run lives in one process's memory: a card stamped with an older
+    // gateway identity is a turn nobody here can watch, and one nobody has told the gateway to stop — nine of
+    // those once held every concurrency slot with their session_turn_leases never released. A stop is asked for
+    // on each (404/409 tolerated), after the reconcile, so nothing it re-attached is touched.
+    try {
+      const stopped = await jobs.stopStaleRuns();
+      if (stopped.length) log(`asked the gateway to stop ${stopped.length} run(s) this panel inherited from an earlier gateway: ${stopped.map((a) => `${a.runId || a.jobId}${a.already ? " (already gone)" : a.ok ? "" : ` (failed: ${a.error})`}`).join(", ")}`);
+    } catch (e) {
+      log(`stopping the runs inherited from an earlier gateway failed: ${String((e && e.message) || e)}`);
+    }
   });
 });
 
