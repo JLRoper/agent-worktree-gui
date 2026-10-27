@@ -28,7 +28,7 @@ import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE } from "./li
 import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { ParentBook } from "./lib/parents.js";
-import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees } from "./lib/steward.js";
+import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees, writePlan } from "./lib/steward.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
 import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyLabel } from "./lib/remote-writes.js";
@@ -2947,7 +2947,8 @@ async function warmParents() {
   for (const project of registry.projects || []) {
     const rows = store.rowsFor(project.name) || [];
     const branches = rows.map((r) => r.branch).filter(Boolean);
-    if (!branches.length) continue;
+    // No rows yet (the boot pass has not reached this project) is NOT a reason to skip it: refresh() works from the
+    // repo's own branch list, and the first pass used to be wasted on exactly the projects that needed it most.
     try {
       const out = await parents.refresh({ project: project.name, repoDir: project.path, mainBranch: project.mainBranch, branches });
       learned += out.learned || 0;

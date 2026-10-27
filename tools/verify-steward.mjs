@@ -94,12 +94,20 @@ async function main() {
   // or left unknown, which is the state a legacy board is in.
   const logsDir = path.join(root, "logs");
   mkdirSync(logsDir, { recursive: true });
+  const cutRecord = (branch) => ({
+    project: "fixture-repo",
+    branch,
+    path: path.join(repo, ".worktrees", branch).replace(/\\/g, "/"),
+    parent: "dmr-77-turnover",
+    parentSha: turnoverSha,
+    parentRef: "dmr-77-turnover",
+    parentSource: "cut",
+    by: "verify",
+    at: new Date().toISOString(),
+  });
   writeFileSync(
     path.join(logsDir, "parents.json"),
-    JSON.stringify({
-      version: 1,
-      records: [{ project: "fixture-repo", branch: "dmr-77-child-cut", path: path.join(repo, ".worktrees", "dmr-77-child-cut").replace(/\\/g, "/"), parent: "dmr-77-turnover", parentSha: turnoverSha, parentRef: "dmr-77-turnover", parentSource: "cut", by: "verify", at: new Date().toISOString() }],
-    }),
+    JSON.stringify({ version: 1, records: [cutRecord("dmr-77-child-cut"), cutRecord("dmr-77-child-landed")] }),
   );
 
   // jobsFile is what every other ledger's default is derived from, so naming it here is what makes the panel read the
@@ -161,6 +169,7 @@ async function main() {
     const after = git(repo, "worktree", "list", "--porcelain").split("\n").filter((l) => l.startsWith("worktree ")).length;
     ok("2c. the plan acted on nothing — every worktree is still there", before === after, { before, after });
     const plan = planned.json || {};
+    for (const e of plan.entries || []) say(`entry ${String(e.branch).padEnd(30)} ${String(e.kind).padEnd(7)} landed=${e.landedIn || "-"} parent=${e.parent || "-"}/${e.parentSource} ahead=${e.ahead}`);
     ok("2d. exactly the landed, clean, unlocked branch is in the delete list", plan.delete?.length === 1 && plan.delete[0].branch === "dmr-77-child-landed", plan.delete?.map((d) => d.branch));
     ok("2e. the roll list is a recorded cut only", plan.roll?.length === 1 && plan.roll[0].branch === "dmr-77-child-cut", plan.roll?.map((d) => d.branch));
     ok(
