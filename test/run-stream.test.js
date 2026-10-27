@@ -98,13 +98,14 @@ test("a dropped stream resumes at the last seq, one line per paragraph, and the 
   const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-stream-"));
   const stub = makeStub();
   const port = await stub.listen();
-  const seen = { lines: [], sets: 0, news: 0 };
+  const seen = { lines: [], sets: 0, news: 0, liveFrames: [] };
   const jobs = new Jobs({
     config: { apiServer: { url: `http://127.0.0.1:${port}`, key: "stub-key" }, jobsFile: path.join(dir, "jobs.json"), defaultCwd: dir },
     onEvent: (evt) => {
       if (evt.type === "jobline") {
         seen.lines.push(evt.line);
         if (evt.line?.mode === "set") seen.sets += 1;
+        if (evt.live) seen.liveFrames.push(evt.live);
       }
       if (evt.type === "job") seen.news += 1;
     },
@@ -133,6 +134,8 @@ test("a dropped stream resumes at the last seq, one line per paragraph, and the 
   assert.equal(textLines().length, 1, "40 deltas are ONE console line, not forty");
   assert.equal(textLines()[0].text, `${words.join(" ")} `, "the line holds every fragment, in order");
   assert.ok(seen.sets < 20, `the store emitted ${seen.sets} set-frames for 40 fragments - coalesced, not one per token`);
+  const liveFrames = () => seen.liveFrames.map((l) => l.events);
+  assert.ok(Math.max(...liveFrames()) >= 40, `the console frames carry the run's live numbers (max events ${Math.max(...liveFrames())}) - the pulse advances with the output, not on a separate summary per token`);
 
   // ---- 2. the live story, mid-turn ------------------------------------------------------------
   const mid = jobs.summary(live());

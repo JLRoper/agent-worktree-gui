@@ -330,6 +330,23 @@ folder, a `row …` chip follows it. It is a reference, not a heading: smallest 
 
 A `yolo` pill appears only if a run was started with that flag elsewhere; the panel never sends it.
 
+### The pulse on a live card
+
+While a turn is live the head carries a small pulsing chip, right of the `running` pill. It is the panel's
+**heartbeat on that run's event stream**, not a reading of the agent's mind — the tooltip says so — and it shows
+one of five honest states:
+
+| The chip | What is true |
+|---|---|
+| `● thinking 2s` (green) | text is streaming: a delta arrived 2 s ago. The console line under it is growing in place — one line per paragraph, not one per token. |
+| `● terminal · 4s` (blue) | a tool is running; it is named, and the number is how long ago the stream last said anything. Waiting on a command is not the same as waiting on tokens. |
+| `● thinking 1m 10s` (grey) | the stream has been quiet that long. The run is still live and the panel still holds its stream; the dot keeps pulsing because the panel is still listening. |
+| `● no events yet · 12s` (amber) | the run is live and the panel subscribed, but the gateway has sent **no event at all** since it started. That is a gateway not sending — not an agent thinking — and the chip says so. |
+| `● polled · every 15s` (dashed) | this gateway does not advertise `run_events_sse`, so the card is read every 15 s and there is no stream to judge. Nothing here can tell you what the model is doing. |
+
+It never carries reasoning text. A finished turn leaves no chip at all, and the age is the time since the last event
+the panel actually received — never a number the panel made up.
+
 Folded, the card keeps one line under its head: a status chip in the turn's own words — `done`, `failed`,
 `interrupted`, `cancelled`, `running`, or `revived` for a turn rebuilt from the session store (which has no duration
 this panel measured) — then how long it ran, then **the error when there is one**; otherwise the last thing the turn
