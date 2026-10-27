@@ -23,6 +23,7 @@ import { ProjectRegistry } from "./lib/projects.js";
 import { Jobs, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js";
 import { gitIn, scanWorktree } from "./lib/scan.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
+import { Hosts, proposeMapping } from "./lib/hosts.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE, autoNameRefusal, namingState } from "./lib/tree-names.js";
 import { WorktreeNaming } from "./lib/worktree-naming.js";
@@ -180,6 +181,11 @@ async function loadConfig() {
   // Which worktrees carry the push guard, and when it went in. The panel's own record (git holds the hooks path
   // itself), beside the job store, so a sandbox config keeps its own copy of it.
   if (!cfg.pushGuardFile) cfg.pushGuardFile = path.join(path.dirname(cfg.jobsFile), "push-guard.json");
+  // Where each project's branches and pull requests live (lib/hosts.js). Reader-edited state, so it sits beside the job
+  // store and not in logs/projects.json, which the discovery sweep rewrites every pass. The SEED is the opposite: it
+  // ships with the code (hosts.seed.json next to this file) and supplies defaults the live file overrides.
+  if (!cfg.hostsFile) cfg.hostsFile = path.join(path.dirname(cfg.jobsFile), "hosts.json");
+  if (!cfg.hostsSeedFile) cfg.hostsSeedFile = path.join(HERE, "hosts.seed.json");
   // Whether a branch may exist on a REMOTE at all: the setting the reader's permission box writes, and what the
   // installed pre-push guard reads. local-only by default — a value that cannot be read falls back to it rather
   // than to a permissive one.
@@ -210,6 +216,16 @@ const store = new Store();
 // (lib/tree-names.js) is read before anything can rename a tree and written the moment the panel learns one:
 // at the cut for a tree this panel makes, at first sight for a tree that was already there.
 const treeNames = new TreeNames({ file: config.treeNamesFile, log });
+// Where each project's branches and pull requests live. The file is created on first boot (empty: the defaults are
+// hosts.seed.json's) so the reader has something to edit, and lib/hosts.js merges the seed under it per host id and
+// per project — a new seed record reaches this install without anybody merging JSON by hand.
+const hosts = new Hosts({
+  file: config.hostsFile || path.join("logs", "hosts.json"),
+  seedFile: config.hostsSeedFile || "hosts.seed.json",
+  log: (line) => log(line),
+});
+const hostsFile = hosts.ensure();
+for (const warning of hosts.doc().warnings) log(`hosts: ${warning}`);
 const registry = new ProjectRegistry({
   getConfig: () => config,
   store,
@@ -222,6 +238,7 @@ let scheduler = new Scheduler({
   store,
   pool,
   registry,
+  hosts,
   getProjects: () => registry.projects,
   panelAgents: () => jobs.agentPaths(),
   panelThreads: () => jobs.panelRunThreads(),
@@ -332,9 +349,16 @@ function gonePointers(id) {
     worktree: row?.path || j.worktreePath || j.ownerPath || j.cwd || null,
     branch: row?.branch || j.branch || null,
     // The scan's PR index carries the number, the state and the title; the URL is the one form of a pointer the
-    // console renders as a link, and it is derivable from the repo the PRs were listed from.
+    // console renders as a link, and it comes from the project's host record — the same template the board's PR cell
+    // uses. No host mapping means no URL: the console then shows the PR number and says where the mapping is missing
+    // rather than sending the reader to a github.com page that may not exist.
     pr: pr
-      ? { number: pr.number, state: pr.state || null, title: pr.title || null, url: found?.project?.prRepo ? `https://github.com/${found.project.prRepo}/pull/${pr.number}` : null }
+      ? {
+          number: pr.number,
+          state: pr.state || null,
+          title: pr.title || null,
+          url: hosts.linkFor(found?.project || { name: "" }, "pull", { pr: pr.number, branch: row?.branch, sha: row?.head, main: found?.project?.mainBranch }).url || null,
+        }
       : null,
   };
 }
@@ -1156,9 +1180,12 @@ function snapshot() {
           // write to a remote for). They ride with the snapshot the way the CLI-transport approvals do, so a reload
           // comes back to the same open question instead of losing it.
           remoteWrites: remoteWrites.state(),        // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
-        // thread id, so a reload comes back to the same conversation and the same watches.
-        assistant: assistant.state(),
-        skipped: registry.skipped,
+          // thread id, so a reload comes back to the same conversation and the same watches.
+          assistant: assistant.state(),
+          // Where the board's links go: the host records a reader can choose from, plus what each project resolves to
+          // right now. One object, because the header's chip and the Discover strip must read the same answer.
+          hosts: { ...hosts.state(), projects: Object.fromEntries(registry.projects.map((p) => [p.name, hosts.view(p)])) },
+          skipped: registry.skipped,
         scanRoots: config.scanRoots || [],
         spawn: {
           // Spawning is no longer "is there a hermes.exe on this box": it is "is the gateway's api_server
@@ -1619,6 +1646,64 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         return sendJson(res, 502, { project: target.name, path: target.path, tookMs: Date.now() - t0, error: String((e && e.message) || e) });
       }
+    }
+
+    // ---- where a project's branches and PRs live ---------------------------------------------------------------
+    // The mapping is data (logs/hosts.json + hosts.seed.json), so the page needs to read it and the reader needs a way
+    // to fill one in without hand-editing JSON. Three routes: the whole mapping, a PROPOSAL read off the project's
+    // own remote (never written), and the confirm that writes it. The proposal is separate from the write on purpose:
+    // nothing here guesses a host into the file, and a mapping the reader did not confirm is not a mapping.
+    if (route === "/api/hosts" && req.method === "GET") {
+      const doc = hosts.doc({ fresh: true });
+      return sendJson(res, 200, {
+        ...hosts.state(),
+        warnings: doc.warnings,
+        projects: Object.fromEntries(registry.projects.map((p) => [p.name, hosts.view(p)])),
+      });
+    }
+
+    if (route === "/api/hosts/propose" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const project = registry.projects.find((p) => p.name === String(body.project || "").trim());
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${body.project || "(none)"}` });
+      let remoteUrl = "";
+      if (project.remote) {
+        const r = await gitIn(project.path, ["remote", "get-url", project.remote], 15000);
+        remoteUrl = r.ok ? String(r.out || "").trim() : "";
+      }
+      const proposal = proposeMapping(hosts.doc({ fresh: true }), project, remoteUrl);
+      return sendJson(res, 200, { project: project.name, remote: project.remote || null, proposal, current: hosts.view(project) });
+    }
+
+    if (route === "/api/hosts/mapping" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const project = registry.projects.find((p) => p.name === String(body.project || "").trim());
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${body.project || "(none)"}` });
+      const doc = hosts.doc({ fresh: true });
+      const hostId = String(body.host || "").trim();
+      if (!doc.hosts[hostId]) {
+        return sendJson(res, 400, { error: `unknown host "${hostId}" — known hosts: ${Object.keys(doc.hosts).join(", ") || "(none)"}` });
+      }
+      // Coordinates arrive as an object, or as the one line a reader types: "owner/repo" for github, "PROJECTKEY/slug"
+      // for a Bitbucket project. The second form is parsed here so the page does not have to know the kind.
+      let coordinates = body.coordinates;
+      if (typeof coordinates === "string") {
+        const [first, second] = coordinates.split(/[\/,\s]+/).filter(Boolean);
+        coordinates = doc.hosts[hostId].kind === "bitbucket-server" ? { projectKey: first, repoSlug: second } : { owner: first, repo: second };
+      }
+      try {
+        hosts.save(project.name, { host: hostId, coordinates: coordinates || null });
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
+      const view = hosts.view(project);
+      log(`hosts: ${project.name} mapped to ${hostId}${view.links?.repo ? ` (${view.links.repo})` : ""}`);
+      // The rows carry their link as a scan result, so the board repaints on the next pass; this event lets the page
+      // show the new chip at once, and a resync from the page refreshes the rows.
+      broadcast({ type: "hosts", hosts: hosts.state() });
+      return sendJson(res, 200, { ok: true, project: project.name, mapping: view, file: hostsFile.file || null });
     }
 
     if (route === "/api/stats") {
@@ -2673,6 +2758,9 @@ const server = createServer(async (req, res) => {
         commits: commitList,
         stamp,
         panelPort: config.port,
+        // Where this branch lands — the doctrine of the project's host (logs/hosts.json), not a shape chosen here. A
+        // project with no mapping hands over null, and the prompt says so instead of inventing a PR.
+        host: hosts.landing(project, { branch: row.branch }),
       });
       const thread = makeThreadName(`${label} ${project.name}`);
       const preview = { project: project.name, base, baseRef, remote, branch: row.branch, ahead: row.ahead, root, worktree: worktree.replace(/\\/g, "/"), label, thread, prompt };

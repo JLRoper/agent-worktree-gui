@@ -80,6 +80,12 @@ const state = {
   confirmEls: new Map(),
   tbodyEls: new Map(),
   settings: {},
+  // Where this board's links go (server: lib/hosts.js). `{hosts, projects, file, seedFile, warnings}`; the per-project
+  // entry says which host a project resolves to and why it does not, and the header's chip reads it.
+  hosts: null,
+  // The open host-mapping strip, by project: { project, host, coords, line, error, busy }. Kept here, not only in the
+  // DOM, so a snapshot repaint (every few seconds) does not wipe the proposal the reader is looking at.
+  hostPanel: null,
   spawn: {},
   paused: false,
   es: null,
@@ -7957,18 +7963,31 @@ function branchCellHtml(row) {
   return `<span class="branch-plain" title="${esc(why)}">${name}</span>${localOnly ? ` <span class="branch-local" title="${esc(why)}">local</span>` : ""}`;
 }
 
+// The PR cell: the number and state are the server's (row.pr), and the PAGE is the project's host record — `row.prUrl`
+// is built by the same template as the branch cell, so `.../pull-requests/12` and `.../pull/12` both come out right
+// without this file knowing which host it is looking at. No URL (an unmapped project, or a host whose pull template
+// cannot be filled): the same chip, plain, with the reason in its title. Never an `<a>` around a guessed page.
+function prCellHtml(row) {
+  if (!row.pr) {
+    return row.remoteBranch === "gone" ? `<span class="dimmer">none · branch gone</span>` : `<span class="dimmer">none</span>`;
+  }
+  const cls = row.pr.state === "OPEN" ? "pr-open" : "pr-merged";
+  const text = `#${row.pr.number} ${row.pr.state}`;
+  const why = row.prUrl ? "" : row.prWhy ? ` · no PR page: ${row.prWhy}` : "";
+  const title = `${row.pr.title || ""}${prMatchNote(row.pr)}${why}`;
+  if (row.prUrl) {
+    return `<a class="pr-link ${cls}" href="${esc(row.prUrl)}" target="_blank" rel="noopener" title="${esc(`${text} — open this PR${why}`)}">${esc(text)}</a>`;
+  }
+  return `<span class="${cls}" title="${esc(title)}">${esc(text)}</span>`;
+}
+
 function rowHtml(row) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   const dirty =
     row.dirty || row.untracked
       ? `<span class="dirty">${row.dirty}</span>${row.untracked ? ` <span class="dimmer">+${row.untracked}?</span>` : ""}`
       : `<span class="clean">clean</span>`;
-  const prTitle = row.pr ? `${row.pr.title || ""}${prMatchNote(row.pr)}` : "";
-  const pr = row.pr
-    ? `<span class="${row.pr.state === "OPEN" ? "pr-open" : "pr-merged"}" title="${esc(prTitle)}">#${row.pr.number} ${esc(row.pr.state)}</span>`
-    : row.remoteBranch === "gone"
-      ? `<span class="dimmer">none · branch gone</span>`
-      : `<span class="dimmer">none</span>`;
+  const pr = prCellHtml(row);
   const badge = verdictHtml(row);
   // The project's own checkout is not a worktree anyone may delete or rename from here: it keeps the folder's name.
   const isProjectRoot = isProjectRootRow(row);
@@ -10086,6 +10105,132 @@ ${projects.map((p) => projectSection(p.name)).join("\n")}
   </section>`;
 }
 
+// ---- where a project's branches and PRs live: the header's chip and its Discover strip -------------------------
+// The board links a branch and a PR to whatever host the project's mapping names (logs/hosts.json, lib/hosts.js). That
+// mapping is data, so it has to be visible and fillable from the page: the chip says which host a project resolves to
+// (or that it has none, and why), and pressing it reads the project's own remote and offers the mapping it implies.
+// The proposal is never written until the reader presses the button that writes it — a mapping the panel guessed is
+// not a mapping, and a guessed URL is worse than the plain text this whole feature replaced.
+function hostChipHtml(name) {
+  const v = state.hosts?.projects?.[name];
+  if (!v) return "";
+  const coords = v.coordinates ? Object.values(v.coordinates).filter(Boolean).join("/") : "";
+  const label = v.host ? `host: ${v.host}` : "no host";
+  const title = v.host
+    ? `links come from ${v.host}${coords ? ` (${coords})` : ""}${v.landing ? " · its landing doctrine is in the merge prompt" : " · no landing doctrine"}${v.links?.repo ? ` · ${v.links.repo}` : ""} — click to change or re-discover the mapping`
+    : `${v.why} — click to read this project's remote and propose a mapping for you to confirm`;
+  return `<button type="button" class="btn-host${v.host ? " is-mapped" : " is-unmapped"}" data-host-project="${esc(name)}" title="${esc(title)}">${esc(label)}${coords ? ` <span class="host-coords">${esc(coords)}</span>` : ""}</button>`;
+}
+
+function hostPanelHtml(name) {
+  const panel = state.hostPanel;
+  if (!panel || panel.project !== name) return "";
+  const ids = Object.keys(state.hosts?.hosts || {});
+  const opts = ids.length ? ids.map((id) => `<option value="${esc(id)}"${id === panel.host ? " selected" : ""}>${esc(id)}</option>`).join("") : `<option value="">(no host records)</option>`;
+  return `<div class="host-form" data-host-form="${esc(name)}">
+      <span class="mono host-line${panel.error ? " clone-err" : ""}" data-host-line>${esc(panel.line || "")}</span>
+      <label class="host-field">host <select data-host-select="${esc(name)}"${panel.busy ? " disabled" : ""}>${opts}</select></label>
+      <label class="host-field">coordinates <input type="text" class="mono" data-host-coords="${esc(name)}" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" spellcheck="false" placeholder="owner/repo or PROJECT/slug" value="${esc(panel.coords || "")}"${panel.busy ? " disabled" : ""}></label>
+      <button type="button" data-host-save="${esc(name)}"${panel.busy ? " disabled" : ""}>Use this mapping</button>
+      <button type="button" data-host-cancel="${esc(name)}">Cancel</button>
+    </div>`;
+}
+
+function repaintHostPanel(name) {
+  const sec = document.querySelector(`section.project[data-project="${CSS.escape(name)}"]`);
+  if (!sec) return;
+  const html = hostPanelHtml(name);
+  const old = sec.querySelector("[data-host-form]");
+  if (old) {
+    if (html) old.outerHTML = html;
+    else old.remove();
+    return;
+  }
+  if (!html) return;
+  const head = sec.querySelector(".project-head.meta-line");
+  if (head) head.insertAdjacentHTML("afterend", html);
+}
+
+async function proposeHostMapping(name) {
+  // A second press on the same chip closes the strip; it is a toggle, not a dialog.
+  if (state.hostPanel?.project === name) {
+    state.hostPanel = null;
+    repaintHostPanel(name);
+    return;
+  }
+  const current = state.hosts?.projects?.[name] || {};
+  state.hostPanel = { project: name, host: current.host || "", coords: "", line: "reading the remote…", busy: true };
+  repaintHostPanel(name);
+  try {
+    const res = await apiFetch("/api/hosts/propose", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: name }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (state.hostPanel?.project !== name) return;
+    if (!res.ok) {
+      state.hostPanel = { ...state.hostPanel, busy: false, error: true, line: out.error || `could not read the remote (HTTP ${res.status})` };
+      repaintHostPanel(name);
+      return;
+    }
+    const prop = out.proposal || {};
+    const coords = prop.ok ? Object.values(prop.coordinates || {}).filter(Boolean).join("/") : "";
+    state.hostPanel = {
+      project: name,
+      host: prop.ok ? prop.host : current.host || Object.keys(state.hosts?.hosts || {})[0] || "",
+      coords,
+      busy: false,
+      error: !prop.ok,
+      line: prop.ok
+        ? `proposed from ${prop.remoteUrl} → ${prop.host} · ${coords} — confirm to write it`
+        : `no proposal: ${prop.why || "unknown reason"}`,
+    };
+    repaintHostPanel(name);
+    document.querySelector(`[data-host-coords="${CSS.escape(name)}"]`)?.focus();
+  } catch (e) {
+    if (state.hostPanel?.project !== name) return;
+    state.hostPanel = { ...state.hostPanel, busy: false, error: true, line: `could not read the remote: ${e.message}` };
+    repaintHostPanel(name);
+  }
+}
+
+async function saveHostMapping(name) {
+  const panel = state.hostPanel;
+  if (!panel || panel.project !== name) return;
+  const host = document.querySelector(`[data-host-select="${CSS.escape(name)}"]`)?.value || panel.host;
+  const coords = document.querySelector(`[data-host-coords="${CSS.escape(name)}"]`)?.value ?? panel.coords;
+  if (!host) {
+    state.hostPanel = { ...panel, error: true, line: "pick a host id first — logs/hosts.json and hosts.seed.json define them" };
+    repaintHostPanel(name);
+    return;
+  }
+  state.hostPanel = { ...panel, busy: true, error: false, line: "writing the mapping…" };
+  repaintHostPanel(name);
+  try {
+    const res = await apiFetch("/api/hosts/mapping", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: name, host, coordinates: String(coords || "").trim() }),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      state.hostPanel = { ...state.hostPanel, busy: false, error: true, line: out.error || `could not write the mapping (HTTP ${res.status})` };
+      repaintHostPanel(name);
+      return;
+    }
+    state.hostPanel = null;
+    repaintHostPanel(name);
+    showBanner(`host mapping: ${name} → ${host}${out.mapping?.links?.repo ? ` (${out.mapping.links.repo})` : ""}`);
+    // The rows carry their link as a scan result, so the cells catch up on the next pass; this resync brings the new
+    // chip and the project's own coordinates back immediately.
+    void resync();
+  } catch (e) {
+    state.hostPanel = { ...state.hostPanel, busy: false, error: true, line: `could not write the mapping: ${e.message}` };
+    repaintHostPanel(name);
+  }
+}
+
 function projectSection(name) {
   const p = state.projects.get(name) || { name };
   const open = state.expandedProjects.has(name);
@@ -10109,8 +10254,9 @@ function projectSection(name) {
     </div>
     <div class="project-head meta-line">
       <span class="mono dim">${mainLine}</span><span class="spacer"></span>${board}${tip}
-      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>
+      <span class="dimmer mono">${p.fetchNote ? esc(p.fetchNote) + " · " : ""}fetched ${relTime(p.fetchedAt)} ago</span>${hostChipHtml(name)}
     </div>
+    ${hostPanelHtml(name)}
     <div class="wt-scroll">
       <table><thead><tr>
         <th>Worktree</th><th>Branch</th><th>Tip</th><th>Ahead / Behind</th><th>Cherry</th>
@@ -11012,6 +11158,7 @@ function applySnapshot(data) {
   // sections on screen are still valid and a full re-render would be pure cost.
   const beforeSig = [...state.projects.keys()].sort().join("|");
   state.settings = data.settings || state.settings;
+  if (data.hosts) state.hosts = data.hosts;
   if (Array.isArray(data.scanRoots)) state.scanRoots = data.scanRoots;
   if (data.spawn) {
     state.spawn = data.spawn;
@@ -11622,6 +11769,30 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     e.preventDefault();
     void cloneIntoRoot(rgo.dataset.cloneGo);
+    return;
+  }
+  // The host chip and its Discover strip. The chip sits inside the project header, whose click toggles the section,
+  // so every one of these stops propagation — pressing "host: sefl-bitbucket" must not also collapse the project.
+  const rhost = e.target.closest("[data-host-project]");
+  if (rhost) {
+    e.stopPropagation();
+    e.preventDefault();
+    void proposeHostMapping(rhost.dataset.hostProject);
+    return;
+  }
+  const rhsave = e.target.closest("[data-host-save]");
+  if (rhsave) {
+    e.stopPropagation();
+    e.preventDefault();
+    void saveHostMapping(rhsave.dataset.hostSave);
+    return;
+  }
+  const rhcancel = e.target.closest("[data-host-cancel]");
+  if (rhcancel) {
+    e.stopPropagation();
+    e.preventDefault();
+    state.hostPanel = null;
+    repaintHostPanel(rhcancel.dataset.hostCancel);
     return;
   }
   // The clear button inside the folder search box: restore the full list and put the caret back.

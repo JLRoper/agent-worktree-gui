@@ -228,6 +228,13 @@ function writeConfig(stubUrl, extra = {}) {
     ...extra,
   };
   writeFileSync(CONFIG, `${JSON.stringify(cfg, null, 2)}\n`, "utf8");
+  // Where this project's links go. The panel merges the SHIPPED seed (hosts.seed.json: github + git.sefl.com) under
+  // the live file, so the sandbox only has to say which host prooflib belongs to — the link shapes are the seed's.
+  mkdirSync(`${S}/panel/logs`, { recursive: true });
+  writeFileSync(`${S}/panel/logs/hosts.json`, `${JSON.stringify({ version: 1, hosts: {}, projects: { prooflib: { host: "github", coordinates: { repo: "proof-repo" } } } }, null, 2)}\n`, "utf8");
+  cfg.hostsFile = `${S}/panel/logs/hosts.json`;
+  cfg.hostsSeedFile = `${normWin(REPO)}/hosts.seed.json`;
+  writeFileSync(CONFIG, `${JSON.stringify(cfg, null, 2)}\n`, "utf8");
   return cfg;
 }
 
@@ -324,8 +331,11 @@ async function phase1Links() {
 }
 
 async function phase2UrlPolicy() {
-  console.log("\n== A. the URL policy, as a pure function (the panel's own modules, called directly — no browser) ==");
-  const { branchPageUrl: branchPageUrlFor, branchLink: branchLinkFor } = await import(`file:///${normWin(REPO)}/lib/project.js`);
+  console.log("\n== A. the link templates, as a pure function over the mapping (the panel's own modules, called directly — no browser) ==");
+  const { linkFor, readHostsFile, mergeDocs } = await import(`file:///${normWin(REPO)}/lib/hosts.js`);
+  const { branchLink: branchLinkFor } = await import(`file:///${normWin(REPO)}/lib/project.js`);
+  // The same two files the sandbox panel reads: the shipped seed under the sandbox's own live file.
+  const doc = mergeDocs(readHostsFile(`${normWin(REPO)}/hosts.seed.json`), readHostsFile(`${S}/panel/logs/hosts.json`));
   // The project parser itself, not a copy of its regex: `githubRepo()` is what `probe()` uses, and it is the only
   // place a remote URL is read. A change to it changes these answers.
   const { githubRepo: parsed } = await import(`file:///${normWin(REPO)}/lib/projects.js`);
@@ -335,26 +345,28 @@ async function phase2UrlPolicy() {
   check("https://github.com/owner/repo.git (trailing .git stripped)", parsed("https://github.com/owner/repo.git"), "owner/repo");
   check("a gitlab remote is NOT parsed (so it gets no link)", parsed("git@gitlab.com:owner/repo.git"), null);
   check("nor a bare local path", parsed("C:/ProjectDevelopment/some-repo"), null);
-  check("branch page shape", branchPageUrlFor({ prRepo: "owner/repo", branch: "wtgui/x-1a2b3c" }), "https://github.com/owner/repo/tree/wtgui/x-1a2b3c");
-  check("a branch with a slash keeps its slashes un-encoded", branchPageUrlFor({ prRepo: "owner/repo", branch: "a/b" }), "https://github.com/owner/repo/tree/a/b");
-  check("no github repo, no link", branchPageUrlFor({ prRepo: null, branch: "main" }), null);
+  const prooflib = { name: "prooflib", mainBranch: "main" };
+  check("branch page shape (from links.branch)", linkFor(doc, prooflib, "branch", { branch: "wtgui/x-1a2b3c" }).url, "https://github.com/JLRoper/proof-repo/tree/wtgui/x-1a2b3c");
+  check("a branch with a slash keeps its slashes un-encoded in a path", linkFor(doc, prooflib, "branch", { branch: "a/b" }).url, "https://github.com/JLRoper/proof-repo/tree/a/b");
+  check("unmapped project, no link", linkFor(doc, { name: "nothing-mapped" }, "branch", { branch: "main" }).url, null);
+  ok("and the sentence names the file to edit", /logs\/hosts\.json/.test(String(linkFor(doc, { name: "nothing-mapped" }, "branch", { branch: "main" }).why)), linkFor(doc, { name: "nothing-mapped" }, "branch", { branch: "main" }).why);
 
-  const project = { remote: "github", prRepo: "owner/repo" };
-  check("a branch the remote has → the page", branchLinkFor({ project, row: { branch: "x", remoteBranch: "exists" } }).url, "https://github.com/owner/repo/tree/x");
-  check("a branch it does not → no link, and a reason", branchLinkFor({ project, row: { branch: "x", remoteBranch: "gone" } }).url, null);
-  check("no remote at all → no link, and that reason", branchLinkFor({ project: { remote: null }, row: { branch: "x", remoteBranch: "n/a" } }).why, "no remote configured");
+  const project = { name: "prooflib", remote: "github" };
+  check("a branch the remote has → the page", branchLinkFor({ project, row: { branch: "x", remoteBranch: "exists" }, hosts: doc }).url, "https://github.com/JLRoper/proof-repo/tree/x");
+  check("a branch it does not → no link, and a reason", branchLinkFor({ project, row: { branch: "x", remoteBranch: "gone" }, hosts: doc }).url, null);
+  check("no remote at all → no link, and that reason", branchLinkFor({ project: { name: "prooflib", remote: null }, row: { branch: "x", remoteBranch: "n/a" }, hosts: doc }).why, "no remote configured");
   check(
     "an unreachable remote falls back to the last fetch's refs",
-    branchLinkFor({ project, row: { branch: "x", remoteBranch: "unknown" }, offline: new Set(["x"]) }).url,
-    "https://github.com/owner/repo/tree/x",
+    branchLinkFor({ project, row: { branch: "x", remoteBranch: "unknown" }, offline: new Set(["x"]), hosts: doc }).url,
+    "https://github.com/JLRoper/proof-repo/tree/x",
   );
   check(
     "and stays plain when that fetch knows nothing either",
-    branchLinkFor({ project, row: { branch: "x", remoteBranch: "unknown" }, offline: new Set() }).url,
+    branchLinkFor({ project, row: { branch: "x", remoteBranch: "unknown" }, offline: new Set(), hosts: doc }).url,
     null,
   );
-  // A non-github remote that HAS the branch: linked or not, but never guessed.
-  check("a non-github remote with the branch present → no link", branchPageUrlFor({ prRepo: null, branch: "main" }), null);
+  // A project nobody mapped: the remote answer does not turn into a guessed URL.
+  check("an unmapped project with the branch present → no link", branchLinkFor({ project: { name: "nothing-mapped", remote: "origin" }, row: { branch: "main", remoteBranch: "exists" }, hosts: doc }).url, null);
 }
 
 async function phase3Setting(stubUrl) {

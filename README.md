@@ -150,6 +150,14 @@ repo's last commit and the newest file edit inside any of its worktrees. Non-git
 listed in the footer as skipped rather than silently ignored. An entry in `projects` overrides what
 discovery finds for that name (heroes-js carries a `prRepo`).
 
+**Where the branch and PR links come from.** Not from this code: a host record in
+`logs/hosts.json` (merged over the committed `hosts.seed.json`) says which host a project lives on and
+carries the templates every link is built from, so a GitHub repo and a `git.sefl.com` one link to their
+own pages without either shape being written into the panel. A project with no mapping gets plain text
+and the reason instead of a guessed URL, and its header chip is where you fill one in — press it to read
+the project's remote and confirm the mapping it proposes. The tokens, the precedence, the `api` block
+and the landing doctrine are in [docs/hosts.md](docs/hosts.md).
+
 **Projects are grouped under their folder.** Each scan root is an accordion
 (`C:\ProjectDevelopment\` by default) holding every project that is actually inside it; a project
 that lives outside every configured root — an explicit `projects[]` entry can point anywhere —
@@ -857,7 +865,7 @@ Watches without a deadline, and finished ones, say so instead.
 | `remoteWriteSeconds` | 300 | how long a parked remote-write question waits before it is denied — the box's countdown and the guard's own poll window |
 | `pushGuardFile` | `logs/push-guard.json` | the panel's record of which worktrees carry the pre-push guard and when it went in (git holds the hooks path itself) |
 | `cloneOwner` | `JLRoper` | GitHub owner used by `/api/clone` (and the folder **+** box) when the typed name has no `owner/` prefix |
-| `projects[]` | — | `name`, `path`, `remote`, `mainBranch`, `prRepo` |
+| `projects[]` | — | `name`, `path`, `remote`, `mainBranch` (the branch and PR links are not configured here: they come from the project's host record — `docs/hosts.md`) |
 
 ## Endpoints
 
@@ -866,6 +874,7 @@ Watches without a deadline, and finished ones, say so instead.
 | GET | `/api/health`, `/api/config`, `/api/stats` | settings / scheduler / pool |
 | GET | `/api/state` | full snapshot (projects, worktrees, jobs, spawn info) |
 | GET | `/api/cleanup?project=NAME[&fresh=1]` | on-demand `hermes worktree list --json` audit for one repo: trees, external trees (`locked`/`missing`), per-branch keep/reap verdict + reason. ~6s, cached 10 min |
+| GET/POST | `/api/hosts` · `/api/hosts/propose` · `/api/hosts/mapping` | where a project's branches and PRs live. GET: the merged mapping (`hosts` records, the file pair, warnings, and each project's `view`). POST `propose` `{project}`: read that project's own remote and return the mapping it implies — writes nothing. POST `mapping` `{project, host, coordinates}`: write ONE project into `logs/hosts.json`, leaving every other record alone. Tokens, precedence and the landing doctrine: `docs/hosts.md` |
 | GET/POST | `/api/approvals`, `/api/approvals/answer`, `/api/approvals/<id>` | human side of the Hermes approval-transport contract: list pending requests, answer one (`{id, choice}` within the request's `allowed_choices`), poll one request's status. Requests expire to `deny` |
 | POST | `/api/clone` | clone a GitHub repo over ssh into one configured scan root: `{root, name}` where `root` must equal a `scanRoots` entry and `name` is `repo` or `owner/repo`. Refuses anything else (no paths, no URLs), and a destination that already exists. Responds when git finishes; discovery picks the repo up on the next pass |
 | GET | `/api/jobs` | job list plus `transport` (gateway URL, reachability, `capabilities`: runs/events/steer/stop/approval/runCwd/runBudget/maxTurns) |
