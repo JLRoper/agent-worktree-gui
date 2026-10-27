@@ -280,14 +280,42 @@
     const badge = as$("assistant-badge");
     if (!btn || !badge) return;
     const alerts = state.assistant?.alerts || [];
-    const n = alerts.length;
+    // Spawn cards are counted on their own badge, below: two numbers for two different things, and neither of
+    // them double-counted. A card is an act waiting on the reader, not a notice about the board.
+    const plain = alerts.filter((a) => !a.spawn);
+    const n = plain.length;
     badge.hidden = n === 0;
     badge.textContent = n > 99 ? "99+" : String(n);
-    const newest = alerts.reduce((t, a) => Math.max(t, Date.parse(a.at) || 0), 0);
+    const newest = plain.reduce((t, a) => Math.max(t, Date.parse(a.at) || 0), 0);
     btn.classList.toggle("is-hot", n > 0 && newest > (state.assistantSeenAt || 0));
     btn.title = n
       ? `assistant — ${n} thing${n === 1 ? "" : "s"} on the board need${n === 1 ? "s" : ""} a look (A or Ctrl+Shift+A)`
       : "assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)";
+    paintSpawnBadge();
+  }
+
+  // The spawn badge. A spawn card is the one thing on this board that changes the repository when it is pressed,
+  // and the one thing that is invisible while nobody presses it: no job, no thread, no row. So it gets its own
+  // count in the header, next to the alerts one, and the watchdog's verdict turns it red rather than being a
+  // line in a list the reader has to remember to open.
+  function paintSpawnBadge() {
+    const el = as$("assistant-spawn-badge");
+    if (!el) return;
+    const s = state.assistant?.spawnCards || { open: 0, unstarted: 0 };
+    const n = Number(s.open) || 0;
+    const stuck = Number(s.unstarted) || 0;
+    el.hidden = n === 0;
+    el.textContent = n > 99 ? "99+" : String(n);
+    el.classList.toggle("is-stuck", stuck > 0);
+    if (!n) {
+      el.title = "";
+      return;
+    }
+    const due = s.nextDueAt ? Math.max(0, s.nextDueAt - Date.now()) : 0;
+    el.title =
+      `${n} spawn card${n === 1 ? "" : "s"} waiting on you — press one to start that worker` +
+      (stuck ? ` · ${stuck} never started and the watchdog has said so` : due ? ` · checked again in ${Math.ceil(due / 1000)}s` : "") +
+      (s.autoStart ? " · auto-start is ON: a card with no run is started once when its check comes round" : "");
   }
 
   // The header's aggressive switch. The SERVER owns the record of what the mode changed — this only paints what
@@ -361,7 +389,9 @@
       modeEl.textContent = mode === "draft" ? "draft-only" : mode === "auto-safe" ? "auto-safe" : "auto";
       modeEl.className = `as-mode mono${mode === "auto" ? " is-auto" : mode === "auto-safe" ? " is-safe" : ""}`;
     }
-    const openAlerts = (a?.alerts || []).length;
+    // The tab's count is the alert count, not the spawn card count: the spawn cards have the header badge, and a
+    // number that silently included them is how a card nobody started stayed invisible.
+    const openAlerts = (a?.alerts || []).filter((x) => !x.spawn).length;
     const liveWatches = (a?.watches || []).filter((w) => w.state !== "done").length;
     if (as$("as-alert-n")) as$("as-alert-n").textContent = String(openAlerts);
     if (as$("as-watch-n")) as$("as-watch-n").textContent = String(liveWatches);
@@ -564,9 +594,10 @@
          ${a.thread ? `<button type="button" data-as-open="${esc(a.thread)}">Open agent</button>` : ""}
          <button type="button" data-as-action="dismiss" data-id="${esc(a.id)}">Dismiss</button>
          <span class="as-err" data-as-err="${esc(a.id)}"></span>`;
-    return `<div class="as-alert is-${esc(a.severity || "warn")}${spawn ? " is-spawn" : ""}${parked ? " is-parked" : ""}" data-alert="${esc(a.id)}">
+    return `<div class="as-alert is-${esc(a.severity || "warn")}${spawn ? " is-spawn" : ""}${parked ? " is-parked" : ""}${a.stuck ? " is-stuck" : ""}" data-alert="${esc(a.id)}">
       <div class="as-alert-head">
         <span class="as-rule is-${esc(a.severity || "warn")}">${esc(a.rule)}</span>
+        ${a.stuck ? `<span class="as-stuck-chip" title="the spawn watchdog looked for a run in this card's worktree and found none">never started</span>` : ""}
         ${a.thread ? `<button class="as-thread" data-as-open="${esc(a.thread)}" type="button" title="open that agent's card">${esc(assistantThreadName(a.thread))}</button>` : ""}
         <span class="as-ago">${esc(fmtDur(Date.now() - (Date.parse(a.at) || Date.now())))} ago</span>
       </div>
@@ -596,13 +627,24 @@
     // A poll must not take the draft the reader is writing: the list is only repainted when nothing in it
     // holds the caret, or when the reader's own action asked for it.
     if (!force && typingInside("#as-alerts")) return;
-    const alerts = state.assistant.alerts || [];
+    const alerts = [...(state.assistant.alerts || [])].sort(
+      (a, b) =>
+        Number(Boolean(b.spawn)) - Number(Boolean(a.spawn)) ||
+        Number(Boolean(b.stuck)) - Number(Boolean(a.stuck)) ||
+        String(b.at).localeCompare(String(a.at)),
+    );
     if (!alerts.length) {
       const w = (state.assistant.watches || []).filter((x) => x.state !== "done").length;
       host.innerHTML = `<div class="as-empty">Nothing needs you. ${w ? `Watching ${w} thing${w === 1 ? "" : "s"}.` : "No watches either."} It is still reading the board every ${state.assistant.settings?.seconds ?? 5}s.</div>`;
       return;
     }
-    host.innerHTML = alerts.map(alertHtml).join("");
+    // A card the watchdog has already named goes above everything, in its own words: the reader is being told
+    // that a spawn they may believe is running was never started, and that is not a list row to scroll for.
+    const stuck = alerts.filter((a) => a.spawn && a.stuck);
+    const banner = stuck.length
+      ? `<div class="as-stuck-banner" role="alert"><b>${stuck.length} spawn card${stuck.length === 1 ? "" : "s"} never started${stuck.length === 1 ? "" : "s"}.</b> ${stuck.length === 1 ? "The card" : "Each card"} below named a worktree and no worker was ever started in it — press ${stuck.length === 1 ? "it" : "one"} to start that worker, or discard ${stuck.length === 1 ? "it" : "it"} so it stops asking.</div>`
+      : "";
+    host.innerHTML = `${banner}${alerts.map(alertHtml).join("")}`;
   }
 
   // ---- watches --------------------------------------------------------------------------------
@@ -1052,9 +1094,10 @@
           <label${heldKnobs.has("autonomy") ? ' class="as-held-label"' : ""}>autonomy <select data-as-set="autonomy"${dis("autonomy")}>${autonomy.map((v) => `<option value="${v}"${s.autonomy === v ? " selected" : ""}>${esc(autonomyLabel[v] || v)}</option>`).join("")}</select></label>
         </div>
         <div class="as-line"><label${heldKnobs.has("spawn") ? ' class="as-held-label"' : ""}>create worktrees <select data-as-set="spawn"${dis("spawn")} title="whether the assistant may cut a worktree and start a worker — ask keeps a one-click card between it and git">${(a.spawnModes || ["off", "ask", "auto"]).map((v) => `<option value="${v}"${s.spawn === v ? " selected" : ""}>${v === "off" ? "off — it may not start workers" : v === "ask" ? "ask me first" : "start immediately"}</option>`).join("")}</select></label></div>
+        <div class="as-line"><label title="a spawn card with no run behind it is always named after about two minutes. With this on, the panel starts that card once by itself instead of only telling you — it never retries a card it has already tried, and a card you discarded is never started">auto-start a stuck card <input type="checkbox" data-as-set="spawnAutoStart"${s.spawnAutoStart ? " checked" : ""}></label><span class="as-hint">one attempt, never a retry — off by default</span></div>
         <div class="as-line"><label>model <select data-as-set="model" title="the assistant's own model — pick something small and fast; the board digest is the whole input">${modelOptionsHtml(s.model || "")}</select></label></div>
         <div class="as-line"><label title="the assistant does no work here — the gateway just refuses a run without an existing cwd. It is created if missing; leave empty for a folder beside the job store.">working dir <input type="text" spellcheck="false" data-as-set="cwd" value="${esc(s.cwd || "")}" placeholder="default: beside the job store"></label></div>
-        <div class="as-help">Draft-only is the default: a reply reaches a worker only when you press Send on it. Auto-safe sends a reply the assistant itself wrote with a TO line; auto also sends anything a standing rule drafted. Creating a worktree has its own switch: <b>ask me first</b> turns a SPAWN line into a card, and nothing runs until you press it. An approval is never answered from here at any setting.</div>
+        <div class="as-help">Draft-only is the default: a reply reaches a worker only when you press Send on it. Auto-safe sends a reply the assistant itself wrote with a TO line; auto also sends anything a standing rule drafted. Creating a worktree has its own switch: <b>ask me first</b> turns a SPAWN line into a card, and nothing runs until you press it — the panel checks that card again after about two minutes, names it on its own header badge if no run exists, and (with auto-start on) starts it once rather than leaving it sitting. An approval is never answered from here at any setting.</div>
         <div class="as-help">sentry: ${hs ? `<b>${esc(hs)}</b> — the server watchdog restarts the clock and runs a missed pass` : "clock running"} · last pass ${esc(lastPass)} · every ${esc(String(health.everySeconds || s.seconds))}s${health.resumed ? " · resumed after a restart" : ""}</div>
       </div>
       <div class="as-group">

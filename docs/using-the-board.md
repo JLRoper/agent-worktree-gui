@@ -36,6 +36,7 @@ cuts a worktree, a row's ✕ removes one, the folder **+** clones a repo). Every
 | Config line | Version, how many projects are being watched, the two main cadences, scan threads, bind host — and `refresh on screen only` when that refresh mode is on. |
 | Stream readout | `pool 1/3 · 3 conversations · 29 events · 2.4/s`: scan workers busy, how many conversations, and the event rate arriving over SSE. |
 | **NOT-RUNNING** | Steps through the agents that are not running and are waiting on you. See below. |
+| **✧ Assistant** | Opens the assistant float (`A` / `Ctrl+Shift+A`). Its purple badge counts the alerts that need a look; the `⧗` badge beside it counts spawn cards — worktrees the assistant proposed that only a press will start. That `⧗` count turns red once a card has been pending about two minutes with no run behind it. |
 | **Collapse all** | Folds the whole tree — every folder, project, worktree row, card and turn. The button then reads **Expand all**. Same as `Ctrl+[` / `Ctrl+]`. |
 | **Refresh now** | Forces a fast scan now instead of waiting for the next tick. With Settings → Board → **Refresh** set to "only on screen", it reads only the projects in view. |
 | **Fetch remotes** | Runs `git fetch <remote> --prune` in every project. The only routine gesture that touches git refs. |

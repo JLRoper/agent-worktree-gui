@@ -714,6 +714,29 @@ then the run. The worker gets the gateway default model (the assistant's small m
 work), the card is tagged `↳ started by the assistant`, and the new thread is put on the watchlist automatically
 so "spawned" later reads as "and here is how it ended".
 
+**A spawn card nobody starts is the panel's own silence, so the panel checks it.** An `ask` card changes nothing:
+no job, no thread, no row — and until now nothing looked at it again, so one could sit open for hours and the
+assistant only found out when it was asked. Every card now carries a deadline (`SPAWN_WATCH_MS`, two minutes) and
+one timer; when it passes, the panel looks in the job store for a run that belongs to that card — the run recorded
+on it, the thread it names, or a worker standing in its tree (a card that would cut a tree is matched on the same
+ask under that project's `.worktrees/`, never on a job in the project's own checkout) — and there are two answers:
+
+- **a run exists** — the card is closed against it silently. A worker that exists is not news, and a warning about
+  one that was never missing teaches the reader to ignore the badge;
+- **none exists** — the card goes red in place (`NEVER STARTED`, its age, and the worktree path), the count lands
+  on its **own** header badge (`⧗ N`, beside the alert badge and not inside the alert count: a card is the reader's
+  pending act, not a notice), the Alerts pane puts it above everything with a banner, and `spawn-unstarted` is
+  written to the journal — `digest()` carries it into the assistant's preamble the way `spawn-failed` already is,
+  because a model reading an empty board otherwise says the work is queued.
+
+The deadline lives on the card as well as in the timer, so a panel restart re-arms it instead of losing a card that
+was seconds from being reported, and the sentry asks the same question on every pass — including with the sentry
+switched off, because a card on the board is a promise the panel made. `spawnAutoStart` (off by default, in the
+assistant's Settings tab) is the other half: with it on, the deadline starts the pending card through the same
+`startSpawn` the button uses — **one** attempt, recorded before it is made, so a refusal (gateway down, unborn
+HEAD) goes back to the reader as a red card rather than a second try. A card the reader discarded is never started
+by either path.
+
 The assistant acts by writing plain lines in a reply, and every such line in it is read — wherever it sits among the paragraphs, not only the one the reply ends on:
 
     TO <thread>: the reply to that worker
@@ -805,7 +828,7 @@ Watches without a deadline, and finished ones, say so instead.
 | `apiServer` | `{"url":"http://127.0.0.1:8642"}` | `url` of the gateway's api_server, and optionally `key` (else `API_SERVER_KEY` from `$HERMES_HOME/.env`) |
 | `jobMaxRuntimeSeconds` | 3600 | hard cap on a spawned job |
 | `assistantFile` | `logs/assistant.json` | the assistant's scratchpad: settings, notes, standing rules, watches, alerts and journal |
-| `assistant` | `{}` | starting knobs for the assistant: `enabled`, `autonomy` (`draft`/`auto-safe`/`auto`), `spawn` (`off`/`ask`/`auto`), `model`, `cwd` (its own working directory — created if missing; default `assistant-cwd` beside the job store), `seconds`, `repeatLimit`, `quietSeconds`, `approvalSeconds`, `contextPercent`, `maxWakesPerHour`, `rearmSeconds`, `rules:{id: log\|alert\|wake\|act}`. The panel writes changes back to `assistantFile`, so this is the first-run default |
+| `assistant` | `{}` | starting knobs for the assistant: `enabled`, `autonomy` (`draft`/`auto-safe`/`auto`), `spawn` (`off`/`ask`/`auto`), `spawnAutoStart` (boolean, default off — start a spawn card once when its two-minute check finds no run), `model`, `cwd` (its own working directory — created if missing; default `assistant-cwd` beside the job store), `seconds`, `repeatLimit`, `quietSeconds`, `approvalSeconds`, `contextPercent`, `maxWakesPerHour`, `rearmSeconds`, `rules:{id: log\|alert\|wake\|act}`. The panel writes changes back to `assistantFile`, so this is the first-run default |
 | `liveSeconds` | 5 | how often liveness evidence is re-read for every row (no git) |
 | `worktreeSeconds` / `dormantSeconds` | 5 / 30 | active-row / dormant-row git scan cadence |
 | `slowSeconds` | 60 | project meta, discovery, and expensive per-row fields |
@@ -846,7 +869,7 @@ Watches without a deadline, and finished ones, say so instead.
 | GET | `/api/models` | the New-agent model menu: `{defaultModel, provider, count, fetchedAt, staleDays, providers:[{id,label,models}]}` — the provider list Hermes itself fetched, grouped, with the configured default first in its group. Falls back to the shipped catalogue when no provider was ever picked |
 | GET | `/api/assistant` | the sentry's whole state: settings, rule definitions, alerts, watches, notes, journal, wake counter and the current board digest |
 | POST | `/api/assistant/say` | `{text}` → one turn on the assistant's own thread (`panel-assistant`), with the scratchpad and board digest attached to the input. **409** while its previous turn is still running |
-| POST | `/api/assistant/settings` | `{autonomy, model, seconds, repeatLimit, quietSeconds, approvalSeconds, contextPercent, maxWakesPerHour, rules:{id: escalation}}` — applied immediately, saved in the scratchpad |
+| POST | `/api/assistant/settings` | `{autonomy, model, seconds, repeatLimit, quietSeconds, approvalSeconds, contextPercent, maxWakesPerHour, spawnAutoStart, rules:{id: escalation}}` — applied immediately, saved in the scratchpad |
 | POST | `/api/assistant/alert` | `{id, action:"dismiss"\|"ask"}` — `ask` wakes the assistant with that alert's digest |
 | POST | `/api/assistant/answer` | `{thread, text, alertId?}` — post a reply into a worker's thread from the panel (the only route that does it on your behalf) |
 | POST | `/api/assistant/answer-question` | `{id, answer}` — settle a question a run is parked on (the `clarify` control), from a choice button or a typed answer; `answer` is a string, or an **array** for a multi-select question. Not a reply: a reply would queue behind the held turn |
