@@ -169,6 +169,13 @@ The title line carries:
 The line beneath it says where local `main` is against the remote (`0 behind / 0 ahead of remote`), any live `.agentboard`
 PID, the remote tip with its subject and age, and when the project was last fetched.
 
+**The host chip** (`host: sefl-bitbucket IT/email-multi`, or `no host`) says where this project's branch and PR links
+go. Click it and the panel reads the project's own remote and offers the mapping that remote implies — the host id and
+the coordinates — with **Use this mapping** to write it and **Cancel** to keep what is there; a project nobody has
+mapped says `no host` and offers the strip the same way. Nothing is written until you press the button, and a remote
+the panel cannot read is refused with the reason rather than guessed at. The tokens and the file behind it are in
+[docs/hosts.md](hosts.md).
+
 **Project colours.** `Ctrl+click` a project's title line to tint that project with a random hue; `Ctrl+click` again
 rolls a new one; `Ctrl+Shift+click` clears it. The hue tints only the project's own surfaces (box, title row, column
 header, row hover), so it answers "which project is this" and never changes what a badge means. A plain click still
@@ -179,11 +186,11 @@ opens and closes the project. Settings → Display → **Project colours** shows
 | Column | Meaning |
 | --- | --- |
 | **Worktree** | The directory name, a green **▶** that **probes** the agents already in it (see below), and the `⧉ N` badge for agents this panel has in it (with `running` / `awaiting approval` when they are busy). Clicking the badge opens the row and its cards; the **+** bar in the row starts a new agent there. |
-| **Branch** | The checked-out branch. |
+| **Branch** | The checked-out branch. A link to the branch's page on its host when the remote actually has the branch; plain text with a `local` chip when it does not, and the reason in the tooltip. |
 | **Tip** | Short SHA of the branch tip. |
 | **Ahead / Behind** | Commits the branch has that the project's base ref (remote main) does not, and commits main has that it does not. `—` when there is no base ref yet. |
 | **Cherry** | `+N/−N` from `git cherry`: `+` commits with no equivalent upstream, `−` commits already upstream by patch id (the evidence that a squash or rebase landed them). |
-| **PR** | `#123 OPEN` / `#123 MERGED`, `none`, or `none · branch gone` when the branch existed remotely and no longer does. Hover the number for the title. |
+| **PR** | `#123 OPEN` / `#123 MERGED`, `none`, or `none · branch gone` when the branch existed remotely and no longer does. The number is a link to the pull request's own page on the project's host; it stays plain text (with the reason in its tooltip) when no page can be built. Hover it for the title. |
 | **Dirty** | Modified files, and `+N?` untracked, or `clean`. |
 | **Life / next read** | Time since anything last said this worktree is alive, the evidence chips, and a ring that fills toward the next scheduled read. Click the ring to read the row **now**. |
 | **Verdict** | See below. |
