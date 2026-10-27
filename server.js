@@ -26,6 +26,7 @@ import { Hosts, proposeMapping } from "./lib/hosts.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
 import { WorktreeNaming } from "./lib/worktree-naming.js";
+import { Locks, describeLock } from "./lib/locks.js";
 import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
@@ -173,6 +174,10 @@ async function loadConfig() {
   // Which trees have already been named, and by whom — the panel's own, never git's, so it lives beside the job
   // store and a PANEL_CONFIG sandbox keeps its own copy of it.
   if (!cfg.treeNamesFile) cfg.treeNamesFile = path.join(path.dirname(cfg.jobsFile), "tree-names.json");
+  // Which worktrees and branches the READER has locked. The last word on a delete, and the one record in this panel
+  // that is neither git's nor an agent's — state, not source, so it lives beside the job store and a PANEL_CONFIG
+  // sandbox keeps its own copy. Absence of the file means everything is unlocked, which is the default.
+  if (!cfg.locksFile) cfg.locksFile = path.join(path.dirname(cfg.jobsFile), "locks.json");
   // What each branch was started to do, extracted once from the earliest run in that tree: the same state-not-source
   // rule as the naming ledger, so a PANEL_CONFIG sandbox keeps its own copy of this too.
   if (!cfg.descriptionsFile) cfg.descriptionsFile = path.join(path.dirname(cfg.jobsFile), "descriptions.json");
@@ -716,6 +721,12 @@ async function seedTreeNamesAtBoot({ timeoutMs = 30_000, width = 4 } = {}) {
 // loads, and that must not beat the seeding. WorktreeNaming awaits this before it decides anything.
 const treeNamesReady = seedTreeNamesAtBoot();
 
+// ---- the reader's locks ---------------------------------------------------------------------------------------
+// A worktree or a branch the reader has locked (lib/locks.js): the one record here that is the reader's and not
+// git's, persisted under logs/ so it survives a restart, and consulted before ANY delete touches a tree. The row
+// wears it as an emoji, so an agent reading the board sees the lock without opening anything.
+const locks = new Locks({ file: config.locksFile, log });
+
 const descriptions = createDescriptions({
   getConfig: () => config,
   // The RAW maps, not list()/rowsFor(): the earliest brief in a tree needs `prompt` and `startedAt`,
@@ -1068,8 +1079,27 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
     }
   }
   const finalPath = moved ? newPath : oldPath;
+  // A locked BRANCH follows its own rename. `git branch -m` keeps the branch's identity — its history and its ref —
+  // so a branch the reader locked is the SAME branch under a new name. Leaving the lock on the old name would
+  // silently unprotect a turnover branch the moment the panel auto-named a tree on it, which is exactly the case
+  // the branch scope exists for. Tied to `branchRenamed`, not to `moved`: the branch half lands on its own when a
+  // process holds the directory open, and the protection has to follow whichever half moved.
+  const heldBranch = oldBranch ? locks.branchEntry(projectName, oldBranch) : null;
+  if (branchRenamed && heldBranch) {
+    locks.setBranch(projectName, oldBranch, false);
+    locks.setBranch(projectName, newBranch, true, { by: heldBranch.by || "the reader", path: finalPath });
+    log(`branch lock follows the rename: ${oldBranch} -> ${newBranch}`);
+  }
   const repointed = jobs.repointPath(oldPath, finalPath);
   if (moved) {
+    // A locked tree stays locked when it moves. The lock is keyed by the directory (lib/locks.js), so a rename would
+    // otherwise unlock a tree nobody asked to unlock — the old key goes and the new path carries the same record.
+    const held = locks.treeEntry(projectName, row.path);
+    if (held) {
+      locks.setTree(projectName, row.path, false);
+      locks.setTree(projectName, finalPath, true, { by: held.by || "the reader", branch: branchRenamed ? newBranch : held.branch || oldBranch });
+      log(`lock follows the rename: ${row.path} -> ${finalPath.replace(/\\/g, "/")}`);
+    }
     scheduler.store.dropRow(projectName, row.path);
     broadcast({ type: "drop", project: projectName, path: row.path });
   }
@@ -1233,6 +1263,36 @@ function withLiveAgents(snap) {
   return snap;
 }
 
+// The reader's lock travels with the snapshot the way the naming ledger does: git knows nothing about it, the
+// scanner must not have to, and the row is where it has to be visible. A row with no `lock` is unlocked — absence is
+// the default, so an unlocked row costs nothing on the wire and a store that cannot be read cannot make a tree look
+// protected. `tree` and `branch` are independent bits: the row draws one toggle for each, and `by` says which one
+// refused a delete.
+function withLocks(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const lock = locks.check({ project: project.name, path: row.path, branch: row.branch });
+      if (!lock.locked) {
+        delete row.lock;
+        continue;
+      }
+      row.lock = {
+        tree: lock.tree,
+        // `branch` is the branch's NAME and `branchLocked` is the boolean; a row that merely HAS a branch must not
+        // read as a locked one. The row draws one toggle per bit and names the branch in its tooltip.
+        branch: lock.branch,
+        branchLocked: lock.branchLocked,
+        locked: true,
+        by: lock.by,
+        at: lock.at,
+        reason: lock.reason,
+        line: describeLock(lock.by === "branch" ? { at: lock.at, by: lock.branchBy } : { at: lock.at, by: lock.treeBy }, lock.by === "branch" ? "branch" : "worktree"),
+      };
+    }
+  }
+  return snap;
+}
+
 // What the panel itself knows about a tree's name — who gave it and when — is in no git repository, so it travels
 // with the snapshot the way the live agent state does. A row that carries `named` is a row the automatic rename
 // will never touch again; one without it is a tree still waiting for the run that will name it.
@@ -1265,8 +1325,9 @@ function withTreeNames(snap) {
 function snapshot() {
   return withTodos(
     descriptions.withDescriptions(
-      withTreeNames(
-        withLiveAgents({
+      withLocks(
+        withTreeNames(
+          withLiveAgents({
           ...store.snapshot({ settings: settingsOut() }),
           jobs: jobs.list(),
           approvals: approvals.list(),
@@ -1289,7 +1350,8 @@ function snapshot() {
           maxRuntimeSeconds: jobs.maxRuntimeSeconds,
           projects: registry.projects.map((p) => ({ name: p.name, path: p.path, activityAt: p.activityAt || null, empty: Boolean(p.empty) })),
         },
-      }),
+        }),
+      ),
     ),
   ),
   );
@@ -1725,6 +1787,47 @@ const server = createServer(async (req, res) => {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       assistant.tick();
       return sendJson(res, 200, { assistant: assistant.state() });
+    }
+
+    // The reader's lock, toggled from the row's emoji (lib/locks.js). `scope` says which lock the press is about —
+    // "tree" for this worktree, "branch" for the branch it is on and every worktree cut from that branch later — and
+    // `locked` omitted means flip. The answer carries the checked state so the button can paint what the server now
+    // holds rather than what the page hoped; every open board repaints from the snapshot the write broadcasts.
+    if (route === "/api/worktree/lock" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const projectName = String(body.project || "").trim();
+      const project = scheduler.getProjects().find((p) => p.name === projectName);
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${projectName}` });
+      const scope = String(body.scope || "tree").toLowerCase() === "branch" ? "branch" : "tree";
+      // The row is the authority for both halves: its path is the key git and the store use, and its branch is what a
+      // branch lock is about. A path the caller names that is not this project's row is refused rather than locked,
+      // so a typo cannot protect a directory nobody is looking at.
+      const asked = body.path ? normPathKey(body.path) : null;
+      const row = asked ? scheduler.store.rowsFor(projectName).find((r) => normPathKey(r.path) === asked) : null;
+      if (asked && !row) return sendJson(res, 404, { error: `not a worktree row of ${projectName}: ${body.path}` });
+      if (!asked && scope === "tree") return sendJson(res, 400, { error: "a worktree path is required to lock a worktree" });
+      const branch = scope === "branch" ? String(body.branch || row?.branch || "").trim() : row?.branch || null;
+      if (scope === "branch" && !branch) return sendJson(res, 400, { error: "this row has no branch to lock" });
+      const out = locks.toggle({
+        project: projectName,
+        path: row?.path || String(body.path || ""),
+        branch,
+        scope,
+        locked: body.locked === undefined ? null : Boolean(body.locked),
+      });
+      if (!out.ok) return sendJson(res, 400, { error: out.error || "the lock could not be changed" });
+      const lock = locks.check({ project: projectName, path: row?.path || String(body.path || ""), branch: row?.branch || branch });
+      const what = scope === "branch" ? `branch ${branch}` : `worktree ${row?.name || path.basename(String(row?.path || body.path || ""))}`;
+      log(`lock ${out.locked ? "set" : "cleared"} on ${what} in ${projectName}${out.locked ? " — deletes are refused until it is removed" : ""}`);
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, {
+        ok: true,
+        scope,
+        locked: Boolean(out.locked),
+        lock,
+        say: out.locked ? `🔒 ${what} is locked — nothing may delete it until you unlock it` : `🔓 ${what} is unlocked`,
+      });
     }
 
     if (route === "/api/state" || route === "/api/audit") {
@@ -2645,6 +2748,14 @@ const server = createServer(async (req, res) => {
       }
       const row = scheduler.store.rowsFor(projectName).find((r) => path.resolve(r.path) === target);
       if (!row) return sendJson(res, 404, { error: `not a worktree row of ${projectName}: ${target}` });
+      // The reader's lock, before anything is even looked at: the row's ✕, a merge agent tidying up, a script that
+      // found this route — every one of them arrives here, and every one of them is refused with the lock named. A
+      // silent no-op would read as a broken button, so this is a 409 with the whole sentence (the board banners it).
+      const lock = locks.check({ project: projectName, path: row.path, branch: row.branch });
+      if (lock.locked) {
+        log(`worktree delete refused for ${row.path}: ${lock.reason}`);
+        return sendJson(res, 409, { error: lock.reason, lock });
+      }
       const busy = jobs
         .list()
         .find(
@@ -2846,6 +2957,10 @@ const server = createServer(async (req, res) => {
       // directory.
       const root = (trees.find((w) => w.branch === base) || trees[0] || { path: project.path }).path;
       const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      // The reader's lock goes into the agent's own script, not just into the board: a merge agent's last phase is
+      // cleanup, and that is exactly where a locked tree must not be touched. The delete route refuses it too — this
+      // is so the agent never tries and then reports a failure it cannot understand.
+      const lock = locks.check({ project: project.name, path: worktree, branch: row.branch });
       const prompt = mergePrompt({
         project: project.name,
         worktree,
@@ -2857,13 +2972,14 @@ const server = createServer(async (req, res) => {
         ahead: row.ahead,
         commits: commitList,
         stamp,
+        locked: lock.locked ? lock : null,
         panelPort: config.port,
         // Where this branch lands — the doctrine of the project's host (logs/hosts.json), not a shape chosen here. A
         // project with no mapping hands over null, and the prompt says so instead of inventing a PR.
         host: hosts.landing(project, { branch: row.branch }),
       });
       const thread = makeThreadName(`${label} ${project.name}`);
-      const preview = { project: project.name, base, baseRef, remote, branch: row.branch, ahead: row.ahead, root, worktree: worktree.replace(/\\/g, "/"), label, thread, prompt };
+      const preview = { project: project.name, base, baseRef, remote, branch: row.branch, ahead: row.ahead, root, worktree: worktree.replace(/\\/g, "/"), label, thread, prompt, lock: lock.locked ? lock : null };
       if (body.dryRun) return sendJson(res, 200, { dryRun: true, ...preview });
       // The whole start, as its own function, because a local-only panel may have to PARK it on the reader's
       // permission box first and run it the moment they say yes. The one thing the merge agent does that touches
@@ -3039,7 +3155,7 @@ const server = createServer(async (req, res) => {
       // hold the request open for it. Rows update over SSE as each fetch lands.
       void scheduler
         .fetchPass({ force: true })
-        .then(() => scheduler.fullPass({ discover: true }))
+        .then(() => scheduler.fullPass())
         .catch(() => {});
       return sendJson(res, 200, { ok: true, started: true });
     }

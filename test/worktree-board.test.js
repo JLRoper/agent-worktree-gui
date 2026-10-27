@@ -77,7 +77,7 @@ test("membership is the folder, not the repository — and a sibling prefix is n
 
 test("out-of-project, detached and untagged trees never become rows or move the header counts", async () => {
   const { store, scheduler } = harness();
-  await scheduler.discover(PROJECT);
+  await scheduler.reconcile(PROJECT);
 
   const rows = store.rowsFor(PROJECT.name);
   assert.deepEqual(pathsOf(rows), [...OWNED].sort(), "only the project's own trees are boarded");
@@ -104,7 +104,7 @@ test("out-of-project, detached and untagged trees never become rows or move the 
 
 test("the UNMERGED arithmetic has no outside tree in it", async () => {
   const { store, scheduler } = harness();
-  await scheduler.discover(PROJECT);
+  await scheduler.reconcile(PROJECT);
   // A real full scan's verdict for one owned tree; the rest keep the "…" discovery puts on a fresh row.
   const row = store.rowsFor(PROJECT.name).find((r) => r.name === "fix-the-thing-1a2b3c");
   store.putRow(PROJECT.name, { ...row, verdict: "MERGED (2 commits)", ahead: 0, behind: 0, dirty: 0, untracked: 0 }, "full");
@@ -123,7 +123,7 @@ test("a tree an earlier build already boarded outside the project is dropped on 
   store.putRow(PROJECT.name, { path: `${SCRATCH}/w-spawn`, name: "w-spawn", branch: "land/spawn-cards-visible", verdict: "UNMERGED (4 commits)" }, "full", { force: true });
   assert.equal(store.summaryFor(PROJECT.name).total, 2);
 
-  await scheduler.discover(PROJECT);
+  await scheduler.reconcile(PROJECT);
 
   const paths = pathsOf(store.rowsFor(PROJECT.name));
   assert.equal(paths.includes(`${SCRATCH}/main`), false, "one discovery pass is enough — the two-pass grace is for a hiccup about an owned tree");

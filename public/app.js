@@ -7572,6 +7572,9 @@ function agentBadgeHtml(row) {
 function deletableWithoutAsking(key) {
   const row = state.rows.get(key);
   if (!row) return false;
+  // A locked row never deletes straight through, whatever its verdict says: the lock is the reader's, and a delete
+  // that skipped the question is exactly the click the lock exists to stop.
+  if (row.lock?.locked) return false;
   if (row.verdictStale) return false;
   if (row.dirty || row.untracked) return false;
   const verdict = String(row.verdict || "");
@@ -7590,6 +7593,25 @@ function showWorktreeConfirm(key) {
   const rowEl = document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
   const row = state.rows.get(key);
   if (!rowEl || !row) return;
+  // THE LOCK: the question is replaced by the refusal, in the same place the Delete button would have been. It is
+  // loud on purpose — the sentence names the lock and says where to remove it — and there is no Delete button to
+  // press, because a button that always fails is worse than no button. The server refuses the same call with the
+  // same words (409), so a script or an agent that never saw this row is refused too.
+  if (row.lock?.locked) {
+    const held = document.createElement("tr");
+    held.className = "row-confirm row-locked";
+    held.dataset.confirmRow = key;
+    held.innerHTML = `<td colspan="10">
+        <div class="row-confirm-cell">
+          <span class="rc-msg"><span class="rc-lock">${"\u{1F512}"} locked</span> <b>${esc(row.name)}</b> <span class="dimmer">cannot be deleted:</span> ${esc(row.lock.reason || "this worktree is locked by the reader")}</span>
+          <span class="rc-actions"><button class="btn-del-no" type="button" data-del-tree-no="${esc(key)}">Close</button></span>
+        </div>
+      </td>`;
+    rowEl.after(held);
+    state.confirmEls.set(key, held);
+    showBanner(`🔒 ${row.lock.reason || "this worktree is locked — unlock it in the row first"}`);
+    return;
+  }
   const confirm = document.createElement("tr");
   confirm.className = "row-confirm";
   confirm.dataset.confirmRow = key;
@@ -7702,6 +7724,38 @@ async function confirmDeleteWorktree(key) {
       yes.disabled = false;
       yes.textContent = "Delete";
     }
+  }
+}
+
+// ---- the reader's lock: one press, one scope -----------------------------------------------
+// `scope` is "tree" (this worktree) or "branch" (the branch it is on, and every worktree cut from it later). The
+// server owns the answer: it writes logs/locks.json, broadcasts a snapshot, and returns the state it now holds, so the
+// button paints what is true rather than what was hoped for. A refusal is a banner, never a silent no-op.
+async function toggleWorktreeLock(scope, key) {
+  const row = state.rows.get(key);
+  if (!row) return;
+  const btn = document.querySelector(`[data-lock-scope="${scope}"][data-lock-tree="${CSS.escape(key)}"]`);
+  if (btn) btn.disabled = true;
+  try {
+    const r = await apiFetch("/api/worktree/lock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ project: row.project, path: row.path, branch: row.branch || null, scope }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showBanner(`lock: ${d.error || `HTTP ${r.status}`}`);
+      return;
+    }
+    showBanner(d.say || (d.locked ? "locked" : "unlocked"));
+    // The snapshot the write broadcast repaints this tab too, but a tab whose stream hiccuped would keep the old
+    // emoji: re-read once so the row this reader is looking at is right either way.
+    await resync();
+  } catch (e) {
+    showBanner(`lock: ${e.message}`);
+  } finally {
+    const again = document.querySelector(`[data-lock-scope="${scope}"][data-lock-tree="${CSS.escape(key)}"]`);
+    if (again) again.disabled = false;
   }
 }
 
@@ -8113,10 +8167,36 @@ function rowHtml(row) {
   // One ✕ per row, and whether it needs the question at all: merged + clean deletes straight away.
   const delKey = keyOf(row.project, row.path);
   const delDirect = !isProjectRoot && deletableWithoutAsking(delKey);
-  return `<tr class="row${isOpen ? " expanded" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
+  const lock = row.lock || null;
+  const lockKeyAttr = esc(keyOf(row.project, row.path));
+  // The reader's lock, as an emoji on the row itself (lib/locks.js). TWO toggles, because the two scopes are a real
+  // difference: the padlock beside the name is THIS worktree, the one in the branch cell is the BRANCH — and the
+  // branch one keeps protecting trees cut from it later, which is the whole point of locking a turnover branch. Each
+  // shows its own bit truthfully, so a tree protected only by its branch reads 🔓 beside the name and 🔒 beside the
+  // branch, and neither can be mistaken for the other. A locked row also carries `is-locked` on the <tr>, so the
+  // state is visible without reading a tooltip.
+  const treeLocked = Boolean(lock?.tree);
+  // The branch's NAME lives in `lock.branch`; the boolean lives in `lock.branchLocked`. Reading the name as a truthy
+  // lock made every row with a branch draw as a locked branch.
+  const branchLockedByBranch = Boolean(lock?.branchLocked);
+  const lockTitle = treeLocked
+    ? `${lock.line || "🔒 this worktree is locked"} — click to unlock it. Nothing may delete it while it is locked.`
+    : branchLockedByBranch
+      ? `this worktree is not locked itself, but ${lock.branch ? `branch ${lock.branch}` : "its branch"} is (see the 🔒 in the branch cell) — click to lock this worktree as well`
+      : "lock this worktree — a locked worktree can never be deleted: not by this row's ✕, not by a merge agent, not by any route";
+  const treeLockBtn = `<button class="btn-row-lock${treeLocked ? " is-locked" : ""}" type="button" data-lock-scope="tree" data-lock-tree="${lockKeyAttr}"
+    title="${esc(lockTitle)}" aria-pressed="${treeLocked ? "true" : "false"}" aria-label="lock this worktree">${treeLocked ? "\u{1F512}" : "\u{1F513}"}</button>`;
+  const branchLockTitle = branchLockedByBranch
+    ? `${lock.line || "🔒 this branch is locked"} — click to unlock it. Every worktree on ${lock.branch || "this branch"}, now and later, is protected while it is locked.`
+    : "lock this BRANCH — protects this worktree and every worktree created on the branch later (a turnover branch stays protected as trees come and go)";
+  const branchLockBtn = isProjectRoot
+    ? ""
+    : `<button class="btn-row-lock btn-branch-lock${branchLockedByBranch ? " is-locked" : ""}" type="button" data-lock-scope="branch" data-lock-tree="${lockKeyAttr}"
+      title="${esc(branchLockTitle)}" aria-pressed="${branchLockedByBranch ? "true" : "false"}" aria-label="lock this branch">${branchLockedByBranch ? "\u{1F512}" : "\u{1F513}"}</button>`;
+  return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
     <td class="name"><div class="name-line"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${renameBtn}${nameFromWorkBtn}${agentBadgeHtml(row)}</div></td>
-    <td class="mono branch">${branchCellHtml(row)}</td>
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${treeLockBtn}${renameBtn}${nameFromWorkBtn}${agentBadgeHtml(row)}</div></td>
+    <td class="mono branch">${branchCellHtml(row)}${branchLockBtn}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
     <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
     <td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>
@@ -11737,9 +11817,19 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     const key = delTree.dataset.delTree;
-    // Merged and clean: nothing here that main does not already have, so no question.
+    // Merged and clean: nothing here that main does not already have, so no question. A locked row never gets here
+    // (deletableWithoutAsking says no) — it goes to showWorktreeConfirm, which shows the refusal instead.
     if (deletableWithoutAsking(key)) void confirmDeleteWorktree(key);
     else showWorktreeConfirm(key);
+    return;
+  }
+  // The reader's lock: one press per scope, and the row repaints from the snapshot the server broadcasts. The button
+  // is answered on the release for the same reason the delete is — the board re-ranks rows under the cursor.
+  const lockBtn = e.target.closest("[data-lock-scope]");
+  if (lockBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    void toggleWorktreeLock(lockBtn.dataset.lockScope === "branch" ? "branch" : "tree", lockBtn.dataset.lockTree);
     return;
   }
   const renameTree = e.target.closest("[data-rename-tree]");
