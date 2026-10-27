@@ -24,7 +24,7 @@ import { Jobs, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js
 import { gitIn, scanWorktree } from "./lib/scan.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
-import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE, autoNameRefusal } from "./lib/tree-names.js";
+import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE, autoNameRefusal, namingState } from "./lib/tree-names.js";
 import { WorktreeNaming } from "./lib/worktree-naming.js";
 import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
@@ -633,6 +633,9 @@ function seedTreeName(project, tree) {
   try {
     const dir = String(tree?.path || "").replace(/\\/g, "/").replace(/\/+$/, "");
     if (!dir) return false;
+    // The project's own checkout is not a tree the panel names, and `renameWorktree` refuses it by this same
+    // comparison. A record for it would also put "named by the panel" on the one row whose name is the folder's.
+    if (normPathKey(project?.path) && normPathKey(project.path) === normPathKey(dir)) return false;
     const name = path.basename(dir);
     const branch = String(tree?.branch || "").replace(/^refs\/heads\//, "") || null;
     const key = treeKey({ project: project?.name, path: dir, branch });
@@ -1122,7 +1125,9 @@ function withTreeNames(snap) {
   for (const project of snap.projects || []) {
     for (const row of project.worktrees || []) {
       const rec = treeNames.forTree({ project: project.name, path: row.path, branch: row.branch });
-      if (!rec) {
+      // A cut record is a tree waiting for its one name, not a tree that has one: the row must not claim a name
+      // nobody has given it yet (the tooltip is the only place this shows, and it would say "named by run …").
+      if (!rec || namingState(rec) === "cut") {
         delete row.named;
         continue;
       }

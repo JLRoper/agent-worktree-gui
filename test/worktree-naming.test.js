@@ -19,7 +19,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { after, before } from "node:test";
 
-import { TreeNames, autoNameRefusal, namingState, tagOf, treeKey } from "../lib/tree-names.js";
+import { TreeNames, autoNameRefusal, describeNaming, namingState, tagOf, treeKey } from "../lib/tree-names.js";
 import { WorktreeNaming } from "../lib/worktree-naming.js";
 import { startPanel, post } from "../tools/panel-testkit.mjs";
 
@@ -69,6 +69,33 @@ function namingHarness({ ledger, project = { name: "demo", path: "/repo/demo" },
 // =============================================================================================
 // the decisions
 // =============================================================================================
+test("a name already taken spends the automatic half's one chance instead of retrying it", async () => {
+  const { ledger } = freshLedger();
+  const tree = "/repo/demo/.worktrees/land-the-export-4b5c6d";
+  const key = treeKey({ project: "demo", path: tree });
+  ledger.claimCut(key, { name: "land-the-export-4b5c6d", cutRun: "run-cut", tag: "4b5c6d", by: "run run-cut (t)", at: new Date().toISOString() });
+  assert.equal(namingState(ledger.get(key)), "cut");
+
+  // Exactly what renameWorktree writes when the directory it would move the tree to is already there: the tree
+  // keeps its first name and the record is settled, so the name is not re-derived on the next event.
+  ledger.settle(key, {
+    name: "land-the-export-4b5c6d",
+    dir: "land-the-export-4b5c6d",
+    by: "the panel",
+    how: "left under its first name — fix-the-export-4b5c6d was already taken",
+    collision: true,
+    moved: false,
+  });
+  const rec = ledger.get(key);
+  assert.equal(rec.collision, true);
+  assert.equal(namingState(rec), "named", "a collision is a settled name, not an open one");
+  assert.match(autoNameRefusal(rec, "run-cut"), /already named by the panel/);
+
+  const { naming, calls } = namingHarness({ ledger });
+  await naming.consider({ id: "run-cut", thread: "t", worktreePath: tree, status: "done", title: "A name it cannot have" });
+  assert.equal(calls.length, 0, "and nothing offers it another name, so the taken target is not tried again");
+});
+
 test("a seeded tree cannot be renamed by a later run, even one that says it cut it", async () => {
   const { ledger } = freshLedger();
   const tree = "/repo/demo/.worktrees/build-a-project-steward-667552";
@@ -119,6 +146,10 @@ test("a freshly cut tree is renamed once, on the first title, whatever the run's
     cutThread: "thread-cut",
   });
   assert.equal(namingState(ledger.get(key)), "cut");
+  // A tree waiting for its name must not read as a named one anywhere: the ledger's own predicate and the
+  // sentence the row's tooltip shows both say it is still to come.
+  assert.equal(ledger.isNamed(key), false, "a cut tree has no name yet");
+  assert.match(describeNaming(ledger.get(key)), /still to come/);
 
   let renames = 0;
   const { naming, calls } = namingHarness({
@@ -152,6 +183,8 @@ test("a freshly cut tree is renamed once, on the first title, whatever the run's
   assert.equal(calls.length, 1);
   assert.equal(ledger.get(key).name, "fix-delete-worktree-button-adc74e");
   assert.equal(namingState(ledger.get(key)), "named");
+  assert.equal(ledger.isNamed(key), true, "and once it lands the tree is named");
+  assert.match(describeNaming(ledger.get(key)), /^named by run run-cut/);
 
   // Every later event of the same run, and every later run into the tree, leaves it alone.
   await naming.consider({ ...base, status: "failed" });
@@ -285,6 +318,55 @@ test("the boot backfill writes down every tree it finds, under the name it was f
   const s = await state();
   const row = s.projects.find((p) => p.name === projectName).worktrees.find((w) => norm(w.path) === norm(treePath(FIXED)));
   assert.match(String(row.named?.line || ""), /named by the panel/);
+
+  // The seeding is the panel's own act, and it says so in the log — a fleet written down by something else
+  // would leave exactly the hole this closes (a tree with no entry reads as one waiting for a name).
+  const log = panel.log();
+  assert.match(log, /tree-names: seeded demo-repo::build-a-project-steward-667552 as it was found/, `the seed is logged\n${log.slice(-1500)}`);
+  assert.match(log, /tree-names: \d+ tree\(s\) had no record/, `the boot backfill reports what it wrote\n${log.slice(-1500)}`);
+
+  // The project's own checkout is not a tree the panel names — its name is the folder's — so it is not seeded.
+  assert.ok(!trees[`${projectName}::path:${norm(repo())}`], "the checkout at the project path has no naming record");
+  assert.ok(
+    Object.values(trees).every((rec) => norm(rec.dir || "") !== norm(repo())),
+    "nothing in the ledger calls the project checkout a named tree",
+  );
+});
+
+test("the boot backfill seeds the fleet from `git worktree list`, before any row is scanned", async () => {
+  // A panel that cannot discover anything — no scan root — over a discovery cache naming the repo. The only
+  // listing that can answer for these trees is the boot backfill's own, which is what "seeded at boot" means:
+  // the record exists before the board has a row for the tree, so no run can ever find it unrecorded.
+  const dir = mkdtempSync(path.join(tmpdir(), "wtgui-naming-boot-"));
+  const logs = path.join(dir, "logs");
+  mkdirSync(logs, { recursive: true });
+  writeFileSync(
+    path.join(logs, "projects.json"),
+    JSON.stringify({ savedAt: new Date().toISOString(), projects: [{ name: "demo-repo", path: repo() }] }),
+    "utf8",
+  );
+  const boot = await startPanel({
+    config: { scanRoots: [], jobsFile: path.join(logs, "jobs.json"), projectsCacheFile: path.join(logs, "projects.json") },
+  });
+  try {
+    const file = path.join(logs, "tree-names.json");
+    await waitFor(() => existsSync(file) && Object.keys(JSON.parse(readFileSync(file, "utf8")).trees || {}).length >= 2, {
+      timeoutMs: 30_000,
+      what: "the boot backfill to write the fleet down",
+    });
+    const trees = JSON.parse(readFileSync(file, "utf8")).trees;
+    for (const [dirName, tag] of [[FIXED, "667552"], [MANUAL, "abcdef"]]) {
+      const rec = trees[`demo-repo::${tag}`];
+      assert.ok(rec, `${dirName} was written down by the boot backfill`);
+      assert.equal(rec.name, dirName);
+      assert.equal(rec.seeded, true);
+      assert.equal(namingState(rec), "named");
+    }
+    assert.match(boot.log(), /tree-names: 2 tree\(s\) had no record/, `the boot backfill reported both\n${boot.log().slice(-1500)}`);
+  } finally {
+    await boot.stop();
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
 });
 
 test("a manual rename moves the tree once, writes the ledger, and settles it for good", async () => {

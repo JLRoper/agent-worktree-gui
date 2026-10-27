@@ -213,15 +213,30 @@ and is counted separately ("open idle" chip). `MERGED` + clean + not live = "saf
 #### What a worktree is called
 
 A tree is cut from the prompt, so its name starts as the reader's first sentence cut at 24 characters —
-usually mid-word. Hermes names the *session* from the work a moment later, and the panel renames the tree
-after that title once, at the end of the turn: the directory (`git worktree move`) and its branch
-(`git branch -m wtgui/<slug>-<tag>`, the six-hex tag kept). That rename happens **once per tree** and the
-"once" is a record, not a hope — `logs/tree-names.json` beside the job store (see `lib/tree-names.js`),
-keyed on the tag every rename keeps, holding who named the tree and when. A second run started into the
-same tree cannot rename it: it would move the directory and the branch out from under the run that already
-lives there, which is how one worktree ended up with a directory named one thing, a branch named another,
-and three live cards each spelling a different branch. The same record is what the board's row reads, so
-the tooltip on `✎` says who named the tree and when.
+usually mid-word. Hermes names the *session* from the work a moment later, and the panel gives the tree that
+name the moment the title exists — the 10-second title sweep emits it, and the rename lands as soon as no run
+is standing in the tree (git will not move a directory a live shell holds, so the first attempt inside a turn
+is deferred, not lost): the directory (`git worktree move`) and its branch (`git branch -m
+wtgui/<slug>-<tag>`, the six-hex tag kept). That name is set **once per tree** and the "once" is a record,
+not a hope — `logs/tree-names.json` beside the job store (`config.treeNamesFile`, see `lib/tree-names.js`),
+keyed on the tag every rename keeps, holding who named the tree and when. Three rules make the once a fact:
+
+- **A tree the panel cut is written down at the cut**, before `git worktree add`, naming the run it was cut
+  for — so a tree is never visible as "unnamed" while the run that owns its name is still starting, and only
+  that run's first title may take it.
+- **A tree the panel did not cut is seeded, never renamed.** Every tree `git worktree list` answers with that
+  has no entry is written down at boot, and on every later listing, under the name it was found with: the
+  fleet that existed before this ledger — every tree in this repository's own `.worktrees/`, every tree another
+  tool cut — reads as named from its first moment. A run started into one of them cannot rename it, whatever
+  `existing` it claims.
+- **A landing settles it.** A rename that lands, a rename that finds its target directory already taken, and a
+  reader's own rename all settle the record, so no later event of that run and no later run can move the tree
+  again. The project's own checkout is never recorded: its name is the folder's.
+
+The record is what the board's row reads, so the tooltip on `✎` says who named the tree and when. A second run
+started into a named tree cannot rename it: it would move the directory and the branch out from under the run
+that already lives there, which is how one worktree ended up with a directory named one thing, a branch named
+another, and three live cards each spelling a different branch.
 
 Two buttons sit beside the worktree name, and neither is automatic:
 
@@ -747,8 +762,8 @@ The assistant acts by writing plain lines in a reply, and every such line in it 
     SPAWN <project> | what the new worker should do
     SPAWN IN <directory, worktree directory name, or branch> | what the worker should do in that tree  (no new worktree)
 
-**A SPAWN IN name that is out of date is resolved, not refused.** The panel renames a finished run's worktree
-directory and its branch after the thread title once, on the run that got the tree first (`renameWorktree` — the
+**A SPAWN IN name that is out of date is resolved, not refused.** The panel renames a run's worktree
+directory and its branch after the session title once, on the run that got the tree first (`renameWorktree` — the
 slug is rebuilt from the title, the six-hex tag kept; every later run in that tree leaves the name alone, see
 *What a worktree is called*), so a path the assistant wrote down when that worker finished, or one typed from an older
 report, stops existing while the tree is standing one directory over. So an existing-tree spawn no longer
