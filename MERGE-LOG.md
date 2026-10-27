@@ -11,3 +11,4 @@ Base: main @ d8ae753 (0.11.2). Each entry is one merge commit, tested after it l
 | 5 | wtgui/subscribe-panel-to-run-event-stream-1e310c | a95c768 | version restored to 0.11.2 | 96/96 pass |
 | 6 | wtgui/make-todo-fact-lines-collapsible-by-defa-90909d | b554f80 | conflicts: package.json (0.11.2), server.js (kept ledger + git gates; cut/skipped both off the named line) | 96/96 pass |
 | 7 | wtgui/fix-gateway-restart-false-positive-detec-4e3521 | de34ded | conflicts: package.json (0.11.2), lib/jobs.js (kept lastSeq + gatewayPid/Start) | 103/103 pass |
+| 8 | wtgui/stop-board-listing-foreign-worktrees-4adc4f | 43ac0cf | conflicts: scheduler, tree-names, server imports/naming (both sides kept; old autoNameWorktree dropped — superseded by WorktreeNaming); test re-pointed | 110/110 pass |
