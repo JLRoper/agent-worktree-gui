@@ -112,6 +112,130 @@ test("an unmapped project keeps the PR number and drops the page, saying why", a
   assert.equal(row.branchUrl, null);
 });
 
+// ---- the branch cell's `local` chip, and the link following a branch that moved ----------------------------------
+// The chip is one word claiming this branch exists only on this box. It is drawn from `branchLocalOnly`, so the
+// three states of the remote's answer have to be three different rows: listed, not listed, and not answered. A page
+// that read "unknown" as local is the bug this pins.
+test("decorate's chip claim is the remote's own head list: listed, not listed, and not answered are three rows", async () => {
+  const hosts = new Hosts({ file: null, seedFile: DEFAULT_SEED_FILE });
+  const { scheduler } = schedulerFor(hosts);
+  const index = buildPrIndex(LIVE_PRS);
+  const row = rowFor("20261023_1724_DMR-44452_internalFrom", "d55e04d");
+  const twice = () => ({ ...row });
+
+  // 1. The remote lists the branch: a page to open, and no chip.
+  const listed = twice();
+  await scheduler.decorate(PROJECT, listed, new Set([row.branch]), index);
+  assert.equal(listed.remoteBranch, "exists");
+  assert.equal(listed.branchLocalOnly, false);
+  assert.match(listed.branchUrl, /browse\?at=refs\/heads\/20261023_1724_DMR-44452_internalFrom$/);
+
+  // 2. The remote answered, and the branch is not in its head list: plain text, the reason, and the chip.
+  const absent = twice();
+  await scheduler.decorate(PROJECT, absent, new Set(["20260928_confluence-doc-sync"]), index);
+  assert.equal(absent.remoteBranch, "gone");
+  assert.equal(absent.branchLocalOnly, true, "the one state that may carry the word");
+  assert.equal(absent.branchUrl, null);
+  assert.match(absent.branchWhy, /^local only/);
+
+  // 3. The remote could not be reached (`ls-remote` returned nothing): the panel cannot tell, so no chip — and the
+  // sentence says exactly that. This is the row that used to wear `local` beside a tooltip admitting it did not know.
+  const unreachable = twice();
+  await scheduler.decorate(PROJECT, unreachable, new Set(), index);
+  assert.equal(unreachable.remoteBranch, "unknown");
+  assert.equal(unreachable.branchLocalOnly, false);
+  assert.equal(unreachable.branchUrl, null);
+  assert.match(unreachable.branchWhy, /^cannot tell/);
+
+  // …and the last fetch's refs do not upgrade that to a chip either, whichever way they point: stale refs are not
+  // the remote's answer, so the word stays off and the title says the remote itself was not asked.
+  const offlineHas = twice();
+  await scheduler.decorate(PROJECT, offlineHas, new Set(), index, null, new Set([row.branch]));
+  assert.equal(offlineHas.branchLocalOnly, false);
+  assert.equal(offlineHas.branchLinkFrom, "local-refs");
+  assert.match(offlineHas.branchUrl, /browse\?at=refs\/heads\/20261023_1724_DMR-44452_internalFrom$/);
+  const offlineHasnt = twice();
+  await scheduler.decorate(PROJECT, offlineHasnt, new Set(), index, null, new Set());
+  assert.equal(offlineHasnt.branchLocalOnly, false);
+  assert.equal(offlineHasnt.branchUrl, null);
+  assert.match(offlineHasnt.branchWhy, /^not on the remote as of the last fetch — /, "the stale-refs answer is not phrased as the remote's own");
+  assert.doesNotMatch(offlineHasnt.branchWhy, /^local only/, "…and it does not open with the claim the remote refused to make");
+  assert.match(offlineHasnt.branchWhy, /the remote itself was not asked/);
+
+  // 4. A project with no remote: every branch is local by construction, and the cell says so instead of marking rows.
+  const noRemote = twice();
+  await scheduler.decorate({ ...PROJECT, remote: null }, noRemote, new Set(), index);
+  assert.equal(noRemote.remoteBranch, "n/a");
+  assert.equal(noRemote.branchLocalOnly, false);
+  assert.equal(noRemote.branchWhy, "no remote configured");
+});
+
+// A branch switched INSIDE one tree (or renamed by the panel) is a different branch, so the link and the PR that
+// were computed from the old name are claims about a branch this tree is not on. server.js re-reads a renamed tree
+// with exactly this call — `scanOne(project, path, "full")`, no heads and no PRs in hand — and it used to come back
+// with the old branch's page still attached.
+test("a row whose branch moved is decorated again: the link is the new branch's, not the one it left", async () => {
+  const hosts = new Hosts({ file: null, seedFile: DEFAULT_SEED_FILE });
+  const { scheduler, store } = schedulerFor(hosts);
+  store.patchProject(PROJECT.name, { path: PROJECT.path, remote: PROJECT.remote, mainBranch: PROJECT.mainBranch });
+
+  const TREE = "C:/ProjectDevelopment/email-multi/.worktrees/follow-up-1a2b3c";
+  const oldBranch = "20261023_1724_DMR-44452_internalFrom";
+  const newBranch = "wtgui/follow-up-1a2b3c";
+
+  // What the store holds before the move: the old branch, its page, and #10 as its PR.
+  const before = { ...rowFor(oldBranch, "d55e04d"), path: TREE };
+  await scheduler.decorate(PROJECT, before, new Set([oldBranch]), buildPrIndex(LIVE_PRS));
+  store.putRow(PROJECT.name, before, "full");
+  assert.equal(store.rowsFor(PROJECT.name)[0].pr?.number, 10);
+  assert.match(store.rowsFor(PROJECT.name)[0].branchUrl, /20261023_1724_DMR-44452_internalFrom$/);
+
+  // The same directory, now on a follow-up branch cut off main — the panel's own rename path, or a `git checkout -b`
+  // in the tree. Nothing is handed in but the row the scan read.
+  scheduler.pool.run = async ({ wtPath }) => ({
+    path: wtPath,
+    name: "follow-up-1a2b3c",
+    branch: newBranch,
+    head: "9f8e7d6",
+    verdict: "UNMERGED (1 commit)",
+    untracked: 0,
+    dirty: 0,
+  });
+  // Liveness is not what this case is about, and the session stores are the reader's own: stubbed, never read.
+  scheduler.sessionRoots = async () => new Map();
+  scheduler.claudeRoots = async () => new Map();
+  let reads = 0;
+  scheduler.remoteAnswers = async () => {
+    reads += 1;
+    return {
+      heads: new Set([newBranch]),
+      prs: buildPrIndex([{ number: 12, state: "OPEN", mergedAt: null, headRefName: newBranch, headRefOid: "9f8e7d6abcd", title: "the follow-up" }]),
+      upstreams: new Map(),
+      remoteRefs: null,
+    };
+  };
+
+  const after = await scheduler.scanOne(PROJECT, TREE, "full");
+
+  assert.equal(reads, 1, "the remote's answers were read for the branch the tree is on now");
+  assert.equal(after.branch, newBranch);
+  assert.match(after.branchUrl, /follow-up-1a2b3c$/);
+  assert.doesNotMatch(after.branchUrl, /internalFrom/, "the cell is not the page of the branch this tree left");
+  assert.equal(after.branchLocalOnly, false);
+  assert.equal(after.pr?.number, 12, "the PR cell follows the branch too — it does not keep the old branch's #10");
+
+  // …and a read that finds the SAME branch asks the remote for nothing: the answers only move when the branch does.
+  let spent = 0;
+  scheduler.remoteAnswers = async () => {
+    spent += 1;
+    throw new Error("a row whose branch did not move must not re-read the remote");
+  };
+  const same = await scheduler.scanOne(PROJECT, TREE, "fast");
+  assert.equal(spent, 0);
+  assert.equal(same.remoteBranch, "exists", "the row keeps the answer it already had");
+  assert.match(same.branchUrl, /follow-up-1a2b3c$/);
+});
+
 test("the cell's link is the template's, not a shape written in the scheduler", () => {
   // GitHub and Bitbucket come out of the same call with different URLs: nothing in lib/scheduler.js names either host.
   assert.ok(seed.hosts.github.links.pull.includes("/pull/{pr}"));

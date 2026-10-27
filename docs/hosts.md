@@ -122,7 +122,7 @@ A remote the panel cannot map is a proposal it refuses, not a host it invents.
 
 ## What a row carries, and what it means
 
-`decorate()` puts four fields on every row, and they are what `/api/state` shows:
+`decorate()` puts these fields on every row, and they are what `/api/state` shows:
 
 | field | meaning |
 |---|---|
@@ -130,6 +130,15 @@ A remote the panel cannot map is a proposal it refuses, not a host it invents.
 | `prUrl` | the PR's page from `links.pull`, or `null` |
 | `prWhy` | the sentence saying why `prUrl` is `null` while `pr` exists |
 | `branchUrl` / `branchWhy` / `branchLinkFrom` | the branch page, why there is none, and whether it came from `ls-remote` or the last fetch's refs |
+| `branchLocalOnly` | `true` only when the remote listed its heads and this branch was not among them — the branch cell's `local` chip, and the one state that word is allowed to describe. `unknown` (unreachable remote, row not read yet) and a project with no remote are `false` |
+
+The chip is drawn from `branchLocalOnly`, not from `remoteBranch`: a row whose remote could not be reached carries no
+chip at all, because "cannot tell whether the remote has this branch yet" and "this branch exists only on this box"
+are different claims and the cell must not show the stronger one.
+
+All of them are computed from the ROW'S BRANCH, so a tree that switches branch (a follow-up cut in place, a `git
+branch -m` rename the panel made) is decorated again on the read that sees the new name — see `scanOne` in
+`lib/scheduler.js`. Otherwise the row wears the page and the PR of the branch it left.
 
 A PR number with no page to open is still useful, so the cell keeps the number as plain text and puts the reason in its
 tooltip. A guessed page is not: nothing here falls back to a host it cannot resolve.
