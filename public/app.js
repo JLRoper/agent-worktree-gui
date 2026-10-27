@@ -8190,19 +8190,22 @@ function prMatchNote(pr) {
 //
 // A branch with no copy on the remote says why in its title AND carries one dim word. That word is the answer to
 // the question the chart was asked to answer at a glance — which trees exist on the remote and which are local
-// only — and it appears only for a project that HAS a remote: in a project without one every branch is local, and
-// the title says that instead of marking each row.
+// only — and it is the SERVER's answer (`row.branchLocalOnly`, written by decorate from the remote's own head
+// list), never one re-derived here. A project without a remote has every branch local, and the title says that
+// instead of marking each row. "The remote could not be reached" and "the scan has not read this branch yet" are
+// NOT that claim: those rows carry no word at all, because the panel could not tell and its tooltip says so.
+// ---- branch cell: the link, and the local chip
 function branchCellHtml(row) {
   const name = esc(row.branch || "—");
   if (row.branchUrl) {
     const how = row.branchLinkFrom === "local-refs" ? " (found in refs/remotes from the last fetch — the remote itself was not asked)" : "";
     return `<a class="branch-link" href="${esc(row.branchUrl)}" target="_blank" rel="noopener" title="${esc(`open ${row.branch} on the remote${how}`)}">${name}</a>`;
   }
-  const project = state.projects.get(row.project) || null;
-  const why = row.branchWhy || (row.remoteBranch === "n/a" ? "no remote configured" : "local only — this branch has no copy on the remote");
-  const localOnly = Boolean(row.branch && project?.remote && row.remoteBranch !== "n/a");
+  const why = row.branchWhy || (row.remoteBranch === "n/a" ? "no remote configured" : "not read yet — the remote has not been asked about this branch");
+  const localOnly = row.branchLocalOnly === true;
   return `<span class="branch-plain" title="${esc(why)}">${name}</span>${localOnly ? ` <span class="branch-local" title="${esc(why)}">local</span>` : ""}`;
 }
+// ---- end branch cell
 
 // The PR cell: the number and state are the server's (row.pr), and the PAGE is the project's host record — `row.prUrl`
 // is built by the same template as the branch cell, so `.../pull-requests/12` and `.../pull/12` both come out right
