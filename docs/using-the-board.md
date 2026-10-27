@@ -66,7 +66,7 @@ Everything happens on the **New agent** card.
 | Prompt | The first turn. `Enter` spawns, `Shift+Enter` adds a line, `Up`/`Down` walk the prompts you have spawned before. Paste or drop a file into it to attach that file (see below). |
 | **start in** | The directory. Usually filled in by aiming, but you can type any path. |
 | **project** | Which project the work belongs to. Changing it points **start in** at that project and re-ticks **create workspace** — the picker is not a display field. |
-| **model** | `(default)` uses the gateway's configured model. The list is what the provider advertises, grouped by provider. |
+| **model** | `(default)` uses the gateway's configured model. The list is what the provider advertises, grouped by provider, and each row carries the price per million tokens in and out, the context window, and the coding rating where the catalogue has one — click the field to open it, type to filter, `Enter` takes the highlighted row. The assistant's own model setting opens the same list. |
 | **budget s** | The run's wall-clock budget (`1800` by default). |
 | **max turns** | Optional ceiling on turns; blank means the gateway's own default. |
 | **skills** | Disabled: a run does not carry a skills list yet. |

@@ -6755,29 +6755,27 @@ async function spawnAgent({ promptFocus = true } = {}) {
 // /api/models, which reads the provider list Hermes itself fetched — not a hardcoded menu.
 let modelsState = null;
 
-// What the CLI's own picker prints beside a model id, and this prints the same way: what the model
-// costs per million tokens in and out, then Artificial Analysis' coding rating out of ten. A model
-// with neither keeps its bare id. The units are stated once, on the select's own tooltip, rather than
-// repeated on every row.
-function modelPriceText(entry) {
-  if (!entry) return "";
-  const parts = [];
-  if (entry.input || entry.output) parts.push(`${entry.input || "?"} in / ${entry.output || "?"} out`);
-  if (entry.coding) parts.push(`code ${entry.coding}`);
-  return parts.join(" · ");
-}
-
+// The rows themselves are the shared picker's (core/model-menu.js): it walks the catalogue in this same
+// provider order, so the floating list the reader picks from and the select the form posts from can never
+// disagree. What the CLI's own picker prints beside an id is unchanged — in/out per million tokens, then
+// Artificial Analysis' coding rating out of ten — and the units are stated once, on the trigger's tooltip.
 function modelOptionHtml(d) {
-  const def = d?.defaultModel || null;
-  const out = [`<option value="">${esc(def ? `(default: ${def})` : "(gateway default)")}</option>`];
-  for (const p of d?.providers || []) {
-    out.push(`<optgroup label="${esc(p.label)}">`);
-    for (const m of p.models) {
-      const price = modelPriceText(p.pricing?.[m]);
-      out.push(`<option value="${esc(m)}">${esc(price ? `${m} — ${price}` : m)}</option>`);
+  const out = [];
+  let group = null;
+  for (const r of ModelMenu.rowsFor(d)) {
+    if (!r.id) {
+      out.push(`<option value="">${esc(r.name)}</option>`);
+      continue;
     }
-    out.push("</optgroup>");
+    if ((r.group || "") !== group) {
+      if (group) out.push("</optgroup>");
+      group = r.group || "";
+      if (group) out.push(`<optgroup label="${esc(group)}">`);
+    }
+    const price = ModelMenu.priceText(r);
+    out.push(`<option value="${esc(r.id)}">${esc(price ? `${r.id} — ${price}` : r.id)}</option>`);
   }
+  if (group) out.push("</optgroup>");
   return out.join("");
 }
 
@@ -6800,6 +6798,8 @@ function renderModelPicker(keep = "") {
     ? `${d.count} model${d.count === 1 ? "" : "s"} available to ${d.provider || "this account"}, ${freshness}` +
       `${d.staleDays > 7 ? " — stale, run: hermes model --refresh" : ""} · ${priced}`
     : "no provider list found in the Hermes home — a run falls back to the gateway's configured model";
+  // The floating list is what the reader clicks; the select beneath it is the value and the form's own row.
+  ModelMenu.attach(sel, { models: () => modelsState });
 }
 
 async function loadModels() {
