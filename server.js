@@ -2942,10 +2942,15 @@ const server = createServer(async (req, res) => {
 let parentsWarmAt = 0;
 async function warmParents() {
   if (Date.now() - parentsWarmAt < config.stewardRefreshSeconds * 1000) return;
+  // A pass with nothing to look at must not spend the whole window: the first one fires 20 s in, and on a slow boot
+  // discovery has not finished by then, so a pass that returned here after setting the clock left every legacy tree
+  // reading "unknown" for the next five minutes. The configured projects are known at boot, so they are the fallback.
+  const projects = (registry.projects?.length ? registry.projects : config.projects) || [];
+  if (!projects.length) return;
   parentsWarmAt = Date.now();
   let learned = 0;
   let guessed = 0;
-  for (const project of registry.projects || []) {
+  for (const project of projects) {
     const rows = store.rowsFor(project.name) || [];
     const branches = rows.map((r) => r.branch).filter(Boolean);
     // No rows yet (the boot pass has not reached this project) is NOT a reason to skip it: refresh() works from the
