@@ -33,7 +33,7 @@ import { ParentBook } from "./lib/parents.js";
 import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees, writePlan } from "./lib/steward.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
-import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyLabel } from "./lib/remote-writes.js";
+import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyForProject, policyLabel } from "./lib/remote-writes.js";
 import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
 import { safeUrl, openerFor } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
@@ -212,6 +212,9 @@ async function loadConfig() {
   // ships with the code (hosts.seed.json next to this file) and supplies defaults the live file overrides.
   if (!cfg.hostsFile) cfg.hostsFile = path.join(path.dirname(cfg.jobsFile), "hosts.json");
   if (!cfg.hostsSeedFile) cfg.hostsSeedFile = path.join(HERE, "hosts.seed.json");
+  // Which branch each tree was cut FROM — the one fact `git worktree add -b` throws away, and the fact the worker's
+  // landing paragraph names. Beside the job store, so a PANEL_CONFIG sandbox keeps its own copy.
+  if (!cfg.branchParentsFile) cfg.branchParentsFile = path.join(path.dirname(cfg.jobsFile), "branch-parents.json");
   // Whether a branch may exist on a REMOTE at all: the setting the reader's permission box writes, and what the
   // installed pre-push guard reads. local-only by default — a value that cannot be read falls back to it rather
   // than to a permissive one.
@@ -423,15 +426,31 @@ const guardRecord = readGuardRecord();
 // challenged for the panel token (authorised), so the guard needs no secret of its own.
 const guardPanelUrl = () => `http://127.0.0.1:${config.port}`;
 
+// THE POLICY IN FORCE FOR ONE PROJECT. The global `remoteBranchPolicy` is the default for every checkout here; a
+// project's own entry in config.json overrides it. That override is not a nicety: this panel and heroes-js LAND by
+// pushing a branch and opening a PR, so a blanket local-only would refuse their own landing path, while every other
+// repository on this box is local work whose child branches must merge into their parent instead of appearing on a
+// shared remote. Unknown names and unreadable values fall back to the global (lib/remote-writes.js `policyForProject`).
+const guardPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+function policyForProjectPath(projectPath, project = null) {
+  if (project) return policyForProject(project, config.remoteBranchPolicy);
+  const key = guardPathKey(projectPath);
+  const found = key ? registry.projects.find((p) => guardPathKey(p.path) === key) || null : null;
+  return policyForProject(found, config.remoteBranchPolicy);
+}
+
 // Install (or refresh) the guard for ONE worktree and remember it. Called the moment the panel cuts a tree, and by
 // the Settings button for trees that predate this feature.
 async function installGuardFor({ projectPath, worktree, branch = null, landing = false, project = null }) {
+  // `project` is the registry record when the caller has it (the spawn path does); a Settings install passes the path
+  // alone. Either way the guard's own copy of the policy is the PROJECT's, not the global one.
+  const policy = policyForProjectPath(projectPath, project && typeof project === "object" ? project : null);
   const out = await installGuard({
     projectPath,
     worktree,
     panelUrl: guardPanelUrl(),
     timeoutSeconds: config.remoteWriteSeconds,
-    policy: config.remoteBranchPolicy,
+    policy,
     landing: [...remoteWrites.landing],
     log,
   });
@@ -442,16 +461,19 @@ async function installGuardFor({ projectPath, worktree, branch = null, landing =
   guardRecord.trees[normTree(worktree)] = {
     tree: normTree(worktree),
     path: cleanPath(worktree),
-    project: project || path.basename(projectPath || ""),
+    project: (project && typeof project === "object" ? project.name : project) || path.basename(projectPath || ""),
     projectPath: cleanPath(projectPath || worktree),
     branch: branch || null,
     landing: Boolean(landing),
+    // The policy this tree's guard was actually written with, so the Settings row can never show the global one for a
+    // project that overrides it.
+    policy,
     dir: out.dir,
     at: new Date().toISOString(),
   };
   writeGuardRecord();
-  log(`push guard installed: ${cleanPath(worktree)} -> ${out.dir} (policy ${config.remoteBranchPolicy}${landing ? ", started to land" : ""})`);
-  return { ...out, policy: config.remoteBranchPolicy };
+  log(`push guard installed: ${cleanPath(worktree)} -> ${out.dir} (policy ${policy}${policy !== config.remoteBranchPolicy ? ` — this project's own, the global is ${config.remoteBranchPolicy}` : ""}${landing ? ", started to land" : ""})`);
+  return { ...out, policy };
 }
 
 // The panel's own worktree creation (lib/jobs.js calls this) — the one place a spawned tree is cut, so it is the
@@ -459,7 +481,8 @@ async function installGuardFor({ projectPath, worktree, branch = null, landing =
 jobs.afterWorktreeCreate = async ({ repoDir, path: tree, branch, landing }) => {
   try {
     const project = registry.projects.find((p) => normPathKey(p.path) === normPathKey(repoDir));
-    return await installGuardFor({ projectPath: repoDir, worktree: tree, branch, landing, project: project?.name || null });
+    // The record, not its name: it carries this project's own `remoteBranchPolicy`, which is what the guard must obey.
+    return await installGuardFor({ projectPath: repoDir, worktree: tree, branch, landing, project: project || null });
   } catch (e) {
     return { ok: false, error: String((e && e.message) || e) };
   }
@@ -473,8 +496,11 @@ async function refreshGuards() {
   const landing = [...remoteWrites.landing].map((t) => guardRecord.trees[t]?.path || t);
   const out = [];
   for (const [key, projectPath] of dirs) {
-    const r = await refreshGuardFiles({ projectPath, panelUrl: guardPanelUrl(), timeoutSeconds: config.remoteWriteSeconds, policy: config.remoteBranchPolicy, landing, log });
-    out.push({ project: key, ...r });
+    // Each project's guard gets ITS policy: a settings change of the global must not overwrite a project that
+    // carries its own answer, and an "Always allow" click must not turn every other checkout's default off either.
+    const policy = policyForProjectPath(projectPath);
+    const r = await refreshGuardFiles({ projectPath, panelUrl: guardPanelUrl(), timeoutSeconds: config.remoteWriteSeconds, policy, landing, log });
+    out.push({ project: key, policy, ...r });
   }
   return out;
 }
@@ -655,6 +681,11 @@ const settingsOut = () => ({
   // from here too, so a hook cannot be reading a different policy than the page shows.
   remoteBranchPolicy: config.remoteBranchPolicy,
   remoteBranchPolicyLabel: policyLabel(config.remoteBranchPolicy),
+  // The policy actually in force per project, because the global is only the default: a project's own entry in
+  // config.json (this panel, heroes-js) overrides it, and the page must be able to say which repo is which.
+  remoteBranchPolicies: Object.fromEntries(
+    (registry?.projects || []).map((p) => [p.name, policyForProject(p, config.remoteBranchPolicy)]),
+  ),
   remoteWriteSeconds: config.remoteWriteSeconds,
   spawnEnabled: true,
 });
@@ -2181,17 +2212,20 @@ const server = createServer(async (req, res) => {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const worktree = String(body.worktree || "");
-      const decision = remoteWrites.decision(worktree);
+      // The project that owns this tree decides, not the global default (which is local-only for every other
+      // checkout): a repo that lands by PR is allowed here, and one whose branches merge into a parent is refused.
+      const found = spawnFeature.projectForPath(worktree);
+      const policy = policyForProject(found, config.remoteBranchPolicy);
+      const decision = remoteWrites.decision(worktree, policy);
       if (decision.allowed) {
         // A one-shot grant is spent by the write it was given for.
         if (decision.consume) remoteWrites.spend(worktree);
-        return sendJson(res, 200, { allowed: true, why: decision.why, policy: remoteWrites.policy() });
+        return sendJson(res, 200, { allowed: true, why: decision.why, policy });
       }
       if (!decision.ask) {
-        log(`remote write refused without asking: ${cleanPath(worktree)} (${decision.why})`);
-        return sendJson(res, 200, { allowed: false, refused: true, why: decision.why, policy: remoteWrites.policy() });
+        log(`remote write refused without asking: ${cleanPath(worktree)} (${decision.why}, policy ${policy})`);
+        return sendJson(res, 200, { allowed: false, refused: true, why: decision.why, policy });
       }
-      const found = spawnFeature.projectForPath(worktree);
       const remote = String(body.remote || "") || found?.remote || "";
       const branch = String(body.branch || "");
       const req0 = remoteWrites.request({
@@ -2210,8 +2244,8 @@ const server = createServer(async (req, res) => {
         id: req0.id,
         deadline: req0.deadline,
         timeoutSeconds: req0.timeoutSeconds,
-        policy: remoteWrites.policy(),
-        why: "local only — this push is parked on your permission box",
+        policy,
+        why: `${policy === "local-only" ? "local only" : policy} — this push is parked on your permission box`,
       });
     }
 
@@ -3160,7 +3194,9 @@ const server = createServer(async (req, res) => {
         log(`merge ${row.branch} -> ${base} in ${project.name}: job ${job.id} (${job.status})`);
         return { status: 202, body: { job, ...preview } };
       };
-      const decision = remoteWrites.decision(worktree);
+      // The MERGE flow asks under this project's policy too: a repo that lands by PR is answered from its own
+      // setting, and one that is local-only asks the reader like anything else.
+      const decision = remoteWrites.decision(worktree, policyForProject(project, config.remoteBranchPolicy));
       if (decision.allowed) {
         // A one-shot grant is spent by the write it was granted for.
         if (decision.consume) remoteWrites.spend(worktree);
