@@ -467,6 +467,10 @@
        needs dom-format's esc and nothing else, so it sits before app.js; both call it through window.ModelMenu. -->
   <script src="/core/model-menu.js"></script>
   <script src="/core/console-format.js"></script>
+  <!-- Where a reasoning block sits among a turn's console lines, and how a stream is cut into pieces. Pure, and
+       published on globalThis as `wtStream`: app.js's single-stream path (the 🌊) calls it by name at render time,
+       and test/single-stream.test.js imports this same file. -->
+  <script src="/core/stream-merge.js"></script>
   <script src="/board/attachments.js"></script>
   <!-- Pasted blocks collapsed into inline chips, for every box the reader writes a prompt in. Loaded after
        attachments.js on purpose: a paste of a FILE belongs to that module (it registers its listener first
