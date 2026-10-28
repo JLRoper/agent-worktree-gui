@@ -431,8 +431,10 @@ the `… N lines hidden — click to read` sentence is this panel's fold, and ea
 dropped something.
 
 **How fast it fills in** is yours to set, because the wire's pace is not a reading pace: prose arrives in coalesced
-bursts, and a burst of tool lines lands all at once. Settings → Display → **Stream display speed** types a paragraph
-out at that many words a second, and **Stream line rate** walks whole new lines into the console one at a time. Both
+bursts, and a burst of tool lines lands all at once. Settings → Display → **Stream display speed** types a paragraph —
+and a 🧠 reasoning block — out at that many words a second, and **Stream line rate** walks whole new lines into the
+console one at a time. A reasoning block only types the first time the panel sees it on a live turn, so opening an
+old card or reloading draws history whole; both settings
 are `0` = off, which is the console filling exactly as the run sent it, and both are saved in this browser. A line
 still held back is not in the console yet, so a repaint in the middle of one (a scan, a pinned turn's second copy)
 shows the transcript as far as it has got — and a turn that settles, or a tab that goes to the background, releases
@@ -568,7 +570,7 @@ setting):
 | Display | Page zoom | `Ctrl+` / `Ctrl-` / `Ctrl+0` (reset), or the `−`/`+` buttons here. `Ctrl+wheel` zooms the page too, except over a console, where it sizes that console's text. |
 | Display | Panel font | Headings, labels, buttons and the text you type. |
 | Display | Terminal font · Console size · Console weight | The console and the tool lines inside it. |
-| Display | Stream display speed | Words a second at which an agent's own prose types out, 0–200 (`off`/10/20/40/80 presets, 40 by default — what a long answer here streams at). `0` is off — the console fills exactly as the run sent it. Whatever is still queued is released when the turn settles. |
+| Display | Stream display speed | Words a second at which an agent's own prose and reasoning blocks type out, 0–200 (`off`/10/20/40/80 presets, 40 by default — what a long answer here streams at). `0` is off — the console fills exactly as the run sent it. Whatever is still queued is released when the turn settles. |
 | Display | Stream line rate | Lines a second at which whole new lines join a console, 0–40 (`off`/2/4/8/16 presets). A tool burst walks in instead of landing in one paint; a held line is not in the console's record yet, and a settled turn flushes what is left. `0` is off. |
 | Display | Panel contrast | How far apart the layered surfaces sit: 0% flattens them, 100% pushes the page to near-black and lifts the panels. The swatch strip below previews the layers. |
 | Display | Add-agent bar | The green of the **+** bar in a worktree's agents, 0% (deep and quiet) to 100% (vivid). Lightness and saturation move together; the swatch below the row is the bar itself, so the preview cannot disagree with the button. |

@@ -2107,6 +2107,9 @@ function streamBodyHtml(turn, lines, windowFull = false) {
   // Reasoning joins the stream only while the 🧠 is on: with it off, the console's own one-line preview is the only
   // trace of what the agent thought, exactly as in the condensed view.
   const blocks = thinkingOn(thread) ? state.thinkCache.get(turn.id)?.blocks || [] : [];
+  // Reasoning joins the console as lines keyed `think:<at>`; feeding them to the pacer HERE, where the turn's own
+  // clock is at hand, is what makes lineHtml type them out exactly like prose.
+  if (blocks.length) for (const b of blocks) paceThinkBlock(turn, b);
   const merged = W.merge(lines, blocks, { windowFull, hidePreviews: blocks.length > 0 });
   const storeSeen = new Map();
   const parts = [];
@@ -5927,6 +5930,24 @@ state.typeGate = globalThis.wtType
       },
     })
   : null;
+// The reasoning blocks the pacer has already been given: a block seen for the first time while its turn is LIVE is
+// the only one that types out, so opening an old card (or reloading the page) draws history whole.
+state.thinkFed = new Set();
+
+// Reasoning types out on the same pacer, at the same words/s the prose uses — it is the same reading. A block is
+// fed the first time the panel sees it while its turn is live, and every re-read of the store feeds it again so a
+// block that grew keeps flowing. Returns the prefix to draw, or null when this block is drawn whole (history, a
+// hidden tab, rate 0, or the turn has settled and the flush already released it).
+function paceThinkBlock(turn, block) {
+  const P = state.typePacer;
+  if (!P || !block) return null;
+  const lid = `think:${block.at}`;
+  const fresh = !state.thinkFed.has(lid);
+  if (fresh && (document.hidden || !turnLive(turn))) return null;
+  state.thinkFed.add(lid);
+  if (document.hidden || !turnLive(turn)) return null;
+  return P.feed(lid, String(turn.id), String(block.text ?? ""));
+}
 
 // The words of a line that may be drawn now: the live append asks for them, and every render path asks too, so a
 // repaint mid-paragraph draws the same prefix the console is showing instead of jumping to the wire's whole text.
@@ -5956,6 +5977,12 @@ function paintTypedLines(lids) {
     for (const el of document.querySelectorAll(`[data-lid="${CSS.escape(String(lid))}"]`)) {
       if (!el.isConnected) continue;
       el.innerHTML = linkifyText(shown);
+      // A reasoning block types inside its thinking block, which follows its own stickiness, not the console's.
+      const body = el.closest(".think-body");
+      if (body) {
+        stickThinkBody(body);
+        continue;
+      }
       const out = el.closest("pre.job-out");
       if (!out) continue;
       const stick = consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
@@ -6126,7 +6153,12 @@ function thinkHtml(turn, copy = "") {
     <summary><span class="think-title">🧠 thinking</span> <span class="think-meta mono">${esc(meta)}</span></summary>
     <div class="out-wrap"><div class="think-body">${
       blocks.length
-        ? blocks.map((b) => `<div class="think-block mono">${linkifyText(b.text)}</div>`).join("")
+        ? blocks.map((b) => {
+            // The same words/s the prose types at: the block is fed the first time it is seen on a live turn, and
+            // the tick repaints it through this very data-lid.
+            const shown = paceThinkBlock(turn, b);
+            return `<div class="think-block mono" data-lid="think:${esc(b.at)}">${linkifyText(shown == null ? b.text : shown)}</div>`;
+          }).join("")
         : `<div class="think-block mono think-empty">${
             entry
               ? turnLive(turn)
