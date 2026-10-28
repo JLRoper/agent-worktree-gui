@@ -745,20 +745,21 @@ function compose() {
   const allLatency = before.scenarios.flatMap((s) => s.turns.flatMap((t) => t.restoreToWipeMs));
   const a = before.refs;
   const b = after.refs;
-  const totalAppends = before.scenarios.reduce((n, s) => n + s.appends, 0);
+  const beforeAppends = before.scenarios.reduce((n, s) => n + s.appends, 0);
+  const afterAppends = after.scenarios.reduce((n, s) => n + s.appends, 0);
   const totalFlips = before.scenarios.reduce((n, s) => n + s.attrFlips, 0) + after.scenarios.reduce((n, s) => n + s.attrFlips, 0);
   const totalWipes = before.scenarios.reduce((n, s) => n + wipesOf(s).length, 0);
   push(
     "# The console flicker, caught in a browser against a real run's output",
     "",
-    `Tree \`wtgui/catch-the-console-flicke-579251\`. **before** = \`${before.commit}\`${before.dirty ? " (+ local edits)" : ""}, **after** = \`${after.commit}\`${after.dirty ? " + the fix, uncommitted when captured" : ""}. Captured ${after.at.slice(0, 10)} by \`node tools/verify-console-flicker.mjs\`; every number below is read back from \`console-flicker-before.json\` and \`console-flicker-after.json\` beside this file.`,
+    `Tree \`wtgui/catch-the-console-flicke-579251\`. **before** = \`${before.commit}\`${before.dirty ? " (+ local edits)" : ""}, without the fix; **after** = \`${after.commit}\`${after.dirty ? " (+ local edits)" : ""}, with it. Captured ${after.at.slice(0, 10)} by \`node tools/verify-console-flicker.mjs\`; every number below is read back from \`console-flicker-before.json\` and \`console-flicker-after.json\` beside this file.`,
     "",
     "## Verdict",
     "",
-    `1. **A group body closing and reopening — disproved.** ${totalFlips} \`hidden\` / \`data-gflat\` attribute flips were seen on anything inside a \`.tgrp\` across ${totalAppends} live appends in the before captures and the same number of after captures. The tool group is not what blinks.`,
-    `2. **The console collapsing to the newest line and reopening — proved, and it happens within a second of an append.** A live line wiped the whole console ${totalWipes} times in the before captures (${before.scenarios.map((s) => `${wipesOf(s).length} in the ${s.name} run`).join(", ")}). Every wipe after the first line of a turn came ${range(allLatency)} after a repaint of the console (${allLatency.length} measured), and is caused by the first live line that arrives after it.`,
+    `1. **A group body closing and reopening — disproved.** ${totalFlips} \`hidden\` / \`data-gflat\` attribute flips were seen on anything inside a \`.tgrp\` across ${beforeAppends} live appends before the fix and ${afterAppends} after it. The tool group is not what blinks.`,
+    `2. **The console collapsing to the newest line and reopening — proved.** A live line wiped the whole console ${totalWipes} times before the fix (${before.scenarios.map((s) => `${wipesOf(s).length} in the ${s.name} run`).join(", ")}). The append is the cause (the wipe happens inside the \`drawJobLine\` call that draws it) and it lands ${range(allLatency)} after the repaint that had just restored the console (median ${med(allLatency)} ms, ${allLatency.length} measured; the other ${totalWipes - allLatency.length} are the first line of a first turn, whose card had only just been created). The console then stays collapsed until the next repaint: ${med(sT2 ? sT2.restoreIntervalsMs : [])} ms later in 🌊 mode, ${range(dT2 ? dT2.restoreIntervalsMs : [])} later in the condensed console. So full → collapsed happens inside about a second of a repaint, and collapsed → full is the slower half.`,
     "3. **The node that blinks:** `pre.job-out[data-out=\"<turn id>\"]`, its whole child list. What the reader sees vanish and return is `pre.job-out > .jl` (text and dim notes) and `pre.job-out > .tgrp[data-tgrp]` with its `> .tgrp-body`; they are destroyed and rebuilt, not hidden. The armed state is `pre.job-out > .jl.jl-dim:first-child`.",
-    `4. **Cadence.** In 🌊 mode the repaint is a clock: every ${med(sT2 ? sT2.restoreIntervalsMs : [])} ms (median; the 1200 ms sweep tick repaints once the thinking cache is 2000 ms old). In the condensed console the repaint is the arrival of each deliverable: ${dT2 ? dT2.restores.length : 0} in the 15 s turn, gaps ${range(dT2 ? dT2.restoreIntervalsMs : [])}. Lines arrive every ${sT2 && sT2.appendGapsMs ? sT2.appendGapsMs.median : "n/a"} ms (median), so a wipe is never more than one append away from a repaint.`,
+    `4. **Cadence.** In 🌊 mode the repaint is a clock: every ${med(sT2 ? sT2.restoreIntervalsMs : [])} ms (median; the 1200 ms sweep tick repaints once the thinking cache is 2000 ms old). In the condensed console the repaint is the arrival of each deliverable: ${dT2 ? dT2.restores.length : 0} in a ${dT2 ? r1((dT2.endMs - dT2.startMs) / 1000) : "?"} s turn, gaps ${range(dT2 ? dT2.restoreIntervalsMs : [])}. The wipe comes with the first append after each repaint, which is why it follows so closely.`,
     "",
     "Nothing watches the collapse and reopens it. The two halves are independent writers that happen to alternate: a repaint writes the whole transcript (and the dim note that arms the wipe) back, and the next live line wipes it. The sweep fires on its clock whether or not anything collapsed.",
     "",
@@ -808,27 +809,46 @@ function compose() {
       );
     }
   }
+  const livePath = path.join(REPORT_DIR, "console-flicker-live-7331.json");
+  if (existsSync(livePath)) {
+    const lv = JSON.parse(readFileSync(livePath, "utf8")).summary;
+    push(
+      "## Live check on 7331, on this run's own console",
+      "",
+      `After the panel restarted onto the merged build, a read-only browser context (its own localStorage, nothing posted) mounted this run's own card on the live panel and watched its console for ${lv.watchedSeconds} s while the run kept working: ${lv.liveLinesDrawn} live lines drawn (${Object.entries(lv.lineKinds).map(([k, n]) => `${n} ${k}`).join(", ")}), ${lv.repaints} repaint${lv.repaints === 1 ? "" : "s"} of the console, ${lv.mode} mode${lv.repaints <= 2 ? " (so this is a spot check; the stub scenarios above are the stress test)" : ""}.`,
+      "",
+      `Wholesale writes to the console from \`drawJobLine\`: **${lv.wholesaleWritesFromDrawJobLine}**. Live lines that removed rows: **${lv.drawsThatRemovedRows}**. Console height falling by more than 40px at once: **${lv.consoleHeightDropsOver40px}**. Content under the console jumping up by more than 40px: **${lv.contentUnderConsoleJumpsOver40px}**. A repaint and the live path disagreeing about how many tool calls the console holds: **${lv.repaintVsLiveToolTallyMismatches}**. The console grew from ${lv.rowsFirstLast ? lv.rowsFirstLast[0] : "?"} to ${lv.rowsFirstLast ? lv.rowsFirstLast[1] : "?"} rows (${lv.consoleScrollHeightFirstLast ? `${lv.consoleScrollHeightFirstLast[0]}px to ${lv.consoleScrollHeightFirstLast[1]}px` : "?"}). Page errors: ${lv.pageErrors.length}.`,
+      "",
+      "![live console on 7331](console-flicker-shots/live-7331-console.png)",
+      "",
+      "This check has no unfixed twin: the live panel only runs the fixed build, so it shows the fix holding on a real run, not the before/after contrast, which is the stub-gateway tables above. Raw numbers: `console-flicker-live-7331.json`.",
+      "",
+    );
+  }
   push(
     "## Why it happens",
     "",
     `1. **The wipe is a class test.** \`public/app.js:${a.arm}\` in \`drawJobLine\` (:${a.drawJobLine}): \`if (out.firstElementChild?.classList.contains("jl-dim")) out.innerHTML = "";\`. It exists to clear the placeholder a console shows before its turn has said anything (:${a.wait}, \`<div class="jl jl-dim">waiting for output…</div>\`), but it asks "is the first child dim?", and the placeholder is not the only dim line.`,
-    `2. **Every worker turn starts with a real dim line.** \`lib/jobs.js:${a.dimNote}\` pushes \`⇢ asked to work in <cwd> …\` as the first line of a turn (the Runs API takes no cwd); a worktree spawn pushes \`cut from …\` and \`push guard: …\` first. They are transcript, rendered as \`.jl.jl-dim\`, and they are the first child of every console that is repainted from the buffer.`,
+    `2. **Turns start with a real dim line.** \`lib/jobs.js:${a.dimNote}\` pushes \`⇢ asked to work in <cwd> …\` as the first line of a spawn into an existing directory (the gateway starts its tools in its own directory, so the prompt carries the cwd); a worktree spawn pushes \`cut from …\` and \`push guard: …\` first. They are transcript, rendered as \`.jl.jl-dim\`, and they are the first child of every console that is repainted from the buffer.`,
     `3. **Repainters put that line back on top.** (a) \`paintStreamConsole\` (:${a.paintStreamConsole}, write at :${a.paintWrite}) rewrites the console wholesale; the thinking sweep (:${a.sweepClock}) calls it on a 1200 ms tick once a live turn's cache is 2000 ms old, so about every 2.4 s. (b) \`renderConversation\` (:${a.renderConversation}) replaces the whole card (:${a.rebuildReplace}) whenever \`conversationSignature\` (:${a.signature}) changes; \`artifacts\` is in it (:${a.signatureArtifacts}), so each new deliverable, and equally an approval, a status flip or a title landing, rebuilds the console from the buffer.`,
     "4. **The next live line wipes it.** A repainted console's first child is the dim note, so `drawJobLine` empties the console and draws only the new line. A tool call after a wipe finds no `.tgrp` at the tail, so it starts a group of one: the aggregation count restarts at ×1, which is what looks like the tool tally being rebuilt. Every drawn line is gone until the next repaint puts them back.",
     "5. **Why the page bounces.** The console is capped (about 230px visible); collapsed it is one line (about 33px). Everything under it, the reply box and the cards after it, rides up about 195px at the wipe and back down at the repaint. The window's own `scrollY` does not move, so the content slides under the reader.",
     "",
     "## History: why it is recent",
     "",
-    "`git log -S` on each piece. The class test dates from 2026-10-21 (6e418ed, a commit about starring turns) and was harmless while the placeholder was the only dim first child. The dim `asked to work in` line arrived 2026-10-23 (6e69bba); the `cut from` / `push guard` notes 2026-10-26 to 27 (3470b18, 692c362); `artifacts` in the signature 2026-10-23 (15b203c); the 1.2 s thinking sweep 2026-10-23 (d09f27a); and `paintStreamConsole`, the whole-console rewrite the sweep now calls, 2026-10-27 (1a24139, \"Draw a card as ONE stream\"). The check became wrong the day a real dim line started the console, and became visible the day something repainted on a clock.",
+    "`git log -S` on each piece. The class test and the placeholder it was written for are from the very first commit (0d3d3a8, 2026-10-20) and were harmless while the placeholder was the only dim first child. The dim `asked to work in` line arrived 2026-10-23 (6e69bba); the `push guard` note 2026-10-26 (3470b18) and the `cut from` note 2026-10-27 (692c362); `artifacts` in the signature 2026-10-23 (15b203c); the 1.2 s thinking sweep 2026-10-23 (d09f27a); and `paintStreamConsole`, the whole-console rewrite the sweep now calls, 2026-10-27 (1a24139, \"Draw a card as ONE stream\"). The check became wrong the day a real dim line started the console, and became visible the day something repainted on a clock.",
     "",
     "## The fix",
     "",
     `The placeholder is marked (\`data-wait\`, \`public/app.js:${b.wait}\`) and \`drawJobLine\` removes that node only (:${b.waitClear}). A dim transcript line is no longer mistaken for the placeholder, so a repaint followed by a live line adds a line instead of replacing the console. Nothing that repaints was removed or throttled: the clocks, the signature and the stickiness helpers are as they were.`,
     "",
+    "## What the earlier reviews said",
+    "",
+    "`console-flicker-deep-dive.md` (a read-only review from another tree at `540fbc1`) ranks six causes of a group flipping between expanded and collapsed. It cites this very line (\"`6979`\") as the placeholder being removed and reads it as harmless; its #6, `paintStreamConsole` replacing the whole console on every thinking re-read, is the repaint half of what is captured here. What a read could not show is that the test on that line also matches real dim lines, so the repaint arms a wipe. The synthetic-card report this file replaces is kept as `console-flicker-synthetic-probe-superseded.md`: it measured a group re-cut that is real but is not the collapse.",
+    "",
     "## Not part of the flicker, found on the way",
     "",
     "- `toolGroupHtml`'s flat flag is decided per call site: a live append reads `data-gflat` off the group, a new group reads `streamOn(...)` in `drawJobLine`, a card render reads it again in `turnBody`, and `conversationSignature` has no `streamOn` term, so toggling 🌊 does not repaint the card. A burst can be flat on one render and condensed on the next. Measured earlier with a synthetic seeded card (git history `5302e81`); this tool does not exercise it.",
-    "- A live tool group is keyed `<turn>#<base36 time>` while the same group rebuilt from the buffer is keyed `<turn>#<index>`, so a group body the reader opened closes at the first repaint.",
     "- When a tool call joins a group that came from a repaint, `drawJobLine` re-cuts the group from `groupLines()`, which reads rows back as `{ kind, text }` without their `lid`, so every row it redraws loses its `data-lid`. Nothing visible changes (the console grows by the new row, as measured), but the rows lose the identity a live `set` update would look them up by. An earlier version of this tool counted line ids and mistook that for lost content.",
     "",
     "## Limits",
