@@ -118,6 +118,12 @@ level is a judgement the landing agent makes from the diff and lands in the same
 and `docs/versioning.md` is the scale. The merge prompt tells the landing agent to do it. Same install covers
 both hooks, and the same `--no-verify` bypasses this one.
 
+Those two hooks are the repo's own; the panel adds three more gates on top of them — the project's
+`remoteBranchPolicy`, the pre-push hook it installs into `<git-common-dir>/wtgui-hooks/`, and the permission box
+that hook parks a push on — plus the host's ruleset on the default branch. All of them, in the order a `git push`
+meets them and with what waives each, are enumerated in
+[docs/pushing-to-a-remote.md](docs/pushing-to-a-remote.md).
+
 `node tools/verify-charter.mjs` seeds a charter from a store full of rules and notes, checks the prescribed
 headings and the cap, checks that the whole file is in the per-turn briefing while the polled state carries
 only its path, size and mtime, drives all three writers (the reader's save, a `CHARTER:` line through the
