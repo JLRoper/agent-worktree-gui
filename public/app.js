@@ -1692,7 +1692,7 @@ function rebuildToolGroup(grp, { filter = "", open = false } = {}) {
   const gkey = grp.dataset.gstate || toolGroupStateKey(key, lines, anchor);
   // The click is the new truth, so record it before rendering: toolGroupHtml prefers the remembered state, and
   // otherwise it would faithfully put back the state the reader just changed.
-  if (!open && !filter) state.toolGroupOpen.delete(gkey);
+  if (toolGroupDropsState(open, filter, grp.dataset.gdefault === "open")) state.toolGroupOpen.delete(gkey);
   else state.toolGroupOpen.set(gkey, { open, filter });
   const holder = document.createElement("div");
   // A piece of a stream stays a piece of a stream: rebuilding it condensed (a store read landing, a batch opened,
@@ -1705,12 +1705,44 @@ function rebuildToolGroup(grp, { filter = "", open = false } = {}) {
   rememberToolGroup(fresh);
 }
 
+// ---- tool group key: what a burst is remembered BY, and the window that keeps that identity in view
 // A burst's identity, for remembering whether the reader opened it. The group's DOM key changes when the console
 // is rebuilt from the buffer (it is the group's index) and when the stream starts a new burst (it is a timestamp),
 // so the state is keyed by the turn plus the first line the burst holds - which is the same line in all three.
+//
+// It has to be the burst's first CALL. A result line above it belongs to a call the console no longer holds, and it
+// slides out of the window as the turn grows, so an anchor derived from it re-keys the group under the reader: the
+// open group came back `hidden` on the next repaint (state.toolGroupOpen answered for a key nothing looks up now).
 function toolGroupAnchor(lines) {
-  const first = Array.isArray(lines) && lines.length ? lines[0] : null;
+  const run = Array.isArray(lines) ? lines : [];
+  const first = run.find((l) => l && l.kind === "tool") || run[0] || null;
   return first ? String(first.lid || first.at || first.text || "").slice(0, 40) : "";
+}
+
+// The console draws a window of the turn, not the whole of it. A raw line count cut bursts in half: the call line
+// fell out of the window while the output it produced stayed, and a burst with no call line has no rows to tally -
+// it stopped being a group at all (toolGroupHtml's trimmed path). So the window is cut on the burst's own boundary:
+// if it would start inside a burst's results, it starts at the call line above them instead.
+//
+// A burst that fits in a second window is kept whole, so there is no hole between a call and what it produced. One
+// that does not (a terminal call with hundreds of lines of output) keeps its call line and the ordinary window: a
+// group with a call row and a gap, which is the window being a window - never a group that stops existing.
+const TURN_WINDOW = 300;
+
+function windowLines(all, keep = TURN_WINDOW) {
+  const lines = Array.isArray(all) ? all : [];
+  const max = Math.max(1, Number(keep) || TURN_WINDOW);
+  if (lines.length <= max) return lines;
+  const tail = lines.length - max;
+  // A run of `tool`/`tool-out` lines is one burst (burstGroups). Walking back over the results the window opened
+  // inside lands on the call that produced them; landing on anything else means the burst's own call line is already
+  // out of the buffer, and the trimmed render draws what is left.
+  let start = tail;
+  while (start > 0 && lines[start].kind === "tool-out") start -= 1;
+  // `start` equal to `tail` is a window that already begins at a burst's own call (or at a line that is not a burst's
+  // at all): nothing was cut in half, so nothing has to be put back.
+  if (start === tail || lines[start].kind !== "tool") return lines.slice(tail);
+  return lines.length - start <= max * 2 ? lines.slice(start) : [lines[start], ...lines.slice(tail)];
 }
 
 // `anchor` is the identity the node already carries (data-gat), which wins over re-deriving it from lines that were
@@ -1719,8 +1751,14 @@ function toolGroupStateKey(key, lines, anchor = "") {
   return `${String(key || "").split("#")[0]}|${anchor || toolGroupAnchor(lines)}`;
 }
 
-// Record the reader's choice from a rendered group, so the next rebuild can put it back. An open block with no
-// filter is worth keeping; a closed, unfiltered one is the default and leaves nothing to remember.
+// Is a rendered group's state worth remembering? A closed, unfiltered group is the condensed view's default and
+// leaves nothing to remember - except where the group's OWN default is open (a burst the window trimmed of its call
+// line is drawn open), because there the reader shutting it is a choice, and a repaint must not undo it.
+function toolGroupDropsState(open, filter, openByDefault = false) {
+  return !open && !filter && !openByDefault;
+}
+
+// Record the reader's choice from a rendered group, so the next rebuild can put it back.
 function rememberToolGroup(grp) {
   if (!grp || !grp.dataset) return;
   const gkey = grp.dataset.gstate;
@@ -1728,7 +1766,7 @@ function rememberToolGroup(grp) {
   const body = grp.querySelector(".tgrp-body");
   const filter = grp.dataset.filter || "";
   const open = Boolean(body && !body.hidden);
-  if (!open && !filter) {
+  if (toolGroupDropsState(open, filter, grp.dataset.gdefault === "open")) {
     state.toolGroupOpen.delete(gkey);
     return;
   }
@@ -1736,6 +1774,7 @@ function rememberToolGroup(grp) {
   // A long-lived tab would otherwise accumulate one entry per burst it ever opened.
   while (state.toolGroupOpen.size > 500) state.toolGroupOpen.delete(state.toolGroupOpen.keys().next().value);
 }
+// ---- end tool group key
 
 // The gateway folds a parallel batch into one line - "first command + 3 commands" - because the run stream carries a
 // summary of the batch, not each call. The other calls are in the session transcript, so the tail becomes a button
@@ -1781,6 +1820,45 @@ function trimmedBurstHtml(lines, turnId, gkey, codeOpen = state.codeBoxOpen) {
   return out.join("");
 }
 
+// ---- trimmed group head: a burst that lost its call line is still a group
+// A burst whose call line the window (or the buffer behind it) no longer holds has no rows to tally, but the lines it
+// does hold are still one block of the reader's console. Drawn bare they had no head row, nothing to click, and
+// nowhere for the open state to land: a repaint could neither keep them open nor remember them shut, and the 3s sweep
+// that refreshes a block's stored output could not find them at all. The head row says what the block is - the call
+// above these results is outside the window - and the node carries the same data-gstate/data-gat as any other group.
+function trimmedGroupHtml(lines, key, anchor = "", flat = false, codeOpen = state.codeBoxOpen) {
+  const gkey = toolGroupStateKey(key, lines, anchor);
+  const body = trimmedBurstHtml(lines, String(key).split("#")[0], key, codeOpen);
+  // A piece of a stream has no fold at all: it is open, and the reader's open state is not consulted for it.
+  if (flat) {
+    return (
+      `<div class="tgrp tgrp-flat" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gflat="1">` +
+      `<div class="tgrp-body">${body}</div></div>`
+    );
+  }
+  // Drawn OPEN: the reader came for this output, and what the window dropped is the call, not the result. Shutting it
+  // is therefore a real choice, and data-gdefault is what makes rememberToolGroup keep that choice.
+  const saved = state.toolGroupOpen.get(gkey);
+  const open = saved ? Boolean(saved.open) : true;
+  const names = [
+    ...new Set(
+      lines
+        .map((l) => {
+          const m = l && l.kind === "tool-out" ? TOOL_DONE_RE.exec(String(l.text || "")) : null;
+          return m ? m[1] : "";
+        })
+        .filter(Boolean),
+    ),
+  ];
+  const label = `${lines.length} line${lines.length === 1 ? "" : "s"}`;
+  const title = "the call line above these results is outside the console's window — this block is the output the card still holds";
+  return `<div class="tgrp" data-copy data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gdefault="open">
+      <div class="tgrp-head" data-copy-text><div class="tgrp-row tgrp-row-trimmed" title="${esc(title)}"><span class="tgrp-g">\u21b3</span><span class="tgrp-name">${esc(names.join(", ") || "tool output")}</span><span class="tgrp-n">trimmed</span></div><button type="button" class="tgrp-more${open ? " is-open" : ""}" data-tgrp-more="${esc(key)}" title="${open ? "fold these result lines away" : "show every result line this card still holds"}">${label}</button></div>
+      <div class="tgrp-body"${open ? "" : " hidden"}>${body}</div>
+    </div>`;
+}
+// ---- end trimmed group head
+
 // ---- one stream: a tool call, drawn as a line of it -------------------------------------------------------------------
 // A card drawn as ONE stream (the 🌊 beside the 🧠) has no tool groups to condense a run of calls into and nothing
 // folded, so a call is simply its line — purple, led by the tool's emoji, exactly the line the group's "N lines"
@@ -1810,7 +1888,10 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
   // every note in them is resolved on its own identity, because there is no tool name and no cursor to be had
   // here. Without that the note drew as a plain div and the reader was shown "click to read" with nothing to
   // click, which is exactly the state a reload of a long turn produces.
-  if (!rows.length) return trimmedBurstHtml(lines, String(key).split("#")[0], key, flat ? FLAT_CODE_OPEN : state.codeBoxOpen);
+  // What it must not lose is BEING A GROUP: a head row that says what the block is, the data-gstate/data-gat the
+  // reader's open state is remembered under, and the fold that state opens. Drawn as bare lines it dropped out of
+  // the panel's own map of its groups - nothing to click, nothing to remember, nothing for the sweep to find.
+  if (!rows.length) return trimmedGroupHtml(lines, key, anchor, flat, flat ? FLAT_CODE_OPEN : state.codeBoxOpen);
   // The reader's own choice wins over the caller's default: a rebuild is not the reader closing the block.
   const gkey = toolGroupStateKey(key, lines, anchor);
   const saved = flat ? null : state.toolGroupOpen.get(gkey);
@@ -2136,7 +2217,9 @@ function streamBodyHtml(turn, lines, windowFull = false) {
 
 function turnBody(turn, copy = "") {
   const all = jobLines(turn.id).filter((l) => !isBookkeeping(l));
-  const lines = all.slice(-300);
+  // A window, cut on a burst boundary rather than a line count: windowLines keeps the call line of the burst the
+  // window would otherwise open inside, so that burst is still a group with a head row and a remembered state.
+  const lines = windowLines(all);
   const running = turnLive(turn);
   // The 🌊: this card draws ONE stream, so the reasoning is not a block above the console — it is in it.
   const stream = streamOn(turn.thread || turn.id) && Boolean(globalThis.wtStream);
@@ -2147,7 +2230,7 @@ function turnBody(turn, copy = "") {
   // paragraph, then another patch burst, and the second one must start after the first one's rows.
   const storeSeen = new Map();
   const body = stream
-    ? streamBodyHtml(turn, lines, all.length > 300)
+    ? streamBodyHtml(turn, lines, lines.length < all.length)
     : burstGroups(lines)
         .map((item, gi) => {
           if (item.group) {
