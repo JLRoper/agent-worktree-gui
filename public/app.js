@@ -14977,7 +14977,11 @@ for (const btn of document.querySelectorAll("[data-approval-set]")) {
 document.addEventListener("click", (e) => {
   const panel = $("settings");
   if (!panel || panel.classList.contains("hidden")) return;
-  if (panel.contains(e.target) || (e.target.closest && e.target.closest("#btn-settings"))) return;
+  // The click's path was fixed when it was dispatched, so it still names the panel after an earlier handler has swapped
+  // the pressed button out of the DOM. The Clean scratch buttons do exactly that (button -> cancel/clean pair -> button),
+  // and `panel.contains(e.target)` calls a detached target "outside", which closed the drawer under the reader's press.
+  const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+  if (path.includes(panel) || panel.contains(e.target) || (e.target.closest && e.target.closest("#btn-settings"))) return;
   toggleSettings(false);
 });
 
