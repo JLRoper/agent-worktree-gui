@@ -6,12 +6,13 @@
 // the folders it must refuse and cleans the one it may. Every panel here is a sandbox with its own port, config and
 // HERMES_HOME (tools/panel-testkit.mjs); :7331 and the real ~/.wag are never touched.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
+import { post, ROOT, startPanel } from "../tools/panel-testkit.mjs";
 
 const sha = (file) => createHash("sha256").update(readFileSync(file)).digest("hex");
 const getState = async (panel) => (await fetch(`${panel.base}/api/state`)).json();
@@ -180,4 +181,28 @@ test("Clean scratch over HTTP: it empties the folder the panel made, and refuses
   const bad = await post(panel.base, "/api/paths/open", { body: { which: "../../etc" } });
   assert.equal(bad.status, 400);
   assert.match(bad.json.error, /unknown folder/);
+});
+
+test("tools/where.mjs and a booted server agree on every folder - the .cmd scripts depend on it", async (t) => {
+  const decoy = mkdtempSync(path.join(os.tmpdir(), "wtgui-where-"));
+  t.after(() => rmSync(decoy, { recursive: true, force: true }));
+  // Two shapes of config: a plain second instance (flat, beside its config) and one that names a dataDir (split). In both
+  // the environment carries a WAG_HOME that neither of them may follow.
+  const shapes = [
+    { name: "second instance", config: {} },
+    { name: "named dataDir", config: { dataDir: path.join(decoy, "named"), jobsFile: undefined, assistantFile: undefined, projectsCacheFile: undefined } },
+  ];
+  for (const shape of shapes) {
+    const panel = await startPanel({ config: shape.config, env: { WAG_HOME: path.join(decoy, "ignored") } });
+    try {
+      const { paths } = await getState(panel);
+      const env = { ...process.env, PANEL_CONFIG: path.join(panel.dir, "config.json"), WAG_HOME: path.join(decoy, "ignored") };
+      const run = (...args) => execFileSync(process.execPath, ["tools/where.mjs", ...args], { cwd: ROOT, env, encoding: "utf8", windowsHide: true }).trim();
+      assert.equal(run("logs"), paths.logsDir, `${shape.name}: the folder start-background.cmd reads the pid file from`);
+      const all = JSON.parse(run("--json"));
+      assert.deepEqual([all.data, all.state, all.scratch], [paths.dataDir, paths.stateDir, paths.scratchDir], shape.name);
+    } finally {
+      await panel.stop();
+    }
+  }
 });
