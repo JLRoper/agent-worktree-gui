@@ -2164,7 +2164,7 @@ function turnBody(turn, copy = "") {
           const live = i === busy ? `<span class="jl-live" data-live-from="${Number(l.at) || Date.now()}">${liveSuffix(Number(l.at) || Date.now())}</span>` : "";
           return lineHtml(l, live);
         })
-        .join("") || '<div class="jl jl-dim">waiting for output…</div>';
+        .join("") || '<div class="jl jl-dim" data-wait="1">waiting for output…</div>';
   return (stream ? "" : thinkHtml(turn, copy)) +
     // `out-tab` carries the 18px left tab the console itself has, so the wrapper is the console's box: the chip
     // centred in the wrapper is centred in the console, not 9px off it.
@@ -6976,7 +6976,11 @@ function drawJobLine(evt) {
     // Streamed lines follow the newest output only for a reader who is already at the bottom; someone
     // scrolled up to read stays where they are.
     const stick = consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
-    if (out.firstElementChild?.classList.contains("jl-dim")) out.innerHTML = "";
+    // Only the placeholder an empty console shows gives way to the first line. This used to ask whether the first CHILD
+    // was dim, but a dim line is transcript too ("⇢ asked to work in …", "cut from …", "push guard: …") and every
+    // repaint — the thinking sweep, a new deliverable, an approval — puts one back on top, so the next live line wiped
+    // everything the reader had on screen and drew only itself until the following repaint put it all back.
+    out.querySelector(":scope > [data-wait]")?.remove();
     // A tool call joins the burst at the tail of the console and updates its tally in place; anything said in
     // between ends that burst, so the next call starts a fresh tally where the transcript has got to.
     const isTool = line.kind === "tool" || line.kind === "tool-out";

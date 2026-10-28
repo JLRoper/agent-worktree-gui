@@ -90,14 +90,17 @@ seeded the way the board really gets one back: an interrupted card with a run id
 against a stub Runs API. Point it at a Playwright install with `PANEL_PLAYWRIGHT_ROOT`; without one the browser half
 reports `BROWSER-HALF-NOT-RUN` and the rest still runs.
 
-`node tools/verify-console-flicker.mjs` is the browser repro for the console's flicker: a panel of its own with a
-seeded job store, the seeded turn flipped to `running` on the page's own captured `EventSource`, then every console
-line delivered as a real `jobline` frame while a MutationObserver records each `.tgrp` added, removed or re-flagged
-and a screenshot is taken per state. It proves an append never toggles a group body, and asserts the two things it
-does not: one console never holds a flat group and a condensed group at once, and the 🌊 toggle repaints the card it
-changes. **It fails on today's tree — that is the finding**, written up in
-`C:/CodeReviews/agent-worktree-gui/console-flicker-playwright.md`; useful after touching `toolGroupHtml`, the flat
-flag or `conversationSignature`.
+`node tools/verify-console-flicker.mjs` is the browser repro for the dark console's flicker, driven by a real run's
+output: a panel of its own (spare port, own `PANEL_CONFIG`, own `jobs.json`, own `HERMES_HOME`) pointed at a stub Runs
+API that plays a scripted agent turn over real SSE, so every console line the browser draws is the server's own
+`jobline` frame, and a card spawned and replied to through the panel's own routes. The page records what the console
+holds and where the reply box under it sits, and every wholesale write to a console with its stack. It asserts that a
+live line never wipes or shortens a console that holds transcript and that nothing under it jumps, in a condensed
+console with deliverables arriving and in a 🌊 console. `--label before|after` names a capture, `--root <checkout>`
+serves another checkout (run `before` against a checkout without the fix), and `--compose` merges the two captures
+into `C:/CodeReviews/agent-worktree-gui/console-flicker-playwright.md` with paired screenshots of the console as a
+repaint left it and one live line later. Useful after touching `drawJobLine`, `paintStreamConsole`,
+`conversationSignature` or anything else that repaints a live console.
 
 `node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
 `--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
