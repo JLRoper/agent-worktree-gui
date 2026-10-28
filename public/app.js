@@ -147,6 +147,9 @@ const state = {
   // add/edit text (module state, never persisted: a half-typed item is not something to bring back a reload later).
   todoOpen: loadOpenTodos(),
   todoDraft: null,
+  // Rows whose ⟳ offered the double-check agent, by row key: `{ key, project, path, evidence }`. Outside the DOM so a
+  // board repaint rebuilds the card instead of dropping the question the reader was about to answer.
+  refreshOffers: new Map(),
   expandedProjects: loadExpandedProjects(),
   collapsedFixed: loadCollapsedFixed(),
   collapsedRoots: loadCollapsedRoots(),
@@ -2399,6 +2402,10 @@ function originHtml(turn) {
     const fit = o.resolvedPath ? ` — ${o.resolvedFrom} had been renamed, resolved to ${o.resolvedPath} (${o.resolvedHow || "matched"})` : "";
     return ` <span class="turn-origin mono" title="${esc(where)}${esc(fit)}">\u21b3 started by the assistant</span>`;
   }
+  if (o && o.kind === "row-refresh") {
+    const what = Array.isArray(o.evidence) && o.evidence.length ? o.evidence.join(" · ") : "nothing that moved";
+    return ` <span class="turn-origin mono" title="${esc(`started by the ⟳ on this worktree's row to double-check the TODO, the description and the merge state — what it found: ${what}`)}">\u21b3 from the row's ⟳</span>`;
+  }
   if (!o || o.kind !== "subagent-delivery") return "";
   const subs = Array.isArray(o.subagents) ? o.subagents : [];
   const one = subs.length === 1 ? subs[0] : null;
@@ -4093,6 +4100,161 @@ async function saveLabel(thread, label) {
     renderConversation(thread);
   } catch (err) {
     showBanner(`rename ${thread}: ${err.message}`);
+  }
+}
+
+// ---- the row's own ⟳ ---------------------------------------------------------------------------
+// One click, no modal. The server re-reads this one tree, reconciles its TODO list against what the tree now holds and
+// re-derives its description only if that has gone stale; the answer carries the row itself, the journal lines it wrote
+// and — when the cheap pass found a mismatch — an offer to start an agent in that tree. The row repaints from the
+// ANSWER rather than waiting for an event, because a refresh that found nothing changed has no event to wait for and the
+// journal line still has to appear.
+//
+// `refreshAgent` is the setting the brief names: off / ask / auto, default ask. It is saved in this browser because it
+// decides what THIS reader's click does — one browser may want to be asked while another never is — and the server
+// re-answers every gate (a live run in the tree, an unusable gateway) before it starts anything.
+const REFRESH_AGENT_KEY = "wtgui.refreshAgent";
+const REFRESH_AGENT_MODES = ["off", "ask", "auto"];
+
+function refreshAgentMode() {
+  try {
+    const v = localStorage.getItem(REFRESH_AGENT_KEY);
+    return REFRESH_AGENT_MODES.includes(v) ? v : "ask";
+  } catch {
+    return "ask";
+  }
+}
+
+function saveRefreshAgent(mode) {
+  const value = REFRESH_AGENT_MODES.includes(String(mode)) ? String(mode) : "ask";
+  try {
+    localStorage.setItem(REFRESH_AGENT_KEY, value);
+  } catch {
+    /* private mode: the choice just does not persist */
+  }
+  return value;
+}
+
+function paintRefreshAgent() {
+  const sel = $("refresh-agent");
+  if (sel) sel.value = refreshAgentMode();
+}
+
+// The card the offer opens: the panel's own in-place question (the same `row-confirm` shape the ✕ asks in), under the
+// row it belongs to, because the whole point is that the agent starts in THAT worktree.
+function refreshOfferHtml(offer) {
+  const row = state.rows.get(offer.key);
+  if (!row) return "";
+  const evidence = (offer.evidence || []).filter(Boolean);
+  const what = evidence.length ? evidence.join(" · ") : "a mismatch the cheap pass cannot resolve by itself";
+  return `<tr class="row-confirm refresh-offer" data-refresh-offer="${esc(offer.key)}">
+      <td colspan="10">
+        <div class="row-confirm-cell">
+          <span class="rc-msg"><span class="dimmer">⟳ re-read</span> <b>${esc(row.name)}</b> <span class="dimmer">found</span> <span class="mono">${esc(what)}</span>
+            <span class="dimmer">— start one agent in this worktree to double-check the TODO, the description and the merge state? It reads the tree itself and reports back; nothing is pushed or merged.</span></span>
+          <span class="rc-actions"><button class="btn-del-no" type="button" data-refresh-offer-no="${esc(offer.key)}" title="leave it — the cheap pass's journal line is already under the row">not now</button><button class="btn-refresh-yes" type="button" data-refresh-offer-yes="${esc(offer.key)}" title="start an agent in ${esc(row.path)} to double-check what the ⟳ found">start agent</button></span>
+        </div>
+      </td>
+    </tr>`;
+}
+
+// Put the card under its row (one copy), or take it away when there is no offer for that key.
+function paintRefreshOffer(key) {
+  const rowEl = document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`);
+  for (const old of document.querySelectorAll(`tr.refresh-offer[data-refresh-offer="${CSS.escape(key)}"]`)) old.remove();
+  const offer = state.refreshOffers.get(key);
+  if (!offer || !rowEl) return false;
+  const holder = document.createElement("tbody");
+  holder.innerHTML = refreshOfferHtml(offer);
+  const card = holder.firstElementChild;
+  if (!card) return false;
+  rowEl.after(card);
+  return true;
+}
+
+// Every open card, after a rebuild that emptied a project's tbody.
+function paintRefreshOffers(project = null) {
+  for (const offer of [...state.refreshOffers.values()]) {
+    if (project && offer.project !== project) continue;
+    paintRefreshOffer(offer.key);
+  }
+}
+
+function clearRefreshOffer(key) {
+  state.refreshOffers.delete(key);
+  for (const old of document.querySelectorAll(`tr.refresh-offer[data-refresh-offer="${CSS.escape(key)}"]`)) old.remove();
+}
+
+async function refreshTreeRow(btn) {
+  const key = btn.dataset.refreshTree;
+  const row = state.rows.get(key);
+  if (!row || btn.dataset.busy === "1") return;
+  btn.dataset.busy = "1";
+  btn.disabled = true;
+  btn.classList.add("is-starting");
+  try {
+    const r = await apiFetch(
+      "/api/worktree/refresh",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: row.project, path: row.path, refreshAgent: refreshAgentMode() }),
+      },
+      { timeoutMs: 60000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    // The row, in place: the same path the next-read ring uses, so nothing below it is rebuilt.
+    if (d.row) placeRow(d.project || row.project, d.row, {});
+    const lines = Array.isArray(d.journal) ? d.journal : [];
+    // The offer: one card under the row, when the server said the cheap pass found something to double-check.
+    clearRefreshOffer(key);
+    if (d.agent && d.agent.offered) {
+      state.refreshOffers.set(key, { key, project: d.project || row.project, path: row.path, evidence: lines.filter((l) => !/^agent pass offered/.test(l)) });
+      paintRefreshOffer(key);
+    }
+    showBanner(`⟳ ${row.name || row.path}: ${lines.join(" · ") || "re-read"}`);
+  } catch (err) {
+    showBanner(`refresh ${row.name || row.path}: ${String(err.message || err)}`);
+  } finally {
+    delete btn.dataset.busy;
+    btn.classList.remove("is-starting");
+    if (btn.isConnected) btn.disabled = false;
+  }
+}
+
+// The offer's button. The server re-answers the live-run and gateway gates, so a card left open for a minute cannot
+// start a run in a tree that no longer needs one; a refusal is said on the banner and the card stays for a retry.
+async function startRefreshAgentFromCard(btn) {
+  const key = btn.dataset.refreshOfferYes;
+  const offer = state.refreshOffers.get(key);
+  const row = state.rows.get(key);
+  if (!offer || !row || btn.dataset.busy === "1") return;
+  btn.dataset.busy = "1";
+  btn.disabled = true;
+  try {
+    const r = await apiFetch(
+      "/api/worktree/refresh/agent",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: offer.project, path: offer.path, evidence: offer.evidence || [] }),
+      },
+      { timeoutMs: 60000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    clearRefreshOffer(key);
+    showBanner(d.say || `agent started in ${row.name || row.path}`);
+    if (d.job) {
+      updateJob(d.job, { scroll: false });
+      revealSpawnedAgent(d.job);
+    }
+  } catch (err) {
+    showBanner(`could not start the agent — ${String(err.message || err)}`);
+  } finally {
+    delete btn.dataset.busy;
+    if (btn.isConnected) btn.disabled = false;
   }
 }
 
@@ -8004,7 +8166,7 @@ function rowHtml(row) {
     <td class="mono nowrap">${dirty}</td>
     ${ageCellHtml(row)}
     <td class="verdict">${badge}</td>
-    <td class="row-actions">${isProjectRoot ? "" : `<button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>
+    <td class="row-actions">${isProjectRoot ? "" : `<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="re-read this one worktree now — its git state (dirty, ahead/behind, cherry, verdict, PR), its TODO list against what the tree now contains (a proposal, nothing closed), and its description only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>
   </tr>`;
 }
 
@@ -9559,11 +9721,21 @@ function todoBlockHtml(row, key) {
     </div>`;
   // The head is a real <button>, so the section is keyboard reachable (Tab to it, Enter or Space to unfold) — the two
   // strips under it are click-only, and the brief asks for this one to be reachable.
+  // The reconcile the last ⟳ wrote, on the badge: how many items the TREE's own commits and touched files make look
+  // closed. Nothing is applied — it is a question, and the reader's ✓ is the only thing that closes an item.
+  const proposal = Array.isArray(todo.proposal) ? todo.proposal : [];
+  const proposalTitle = proposal.length
+    ? `nothing is marked done by itself — this is what the last ⟳ found:\n${proposal.map((p) => `#${p.id} ${p.text}${p.because ? ` — ${p.because}` : ""}`).join("\n")}`
+    : "";
+  const proposalChip = proposal.length
+    ? `<span class="todo-proposal mono" title="${esc(proposalTitle)}">${proposal.length} look${proposal.length === 1 ? "s" : ""} closed</span>`
+    : "";
   return `<div class="todo-block${open ? "" : " collapsed"}" data-todo-block="${esc(key)}">
     <button type="button" class="todo-head" data-toggle-todo="${esc(key)}" aria-expanded="${open ? "true" : "false"}" title="${open ? "fold" : "unfold"} this worktree's TODO list — folded it reads the OLDEST item still open">
       <span class="chev">${open ? "\u25be" : "\u25b8"}</span>
       <span class="todo-title">TODO</span>
       <span class="todo-count mono" title="${done} done of ${total}">${count}</span>
+      ${proposalChip}
       ${open ? "" : `<span class="todo-first mono" title="${esc(peek)}">${esc(peek)}</span>`}
     </button>
     <div class="todo-body">
@@ -9572,6 +9744,15 @@ function todoBlockHtml(row, key) {
       ${addHtml}
     </div>
   </div>`;
+}
+
+// The clock on a ⟳ journal line: the reader's own wall time, because the strip answers "when did I refresh this and what
+// did it find" and a relative age would drift on a repaint.
+function refreshClock(at) {
+  const t = Date.parse(at || "");
+  if (!Number.isFinite(t)) return "";
+  const d = new Date(t);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function detailHtml(row) {
@@ -9733,8 +9914,16 @@ function detailHtml(row) {
       </div>
     </div>`
     : "";
-  // Merge state and liveness evidence lead the block again, but as two folded one-line strips: they are
-  // reference material and were taking a block's worth of height above the agents when they sat open here.
+  // What the row's own ⟳ found: one dim line per action it took, newest first. The journal is the server's (kept per row
+  // beside the panel's other stores), so the strip survives a reload — and a row nobody has refreshed by hand has no
+  // strip at all rather than an empty one.
+  const refreshJournal = Array.isArray(row.refreshJournal) && row.refreshJournal.length
+    ? `<div class="refresh-journal mono dimmer" data-refresh-journal="${esc(key)}" title="what the ⟳ on this row found — newest first, one line per action">${row.refreshJournal
+        .map((j) => `<div class="rj-line"><span class="rj-at">⟳ ${esc(refreshClock(j.at))}</span> ${esc(j.text)}</div>`)
+        .join("")}</div>`
+    : "";
+  // Merge state and liveness evidence lead the block again, but as two folded one-line strips: they are reference
+  // material and were taking a block's worth of height above the agents when they sat open here.
   // Ten columns, not nine: the row-actions cell is the tenth, and a colspan of 9 left the card area short of the
   // table's right edge by that column, so the expanded agent section ended in a bare strip of panel on the right
   // while the left was flush. (The delete confirmation row below already spans 10.)
@@ -9756,6 +9945,7 @@ function detailHtml(row) {
         ${subStrips.join("")}
       </div>
     </div>
+    ${refreshJournal}
     ${liveBlock}
     ${agentsHtml}
     ${sessionsHtml}
@@ -10139,9 +10329,9 @@ function refreshChips(name) {
 // every project table); a double-click on any edge hands the board back to the measurement.
 const WT_COLS = 10;
 // Floors, measured off the real cell text at the panel's own font sizes: the hash, `0 / 0`, `+0/−0`, `none`,
-// `clean`/`3 +1?`, `0s` with the ring and one chip, `NO COMMITS` and the row's ✕ each fit whole at these numbers.
+// `clean`/`3 +1?`, `0s` with the ring and one chip, `NO COMMITS` and the row's ⟳ then ✕ each fit whole at these numbers.
 // A long branch or a long `MERGED (squash/rebase, 3 commits)` still ellipsizes - that is the cheapest thing to lose.
-const COL_MIN = [170, 110, 70, 58, 56, 62, 64, 120, 104, 32];
+const COL_MIN = [170, 110, 70, 58, 56, 62, 64, 120, 104, 52];
 // How readily a column gives width back when the content is wider than the table, per column: 1 is a column that
 // says little at any width (`+0/−0`, `none`), 0.15 is one that must not move (the row's ✕). A column only ever gives
 // up its own slack above its floor, so the numbers decide how the squeeze is shared, not who is cut to the bone.
@@ -10748,6 +10938,8 @@ function placeRow(project, row, { flash = false } = {}) {
     window.scrollTo({ top: Math.min(pageY, maxY) });
   }
   scheduleBoardSweep(rowAnchor);
+  // The ⟳'s offer card sat under this row and the row was just replaced: one copy, back under the new node.
+  if (state.refreshOffers.has(key)) paintRefreshOffer(key);
 }
 
 function removeRow(project, p) {
@@ -10758,6 +10950,8 @@ function removeRow(project, p) {
   state.rowEls.get(key)?.remove();
   state.detailEls.get(key)?.remove();
   state.confirmEls.get(key)?.remove();
+  // The offer belonged to the row that is going away: nothing can start an agent in a tree the board no longer has.
+  clearRefreshOffer(key);
   state.rowEls.delete(key);
   state.detailEls.delete(key);
   state.confirmEls.delete(key);
@@ -10903,6 +11097,9 @@ function renderProjectRows(name, { typing = null } = {}) {
   // project event or a snapshot). Without this the move was silent — the node was new, so nothing
   // remembered where it used to be.
   flashMovedByKey(prevRowKeys, [...tbody.children].filter((el) => el.classList.contains("row")), tbody);
+  // …and the ⟳'s offer card was a child of this tbody too. It lives in state, so put it back under its row instead of
+  // letting a repaint answer the question for the reader.
+  paintRefreshOffers(name);
 }
 
 // Header summary. The project count is the live one — what the table is actually showing — not
@@ -11460,6 +11657,29 @@ document.addEventListener("click", async (e) => {
         state.openArtifacts.set(thread, { left, top, kind });
       }
     }
+    return;
+  }
+  // The row's own ⟳ re-reads this one worktree (git facts, TODO reconcile, description, journal) and may offer the
+  // double-check agent as one card under the row.
+  const refreshTree = e.target.closest("[data-refresh-tree]");
+  if (refreshTree) {
+    e.preventDefault();
+    e.stopPropagation();
+    void refreshTreeRow(refreshTree);
+    return;
+  }
+  const refreshOfferYes = e.target.closest("[data-refresh-offer-yes]");
+  if (refreshOfferYes) {
+    e.preventDefault();
+    e.stopPropagation();
+    void startRefreshAgentFromCard(refreshOfferYes);
+    return;
+  }
+  const refreshOfferNo = e.target.closest("[data-refresh-offer-no]");
+  if (refreshOfferNo) {
+    e.preventDefault();
+    e.stopPropagation();
+    clearRefreshOffer(refreshOfferNo.dataset.refreshOfferNo);
     return;
   }
   const delTree = e.target.closest("[data-del-tree]");
@@ -13937,6 +14157,19 @@ $("event-flash")?.addEventListener("change", (e) => {
 });
 $("stabilize-reorder")?.addEventListener("change", (e) => applyStabilize(Boolean(e.target.checked)));
 
+// What the row's ⟳ does with a mismatch: never / ask (one card) / start it. Per browser, because the click is this
+// reader's, and read again on every click rather than cached, so flipping it needs no reload.
+$("refresh-agent")?.addEventListener("change", (e) => {
+  const mode = saveRefreshAgent(e.target.value);
+  showBanner(
+    mode === "off"
+      ? "row refresh: never starts an agent — the cheap pass and its journal are all"
+      : mode === "auto"
+        ? "row refresh: starts the double-check agent itself when the cheap pass finds a mismatch"
+        : "row refresh: offers the double-check agent on one card when the cheap pass finds a mismatch",
+  );
+});
+
 // Refresh everything, or only what is on screen. The scans happen in the server, so this is a server setting: it is
 // written to the panel's config.json and applies to whichever browser is open.
 $("scan-mode")?.addEventListener("change", async (e) => {
@@ -14186,6 +14419,7 @@ function paintAnchorSettings() {
   if (rankWindow && document.activeElement !== rankWindow) rankWindow.value = String(state.rankWindowSeconds);
   if (eventFlash) eventFlash.checked = state.eventFlash;
   if (scanMode) scanMode.value = state.settings?.scanMode === "visible" ? "visible" : "all";
+  paintRefreshAgent();
   applyFlashTime();
 }
 

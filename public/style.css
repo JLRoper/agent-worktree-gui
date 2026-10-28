@@ -1230,7 +1230,24 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
   cursor: pointer;
 }
 .btn-artifacts:hover { border-color: #3b4757; background: #1b2230; }
-.row-actions { width: 26px; text-align: center; }
+.row-actions { width: 52px; text-align: center; white-space: nowrap; }
+/* The row's own refresh, to the LEFT of the ✕ and in the same family: quiet at rest, bright under the pointer, and a
+   spin while the read is in flight (the panel's own "this is happening" for a glyph control — no label change). */
+.btn-refresh-tree {
+  border: 1px solid var(--line);
+  background: #15181e;
+  color: var(--dim);
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 5px;
+  margin-right: 3px;
+  cursor: pointer;
+  opacity: .55;
+}
+tr.row:hover .btn-refresh-tree { opacity: 1; }
+.btn-refresh-tree:hover { background: #1b2230; border-color: #3b4757; color: var(--text); }
+.btn-refresh-tree:disabled { cursor: progress; opacity: .5; }
+.btn-refresh-tree.is-starting { animation: pill-again-spin .9s linear infinite; }
 .btn-del-tree {
   border: 1px solid #3a2226;
   background: #1a1216;
@@ -1294,6 +1311,21 @@ tr.row-confirm .btn-del-no {
   cursor: pointer;
 }
 tr.row-confirm .btn-del-no { border-color: var(--line); background: #151a22; color: var(--text); }
+tr.row-confirm .rc-actions { display: flex; gap: 8px; align-items: center; flex: none; }
+/* The ⟳ offer's action: the panel's green "start something" rather than the delete red, because this button starts an
+   agent in the tree; `not now` keeps the neutral Cancel styling beside it. */
+tr.row-confirm .btn-refresh-yes {
+  margin-left: 0;
+  padding: 1px 8px;
+  border-radius: 4px;
+  border: 1px solid #2b4a37;
+  background: #14211a;
+  color: #8fe3b0;
+  font: 11px/1.6 var(--term);
+  cursor: pointer;
+}
+tr.row-confirm .btn-refresh-yes:hover { border-color: #3d6b4e; background: #17281e; color: #b6f2cd; }
+tr.row-confirm .btn-refresh-yes:disabled { opacity: .5; cursor: progress; }
 /* The naming question's evidence line: the commit subjects and files the offered name was read from, on their own
    line so the question still fits one row of the table. */
 tr.row-confirm .rc-evidence { margin-top: 2px; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1728,6 +1760,13 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
 .todo-head:hover .chev, .todo-head:hover .todo-title, .todo-head:hover .todo-first { color: var(--text); }
 .todo-head:focus-visible { outline: 1px solid var(--text); outline-offset: 2px; }
 .todo-count { font-size: 11.5px; color: var(--dim); flex: none; }
+/* What the last ⟳ thought looked closed — a question, not a change. Amber like the panel's other "this wants your
+   judgement" signals, and quiet in size so it never outranks the counts it sits beside. */
+.todo-proposal {
+  flex: none; font-size: 10px; line-height: 1.5; padding: 0 6px; border-radius: 999px;
+  border: 1px solid #5a4a22; background: #221d10; color: #e0b341;
+}
+.todo-head:hover .todo-proposal { border-color: #7a6327; color: #f0c674; }
 .todo-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .todo-block.collapsed .todo-body { display: none; }
 .todo-block:not(.collapsed) .todo-head .todo-first { display: none; }
@@ -1894,7 +1933,7 @@ thead th:nth-child(6) { width: 3.8%; }  /* PR: "none" in almost every row */
 thead th:nth-child(7) { width: 4.8%; }  /* dirty */
 thead th:nth-child(8) { width: 8.2%; }  /* life / next read: "never live" still fits whole */
 thead th:nth-child(9) { width: 12.6%; } /* verdict */
-thead th:nth-child(10) { width: 3.5%; }
+thead th:nth-child(10) { width: 5%; }
 /* The delete cell is its own column: a fixed 34px plus the cell's padding was 4px wider than the card at a
    narrow window, and the ✕ was the thing that fell off. Slim padding, and let the button sit inside. */
 td.row-actions { padding-left: 4px; padding-right: 4px; }
@@ -2268,6 +2307,11 @@ tr.detail > td > .detail-inner > .todo-block .todo-head .todo-title { font-size:
 tr.detail > td > .detail-inner > .todo-block .todo-count,
 tr.detail > td > .detail-inner > .todo-block .todo-first { font-size: 11px; }
 tr.detail > td > .detail-inner > .todo-block .todo-body { padding: 0 0 6px 28px; }
+/* What the row's own ⟳ found: one dim line per action, newest first, under MERGE STATE. Not a fold — it is at most three
+   short lines, and the point of it is to be readable without a click. */
+tr.detail > td > .detail-inner > .refresh-journal { margin: 0; padding: 0 0 4px 0; font-size: 11px; line-height: 1.6; }
+tr.detail > td > .detail-inner > .refresh-journal .rj-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+tr.detail > td > .detail-inner > .refresh-journal .rj-at { color: var(--dimmer); margin-right: 5px; }
 /* The description's own text and its folded peek, in the sizes the two strips below it use. Its bullets are the
    shared fact list (`.desc-body .git-list`, styled with the merge state's), on the same 28px indent the two strips'
    lists use, so the three strips read as one column under their three headings. */

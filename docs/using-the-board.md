@@ -187,6 +187,7 @@ opens and closes the project. Settings → Display → **Project colours** shows
 | **Dirty** | Modified files, and `+N?` untracked, or `clean`. |
 | **Life / next read** | Time since anything last said this worktree is alive, the evidence chips, and a ring that fills toward the next scheduled read. Click the ring to read the row **now**. |
 | **Verdict** | See below. |
+| ⟳ | Re-read this one worktree now and reconcile it (see **Refreshing one row** below). Not offered on the project's own checkout row. |
 | ✕ | Remove the worktree (not offered on the project's own checkout row). |
 
 **Column widths are measured, not fixed.** Each column is sized from the widest thing it actually holds — its
@@ -282,6 +283,31 @@ Click a row to expand it. The detail is built not to bury the agents:
 Rows sort by what is worth reading first — a running panel agent, then the most recent sign of life — and a row you
 have open keeps its exact slot while the closed ones re-sort around it. Settings → Board → **Board reorder** controls
 how often that happens (default 5 s; off is allowed).
+
+### Refreshing one row
+
+The ⟳ in a row's actions cell (left of the ✕) re-reads **that one worktree** instead of waiting for the sweep, and does
+four things, journalling each:
+
+1. **Merge state.** `git status`, the counts against the branch's base, `git cherry`, the verdict and the PR are all
+   re-read, and the row is repainted from the answer. The journal line names what actually moved — `verdict MERGED -> UNMERGED`,
+   `0 -> 3 ahead`, `dirty 0 -> 2`, `PR #12 OPEN -> #12 MERGED` — or says `re-read, nothing moved`.
+2. **TODO.** The tree's commits and the files those commits touched are matched against the open items (the same
+   `proposeClosed` rule a finished run's harvest uses, plus the item's own `files`). A proposal is written **beside** the
+   list, never into it: the TODO badge shows `N look closed`, the tooltip lists them with the evidence, and nothing is
+   marked done until you press ✓. The list's own journal records the reconcile.
+3. **Description.** Re-derived only when there is none, or when it shares no significant word with any commit the branch
+   now carries — and never when you wrote it by hand. The panel owns that text (`lib/descriptions.js`), so a refresh can
+   ask for it again but cannot invent it or overwrite yours.
+4. **Journal.** One line per action, kept with the row (beside the panel's other stores) and shown under **Merge state**,
+   newest first. It survives a reload — a refresh that changed nothing leaves that record too.
+
+When the cheap pass finds a mismatch, the click may also **offer one agent**: Settings → Board → **Row refresh → agent**
+is `never` / **ask first** (the default) / `start it`. In *ask first* a single card appears under the row —
+**not now** / **start agent**, left to right — and starting it runs one agent **in that worktree** to double-check the
+TODO, the description and the merge state and report back; its turn is marked `↳ from the row's ⟳`. It is refused while
+any run is already live in the tree (409), and it is told to change nothing — no commits, no push, no merge. *Never*
+leaves the cheap pass and its journal; *start it* skips the card.
 
 ### Removing a worktree
 
@@ -518,6 +544,7 @@ setting):
 | Board | Grey flash | A row that was re-read with nothing changed flashes grey. Green — a sign of life — always flashes. |
 | Board | Flash on events | An event about the worktree (a console line, a job starting or finishing, an approval) counts as life and flashes the row; off, the ring still restarts but the board does not pulse. |
 | Board | Refresh | Which projects the panel re-reads: **everything**, or **only on screen** (the window plus half a screen either side). In "only on screen" it reads nothing while no page is open, and scrolling a stale project into view reads it at once. Saved in this panel's `config.json`, so it applies to every browser and survives a restart. |
+| Board | Row refresh → agent | What a row's ⟳ does after its cheap pass finds a mismatch: **never** (re-read and journal only), **ask first** (one card under the row, the default), or **start it** (the click starts the agent itself). Refused while a run is already live in that tree. Saved in this browser. |
 
 **Written to the gateway's `config.yaml`** (the gateway re-reads them; a row whose file is not reachable from this
 machine is disabled, and its note gives the reason):
