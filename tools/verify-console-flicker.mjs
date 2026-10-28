@@ -466,6 +466,35 @@ try {
       },
     }),
   );
+  // E: one stream, a tall console — does the sweep's wholesale innerHTML cost the reader their scroll?
+  results.push(
+    await scenario(pw, sandbox, {
+      mode: "stream",
+      name: "E one stream, reader scrolled to the middle, sweep",
+      steps: async ({ page, shot, record, trail }) => {
+        for (let i = 0; i < 12; i++) await appendPair(page, i, "tall");
+        const before = await page.evaluate(() => {
+          const out = document.querySelector("pre.job-out");
+          // The real cap is `.agents-block .job-out { max-height: 320px }`; an unattached card's console grows and
+          // the page scrolls instead, so the scroller is made here to measure the console's own scrollTop.
+          out.style.maxHeight = "260px";
+          out.style.overflowY = "auto";
+          state.outPinned["turn-probe-1"] = false;
+          out.scrollTop = Math.round((out.scrollHeight - out.clientHeight) / 2);
+          return { top: out.scrollTop, max: out.scrollHeight - out.clientHeight, paints: window.__probe.paints.length };
+        });
+        await shot("E0-scrolled");
+        await sleep(5200);
+        const after = await page.evaluate(() => {
+          const out = document.querySelector("pre.job-out");
+          return { top: out.scrollTop, max: out.scrollHeight - out.clientHeight, paints: window.__probe.paints.length };
+        });
+        await shot("E1-after-sweep");
+        await record("settled");
+        return { trail, scroll: { before, after } };
+      },
+    }),
+  );
 } finally {
   sandbox.child.kill();
 }
@@ -475,6 +504,7 @@ const a = results[0];
 const b = results[1];
 const c = results[2];
 const d = results[3];
+const e = results[4];
 
 const hiddenFlips = results.flatMap((r) => r.recs.filter((x) => x.kind === "attr" && x.attr === "hidden").map((x) => ({ mode: r.mode, ...x })));
 const flatFlipAttr = results.flatMap((r) => r.recs.filter((x) => x.kind === "attr" && x.attr === "data-gflat"));
@@ -521,6 +551,7 @@ console.log(`\nmeasured: ${results.map((r) => `${r.name}: ${r.appends.length} ap
 console.log(`group node churn: ${JSON.stringify(groupAdds)}`);
 console.log(`console rewrites in D: ${paints.length} at ${paints.join(", ")} ms; gaps ${gaps.join(", ")} ms`);
 console.log(`next rewrite after an append: ${rewritesAfterAppend.join(", ")} ms (${withinSecond}/${rewritesAfterAppend.length} within 1 s)`);
+console.log(`reader's mid-console scroll across a sweep (E): ${JSON.stringify(e.steps.scroll)}`);
 
 // ---- the report ----------------------------------------------------------------------------------------------
 const shotList = (labels) => labels.map((l) => `console-flicker-shots/${l}`).join("\n");
@@ -548,7 +579,7 @@ group is drawn two ways by one function, and the two ways are not the same shape
 
 ## Proven / disproven
 
-* **A group body does NOT close and reopen on an append.** Across ${results.reduce((n, r) => n + r.appends.length, 0)} appends in four card states the
+* **A group body does NOT close and reopen on an append.** Across ${results.reduce((n, r) => n + r.appends.length, 0)} appends in five card states the
   MutationObserver recorded **${hiddenFlips.length}** \`hidden\` flips and **${flatFlipAttr.length}** \`data-gflat\` flips. That is structural, not luck: nothing
   in the panel ever toggles a burst body in place. The two in-place toggles that DO exist are a single call's
   output (\`.call-body\`, \`app.js:13141\`) and a code box (\`.code-body\`, \`app.js:13171\`) — a \`.tgrp-body\`'s
@@ -580,6 +611,21 @@ group is drawn two ways by one function, and the two ways are not the same shape
   ${rewritesAfterAppend.length} appends came ${rewritesAfterAppend.join(", ")} ms after it — ${withinSecond} of ${rewritesAfterAppend.length} within the same second as the append, which is
   what makes it read as "it flickers when a line arrives".
 
+## The other half: is a turn's innerHTML replaced per append?
+
+| path | when | what it replaces | what it costs |
+| --- | --- | --- | --- |
+| \`drawJobLine\` (\`app.js:6962\`) | every tool line | the burst's \`.tgrp\` node only (\`app.js:7013\`) | the group's text is re-created; nothing else in the console moves |
+| \`paintStreamConsole\` (\`app.js:6110\`) | 🌊 cards only, on the thinking sweep (~2.4 s) | the console's whole innerHTML | every node; a reader's scroll measured **${e.steps.scroll.before.top}px before and ${e.steps.scroll.after.top}px after** a rewrite (max ${e.steps.scroll.before.max}px) |
+| \`renderConversation\` (\`app.js:6807\`) | when \`conversationSignature\` changes — a status flip, an approval, a new turn | the whole \`.job\` node | scroll, selection and the caret restored explicitly (\`app.js:6828-6865\`) |
+| \`renderJobs\` (\`app.js:6489-6491\`) | a snapshot carrying \`jobs\`, or an owner change | \`$("jobs").innerHTML\` — every unattached card | each console's scroll restored by \`captureScrolls\`/\`restoreScrolls\` |
+
+An append never runs \`conversationHtml\`/\`turnBody\`: the card is guarded by \`el.dataset.sig === sig\`
+(\`app.js:6821\`) and \`conversationSignature\` (\`app.js:6602-6682\`) has no per-line term — \`l.lastActiveAt\` and
+\`l.tokens.total\` are deliberately out of it (\`app.js:6642-6645\`, \`6666-6668\`) and painted in place instead. So the
+per-append innerHTML reset the TODO suspected does not happen; the wholesale replacement that does happen is the
+sweep's, and it keeps the reader's scroll.
+
 ## Event cadence, in one line each
 
 | event | what it does to the console |
@@ -592,7 +638,7 @@ group is drawn two ways by one function, and the two ways are not the same shape
 
 ## Screenshots (open and collapsed, both on disk)
 
-${shotList(["condensed-A0-start.png", "condensed-A1-settled.png", "stream-B0-stream-on.png", "stream-B1-after-toggle-off.png", "stream-B2-mixed.png", "condensed-C0-condensed.png", "condensed-C1-after-toggle-on.png", "condensed-C2-after-append.png", "condensed-C3-after-sweep.png", "stream-D0-settled.png"])}
+${shotList(["condensed-A0-start.png", "condensed-A1-settled.png", "stream-B0-stream-on.png", "stream-B1-after-toggle-off.png", "stream-B2-mixed.png", "condensed-C0-condensed.png", "condensed-C1-after-toggle-on.png", "condensed-C2-after-append.png", "condensed-C3-after-sweep.png", "stream-D0-settled.png", "stream-E0-scrolled.png", "stream-E1-after-sweep.png"])}
 
 * \`condensed-C2-after-append.png\` — the money shot: the first group is **condensed and closed** (\`terminal ×1 · ls -la\`,
   a \`2 lines\` button, \`0.31s\`) while the line appended after the toggle is **flat and open** (\`terminal · after-toggle\`).
