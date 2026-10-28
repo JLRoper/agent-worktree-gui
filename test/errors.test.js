@@ -46,5 +46,5 @@ test("a missing file is a 404, and the page still serves", async (t) => {
   assert.equal(dir.status, 404, "a directory under public/ is not a readable file, and not a 500");
   const page = await fetch(`${panel.base}/`);
   assert.equal(page.status, 200);
-  assert.match(await page.text(), /<script src="\/app\.js">/, "the real page is what a blank page was failing to load");
+  assert.match(await page.text(), /<script src="\/app\.js(\?v=[0-9a-f]+)?">/, "the real page is what a blank page was failing to load");
 });

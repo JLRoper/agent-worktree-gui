@@ -150,6 +150,14 @@ repo's last commit and the newest file edit inside any of its worktrees. Non-git
 listed in the footer as skipped rather than silently ignored. An entry in `projects` overrides what
 discovery finds for that name (heroes-js carries a `prRepo`).
 
+**Where the branch and PR links come from.** Not from this code: a host record in
+`logs/hosts.json` (merged over the committed `hosts.seed.json`) says which host a project lives on and
+carries the templates every link is built from, so a GitHub repo and a `git.sefl.com` one link to their
+own pages without either shape being written into the panel. A project with no mapping gets plain text
+and the reason instead of a guessed URL, and its header chip is where you fill one in — press it to read
+the project's remote and confirm the mapping it proposes. The tokens, the precedence, the `api` block
+and the landing doctrine are in [docs/hosts.md](docs/hosts.md).
+
 **Projects are grouped under their folder.** Each scan root is an accordion
 (`C:\ProjectDevelopment\` by default) holding every project that is actually inside it; a project
 that lives outside every configured root — an explicit `projects[]` entry can point anywhere —
@@ -183,6 +191,17 @@ same worktree, so the cheap and expensive passes can never race into the same ro
 consecutive discovery passes, and never when that call itself failed or came back empty — a
 transient git hiccup cannot blank the table. New worktrees appear on the next discovery pass.
 
+**A row is a tree this project OWNS**, and ownership is the folder, not the repository. `git worktree list` answers
+for the whole *repository*, so a tree cut from this repo anywhere on disk is in its answer — a lander's comparison
+trees under `%LOCALAPPDATA%\hermes\cache\scratch\land-check\`, or anything `git worktree add ../…` left beside the
+checkout — and boarding those drew bare basenames with no tag, detached HEADs and duplicated `land/*` branches as if
+they were this project's work. Only a path at or under the project's own folder becomes a row: a tree outside it is
+absent from the header counts, from the UNMERGED arithmetic and from the merge / rename / delete controls rather than
+drawn and explained away, because every one of those controls hangs off a row and none of them would be right for a
+tree the panel cannot name. `outsideTrees` on the project record (`/api/state`) carries how many the last discovery
+left off, the panel log names them, and a row an earlier build already boarded outside the project is dropped on the
+next discovery pass instead of after the usual two — the two-pass grace is for a git hiccup about a tree still owned.
+
 Per-worktree verdict:
 
 | Verdict | Meaning |
@@ -213,15 +232,37 @@ and is counted separately ("open idle" chip). `MERGED` + clean + not live = "saf
 #### What a worktree is called
 
 A tree is cut from the prompt, so its name starts as the reader's first sentence cut at 24 characters —
-usually mid-word. Hermes names the *session* from the work a moment later, and the panel renames the tree
-after that title once, at the end of the turn: the directory (`git worktree move`) and its branch
-(`git branch -m wtgui/<slug>-<tag>`, the six-hex tag kept). That rename happens **once per tree** and the
-"once" is a record, not a hope — `logs/tree-names.json` beside the job store (see `lib/tree-names.js`),
-keyed on the tag every rename keeps, holding who named the tree and when. A second run started into the
-same tree cannot rename it: it would move the directory and the branch out from under the run that already
-lives there, which is how one worktree ended up with a directory named one thing, a branch named another,
-and three live cards each spelling a different branch. The same record is what the board's row reads, so
-the tooltip on `✎` says who named the tree and when.
+usually mid-word. Hermes names the *session* from the work a moment later, and the panel gives the tree that
+name the moment the title exists — the 10-second title sweep emits it, and the rename lands as soon as no run
+is standing in the tree (git will not move a directory a live shell holds, so the first attempt inside a turn
+is deferred, not lost): the directory (`git worktree move`) and its branch (`git branch -m
+wtgui/<slug>-<tag>`, the six-hex tag kept). That name is set **once per tree** and the "once" is a record,
+not a hope — `logs/tree-names.json` beside the job store (`config.treeNamesFile`, see `lib/tree-names.js`),
+keyed on the tag every rename keeps, holding who named the tree and when. Three rules make the once a fact:
+
+- **A tree the panel cut is written down at the cut**, before `git worktree add`, naming the run it was cut
+  for — so a tree is never visible as "unnamed" while the run that owns its name is still starting, and only
+  that run's first title may take it.
+- **A tree the panel did not cut is seeded, never renamed.** Every tree `git worktree list` answers with that
+  has no entry is written down at boot, and on every later listing, under the name it was found with: the
+  fleet that existed before this ledger — every tree in this repository's own `.worktrees/`, every tree another
+  tool cut — reads as named from its first moment. A run started into one of them cannot rename it, whatever
+  `existing` it claims.
+- **A landing settles it.** A rename that lands, a rename that finds its target directory already taken, and a
+  reader's own rename all settle the record, so no later event of that run and no later run can move the tree
+  again. The project's own checkout is never recorded: its name is the folder's.
+
+The record is what the board's row reads, so the tooltip on `✎` says who named the tree and when. A second run
+started into a named tree cannot rename it: it would move the directory and the branch out from under the run
+that already lives there, which is how one worktree ended up with a directory named one thing, a branch named
+another, and three live cards each spelling a different branch.
+
+A tree whose directory carries **no `-<hex6>` tag** is never renamed, automatically or by hand: the tag is the
+ledger key and the one part of the name a rename keeps, so a bare name would have to be given an invented tag (a
+second identity for a tree that already had one) and its record keyed on a path the rename then moves out from under
+itself. `POST /api/worktree/rename` and `POST /api/worktree/suggest-name` both answer `400 … carries no -<hex6> tag`,
+and the automatic half skips the tree entirely (logging the reason once); rename the directory yourself if it needs
+another name. A directory that *is* six hex counts as the tag being named, which is the same answer.
 
 Two buttons sit beside the worktree name, and neither is automatic:
 
@@ -318,7 +359,14 @@ from the provider list Hermes itself fetched (`provider_models_cache.json`, refr
 `hermes model --refresh`), grouped by provider, with `(default: <the configured model>)` first — that
 entry sends no `model` field at all, so the run uses the gateway's own model. The menu's tooltip says
 how many models and how old the list is; a provider that was never picked falls back to the catalogue
-that ships with Hermes.
+that ships with Hermes. Each entry also carries a 0-10 `★rating` and its price in and out per 1M tokens,
+from ONE table (`providers[].pricing` on `/api/models`) composed in `lib/model-prices.js`: the panel's
+own copy of the gateway's inventory, as rebuilt by Settings → Gateway → Model prices → **Refresh now**,
+with the repo's committed `data/openrouter-model-prices.json` filling what that inventory does not price
+and the 0-10 benchmark rating it does not carry (`python tools/openrouter-prices.py` refreshes the
+snapshot; stdlib only, no key needed for either public source). The spawn form, the assistant's model
+setting and a card's model readout all open the same list from that one table; with no price anywhere the
+rows simply show no prices or ratings, never a zero.
 
 The gateway has to be up and keyed:
 `POST /api/agents` answers **503** with the gateway's own reason rather than creating a card that
@@ -578,7 +626,7 @@ so the box you type in is on screen at any panel height with the last message di
 shorter than the panel starts at its foot instead of leaving empty panel under its last turn. It is two things:
 
 - **A sentry** that runs in the panel's own process, on `settings.seconds` (default 5 s), over the same job
-  summaries the cards are drawn from. It costs no tokens and it is always awake. Thirteen rules:
+  summaries the cards are drawn from. It costs no tokens and it is always awake. Fifteen rules:
   `loop` (the same tool with the same input N times, read-only helpers held to a higher bar), `errorloop`
   (identical failing output), `quiet` (a running turn with no new output — a long build looks exactly like
   this, so it only journals by default), `approval` (parked longer than the threshold), `question` (a turn
@@ -600,7 +648,11 @@ shorter than the panel starts at its foot instead of leaving empty panel under i
   a turn stopped without finishing, usually a panel restart; an interrupted turn a later turn has taken over is
   history and does not fire. It alerts rather than wakes by default, because one restart rewrites every running
   turn as interrupted at once and would spend the whole hourly wake budget in a single pass; raise it per rule
-  under **Settings → Per-rule escalation** when a cut-off turn is worth the assistant's opinion). Every alert
+  under **Settings → Per-rule escalation** when a cut-off turn is worth the assistant's opinion), plus
+  `spawnidle` (a spawn card has waited two minutes for a click — nothing has started, and the alert names the
+  turn and the prompt) and `spawnlost` (a turn wrote a SPAWN line and neither a worker nor a card exists for it
+  two minutes later — the charter's unexplained failure, now a journal line with the line's own words). Both
+  ship at `alert`; raise either in Settings when a lost line is worth a wake. Every alert
   carries the evidence it was built from — counts,
   the repeated call, the failing line, the command being waited on — because "it looks stuck" is not
   actionable.
@@ -737,6 +789,27 @@ assistant's Settings tab) is the other half: with it on, the deadline starts the
 HEAD) goes back to the reader as a red card rather than a second try. A card the reader discarded is never started
 by either path.
 
+**An unclicked card is a worker that has not started, and it used to be invisible.** A spawn card exists only as
+an alert: no job, no row, no card, so the board drew nothing for it and the only sign was a number on the header
+badge — inside an 80-deep Alerts list. Four cards created in one evening (19:54, 19:57, 19:58, 20:00) all sat
+`open` while the reader concluded the agents had failed to spawn. So all three surfaces now say it:
+
+- a **spawn strip** at the top of the board (`#spawn-strip`, above **New agent**): `N spawn cards waiting`, one
+  row per card oldest-first, each with the prompt it would run, how long it has waited, a **Create worktree &
+  start** button and **Open card** — the same POST the float's card makes, and nothing starts by itself;
+- the header's badge gains a **separate spawn count** (`4 spawn`, amber and pulsing once the oldest card is past
+  two minutes) beside the total-alert count, and the Alerts tab shows both counts;
+- the float's Alerts tab draws **spawn cards first**, under their own heading, oldest waiting first.
+
+Both halves are watched on a two-minute clock (`SPAWN_WATCH_MS`, `checkSpawns` in `lib/assistant.js`): a card
+still open after it raises `spawnidle` — *"spawn card unclicked for 2m"*, naming the turn and the prompt — and a
+turn's SPAWN line that produced no job and no card raises `spawnlost`. The debt is recorded **before** the line is
+carried out and written to `assistant.json` at once (`spawnIntents`), so a restart mid-harvest cannot lose it; the
+sentry also re-reads the prose of the assistant's own finished turns for a SPAWN line the harvest never saw (the
+stream can deliver the last paragraph after the turn is marked harvested), and a line the debt list already shows
+as settled is never reported twice. The digest handed to the assistant every turn carries the waiting cards and the
+lost lines outright, so it cannot read an empty board as "queued".
+
 The assistant acts by writing plain lines in a reply, and every such line in it is read — wherever it sits among the paragraphs, not only the one the reply ends on:
 
     TO <thread>: the reply to that worker
@@ -747,8 +820,23 @@ The assistant acts by writing plain lines in a reply, and every such line in it 
     SPAWN <project> | what the new worker should do
     SPAWN IN <directory, worktree directory name, or branch> | what the worker should do in that tree  (no new worktree)
 
-**A SPAWN IN name that is out of date is resolved, not refused.** The panel renames a finished run's worktree
-directory and its branch after the thread title once, on the run that got the tree first (`renameWorktree` — the
+**Every command line is reconciled against what the panel actually did with it.** Each kind already journals its own
+refusals — a busy thread, a TODO id that does not exist, a WATCH with no such thread, a RESTART with no key — so the
+audit is not a second vocabulary: it counts. Every turn of the assistant's own gets one ledger
+(`lib/assistant/audit.js`, persisted in `assistant.json`): the lines `parseActions` read per kind, the outcome each
+one got as it was carried out (applied, or refused — with the journal line that says why), and a third count for lines
+that begin with a known prefix and miss its grammar, which used to be dropped with no journal line at all
+(`TO wtgui-x without a colon` is recorded as unparsed instead of vanishing). When parsed exceeds applied plus refused,
+the sentry raises a red card naming the turn, the kind and the missing count, and writes `command-unactioned` to the
+journal, which `digest()` carries beside `spawn-unstarted` — the board cannot show a line that did nothing, and a
+model re-reading its own prose otherwise believes it acted. The parsed side comes from the turn's own lines, which
+outlive the process in the job store, so a turn a restart cut in half is reconciled by the **next** pass instead of
+being carried out by nobody. **Settings → command audit** is `off` (the default: nothing is read), `report` (the red
+card and the journal line), or `enforce` (the same, and the lines nothing accounted for are carried out once on the
+following pass — a line that already ran is never replayed).
+
+**A SPAWN IN name that is out of date is resolved, not refused.** The panel renames a run's worktree
+directory and its branch after the session title once, on the run that got the tree first (`renameWorktree` — the
 slug is rebuilt from the title, the six-hex tag kept; every later run in that tree leaves the name alone, see
 *What a worktree is called*), so a path the assistant wrote down when that worker finished, or one typed from an older
 report, stops existing while the tree is standing one directory over. So an existing-tree spawn no longer
@@ -784,6 +872,15 @@ ended it — so no card is left with neither a done nor an interrupted verdict. 
 is proved with **one real turn through the gateway, never with its port**, and only then is the assistant woken
 once with the completion payload of everything the restart interrupted.
 
+A turn is not proof that anything was restarted: the gateway that was already there answers it perfectly well.
+So a restart is accepted only when `gateway_state.json` reports a **different pid** within 30 s of the command.
+`hermes gateway restart` is a service-manager verb and the board's gateway is a foreground `gateway run`, so
+the command can exit 0 having done nothing; when the pid does not move the panel stops the recorded pid and
+starts the recorded argv itself (`python -m hermes_cli.main gateway run …`, detached, with `HERMES_HOME` set,
+from the checkout the argv came from). If the pid still does not move, the restart is recorded as a **failure**
+with the reason `the gateway process never changed`, in the journal and in `logs/gateway-restart.log` — a false
+success there once had the board reporting a sixteen-hour-old gateway as freshly restarted.
+
 A panel restart hands the port over: the outgoing process writes what was running into `restart.json` beside
 the job store, spawns a detached helper (`lib/panel-restart.cjs`) that waits for the old pid to exit and only
 then starts `server.js` (and writes `logs/server.pid`), and exits through the same path a signal uses. The
@@ -792,6 +889,15 @@ panel did *not* ask for: if runs stop reporting while the panel is still up — 
 longer knows their run ids — each lost run is marked interrupted once and the assistant is told once, with the
 same payload each time. A gateway restart is invisible from the outside (its port answers either way), which is
 why the sweep asks the runs themselves and why the proof is a real turn.
+
+Giving a card the interrupted verdict is not stopping its run. The run lives in the gateway, and one whose
+client is gone keeps executing — holding a concurrency slot and a `session_turn_lease` nobody will release:
+nine of them once filled every slot until the gateway was bounced by hand. So every interrupt path also POSTs
+`/v1/runs/<id>/stop`, taking **404 and 409 as already gone**, journalling each attempt and its answer and never
+letting a failed stop hold up the verdict. The same ask is made once at boot for any run the panel inherited
+that was issued to an **earlier gateway identity** (a run id belongs to one process's memory), after the boot
+reconcile has had its chance to re-attach the runs the current gateway still holds — those are live work and
+are never stopped.
 Each finished turn is harvested exactly once (keyed by turn id, persisted): a turn's title landing or a panel
 restart re-emits the same job, and re-reading its lines would otherwise start a second worker.
 
@@ -806,7 +912,8 @@ with the line and the reason (`spawn-failed`, `send-failed`, `watch-failed`, `ru
 
 **The scratchpad** is one JSON file beside the job store (`assistantFile`, default
 `logs/assistant.json`): `settings`, `notes` (freeform, read every turn), `rules` (standing answers),
-`watches`, persisted `alerts` (so a restart does not shout twice) and a capped `journal`. It is written
+`watches`, persisted `alerts` (so a restart does not shout twice), the spawn debt (`spawnIntents` — every SPAWN
+line and whether it became a card, a job or nothing) and a capped `journal`. It is written
 through a temp file + rename, and a second panel instance with its own `jobsFile` keeps its own.
 The panel's **Scratchpad** tab edits the notes and rules; **Watches** adds and removes watches; **Alerts**
 dismisses one, hands it to the assistant, or opens the agent. A watch with a deadline carries a live countdown
@@ -838,19 +945,23 @@ Watches without a deadline, and finished ones, say so instead.
 | `hideOlderThanDays` | 7 | how old a worktree's **last activity** has to be before its chart stops drawing it. Activity, never the age of the directory: the newest of its last commit, its last edited file, the last moment the panel saw it alive and any event received about its agents — so a tree cut months ago that somebody is working in today stays. Nothing is lost: the arrow at the bottom of that project's chart (visible while the pointer is over it) shows every tree again, and each `older hidden` chip says how many are held back. `0` shows everything. Written back by `POST /api/settings/age` (Settings → **Hide stale worktrees**) |
 | `threads` | 4 (capped) | scan worker threads |
 | `discovery.worktreeSource` | `git` | `git` probes each repo (6-7 calls, ~0.8s, the default) or `hermes` runs `hermes worktree list --json` (5.5-7.2s per repo, measured on Windows). `hermes` additionally reports per-tree `locked`/`missing` and a per-branch keep/reap verdict; it is opt-in because discovery sweeps every repo on `slowSeconds`. Either way `/api/cleanup?project=NAME` gives the full audit for one repo on demand |
-| `remoteBranchPolicy` | `local-only` | whether a branch may exist on a **remote** at all. `local-only` (the default): every tree the panel cuts stays on this box — the pre-push hook it installs refuses a `git push` out of one and asks you through the permission box instead (Allow once / this session / Always allow / Deny), and the panel's own merge flow asks before it starts. `allow`: remote writes go through without asking (this is what **Always allow** in the box writes, so the box and the setting are one fact). `deny`: refused outright, and the box is not even offered. Written back by `POST /api/settings/remote-branches` (Settings → **Branches on the remote**), so it survives a restart | 
+| `remoteBranchPolicy` | `local-only` | whether a branch may exist on a **remote** at all, GLOBALLY. `local-only` (the default): every tree the panel cuts stays on this box — the pre-push hook it installs refuses a `git push` out of one and asks you through the permission box instead (Allow once / this session / Always allow / Deny), and the panel's own merge flow asks before it starts. `allow`: remote writes go through without asking (this is what **Always allow** in the box writes, so the box and the setting are one fact). `deny`: refused outright, and the box is not even offered. Written back by `POST /api/settings/remote-branches` (Settings → **Branches on the remote**), so it survives a restart. **A project overrides it** — see `projects[].remoteBranchPolicy` | 
+| `projects[].remoteBranchPolicy` | inherits the global | the policy in force for ONE project, overriding `remoteBranchPolicy` for every tree cut in it: the guard the panel installs there, the guard's answers, and the merge flow all read this value (`lib/remote-writes.js` `policyForProject`). Live report: `settings.remoteBranchPolicies` in `/api/health`, and `policy` on each tree in `logs/push-guard.json`. This panel and heroes-js are `allow` because they land by pushing a branch and opening a PR; every other checkout stays on the global `local-only`, where a child of a local turnover branch merges into its parent instead of landing on a shared remote | 
 | `remoteWriteSeconds` | 300 | how long a parked remote-write question waits before it is denied — the box's countdown and the guard's own poll window |
-| `pushGuardFile` | `logs/push-guard.json` | the panel's record of which worktrees carry the pre-push guard and when it went in (git holds the hooks path itself) |
+| `pushGuardFile` | `logs/push-guard.json` | the panel's record of which worktrees carry the pre-push guard, when it went in, and the policy it was written with (git holds the hooks path itself) |
+| `branchParentsFile` | `logs/branch-parents.json` | which branch each tree was CUT FROM, recorded at the `git worktree add` and keyed on the tree's six-hex tag so a rename does not lose it. It is what lets a run's brief name its real parent branch (`git worktree add -b` records no such thing) |
 | `cloneOwner` | `JLRoper` | GitHub owner used by `/api/clone` (and the folder **+** box) when the typed name has no `owner/` prefix |
-| `projects[]` | — | `name`, `path`, `remote`, `mainBranch`, `prRepo` |
+| `projects[]` | — | `name`, `path`, `remote`, `mainBranch`, and optionally `remoteBranchPolicy` (the branch and PR links are not configured here: they come from the project's host record — `docs/hosts.md`) |
 
 ## Endpoints
 
 | Method | Route | Notes |
 | --- | --- | --- |
 | GET | `/api/health`, `/api/config`, `/api/stats` | settings / scheduler / pool |
+| GET | `/api/build` | the build this process is serving: `{version, bootedAt, computedAt, uptimeSeconds, files}` — a short hash over `index.html`, every script/stylesheet it loads and everything under `public/core`, plus the per-file sha256. The shell's asset URLs carry `version`; the page polls this to learn the panel restarted (or that `public/` was edited under it) |
 | GET | `/api/state` | full snapshot (projects, worktrees, jobs, spawn info) |
 | GET | `/api/cleanup?project=NAME[&fresh=1]` | on-demand `hermes worktree list --json` audit for one repo: trees, external trees (`locked`/`missing`), per-branch keep/reap verdict + reason. ~6s, cached 10 min |
+| GET/POST | `/api/hosts` · `/api/hosts/propose` · `/api/hosts/mapping` | where a project's branches and PRs live. GET: the merged mapping (`hosts` records, the file pair, warnings, and each project's `view`). POST `propose` `{project}`: read that project's own remote and return the mapping it implies — writes nothing. POST `mapping` `{project, host, coordinates}`: write ONE project into `logs/hosts.json`, leaving every other record alone. Tokens, precedence and the landing doctrine: `docs/hosts.md` |
 | GET/POST | `/api/approvals`, `/api/approvals/answer`, `/api/approvals/<id>` | human side of the Hermes approval-transport contract: list pending requests, answer one (`{id, choice}` within the request's `allowed_choices`), poll one request's status. Requests expire to `deny` |
 | POST | `/api/clone` | clone a GitHub repo over ssh into one configured scan root: `{root, name}` where `root` must equal a `scanRoots` entry and `name` is `repo` or `owner/repo`. Refuses anything else (no paths, no URLs), and a destination that already exists. Responds when git finishes; discovery picks the repo up on the next pass |
 | GET | `/api/jobs` | job list plus `transport` (gateway URL, reachability, `capabilities`: runs/events/steer/stop/approval/runCwd/runBudget/maxTurns) |
@@ -866,7 +977,7 @@ Watches without a deadline, and finished ones, say so instead.
 | GET | `/api/sessions?path=` | the Hermes sessions the scheduler attributes to one worktree row: `{id, title, matched, lastActivityAt, onBoard}`. The same answer the row's "idle session" claim comes from |
 | POST | `/api/sessions/revive` | `{sessionId, path}` → a job record for a session the board has no card for (the run itself lives in the gateway; a reply continues it). **404** when the store does not attribute that session to that row, **409** when it already has a card |
 | GET/POST | `/api/settings/sessions` | the CLI's session-list length: GET reports `sessions.list_limit`, the store's real size (sessions, messages, by source) and whether the local CLI patch that reads the key is installed; POST `{listLimit}` rewrites that one line in `config.yaml`. **400** outside 1–500 |
-| GET | `/api/models` | the New-agent model menu: `{defaultModel, provider, count, fetchedAt, staleDays, providers:[{id,label,models}]}` — the provider list Hermes itself fetched, grouped, with the configured default first in its group. Falls back to the shipped catalogue when no provider was ever picked |
+| GET | `/api/models` | the model menu: `{defaultModel, provider, count, fetchedAt, staleDays, providers:[{id,label,models,pricing}], pricingAt, pricingAge, pricingSource, pricingSnapshotAt, pricedCount, ratedCount, ratedFromSnapshot}` — the provider list Hermes itself fetched, grouped, with the configured default first in its group. Falls back to the shipped catalogue when no provider was ever picked. `pricing` is the ONE price table, per provider: model id → `{input, output, average?, coding?, rating?, ratingSource?, variable?}` — in/out USD per 1M tokens (the gateway's own strings) plus a 0-10 rating, absent rather than zero when nothing has priced or scored that model. It is composed by `lib/model-prices.js` from the panel's cache over the committed `data/openrouter-model-prices.json`, so both model fields and a card's readout quote the same numbers |
 | GET | `/api/assistant` | the sentry's whole state: settings, rule definitions, alerts, watches, notes, journal, wake counter and the current board digest |
 | POST | `/api/assistant/say` | `{text}` → one turn on the assistant's own thread (`panel-assistant`), with the scratchpad and board digest attached to the input. **409** while its previous turn is still running |
 | POST | `/api/assistant/settings` | `{autonomy, model, seconds, repeatLimit, quietSeconds, approvalSeconds, contextPercent, maxWakesPerHour, spawnAutoStart, rules:{id: escalation}}` — applied immediately, saved in the scratchpad |

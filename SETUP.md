@@ -39,7 +39,7 @@ too when the profile has one.
 | git | `git --version` | every scan (the panel shells out to git) |
 | Hermes CLI | `hermes --version` | **only** spawning agents; monitoring works without it |
 | an OpenRouter key | `hermes auth`, or `$HERMES_HOME/.env` | **only** spawning agents |
-| `gh` | `gh auth status` | **only** PR columns: the panel runs `gh pr list` for a project that names a `prRepo`. Missing or unauthenticated, the PR column reads none and every other column still works — measured on a box with no `gh` installed at all. Cloning does not need it; the repo is public |
+| `gh` | `gh auth status` | **only** the PR column of a project whose host record names `"transport": "gh"` (`hosts.seed.json`'s github record does; the `git.sefl.com` one reads Bitbucket's REST API with a token instead — `docs/hosts.md`). Missing or unauthenticated, that project's PR column reads none and every other column still works — measured on a box with no `gh` installed at all. Cloning does not need it; the repo is public |
 | the commit-subject hook | in the **clone root**, `git config core.hooksPath` prints `.githooks`; nothing printed means `npm run hooks:install` was never run | keeping `wip`-style subjects out of main's history — one install covers every worktree of the clone |
 | the version-bump hook | the same `core.hooksPath` check, and `node tools/version.mjs suggest` runs | refusing a push of a branch whose own commits carry no version bump (`docs/versioning.md` is the scale). Install it **before** the panel cuts a worktree — see below |
 
@@ -76,7 +76,7 @@ Edit `config.json`. Only `scanRoots` normally matters:
 | `scanRoots` | the directory your repos live in. Every git repo directly under it becomes a project. Defaults to the folder the panel sits in. |
 | `port`, `host` | bind address. `127.0.0.1` keeps it local. `0.0.0.0` puts the board on the LAN or tailnet: a remote browser authenticates once by opening `http://<this-machine>:7331/?token=…`, but only writes are gated — reads stay open to anyone who can reach the port, so never expose it to a public network. |
 | `PANEL_TOKEN` (environment, not a key here) | the secret behind `?token=…`. Set it in the environment the panel inherits — `setx PANEL_TOKEN "<43 random chars>"` on Windows, then restart the panel — and keep it out of `config.json`, which is tracked by git. With it unset, writes from other machines are refused. |
-| `projects` | optional per-repo overrides: `remote` name, `mainBranch`, `prRepo` (for PR lookups — that column needs `gh` on PATH) |
+| `projects` | optional per-repo overrides: `remote` name, `mainBranch`. The PR column does **not** come from here — it comes from the project's host record (`logs/hosts.json`, `docs/hosts.md`), which is also where a project that is not on github.com gets its host |
 | `hermesBin`, `defaultCwd` | optional; auto-detected. |
 
 No `config.json`? The panel starts on defaults and logs that it did, so a bare `node server.js`
@@ -189,10 +189,13 @@ Then open **http://127.0.0.1:7331**.
   has no `clarify` tool and its question is only text in the console. Set the line in section 3 and
   restart the gateway. A question already asked in prose cannot be retro-answered — the run has to ask
   again.
-- **The PR column reads `none` for a project that has pull requests** — `gh` is missing or
-  unauthenticated (`gh auth status`), or that project names no `prRepo` in `config.json`. The panel
-  runs `gh pr list --repo <prRepo>` and swallows the failure, so the column goes quiet rather than
-  showing a wrong state. This is the only thing `gh` is for.
+- **The PR column reads `none` for a project that has pull requests** — that project has no host
+  mapping (`logs/hosts.json` / `hosts.seed.json`; the header chip says `no host` and names the reason —
+  `docs/hosts.md`), or the fetch itself failed: for a `"transport": "gh"` record, `gh` is missing or
+  unauthenticated (`gh auth status`); for a `"transport": "rest"` record, the env var named by
+  `api.tokenEnv` is empty on the machine running the panel (`BITBUCKET_SEFL_TOKEN` for
+  `git.sefl.com`). Both are logged once per fetch — `PR list for <project> (<host>) failed: …` — and the
+  column goes quiet rather than showing a wrong state. `gh` is not needed for a REST host.
 - **A commit landed with a subject like "wip"** — the hook is not installed in this clone: run
   `npm run hooks:install`. A local hook binds this machine and this clone only — this repo has no CI, so
   nothing refuses a bad subject at PR time either — and its own author can bypass it with

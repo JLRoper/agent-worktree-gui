@@ -10,11 +10,12 @@
 // reads the body's `input`.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   cleanScratch,
   dirSize,
@@ -36,6 +37,7 @@ import {
   scratchProblem,
   sizeOf,
   statePaths,
+  STATE_DIR_NAMES,
   STATE_FILE_NAMES,
   walkSize,
 } from "../lib/paths.js";
@@ -174,15 +176,85 @@ test("every state file lands under the data directory", () => {
     threadModelsFile: "thread-models.json",
     threadContextFile: "thread-context.json",
     projectsCacheFile: "projects.json",
+    // The records main added while this module was waiting to land.
+    locksFile: "locks.json",
+    parentsFile: "parents.json",
+    branchParentsFile: "branch-parents.json",
+    hostsFile: "hosts.json",
+    stewardQuestionsFile: "steward-questions.json",
   };
   for (const [key, name] of Object.entries(expected)) {
     assert.equal(p[key], path.join(stateDir, name), `${key} belongs in <dataDir>/state`);
   }
+  assert.equal(p.stewardDir, stateDir, "the steward's plans/ folder sits beside the store, as it did beside logs/jobs.json");
   assert.equal(p.attachmentsDir, path.join(dataDir, "attachments"));
   assert.equal(p.logsDir, path.join(dataDir, "logs"));
   // The list the migration copies and the files the panel resolves have to be the same list, or a state file is
   // silently left behind in the checkout by every install that upgrades.
   for (const name of Object.values(expected)) assert.ok(STATE_FILE_NAMES.includes(name), `${name} is on the migration list`);
+  for (const name of ["assistant-cwd", "steward"]) assert.ok(STATE_DIR_NAMES.includes(name), `${name}/ is on the migration list`);
+});
+
+// ---- drift guards: how this change broke the first time main moved under it ----------------------------------------
+// While this work waited to land, main grew six more `if (!cfg.xFile) cfg.xFile = path.join(path.dirname(cfg.jobsFile), ...)`
+// defaults. Nothing noticed, because nothing looked: a panel that merged the two would have kept those six files in the
+// checkout and reported a data directory that did not hold them. These two tests are the thing that looks.
+const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+function sourceFiles() {
+  const out = [path.join(REPO, "server.js")];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir)) {
+      const full = path.join(dir, entry);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (/\.(c|m)?js$/.test(entry) && !/\.test\.js$/.test(entry)) out.push(full);
+    }
+  };
+  walk(path.join(REPO, "lib"));
+  return out.filter((f) => path.basename(f) !== "paths.js");
+}
+const codeLines = (file) =>
+  readFileSync(file, "utf8")
+    .split(/\r?\n/)
+    .map((text, i) => ({ text, n: i + 1 }))
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l.text));
+
+test("every *File / *Dir / *Log config key the panel reads is derived by lib/paths.js, or is source rather than state", () => {
+  const derived = new Set(Object.keys(statePaths({ dataDir: "X" })));
+  // Read from config but not a state file: the scratch directory is resolved beside the data directory (resolveDirs), and
+  // the host SEED ships with the code, next to server.js, by design.
+  const notState = new Set(["scratchDir", "hostsSeedFile", "dataDirSource", "scratchDirSource"]);
+  const missing = new Map();
+  for (const file of sourceFiles()) {
+    for (const { text, n } of codeLines(file)) {
+      for (const m of text.matchAll(/\b(?:config|cfg)\.(\w+(?:File|Dir|Log))\b/g)) {
+        const key = m[1];
+        if (derived.has(key) || notState.has(key)) continue;
+        missing.set(key, `${path.relative(REPO, file)}:${n}`);
+      }
+    }
+  }
+  assert.deepEqual([...missing], [], "a config path nothing derives: add it to statePaths() and, if it is a file the panel writes, to STATE_FILE_NAMES");
+});
+
+test("no code builds a state path from the checkout or from a literal logs/ folder", () => {
+  // The only places the old spelling is allowed: the legacy folder the migration reads FROM, and the documented fallback
+  // of a lib that the server always overrides.
+  const allowed = [
+    /legacyDir:\s*path\.join\(CONFIG_DIR,\s*"logs"\)/,
+    /const CONFIG_DIR\s*=\s*path\.dirname\(CONFIG_PATH\)/,
+    /DEFAULT_HOSTS_FILE\s*=\s*"logs\/hosts\.json"/,
+  ];
+  const offenders = [];
+  for (const file of sourceFiles()) {
+    for (const { text, n } of codeLines(file)) {
+      if (allowed.some((re) => re.test(text))) continue;
+      // `dirname(CONFIG_PATH)` and `"logs"` / `logs/` as a path segment are how a state file ended up in the repository.
+      if (/path\.dirname\(CONFIG_PATH\)/.test(text) && !/legacyDir|configDir/.test(text)) offenders.push(`${path.relative(REPO, file)}:${n}  ${text.trim()}`);
+      if (/path\.join\([^)]*["']logs["']/.test(text)) offenders.push(`${path.relative(REPO, file)}:${n}  ${text.trim()}`);
+      if (/["'`]logs[\\/]\w/.test(text) && !/^\s*(\/\/)/.test(text) && !/why:|\$\{/.test(text)) offenders.push(`${path.relative(REPO, file)}:${n}  ${text.trim()}`);
+    }
+  }
+  assert.deepEqual(offenders, [], "state paths are lib/paths.js's job");
 });
 
 test("no derived path is inside the checkout it was resolved from", () => {
