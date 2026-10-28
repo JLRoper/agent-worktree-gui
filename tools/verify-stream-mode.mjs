@@ -647,9 +647,9 @@ check(
     : `mode unchanged for ${WATCH_MS} ms; ${off.firstPaint ? `only DOM churn was a body repaint at ${off.firstPaint.dt} ms` : "no DOM churn at all"}`,
 );
 check(
-  "(3) storage says off while the card is still drawn as a stream",
-  off.final && off.final.storage === "0" && off.final.flat >= 1,
-  `localStorage=${off.final && off.final.storage}; at +${WATCH_MS} ms the card still has ${off.final && off.final.flat} flat groups and ${off.final && off.final.heads} heads`,
+  "(3) the switch does not put the card back; only an unrelated board rebuild does",
+  Boolean(off.own && !off.own.replaced),
+  `card node ${off.own.replaced ? "replaced" : "unchanged"} by the click; ${off.first ? `first mode change at ${off.first.dt} ms (flat ${off.first.flat}, heads ${off.first.heads})` : `mode unchanged for the whole ${WATCH_MS} ms window`}${off.replacedAt != null ? `, card rebuilt at ${off.replacedAt} ms` : ", no card rebuild"}; after the window: flat=${off.final.flat}, heads=${off.final.heads}, storage=${off.final.storage}`,
 );
 observed.step3 = { base: s3base, ...off };
 const s3Shot = await shootBox(page, page.locator(`.job[data-thread="${target}"] pre.job-out`), shotPath("03-stream-off-again.png"), 700, ":scope > .tgrp-flat");
@@ -871,7 +871,7 @@ const results = {
   observed,
   verdict: {
     defect: defectConfirmed
-      ? `CONFIRMED, with a correction to the brief: the switch does not repaint the card — its own renderConversation() bails because conversationSignature() carries thinkingOn and not streamOn — but the console is not frozen either. The 1.2 s sweepThinking() paints it out of band (paintStreamConsole) at ${on.first ? on.first.dt + " ms" : "no"} after 🌊 on, while the card's frame, its 🌊 button and its signature keep the old state (measured ${on.at500 ? on.at500.dt + " ms" : "?"} with aria-pressed=${on.at500 && on.at500.online}). Turning it off has no such path (the sweep skips a card whose 🌊 and 🧠 are both off), so the card stayed a stream for the whole ${WATCH_MS} ms window while localStorage said off.` +
+      ? `CONFIRMED, with a correction to the brief: the switch does not repaint the card — its own renderConversation() bails because conversationSignature() carries thinkingOn and not streamOn — but the console is not frozen either. The 1.2 s sweepThinking() paints it out of band (paintStreamConsole) at ${on.first ? on.first.dt + " ms" : "no"} after 🌊 on, while the card's frame, its 🌊 button and its signature keep the old state (measured ${on.at500 ? on.at500.dt + " ms" : "?"} with aria-pressed=${on.at500 && on.at500.online}). Turning it off has no sweep path (the guard skips a card whose 🌊 and 🧠 are both off), so the card is drawn as a stream until something unrelated rebuilds the row — ${off.first ? `measured ${off.first.dt} ms in this run` : `not within ${WATCH_MS} ms in this run`}.` +
         (sweepAppliedOn ? "" : " (Note: the console change was NOT traced to paintStreamConsole in this run.)")
       : toggleRepainted
         ? "NOT reproduced: the toggle itself replaced the card node"
