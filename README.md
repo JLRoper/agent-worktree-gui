@@ -209,7 +209,7 @@ Per-worktree verdict:
 | `MERGED (N commits)` | the branch really did carry commits and they are now in remote main (reflog evidence; N counts only commits the branch itself made, not main commits it merged in) |
 | `NO COMMITS` | the branch never moved off its creation commit — there is nothing to merge, and nothing was merged |
 | `ON MAIN` | this is the primary checkout of the main branch |
-| `UNMERGED (N commits)` | carries commits not on remote main |
+| `UNMERGED (N commits)` | carries commits not on remote main — the badge is a control: roll it into its parent, open a PR, have an agent check whether the change is already on main (deleting the tree when it is), or ask where it goes |
 
 `MERGED` is only claimed when the branch has commits of its own **and** they are in remote main. A
 worktree whose branch has zero commits (a freshly made `wtgui/…` tree, or a branch created and never

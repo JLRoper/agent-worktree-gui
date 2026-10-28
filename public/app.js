@@ -8103,6 +8103,17 @@ function mergeAgentLabel(row) {
   return null;
 }
 
+// The same question for the chooser's fourth outcome: a CHECKING agent already reading this tree. The route refuses a
+// second one, so the button is drawn disabled with the reason in its tooltip rather than looking like a dead control.
+function checkAgentLabel(row) {
+  for (const a of agentsFor(row) || []) {
+    const label = String(a?.latest?.label || a?.first?.label || "");
+    if (!label.startsWith("CHECKING ")) continue;
+    if (convLive(a)) return label;
+  }
+  return null;
+}
+
 function baseBranchOf(row) {
   return String(state.projects.get(row.project)?.mainBranch || "").trim() || "main";
 }
@@ -8141,10 +8152,14 @@ function verdictHtml(row) {
 // ---- end merge control
 
 // ---- the UNMERGED chip's chooser ---------------------------------------------------------------
-// The chip used to start a merge agent on the press. It now opens three outcomes and starts NOTHING until one of them
+// The chip used to start a merge agent on the press. It now opens four outcomes and starts NOTHING until one of them
 // is clicked, because "land this" is not one decision: a child cut from a turnover branch belongs ON that branch (a
-// roll-up, done in the parent's own worktree), a child that has nowhere local to go belongs on a PR, and a child whose
-// parent is master or unknown is a question for the reader — the panel must not invent an answer to it.
+// roll-up, done in the parent's own worktree), a child that has nowhere local to go belongs on a PR, a child whose
+// parent is master or unknown is a question for the reader, and a child that may ALREADY be on main needs somebody to
+// say so from the content — the commit count cannot, because a squash merge leaves the branch ahead forever.
+//
+// That last outcome is the one that acts on the far side: its agent reads only, and a LANDED: YES is what makes the
+// panel move the worktree to the Recycle Bin (the server's own sweep, through the ✕'s act). The button says so.
 //
 // `parent` is the branch this tree was cut from and `parentSource` says how sure that is: "cut" (the panel watched it),
 // "backfilled" (guessed from a shared ticket id in the branch name) or "unknown". Only a "cut" record may drive a
@@ -8169,15 +8184,18 @@ function mergeParentOf(row) {
 }
 
 function mergeChooserTitle(row, parent) {
+  // The fourth outcome, worded once so every branch of the tooltip says the same thing about what it costs: an agent
+  // reads the base for this branch's own change, and when it is there the panel deletes the tree.
+  const check = `have an agent check whether the change is already on ${parent.main} (if it is, this worktree goes to the Recycle Bin)`;
   if (parent.rollable) {
     return `choose what happens to ${row.branch || "this branch"}: roll it into ${parent.parent} (fast-forward or merge, inside that branch's own worktree), ` +
-      `open a PR, or ask where it should go — nothing happens until you pick one`;
+      `open a PR, ${check}, or ask where it should go — nothing happens until you pick one`;
   }
   if (parent.local) {
     return `${row.branch || "this branch"} looks like it belongs on ${parent.parent}, but that parent is a ${parent.source} guess — ` +
-      `the panel will not merge on a guess: open a PR, or say where it should go`;
+      `the panel will not merge on a guess: open a PR, ${check}, or say where it should go`;
   }
-  return `choose what happens to ${row.branch || "this branch"}: open a PR, or ask where it should go — ` +
+  return `choose what happens to ${row.branch || "this branch"}: open a PR, ${check}, or ask where it should go — ` +
     `its parent is ${parent.parent ? `${parent.parent} (a main branch)` : "unknown"}, which is never a roll-up target`;
 }
 
@@ -8206,8 +8224,10 @@ function openMergeChooser(key) {
   else if (parent.local) notes.push(`${parent.parent} is a ${parent.source} guess, so rolling is refused: a guess may not drive a merge`);
   else if (parent.parent) notes.push(`${parent.parent} is a main branch — the turnover destination is a PR, not a roll`);
   else notes.push(`no parent was recorded for this tree, and the panel will not invent one`);
-  const btn = (choice, label, extra = "", disabled = false) =>
-    `<button type="button" class="mc-choice${extra}" data-merge-choice="${choice}" data-mc-key="${esc(key)}"${disabled ? " disabled" : ""}>${esc(label)}</button>`;
+  const btn = (choice, label, extra = "", disabled = false, title = "") =>
+    `<button type="button" class="mc-choice${extra}" data-merge-choice="${choice}" data-mc-key="${esc(key)}"${disabled ? " disabled" : ""}${title ? ` title="${esc(title)}"` : ""}>${esc(label)}</button>`;
+  // A check agent already reading this tree: one at a time, and the button says who rather than going quietly dead.
+  const checkLive = checkAgentLabel(row);
   const el = document.createElement("div");
   el.className = "merge-chooser";
   el.setAttribute("role", "dialog");
@@ -8219,8 +8239,15 @@ function openMergeChooser(key) {
       ? btn("roll", `Roll into ${parent.parent}`, " is-roll")
       : btn("roll", parent.parent ? `Roll into ${parent.parent}` : "Roll into its parent", " is-roll", true)) +
     btn("pr", "Open a PR", " is-pr") +
+    // The fourth outcome, and the only one that can delete the tree: it says so on the popover's own note line, because
+    // "check whether it landed" sounds read-only and half of it is not.
+    btn("check", `Check whether it is on ${parent.main}`, " is-check", Boolean(checkLive),
+      checkLive ? `${checkLive} is already reading this tree — one check at a time` : `start an agent that reads ${parent.main} for this branch's own change; if the change is there, this worktree goes to the Recycle Bin`) +
     btn("ask", "Where should this go?", " is-ask") +
-    `<div class="mc-note">${esc(notes.join(" · "))}</div>`;
+    `<div class="mc-note">${esc(notes.join(" · "))}</div>` +
+    `<div class="mc-note mc-note-check">${esc(
+      `the check reads ${parent.main} against this branch's own change and writes nothing to either branch — but if the change is already there it moves this worktree to the Recycle Bin (unlocked and clean only)${checkLive ? ` · ${checkLive} is reading it now` : ""}`,
+    )}</div>`;
   document.body.appendChild(el);
   const rect = chip ? chip.getBoundingClientRect() : null;
   if (rect) {
@@ -8253,6 +8280,29 @@ async function chooseMergeOutcome(what, key) {
       showBanner(`asked where ${row.branch || "this tree"} should go — recorded, nothing was started`);
     } catch (e) {
       showBanner(`could not record the question — ${String(e.message || e)}`);
+    }
+    return;
+  }
+  if (what === "check") {
+    // Read-only on both branches, and the panel acts on the answer itself: the run is lib/verify-prompt.js, and a
+    // LANDED: YES is what makes the server move this tree to the Recycle Bin (lib/worktree-remove.js). So there is
+    // nothing here to confirm beyond the choice the reader already made in the popover.
+    try {
+      const r = await apiFetch(
+        "/api/worktree/verify-landed",
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: row.project, path: row.path }) },
+        { timeoutMs: 120000 },
+      );
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      showBanner(`${d.label || "CHECKING"} started · ${d.branch || "branch"} against ${d.baseRef || d.base || "the base"} — the tree is deleted only if the answer is yes`);
+      if (d.job) {
+        updateJob(d.job, { scroll: false });
+        revealSpawnedAgent(d.job);
+      }
+      await resync();
+    } catch (e) {
+      showBanner(`could not start the check — ${String(e.message || e)}`);
     }
     return;
   }

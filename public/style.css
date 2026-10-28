@@ -2276,10 +2276,11 @@ td.branch .branch-plain { color: #9aa6b4; }
 .badge.merge-start.is-merging,
 .badge.merge-start.is-starting { opacity: .7; background: var(--red-bg); border-color: #57262a; color: #ff9c94; }
 
-/* The chip's chooser: three outcomes, no write until one is clicked. It is a popover on the body (not inside the cell)
-   because the board rebuilds the table on every scan and a re-rank would take a nested popover with it. The three
-   buttons are drawn as a stack rather than a row: "Roll into <parent>" and "Open a PR" are different destinations,
-   and a reader picking one should see the other two whole. */
+/* The chip's chooser: four outcomes, no write until one is clicked. It is a popover on the body (not inside the cell)
+   because the board rebuilds the table on every scan and a re-rank would take a nested popover with it. The buttons
+   are drawn as a stack rather than a row: "Roll into <parent>" and "Open a PR" are different destinations, and a
+   reader picking one should see the others whole. "Check whether it is on <main>" is the fourth: read-only in the
+   branches, and the one that ends in this worktree going to the Recycle Bin. */
 .merge-chooser {
   position: fixed;
   z-index: 60;
@@ -2313,6 +2314,11 @@ td.branch .branch-plain { color: #9aa6b4; }
 .mc-choice.is-roll:not(:disabled) { border-color: #4f6d3a; color: #b8e08a; }
 .mc-choice.is-roll:not(:disabled):hover { background: #1d2419; }
 .mc-choice.is-ask { color: var(--dim); }
+/* The check is the one outcome that can delete the tree, so it is coloured like the ON MAIN badge it is trying to
+   prove: quiet when it is just a question, blue when the answer is one it can act on. */
+.mc-choice.is-check:not(:disabled) { border-color: #1c3a56; color: #9ecbff; }
+.mc-choice.is-check:not(:disabled):hover { background: #16202c; border-color: #2b527a; }
+.mc-note-check { color: #7d93a8; }
 .mc-note { font-size: 10px; color: var(--dimmer); padding: 2px 4px; line-height: 1.45; }
 
 .clean { color: #7ee787; }

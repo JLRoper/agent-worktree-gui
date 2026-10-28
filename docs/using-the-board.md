@@ -260,7 +260,7 @@ If none of them fired, the row is not live — whatever processes may be running
 | `MERGED (N commits)` | The branch carried commits of its own and they are in remote main. `MERGED (squash/rebase, N commits)` is the same claim proved by patch id instead of ancestry; `MERGED (content identical)` says the branch's tree already matches main. |
 | `NO COMMITS` | The branch never moved off the commit it was created at. Nothing to merge; nothing was merged — and it is deliberately *not* counted as safe to remove. `NO COMMITS?` means the reflog is missing or expired, so the panel cannot tell whether the branch ever moved and will not claim it did. |
 | `ON MAIN` | This is the primary checkout of the main branch. |
-| `UNMERGED (N commits)` | Carries `N` commits that are not on remote main. On a clean tree the badge **is a button** (`⇥` on its face): it starts a `MERGING into MAIN` agent for that row — see [Merging a branch from the board](#merging-a-branch-from-the-board). |
+| `UNMERGED (N commits)` | Carries `N` commits that are not on remote main. On a clean tree the badge **is a button** (`⇥` on its face): it opens four outcomes for that row — roll it into its parent, open a PR, have an agent **check whether the change is already on main** (which deletes the tree when it is), or ask where it should go. See [Merging a branch from the board](#merging-a-branch-from-the-board) and [Checking whether a branch already landed](#checking-whether-a-branch-already-landed). |
 | `EMPTY REPO` / `NO BASE REF` | There is nothing to judge against: the repo has no commits yet, or its remote base ref does not exist here. |
 | *(empty, grey)* | Not computed yet. A dashed grey badge is a verdict being reclassified after a change. |
 
@@ -291,6 +291,31 @@ else's work. A row that already has a merge agent working it draws a disabled `M
 names the agent. The route (`POST /api/worktree/merge {project, path}`) refuses all of those cases again from git, so
 a board that is a scan behind cannot start one by accident; `{dryRun: true}` returns the prompt without starting
 anything, and the script itself is `lib/merge-prompt.js`.
+
+### Checking whether a branch already landed
+
+The `UNMERGED` count is a count of **commits**, not a verdict on content: a branch that landed by squash, rebase,
+cherry-pick or a hand-rewritten patch keeps commits of its own while main holds the change under another sha, so it
+reads `UNMERGED` forever. The chooser's fourth outcome answers that. **Check whether it is on main** (or `… on
+master`, or whatever the project's base branch is called) starts a Hermes agent in that worktree, named
+`CHECKING MAIN`, and it reads only:
+
+- it reverse-applies the branch's own patch to a pristine `git archive` export of the base, under the OS temp dir. A
+  patch that reverses cleanly is content the base already has, whatever the sha or the subject says — which is the
+  one test a squash merge survives;
+- it corroborates with `git cherry` (patch ids), `git diff --quiet` for an identical tree, and `git cat-file -e` for
+  every file the branch adds: an absent file is what settles a half-landed branch;
+- it answers in one line, on its own: `LANDED: YES`, `LANDED: PARTIAL`, `LANDED: NO` or `LANDED: SUPERSEDED` (the base
+  delivers the same behaviour another way — that is not landed, and it deletes nothing);
+- on `LANDED: YES` the panel moves the worktree's folder to the Windows Recycle Bin and prunes git's record of it,
+  exactly as the row's ✕ does. A **locked** tree is refused with the lock named, a tree with modified or untracked
+  files is refused with that reason on the card, and a tree an agent is still running in is refused too;
+- every other answer deletes nothing, and the card's console carries the word the agent read and why.
+
+The agent writes nothing: no commit, no stash, no checkout, no push — a dirty tree is reported, never tidied. The
+route (`POST /api/worktree/verify-landed {project, path}`) refuses a tree that is on the base branch itself, a branch
+with no commits off the base, and a second check in the same tree; `{dryRun: true}` returns the script without
+starting anything, and the script is `lib/verify-prompt.js`.
 
 ### Opening a row
 

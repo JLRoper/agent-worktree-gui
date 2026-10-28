@@ -4,11 +4,11 @@
 import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 // The push-guard record is a few hundred bytes read at boot and written on an install: sync is the honest shape
 // for it, and it is the same file the Settings row reports from.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { cpus } from "node:os";
+import { cpus, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "./lib/pool.js";
@@ -22,6 +22,9 @@ import { ProjectRegistry } from "./lib/projects.js";
 import { Jobs, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js";
 import { gitIn, scanWorktree } from "./lib/scan.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
+import { verifyLabel, verifyPrompt } from "./lib/verify-prompt.js";
+import { answerDeletes, answerLine, answeredChecks } from "./lib/verify-landed.js";
+import { deleteWorktreeRow } from "./lib/worktree-remove.js";
 import { Hosts, proposeMapping } from "./lib/hosts.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
@@ -1469,43 +1472,9 @@ function warmModelPrices(cfg, catalogue) {
 
 const cleanPath = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "");
 
-const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// Remove a directory that something may still hold open. `force: true` makes a missing path a
-// success; anything left behind is a handle, not a missing file. Returns true when the path is gone.
-async function removeDirNow(target) {
-  try {
-    await rm(target, { recursive: true, force: true, maxRetries: 2, retryDelay: 100 });
-  } catch {
-    /* held open — the check below is the answer */
-  }
-  return !(await stat(target).then((s) => s.isDirectory()).catch(() => false));
-}
-
-// Windows refuses to delete (or rename) a directory that a process is using as its working directory,
-// and a worktree is exactly that whenever an agent, an editor, or a panel started from it is still
-// running. Nothing the panel can do makes the holder let go — it has to exit — so the cleanup keeps
-// trying after the response for minutes rather than leaving an empty folder on disk forever.
-function retryDirCleanup(target, { everyMs = 5_000, forMs = 10 * 60_000 } = {}) {
-  const until = Date.now() + forMs;
-  const tick = async () => {
-    if (await removeDirNow(target)) {
-      log(`worktree cleanup: removed the leftover folder ${target}`);
-      return;
-    }
-    if (Date.now() < until) setTimeout(tick, everyMs).unref();
-    else log(`worktree cleanup: gave up on ${target} — a process still holds it`);
-  };
-  setTimeout(tick, everyMs).unref();
-}
-
-// Is this path an ancestor of (or equal to) a process's working directory? A panel cannot delete the
-// folder it was started from, and saying so is more use to the reader than "another process".
-function holdsCwd(target, cwd) {
-  const a = cleanPath(target).toLowerCase();
-  const b = cleanPath(cwd).toLowerCase();
-  return Boolean(b) && (b === a || b.startsWith(`${a}/`));
-}
+// Removing a worktree's folder - the Recycle Bin attempt, the retry for a folder a process still holds, and
+// the question of whether the panel itself is what holds it - lives in lib/worktree-remove.js with the rest of
+// the act, because the answer a CHECKING agent gives ends in the same removal.
 
 // The Hermes sessions the scheduler attributes to one worktree row — the same attribution the row's
 // own "Hermes session open here but idle" claim is built from, so this list can never offer a session
@@ -2927,8 +2896,11 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, removedFile, kind: hit.artifact.kind || "file" });
     }
 
-    // Remove a worktree from the board: the directory goes to the Windows Recycle Bin (recoverable), then
-    // git's own bookkeeping is pruned. Never the project's own checkout, never a tree with a live agent.
+    // Remove a worktree from the board: the directory goes to the Windows Recycle Bin (recoverable), then git's
+    // own bookkeeping is pruned. Never the project's own checkout, never a tree with a live agent, never a locked
+    // tree. The act itself is lib/worktree-remove.js, because the answer a CHECKING agent gives (LANDED: YES) ends in
+    // the same removal and has to pass through the same guards - the lock, the live-agent check and what git still
+    // lists are enforced there, so a second caller cannot arrive one guard short of this one.
     if (route === "/api/worktree/delete" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
@@ -2936,121 +2908,18 @@ const server = createServer(async (req, res) => {
       const target = path.resolve(String(body.path || "").trim());
       const project = scheduler.getProjects().find((p) => p.name === projectName);
       if (!project) return sendJson(res, 404, { error: `unknown project: ${projectName}` });
-      if (path.resolve(project.path) === target) {
-        return sendJson(res, 400, { error: "that is the project's own checkout, not a worktree" });
-      }
       const row = scheduler.store.rowsFor(projectName).find((r) => path.resolve(r.path) === target);
       if (!row) return sendJson(res, 404, { error: `not a worktree row of ${projectName}: ${target}` });
-      // The reader's lock, before anything is even looked at: the row's ✕, a merge agent tidying up, a script that
-      // found this route — every one of them arrives here, and every one of them is refused with the lock named. A
-      // silent no-op would read as a broken button, so this is a 409 with the whole sentence (the board banners it).
-      const lock = locks.check({ project: projectName, path: row.path, branch: row.branch });
-      if (lock.locked) {
-        log(`worktree delete refused for ${row.path}: ${lock.reason}`);
-        return sendJson(res, 409, { error: lock.reason, lock });
-      }
-      const busy = jobs
-        .list()
-        .find(
-          (j) =>
-            isLiveJobStatus(j.status) &&
-            [j.cwd, j.ownerPath].filter(Boolean).some((p) => path.resolve(p) === target),
-        );
-      if (busy) return sendJson(res, 409, { error: `an agent is running in that worktree (${busy.id})` });
-
-      // Recycle first: a mistaken click is recoverable from the Recycle Bin for as long as Windows keeps
-      // it. `git worktree remove --force` is the fallback when the shell cannot reach the Recycle Bin.
-      const psCommand =
-        "Add-Type -AssemblyName Microsoft.VisualBasic; " +
-        `[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory('${target.replace(/'/g, "''")}','OnlyErrorDialogs','SendToRecycleBin')`;
-      const stillThere = () => stat(target).then((s) => s.isDirectory()).catch(() => false);
-      // Recorded before anything is deleted: the response should say whether this call removed a
-      // directory or merely cleaned up the panel's record of one that was already gone.
-      const hadDirectory = await stillThere();
-      let recycled = false;
-      let recycleError = null;
-      if (process.platform === "win32" && hadDirectory) {
-        try {
-          await execP("powershell", ["-NoProfile", "-NonInteractive", "-Command", psCommand], { timeout: 90_000, windowsHide: true });
-          recycled = !(await stillThere());
-          if (!recycled) recycleError = "the Recycle Bin refused it — the directory is still there";
-        } catch (e) {
-          recycleError = String((e && e.message) || e);
-        }
-      }
-      // git's removal empties the tree and drops its own record. Its LAST step is the rmdir, and on
-      // Windows that fails whenever a process still has the folder as its working directory — which a
-      // worktree routinely is, because the agent that built it, an editor, or a panel started from it is
-      // still running. So `failed to delete …: Permission denied` does NOT mean the worktree survived: by
-      // then the files and the record are gone and only an EMPTY folder is left. Treating that error as
-      // a failure is what left the row on the board (re-read as a worktree with no branch) while the
-      // folder stayed on disk. What git still lists is the arbiter, below.
-      let gitError = null;
-      if (await stillThere()) {
-        try {
-          await execP("git", ["-C", project.path, "worktree", "remove", "--force", target], { timeout: 90_000, windowsHide: true });
-        } catch (e) {
-          gitError = String((e && e.message) || e);
-        }
-      }
-      await execP("git", ["-C", project.path, "worktree", "prune"], { timeout: 30_000, windowsHide: true }).catch(() => {});
-
-      const listing = await worktreeList(project.path).catch(() => null);
-      const stillRegistered = listing ? listing.some((w) => path.resolve(w.path) === target) : null;
-      if (stillRegistered === true) {
-        // git never let go of it: the worktree is still real, so the row has to stay and the caller has
-        // to hear a failure rather than a claim of deletion.
-        const why = String(gitError || "git still lists it").trim().split("\n").filter(Boolean).pop();
-        return sendJson(res, 500, { error: `could not remove the worktree: ${why}` });
-      }
-      const heldOpen = /failed to delete|Permission denied|being used by another process|EBUSY|EPERM/i.test(
-        String(gitError || ""),
-      );
-      if (stillRegistered === null && (await stillThere()) && gitError && !heldOpen) {
-        // git's listing could not be read AND its removal failed for some other reason: nothing here
-        // proves the worktree is gone, so do not pretend it is.
-        return sendJson(res, 500, { error: `could not remove the worktree: ${gitError}` });
-      }
-
-      // Only the folder can disagree now. An empty leftover goes at once; one a process still holds is
-      // retried here, then kept after the response until the holder exits — the row goes either way,
-      // because it describes a worktree git no longer has.
-      let dirLeft = await stillThere();
-      for (let i = 0; dirLeft && i < 4; i += 1) {
-        dirLeft = !(await removeDirNow(target));
-        if (dirLeft) await sleepMs(600);
-      }
-      if (dirLeft) retryDirCleanup(target);
-      // Whether the panel itself is what holds the folder: a panel started from this worktree cannot
-      // delete it while it runs, and "restart the panel" is the only useful thing to say.
-      const panelHolds = dirLeft && holdsCwd(target, process.cwd());
-
-      // Drop by the path the STORE knows, not by `path.resolve(target)`: rows are keyed by the scanned
-      // path with forward slashes, so a resolved Windows path is a different key and the row survived
-      // its own deletion.
+      const out = await deleteWorktreeRow({ project, row, target, jobs, locks, onLog: log });
+      if (!out.ok) return sendJson(res, out.status || 500, { error: out.error, lock: out.lock || undefined });
+      // Drop by the path the STORE knows, not by `path.resolve(target)`: rows are keyed by the scanned path with
+      // forward slashes, so a resolved Windows path is a different key and the row survived its own deletion.
       scheduler.store.dropRow(projectName, row.path);
-      // A snapshot only refreshes the rows it carries — it never retracts one — so the removal needs
-      // its own event or the row sits on every open board for a worktree that no longer exists.
+      // A snapshot only refreshes the rows it carries - it never retracts one - so the removal needs its own event
+      // or the row sits on every open board for a worktree that no longer exists.
       broadcast({ type: "drop", project: projectName, path: row.path });
       broadcast({ type: "snapshot", data: snapshot() });
-      return sendJson(res, 200, {
-        ok: true,
-        recycled,
-        // The Recycle Bin is best effort: when it declined, say why and let the card say the files are
-        // gone permanently instead of promising recoverability that does not exist.
-        recycleError,
-        // Files deleted, git record pruned, row dropped — and the folder itself survived because a
-        // process holds it. The panel keeps trying in the background.
-        dirLeft,
-        panelHolds,
-        path: target,
-        name: row.name,
-        branch: row.branch || null,
-        // The key the panel and its rows use, so the browser can remove the right node.
-        rowPath: row.path,
-        // The folder was already gone when this ran: say so rather than pretending we removed it.
-        alreadyGone: !hadDirectory,
-      });
+      return sendJson(res, 200, out);
     }
 
     // Open a file an agent produced for the reader. Not a URL: a real path, opened in an editor.
@@ -3233,6 +3102,97 @@ const server = createServer(async (req, res) => {
       });
       log(`merge ${row.branch} -> ${base} in ${project.name}: parked on the permission box (${parked.id}) — the setting is local-only`);
       return sendJson(res, 202, { pending: { id: parked.id, deadline: parked.deadline, timeoutSeconds: parked.timeoutSeconds, kind: "merge" }, ...preview, prompt: undefined });
+    }
+
+    // The UNMERGED chip's fourth outcome: an agent that CHECKS the branch against the base, because the commit count
+    // cannot answer it. A squash, a rebase or a hand-rewritten patch leaves the branch carrying commits of its own
+    // while the base holds the change under another sha, so "is it on main?" is a question about CONTENT, and
+    // lib/verify-prompt.js is the script that answers it from the content itself (a reverse-apply of the branch's own
+    // patch to a pristine export of the base).
+    //
+    // The run writes nothing to either branch, so it does NOT pass through the remote-write box: the only act that
+    // follows its answer is the panel's own delete - on LANDED: YES, through the same lib/worktree-remove.js the ✕
+    // uses, so a locked tree, a tree with a live agent and a tree with uncommitted work are all still refused.
+    // `dryRun` hands the script back without starting anything, the way the merge route does.
+    if (route === "/api/worktree/verify-landed" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const asked = String(body.path || "").trim();
+      if (!asked) return sendJson(res, 400, { error: "path is required" });
+      const worktree = path.resolve(asked);
+      const info = await stat(worktree).catch(() => null);
+      if (!info || !info.isDirectory()) return sendJson(res, 404, { error: `no such directory: ${worktree}` });
+      // The same resolution the merge route does, for the same reason: a worktree can live anywhere, so the row's
+      // project is the hint and git's own worktree list is the proof that the hint is real.
+      let project = spawnFeature.projectForPath(worktree) || registry.projects.find((p) => normPathKey(p.path) === normPathKey(worktree));
+      let trees = project ? await worktreeList(project.path).catch(() => []) : [];
+      if (!project) {
+        const hinted = registry.projects.find((p) => p.name === String(body.project || "").trim());
+        if (hinted) {
+          const listed = await worktreeList(hinted.path).catch(() => []);
+          if (listed.some((w) => normPathKey(w.path) === normPathKey(worktree))) {
+            project = hinted;
+            trees = listed;
+          }
+        }
+      }
+      if (!project) return sendJson(res, 400, { error: `${worktree} is not inside a known project, and is not one of its worktrees` });
+      const base = String(project.mainBranch || "");
+      if (!base) return sendJson(res, 400, { error: `${project.name} has no base branch (no main/master and no remote default) to check against` });
+      const remote = project.remote || null;
+      const baseRef = remote ? `${remote}/${base}` : base;
+      const row = await scanWorktree(worktree, { remoteRef: baseRef, mainBranch: base }, "fast");
+      if (row.error) return sendJson(res, 400, { error: row.error });
+      if (row.branch === base) return sendJson(res, 409, { error: `${path.basename(worktree)} is on ${base} itself - there is nothing to check` });
+      if (row.ahead === null) return sendJson(res, 409, { error: `cannot count commits against ${baseRef} in this worktree - is the base ref there?` });
+      if (row.ahead === 0) return sendJson(res, 409, { error: `${row.branch} has no commits off ${base} - there is nothing to check` });
+      const label = verifyLabel(base);
+      // One check agent per worktree: a second would spend the gateway's run on the answer the first one is writing.
+      const running = jobs
+        .list()
+        .find((j) => isLiveJobStatus(j.status) && normPathKey(j.ownerPath || j.cwd) === normPathKey(worktree) && String(j.label || "").startsWith("CHECKING "));
+      if (running) return sendJson(res, 409, { error: `an agent is already checking this worktree (${running.label || running.thread})` });
+      const list = await gitIn(worktree, ["log", "--oneline", "-20", `${baseRef}..HEAD`], 20000);
+      const commitList = list.ok ? list.out.split("\n").filter(Boolean) : [];
+      const root = (trees.find((w) => w.branch === base) || trees[0] || { path: project.path }).path;
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const lock = locks.check({ project: project.name, path: worktree, branch: row.branch });
+      const prompt = verifyPrompt({
+        project: project.name,
+        worktree,
+        root,
+        branch: row.branch,
+        base,
+        baseRef,
+        remote,
+        ahead: row.ahead,
+        commits: commitList,
+        stamp,
+        // What the board knows, so the agent reads a clean tree rather than trusting this line: the panel will refuse
+        // the delete for a dirty tree, and the report has to say so before the reader wonders why nothing moved.
+        dirty: row.dirty,
+        untracked: row.untracked,
+        locked: lock.locked ? lock : null,
+        panelPort: config.port,
+        scratchBase: tmpdir(),
+      });
+      const thread = makeThreadName(`${label} ${project.name}`);
+      const preview = { project: project.name, base, baseRef, remote, branch: row.branch, ahead: row.ahead, root, worktree: worktree.replace(/\\/g, "/"), label, thread, prompt, lock: lock.locked ? lock : null };
+      if (body.dryRun) return sendJson(res, 200, { dryRun: true, ...preview });
+      const transport = await jobs.probe();
+      if (!transport.reachable || !transport.capabilities?.runs) {
+        return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}`, ...preview, prompt: undefined });
+      }
+      const top = await gitIn(worktree, ["rev-parse", "--show-toplevel"], 15000);
+      const ownerPath = top.ok && top.out ? top.out : worktree;
+      // `remoteWrite: "none"` is the promise this run makes: a check reads, so the landing paragraphs stay out of its
+      // brief and no push guard is installed for a push it must never make.
+      const job = await jobs.create({ prompt, thread, cwd: worktree, existing: true, ownerPath, project: project.name, remoteWrite: "none" });
+      // The label is what the sweep reads the answer back from, so it is set before the card draws.
+      jobs.setLabel(job.thread, label);
+      if (job.status === "failed") return sendJson(res, 502, { error: job.error || "the run could not be started", job, ...preview, prompt: undefined });
+      log(`check ${row.branch} against ${base} in ${project.name}: job ${job.id} (${job.status})`);
+      return sendJson(res, 202, { job, ...preview });
     }
 
     // Give a worktree a name of its own: the directory and its branch. The row is looked up by path, and the whole
@@ -3441,6 +3401,67 @@ async function warmParents() {
   }
   if (learned) log(`parents: ${learned} branch(es) resolved (${guessed} backfilled guess(es) in total — a guess never drives a write)`);
 }
+// ---- the CHECKING agent's answer, acted on -------------------------------------------------------------------
+// A check run is read-only, so its answer is the whole product: on LANDED: YES the panel does the one thing that
+// answer is for and moves the tree to the Recycle Bin, through the ✕'s own act (lib/worktree-remove.js) so the
+// reader's lock, a live agent and the project's own checkout still refuse it. Every other word - PARTIAL, NO,
+// SUPERSEDED, or no readable line at all - leaves the tree exactly where it is and the card says which word it read.
+//
+// A pass over the JOB STORE rather than a callback on the run that answered: a panel restarted between the answer and
+// the delete still acts on it, and the store is what survives a restart. `checkedAnswers` keeps one answer to one
+// delete per process, and lib/verify-landed.js bounds how old an answer may be before it is history rather than an
+// instruction.
+const checkedAnswers = new Set();
+let sweepingChecked = false;
+async function sweepCheckedLandings() {
+  if (sweepingChecked) return;
+  sweepingChecked = true;
+  try {
+    // The summary `jobs.list()` hands back has no `finalMessage` (the card store drops it), so each candidate is
+    // enriched from the LIVE job first: the answer is the last line of a message the completion payload may have
+    // truncated from the start.
+    const rows = jobs.list().map((s) => ({ ...s, finalMessage: jobs.get(s.id)?.finalMessage || s.completion?.final?.text || "" }));
+    for (const { job, answer } of answeredChecks(rows, { acted: checkedAnswers })) {
+      checkedAnswers.add(job.id);
+      const live = jobs.get(job.id);
+      const tree = job.ownerPath || job.cwd || "";
+      const project = (tree && spawnFeature.projectForPath(tree)) || null;
+      const row = project ? store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(tree)) : null;
+      const base = String(project?.mainBranch || "main");
+      const say = (text) => {
+        if (live) jobs.push(live, { kind: "raw", text });
+      };
+      if (!answerDeletes(answer)) {
+        say(answerLine(answer, { base }));
+        log(`check ${job.id}: answered LANDED: ${answer.verdict} for ${row?.branch || tree || "(no tree)"} - nothing was deleted`);
+        continue;
+      }
+      if (!project || !row) {
+        say(answerLine(answer, { base, error: "it is no longer a worktree row of this project, so there was nothing to remove" }));
+        continue;
+      }
+      const out = await deleteWorktreeRow({ project, row, target: row.path, jobs, locks, onLog: log });
+      if (!out.ok) {
+        say(answerLine(answer, { base, error: out.error }));
+        log(`check ${job.id}: LANDED: YES for ${row.branch}, but ${row.path} was not deleted - ${out.error}`);
+        continue;
+      }
+      store.dropRow(project.name, row.path);
+      broadcast({ type: "drop", project: project.name, path: row.path });
+      broadcast({ type: "snapshot", data: snapshot() });
+      say(answerLine(answer, { base, deleted: true }));
+      log(`check ${job.id}: LANDED: YES for ${row.branch} - removed ${row.path} (recycled: ${out.recycled ? "yes" : "no"})`);
+    }
+  } catch (e) {
+    log(`checked-landing sweep failed: ${String((e && e.message) || e)}`);
+  } finally {
+    sweepingChecked = false;
+  }
+}
+setInterval(() => void sweepCheckedLandings(), 10_000).unref?.();
+// One pass shortly after boot, so an answer a restart interrupted is acted on without waiting for the first tick.
+setTimeout(() => void sweepCheckedLandings(), 6_000).unref?.();
+
 setInterval(() => void warmParents(), Math.max(30_000, config.stewardRefreshSeconds * 500));
 // First pass 20s in: late enough that the board is up (the boot pass is local git only), early enough that a legacy
 // tree stops reading "unknown" within one screen of the panel opening.
