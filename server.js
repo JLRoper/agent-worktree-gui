@@ -3412,6 +3412,9 @@ async function warmParents() {
 // delete per process, and lib/verify-landed.js bounds how old an answer may be before it is history rather than an
 // instruction.
 const checkedAnswers = new Set();
+// Answers whose tree the board has not re-adopted yet. Not `acted`: the answer is still good, and the next tick may
+// find the row. Only the one log line is deduped.
+const pendingChecked = new Set();
 let sweepingChecked = false;
 async function sweepCheckedLandings() {
   if (sweepingChecked) return;
@@ -3436,8 +3439,18 @@ async function sweepCheckedLandings() {
         log(`check ${job.id}: answered LANDED: ${answer.verdict} for ${row?.branch || tree || "(no tree)"} - nothing was deleted`);
         continue;
       }
-      if (!project || !row) {
+      if (!project) {
         say(answerLine(answer, { base, error: "it is no longer a worktree row of this project, so there was nothing to remove" }));
+        continue;
+      }
+      if (!row) {
+        // The project is known but its row is not in the store YET - the answer arrived before a discovery pass put
+        // the tree back on the board (a restart between the answer and the delete is exactly that). Do not spend the
+        // answer: leave it for the next tick, inside lib/verify-landed.js's age window, and say so once.
+        if (!pendingChecked.has(job.id)) {
+          pendingChecked.add(job.id);
+          log(`check ${job.id}: LANDED: YES, but ${tree} is not on the board yet - waiting for the scan`);
+        }
         continue;
       }
       const out = await deleteWorktreeRow({ project, row, target: row.path, jobs, locks, onLog: log });

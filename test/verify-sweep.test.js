@@ -106,10 +106,13 @@ test("a settled LANDED: YES card deletes its worktree, and a PARTIAL one does no
     const proj = (snap.projects || []).find((x) => x.name === "proj");
     return proj ? (proj.worktrees || []).find((w) => slash(w.path) === slash(p)) || null : null;
   };
-  await waitFor(panel.base, (s) => Boolean(rowOf(s, landedTree)) && Boolean(rowOf(s, partialTree)), "both trees on the board");
+  // Discovery first, and only the tree that must SURVIVE is waited for: the landed row may already be gone by the time
+  // this reads the board (the sweep's boot pass is 6 s in, and a loaded box can take longer than that to scan), and
+  // waiting for a row that is being deleted is a race this test would lose for the right reason.
+  await waitFor(panel.base, (s) => Boolean(rowOf(s, partialTree)), "the worktrees on the board");
 
   // The answer is acted on within one sweep tick (10 s), with a boot pass 6 s in.
-  const after = await waitFor(panel.base, (s) => !rowOf(s, landedTree), "the landed row to be swept off the board");
+  const after = await waitFor(panel.base, (s) => !rowOf(s, landedTree), "the landed row to be swept off the board", { timeout: 60_000 });
   assert.equal(await exists(landedTree), false, "the landed worktree's folder is gone (Recycle Bin or git's removal)");
   assert.equal(/feat\/landed/.test(git(repo, ["worktree", "list", "--porcelain"])), false, "git no longer lists the removed tree");
   assert.ok(rowOf(after, partialTree), "a LANDED: PARTIAL answer deletes nothing: its tree is still a row");
