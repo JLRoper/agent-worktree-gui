@@ -679,6 +679,11 @@ button.btn-pin.is-on { color: #c8a6ff; border-color: #55407a; background: #2a204
 button.btn-think { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dimmer); font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; }
 button.btn-think:hover { color: var(--text); border-color: var(--line); }
 button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241d33; }
+/* The 🌊 beside the 🧠: the same button, saying the card is drawn as ONE stream. Blue rather than violet, because it
+   is a different choice rather than a second level of the same one. */
+button.btn-stream { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dimmer); font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; }
+button.btn-stream:hover { color: var(--text); border-color: var(--line); }
+button.btn-stream.is-on { color: #9ed4ff; border-color: #2f4a63; background: #14202b; }
 
 
 /* A steer the turn never read: offered back, unsent, rather than sent as a second turn. */
@@ -948,6 +953,13 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
 /* The console is a <pre>: the template's own newlines would render as blank lines, so the block normalises
    whitespace and only its real transcript lines keep it. */
 .tgrp { margin: 3px 0 6px; padding-left: 8px; border-left: 2px solid #2c3542; white-space: normal; }
+/* A piece of ONE stream: the same markup without the rail, the indent or the gap, so a call sits in the flow exactly
+   like the prose and the reasoning around it. Nothing in it is folded, so nothing in it is chrome either. */
+.tgrp.tgrp-flat { margin: 0; padding-left: 0; border-left: 0; }
+.tgrp-flat > .tgrp-body { margin-top: 0; padding-top: 0; border-top: 0; }
+/* The reasoning, drawn as a line of that stream rather than as a block above it. It keeps the block's own voice
+   (italic, dim) so it still reads as thought and not as something the agent said out loud. */
+.jl-think { color: #b3a8cc; font-style: italic; }
 .tgrp .jl { white-space: pre-wrap; }
 .tgrp-head { display: flex; flex-direction: column; gap: 1px; }
 .tgrp-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; cursor: pointer; border-radius: 3px; }
