@@ -1,16 +1,22 @@
-// The model menu's price and coding-rating columns, and the one control that regenerates them.
+// The model menu's price and rating columns, and the one control that regenerates them.
 //
 //   PANEL_PLAYWRIGHT_ROOT=C:/ProjectDevelopment/heroes-js node tools/verify-model-prices.mjs
 //
 // The New-agent card's model dropdown named a model and nothing else, so choosing between two ids that
 // cost the same meant leaving the board. Each row now carries what the shipped CLI model picker already
-// shows: the input and output price per million tokens and Artificial Analysis' coding index rescaled to
-// 0-10. The numbers come from the gateway's own model inventory (GET /api/model/options — the same
-// `_apply_pricing` the CLI picker patch decorates its rows from), and the panel keeps its own copy so
-// opening the menu is a file read and can never wait on a cold provider. A Settings control regenerates
-// that copy: it makes the gateway re-fetch every provider's live model list — rewriting
-// provider_models_cache.json, the file `hermes model --refresh` writes and the file the menu lists from —
-// and rebuilds the panel's cache from the answer, having deleted its own first.
+// shows: the input and output price per million tokens and a 0-10 Artificial Analysis rating.
+//
+// There is ONE table (/api/models' providers[].pricing), composed by lib/model-prices.js from two
+// producers that are never served separately:
+//   * the panel's own copy of the gateway's model inventory (GET /api/model/options — the same
+//     `_apply_pricing` the CLI picker patch decorates its rows from), so opening the menu is a file read
+//     and can never wait on a cold provider. A Settings control regenerates that copy: it makes the
+//     gateway re-fetch every provider's live model list — rewriting provider_models_cache.json, the file
+//     `hermes model --refresh` writes and the file the menu lists from — and rebuilds the panel's cache
+//     from the answer, having deleted its own first.
+//   * the committed data/openrouter-model-prices.json (tools/openrouter-prices.py), which fills what the
+//     gateway did not price and supplies the 0-10 benchmark rating the gateway's inventory so often does
+//     not carry. Its rows are applied to the OpenRouter provider only.
 //
 // Everything below happens in a sandbox of its own: a throwaway HERMES_HOME, its own PANEL_CONFIG with
 // its own port and its own logs, and an apiServer pointed at a STAND-IN gateway this script runs. The
@@ -308,6 +314,56 @@ async function unitPhase() {
   const built = m.buildPricingCache({ providers: [{ slug: "openrouter", pricing: { ...PRICING_A } }] }, "http://stub");
   check("the cache is keyed by provider slug and drops the sentinel", Object.keys(built.providers.openrouter).sort(), ["acme/priced-only", "acme/priced-rated"]);
   check("and counts what it kept", [built.pricedCount, built.ratedCount], [2, 1]);
+
+  // ---- the committed snapshot is the base of that ONE table, not a table beside it ----------------
+  // The cache prices a row but sends no rating (the gateway's coding index is often absent); the snapshot
+  // supplies the rating. A row the cache never priced takes the snapshot's price instead. And the snapshot
+  // describes OpenRouter, so it must never decorate another provider's row.
+  const snapFile = path.join(logDir, "snapshot-fixture.json");
+  writeFileSync(
+    snapFile,
+    JSON.stringify({
+      generatedAt: "2026-10-20T00:00:00+00:00",
+      source: "https://openrouter.ai/api/v1/models",
+      unit: "per 1M tokens",
+      models: [
+        { id: "acme/priced-only", inputPerMillion: 1, outputPerMillion: 2, averagePerMillion: 1.5, rating: 8.4 },
+        { id: "acme/unpriced", inputPerMillion: 3, outputPerMillion: 0.5, averagePerMillion: 1.75, rating: null },
+        { id: "acme/copilot-only", inputPerMillion: 9, outputPerMillion: 9, averagePerMillion: 9, rating: 9.9 },
+      ],
+    }),
+    "utf8",
+  );
+  writeFileSync(
+    pricingFile,
+    JSON.stringify({ at: Date.now(), url: "http://stub", providers: { openrouter: { "acme/priced-only": { input: "$1.00", output: "$2.00" } } } }),
+    "utf8",
+  );
+  const composed = m.menuPricing({
+    cacheFile: pricingFile,
+    providers: [
+      { id: "openrouter", models: ["acme/priced-only", "acme/unpriced"] },
+      { id: "copilot", models: ["acme/copilot-only"] },
+    ],
+    snapshotFile: snapFile,
+  });
+  check("a priced row keeps the cache's price and gains the snapshot's rating", composed.providers.openrouter["acme/priced-only"], {
+    input: "$1.00",
+    output: "$2.00",
+    average: 1.5,
+    rating: 8.4,
+    ratingSource: "intelligence",
+  });
+  check("a row the cache never priced takes the snapshot's price", composed.providers.openrouter["acme/unpriced"], {
+    input: "$3.00",
+    output: "$0.5", // formatRate's sub-dollar form: no trailing zeros, as the gateway's own "$0.02" prints
+    average: 1.75,
+  });
+  ok("the snapshot never decorates another provider's row", composed.providers.copilot === undefined, JSON.stringify(composed.providers.copilot));
+  check("and the counts are the table's own", [composed.pricedCount, composed.ratedCount], [2, 1]);
+  // Leave the sandbox with no cache at all: the warm phase below is about a panel that has none.
+  rmSync(snapFile, { force: true });
+  rmSync(pricingFile, { force: true });
 }
 
 async function warmPhase() {
@@ -323,15 +379,19 @@ async function warmPhase() {
     JSON.stringify(gateway.calls.map((c) => c.refresh)),
   );
   check("the warm authenticated with the configured key", gateway.calls[0].auth, "Bearer sandbox-key");
-  ok("the warm deleted and rewrote the panel's own cache file", fileFacts(pricingFile).exists, JSON.stringify(fileFacts(pricingFile)));
+  // The warm is fire-and-forget: the gateway call lands first and the panel writes the file after answering
+  // itself. Waiting for the file is what the assertion means — asserting on the instant the call is observed
+  // is a race the disk decides, not the code.
+  const warmWrote = await waitFor(() => fileFacts(pricingFile).exists, { timeoutMs: 10_000, what: "the warm's cache file" });
+  ok("the warm deleted and rewrote the panel's own cache file", warmWrote, JSON.stringify(fileFacts(pricingFile)));
 
   const second = await models();
   check("the next read carries the prices it stored", [second.pricedCount, second.ratedCount], [2, 1]);
   check("and no further call was made", gateway.calls.length, 1);
   ok("every gateway call so far was a regeneration — the read path itself never fetched", gateway.calls.every((c) => c.refresh === true));
   const openrouter = second.providers.find((p) => p.id === "openrouter");
-  check("the priced-and-rated row", openrouter.pricing["acme/priced-rated"], { input: "$10.00", output: "$50.00", coding: "7.7" });
-  check("the priced-but-unrated row keeps its price and gains no rating", openrouter.pricing["acme/priced-only"], { input: "$1.00", output: "$2.00" });
+  check("the priced-and-rated row", openrouter.pricing["acme/priced-rated"], { input: "$10.00", output: "$50.00", average: 30, coding: "7.7" });
+  check("the priced-but-unrated row keeps its price and gains no rating", openrouter.pricing["acme/priced-only"], { input: "$1.00", output: "$2.00", average: 1.5 });
   ok("the sentinel-priced row is absent, not negative", openrouter.pricing["acme/sentinel"] === undefined, JSON.stringify(openrouter.pricing));
   ok("a model nothing was priced for is absent too", openrouter.pricing["acme/unpriced"] === undefined);
   ok("a provider nothing was priced for carries no pricing map", !second.providers.find((p) => p.id === "copilot")?.pricing);
@@ -369,9 +429,9 @@ async function refreshPhase() {
   const after = await models();
   check("the menu now lists the model the gateway added", after.count, 7);
   const openrouter = after.providers.find((p) => p.id === "openrouter");
-  check("with the regenerated price for the rated row", openrouter.pricing["acme/priced-rated"], { input: "$11.00", output: "$91.00", coding: "8.1" });
+  check("with the regenerated price for the rated row", openrouter.pricing["acme/priced-rated"], { input: "$11.00", output: "$91.00", average: 51, coding: "8.1" });
   ok("the row the new answer stopped pricing lost its price", !openrouter.pricing["acme/priced-only"], JSON.stringify(openrouter.pricing["acme/priced-only"]));
-  check("and the added model arrived with its own", openrouter.pricing["acme/new-model"], { input: "$2.00", output: "$4.00", coding: "9.9" });
+  check("and the added model arrived with its own", openrouter.pricing["acme/new-model"], { input: "$2.00", output: "$4.00", average: 3, coding: "9.9" });
 }
 
 async function browserPhase(pw) {
@@ -390,7 +450,7 @@ async function browserPhase(pw) {
     console.log("\n== the dropdown's rows carry the price and the rating ==");
     const rated = await textFor("acme/priced-rated");
     ok("the rated row names its price per Mtok in and out", /in \/ \$91\.00 out/.test(rated || ""), rated);
-    ok("and its coding rating out of ten", /code 8\.1/.test(rated || ""), rated);
+    ok("and its 0-10 rating, starred", /★8\.1/.test(rated || ""), rated);
     const sentinel = await textFor("acme/sentinel");
     ok("the sentinel row shows no number at all", sentinel === "acme/sentinel", JSON.stringify(sentinel));
     ok("definitely no negative price anywhere in the menu", (await options()).every((o) => !/-1000000|-1000000\.00/.test(o.text)));

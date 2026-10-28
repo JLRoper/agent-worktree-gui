@@ -20,6 +20,7 @@ cuts a worktree, a row's ✕ removes one, the folder **+** clones a repo). Every
 | Top bar | Liveness dot, stream state and rate, and the page's own controls. Sticky: it stays on screen while you scroll. |
 | **New agent** | The spawn form. Its header line always says what a spawn will do (a new worktree, or a run in a directory as it is). |
 | **Unattached agents** | Agent cards whose directory is not a worktree on the board — or none at all. |
+| **Spawn cards waiting** | A strip above **New agent**, only while the assistant has proposed workers nobody has clicked yet (see *Spawn cards*). |
 | Folders → projects → worktrees | One accordion per scan root, every git repo under it, a table row per worktree. |
 | Agent cards | Inside an expanded worktree row: the conversation, its console, its reply box. |
 | Approvals dock | Bottom-right, over the board, only while something is waiting on you outside a card. |
@@ -36,8 +37,9 @@ cuts a worktree, a row's ✕ removes one, the folder **+** clones a repo). Every
 | Config line | Version, how many projects are being watched, the two main cadences, scan threads, bind host — and `refresh on screen only` when that refresh mode is on. |
 | Stream readout | `pool 1/3 · 3 conversations · 29 events · 2.4/s`: scan workers busy, how many conversations, and the event rate arriving over SSE. |
 | **NOT-RUNNING** | Steps through the agents that are not running and are waiting on you. See below. |
-| **✧ Assistant** | Opens the assistant float (`A` / `Ctrl+Shift+A`). Its purple badge counts the alerts that need a look; the `⧗` badge beside it counts spawn cards — worktrees the assistant proposed that only a press will start. That `⧗` count turns red once a card has been pending about two minutes with no run behind it. |
+| **✧ Assistant** | Opens the floating assistant panel (`A` or `Ctrl+Shift+A`). Its purple badge counts the open alerts; the `⧗` pill beside it counts the **spawn cards** waiting for a click, amber once the oldest has waited over two minutes. |
 | **Collapse all** | Folds the whole tree — every folder, project, worktree row, card and turn. The button then reads **Expand all**. Same as `Ctrl+[` / `Ctrl+]`. |
+| **⚡ Aggressive** | Switches the assistant's aggressive profile on or off. Its pill reads `on`/`off`, so the state does not depend on colour. |
 | **Refresh now** | Forces a fast scan now instead of waiting for the next tick. With Settings → Board → **Refresh** set to "only on screen", it reads only the projects in view. |
 | **Fetch remotes** | Runs `git fetch <remote> --prune` in every project. The only routine gesture that touches git refs. |
 | **Pause** | Freezes the page: closes the live stream, so nothing updates. The button reads **Resume**, which reconnects and resyncs. |
@@ -66,7 +68,7 @@ Everything happens on the **New agent** card.
 | Prompt | The first turn. `Enter` spawns, `Shift+Enter` adds a line, `Up`/`Down` walk the prompts you have spawned before. Paste or drop a file into it to attach that file (see below). |
 | **start in** | The directory. Usually filled in by aiming, but you can type any path. |
 | **project** | Which project the work belongs to. Changing it points **start in** at that project and re-ticks **create workspace** — the picker is not a display field. |
-| **model** | `(default)` uses the gateway's configured model. The list is what the provider advertises, grouped by provider. |
+| **model** | `(default)` uses the gateway's configured model. The list is what the provider advertises, grouped by provider, and each row carries the price per million tokens in and out, the context window, and a 0-10 Artificial Analysis rating where a benchmark has scored it — click the field to open it, type to filter, `Enter` takes the highlighted row. The assistant's own model setting and a card's model readout open the same list, from the same one price table. A model nothing has priced or scored shows no columns, not a zero. |
 | **budget s** | The run's wall-clock budget (`1800` by default). |
 | **max turns** | Optional ceiling on turns; blank means the gateway's own default. |
 | **skills** | Disabled: a run does not carry a skills list yet. |
@@ -117,6 +119,29 @@ answering. The chip's `✕` removes it before sending.
 The card appears under the row of the worktree it was created for, immediately — not after the next scan. An agent
 started in a project's own checkout (no new worktree) is filed on the project's base row and tagged *in the project
 checkout (no worktree)*.
+
+### Spawn cards
+
+The assistant proposes a worker by writing a `SPAWN` line; with `create worktrees` set to **ask** (the default)
+that line becomes a card, and **nothing has started** until you press its Start button. A card is not an agent:
+it has no job, no row and no card on the board, so it is shown where you cannot miss it:
+
+- **The strip at the top of the board** says `N spawn cards waiting`, one row per card, oldest first. A row shows
+  the tree it would use, the prompt the worker would be given, how long it has waited, **Create worktree & start**
+  (or **Start worker there**, for a card aimed at a tree that already exists) and **Open card**. Pressing Start is
+  the same action as the button inside the assistant panel; nothing here starts by itself, and a refusal (a dirty
+  tree, an unknown project, the gateway down) is printed on the row in red while the card stays for a retry.
+- **The header's ✧ Assistant button** carries two counts: the open alerts, and a violet `N spawn` pill for the
+  cards. The pill turns amber once the oldest card has waited more than two minutes. **Review in Alerts** in the
+  strip opens the panel on its Alerts tab with the card in view.
+- **The Alerts tab** draws spawn cards first, under `spawn cards waiting`, before the other alerts.
+
+Two minutes is a watched deadline, not just a colour: a card still open raises **“spawn card unclicked for 2m”**
+(naming the turn that proposed it and the first 60 characters of its prompt) so the assistant sees it in its own
+digest; and a turn whose `SPAWN` line produced *neither* a worker nor a card is journaled as a lost line and
+alerted the same way. Both are rules in **Settings → Per-rule escalation** (`spawn card not clicked`, `lost SPAWN
+line`), so either can be raised to a wake. To clear a card without starting it, open it and press **Discard** —
+that is the only thing that cancels a proposal.
 
 ---
 
@@ -169,6 +194,13 @@ The title line carries:
 The line beneath it says where local `main` is against the remote (`0 behind / 0 ahead of remote`), any live `.agentboard`
 PID, the remote tip with its subject and age, and when the project was last fetched.
 
+**The host chip** (`host: sefl-bitbucket IT/email-multi`, or `no host`) says where this project's branch and PR links
+go. Click it and the panel reads the project's own remote and offers the mapping that remote implies — the host id and
+the coordinates — with **Use this mapping** to write it and **Cancel** to keep what is there; a project nobody has
+mapped says `no host` and offers the strip the same way. Nothing is written until you press the button, and a remote
+the panel cannot read is refused with the reason rather than guessed at. The tokens and the file behind it are in
+[docs/hosts.md](hosts.md).
+
 **Project colours.** `Ctrl+click` a project's title line to tint that project with a random hue; `Ctrl+click` again
 rolls a new one; `Ctrl+Shift+click` clears it. The hue tints only the project's own surfaces (box, title row, column
 header, row hover), so it answers "which project is this" and never changes what a badge means. A plain click still
@@ -176,14 +208,16 @@ opens and closes the project. Settings → Display → **Project colours** shows
 
 ### The worktree table
 
+Rows are the trees this project **owns**: its own checkout and the worktrees inside its folder. `git worktree list` answers for the whole *repository*, so a tree of the same repo that sits somewhere else on disk — a scratch comparison tree a landing run cut, a tree checked out beside the project — is in git's answer but is **not** a row here: it is left out of the header counts, the UNMERGED arithmetic and the merge / rename / delete controls, which belong to this project's work. The project record's `outsideTrees` in `/api/state` and a line in the panel log say how many the last discovery left off, so the exclusion is inspectable rather than silent.
+
 | Column | Meaning |
 | --- | --- |
 | **Worktree** | The directory name, a green **▶** that **probes** the agents already in it (see below), and the `⧉ N` badge for agents this panel has in it (with `running` / `awaiting approval` when they are busy). Clicking the badge opens the row and its cards; the **+** bar in the row starts a new agent there. |
-| **Branch** | The checked-out branch. |
+| **Branch** | The checked-out branch. A link to the branch's page on its host when the remote actually has the branch; plain text with a `local` chip when the remote answered its head list and this branch was not in it, and the reason in the tooltip. When the remote could not be reached the cell is plain text with no chip and a tooltip that says how far the panel got ("cannot tell whether the remote has this branch yet", or "not on the remote as of the last fetch" when its refs were checked) — "unknown" is not "local". The link follows the branch: a tree that switches or renames its branch is read again and wears the new branch's page and PR, not the old one's. |
 | **Tip** | Short SHA of the branch tip. |
 | **Ahead / Behind** | Commits the branch has that the project's base ref (remote main) does not, and commits main has that it does not. `—` when there is no base ref yet. |
 | **Cherry** | `+N/−N` from `git cherry`: `+` commits with no equivalent upstream, `−` commits already upstream by patch id (the evidence that a squash or rebase landed them). |
-| **PR** | `#123 OPEN` / `#123 MERGED`, `none`, or `none · branch gone` when the branch existed remotely and no longer does. Hover the number for the title. |
+| **PR** | `#123 OPEN` / `#123 MERGED`, `none`, or `none · branch gone` when the branch existed remotely and no longer does. The number is a link to the pull request's own page on the project's host; it stays plain text (with the reason in its tooltip) when no page can be built. Hover it for the title. |
 | **Dirty** | Modified files, and `+N?` untracked, or `clean`. |
 | **Life / next read** | Time since anything last said this worktree is alive, the evidence chips, and a ring that fills toward the next scheduled read. Click the ring to read the row **now**. |
 | **Verdict** | See below. |
@@ -272,6 +306,12 @@ Click a row to expand it. The detail is built not to bury the agents:
   strip the two of them sit in. A tree with nothing unmerged, or a clean one, shows no empty strip.
 - **Liveness evidence** — folded, with its strongest line still visible on the header. Open it to see why the row is
   live, or why it is not.
+- **TODO** — the worktree's list, folded to one line: the OLDEST item still open and a `done/total` count. Open it for
+  every item with its status glyph and its controls (add, edit, claim, complete, drop, reopen), the journal of who
+  changed what, and a **+ add** for a new item. Each item's facts — `owner`, `by`, `updated`, its note and its files —
+  are folded behind the small `▸` in front of the item's line: click it, or `Tab` to it and press `Enter` or `Space`,
+  to unfold that one item. A worktree's open items are remembered in this browser, so a repaint or a reload leaves
+  them as you left them, and an item you never opened stays folded.
 - **Agents** — the cards owned by this worktree, each moved into place rather than rebuilt, so a running console keeps
   its scroll. The **+** bar in the row starts another agent in this tree; it is drawn even when the row has no cards,
   and it sits above the cards by default (Settings → Display → **Add-agent bar at top** moves it back under them).
@@ -355,6 +395,23 @@ actually runs in (the last three segments; hover for the whole path). When the r
 folder, a `row …` chip follows it. It is a reference, not a heading: smallest size, dimmest ink.
 
 A `yolo` pill appears only if a run was started with that flag elsewhere; the panel never sends it.
+
+### The pulse on a live card
+
+While a turn is live the head carries a small pulsing chip, right of the `running` pill. It is the panel's
+**heartbeat on that run's event stream**, not a reading of the agent's mind — the tooltip says so — and it shows
+one of five honest states:
+
+| The chip | What is true |
+|---|---|
+| `● thinking 2s` (green) | text is streaming: a delta arrived 2 s ago. The console line under it is growing in place — one line per paragraph, not one per token. |
+| `● terminal · 4s` (blue) | a tool is running; it is named, and the number is how long ago the stream last said anything. Waiting on a command is not the same as waiting on tokens. |
+| `● thinking 1m 10s` (grey) | the stream has been quiet that long. The run is still live and the panel still holds its stream; the dot keeps pulsing because the panel is still listening. |
+| `● no events yet · 12s` (amber) | the run is live and the panel subscribed, but the gateway has sent **no event at all** since it started. That is a gateway not sending — not an agent thinking — and the chip says so. |
+| `● polled · every 15s` (dashed) | this gateway does not advertise `run_events_sse`, so the card is read every 15 s and there is no stream to judge. Nothing here can tell you what the model is doing. |
+
+It never carries reasoning text. A finished turn leaves no chip at all, and the age is the time since the last event
+the panel actually received — never a number the panel made up.
 
 Folded, the card keeps one line under its head: a status chip in the turn's own words — `done`, `failed`,
 `interrupted`, `cancelled`, `running`, or `revived` for a turn rebuilt from the session store (which has no duration
@@ -458,7 +515,8 @@ deepseek-v4.1-flash-1017 │ 101K/1.05M⌄ │ █········· 10% │ ◎
 ```
 
 - **model** — double-click for the model picker (search as you type; the current choice is marked; the next turn uses
-  it).
+  it). Each row shows a `★` 0-10 Artificial Analysis rating when one exists, the context window, and `$input/$output`
+  per 1M tokens; the tooltip says which index the rating came from and gives the average price.
 - **used/ceiling⌄** — click to step the ceiling the card measures against. The ladder is built from the model's real
   window: the window itself, then three quarters, a half and a quarter of it, plus whichever of 1M, 400K, 200K and
   128K fit under it — biggest first, wrapping back to the window (which stores "no ceiling"). Sizes above the model's
@@ -545,6 +603,8 @@ setting):
 | Board | Flash on events | An event about the worktree (a console line, a job starting or finishing, an approval) counts as life and flashes the row; off, the ring still restarts but the board does not pulse. |
 | Board | Refresh | Which projects the panel re-reads: **everything**, or **only on screen** (the window plus half a screen either side). In "only on screen" it reads nothing while no page is open, and scrolling a stale project into view reads it at once. Saved in this panel's `config.json`, so it applies to every browser and survives a restart. |
 | Board | Row refresh → agent | What a row's ⟳ does after its cheap pass finds a mismatch: **never** (re-read and journal only), **ask first** (one card under the row, the default), or **start it** (the click starts the agent itself). Refused while a run is already live in that tree. Saved in this browser. |
+| Updates | Update check | What this tab does when the panel is serving a different build than the one it loaded: **off**, **prompt** (the default — a chip offers the reload), or **auto** (reload as soon as the page is idle). Both modes hold the reload while a reply box or a held draft has text, or while a turn is streaming. Saved in this browser. |
+| Updates | Panel build · Check now | The build this tab is running, and what the panel serves now. **Check now** asks `GET /api/build` at once — it works even with the check set to off. |
 
 **Written to the gateway's `config.yaml`** (the gateway re-reads them; a row whose file is not reachable from this
 machine is disabled, and its note gives the reason):
@@ -576,7 +636,7 @@ only its own line so your comments and formatting survive.
 | `Ctrl+wheel` | Over a console or a thinking block | Size that text for that card; anywhere else it zooms the page. |
 | `Ctrl+` / `Ctrl-` / `Ctrl+0` | Anywhere | Page zoom in, out, reset. |
 | `Ctrl+[` / `Ctrl+]` | Anywhere | Collapse / expand the whole tree. |
-| Click | Worktree row | Open its detail (merge state, liveness, agents, sessions). |
+| Click | Worktree row | Open its detail (description, TODO, merge state, liveness, agents, sessions). |
 | Click | Project or folder title | Open or close it. |
 | `Ctrl+click` | Project title | Give it a theme colour; again re-rolls. |
 | `Ctrl+Shift+click` | Project title | Clear its theme colour. |
@@ -589,6 +649,7 @@ only its own line so your comments and formatting survive.
 | Click / right-click | `used/ceiling⌄` | Cycle the context ceiling / open the full picker. |
 | Click | `📄 N` / `🔗 N` | Open the file or link list. |
 | Click | Turn head | Open or fold that turn. |
+| Click / `Tab`+`Enter`/`Space` | The `▸` in front of a TODO item | Unfold that one item's owner / by / updated facts; again folds them. |
 | Click | `☆` on a turn | Pin the turn above the paged turns. |
 | Click | Tool group row | Filter the group to that tool (`all N` clears). |
 
@@ -604,6 +665,7 @@ only its own line so your comments and formatting survive.
 | Verdict / PR / commit detail | The expensive per-row fields | every 60 s |
 | Fetch | `git fetch --prune` per project | every 10 min |
 | Client resync | Full snapshot fallback (also every 30 s if the stream goes quiet) | every 30 s |
+| Panel build | `GET /api/build` — the version this tab loaded vs the one the panel is serving | every 30 s (setting: off / prompt / auto) |
 
 Rows flash when something moved: green for a sign of life or a row that moved up the order, grey for a re-read with
 nothing new. A **collapsed** project's outline and title bar flash green along with the row inside it; an open
@@ -618,6 +680,13 @@ immediately. The config line then ends with `refresh on screen only`.
 Configured in `config.json` (`liveSeconds`, `worktreeSeconds`, `dormantSeconds`, `slowSeconds`, `fetchSeconds`,
 `refreshSeconds`), and the footer prints the values in use.
 
+The panel's own build is separate from all of that. `index.html` is served `no-store` and every script and stylesheet
+it loads carries a `?v=` hash of the bytes; a restarted panel (or an edit under `public/` while it runs) is a new
+version, and the open tab learns it from `GET /api/build`. Settings → **Updates** decides what happens: **off** never
+looks, **prompt** (the default) offers a reload chip, **auto** takes it. Either mode **holds** the reload while a reply
+box or a held draft has text, or while a turn is still streaming — the chip says which — so a reload never throws away
+something you typed or an agent is writing. **Check now** asks at once, even with the setting off.
+
 ---
 
 ## When something looks wrong
@@ -631,6 +700,7 @@ Configured in `config.json` (`liveSeconds`, `worktreeSeconds`, `dormantSeconds`,
 | Rows stop moving | The page may be paused, or the stream `reconnecting…`/`offline`. **Resume** or **Refresh now**. |
 | A project's numbers look old while it is off screen | With Settings → Board → Refresh: **only on screen**, off-screen projects are not read until you scroll them into view — and nothing is read at all while no page is open. |
 | A worktree will not delete | An agent run is live in it — stop the run first. |
+| The assistant says it started a worker but nothing appeared | Look at the strip above **New agent** and at the `N spawn` pill on ✧ Assistant: in **ask** mode a SPAWN line is a card waiting for a click, not a run. If neither a card nor a worker exists two minutes after the turn, the journal carries a **lost SPAWN line** and the Alerts tab an alert naming the turn. |
 | A column is too narrow or too wide | Drag the edge between two column headers (the pair trades width); **double-click** any edge to go back to the measured split. Widths are remembered in this browser, so a reset is per browser too. |
 | `revive` is refused | That session already has a card on the board. |
 | A console result is cut short | The run stream carries a preview, not the full payload. See the README's troubleshooting section. |

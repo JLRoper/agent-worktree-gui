@@ -16,7 +16,7 @@
     <div class="controls">
       <span class="meta" id="stream-state">—</span>
       <span class="meta" id="stream-rate"></span>
-      <button id="btn-assistant" type="button" class="btn-assistant" title="assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)">✧ Assistant<span id="assistant-badge" hidden>0</span><span id="assistant-spawn-badge" hidden title="spawn cards waiting on you">0</span></button>
+      <button id="btn-assistant" type="button" class="btn-assistant" title="assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)">✧ Assistant<span id="assistant-badge" hidden>0</span><span id="assistant-spawn-badge" class="as-spawn-badge" hidden>0</span></button>
       <button id="btn-aggressive" type="button" class="btn-aggressive" aria-pressed="false" title="aggressive assistant — spends more tokens: the assistant wakes on everything, monitors and checks every live card, and keeps pushing until the fleet is waiting on something outside. While it is on it holds the waking, monitoring and acting settings; switching it off puts your own values back (Alt+Shift+A)">⚡ Aggressive<span id="aggressive-state">off</span></button>
       <button id="btn-hot" type="button" title="NOT-RUNNING — step through the agents that are not running and are waiting on you: each one is opened, its reply box focused and flashed amber. Enter sends and moves on; Alt+Right skips; Alt+Left goes back.">NOT-RUNNING</button>
       <button id="btn-collapse-all" type="button" title="collapse every folder and project section">Collapse all</button>
@@ -43,7 +43,7 @@
     </div>
     <div class="as-tabs" id="as-tabs">
       <button type="button" data-as-tab="chat" class="is-on" title="the assistant itself — a normal agent card, with its own thread">Chat</button>
-      <button type="button" data-as-tab="alerts" title="what it noticed and what is waiting on you">Alerts <span class="as-n" id="as-alert-n">0</span></button>
+      <button type="button" data-as-tab="alerts" title="what it noticed and what is waiting on you — spawn cards waiting for a click sit at the top">Alerts <span class="as-n" id="as-alert-n">0</span><span class="as-n is-spawn" id="as-spawn-n" hidden>0</span></button>
       <button type="button" data-as-tab="watches" title="what it is keeping an eye on, and until when">Watches <span class="as-n" id="as-watch-n">0</span></button>
       <button type="button" data-as-tab="messages" title="the message board between it and the agents — what it sent them and what they sent back, thread by thread, over the last 7 days">Messages</button>
       <button type="button" data-as-tab="pad" title="the server-side scratchpad: notes, standing rules and the journal">Scratchpad</button>
@@ -355,12 +355,36 @@
         <div class="settings-preview mono" id="models-preview">…</div>
       </div>
 
+      <div class="settings-group">
+        <h3 class="settings-group-head" title="A panel that restarted (or whose public/ was edited while it ran) serves a new build. This is what this tab does about it — and what it refuses to do while you are mid-sentence or an agent is mid-turn.">Updates</h3>
+
+        <label class="settings-row" for="update-mode" title="off — never look; a manual press on Check now still works. prompt (the default) — poll the panel every 30s and, when it is serving a different build, offer a Reload chip. auto — take the reload as soon as the page is idle. Either mode HOLDS the reload while a reply box or a held draft has text, or while a turn is still streaming, so nothing you typed and nothing an agent is writing is thrown away. Saved in this browser.">
+          <span>Update check <span class="settings-info">ⓘ</span></span>
+          <select id="update-mode">
+            <option value="off">off</option>
+            <option value="prompt" selected>prompt — offer a reload</option>
+            <option value="auto">auto — reload when idle</option>
+          </select>
+        </label>
+
+        <div class="settings-row settings-gap" id="update-row" title="The build this tab loaded, and the build the panel is serving now. A panel restart or an edit under public/ moves the second one; the first only moves when this page reloads.">
+          <span>Panel build <span class="settings-info mono" id="build-version">…</span></span>
+          <button id="btn-check-update" type="button" title="ask GET /api/build now and offer the reload if the answer is a different build — works even with Update check set to off">Check now</button>
+        </div>
+        <div class="settings-preview mono" id="update-preview">…</div>
+      </div>
+
     </div>
   </div>
 
   <div id="banner" class="banner hidden"></div>
 
   <main>
+    <!-- Spawn cards waiting for a click: a worker the assistant proposed and nothing has started yet. It sits
+         at the top of the board on purpose — an unclicked card used to exist only as a number on the header
+         badge, inside an 80-deep Alerts list, and four of them read as "the agents never spawned". -->
+    <div id="spawn-strip" class="spawn-strip" hidden aria-live="polite"></div>
+
     <section class="project" id="newagent">
       <div class="project-head" data-toggle-fixed="newagent" title="minimize this card">
         <span class="chev">▾</span>
@@ -448,6 +472,9 @@
        helpers from its own top-level code and runs its boot wiring the moment it loads. The extracted modules
        are listed in dependency order (see .agentboard/refactor-research/frontend-app-js.md §5). -->
   <script src="/core/dom-format.js"></script>
+  <!-- The one model picker: the spawn card's model field and the assistant's model setting both open it. It
+       needs dom-format's esc and nothing else, so it sits before app.js; both call it through window.ModelMenu. -->
+  <script src="/core/model-menu.js"></script>
   <script src="/core/console-format.js"></script>
   <script src="/board/attachments.js"></script>
   <!-- Pasted blocks collapsed into inline chips, for every box the reader writes a prompt in. Loaded after
@@ -458,6 +485,9 @@
   <script src="/core/transport.js"></script>
   <script src="/core/sse.js"></script>
   <script src="/app.js"></script>
+  <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
+       the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->
+  <script src="/core/update-check.js"></script>
   <!-- The assistant's floating panel. Loaded after app.js on purpose: it reads that file's own state and card
        renderer, so the assistant's card is a real card rather than a second implementation of one. -->
   <script src="/assistant.js"></script>

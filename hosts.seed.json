@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "note": "Seed for logs/hosts.json: where this board's projects keep their branches and pull requests. The live file (logs/hosts.json) overrides this one per host id and per project, and is the one the reader edits. docs/hosts.md explains the tokens, the api block and the landing doctrine.",
+  "hosts": {
+    "github": {
+      "kind": "github",
+      "base": "https://github.com",
+      "coordinates": {
+        "owner": "JLRoper"
+      },
+      "links": {
+        "repo": "{base}/{owner}/{repo}",
+        "branch": "{base}/{owner}/{repo}/tree/{branch}",
+        "pull": "{base}/{owner}/{repo}/pull/{pr}",
+        "commit": "{base}/{owner}/{repo}/commit/{sha}",
+        "newPull": "{base}/{owner}/{repo}/compare/{main}...{branch}?expand=1"
+      },
+      "api": {
+        "transport": "gh",
+        "listOpenPrs": "https://api.github.com/repos/{owner}/{repo}/pulls?state=open",
+        "listPullRequests": "https://api.github.com/repos/{owner}/{repo}/pulls?state=all&per_page=100",
+        "tokenEnv": "GITHUB_TOKEN"
+      },
+      "landing": "This repo lives on GitHub and main is protected: a branch lands through a pull request, never a push to main.\n\n1. Push the branch, never {main}:  git push -u origin {branch}\n2. Open ONE pull request from {branch} into {main}:\n     gh pr create --base {main} --head {branch} --title \"<a subject a reviewer can read>\" --body-file <a file written outside the repo>\n   --fill drops the reason a version bump gave, so when this branch carries a bump, pass --title and --body-file and put the\n   level and its reason into the body.\n3. Read it back before reporting it: gh pr view <n> --json state,headRefOid,baseRefName, and confirm headRefOid is the\n   commit you just pushed.\n4. Report the PR URL and leave it OPEN. The reader merges it. Do not merge it, do not push {main}, and do not open a\n   second PR for the same branch.\n5. If the PR is already open and its base moved, rebase onto origin/{main} and push --force-with-lease. That rewrite is\n   the only one allowed on a published branch, and only for the PR this run opened."
+    },
+    "sefl-bitbucket": {
+      "kind": "bitbucket-server",
+      "base": "https://git.sefl.com",
+      "coordinates": {
+        "projectKey": "IT"
+      },
+      "links": {
+        "repo": "{base}/projects/{projectKey}/repos/{repoSlug}",
+        "branch": "{base}/projects/{projectKey}/repos/{repoSlug}/browse?at=refs/heads/{branch}",
+        "pull": "{base}/projects/{projectKey}/repos/{repoSlug}/pull-requests/{pr}",
+        "commit": "{base}/projects/{projectKey}/repos/{repoSlug}/commits/{sha}",
+        "newPull": "{base}/projects/{projectKey}/repos/{repoSlug}/pull-requests?create&sourceBranch=refs%2Fheads%2F{branch}&targetBranch=refs%2Fheads%2F{main}"
+      },
+      "api": {
+        "transport": "rest",
+        "listOpenPrs": "{base}/rest/api/1.0/projects/{projectKey}/repos/{repoSlug}/pull-requests?state=OPEN&limit=50",
+        "listPullRequests": "{base}/rest/api/1.0/projects/{projectKey}/repos/{repoSlug}/pull-requests?state=ALL&limit=100",
+        "tokenEnv": "BITBUCKET_SEFL_TOKEN"
+      },
+      "landing": "This repo lives on SEFL Bitbucket (git.sefl.com). {main} is not yours to push: a change lands by opening a pull request into {main} and letting a human reviewer merge it.\n\n1. Push the branch, never {main}:  git push origin {branch}\n2. Open ONE pull request, {branch} -> {main}, and get all three of these right, because the review queue filters on them:\n   - title: \"Java Code Review for <repo> <branch>\"\n   - reviewers: the GROUP code_review_java and nothing else - no individuals, no code_review_java_dal on a non-DAL change\n   - description, four sections, every one of them present:\n       ## Jira Ticket              the ticket id only, or \"none\"\n       ## Description              what changed and why, in a reviewer's terms\n       ## Test Procedures          the commands actually run and their real results - counts, not adjectives\n       ## Technical Specifications Confluence links, or the one line saying none applies\n   POST it to {base}/rest/api/1.0/projects/{projectKey}/repos/{repoSlug}/pull-requests with\n   Authorization: Bearer $BITBUCKET_SEFL_TOKEN (never echo the token), fromRef refs/heads/{branch}, toRef refs/heads/{main}.\n   Read the PR back: reviewers must be exactly [code_review_java] and fromRef.latestCommit must be the head you pushed.\n   (Repository automation can push to the branch on its own schedule, so if latestCommit is a commit you did not write,\n   fetch it, say what it is, and diff it against {main} rather than reporting the SHA you aimed at.)\n3. A human reviewer may take a day, and sometimes longer. That is the normal wait, not a failure: report the PR id and\n   its URL and stop there. Do not merge it, do not decline it, do not close it, do not push {main}, and do not sit in a\n   loop waiting for a person.\n4. Once the PR is open, poll it HOURLY - not more often - and answer what arrives:\n     GET {base}/rest/api/1.0/projects/{projectKey}/repos/{repoSlug}/pull-requests/<id>/activities?limit=100\n   Look for COMMENTED / REVIEWED / UNAPPROVED / MERGED events newer than your last poll. For each comment, make the\n   smallest change that answers it, commit on {branch}, push, and reply on that comment naming the commit. An approval\n   at an older commit is not an approval of the head: after any push, compare reviewers[].lastReviewedCommit with\n   fromRef.latestCommit and say plainly that the head needs re-approval.\n5. \"Landed\" on this host means: branch pushed, PR open, waiting for a human. Say exactly that and quote the PR URL.\n   Never report it as merged, and never call the work blocked because a reviewer has not looked yet."
+    }
+  },
+  "projects": {
+    "agent-worktree-gui": { "host": "github", "coordinates": { "repo": "agent-worktree-gui" } },
+    "heroes-js": { "host": "github", "coordinates": { "repo": "vigilant-palm-tree" } },
+    "jlr-test-repo": { "host": "github", "coordinates": { "owner": "59055_SEFL", "repo": "jlr-test-repo" } },
+    "email-multi": { "host": "sefl-bitbucket", "coordinates": { "repoSlug": "email-multi" } },
+    "Menu": { "host": "sefl-bitbucket", "coordinates": { "repoSlug": "Menu" } },
+    "web-service-multi": { "host": "sefl-bitbucket", "coordinates": { "repoSlug": "web-service-multi" } },
+    "optym-integration-multi": { "host": "sefl-bitbucket", "coordinates": { "repoSlug": "optym-integration-multi" } },
+    "event-multi": { "host": "sefl-bitbucket", "coordinates": { "repoSlug": "event-multi" } },
+    "pictureviewer": { "host": "sefl-bitbucket", "coordinates": { "repoSlug": "pictureviewer" } },
+    "oauth2-multi": { "host": "sefl-bitbucket", "coordinates": { "repoSlug": "oauth2-multi" } },
+    "fleet-kafka": { "host": "sefl-bitbucket", "coordinates": { "projectKey": "SA", "repoSlug": "fleet-kafka" } }
+  }
+}
