@@ -29,7 +29,8 @@
 // WHAT IT ASSERTS, per scenario (exit code 1 while any fails)
 //   (1) no live line wipes a console that holds transcript
 //   (2) no live line removes rows from the console it is drawn into, and the console never loses 40px of height at once
-//   (3) no line is drawn twice (a repaint plus a live append must not double a line)
+//   (3) no line is drawn twice (a repaint plus a live append must not double a line), and a repaint draws exactly the
+//       tool calls the live path drew (a call counted twice, or lost, shows as a different tally)
 //   (4) nothing under the console jumps up by more than 40px at an unchanged window scroll
 //   (5) the repainters really fired (>= 3), so a clean run means the see-saw was exercised and survived
 import { execFileSync, spawn } from "node:child_process";
@@ -301,7 +302,7 @@ function pageInit({ storage, thread }) {
   } catch {
     /* storage may be unavailable */
   }
-  const R = { t0: performance.now(), epoch0: performance.timeOrigin + performance.now(), writes: [], rebuilds: [], lines: [], draws: [], samples: [], attrFlips: 0, attrTargets: [] };
+  const R = { t0: performance.now(), epoch0: performance.timeOrigin + performance.now(), writes: [], rebuilds: [], tools: [], lines: [], draws: [], dups: [], samples: [], attrFlips: 0, attrTargets: [] };
   const P = { armed: false, frozen: false, minRows: 6, queue: [] };
   window.__rec = R;
   window.__pair = P;
@@ -359,12 +360,21 @@ function pageInit({ storage, thread }) {
     const j = liveJob();
     const out = j ? consoleOf(j.id) : null;
     if (out) {
-      const lids = [...out.querySelectorAll("[data-lid]")].map((e) => e.dataset.lid);
+      const lids = [...out.querySelectorAll("[data-lid]")].map((e) => e.dataset.lid).filter(Boolean); // rows a re-cut group redraws carry data-lid=""
       const rec = [now(), j.id, out.children.length, lids.length, lids.length - new Set(lids).size, out.scrollHeight, out.clientHeight, Math.round(scrollY), document.documentElement.scrollHeight, boxTop(j.id), out.querySelector("[data-wait]") ? 1 : 0];
       const key = rec.slice(2).join(",");
       if (key !== last) {
         R.samples.push(rec);
         last = key;
+        if (rec[4] > 0) {
+          const seen = new Map();
+          for (const e of out.querySelectorAll("[data-lid]")) {
+            const k = e.dataset.lid;
+            if (!k) continue;
+            seen.set(k, [...(seen.get(k) || []), `${e.className.split(" ").slice(0, 2).join(".")} in ${e.parentElement ? e.parentElement.className.split(" ")[0] || e.parentElement.tagName : "?"}`]);
+          }
+          R.dups.push({ t: rec[0], dups: [...seen].filter(([, v]) => v.length > 1).map(([k, v]) => ({ lid: k, where: v, text: String((out.querySelector(`[data-lid="${k}"]`) || {}).dataset?.ltext || "").slice(0, 60) })) });
+        }
       }
     }
     requestAnimationFrame(tick);
@@ -419,17 +429,32 @@ function pageInit({ storage, thread }) {
     if (wrap("renderConversation", (o) => function (...a) {
       const sel = `.job[data-thread="${CSS.escape(String(a[0] || ""))}"]`;
       const before = document.querySelector(sel);
+      // How many tool-call rows each console of the card held, as the live path drew them.
+      const toolRows = (card) => {
+        const m = {};
+        if (card) for (const c of card.querySelectorAll("pre.job-out")) m[c.dataset.out] = c.querySelectorAll(".jl-tool").length;
+        return m;
+      };
+      const drawn = toolRows(before);
       const r = o.apply(this, a);
       const after = document.querySelector(sel);
       if (before && after && before !== after) {
         const live = liveJob();
         R.rebuilds.push({ t: now(), job: live ? live.id : null, stack: frames(new Error().stack).split(" < ").slice(0, 4).join(" < ") });
+        // …and as the repaint drew them from the transcript. The two must agree: a call drawn twice live, or lost, shows here.
+        const rebuilt = toolRows(after);
+        for (const id of Object.keys(drawn)) if (id in rebuilt && rebuilt[id] !== drawn[id]) R.tools.push({ t: now(), out: id, live: drawn[id], rebuilt: rebuilt[id] });
         if (live) onRepaint("a card rebuild");
       }
       return r;
     })) ok.push("renderConversation");
     if (wrap("paintStreamConsole", (o) => function (...a) {
+      // The sweep repaints a console from the transcript: it must come out with the tool calls the live path had drawn.
+      const toolRows = () => Object.fromEntries([...document.querySelectorAll("pre.job-out")].map((c) => [c.dataset.out, c.querySelectorAll(".jl-tool").length]));
+      const drawn = toolRows();
       const r = o.apply(this, a);
+      const repainted = toolRows();
+      for (const id of Object.keys(drawn)) if (id in repainted && repainted[id] !== drawn[id]) R.tools.push({ t: now(), out: id, live: drawn[id], rebuilt: repainted[id], via: "sweep" });
       if (liveJob()) onRepaint("the thinking sweep");
       return r;
     })) ok.push("paintStreamConsole");
@@ -660,10 +685,10 @@ async function capture() {
     const measured = await runScenario(pw, sc, { pair: false });
     const paired = argv.includes("--no-pair") ? { paired: null, shots: [], errors: [] } : await runScenario(pw, sc, { pair: true });
     const turns = [readTurn(measured.R, measured.jobs.turn1), readTurn(measured.R, measured.jobs.turn2)];
-    if (argv.includes("--raw")) writeFileSync(path.join(REPORT_DIR, `console-flicker-${LABEL}-${sc.name}-raw.json`), JSON.stringify({ samples: measured.R.samples, writes: measured.R.writes, rebuilds: measured.R.rebuilds, lines: measured.R.lines, draws: measured.R.draws, jobs: measured.jobs }));
+    if (argv.includes("--raw")) writeFileSync(path.join(REPORT_DIR, `console-flicker-${LABEL}-${sc.name}-raw.json`), JSON.stringify({ samples: measured.R.samples, writes: measured.R.writes, rebuilds: measured.R.rebuilds, lines: measured.R.lines, draws: measured.R.draws, dups: measured.R.dups, jobs: measured.jobs }));
     result.scenarios.push({
       name: sc.name, title: sc.title, restorer: sc.restorer, turnStates: [measured.turn1, measured.turn2], turns, errors: measured.errors, instrumented: measured.instrumented,
-      attrFlips: measured.R.attrFlips, attrTargets: measured.R.attrTargets, appends: measured.R.lines.length, paired: paired.paired, shots: paired.shots, pairedErrors: paired.errors,
+      attrFlips: measured.R.attrFlips, attrTargets: measured.R.attrTargets, toolMismatches: measured.R.tools, appends: measured.R.lines.length, paired: paired.paired, shots: paired.shots, pairedErrors: paired.errors,
     });
     const wipes = turns.flatMap((t) => t.wipes);
     const drops = turns.flatMap((t) => t.rowDrops);
@@ -675,6 +700,7 @@ async function capture() {
     check(`${sc.name}: no live line removes rows from the console it is drawn into`, drops.length, 0, drops.slice(0, 3).map((d) => `@${d.t}ms ${d.kind} took ${d.from} rows to ${d.to}`).join("; "));
     check(`${sc.name}: the console never loses more than 40px of height at once`, shrinks.length, 0, shrinks.slice(0, 3).map((d) => `@${d.t}ms ${d.from}px -> ${d.to}px`).join("; "));
     check(`${sc.name}: no line is drawn twice`, Math.max(...turns.map((t) => t.dupMax)), 0);
+    check(`${sc.name}: a repaint draws the same tool calls the live path drew`, measured.R.tools.length, 0, measured.R.tools.slice(0, 3).map((x) => `@${x.t}ms live ${x.live} vs repainted ${x.rebuilt}`).join("; "));
     check(`${sc.name}: nothing under the console jumps up by more than 40px`, bounces.length, 0, bounces.slice(0, 3).map((b) => `@${b.t}ms by ${b.by}px`).join("; "));
     check(`${sc.name}: the repainters fired at least 3 times`, restores.length >= 3, true);
     check(`${sc.name}: no page errors`, measured.errors.length + paired.errors.length, 0);
@@ -751,6 +777,7 @@ function compose() {
     push(`| content under the console jumps up > 40px | ${sc} | ${bouncesOf(bs).length} (largest ${Math.min(0, ...bouncesOf(bs).map((x) => x.by))}px) | ${bouncesOf(af).length} |`);
     push(`| repaints of the console during the two turns | ${sc} | ${restoresOf(bs).length} | ${restoresOf(af).length} |`);
     push(`| a line drawn twice (max duplicate line ids) | ${sc} | ${Math.max(...bs.turns.map((t) => t.dupMax))} | ${Math.max(...af.turns.map((t) => t.dupMax))} |`);
+    push(`| a repaint disagrees with the live path about how many tool calls the console holds | ${sc} | ${(bs.toolMismatches || []).length} | ${(af.toolMismatches || []).length} |`);
   }
   push("", `Checks passed: before ${before.checks.filter((c) => c.ok).length}/${before.checks.length}, after ${after.checks.filter((c) => c.ok).length}/${after.checks.length}. The repaints still fire after the fix, which is the point: they now rewrite what is already there instead of arming a wipe.`, "");
   for (const s of before.scenarios) {
