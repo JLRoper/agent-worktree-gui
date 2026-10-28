@@ -1199,7 +1199,12 @@ function isBookkeeping(l) {
 // markup must not change what the next render believes the line said.
 function lineHtml(l, live = "") {
   const kind = l.kind || "raw";
-  return `<div class="jl jl-${esc(kind)}" data-lid="${esc(l.lid ?? "")}" data-ltext="${esc(l.text ?? "")}" data-lkind="${esc(kind)}">${linkifyText(l.text)}${live}</div>`;
+  // A line the stream is still revealing is drawn up to what may be shown NOW, not up to the wire's whole text:
+  // a repaint mid-paragraph (a scan, a pinned copy, the 3s result sweep) must not jump the console ahead of the
+  // words the reader is watching arrive. Every other line — history, a tool line, reasoning — is drawn whole.
+  const shown = typedShown(l);
+  const text = shown == null ? l.text : shown;
+  return `<div class="jl jl-${esc(kind)}" data-lid="${esc(l.lid ?? "")}" data-ltext="${esc(l.text ?? "")}" data-lkind="${esc(kind)}">${linkifyText(text)}${live}</div>`;
 }
 
 function burstGroups(lines) {
@@ -5870,6 +5875,154 @@ function setStreamMode(thread, on) {
   renderConversation(thread);
 }
 
+// ---- how a run's output arrives (Settings > Display) ------------------------------------------
+// The wire is not the reader's pace. A paragraph reaches the console in coalesced frames (120 ms on the server, and
+// several words in a fast model) and tool calls and results arrive as whole lines, so a live card used to jump a
+// phrase at a time. Two settings answer that, and they answer different questions:
+//
+//   * Stream display speed — WORDS a second inside a growing paragraph. The line's tail waits in
+//     core/type-stream.js's pacer and leaves a word at a time; what is drawn is always an exact prefix of the text
+//     the run sent, so a copy of a half-typed line is what is on screen.
+//   * Stream line rate — LINES a second joining a console. A burst of whole lines (a tool call and the results that
+//     answered it, a run of stored output) walks in one at a time instead of landing in one paint. A line held back
+//     is not in the console's record yet, so a repaint mid-burst shows the transcript as far as it has got.
+//
+// Both are per browser, both are 0 = off (today's behaviour), and both are flushed the moment their turn settles: a
+// buffer that outlived the run would be words the reader never sees, which is the one thing this must not do.
+const TYPE_WORDS_KEY = "wtgui.streamWords";
+// 40 words a second is what a long answer on this box streams at (measured: 2,682 words in 72 s), so the console
+// keeps up with the model and still fills in a word or two at a time. 0 is off.
+const TYPE_WORDS_DEFAULT = 40;
+const TYPE_LINES_KEY = "wtgui.streamLines";
+const TYPE_LINES_DEFAULT = 0;
+
+function typeSpeedStored(key, fallback, clamp) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null || raw === "") return fallback;
+    return clamp(Number(raw));
+  } catch {
+    return fallback; // private mode: the default holds
+  }
+}
+
+function typeWordSpeed() {
+  return typeSpeedStored(TYPE_WORDS_KEY, TYPE_WORDS_DEFAULT, (n) => (globalThis.wtType ? globalThis.wtType.clampWords(n) : 0));
+}
+
+function typeLineRate() {
+  return typeSpeedStored(TYPE_LINES_KEY, TYPE_LINES_DEFAULT, (n) => (globalThis.wtType ? globalThis.wtType.clampLines(n) : 0));
+}
+
+// One pacer and one gate for the whole board: this is a reading preference, not a per-card one.
+state.typePacer = globalThis.wtType
+  ? globalThis.wtType.createPacer({ rate: typeWordSpeed(), onPaint: (lids) => paintTypedLines(lids) })
+  : null;
+state.typeGate = globalThis.wtType
+  ? globalThis.wtType.createLineGate({
+      rate: typeLineRate(),
+      release: (evt) => {
+        recordJobLine(evt);
+        drawJobLine(evt);
+      },
+    })
+  : null;
+
+// The words of a line that may be drawn now: the live append asks for them, and every render path asks too, so a
+// repaint mid-paragraph draws the same prefix the console is showing instead of jumping to the wire's whole text.
+function typedText(line, jobId) {
+  const P = state.typePacer;
+  const full = String(line?.text ?? "");
+  // A tab nobody is looking at has no flow to show: while it is hidden every frame is drawn whole, so coming back to
+  // it shows the answer as it stands instead of a paragraph still typing out the minutes nobody watched.
+  if (!P || line?.lid == null || document.hidden) return full;
+  return P.feed(String(line.lid), String(jobId ?? ""), full);
+}
+
+function typedShown(line) {
+  const P = state.typePacer;
+  if (!P || !line || line.lid == null) return null;
+  return P.shownFor(String(line.lid));
+}
+
+// The pacer says which lines grew; every pane carrying one gets the new prefix (a pinned turn draws its own copy,
+// so the same line can be in two consoles at once).
+function paintTypedLines(lids) {
+  const P = state.typePacer;
+  if (!P) return;
+  for (const lid of lids) {
+    const shown = P.shownFor(lid);
+    if (shown == null) continue;
+    for (const el of document.querySelectorAll(`[data-lid="${CSS.escape(String(lid))}"]`)) {
+      if (!el.isConnected) continue;
+      el.innerHTML = linkifyText(shown);
+      const out = el.closest("pre.job-out");
+      if (!out) continue;
+      const stick = consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
+      if (stick) setScroll(out, out.scrollHeight);
+    }
+  }
+}
+
+// The turn is over: nothing may be left waiting in either buffer, and the last of a paragraph's words are released
+// rather than left to a clock that has nothing more to say.
+function flushTypeStream(job) {
+  state.typeGate?.drain(String(job ?? ""));
+  state.typePacer?.flushJob(String(job ?? ""));
+}
+
+// A background tab has no flow to show: release both buffers, so the reader comes back to the whole answer instead
+// of to a transcript that is still typing out a paragraph nobody was watching.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) return;
+  state.typeGate?.drain();
+  state.typePacer?.releaseAll();
+});
+
+function paintStreamSpeed() {
+  const w = typeWordSpeed();
+  const l = typeLineRate();
+  const words = $("stream-words");
+  if (words && document.activeElement !== words) words.value = String(w);
+  const lines = $("stream-lines");
+  if (lines && document.activeElement !== lines) lines.value = String(l);
+  // The preset the stored value lands on is lit, so the row says what it is without reading the number back.
+  for (const b of document.querySelectorAll("[data-stream-words-set]")) {
+    b.classList.toggle("on", Number(b.dataset.streamWordsSet) === w);
+  }
+  for (const b of document.querySelectorAll("[data-stream-lines-set]")) {
+    b.classList.toggle("on", Number(b.dataset.streamLinesSet) === l);
+  }
+  const preview = $("stream-preview");
+  if (!preview) return;
+  preview.textContent =
+    !w && !l
+      ? "output arrives exactly as the run sent it — both off"
+      : `${w ? `words type at ${w}/s` : "words appear as they arrive"} · ${l ? `new lines walk in at ${l}/s` : "new lines appear at once"}`;
+}
+
+function saveTypeWords(value) {
+  const n = globalThis.wtType ? globalThis.wtType.clampWords(value) : 0;
+  state.typePacer?.setRate(n);
+  try {
+    localStorage.setItem(TYPE_WORDS_KEY, String(n));
+  } catch {
+    /* private mode: the choice just will not persist */
+  }
+  paintStreamSpeed();
+}
+
+function saveTypeLines(value) {
+  const n = globalThis.wtType ? globalThis.wtType.clampLines(value) : 0;
+  state.typeGate?.setRate(n);
+  try {
+    localStorage.setItem(TYPE_LINES_KEY, String(n));
+  } catch {
+    /* private mode: the choice just will not persist */
+  }
+  paintStreamSpeed();
+}
+
 // One turn's thoughts, from the store, bounded by the turn's own clock.
 async function loadThinking(turn, copy = "") {
   const key = turnKey(turn, copy);
@@ -6384,6 +6537,9 @@ function updateJob(j, { scroll = false } = {}) {
   const ownerChanged = (j.ownerPath || null) !== prevOwner;
   state.jobs.set(j.id, { ...prev, ...j });
   if (!state.jobLines.has(j.id) && j.lines?.length) state.jobLines.set(j.id, j.lines.slice());
+  // A turn that has stopped has no more frames coming, so whatever either display buffer still holds is released:
+  // a resumed, interrupted or failed run settles without a `result` line, and its card must not sit mid-paragraph.
+  if (statusChanged && !turnLive(j)) flushTypeStream(j.id);
   renderConversation(j.thread || j.id, { scroll });
   // Starting or finishing a turn changes what the worktree rows should say about themselves.
   if (statusChanged || approvalChanged) {
@@ -6745,6 +6901,19 @@ function appendJobLine(evt) {
     if (job) job.live = evt.live;
   }
   const line = evt.line || {};
+  // The line-by-line setting holds a burst of whole lines and lets them in one at a time. Bookkeeping never waits:
+  // the `result` line is what says the turn ended, and it is also the frame that flushes both buffers. A hidden tab
+  // is not reading anything, so it never holds a line either — the answer is there in full when the reader returns.
+  if (!document.hidden && !isBookkeeping(line) && state.typeGate?.push(evt)) return;
+  recordJobLine(evt);
+  drawJobLine(evt);
+  if (line.kind === "result") flushTypeStream(evt.id);
+}
+
+// The console's own record of the turn — the lines a rebuild draws from. A held line is not in here yet, so a
+// repaint mid-burst shows the transcript as far as it has got.
+function recordJobLine(evt) {
+  const line = evt.line || {};
   const buf = state.jobLines.get(evt.id) || [];
   // mode "set" = the agent is still writing the same paragraph; that line grows in place
   // instead of a new one being pushed for every streamed fragment.
@@ -6755,6 +6924,11 @@ function appendJobLine(evt) {
   state.jobLines.set(evt.id, buf);
   // A folded turn shows only the peek, and it is not part of the console the lines are appended to.
   refreshTurnPeek(state.jobs.get(evt.id));
+}
+
+// One line into every pane showing this turn.
+function drawJobLine(evt) {
+  const line = evt.line || {};
   // Kept in the buffer, never drawn: see BOOKKEEPING_LINES above.
   if (isBookkeeping(line)) return;
   // A pinned turn renders twice — in its page and in the pinned block above — so every pane carrying
@@ -6763,6 +6937,9 @@ function appendJobLine(evt) {
     (el) => el.dataset.out === evt.id || el.dataset.out === `${evt.id}@pin`,
   );
   if (!outs.length) return;
+  // The words of a growing paragraph that may be drawn now: the pacer holds the tail and releases it on its own
+  // clock, so the console fills in a word or two at a time instead of a coalesced phrase at a time.
+  const shownText = line.kind === "text" ? typedText(line, evt.id) : line.text;
   for (const out of outs) {
     // Streamed lines follow the newest output only for a reader who is already at the bottom; someone
     // scrolled up to read stays where they are.
@@ -6808,7 +6985,7 @@ function appendJobLine(evt) {
     } else {
       const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
       if (line.mode === "set" && existing) {
-        existing.innerHTML = linkifyText(line.text);
+        existing.innerHTML = linkifyText(shownText);
         existing.dataset.ltext = String(line.text ?? "");
       } else {
         const div = document.createElement("div");
@@ -6818,7 +6995,7 @@ function appendJobLine(evt) {
         // back out of the DOM, and this one must read as what was said rather than as what was drawn.
         div.dataset.ltext = String(line.text ?? "");
         div.dataset.lkind = String(line.kind || "raw");
-        div.innerHTML = linkifyText(line.text);
+        div.innerHTML = linkifyText(shownText);
         out.appendChild(div);
       }
     }
@@ -14925,6 +15102,30 @@ $("anchor-touch-seconds")?.addEventListener("input", (e) => {
   saveAnchorSeconds(ANCHOR_TOUCH_SECONDS_KEY, n);
   refreshAnchorBaseline();
 });
+// The two stream rows: a number each, with presets. A typed number is clamped on `change` (and Enter), because a
+// per-keystroke clamp makes 20 impossible — 2 becomes the value before the 0 is typed.
+$("stream-words")?.addEventListener("change", (e) => saveTypeWords(e.target.value));
+$("stream-words")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  saveTypeWords(e.target.value);
+  e.target.blur();
+});
+$("stream-lines")?.addEventListener("change", (e) => saveTypeLines(e.target.value));
+$("stream-lines")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  saveTypeLines(e.target.value);
+  e.target.blur();
+});
+for (const b of document.querySelectorAll("[data-stream-words-set]")) {
+  b.addEventListener("click", () => saveTypeWords(b.dataset.streamWordsSet));
+}
+for (const b of document.querySelectorAll("[data-stream-lines-set]")) {
+  b.addEventListener("click", () => saveTypeLines(b.dataset.streamLinesSet));
+}
+paintStreamSpeed();
+
 $("contrast")?.addEventListener("input", (e) => applyContrast(Number(e.target.value)));
 $("addbar-bright")?.addEventListener("input", (e) => applyAddBarBrightness(Number(e.target.value)));
 $("addbar-top")?.addEventListener("change", (e) => applyAddBarTop(Boolean(e.target.checked)));
