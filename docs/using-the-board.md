@@ -260,7 +260,7 @@ If none of them fired, the row is not live — whatever processes may be running
 | `MERGED (N commits)` | The branch carried commits of its own and they are in remote main. `MERGED (squash/rebase, N commits)` is the same claim proved by patch id instead of ancestry; `MERGED (content identical)` says the branch's tree already matches main. |
 | `NO COMMITS` | The branch never moved off the commit it was created at. Nothing to merge; nothing was merged — and it is deliberately *not* counted as safe to remove. `NO COMMITS?` means the reflog is missing or expired, so the panel cannot tell whether the branch ever moved and will not claim it did. |
 | `ON MAIN` | This is the primary checkout of the main branch. |
-| `UNMERGED (N commits)` | Carries `N` commits that are not on remote main. On a clean tree the badge **is a button** (`⇥` on its face): it starts a `MERGING into MAIN` agent for that row — see [Merging a branch from the board](#merging-a-branch-from-the-board). |
+| `UNMERGED (N commits)` | Carries `N` commits that are not on remote main. On a clean tree the badge **is a button** (`⇥` on its face): it opens four outcomes for that row — roll it into its parent, open a PR, have an agent **check whether the change is already on main** (which deletes the tree when it is), or ask where it should go. See [Merging a branch from the board](#merging-a-branch-from-the-board) and [Checking whether a branch already landed](#checking-whether-a-branch-already-landed). |
 | `EMPTY REPO` / `NO BASE REF` | There is nothing to judge against: the repo has no commits yet, or its remote base ref does not exist here. |
 | *(empty, grey)* | Not computed yet. A dashed grey badge is a verdict being reclassified after a change. |
 
@@ -291,6 +291,31 @@ else's work. A row that already has a merge agent working it draws a disabled `M
 names the agent. The route (`POST /api/worktree/merge {project, path}`) refuses all of those cases again from git, so
 a board that is a scan behind cannot start one by accident; `{dryRun: true}` returns the prompt without starting
 anything, and the script itself is `lib/merge-prompt.js`.
+
+### Checking whether a branch already landed
+
+The `UNMERGED` count is a count of **commits**, not a verdict on content: a branch that landed by squash, rebase,
+cherry-pick or a hand-rewritten patch keeps commits of its own while main holds the change under another sha, so it
+reads `UNMERGED` forever. The chooser's fourth outcome answers that. **Check whether it is on main** (or `… on
+master`, or whatever the project's base branch is called) starts a Hermes agent in that worktree, named
+`CHECKING MAIN`, and it reads only:
+
+- it reverse-applies the branch's own patch to a pristine `git archive` export of the base, under the OS temp dir. A
+  patch that reverses cleanly is content the base already has, whatever the sha or the subject says — which is the
+  one test a squash merge survives;
+- it corroborates with `git cherry` (patch ids), `git diff --quiet` for an identical tree, and `git cat-file -e` for
+  every file the branch adds: an absent file is what settles a half-landed branch;
+- it answers in one line, on its own: `LANDED: YES`, `LANDED: PARTIAL`, `LANDED: NO` or `LANDED: SUPERSEDED` (the base
+  delivers the same behaviour another way — that is not landed, and it deletes nothing);
+- on `LANDED: YES` the panel moves the worktree's folder to the Windows Recycle Bin and prunes git's record of it,
+  exactly as the row's ✕ does. A **locked** tree is refused with the lock named, a tree with modified or untracked
+  files is refused with that reason on the card, and a tree an agent is still running in is refused too;
+- every other answer deletes nothing, and the card's console carries the word the agent read and why.
+
+The agent writes nothing: no commit, no stash, no checkout, no push — a dirty tree is reported, never tidied. The
+route (`POST /api/worktree/verify-landed {project, path}`) refuses a tree that is on the base branch itself, a branch
+with no commits off the base, and a second check in the same tree; `{dryRun: true}` returns the script without
+starting anything, and the script is `lib/verify-prompt.js`.
 
 ### Opening a row
 
@@ -360,6 +385,7 @@ releases it.
 | Thread name | The Hermes session id (or your label for it) — the thing a reply continues. |
 | `📌` | Pin this card: it keeps its screen position while cards above it grow. One pin at a time; clicking again releases it, and clearing the thread releases it too. |
 | `🧠` | Show this session's reasoning (see below). |
+| `🌊` | Draw this session as **one stream**: what the agent thought (while `🧠` is on), said, called and got back, in the order it happened, with nothing folded. Per session, remembered in this browser; off, the card is the separate thinking block and the condensed tool bursts it always was. |
 | `✎` | Rename the session **in the panel only**. The Hermes thread id never changes. |
 | `⤢` | Maximize the card to the window (`Esc` closes). |
 | `✕` | Forget this session: the first click arms it (`✕ sure?`), the second removes its turns and transcript from the panel. The worktree it made stays on disk. |
@@ -428,6 +454,16 @@ inventing output: `… the session store has no copy of this result — the line
 truncation notes are honest about which cap cut: `… result truncated by the gateway` is the gateway's preview cap,
 the `… N lines hidden — click to read` sentence is this panel's fold, and each only appears when its own cap really
 dropped something.
+
+**How fast it fills in** is yours to set, because the wire's pace is not a reading pace: prose arrives in coalesced
+bursts, and a burst of tool lines lands all at once. Settings → Display → **Stream display speed** types a paragraph —
+and a 🧠 reasoning block — out at that many words a second, and **Stream line rate** walks whole new lines into the
+console one at a time. A reasoning block only types the first time the panel sees it on a live turn, so opening an
+old card or reloading draws history whole; both settings
+are `0` = off, which is the console filling exactly as the run sent it, and both are saved in this browser. A line
+still held back is not in the console yet, so a repaint in the middle of one (a scan, a pinned turn's second copy)
+shows the transcript as far as it has got — and a turn that settles, or a tab that goes to the background, releases
+everything at once, so nothing is ever left waiting in a buffer.
 
 **A run of tool calls is condensed.** Consecutive calls between two pieces of prose become one group, one row per
 tool name: `💻 terminal ×11 curl …` with the last input and either a duration or a live clock. Click a row to filter
@@ -559,6 +595,8 @@ setting):
 | Display | Page zoom | `Ctrl+` / `Ctrl-` / `Ctrl+0` (reset), or the `−`/`+` buttons here. `Ctrl+wheel` zooms the page too, except over a console, where it sizes that console's text. |
 | Display | Panel font | Headings, labels, buttons and the text you type. |
 | Display | Terminal font · Console size · Console weight | The console and the tool lines inside it. |
+| Display | Stream display speed | Words a second at which an agent's own prose and reasoning blocks type out, 0–200 (`off`/10/20/40/80 presets, 40 by default — what a long answer here streams at). `0` is off — the console fills exactly as the run sent it. Whatever is still queued is released when the turn settles. |
+| Display | Stream line rate | Lines a second at which whole new lines join a console, 0–40 (`off`/2/4/8/16 presets). A tool burst walks in instead of landing in one paint; a held line is not in the console's record yet, and a settled turn flushes what is left. `0` is off. |
 | Display | Panel contrast | How far apart the layered surfaces sit: 0% flattens them, 100% pushes the page to near-black and lifts the panels. The swatch strip below previews the layers. |
 | Display | Add-agent bar | The green of the **+** bar in a worktree's agents, 0% (deep and quiet) to 100% (vivid). Lightness and saturation move together; the swatch below the row is the bar itself, so the preview cannot disagree with the button. |
 | Display | Add-agent bar at top | Draw the **+** bar above a worktree's agent cards instead of under them. On by default; off restores the old position. |

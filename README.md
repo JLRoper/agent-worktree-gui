@@ -90,6 +90,18 @@ seeded the way the board really gets one back: an interrupted card with a run id
 against a stub Runs API. Point it at a Playwright install with `PANEL_PLAYWRIGHT_ROOT`; without one the browser half
 reports `BROWSER-HALF-NOT-RUN` and the rest still runs.
 
+`node tools/verify-console-flicker.mjs` is the browser repro for the dark console's flicker, driven by a real run's
+output: a panel of its own (spare port, own `PANEL_CONFIG`, own `jobs.json`, own `HERMES_HOME`) pointed at a stub Runs
+API that plays a scripted agent turn over real SSE, so every console line the browser draws is the server's own
+`jobline` frame, and a card spawned and replied to through the panel's own routes. The page records what the console
+holds and where the reply box under it sits, and every wholesale write to a console with its stack. It asserts that a
+live line never wipes or shortens a console that holds transcript and that nothing under it jumps, in a condensed
+console with deliverables arriving and in a 🌊 console. `--label before|after` names a capture, `--root <checkout>`
+serves another checkout (run `before` against a checkout without the fix), and `--compose` merges the two captures
+into `C:/CodeReviews/agent-worktree-gui/console-flicker-playwright.md` with paired screenshots of the console as a
+repaint left it and one live line later. Useful after touching `drawJobLine`, `paintStreamConsole`,
+`conversationSignature` or anything else that repaints a live console.
+
 `node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
 `--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
 ancestry cannot see the merge: the repository ruleset requires linear history, so a PR lands as a squash or a
@@ -117,6 +129,12 @@ level is a judgement the landing agent makes from the diff and lands in the same
 `node tools/version.mjs suggest` advises, `apply <patch|minor|major>` writes the one place the version lives,
 and `docs/versioning.md` is the scale. The merge prompt tells the landing agent to do it. Same install covers
 both hooks, and the same `--no-verify` bypasses this one.
+
+Those two hooks are the repo's own; the panel adds three more gates on top of them — the project's
+`remoteBranchPolicy`, the pre-push hook it installs into `<git-common-dir>/wtgui-hooks/`, and the permission box
+that hook parks a push on — plus the host's ruleset on the default branch. All of them, in the order a `git push`
+meets them and with what waives each, are enumerated in
+[docs/pushing-to-a-remote.md](docs/pushing-to-a-remote.md).
 
 `node tools/verify-charter.mjs` seeds a charter from a store full of rules and notes, checks the prescribed
 headings and the cap, checks that the whole file is in the per-turn briefing while the polled state carries
@@ -209,7 +227,7 @@ Per-worktree verdict:
 | `MERGED (N commits)` | the branch really did carry commits and they are now in remote main (reflog evidence; N counts only commits the branch itself made, not main commits it merged in) |
 | `NO COMMITS` | the branch never moved off its creation commit — there is nothing to merge, and nothing was merged |
 | `ON MAIN` | this is the primary checkout of the main branch |
-| `UNMERGED (N commits)` | carries commits not on remote main |
+| `UNMERGED (N commits)` | carries commits not on remote main — the badge is a control: roll it into its parent, open a PR, have an agent check whether the change is already on main (deleting the tree when it is), or ask where it goes |
 
 `MERGED` is only claimed when the branch has commits of its own **and** they are in remote main. A
 worktree whose branch has zero commits (a freshly made `wtgui/…` tree, or a branch created and never

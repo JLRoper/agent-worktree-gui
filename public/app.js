@@ -187,6 +187,9 @@ const state = {
   // Kept here for the same reason toolGroupOpen is — every rebuild replaces the console's markup, and a box
   // that snapped shut under the reader's cursor would read as the panel losing the click.
   codeBoxOpen: new Set(),
+  // The same for a card drawn as ONE stream (the 🌊 beside the 🧠), where a file's code box starts OPEN because nothing in
+  // that stream is folded: here it is the boxes the reader SHUT that are remembered, by the same key.
+  codeBoxShut: new Set(),
   // Which tool calls the reader has folded: "<burst id>|<segment>". A call's own row is its handle, and the fold
   // covers that call's output and nothing else. Kept here for the same reason codeBoxOpen is: a repaint or a
   // burst rebuild replaces the markup, and a call that sprang back open under the reader's cursor would read as
@@ -1196,7 +1199,12 @@ function isBookkeeping(l) {
 // markup must not change what the next render believes the line said.
 function lineHtml(l, live = "") {
   const kind = l.kind || "raw";
-  return `<div class="jl jl-${esc(kind)}" data-lid="${esc(l.lid ?? "")}" data-ltext="${esc(l.text ?? "")}" data-lkind="${esc(kind)}">${linkifyText(l.text)}${live}</div>`;
+  // A line the stream is still revealing is drawn up to what may be shown NOW, not up to the wire's whole text:
+  // a repaint mid-paragraph (a scan, a pinned copy, the 3s result sweep) must not jump the console ahead of the
+  // words the reader is watching arrive. Every other line — history, a tool line, reasoning — is drawn whole.
+  const shown = typedShown(l);
+  const text = shown == null ? l.text : shown;
+  return `<div class="jl jl-${esc(kind)}" data-lid="${esc(l.lid ?? "")}" data-ltext="${esc(l.text ?? "")}" data-lkind="${esc(kind)}">${linkifyText(text)}${live}</div>`;
 }
 
 function burstGroups(lines) {
@@ -1417,12 +1425,12 @@ async function ensureToolStore(turnId, tool, grp = null) {
 // This is the DOM being handed the rest of a result, never the job's own lines: the console's ring buffer
 // (jobs.js MAX_LINES = 600) is what a big result would evict, and a result the reader asked to see is not
 // something the card has to keep — it is one click away again after any repaint.
-function wholeStoredHtml(got, tool = "", arg = "", boxKey = "") {
+function wholeStoredHtml(got, tool = "", arg = "", boxKey = "", codeOpen = null) {
   const LF = String.fromCharCode(10);
   const all = String((got && got.text) || "").split(LF);
   if (!all.some((l) => l.trim())) return `<div class="jl jl-dim jl-note">  the stored result has no text</div>`;
   return (
-    consoleBodyHtml(all.map((l) => ({ kind: "store", text: l })), { tool, arg, codeOpen: null, codeKey: boxKey }) +
+    consoleBodyHtml(all.map((l) => ({ kind: "store", text: l })), { tool, arg, codeOpen, codeKey: boxKey }) +
     (got.truncated ? `<div class="jl jl-dim jl-note">… this stored result was cut as well</div>` : "")
   );
 }
@@ -1684,10 +1692,12 @@ function rebuildToolGroup(grp, { filter = "", open = false } = {}) {
   const gkey = grp.dataset.gstate || toolGroupStateKey(key, lines, anchor);
   // The click is the new truth, so record it before rendering: toolGroupHtml prefers the remembered state, and
   // otherwise it would faithfully put back the state the reader just changed.
-  if (!open && !filter) state.toolGroupOpen.delete(gkey);
+  if (toolGroupDropsState(open, filter, grp.dataset.gdefault === "open")) state.toolGroupOpen.delete(gkey);
   else state.toolGroupOpen.set(gkey, { open, filter });
   const holder = document.createElement("div");
-  holder.innerHTML = toolGroupHtml(lines, key, filter, open, anchor, gofs);
+  // A piece of a stream stays a piece of a stream: rebuilding it condensed (a store read landing, a batch opened,
+  // the rollup refreshed) would put the folded group back under a card whose whole point is that nothing is folded.
+  holder.innerHTML = toolGroupHtml(lines, key, filter, open, anchor, gofs, grp.dataset.gflat === "1" ? { flat: true } : {});
   const fresh = holder.firstElementChild;
   if (!fresh) return;
   fresh._burst = lines;
@@ -1695,12 +1705,44 @@ function rebuildToolGroup(grp, { filter = "", open = false } = {}) {
   rememberToolGroup(fresh);
 }
 
+// ---- tool group key: what a burst is remembered BY, and the window that keeps that identity in view
 // A burst's identity, for remembering whether the reader opened it. The group's DOM key changes when the console
 // is rebuilt from the buffer (it is the group's index) and when the stream starts a new burst (it is a timestamp),
 // so the state is keyed by the turn plus the first line the burst holds - which is the same line in all three.
+//
+// It has to be the burst's first CALL. A result line above it belongs to a call the console no longer holds, and it
+// slides out of the window as the turn grows, so an anchor derived from it re-keys the group under the reader: the
+// open group came back `hidden` on the next repaint (state.toolGroupOpen answered for a key nothing looks up now).
 function toolGroupAnchor(lines) {
-  const first = Array.isArray(lines) && lines.length ? lines[0] : null;
+  const run = Array.isArray(lines) ? lines : [];
+  const first = run.find((l) => l && l.kind === "tool") || run[0] || null;
   return first ? String(first.lid || first.at || first.text || "").slice(0, 40) : "";
+}
+
+// The console draws a window of the turn, not the whole of it. A raw line count cut bursts in half: the call line
+// fell out of the window while the output it produced stayed, and a burst with no call line has no rows to tally -
+// it stopped being a group at all (toolGroupHtml's trimmed path). So the window is cut on the burst's own boundary:
+// if it would start inside a burst's results, it starts at the call line above them instead.
+//
+// A burst that fits in a second window is kept whole, so there is no hole between a call and what it produced. One
+// that does not (a terminal call with hundreds of lines of output) keeps its call line and the ordinary window: a
+// group with a call row and a gap, which is the window being a window - never a group that stops existing.
+const TURN_WINDOW = 300;
+
+function windowLines(all, keep = TURN_WINDOW) {
+  const lines = Array.isArray(all) ? all : [];
+  const max = Math.max(1, Number(keep) || TURN_WINDOW);
+  if (lines.length <= max) return lines;
+  const tail = lines.length - max;
+  // A run of `tool`/`tool-out` lines is one burst (burstGroups). Walking back over the results the window opened
+  // inside lands on the call that produced them; landing on anything else means the burst's own call line is already
+  // out of the buffer, and the trimmed render draws what is left.
+  let start = tail;
+  while (start > 0 && lines[start].kind === "tool-out") start -= 1;
+  // `start` equal to `tail` is a window that already begins at a burst's own call (or at a line that is not a burst's
+  // at all): nothing was cut in half, so nothing has to be put back.
+  if (start === tail || lines[start].kind !== "tool") return lines.slice(tail);
+  return lines.length - start <= max * 2 ? lines.slice(start) : [lines[start], ...lines.slice(tail)];
 }
 
 // `anchor` is the identity the node already carries (data-gat), which wins over re-deriving it from lines that were
@@ -1709,8 +1751,14 @@ function toolGroupStateKey(key, lines, anchor = "") {
   return `${String(key || "").split("#")[0]}|${anchor || toolGroupAnchor(lines)}`;
 }
 
-// Record the reader's choice from a rendered group, so the next rebuild can put it back. An open block with no
-// filter is worth keeping; a closed, unfiltered one is the default and leaves nothing to remember.
+// Is a rendered group's state worth remembering? A closed, unfiltered group is the condensed view's default and
+// leaves nothing to remember - except where the group's OWN default is open (a burst the window trimmed of its call
+// line is drawn open), because there the reader shutting it is a choice, and a repaint must not undo it.
+function toolGroupDropsState(open, filter, openByDefault = false) {
+  return !open && !filter && !openByDefault;
+}
+
+// Record the reader's choice from a rendered group, so the next rebuild can put it back.
 function rememberToolGroup(grp) {
   if (!grp || !grp.dataset) return;
   const gkey = grp.dataset.gstate;
@@ -1718,7 +1766,7 @@ function rememberToolGroup(grp) {
   const body = grp.querySelector(".tgrp-body");
   const filter = grp.dataset.filter || "";
   const open = Boolean(body && !body.hidden);
-  if (!open && !filter) {
+  if (toolGroupDropsState(open, filter, grp.dataset.gdefault === "open")) {
     state.toolGroupOpen.delete(gkey);
     return;
   }
@@ -1726,6 +1774,7 @@ function rememberToolGroup(grp) {
   // A long-lived tab would otherwise accumulate one entry per burst it ever opened.
   while (state.toolGroupOpen.size > 500) state.toolGroupOpen.delete(state.toolGroupOpen.keys().next().value);
 }
+// ---- end tool group key
 
 // The gateway folds a parallel batch into one line - "first command + 3 commands" - because the run stream carries a
 // summary of the batch, not each call. The other calls are in the session transcript, so the tail becomes a button
@@ -1748,13 +1797,13 @@ function linkBatchTail(text, tool, gkey) {
 // server stamped on them, and the head above each one, checked against the store's rows), so the burst is drawn in
 // pieces AROUND them: the console lines as they are, each note as the button that opens it, and — once the reader
 // has pressed one — the whole stored text in the note's place, exactly as the grouped path draws it.
-function trimmedBurstHtml(lines, turnId, gkey) {
+function trimmedBurstHtml(lines, turnId, gkey, codeOpen = state.codeBoxOpen) {
   const folds = noteFolds(turnId, lines);
   const out = [];
   let run = [];
   const flush = () => {
     if (!run.length) return;
-    out.push(consoleBodyHtml(run, { tool: "", arg: "", codeOpen: state.codeBoxOpen, codeKey: String(gkey), folds }));
+    out.push(consoleBodyHtml(run, { tool: "", arg: "", codeOpen, codeKey: String(gkey), folds }));
     run = [];
   };
   for (const l of lines) {
@@ -1765,23 +1814,87 @@ function trimmedBurstHtml(lines, turnId, gkey) {
       continue;
     }
     flush();
-    out.push(wholeStoredHtml(opened, fold.tool, "", `${gkey}|${fold.tool}`));
+    out.push(wholeStoredHtml(opened, fold.tool, "", `${gkey}|${fold.tool}`, codeOpen === state.codeBoxOpen ? null : codeOpen));
   }
   flush();
   return out.join("");
 }
 
-function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", gofs = null) {
+// ---- trimmed group head: a burst that lost its call line is still a group
+// A burst whose call line the window (or the buffer behind it) no longer holds has no rows to tally, but the lines it
+// does hold are still one block of the reader's console. Drawn bare they had no head row, nothing to click, and
+// nowhere for the open state to land: a repaint could neither keep them open nor remember them shut, and the 3s sweep
+// that refreshes a block's stored output could not find them at all. The head row says what the block is - the call
+// above these results is outside the window - and the node carries the same data-gstate/data-gat as any other group.
+function trimmedGroupHtml(lines, key, anchor = "", flat = false, codeOpen = state.codeBoxOpen) {
+  const gkey = toolGroupStateKey(key, lines, anchor);
+  const body = trimmedBurstHtml(lines, String(key).split("#")[0], key, codeOpen);
+  // A piece of a stream has no fold at all: it is open, and the reader's open state is not consulted for it.
+  if (flat) {
+    return (
+      `<div class="tgrp tgrp-flat" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gflat="1">` +
+      `<div class="tgrp-body">${body}</div></div>`
+    );
+  }
+  // Drawn OPEN: the reader came for this output, and what the window dropped is the call, not the result. Shutting it
+  // is therefore a real choice, and data-gdefault is what makes rememberToolGroup keep that choice.
+  const saved = state.toolGroupOpen.get(gkey);
+  const open = saved ? Boolean(saved.open) : true;
+  const names = [
+    ...new Set(
+      lines
+        .map((l) => {
+          const m = l && l.kind === "tool-out" ? TOOL_DONE_RE.exec(String(l.text || "")) : null;
+          return m ? m[1] : "";
+        })
+        .filter(Boolean),
+    ),
+  ];
+  const label = `${lines.length} line${lines.length === 1 ? "" : "s"}`;
+  const title = "the call line above these results is outside the console's window — this block is the output the card still holds";
+  return `<div class="tgrp" data-copy data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gdefault="open">
+      <div class="tgrp-head" data-copy-text><div class="tgrp-row tgrp-row-trimmed" title="${esc(title)}"><span class="tgrp-g">\u21b3</span><span class="tgrp-name">${esc(names.join(", ") || "tool output")}</span><span class="tgrp-n">trimmed</span></div><button type="button" class="tgrp-more${open ? " is-open" : ""}" data-tgrp-more="${esc(key)}" title="${open ? "fold these result lines away" : "show every result line this card still holds"}">${label}</button></div>
+      <div class="tgrp-body"${open ? "" : " hidden"}>${body}</div>
+    </div>`;
+}
+// ---- end trimmed group head
+
+// ---- one stream: a tool call, drawn as a line of it -------------------------------------------------------------------
+// A card drawn as ONE stream (the 🌊 beside the 🧠) has no tool groups to condense a run of calls into and nothing
+// folded, so a call is simply its line — purple, led by the tool's emoji, exactly the line the group's "N lines"
+// button opens onto in the condensed view. Two things the group's head row carried have to live on the line instead:
+// the clock of the call still in flight, and the "+ N commands" tail the gateway puts on a parallel batch.
+const FLAT_CODE_OPEN = { has: (key) => !state.codeBoxShut.has(key) };
+
+function flatCallHtml(l, gkey, live = "") {
+  const text = String(l.text ?? "");
+  const m = TOOL_START_RE.exec(text);
+  const tool = m ? m[1] : "";
+  const sep = text.indexOf(" · ");
+  const arg = sep >= 0 ? text.slice(sep + 3) : "";
+  const inner = tool && arg && BATCH_TAIL_RE.test(arg) ? `${linkifyText(text.slice(0, sep + 3))}${linkBatchTail(arg, tool, gkey)}` : linkifyText(text);
+  return `<div class="jl jl-tool" data-lid="${esc(l.lid ?? "")}" data-ltext="${esc(text)}" data-lkind="tool">${inner}${live}</div>`;
+}
+
+// A stream piece's stored results are not asked for by the markup: an always-visible .tgrp is swept by the same 3s
+// interval that keeps the condensed view's open groups current (see the setInterval beside ensureToolStore), so a
+// patch with an empty preview fills itself in without the reader clicking anything.
+
+function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", gofs = null, opts = {}) {
+  const flat = Boolean(opts && opts.flat);
   const rows = toolBurstRows(lines);
   // No recognisable call lines (a result whose start was trimmed away): show the lines rather than an empty box.
   // They still go through the one renderer, so a diff in a burst whose call lines were trimmed is a diff — and
   // every note in them is resolved on its own identity, because there is no tool name and no cursor to be had
   // here. Without that the note drew as a plain div and the reader was shown "click to read" with nothing to
   // click, which is exactly the state a reload of a long turn produces.
-  if (!rows.length) return trimmedBurstHtml(lines, String(key).split("#")[0], key);
+  // What it must not lose is BEING A GROUP: a head row that says what the block is, the data-gstate/data-gat the
+  // reader's open state is remembered under, and the fold that state opens. Drawn as bare lines it dropped out of
+  // the panel's own map of its groups - nothing to click, nothing to remember, nothing for the sweep to find.
+  if (!rows.length) return trimmedGroupHtml(lines, key, anchor, flat, flat ? FLAT_CODE_OPEN : state.codeBoxOpen);
   // The reader's own choice wins over the caller's default: a rebuild is not the reader closing the block.
   const gkey = toolGroupStateKey(key, lines, anchor);
-  const saved = state.toolGroupOpen.get(gkey);
+  const saved = flat ? null : state.toolGroupOpen.get(gkey);
   if (saved) {
     filter = saved.filter || filter;
     openBody = saved.open;
@@ -1790,7 +1903,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
   // the panel lost at a restart still drew "running 77m16s" an hour later, one line above the word "interrupted".
   const turnJob = state.jobs.get(String(key).split("#")[0]);
   const live = turnJob ? turnLive(turnJob) : false;
-  const head = rows
+  const head = flat ? "" : rows
     .map((r) => {
       const running = r.count > r.done && live;
       const state = running
@@ -1826,6 +1939,9 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
   // The index takeStored is ABOUT to take: a result's fold names which of the turn's rows it is, and the pairing
   // above is where that number comes from (the click then reads exactly that row back out of the store).
   const storedRowAt = (tool) => cursors.get(tool) || 0;
+  // Code boxes: folded until opened in the condensed view; in a stream nothing is folded, so they start open and it is
+  // the boxes the reader shut that are remembered.
+  const codeOpenSet = flat ? FLAT_CODE_OPEN : state.codeBoxOpen;
   const storedHtml = (got, tool = "", arg = "", boxKey = "", at = null) => {
     const all = String(got.text || "").split(LF);
     const cut = got.truncated && !/characters not shown/.test(got.text || "");
@@ -1834,7 +1950,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
     // display cap exactly like the live stream's, and re-folding a result the reader just opened reads as the
     // panel losing the click.
     const opened = at == null ? null : state.foldRows.get(foldKey(turnId, tool, at));
-    if (opened) return wholeStoredHtml(opened, tool, arg, boxKey) + (cut ? `<div class="jl jl-dim jl-note">… this result was cut</div>` : "");
+    if (opened) return wholeStoredHtml(opened, tool, arg, boxKey, flat ? FLAT_CODE_OPEN : null) + (cut ? `<div class="jl jl-dim jl-note">… this result was cut</div>` : "");
     const shown = all.slice(0, STORE_LINES);
     const more = all.length - shown.length;
     // The tail is the same affordance the live stream's fold ends with — one renderer, one click — and it is only
@@ -1858,7 +1974,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
       // gateway), and it must not be the one console path that draws a diff as plain lines.
       consoleBodyHtml(
         shown.map((l) => ({ kind: "store", text: l })),
-        { tool, arg, codeOpen: state.codeBoxOpen, codeKey: boxKey },
+        { tool, arg, codeOpen: codeOpenSet, codeKey: boxKey },
       ) +
       tail +
       (cut ? `<div class="jl jl-dim jl-note">… this result was cut</div>` : "")
@@ -1925,7 +2041,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
     const resultLine = resultHead(seg) ? seg.lines.slice(0, 1) : [];
     const preview = resultHead(seg) ? seg.lines.slice(1) : seg.lines;
     const render = (list, extra = {}) =>
-      consoleBodyHtml(list, { tool: seg.tool, arg, codeOpen: state.codeBoxOpen, codeKey: boxKey, ...extra });
+      consoleBodyHtml(list, { tool: seg.tool, arg, codeOpen: codeOpenSet, codeKey: boxKey, ...extra });
     // Where this result's store row is: the pairing below takes rows in order, so the cursor's value BEFORE it
     // advances is this result's own row — the number a fold's click fetches by.
     const rowAt = resultHead(seg) ? storedRowAt(seg.tool) : 0;
@@ -1955,7 +2071,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
         out =
           render(resultLine) +
           render(preview.filter((_, k) => k !== foldAt)) +
-          wholeStoredHtml(opened, seg.tool, arg, boxKey);
+          wholeStoredHtml(opened, seg.tool, arg, boxKey, flat ? FLAT_CODE_OPEN : null);
       } else if (foldAt >= 0) {
         out =
           render(resultLine) +
@@ -1975,8 +2091,27 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
   // top, that call's output under it, and nothing else on the card moving when it folds. A call whose result has
   // not arrived yet has nothing to fold and is drawn as the plain line it always was.
   const bodyParts = [];
+  // One stream: the call still in flight carries its clock on its own line (the condensed view keeps it on the head row),
+  // and a call is its line — there is no fold around it, and its result is the next piece in the order it happened.
+  const busyAt = flat && live ? inflightToolIndex(lines) : -1;
+  const busyLine = busyAt >= 0 ? lines[busyAt] : null;
+  const flatSegHtml = (seg, si) => {
+    const first = seg.lines[0];
+    if (!first || first.kind !== "tool") return bodyOf(seg, si);
+    const from = Number(first.at) || Date.now();
+    const clock = first === busyLine ? `<span class="jl-live" data-live-from="${from}">${liveSuffix(from)}</span>` : "";
+    const rest = seg.lines.slice(1);
+    return (
+      flatCallHtml(first, gkey, clock) +
+      (rest.length ? consoleBodyHtml(rest, { tool: seg.tool, arg: callArgFor(seg), codeOpen: codeOpenSet, codeKey: `${gkey}|${si}` }) : "")
+    );
+  };
   for (let si = 0; si < segments.length; si++) {
     const seg = segments[si];
+    if (flat) {
+      bodyParts.push(flatSegHtml(seg, si));
+      continue;
+    }
     const next = segments[si + 1];
     if (seg.lines[0] && seg.lines[0].kind === "tool" && next && resultHead(next) && next.tool === seg.tool) {
       bodyParts.push(callBlockHtml(seg.lines[0], bodyOf(next, si + 1), `${gkey}|${si}`));
@@ -2007,6 +2142,16 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
       ? bodyParts.join("")
       : `<div class="jl jl-dim">this run recorded nothing for ${esc(filter)}</div>`) + batchBlocks;
   const label = filter ? `all ${lines.length}` : `${lines.length} line${lines.length === 1 ? "" : "s"}`;
+  if (flat) {
+    // One piece of a stream: no head row and no "N lines" button, and no template whitespace either (the console is a
+    // <pre>). `data-gflat` is what keeps it flat: the 3s sweep that keeps an open group's stored results current
+    // aims at this node by its state key, and a rebuild must not put the folded group back under the reader.
+    return (
+      `<div class="tgrp tgrp-flat" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}"` +
+      ` data-gofs="${esc(JSON.stringify(Object.fromEntries(cursorsStart)))}" data-gflat="1">` +
+      `<div class="tgrp-body">${body}</div></div>`
+    );
+  }
   return `<div class="tgrp" data-copy data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gofs="${esc(JSON.stringify(Object.fromEntries(cursorsStart)))}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
       <div class="tgrp-head" data-copy-text>${head}<button type="button" class="tgrp-more${filter ? " is-open" : ""}" data-tgrp-more="${esc(key)}" title="${filter ? "show every tool in this run, not just this one" : "show every call in this run of tools, with its output"}">${label}</button></div>
       <div class="tgrp-body"${openBody || filter ? "" : " hidden"}>${body}</div>
@@ -2028,34 +2173,82 @@ function paintToBottom(box) {
   wrap.classList.toggle("is-at-end", !overflowing || atEnd);
 }
 
+// ---- one stream: the turn's own body, drawn in its order ---------------------------------------------------------
+// Everything a card keeps apart, in one flow: the panel's console lines, the reasoning blocks (placed by
+// core/stream-merge.js — see why its comment is the authority on where a block goes), and each tool call with the
+// result it produced, drawn open. Nothing is folded, so there is no head row and no "N lines" button: a call is its
+// own line and its output is the next piece, which is exactly what the condensed view's button opens onto.
+//
+// The pieces are drawn separately on purpose (wtStream.segments): a live line then only ever redraws the call it
+// belongs to, so a reader's selection in an earlier diff survives the turn growing under it.
+function streamBodyHtml(turn, lines, windowFull = false) {
+  const W = globalThis.wtStream;
+  if (!W || typeof W.merge !== "function" || typeof W.segments !== "function") return "";
+  const thread = turn.thread || turn.id;
+  // Reasoning joins the stream only while the 🧠 is on: with it off, the console's own one-line preview is the only
+  // trace of what the agent thought, exactly as in the condensed view.
+  const blocks = thinkingOn(thread) ? state.thinkCache.get(turn.id)?.blocks || [] : [];
+  // Reasoning joins the console as lines keyed `think:<at>`; feeding them to the pacer HERE, where the turn's own
+  // clock is at hand, is what makes lineHtml type them out exactly like prose.
+  if (blocks.length) for (const b of blocks) paceThinkBlock(turn, b);
+  const merged = W.merge(lines, blocks, { windowFull, hidePreviews: blocks.length > 0 });
+  const storeSeen = new Map();
+  const parts = [];
+  let n = 0;
+  for (const seg of W.segments(merged)) {
+    if (!seg) continue;
+    if (!seg.unit) {
+      // A reasoning block is a line of the stream like any other: same markup, its own kind, so a reader can copy or
+      // select across it and the console's own links still work inside it.
+      parts.push(lineHtml(seg.line));
+      continue;
+    }
+    // The stored rows this piece pairs from: what the earlier pieces of THIS turn already consumed for that tool.
+    const gofs = Object.fromEntries(storeSeen);
+    parts.push(toolGroupHtml(seg.lines, `${turn.id}#f${n++}`, "", false, "", gofs, { flat: true }));
+    for (const l of seg.lines) {
+      if (l.kind !== "tool-out") continue;
+      const m = TOOL_DONE_RE.exec(String(l.text || ""));
+      if (m) storeSeen.set(m[1], (storeSeen.get(m[1]) || 0) + 1);
+    }
+  }
+  return parts.join("");
+}
+
 function turnBody(turn, copy = "") {
-  const lines = jobLines(turn.id).filter((l) => !isBookkeeping(l)).slice(-300);
+  const all = jobLines(turn.id).filter((l) => !isBookkeeping(l));
+  // A window, cut on a burst boundary rather than a line count: windowLines keeps the call line of the burst the
+  // window would otherwise open inside, so that burst is still a group with a head row and a remembered state.
+  const lines = windowLines(all);
   const running = turnLive(turn);
+  // The 🌊: this card draws ONE stream, so the reasoning is not a block above the console — it is in it.
+  const stream = streamOn(turn.thread || turn.id) && Boolean(globalThis.wtStream);
   // Which started tool call has no result yet. Parallel calls interleave, so count starts and
   // completions per tool name instead of assuming "the last line is the running one".
   const busy = running ? inflightToolIndex(lines) : -1;
   // Each burst pairs its result lines with the store's rows from ITS own offset: a turn can hold a patch burst, a
   // paragraph, then another patch burst, and the second one must start after the first one's rows.
   const storeSeen = new Map();
-  const body =
-    burstGroups(lines)
-      .map((item, gi) => {
-        if (item.group) {
-          const gofs = Object.fromEntries(storeSeen);
-          for (const l of item.lines) {
-            if (l.kind !== "tool-out") continue;
-            const m = TOOL_DONE_RE.exec(String(l.text || ""));
-            if (m) storeSeen.set(m[1], (storeSeen.get(m[1]) || 0) + 1);
+  const body = stream
+    ? streamBodyHtml(turn, lines, lines.length < all.length)
+    : burstGroups(lines)
+        .map((item, gi) => {
+          if (item.group) {
+            const gofs = Object.fromEntries(storeSeen);
+            for (const l of item.lines) {
+              if (l.kind !== "tool-out") continue;
+              const m = TOOL_DONE_RE.exec(String(l.text || ""));
+              if (m) storeSeen.set(m[1], (storeSeen.get(m[1]) || 0) + 1);
+            }
+            return toolGroupHtml(item.lines, `${turn.id}#${gi}`, "", false, "", gofs);
           }
-          return toolGroupHtml(item.lines, `${turn.id}#${gi}`, "", false, "", gofs);
-        }
-        const l = item.line;
-        const i = lines.indexOf(l);
-        const live = i === busy ? `<span class="jl-live" data-live-from="${Number(l.at) || Date.now()}">${liveSuffix(Number(l.at) || Date.now())}</span>` : "";
-        return lineHtml(l, live);
-      })
-      .join("") || '<div class="jl jl-dim">waiting for output…</div>';
-  return thinkHtml(turn, copy) +
+          const l = item.line;
+          const i = lines.indexOf(l);
+          const live = i === busy ? `<span class="jl-live" data-live-from="${Number(l.at) || Date.now()}">${liveSuffix(Number(l.at) || Date.now())}</span>` : "";
+          return lineHtml(l, live);
+        })
+        .join("") || '<div class="jl jl-dim" data-wait="1">waiting for output…</div>';
+  return (stream ? "" : thinkHtml(turn, copy)) +
     // `out-tab` carries the 18px left tab the console itself has, so the wrapper is the console's box: the chip
     // centred in the wrapper is centred in the console, not 9px off it.
     `<div class="out-wrap out-tab" data-copy><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${toBottomBtnHtml()}</div>` +
@@ -3618,7 +3811,8 @@ setInterval(refreshSubagentRoster, 5000);
 function sweepThinking() {
   for (const card of document.querySelectorAll(".job[data-thread]")) {
     const thread = card.dataset.thread;
-    if (!thread || !thinkingOn(thread)) continue;
+    // A card drawn as ONE stream wants the blocks too: they are lines of its console, not a block above it.
+    if (!thread || (!thinkingOn(thread) && !streamOn(thread))) continue;
     const conv = conversations().find((c) => c.thread === thread);
     if (!conv) continue;
     for (const turn of conv.turns) {
@@ -3846,6 +4040,7 @@ function conversationHtml(conv) {
       <span class="mono dimmer thread-name" data-thread-name="${esc(thread)}" data-label="${esc(latest.label || "")}" title="${latest.label ? esc(`${latest.label} — Hermes thread ${thread}`) : "Hermes session thread — continue it any time"}">${esc(latest.label || thread)}</span>
       <button class="btn-pin${state.anchorThread === thread ? " is-on" : ""}" data-pin-thread="${esc(thread)}" type="button" title="${state.anchorThread === thread ? "this card holds its place while anything above it grows — click to release" : "pin this card: hold its place on screen while other cards above it grow (one pin at a time)"}">\u{1F4CC}</button>
       <button class="btn-think${thinkingOn(thread) ? " is-on" : ""}" data-think-thread="${esc(thread)}" type="button" title="${thinkingOn(thread) ? "showing this session's reasoning — open live while a turn runs, folded afterwards. click to hide it" : "show this session's reasoning: live and open while a turn runs, folded per turn afterwards (read from the session store)"}">🧠</button>
+      <button class="btn-stream${streamOn(thread) ? " is-on" : ""}" data-stream-thread="${esc(thread)}" type="button" aria-pressed="${streamOn(thread) ? "true" : "false"}" title="${streamOn(thread) ? "this session is drawn as ONE stream — reasoning, tool calls, their output and the agent's own words in the order they happened, nothing folded. click to go back to the separate thinking block and the condensed tool groups" : "draw this session as ONE stream: what the agent thought, said, called and got back, in the order it happened, with nothing folded (reasoning joins it while 🧠 is on; subagents keep their own strip)"}">🌊</button>
       <button class="btn-rename" data-rename-thread="${esc(thread)}" type="button" title="rename this session — a label for the panel only; the Hermes thread id never changes">\u270e</button>
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
       <button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>
@@ -5739,6 +5934,205 @@ function setThinking(thread, on) {
   renderConversation(thread);
 }
 
+// ---- one stream ------------------------------------------------------------------------------
+// The 🌊 beside the 🧠: draw this session as ONE stream — what the agent thought, said, called and got back, in the
+// order it happened, nothing folded. Per session like thinking, but with no global default: a card that never
+// pressed it renders exactly as it always did, which is what every card did before this existed.
+const STREAM_KEY = "wtgui.stream";
+
+// NOT `setStream`. That name is already core/sse.js's connection label (the ● live / offline pill, called from
+// there, from core/transport.js and from this file); it is a global in a classic script, so a function of the same
+// name here would replace it for every caller and the status pill would stop moving.
+function streamOn(thread) {
+  try {
+    return localStorage.getItem(`${STREAM_KEY}.${thread}`) === "1";
+  } catch {
+    /* private mode: off, which is the default anyway */
+    return false;
+  }
+}
+
+function setStreamMode(thread, on) {
+  try {
+    localStorage.setItem(`${STREAM_KEY}.${thread}`, on ? "1" : "0");
+  } catch {
+    /* the choice just will not persist */
+  }
+  renderConversation(thread);
+}
+
+// ---- how a run's output arrives (Settings > Display) ------------------------------------------
+// The wire is not the reader's pace. A paragraph reaches the console in coalesced frames (120 ms on the server, and
+// several words in a fast model) and tool calls and results arrive as whole lines, so a live card used to jump a
+// phrase at a time. Two settings answer that, and they answer different questions:
+//
+//   * Stream display speed — WORDS a second inside a growing paragraph. The line's tail waits in
+//     core/type-stream.js's pacer and leaves a word at a time; what is drawn is always an exact prefix of the text
+//     the run sent, so a copy of a half-typed line is what is on screen.
+//   * Stream line rate — LINES a second joining a console. A burst of whole lines (a tool call and the results that
+//     answered it, a run of stored output) walks in one at a time instead of landing in one paint. A line held back
+//     is not in the console's record yet, so a repaint mid-burst shows the transcript as far as it has got.
+//
+// Both are per browser, both are 0 = off (today's behaviour), and both are flushed the moment their turn settles: a
+// buffer that outlived the run would be words the reader never sees, which is the one thing this must not do.
+const TYPE_WORDS_KEY = "wtgui.streamWords";
+// 40 words a second is what a long answer on this box streams at (measured: 2,682 words in 72 s), so the console
+// keeps up with the model and still fills in a word or two at a time. 0 is off.
+const TYPE_WORDS_DEFAULT = 40;
+const TYPE_LINES_KEY = "wtgui.streamLines";
+const TYPE_LINES_DEFAULT = 0;
+
+function typeSpeedStored(key, fallback, clamp) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null || raw === "") return fallback;
+    return clamp(Number(raw));
+  } catch {
+    return fallback; // private mode: the default holds
+  }
+}
+
+function typeWordSpeed() {
+  return typeSpeedStored(TYPE_WORDS_KEY, TYPE_WORDS_DEFAULT, (n) => (globalThis.wtType ? globalThis.wtType.clampWords(n) : 0));
+}
+
+function typeLineRate() {
+  return typeSpeedStored(TYPE_LINES_KEY, TYPE_LINES_DEFAULT, (n) => (globalThis.wtType ? globalThis.wtType.clampLines(n) : 0));
+}
+
+// One pacer and one gate for the whole board: this is a reading preference, not a per-card one.
+state.typePacer = globalThis.wtType
+  ? globalThis.wtType.createPacer({ rate: typeWordSpeed(), onPaint: (lids) => paintTypedLines(lids) })
+  : null;
+state.typeGate = globalThis.wtType
+  ? globalThis.wtType.createLineGate({
+      rate: typeLineRate(),
+      release: (evt) => {
+        recordJobLine(evt);
+        drawJobLine(evt);
+      },
+    })
+  : null;
+// The reasoning blocks the pacer has already been given: a block seen for the first time while its turn is LIVE is
+// the only one that types out, so opening an old card (or reloading the page) draws history whole.
+state.thinkFed = new Set();
+
+// Reasoning types out on the same pacer, at the same words/s the prose uses — it is the same reading. A block is
+// fed the first time the panel sees it while its turn is live, and every re-read of the store feeds it again so a
+// block that grew keeps flowing. Returns the prefix to draw, or null when this block is drawn whole (history, a
+// hidden tab, rate 0, or the turn has settled and the flush already released it).
+function paceThinkBlock(turn, block) {
+  const P = state.typePacer;
+  if (!P || !block) return null;
+  const lid = `think:${block.at}`;
+  const fresh = !state.thinkFed.has(lid);
+  if (fresh && (document.hidden || !turnLive(turn))) return null;
+  state.thinkFed.add(lid);
+  if (document.hidden || !turnLive(turn)) return null;
+  return P.feed(lid, String(turn.id), String(block.text ?? ""));
+}
+
+// The words of a line that may be drawn now: the live append asks for them, and every render path asks too, so a
+// repaint mid-paragraph draws the same prefix the console is showing instead of jumping to the wire's whole text.
+function typedText(line, jobId) {
+  const P = state.typePacer;
+  const full = String(line?.text ?? "");
+  // A tab nobody is looking at has no flow to show: while it is hidden every frame is drawn whole, so coming back to
+  // it shows the answer as it stands instead of a paragraph still typing out the minutes nobody watched.
+  if (!P || line?.lid == null || document.hidden) return full;
+  return P.feed(String(line.lid), String(jobId ?? ""), full);
+}
+
+function typedShown(line) {
+  const P = state.typePacer;
+  if (!P || !line || line.lid == null) return null;
+  return P.shownFor(String(line.lid));
+}
+
+// The pacer says which lines grew; every pane carrying one gets the new prefix (a pinned turn draws its own copy,
+// so the same line can be in two consoles at once).
+function paintTypedLines(lids) {
+  const P = state.typePacer;
+  if (!P) return;
+  for (const lid of lids) {
+    const shown = P.shownFor(lid);
+    if (shown == null) continue;
+    for (const el of document.querySelectorAll(`[data-lid="${CSS.escape(String(lid))}"]`)) {
+      if (!el.isConnected) continue;
+      el.innerHTML = linkifyText(shown);
+      // A reasoning block types inside its thinking block, which follows its own stickiness, not the console's.
+      const body = el.closest(".think-body");
+      if (body) {
+        stickThinkBody(body);
+        continue;
+      }
+      const out = el.closest("pre.job-out");
+      if (!out) continue;
+      const stick = consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
+      if (stick) setScroll(out, out.scrollHeight);
+    }
+  }
+}
+
+// The turn is over: nothing may be left waiting in either buffer, and the last of a paragraph's words are released
+// rather than left to a clock that has nothing more to say.
+function flushTypeStream(job) {
+  state.typeGate?.drain(String(job ?? ""));
+  state.typePacer?.flushJob(String(job ?? ""));
+}
+
+// A background tab has no flow to show: release both buffers, so the reader comes back to the whole answer instead
+// of to a transcript that is still typing out a paragraph nobody was watching.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) return;
+  state.typeGate?.drain();
+  state.typePacer?.releaseAll();
+});
+
+function paintStreamSpeed() {
+  const w = typeWordSpeed();
+  const l = typeLineRate();
+  const words = $("stream-words");
+  if (words && document.activeElement !== words) words.value = String(w);
+  const lines = $("stream-lines");
+  if (lines && document.activeElement !== lines) lines.value = String(l);
+  // The preset the stored value lands on is lit, so the row says what it is without reading the number back.
+  for (const b of document.querySelectorAll("[data-stream-words-set]")) {
+    b.classList.toggle("on", Number(b.dataset.streamWordsSet) === w);
+  }
+  for (const b of document.querySelectorAll("[data-stream-lines-set]")) {
+    b.classList.toggle("on", Number(b.dataset.streamLinesSet) === l);
+  }
+  const preview = $("stream-preview");
+  if (!preview) return;
+  preview.textContent =
+    !w && !l
+      ? "output arrives exactly as the run sent it — both off"
+      : `${w ? `words type at ${w}/s` : "words appear as they arrive"} · ${l ? `new lines walk in at ${l}/s` : "new lines appear at once"}`;
+}
+
+function saveTypeWords(value) {
+  const n = globalThis.wtType ? globalThis.wtType.clampWords(value) : 0;
+  state.typePacer?.setRate(n);
+  try {
+    localStorage.setItem(TYPE_WORDS_KEY, String(n));
+  } catch {
+    /* private mode: the choice just will not persist */
+  }
+  paintStreamSpeed();
+}
+
+function saveTypeLines(value) {
+  const n = globalThis.wtType ? globalThis.wtType.clampLines(value) : 0;
+  state.typeGate?.setRate(n);
+  try {
+    localStorage.setItem(TYPE_LINES_KEY, String(n));
+  } catch {
+    /* private mode: the choice just will not persist */
+  }
+  paintStreamSpeed();
+}
+
 // One turn's thoughts, from the store, bounded by the turn's own clock.
 async function loadThinking(turn, copy = "") {
   const key = turnKey(turn, copy);
@@ -5789,8 +6183,23 @@ function stickThinkBody(body) {
   setScroll(body, max);
 }
 
+// In the single-stream mode there is no block to repaint: the blocks are lines of the console itself, so a read that
+// lands mid-turn redraws that console, keeping the reader where they were (the same rule as the run's own appends).
+function paintStreamConsole(turn, copy = "") {
+  const out = [...document.querySelectorAll("pre.job-out")].find((el) => el.dataset.out === `${turn.id}${copy}`);
+  if (!out) return false;
+  const all = jobLines(turn.id).filter((l) => !isBookkeeping(l));
+  const stick = consolePinned(`${turn.id}${copy}`) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
+  out.innerHTML = streamBodyHtml(turn, all.slice(-300), all.length > 300);
+  if (stick) setScroll(out, out.scrollHeight);
+  paintToBottom(out);
+  return true;
+}
+
 function paintThink(turn, copy = "") {
   const key = turnKey(turn, copy);
+  // The 🌊 draws the reasoning inside the console, so that is the thing to repaint — there is no block on the page.
+  if (streamOn(turn.thread || turn.id) && paintStreamConsole(turn, copy)) return;
   const el = document.querySelector(`details.think[data-think-turn="${CSS.escape(key)}"]`);
   if (!el) return;
   const was = el.querySelector(".think-body");
@@ -5827,7 +6236,12 @@ function thinkHtml(turn, copy = "") {
     <summary><span class="think-title">🧠 thinking</span> <span class="think-meta mono">${esc(meta)}</span></summary>
     <div class="out-wrap"><div class="think-body">${
       blocks.length
-        ? blocks.map((b) => `<div class="think-block mono">${linkifyText(b.text)}</div>`).join("")
+        ? blocks.map((b) => {
+            // The same words/s the prose types at: the block is fed the first time it is seen on a live turn, and
+            // the tick repaints it through this very data-lid.
+            const shown = paceThinkBlock(turn, b);
+            return `<div class="think-block mono" data-lid="think:${esc(b.at)}">${linkifyText(shown == null ? b.text : shown)}</div>`;
+          }).join("")
         : `<div class="think-block mono think-empty">${
             entry
               ? turnLive(turn)
@@ -6238,6 +6652,9 @@ function updateJob(j, { scroll = false } = {}) {
   const ownerChanged = (j.ownerPath || null) !== prevOwner;
   state.jobs.set(j.id, { ...prev, ...j });
   if (!state.jobLines.has(j.id) && j.lines?.length) state.jobLines.set(j.id, j.lines.slice());
+  // A turn that has stopped has no more frames coming, so whatever either display buffer still holds is released:
+  // a resumed, interrupted or failed run settles without a `result` line, and its card must not sit mid-paragraph.
+  if (statusChanged && !turnLive(j)) flushTypeStream(j.id);
   renderConversation(j.thread || j.id, { scroll });
   // Starting or finishing a turn changes what the worktree rows should say about themselves.
   if (statusChanged || approvalChanged) {
@@ -6599,6 +7016,19 @@ function appendJobLine(evt) {
     if (job) job.live = evt.live;
   }
   const line = evt.line || {};
+  // The line-by-line setting holds a burst of whole lines and lets them in one at a time. Bookkeeping never waits:
+  // the `result` line is what says the turn ended, and it is also the frame that flushes both buffers. A hidden tab
+  // is not reading anything, so it never holds a line either — the answer is there in full when the reader returns.
+  if (!document.hidden && !isBookkeeping(line) && state.typeGate?.push(evt)) return;
+  recordJobLine(evt);
+  drawJobLine(evt);
+  if (line.kind === "result") flushTypeStream(evt.id);
+}
+
+// The console's own record of the turn — the lines a rebuild draws from. A held line is not in here yet, so a
+// repaint mid-burst shows the transcript as far as it has got.
+function recordJobLine(evt) {
+  const line = evt.line || {};
   const buf = state.jobLines.get(evt.id) || [];
   // mode "set" = the agent is still writing the same paragraph; that line grows in place
   // instead of a new one being pushed for every streamed fragment.
@@ -6609,6 +7039,11 @@ function appendJobLine(evt) {
   state.jobLines.set(evt.id, buf);
   // A folded turn shows only the peek, and it is not part of the console the lines are appended to.
   refreshTurnPeek(state.jobs.get(evt.id));
+}
+
+// One line into every pane showing this turn.
+function drawJobLine(evt) {
+  const line = evt.line || {};
   // Kept in the buffer, never drawn: see BOOKKEEPING_LINES above.
   if (isBookkeeping(line)) return;
   // A pinned turn renders twice — in its page and in the pinned block above — so every pane carrying
@@ -6617,11 +7052,18 @@ function appendJobLine(evt) {
     (el) => el.dataset.out === evt.id || el.dataset.out === `${evt.id}@pin`,
   );
   if (!outs.length) return;
+  // The words of a growing paragraph that may be drawn now: the pacer holds the tail and releases it on its own
+  // clock, so the console fills in a word or two at a time instead of a coalesced phrase at a time.
+  const shownText = line.kind === "text" ? typedText(line, evt.id) : line.text;
   for (const out of outs) {
     // Streamed lines follow the newest output only for a reader who is already at the bottom; someone
     // scrolled up to read stays where they are.
     const stick = consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
-    if (out.firstElementChild?.classList.contains("jl-dim")) out.innerHTML = "";
+    // Only the placeholder an empty console shows gives way to the first line. This used to ask whether the first CHILD
+    // was dim, but a dim line is transcript too ("⇢ asked to work in …", "cut from …", "push guard: …") and every
+    // repaint — the thinking sweep, a new deliverable, an approval — puts one back on top, so the next live line wiped
+    // everything the reader had on screen and drew only itself until the following repaint put it all back.
+    out.querySelector(":scope > [data-wait]")?.remove();
     // A tool call joins the burst at the tail of the console and updates its tally in place; anything said in
     // between ends that burst, so the next call starts a fresh tally where the transcript has got to.
     const isTool = line.kind === "tool" || line.kind === "tool-out";
@@ -6647,8 +7089,11 @@ function appendJobLine(evt) {
       } else {
         gofs = storeOffsetsBefore(out, null);
       }
+      // The group already on screen says whether this console is drawn as a stream; a new one asks its card. A flat
+      // piece has no head row and no "N lines" button, so a call appended to it must not grow one back.
+      const flat = openGroup ? openGroup.dataset.gflat === "1" : streamOn(state.jobs.get(evt.id)?.thread || evt.id);
       const holder = document.createElement("div");
-      holder.innerHTML = toolGroupHtml(lines, key, filter, bodyEl ? !bodyEl.hidden : false, openGroup ? openGroup.dataset.gat || "" : "", gofs);
+      holder.innerHTML = toolGroupHtml(lines, key, filter, bodyEl ? !bodyEl.hidden : false, openGroup ? openGroup.dataset.gat || "" : "", gofs, flat ? { flat: true } : {});
       const fresh = holder.firstElementChild;
       if (fresh) {
         fresh._burst = lines;
@@ -6659,7 +7104,7 @@ function appendJobLine(evt) {
     } else {
       const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
       if (line.mode === "set" && existing) {
-        existing.innerHTML = linkifyText(line.text);
+        existing.innerHTML = linkifyText(shownText);
         existing.dataset.ltext = String(line.text ?? "");
       } else {
         const div = document.createElement("div");
@@ -6669,7 +7114,7 @@ function appendJobLine(evt) {
         // back out of the DOM, and this one must read as what was said rather than as what was drawn.
         div.dataset.ltext = String(line.text ?? "");
         div.dataset.lkind = String(line.kind || "raw");
-        div.innerHTML = linkifyText(line.text);
+        div.innerHTML = linkifyText(shownText);
         out.appendChild(div);
       }
     }
@@ -7954,6 +8399,17 @@ function mergeAgentLabel(row) {
   return null;
 }
 
+// The same question for the chooser's fourth outcome: a CHECKING agent already reading this tree. The route refuses a
+// second one, so the button is drawn disabled with the reason in its tooltip rather than looking like a dead control.
+function checkAgentLabel(row) {
+  for (const a of agentsFor(row) || []) {
+    const label = String(a?.latest?.label || a?.first?.label || "");
+    if (!label.startsWith("CHECKING ")) continue;
+    if (convLive(a)) return label;
+  }
+  return null;
+}
+
 function baseBranchOf(row) {
   return String(state.projects.get(row.project)?.mainBranch || "").trim() || "main";
 }
@@ -7992,10 +8448,14 @@ function verdictHtml(row) {
 // ---- end merge control
 
 // ---- the UNMERGED chip's chooser ---------------------------------------------------------------
-// The chip used to start a merge agent on the press. It now opens three outcomes and starts NOTHING until one of them
+// The chip used to start a merge agent on the press. It now opens four outcomes and starts NOTHING until one of them
 // is clicked, because "land this" is not one decision: a child cut from a turnover branch belongs ON that branch (a
-// roll-up, done in the parent's own worktree), a child that has nowhere local to go belongs on a PR, and a child whose
-// parent is master or unknown is a question for the reader — the panel must not invent an answer to it.
+// roll-up, done in the parent's own worktree), a child that has nowhere local to go belongs on a PR, a child whose
+// parent is master or unknown is a question for the reader, and a child that may ALREADY be on main needs somebody to
+// say so from the content — the commit count cannot, because a squash merge leaves the branch ahead forever.
+//
+// That last outcome is the one that acts on the far side: its agent reads only, and a LANDED: YES is what makes the
+// panel move the worktree to the Recycle Bin (the server's own sweep, through the ✕'s act). The button says so.
 //
 // `parent` is the branch this tree was cut from and `parentSource` says how sure that is: "cut" (the panel watched it),
 // "backfilled" (guessed from a shared ticket id in the branch name) or "unknown". Only a "cut" record may drive a
@@ -8020,15 +8480,18 @@ function mergeParentOf(row) {
 }
 
 function mergeChooserTitle(row, parent) {
+  // The fourth outcome, worded once so every branch of the tooltip says the same thing about what it costs: an agent
+  // reads the base for this branch's own change, and when it is there the panel deletes the tree.
+  const check = `have an agent check whether the change is already on ${parent.main} (if it is, this worktree goes to the Recycle Bin)`;
   if (parent.rollable) {
     return `choose what happens to ${row.branch || "this branch"}: roll it into ${parent.parent} (fast-forward or merge, inside that branch's own worktree), ` +
-      `open a PR, or ask where it should go — nothing happens until you pick one`;
+      `open a PR, ${check}, or ask where it should go — nothing happens until you pick one`;
   }
   if (parent.local) {
     return `${row.branch || "this branch"} looks like it belongs on ${parent.parent}, but that parent is a ${parent.source} guess — ` +
-      `the panel will not merge on a guess: open a PR, or say where it should go`;
+      `the panel will not merge on a guess: open a PR, ${check}, or say where it should go`;
   }
-  return `choose what happens to ${row.branch || "this branch"}: open a PR, or ask where it should go — ` +
+  return `choose what happens to ${row.branch || "this branch"}: open a PR, ${check}, or ask where it should go — ` +
     `its parent is ${parent.parent ? `${parent.parent} (a main branch)` : "unknown"}, which is never a roll-up target`;
 }
 
@@ -8057,8 +8520,10 @@ function openMergeChooser(key) {
   else if (parent.local) notes.push(`${parent.parent} is a ${parent.source} guess, so rolling is refused: a guess may not drive a merge`);
   else if (parent.parent) notes.push(`${parent.parent} is a main branch — the turnover destination is a PR, not a roll`);
   else notes.push(`no parent was recorded for this tree, and the panel will not invent one`);
-  const btn = (choice, label, extra = "", disabled = false) =>
-    `<button type="button" class="mc-choice${extra}" data-merge-choice="${choice}" data-mc-key="${esc(key)}"${disabled ? " disabled" : ""}>${esc(label)}</button>`;
+  const btn = (choice, label, extra = "", disabled = false, title = "") =>
+    `<button type="button" class="mc-choice${extra}" data-merge-choice="${choice}" data-mc-key="${esc(key)}"${disabled ? " disabled" : ""}${title ? ` title="${esc(title)}"` : ""}>${esc(label)}</button>`;
+  // A check agent already reading this tree: one at a time, and the button says who rather than going quietly dead.
+  const checkLive = checkAgentLabel(row);
   const el = document.createElement("div");
   el.className = "merge-chooser";
   el.setAttribute("role", "dialog");
@@ -8070,8 +8535,15 @@ function openMergeChooser(key) {
       ? btn("roll", `Roll into ${parent.parent}`, " is-roll")
       : btn("roll", parent.parent ? `Roll into ${parent.parent}` : "Roll into its parent", " is-roll", true)) +
     btn("pr", "Open a PR", " is-pr") +
+    // The fourth outcome, and the only one that can delete the tree: it says so on the popover's own note line, because
+    // "check whether it landed" sounds read-only and half of it is not.
+    btn("check", `Check whether it is on ${parent.main}`, " is-check", Boolean(checkLive),
+      checkLive ? `${checkLive} is already reading this tree — one check at a time` : `start an agent that reads ${parent.main} for this branch's own change; if the change is there, this worktree goes to the Recycle Bin`) +
     btn("ask", "Where should this go?", " is-ask") +
-    `<div class="mc-note">${esc(notes.join(" · "))}</div>`;
+    `<div class="mc-note">${esc(notes.join(" · "))}</div>` +
+    `<div class="mc-note mc-note-check">${esc(
+      `the check reads ${parent.main} against this branch's own change and writes nothing to either branch — but if the change is already there it moves this worktree to the Recycle Bin (unlocked and clean only)${checkLive ? ` · ${checkLive} is reading it now` : ""}`,
+    )}</div>`;
   document.body.appendChild(el);
   const rect = chip ? chip.getBoundingClientRect() : null;
   if (rect) {
@@ -8104,6 +8576,29 @@ async function chooseMergeOutcome(what, key) {
       showBanner(`asked where ${row.branch || "this tree"} should go — recorded, nothing was started`);
     } catch (e) {
       showBanner(`could not record the question — ${String(e.message || e)}`);
+    }
+    return;
+  }
+  if (what === "check") {
+    // Read-only on both branches, and the panel acts on the answer itself: the run is lib/verify-prompt.js, and a
+    // LANDED: YES is what makes the server move this tree to the Recycle Bin (lib/worktree-remove.js). So there is
+    // nothing here to confirm beyond the choice the reader already made in the popover.
+    try {
+      const r = await apiFetch(
+        "/api/worktree/verify-landed",
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project: row.project, path: row.path }) },
+        { timeoutMs: 120000 },
+      );
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      showBanner(`${d.label || "CHECKING"} started · ${d.branch || "branch"} against ${d.baseRef || d.base || "the base"} — the tree is deleted only if the answer is yes`);
+      if (d.job) {
+        updateJob(d.job, { scroll: false });
+        revealSpawnedAgent(d.job);
+      }
+      await resync();
+    } catch (e) {
+      showBanner(`could not start the check — ${String(e.message || e)}`);
     }
     return;
   }
@@ -12864,6 +13359,15 @@ document.addEventListener("click", async (e) => {
     setThinking(thread, !thinkingOn(thread));
     return;
   }
+  // The 🌊 beside it: the same press, a different choice — draw this card as one stream, or as it always was.
+  const streamBtn = e.target.closest("[data-stream-thread]");
+  if (streamBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const thread = streamBtn.dataset.streamThread;
+    setStreamMode(thread, !streamOn(thread));
+    return;
+  }
   const subsCollect = e.target.closest("[data-subs-collect]");
   if (subsCollect) {
     e.preventDefault();
@@ -14907,6 +15411,30 @@ $("anchor-touch-seconds")?.addEventListener("input", (e) => {
   saveAnchorSeconds(ANCHOR_TOUCH_SECONDS_KEY, n);
   refreshAnchorBaseline();
 });
+// The two stream rows: a number each, with presets. A typed number is clamped on `change` (and Enter), because a
+// per-keystroke clamp makes 20 impossible — 2 becomes the value before the 0 is typed.
+$("stream-words")?.addEventListener("change", (e) => saveTypeWords(e.target.value));
+$("stream-words")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  saveTypeWords(e.target.value);
+  e.target.blur();
+});
+$("stream-lines")?.addEventListener("change", (e) => saveTypeLines(e.target.value));
+$("stream-lines")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  saveTypeLines(e.target.value);
+  e.target.blur();
+});
+for (const b of document.querySelectorAll("[data-stream-words-set]")) {
+  b.addEventListener("click", () => saveTypeWords(b.dataset.streamWordsSet));
+}
+for (const b of document.querySelectorAll("[data-stream-lines-set]")) {
+  b.addEventListener("click", () => saveTypeLines(b.dataset.streamLinesSet));
+}
+paintStreamSpeed();
+
 $("contrast")?.addEventListener("input", (e) => applyContrast(Number(e.target.value)));
 $("addbar-bright")?.addEventListener("input", (e) => applyAddBarBrightness(Number(e.target.value)));
 $("addbar-top")?.addEventListener("change", (e) => applyAddBarTop(Boolean(e.target.checked)));

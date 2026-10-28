@@ -104,6 +104,33 @@
           <select id="term-weight-select"></select>
         </label>
 
+        <label class="settings-row settings-gap" for="stream-words" title="How fast the agent's own words — and its reasoning blocks — are written on the screen. A run's prose reaches the panel in bursts — a phrase or two every frame, more on a fast model — and this holds the tail of each paragraph back so it types out a word or two at a time at this many words a second. A reasoning block only types the first time the panel sees it on a live turn, so history is never re-typed. Nothing is lost or left waiting: the words keep coming on the clock's own schedule, and whatever is still held is released the moment the turn ends (or the tab goes to the background). 0 turns it off, so the console fills exactly as the run sent it. Saved in this browser.">
+          <span>Stream display speed <span class="settings-info">ⓘ</span></span>
+          <input id="stream-words" type="number" inputmode="numeric" step="5" min="0" max="200">
+          <span class="settings-unit mono">words/s</span>
+        </label>
+        <div class="settings-presets">
+          <button type="button" data-stream-words-set="0">off</button>
+          <button type="button" data-stream-words-set="10">10</button>
+          <button type="button" data-stream-words-set="20">20</button>
+          <button type="button" data-stream-words-set="40">40</button>
+          <button type="button" data-stream-words-set="80">80</button>
+        </div>
+
+        <label class="settings-row settings-gap" for="stream-lines" title="How fast whole lines join a console. A run arrives as bursts of lines — a tool call and the output that answered it, a stack of results — and this walks them in one at a time instead of the whole burst landing in one paint. A line held back is not in the console's record yet, so a repaint in the middle of a burst shows the transcript as far as it has got, and a run that settles flushes whatever it was holding. 0 is off: lines appear the moment they arrive. Saved in this browser.">
+          <span>Stream line rate <span class="settings-info">ⓘ</span></span>
+          <input id="stream-lines" type="number" inputmode="numeric" step="1" min="0" max="40">
+          <span class="settings-unit mono">lines/s</span>
+        </label>
+        <div class="settings-presets">
+          <button type="button" data-stream-lines-set="0">off</button>
+          <button type="button" data-stream-lines-set="2">2</button>
+          <button type="button" data-stream-lines-set="4">4</button>
+          <button type="button" data-stream-lines-set="8">8</button>
+          <button type="button" data-stream-lines-set="16">16</button>
+        </div>
+        <div class="settings-preview mono" id="stream-preview">…</div>
+
         <label class="settings-row settings-gap" for="contrast" title="How far apart the layered panels sit: 0% makes every layer one neutral, 100% pushes the page to near-black and lifts the panels.">
           <span>Panel contrast <span class="settings-info">ⓘ</span></span>
           <input id="contrast" type="range" min="0" max="100" step="5" value="15">
@@ -488,6 +515,14 @@
        needs dom-format's esc and nothing else, so it sits before app.js; both call it through window.ModelMenu. -->
   <script src="/core/model-menu.js"></script>
   <script src="/core/console-format.js"></script>
+  <!-- Where a reasoning block sits among a turn's console lines, and how a stream is cut into pieces. Pure, and
+       published on globalThis as `wtStream`: app.js's single-stream path (the 🌊) calls it by name at render time,
+       and test/single-stream.test.js imports this same file. -->
+  <script src="/core/stream-merge.js"></script>
+  <!-- How fast a run's output reaches the reader's eyes: the word pacer (a paragraph typing out) and the line gate
+       (whole lines walking into a console), both driven from app.js by the two Settings > Display rows. Published
+       on globalThis as `wtType`; test/type-stream.test.js imports this same file. -->
+  <script src="/core/type-stream.js"></script>
   <script src="/board/attachments.js"></script>
   <!-- Pasted blocks collapsed into inline chips, for every box the reader writes a prompt in. Loaded after
        attachments.js on purpose: a paste of a FILE belongs to that module (it registers its listener first
