@@ -967,6 +967,9 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
 .tgrp-row.is-active { background: rgba(200, 166, 255, .10); }
 .tgrp-row.is-active .tgrp-name { color: #ecd9ff; }
 .tgrp-row:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+/* A trimmed burst's head row names the block; it is not a filter target like a tool row, so it must not look clickable. */
+.tgrp-row.tgrp-row-trimmed { cursor: default; }
+.tgrp-row.tgrp-row-trimmed:hover { background: none; }
 .tgrp-g { flex: none; width: 15px; }
 .tgrp-name { flex: none; color: #c8a6ff; }
 .tgrp-n { flex: none; color: var(--dim); }
