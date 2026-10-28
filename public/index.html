@@ -104,7 +104,7 @@
           <select id="term-weight-select"></select>
         </label>
 
-        <label class="settings-row settings-gap" for="stream-words" title="How fast the agent's own words are written on the screen. A run's prose reaches the panel in bursts — a phrase or two every frame, more on a fast model — and this holds the tail of each paragraph back so it types out a word or two at a time at this many words a second. Nothing is lost or left waiting: the words keep coming on the clock's own schedule, and whatever is still held is released the moment the turn ends (or the tab goes to the background). 0 turns it off, so the console fills exactly as the run sent it. Saved in this browser.">
+        <label class="settings-row settings-gap" for="stream-words" title="How fast the agent's own words — and its reasoning blocks — are written on the screen. A run's prose reaches the panel in bursts — a phrase or two every frame, more on a fast model — and this holds the tail of each paragraph back so it types out a word or two at a time at this many words a second. A reasoning block only types the first time the panel sees it on a live turn, so history is never re-typed. Nothing is lost or left waiting: the words keep coming on the clock's own schedule, and whatever is still held is released the moment the turn ends (or the tab goes to the background). 0 turns it off, so the console fills exactly as the run sent it. Saved in this browser.">
           <span>Stream display speed <span class="settings-info">ⓘ</span></span>
           <input id="stream-words" type="number" inputmode="numeric" step="5" min="0" max="200">
           <span class="settings-unit mono">words/s</span>
