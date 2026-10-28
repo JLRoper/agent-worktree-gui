@@ -298,6 +298,27 @@
       </div>
 
       <div class="settings-group">
+        <h3 class="settings-group-head" title="The two folders this panel keeps things in, both outside the checkout on purpose: a re-clone, a move or a read-only checkout keeps the board's history, and nothing it writes shows up in git status. The data directory is the durable half; the scratch directory is the throwaway half, and the OS is free to clean it. Either can be moved by naming dataDir / scratchDir in config.json, or by setting WAG_HOME / WAG_SCRATCH in the environment — the row below says which of those answered, so an unexpected path is explainable.">Data</h3>
+
+        <div class="settings-row" id="data-dir-row" title="Everything the panel must not lose: the job store, the assistant's scratchpad and charter, the worktree TODOs, the naming ledger, the descriptions, the labels, the model prices, the push-guard record, the restart record, the attachments you paste, and the panel's own server log — under state/, attachments/ and logs/ inside this folder. Read once at boot; changing dataDir in config.json moves it, and an existing logs/ beside the checkout is COPIED here once and left where it was.">
+          <span>Data directory <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono" id="data-dir-size">…</span>
+          <button id="btn-open-data" type="button" title="open this folder in the file manager">open folder</button>
+        </div>
+        <div class="settings-preview mono" id="data-dir-path">…</div>
+
+        <div class="settings-row settings-gap" id="scratch-dir-row" title="Where agents put anything they do not mean to keep: branch comparisons, exported files, a probe's output. Every spawn prompt names its own subfolder here. Nothing the panel needs is stored in it, so emptying it costs nothing — but a run whose working directory is inside it stops the clean, because deleting files under a live agent leaves it working in a folder that no longer adds up.">
+          <span>Scratch directory <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono" id="scratch-dir-size">…</span>
+          <button id="btn-open-scratch" type="button" title="open this folder in the file manager">open folder</button>
+        </div>
+        <div class="settings-preview mono" id="scratch-dir-path">…</div>
+        <div class="settings-presets" id="scratch-actions">
+          <button type="button" id="btn-clean-scratch" title="delete everything in the scratch directory and report how much it freed. Refused with the run named if a live agent is working inside it.">clean scratch</button>
+        </div>
+      </div>
+
+      <div class="settings-group">
         <h3 class="settings-group-head" title="Written to the gateway's config.yaml, not this browser. It re-reads them, so the next prompt or session list uses the new number without a restart.">Gateway</h3>
 
         <label class="settings-row" for="approval-timeout" id="approval-row" title="How long a permission prompt waits for you before it fails closed — if it expires, nothing runs.">

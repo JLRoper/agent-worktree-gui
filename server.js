@@ -31,7 +31,7 @@ import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
 import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyLabel } from "./lib/remote-writes.js";
 import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
-import { safeUrl, openerFor } from "./lib/open-url.js";
+import { safeUrl, openerFor, openerForFolder } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
@@ -45,6 +45,9 @@ import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./
 import { thinkingFor } from "./lib/thinking.js";
 import { modelCatalogue, refreshModelCatalogue } from "./lib/hermes-models.js";
 import { createSpawn } from "./lib/features/spawn.js";
+// The panel's own directories, and every state path derived from them. Nothing below builds one of those
+// paths itself any more: `resolveDirs` answers where, `statePaths` answers which file.
+import { cleanScratch, ensureDirs, humanBytes, migrateState, resolveConfigPath, resolveDirs, sizeOf, statePaths } from "./lib/paths.js";
 // HTTP framing lives in lib/http/: transport.js knows about req/res and nothing about worktrees,
 // and static.js serves public/. Both are handed the state they used to read by closure.
 import { authorised, handleStream, readBody, readRawBody, sendJson } from "./lib/http/transport.js";
@@ -89,7 +92,12 @@ const VERSION = await readFile(path.join(HERE, "package.json"), "utf8")
 // PANEL_CONFIG lets a second instance run from the same code with its own config and port —
 // a sandbox or a demo you can click around in without touching the real one:
 //   set PANEL_CONFIG=C:\path\to\panel-config.json && node server.js
-const CONFIG_PATH = process.env.PANEL_CONFIG ? path.resolve(process.env.PANEL_CONFIG) : path.join(HERE, "config.json");
+//
+// Otherwise the file has two homes, and lib/paths.js decides between them: `<dataDir>/config.json` when an
+// install has been moved there, else `config.json` beside this checkout — so an existing install keeps
+// running untouched, and moving the file is what opts into the new home.
+const CONFIG_FILE = resolveConfigPath({ here: HERE });
+const CONFIG_PATH = CONFIG_FILE.path;
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
@@ -153,32 +161,29 @@ async function loadConfig() {
   // project sections are on screen and only those are re-read - with ~100 projects that is most of the git work
   // the board does. The setting lives in this file so it survives a restart and applies to every browser.
   cfg.scanMode = String(cfg.scanMode || "all").toLowerCase() === "visible" ? "visible" : "all";
-  // Keyed off the config's own directory, so a PANEL_CONFIG sandbox keeps its own registry.
-  if (!cfg.jobsFile) cfg.jobsFile = path.join(path.dirname(CONFIG_PATH), "logs", "jobs.json");
-  // The assistant's scratchpad lives beside the job store; `assistant` is an optional block of knobs
-  // (mode, model, rule escalations) that the page can also change at runtime.
+  // ---- where the panel keeps things ----------------------------------------------------------------
+  // Two directories, resolved once, here, by lib/paths.js — and every state file derived from the data one.
+  // This used to be eleven separate `path.dirname(CONFIG_PATH)` lines, which put the job store, the assistant,
+  // the TODOs, the naming ledger, the labels and the push-guard record INSIDE the checkout: a fresh clone opened
+  // on an empty board, a re-clone lost the history, and `git status` could never be trusted to be about the code.
+  //
+  // `dataDir` is the durable half (default `~/.wag`), `scratchDir` the throwaway half (default `<os tmpdir>/wag`).
+  // Explicit `dataDir` / `scratchDir` keys win, then WAG_HOME / WAG_SCRATCH, then those defaults — and the source
+  // of each travels with it, so the Settings row can answer "why is my board empty" without a docs hunt.
+  //
+  // A config that names one of these files itself still wins (that is how a sandbox points at its own store); the
+  // rest follow it, which is the behaviour every existing `PANEL_CONFIG` sandbox relies on.
+  const dirs = resolveDirs({ config: cfg });
+  cfg.dataDir = dirs.dataDir;
+  cfg.dataDirSource = dirs.dataSource;
+  cfg.scratchDir = dirs.scratchDir;
+  cfg.scratchDirSource = dirs.scratchSource;
+  Object.assign(cfg, statePaths(cfg));
+  // The assistant's `assistant` block is an optional set of knobs (mode, model, rule escalations) that the page can
+  // also change at runtime. It is not a path, but it is read by the same callers, so it is resolved here too.
   cfg.assistant = cfg.assistant && typeof cfg.assistant === "object" ? cfg.assistant : {};
-  if (!cfg.assistantFile) cfg.assistantFile = path.join(path.dirname(cfg.jobsFile), "assistant.json");
-  // The continuity file the assistant is handed every turn, beside its scratchpad for the same reason: it is
-  // state, not source. A sandbox config that names its own jobsFile therefore gets its own charter too.
-  if (!cfg.charterFile) cfg.charterFile = path.join(path.dirname(cfg.assistantFile), "assistant-charter.md");
-  // Which trees have already been named, and by whom — the panel's own, never git's, so it lives beside the job
-  // store and a PANEL_CONFIG sandbox keeps its own copy of it.
-  if (!cfg.treeNamesFile) cfg.treeNamesFile = path.join(path.dirname(cfg.jobsFile), "tree-names.json");
-  // What each branch was started to do, extracted once from the earliest run in that tree: the same state-not-source
-  // rule as the naming ledger, so a PANEL_CONFIG sandbox keeps its own copy of this too.
-  if (!cfg.descriptionsFile) cfg.descriptionsFile = path.join(path.dirname(cfg.jobsFile), "descriptions.json");
-  // The TODO list of each worktree — written by the assistant, kept current by every agent in the tree, read by the
-  // row. State, not source, and beside the job store for the same reason as the two records above: a PANEL_CONFIG
-  // sandbox gets its own copy. NEVER inside the worktree, where it would be git noise and a merge conflict.
-  if (!cfg.todosFile) cfg.todosFile = path.join(path.dirname(cfg.jobsFile), "todos.json");
-  // The model menu's price/rating half: what the dropdown decorates each row with, rebuilt only by the
-  // Settings refresh (POST /api/models/refresh). State, not source — beside the job store, so a sandbox
-  // config that names its own jobsFile gets its own copy.
-  if (!cfg.modelPricingFile) cfg.modelPricingFile = path.join(path.dirname(cfg.jobsFile), "model-prices.json");
-  // Which worktrees carry the push guard, and when it went in. The panel's own record (git holds the hooks path
-  // itself), beside the job store, so a sandbox config keeps its own copy of it.
-  if (!cfg.pushGuardFile) cfg.pushGuardFile = path.join(path.dirname(cfg.jobsFile), "push-guard.json");
+  // `assistant.cwd` (lib/assistant.js) defaults to `assistant-cwd` beside `assistantFile`, so it follows this store
+  // into the data directory with no extra key: state, not source, and never a folder inside the checkout.
   // Whether a branch may exist on a REMOTE at all: the setting the reader's permission box writes, and what the
   // installed pre-push guard reads. local-only by default — a value that cannot be read falls back to it rather
   // than to a permissive one.
@@ -203,14 +208,40 @@ async function patchPanelConfig(patch) {
 }
 
 let config = await loadConfig();
+// ---- both directories exist before anything writes into them --------------------------------------
+// Nothing is created lazily any more: a boot that dies between "store opened" and "attachment saved" used to leave
+// a half-made `logs/`, and the next boot could not tell that from a fresh install. `ensureDirs` is `mkdir -p`, so
+// two panels racing on one data directory is a no-op rather than a failure.
+const madeDirs = ensureDirs(config);
+for (const target of madeDirs.made) log(`created ${target}`);
+log(`data directory: ${config.dataDir} (${config.dataDirSource}) · scratch directory: ${config.scratchDir} (${config.scratchDirSource})`);
+// ---- the one-time move off the checkout -----------------------------------------------------------
+// An install that has been running from a checkout keeps its whole history in `<repo>/logs`. The first boot with a
+// data directory that holds no store COPIES it across. Never moved, never deleted: a downgrade, a second build, or a
+// reader who deliberately points PANEL_CONFIG at the old file all still find what was there. The line names the
+// count and the directory so a board that comes up full of last week's cards is explainable from the log alone.
+const stateMigration = migrateState({
+  dataDir: config.dataDir,
+  stateFile: config.jobsFile,
+  legacyDir: path.join(path.dirname(CONFIG_PATH), "logs"),
+  onLog: log,
+});
+if (!stateMigration.migrated && stateMigration.reason && stateMigration.reason !== "no job store beside the checkout") {
+  log(`state migration skipped: ${stateMigration.reason}`);
+}
+// Prime the two size readings so the first /api/state (and the first Settings open) does not pay for a walk.
+sizeOf(config.dataDir, { fresh: true });
+sizeOf(config.scratchDir, { fresh: true });
 let pool = new Pool(config.threads);
 const store = new Store();
 const registry = new ProjectRegistry({
   getConfig: () => config,
   store,
   onLog: log,
-  // Last successful sweep, so a restart opens on the board it had instead of "no git repos found".
-  cacheFile: config.projectsCacheFile || path.join("logs", "projects.json"),
+  // Last successful sweep, so a restart opens on the board it had instead of "no git repos found". Resolved by
+  // lib/paths.js — it used to default to a path relative to the process cwd, which a sandbox then shared with the
+  // live board while its own seeded rows stayed invisible.
+  cacheFile: config.projectsCacheFile,
 });
 let scheduler = new Scheduler({
   config,
@@ -1012,12 +1043,43 @@ function withTreeNames(snap) {
   return snap;
 }
 
+// ---- the two directories the panel keeps its things in ---------------------------------------------
+// The page shows these, with their sizes, and offers to open either or to empty the scratch one. Both numbers come
+// from lib/paths.js's cached walk (10 s), so a board polled every few seconds never pays for a fresh stat of the
+// attachments folder; `at` says how old the reading is rather than the page pretending it is live.
+function pathsInfo() {
+  const data = sizeOf(config.dataDir);
+  const scratch = sizeOf(config.scratchDir);
+  return {
+    dataDir: config.dataDir,
+    dataSource: config.dataDirSource,
+    dataBytes: data.bytes,
+    dataFiles: data.files,
+    scratchDir: config.scratchDir,
+    scratchSource: config.scratchDirSource,
+    scratchBytes: scratch.bytes,
+    scratchFiles: scratch.files,
+    scratchDirs: scratch.dirs,
+    // Where the pieces sit, so the row can say "the job store is under state/" without the reader guessing.
+    stateDir: config.stateDir,
+    attachmentsDir: config.attachmentsDir,
+    logsDir: config.logsDir,
+    // What the one-time move off the checkout did on this boot: the page reports it once, and never again because a
+    // second boot finds a store and copies nothing.
+    migrated: stateMigration.migrated
+      ? { files: stateMigration.copied.length, from: stateMigration.from, to: stateMigration.to, at: new Date().toISOString() }
+      : null,
+    at: new Date(data.at || Date.now()).toISOString(),
+  };
+}
+
 function snapshot() {
   return withTodos(
     descriptions.withDescriptions(
       withTreeNames(
         withLiveAgents({
           ...store.snapshot({ settings: settingsOut() }),
+          paths: pathsInfo(),
           jobs: jobs.list(),
           approvals: approvals.list(),
           // The panel's own permission requests (a push a worker's guard parked, a merge the panel itself wants to
@@ -1472,6 +1534,58 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, snapshot());
     }
 
+    // ---- the panel's own folders, acted on only when the reader asks -------------------------------------
+    // Settings > Data shows the data and scratch directories with their sizes (both ride in /api/state as
+    // `paths`). These two routes are the only things that touch them: one opens a folder, one empties the
+    // scratch directory. Both are writes, so both are authorised.
+    if (route === "/api/paths/open" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const which = String(body.which || "data").trim().toLowerCase();
+      const target = which === "data" ? config.dataDir : which === "scratch" ? config.scratchDir : which === "logs" ? config.logsDir : null;
+      if (!target) return sendJson(res, 400, { error: `unknown folder “${which}” — one of data, scratch, logs` });
+      // Created before it is opened: the button says "open the folder", and a folder that exists but is empty is
+      // a better answer than "there is no such folder" on a panel that has simply not written anything yet.
+      try {
+        ensureDirs(config);
+      } catch (e) {
+        return sendJson(res, 500, { error: `could not create ${target}: ${String((e && e.message) || e)}` });
+      }
+      const { bin, args, error } = openerForFolder(target);
+      if (error) return sendJson(res, 400, { error });
+      try {
+        // Detached, exactly like /api/open-url: explorer.exe reports an exit code before the window is up, so the
+        // spawn is the only thing this route can honestly report on.
+        const child = spawn(bin, args, { detached: true, stdio: "ignore", windowsHide: true });
+        child.on("error", (e) => log(`could not open ${target}: ${String((e && e.message) || e)}`));
+        child.unref();
+      } catch (e) {
+        return sendJson(res, 500, { error: String((e && e.message) || e) });
+      }
+      return sendJson(res, 200, { ok: true, which, path: target, opened: bin });
+    }
+
+    // Empty the scratch directory. A live run whose cwd is inside it REFUSES the whole thing — on Windows the
+    // delete would half-fail under a process holding the files, and the agent would be left with a tree that no
+    // longer adds up. The refusal names the runs, and the reader stops them (or cleans it by hand).
+    if (route === "/api/scratch/clean" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const out = cleanScratch({ scratchDir: config.scratchDir, jobs: jobs.list() });
+      if (!out.ok) {
+        log(`scratch NOT cleaned: ${out.error}`);
+        return sendJson(res, out.refused ? 409 : 500, { ...out, freed: "0 B", paths: pathsInfo() });
+      }
+      sizeOf(config.scratchDir, { fresh: true });
+      const freed = humanBytes(out.freedBytes);
+      log(
+        `scratch cleaned: freed ${freed} (${out.removedFiles} file(s), ${out.removedDirs} folder(s)) from ${config.scratchDir}` +
+          `${out.leftBehind ? ` — ${out.leftBehind} entr${out.leftBehind === 1 ? "y" : "ies"} could not be removed (still open)` : ""}`,
+      );
+      // Every open Settings tab repaints from this: the size in the row has to move with the press.
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, { ...out, freed, paths: pathsInfo() });
+    }
+
     // On-demand cleanup audit for ONE project, straight from `hermes worktree list --json`:
     // linked trees, externally-registered trees (with locked/missing), and a keep/reap verdict
     // with a reason for every local branch. ~6s per repo, so it is never polled — the UI (or a
@@ -1827,7 +1941,9 @@ const server = createServer(async (req, res) => {
         name = "";
       }
       name = path.basename(name || "pasted-file").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").slice(0, 120) || "pasted-file";
-      const dir = config.attachmentsDir || path.join(path.dirname(config.jobsFile || path.join(process.cwd(), "logs")), "attachments");
+      // Under the data directory, never inside the checkout: an attachment is state the panel keeps, and its
+      // absolute path is what goes into the run's prompt (lib/paths.js owns the default).
+      const dir = config.attachmentsDir;
       const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const target = path.join(dir, `${stamp}-${name}`);
       try {

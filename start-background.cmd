@@ -1,17 +1,22 @@
 @echo off
 rem Start the worktree monitor detached (no console window, survives this shell).
-rem Logs go to logs\server.log; the PID is written to logs\server.pid.
+rem
+rem The panel's own log and pid file live in its DATA directory, never in this checkout:
+rem %WAG_HOME%\logs, default %USERPROFILE%\.wag\logs. A "dataDir" written in config.json wins over
+rem the environment, so set WAG_HOME only when you have not named one there.
 setlocal
 cd /d "%~dp0"
-if not exist logs mkdir logs
+if not defined WAG_HOME set "WAG_HOME=%USERPROFILE%\.wag"
+set "LOGDIR=%WAG_HOME%\logs"
+if not exist "%LOGDIR%" mkdir "%LOGDIR%"
 where node >nul 2>nul
 if errorlevel 1 (
   echo Node.js was not found on PATH.
   pause
   exit /b 1
 )
-if exist logs\server.pid (
-  set /p OLDPID=<logs\server.pid
+if exist "%LOGDIR%\server.pid" (
+  set /p OLDPID=<"%LOGDIR%\server.pid"
   call :alive %OLDPID%
   if not errorlevel 1 (
     echo Already running as PID %OLDPID% -- use stop-background.cmd first.
@@ -19,7 +24,7 @@ if exist logs\server.pid (
   )
 )
 powershell -NoProfile -Command ^
-  "$p = Start-Process -FilePath (Get-Command node).Source -ArgumentList 'server.js' -WorkingDirectory '%CD%' -WindowStyle Hidden -PassThru -RedirectStandardOutput 'logs\server.out.log' -RedirectStandardError 'logs\server.err.log'; Set-Content -Path 'logs\server.pid' -Value $p.Id -Encoding ascii; Write-Host ('started PID ' + $p.Id)"
+  "$p = Start-Process -FilePath (Get-Command node).Source -ArgumentList 'server.js' -WorkingDirectory '%CD%' -WindowStyle Hidden -PassThru -RedirectStandardOutput '%LOGDIR%\server.out.log' -RedirectStandardError '%LOGDIR%\server.err.log'; Set-Content -Path '%LOGDIR%\server.pid' -Value $p.Id -Encoding ascii; Write-Host ('started PID ' + $p.Id + ' -- log: %LOGDIR%\server.out.log')"
 echo.
 echo Monitor: http://localhost:7331
 echo Stop with stop-background.cmd
