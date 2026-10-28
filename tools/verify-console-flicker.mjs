@@ -808,22 +808,42 @@ function compose() {
       );
     }
   }
+  const livePath = path.join(REPORT_DIR, "console-flicker-live-7331.json");
+  if (existsSync(livePath)) {
+    const lv = JSON.parse(readFileSync(livePath, "utf8")).summary;
+    push(
+      "## Live check on 7331, on this run's own console",
+      "",
+      `After the panel restarted onto the merged build, a read-only browser context (its own localStorage, nothing posted) mounted this run's own card on the live panel and watched its console for ${lv.watchedSeconds} s while the run kept working: ${lv.liveLinesDrawn} live lines drawn (${Object.entries(lv.lineKinds).map(([k, n]) => `${n} ${k}`).join(", ")}), ${lv.repaints} repaints of the console, ${lv.mode} mode.`,
+      "",
+      `Wholesale writes to the console from \`drawJobLine\`: **${lv.wholesaleWritesFromDrawJobLine}**. Live lines that removed rows: **${lv.drawsThatRemovedRows}**. Console height falling by more than 40px at once: **${lv.consoleHeightDropsOver40px}**. Content under the console jumping up by more than 40px: **${lv.contentUnderConsoleJumpsOver40px}**. A repaint and the live path disagreeing about how many tool calls the console holds: **${lv.repaintVsLiveToolTallyMismatches}**. The console grew from ${lv.rowsFirstLast ? lv.rowsFirstLast[0] : "?"} to ${lv.rowsFirstLast ? lv.rowsFirstLast[1] : "?"} rows (${lv.consoleScrollHeightFirstLast ? `${lv.consoleScrollHeightFirstLast[0]}px to ${lv.consoleScrollHeightFirstLast[1]}px` : "?"}). Page errors: ${lv.pageErrors.length}.`,
+      "",
+      "![live console on 7331](console-flicker-shots/live-7331-console.png)",
+      "",
+      "This check has no unfixed twin: the live panel only runs the fixed build, so it shows the fix holding on a real run, not the before/after contrast, which is the stub-gateway tables above. Raw numbers: `console-flicker-live-7331.json`.",
+      "",
+    );
+  }
   push(
     "## Why it happens",
     "",
     `1. **The wipe is a class test.** \`public/app.js:${a.arm}\` in \`drawJobLine\` (:${a.drawJobLine}): \`if (out.firstElementChild?.classList.contains("jl-dim")) out.innerHTML = "";\`. It exists to clear the placeholder a console shows before its turn has said anything (:${a.wait}, \`<div class="jl jl-dim">waiting for output…</div>\`), but it asks "is the first child dim?", and the placeholder is not the only dim line.`,
-    `2. **Every worker turn starts with a real dim line.** \`lib/jobs.js:${a.dimNote}\` pushes \`⇢ asked to work in <cwd> …\` as the first line of a turn (the Runs API takes no cwd); a worktree spawn pushes \`cut from …\` and \`push guard: …\` first. They are transcript, rendered as \`.jl.jl-dim\`, and they are the first child of every console that is repainted from the buffer.`,
+    `2. **Turns start with a real dim line.** \`lib/jobs.js:${a.dimNote}\` pushes \`⇢ asked to work in <cwd> …\` as the first line of a spawn into an existing directory (the gateway starts its tools in its own directory, so the prompt carries the cwd); a worktree spawn pushes \`cut from …\` and \`push guard: …\` first. They are transcript, rendered as \`.jl.jl-dim\`, and they are the first child of every console that is repainted from the buffer.`,
     `3. **Repainters put that line back on top.** (a) \`paintStreamConsole\` (:${a.paintStreamConsole}, write at :${a.paintWrite}) rewrites the console wholesale; the thinking sweep (:${a.sweepClock}) calls it on a 1200 ms tick once a live turn's cache is 2000 ms old, so about every 2.4 s. (b) \`renderConversation\` (:${a.renderConversation}) replaces the whole card (:${a.rebuildReplace}) whenever \`conversationSignature\` (:${a.signature}) changes; \`artifacts\` is in it (:${a.signatureArtifacts}), so each new deliverable, and equally an approval, a status flip or a title landing, rebuilds the console from the buffer.`,
     "4. **The next live line wipes it.** A repainted console's first child is the dim note, so `drawJobLine` empties the console and draws only the new line. A tool call after a wipe finds no `.tgrp` at the tail, so it starts a group of one: the aggregation count restarts at ×1, which is what looks like the tool tally being rebuilt. Every drawn line is gone until the next repaint puts them back.",
     "5. **Why the page bounces.** The console is capped (about 230px visible); collapsed it is one line (about 33px). Everything under it, the reply box and the cards after it, rides up about 195px at the wipe and back down at the repaint. The window's own `scrollY` does not move, so the content slides under the reader.",
     "",
     "## History: why it is recent",
     "",
-    "`git log -S` on each piece. The class test dates from 2026-10-21 (6e418ed, a commit about starring turns) and was harmless while the placeholder was the only dim first child. The dim `asked to work in` line arrived 2026-10-23 (6e69bba); the `cut from` / `push guard` notes 2026-10-26 to 27 (3470b18, 692c362); `artifacts` in the signature 2026-10-23 (15b203c); the 1.2 s thinking sweep 2026-10-23 (d09f27a); and `paintStreamConsole`, the whole-console rewrite the sweep now calls, 2026-10-27 (1a24139, \"Draw a card as ONE stream\"). The check became wrong the day a real dim line started the console, and became visible the day something repainted on a clock.",
+    "`git log -S` on each piece. The class test dates from 2026-10-21 (6e418ed, a commit about starring turns) and was harmless while the placeholder was the only dim first child. The dim `asked to work in` line arrived 2026-10-23 (6e69bba); the `push guard` note 2026-10-26 (3470b18) and the `cut from` note 2026-10-27 (692c362); `artifacts` in the signature 2026-10-23 (15b203c); the 1.2 s thinking sweep 2026-10-23 (d09f27a); and `paintStreamConsole`, the whole-console rewrite the sweep now calls, 2026-10-27 (1a24139, \"Draw a card as ONE stream\"). The check became wrong the day a real dim line started the console, and became visible the day something repainted on a clock.",
     "",
     "## The fix",
     "",
     `The placeholder is marked (\`data-wait\`, \`public/app.js:${b.wait}\`) and \`drawJobLine\` removes that node only (:${b.waitClear}). A dim transcript line is no longer mistaken for the placeholder, so a repaint followed by a live line adds a line instead of replacing the console. Nothing that repaints was removed or throttled: the clocks, the signature and the stickiness helpers are as they were.`,
+    "",
+    "## What the earlier reviews said",
+    "",
+    "`console-flicker-deep-dive.md` (a read-only review from another tree at `540fbc1`) ranks six causes of a group flipping between expanded and collapsed. It cites this very line (\"`6979`\") as the placeholder being removed and reads it as harmless; its #6, `paintStreamConsole` replacing the whole console on every thinking re-read, is the repaint half of what is captured here. What a read could not show is that the test on that line also matches real dim lines, so the repaint arms a wipe. The synthetic-card report this file replaces is kept as `console-flicker-synthetic-probe-superseded.md`: it measured a group re-cut that is real but is not the collapse.",
     "",
     "## Not part of the flicker, found on the way",
     "",
