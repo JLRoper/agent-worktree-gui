@@ -22,15 +22,24 @@ import {
   expandHome,
   humanBytes,
   insideDir,
+  LIVE_STATUSES,
+  markScratch,
+  measureSize,
   migrateState,
+  MIGRATION_JOURNAL,
+  readMigrationJournal,
   resolveConfigPath,
   resolveDirs,
+  resolveLayout,
+  SCRATCH_MARKER,
   scratchLine,
+  scratchProblem,
   sizeOf,
   statePaths,
   STATE_FILE_NAMES,
+  walkSize,
 } from "../lib/paths.js";
-import { Jobs } from "../lib/jobs.js";
+import { Jobs, LIVE_JOB_STATUS } from "../lib/jobs.js";
 
 const tmp = () => mkdtempSync(path.join(os.tmpdir(), "wtgui-paths-"));
 
@@ -77,6 +86,72 @@ test("a ~ path in the config or the environment is expanded, not resolved into a
   assert.equal(expandHome("~", home), home);
   const got = resolveDirs({ config: {}, env: { WAG_HOME: "~/mine" }, home, tmpdir: home });
   assert.equal(got.dataDir, path.join(home, "mine"));
+});
+
+// ---- a second instance must never resolve to the reader's board -----------------------------------
+// This is the regression the first version of this change carried: 31 verify tools and every startPanel() test run a
+// PANEL_CONFIG instance that names only its own store, and with the plain precedence they all resolved to ~/.wag —
+// the live job store, the live naming ledger, the live log folder.
+test("a PANEL_CONFIG instance with no dataDir keeps its own folder, flat, and ignores WAG_HOME and WAG_SCRATCH", () => {
+  const home = path.join(os.tmpdir(), "wtgui-fake-home");
+  const cfgDir = path.join(os.tmpdir(), "wtgui-sandbox-config");
+  const env = { WAG_HOME: "D:/the-readers-board", WAG_SCRATCH: "D:/the-readers-scratch" };
+  const got = resolveDirs({ config: {}, env, home, tmpdir: home, configSource: "PANEL_CONFIG", configDir: cfgDir });
+  assert.equal(got.dataDir, path.join(cfgDir, "logs"), "where every sandbox has always kept its files");
+  assert.equal(got.dataSource, "PANEL_CONFIG");
+  assert.equal(got.dataLayout, "flat");
+  assert.equal(got.scratchDir, path.join(cfgDir, "logs", "scratch"), "and its throwaway folder is its own, not <tmp>/wag shared with the live panel");
+  assert.equal(got.scratchSource, "PANEL_CONFIG");
+
+  const p = statePaths({ dataDir: got.dataDir, dataLayout: got.dataLayout });
+  assert.equal(p.jobsFile, path.join(cfgDir, "logs", "jobs.json"), "no state/ folder inside the flat layout");
+  assert.equal(p.todosFile, path.join(cfgDir, "logs", "todos.json"));
+  assert.equal(p.logsDir, path.join(cfgDir, "logs"));
+  assert.equal(p.attachmentsDir, path.join(cfgDir, "logs", "attachments"), "the same place the old code put pasted files");
+});
+
+test("naming dataDir in the config is how a second instance opts into the new layout", () => {
+  const cfgDir = path.join(os.tmpdir(), "wtgui-sandbox-config");
+  const got = resolveDirs({ config: { dataDir: "E:/own-data" }, env: { WAG_HOME: "D:/ignored" }, home: cfgDir, tmpdir: cfgDir, configSource: "PANEL_CONFIG", configDir: cfgDir });
+  assert.deepEqual([got.dataDir, got.dataSource, got.dataLayout], [path.resolve("E:/own-data"), "config", "split"]);
+  // Its scratch folder is still its own: a second instance never shares <tmp>/wag with the one the reader is using.
+  assert.equal(got.scratchDir, path.join(path.resolve("E:/own-data"), "scratch"));
+});
+
+test("the default install is unchanged by all of that: no PANEL_CONFIG, the environment and then the defaults apply", () => {
+  const home = path.join(os.tmpdir(), "wtgui-fake-home");
+  const checkout = resolveDirs({ config: {}, env: { WAG_HOME: "D:/data" }, home, tmpdir: home, configSource: "checkout", configDir: path.join(home, "repo") });
+  assert.deepEqual([checkout.dataDir, checkout.dataSource, checkout.dataLayout], [path.resolve("D:/data"), "env", "split"]);
+  const plain = resolveDirs({ config: {}, env: {}, home, tmpdir: home, configSource: "checkout", configDir: path.join(home, "repo") });
+  assert.deepEqual([plain.dataDir, plain.dataSource], [path.join(home, ".wag"), "default"]);
+});
+
+test("resolveLayout answers what a booted server will, from the config file alone (this is what the .cmd scripts ask)", () => {
+  const root = tmp();
+  try {
+    const checkout = path.join(root, "checkout");
+    const home = path.join(root, "home");
+    mkdirSync(checkout, { recursive: true });
+    mkdirSync(home, { recursive: true });
+    // No config at all: the defaults.
+    const bare = resolveLayout({ here: checkout, env: {}, home, tmpdir: root });
+    assert.equal(bare.paths.logsDir, path.join(home, ".wag", "logs"));
+    assert.equal(bare.configFile.source, "checkout");
+    // A dataDir written in config.json wins over the environment — the case a launcher script cannot see from %WAG_HOME%.
+    writeFileSync(path.join(checkout, "config.json"), JSON.stringify({ dataDir: path.join(root, "elsewhere") }));
+    const named = resolveLayout({ here: checkout, env: { WAG_HOME: path.join(root, "ignored") }, home, tmpdir: root });
+    assert.equal(named.paths.logsDir, path.join(root, "elsewhere", "logs"));
+    assert.equal(named.dirs.dataSource, "config");
+    // A BOM and a PANEL_CONFIG instance both resolve the way the server does.
+    const sandbox = path.join(root, "sandbox");
+    mkdirSync(sandbox, { recursive: true });
+    writeFileSync(path.join(sandbox, "config.json"), `\uFEFF${JSON.stringify({ port: 1 })}`);
+    const second = resolveLayout({ here: checkout, env: { PANEL_CONFIG: path.join(sandbox, "config.json"), WAG_HOME: path.join(root, "ignored") }, home, tmpdir: root });
+    assert.equal(second.paths.logsDir, path.join(sandbox, "logs"));
+    assert.equal(second.dirs.dataLayout, "flat");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 // ---- derivation ---------------------------------------------------------------------------------
@@ -128,7 +203,7 @@ test("an explicit dataDir moves everything with it, and an explicit jobsFile kee
   assert.equal(p.attachmentsDir, path.join(dataDir, "attachments"));
 });
 
-test("ensureDirs creates both directories and the folders inside the data one", () => {
+test("ensureDirs creates both directories and the folders inside the data one, and marks the scratch folder it made", () => {
   const root = tmp();
   try {
     const dataDir = path.join(root, "data");
@@ -138,6 +213,8 @@ test("ensureDirs creates both directories and the folders inside the data one", 
     for (const dir of [dataDir, scratchDir, path.join(dataDir, "state"), path.join(dataDir, "attachments"), path.join(dataDir, "logs")]) {
       assert.ok(existsSync(dir), `${dir} exists`);
     }
+    assert.ok(existsSync(path.join(scratchDir, SCRATCH_MARKER)), "a scratch folder the panel made carries the marker Clean scratch looks for");
+    assert.equal(out.marked, true);
     // Idempotent: a second boot (or a second panel on one data directory) is a no-op, not an error.
     assert.deepEqual(ensureDirs({ dataDir, scratchDir }).made, []);
   } finally {
@@ -145,18 +222,44 @@ test("ensureDirs creates both directories and the folders inside the data one", 
   }
 });
 
-test("sizes are stat-only walks with a cache, and the label is the one the page shows", () => {
+test("a scratch folder that already holds somebody's files is never marked, so it can never be cleaned", () => {
+  const root = tmp();
+  try {
+    const theirs = path.join(root, "documents");
+    mkdirSync(theirs, { recursive: true });
+    writeFileSync(path.join(theirs, "thesis.docx"), "precious");
+    assert.equal(markScratch(theirs), false);
+    assert.equal(existsSync(path.join(theirs, SCRATCH_MARKER)), false);
+    // An empty folder the reader made for the purpose is adopted.
+    const mine = path.join(root, "mine");
+    mkdirSync(mine, { recursive: true });
+    assert.equal(markScratch(mine), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("sizes: a read never waits on a walk, the walk is async and de-duplicated, and the marker is not counted", async () => {
   const root = tmp();
   try {
     mkdirSync(path.join(root, "nested"), { recursive: true });
     writeFileSync(path.join(root, "a.txt"), "12345");
     writeFileSync(path.join(root, "nested", "b.txt"), "123");
-    assert.deepEqual(dirSize(root), { bytes: 8, files: 2, dirs: 1 });
-    const first = sizeOf(root, { ttlMs: 60_000 });
+    writeFileSync(path.join(root, SCRATCH_MARKER), "marker");
+    assert.deepEqual(dirSize(root), { bytes: 8, files: 2, dirs: 1 }, "the sync walk and ...");
+    assert.deepEqual(await walkSize(root), { bytes: 8, files: 2, dirs: 1 }, "... the async walk agree, and neither counts the marker");
+
+    // The first read of a directory nobody has measured answers at once with `at: 0` — it does not block on the walk.
+    const cold = sizeOf(root, { ttlMs: 60_000 });
+    assert.equal(cold.at, 0, "nothing measured yet, and the caller is told so");
+    // Two concurrent measurements are one walk.
+    const [one, two] = await Promise.all([measureSize(root), measureSize(root)]);
+    assert.equal(one, two, "the second call joined the walk already running");
+    assert.equal(one.bytes, 8);
+
     writeFileSync(path.join(root, "c.txt"), "1234567");
     assert.equal(sizeOf(root, { ttlMs: 60_000 }).bytes, 8, "inside the window the cached reading stands");
-    assert.equal(sizeOf(root, { ttlMs: 60_000, fresh: true }).bytes, 15, "and `fresh` re-measures");
-    assert.equal(first.files, 2);
+    assert.equal(sizeOf(root, { ttlMs: 60_000, fresh: true }).bytes, 15, "and `fresh` re-measures, exactly, now");
     assert.deepEqual([humanBytes(0), humanBytes(999), humanBytes(1024), humanBytes(1536), humanBytes(5 * 1024 * 1024)], ["0 B", "999 B", "1 KB", "1.5 KB", "5 MB"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -266,6 +369,96 @@ test("a fresh install has nothing to migrate, and a store configured elsewhere i
   }
 });
 
+test("the migration also lands the attachments when ensureDirs has already made an empty folder for them", () => {
+  // The real boot order: server.js calls ensureDirs() BEFORE migrateState(), so `attachments/` exists and is empty by the
+  // time the copy looks at it. The first version skipped any destination that existed, which left every pasted file —
+  // whose absolute path is written into the job store that did move — behind in the checkout.
+  const root = tmp();
+  try {
+    const legacy = path.join(root, "checkout", "logs");
+    const dataDir = path.join(root, "data");
+    mkdirSync(path.join(legacy, "attachments"), { recursive: true });
+    mkdirSync(path.join(legacy, "assistant-cwd"), { recursive: true });
+    writeFileSync(path.join(legacy, "jobs.json"), "{}");
+    writeFileSync(path.join(legacy, "attachments", "shot.png"), "PNG");
+    writeFileSync(path.join(legacy, "assistant-cwd", "AGENTS.md"), "notes");
+    ensureDirs({ dataDir, scratchDir: path.join(root, "scratch") });
+    assert.ok(existsSync(path.join(dataDir, "attachments")), "the precondition: the folder is already there");
+    const out = migrateState({ dataDir, legacyDir: legacy });
+    assert.equal(out.migrated, true);
+    assert.equal(readFileSync(path.join(dataDir, "attachments", "shot.png"), "utf8"), "PNG");
+    assert.equal(readFileSync(path.join(dataDir, "state", "assistant-cwd", "AGENTS.md"), "utf8"), "notes", "the assistant's own working folder moves with its scratchpad");
+    assert.ok(out.copied.includes("attachments/") && out.copied.includes("assistant-cwd/"), out.copied.join(","));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the migration is journaled durably, and the journal survives a second boot that copies nothing", () => {
+  const root = tmp();
+  try {
+    const legacy = path.join(root, "checkout", "logs");
+    const dataDir = path.join(root, "data");
+    mkdirSync(legacy, { recursive: true });
+    writeFileSync(path.join(legacy, "jobs.json"), "{}");
+    writeFileSync(path.join(legacy, "todos.json"), "{}");
+    const at = Date.UTC(2026, 9, 27, 12, 0, 0);
+    const first = migrateState({ dataDir, legacyDir: legacy, now: at });
+    assert.equal(first.migrated, true);
+    const entries = readMigrationJournal(path.join(dataDir, "state"));
+    assert.equal(entries.length, 1);
+    assert.deepEqual([entries[0].at, entries[0].from, entries[0].to], ["2026-10-27T12:00:00.000Z", legacy, path.join(dataDir, "state")]);
+    assert.deepEqual(entries[0].copied.sort(), ["jobs.json", "todos.json"]);
+    assert.ok(existsSync(path.join(dataDir, "state", MIGRATION_JOURNAL)));
+    // The second boot copies nothing — and the answer to "where did this board come from" is still there.
+    assert.equal(migrateState({ dataDir, legacyDir: legacy }).migrated, false);
+    assert.equal(readMigrationJournal(path.join(dataDir, "state")).length, 1, "not a second entry for a boot that moved nothing");
+    assert.deepEqual(readMigrationJournal(path.join(root, "never-migrated")), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the job store is copied last, so a migration that died half way is retried instead of mistaken for finished", () => {
+  const root = tmp();
+  try {
+    const legacy = path.join(root, "checkout", "logs");
+    const dataDir = path.join(root, "data");
+    mkdirSync(path.join(legacy, "jobs.json"), { recursive: true });
+    writeFileSync(path.join(legacy, "todos.json"), "{}");
+    // jobs.json is a DIRECTORY here, which cpSync (non-recursive) refuses: the other files copy, the store does not.
+    const lines = [];
+    const broken = migrateState({ dataDir, legacyDir: legacy, onLog: (l) => lines.push(l) });
+    assert.equal(broken.migrated, false);
+    assert.match(broken.reason, /job store could not be copied/);
+    assert.equal(existsSync(path.join(dataDir, "state", "jobs.json")), false, "no store in the data directory, so nothing says `done`");
+    assert.ok(lines.some((l) => /could not copy jobs\.json/.test(l)), lines.join("\n"));
+    // The next boot, with the store readable again, finishes the job.
+    rmSync(path.join(legacy, "jobs.json"), { recursive: true });
+    writeFileSync(path.join(legacy, "jobs.json"), "{}");
+    const retried = migrateState({ dataDir, legacyDir: legacy });
+    assert.equal(retried.migrated, true);
+    assert.ok(existsSync(path.join(dataDir, "state", "jobs.json")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a second instance's flat layout has nothing to migrate, whatever sits in its logs folder", () => {
+  const root = tmp();
+  try {
+    const own = path.join(root, "sandbox", "logs");
+    mkdirSync(own, { recursive: true });
+    writeFileSync(path.join(own, "jobs.json"), "{}");
+    const out = migrateState({ dataDir: own, legacyDir: own, layout: "flat" });
+    assert.equal(out.migrated, false);
+    assert.match(out.reason, /beside its own config file/);
+    assert.equal(existsSync(path.join(own, "state")), false, "no state/ folder was invented inside the sandbox's own folder");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // ---- the scratch directory ----------------------------------------------------------------------
 test("insideDir compares the way Windows does: separators, case and a trailing slash are not a difference", () => {
   const base = path.join("C:", "Temp", "wag");
@@ -277,29 +470,32 @@ test("insideDir compares the way Windows does: separators, case and a trailing s
   assert.equal(insideDir("", base), false);
 });
 
-test("cleaning the scratch directory frees the bytes and reports them", () => {
+test("cleaning the scratch directory frees the bytes, reports them, and leaves the folder and its marker", async () => {
   const root = tmp();
   try {
     const scratch = path.join(root, "wag");
+    ensureDirs({ dataDir: path.join(root, "data"), scratchDir: scratch });
     mkdirSync(path.join(scratch, "job-1"), { recursive: true });
     writeFileSync(path.join(scratch, "job-1", "compare.diff"), "x".repeat(2048));
     writeFileSync(path.join(scratch, "notes.txt"), "1234");
-    const out = cleanScratch({ scratchDir: scratch, jobs: [] });
-    assert.equal(out.ok, true);
+    const out = await cleanScratch({ scratchDir: scratch, jobs: [], home: path.join(root, "home") });
+    assert.equal(out.ok, true, out.error);
     assert.equal(out.freedBytes, 2052);
     assert.equal(out.removedFiles, 2);
     assert.equal(out.leftBehind, 0);
     assert.ok(existsSync(scratch), "the directory itself stays");
+    assert.ok(existsSync(path.join(scratch, SCRATCH_MARKER)), "and so does its marker, or the next clean would refuse");
     assert.deepEqual(dirSize(scratch), { bytes: 0, files: 0, dirs: 0 });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
-test("a live run standing in the scratch directory refuses the whole clean, and names the run", () => {
+test("a live run standing in the scratch directory refuses the whole clean, and names the run", async () => {
   const root = tmp();
   try {
     const scratch = path.join(root, "wag");
+    ensureDirs({ dataDir: path.join(root, "data"), scratchDir: scratch });
     mkdirSync(path.join(scratch, "job-7"), { recursive: true });
     writeFileSync(path.join(scratch, "job-7", "busy.diff"), "x".repeat(64));
     const jobs = [
@@ -307,7 +503,7 @@ test("a live run standing in the scratch directory refuses the whole clean, and 
       { id: "job-6", status: "done", cwd: path.join(scratch, "job-6") },
       { id: "job-5", status: "running", cwd: path.join(root, "elsewhere") },
     ];
-    const out = cleanScratch({ scratchDir: scratch, jobs });
+    const out = await cleanScratch({ scratchDir: scratch, jobs, home: path.join(root, "home") });
     assert.equal(out.ok, false);
     assert.equal(out.refused, true);
     assert.match(out.error, /scratch is in use/);
@@ -319,15 +515,126 @@ test("a live run standing in the scratch directory refuses the whole clean, and 
   }
 });
 
-test("a finished run in the scratch directory does not hold it", () => {
+test("a run parked on an approval holds the scratch directory too: `waiting` is a live status", async () => {
   const root = tmp();
   try {
     const scratch = path.join(root, "wag");
-    mkdirSync(scratch, { recursive: true });
+    ensureDirs({ dataDir: path.join(root, "data"), scratchDir: scratch });
+    writeFileSync(path.join(scratch, "keep.txt"), "x");
+    const out = await cleanScratch({
+      scratchDir: scratch,
+      jobs: [{ id: "job-w", status: "waiting", cwd: path.join(scratch, "job-w") }],
+      home: path.join(root, "home"),
+    });
+    assert.equal(out.refused, true, "the first version of this check listed `waiting_for_approval` and `queued` and missed the status the store actually writes");
+    assert.ok(existsSync(path.join(scratch, "keep.txt")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("every status the job store treats as live is one a clean refuses over", () => {
+  for (const status of LIVE_JOB_STATUS) assert.ok(LIVE_STATUSES.has(status), `${status} is live in lib/jobs.js and must hold the scratch directory`);
+});
+
+test("a live run whose cwd is elsewhere still holds the scratch folder it was told to write in", async () => {
+  const root = tmp();
+  try {
+    const scratch = path.join(root, "wag");
+    ensureDirs({ dataDir: path.join(root, "data"), scratchDir: scratch });
+    // The spawn prompt names `<scratch>/<job id>`; the run works in its worktree, and writes its throwaway files there.
+    mkdirSync(path.join(scratch, "job-9"), { recursive: true });
+    writeFileSync(path.join(scratch, "job-9", "export.tar"), "x".repeat(32));
+    const live = [{ id: "job-9", status: "running", cwd: path.join(root, "worktree") }];
+    const refused = await cleanScratch({ scratchDir: scratch, jobs: live, home: path.join(root, "home") });
+    assert.equal(refused.refused, true);
+    assert.match(refused.error, /job-9/);
+    assert.ok(existsSync(path.join(scratch, "job-9", "export.tar")));
+    // The same run, finished: nothing holds the folder any more.
+    const done = await cleanScratch({ scratchDir: scratch, jobs: [{ ...live[0], status: "done" }], home: path.join(root, "home") });
+    assert.equal(done.ok, true);
+    assert.equal(existsSync(path.join(scratch, "job-9")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a finished run in the scratch directory does not hold it", async () => {
+  const root = tmp();
+  try {
+    const scratch = path.join(root, "wag");
+    ensureDirs({ dataDir: path.join(root, "data"), scratchDir: scratch });
     writeFileSync(path.join(scratch, "old.txt"), "1234");
-    const out = cleanScratch({ scratchDir: scratch, jobs: [{ id: "job-1", status: "done", cwd: path.join(scratch, "job-1") }] });
+    const out = await cleanScratch({
+      scratchDir: scratch,
+      jobs: [{ id: "job-1", status: "done", cwd: path.join(scratch, "job-1") }],
+      home: path.join(root, "home"),
+    });
     assert.equal(out.ok, true);
     assert.equal(out.freedBytes, 4);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ---- Clean scratch is a recursive delete of a configured path: what it must refuse ---------------------------
+test("a folder the panel did not make is refused: no marker, no delete", async () => {
+  const root = tmp();
+  try {
+    const theirs = path.join(root, "documents");
+    mkdirSync(theirs, { recursive: true });
+    writeFileSync(path.join(theirs, "thesis.docx"), "precious");
+    const out = await cleanScratch({ scratchDir: theirs, jobs: [], home: path.join(root, "home") });
+    assert.equal(out.refused, true);
+    assert.match(out.error, /was not made by the panel/);
+    assert.match(out.error, new RegExp(SCRATCH_MARKER.replace(".", "\\.")));
+    assert.equal(readFileSync(path.join(theirs, "thesis.docx"), "utf8"), "precious", "nothing was deleted");
+    // The reader's own opt-in is one empty file.
+    writeFileSync(path.join(theirs, SCRATCH_MARKER), "");
+    const allowed = await cleanScratch({ scratchDir: theirs, jobs: [], home: path.join(root, "home") });
+    assert.equal(allowed.ok, true);
+    assert.equal(existsSync(path.join(theirs, "thesis.docx")), false, "once they have said so");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("scratchProblem refuses a drive root, the home folder and anything above it, and the panel's own state", () => {
+  const root = tmp();
+  try {
+    const home = path.join(root, "users", "me");
+    const dataDir = path.join(home, ".wag");
+    const checkout = path.join(root, "projects", "agent-worktree-gui");
+    const keep = [checkout, path.join(root, "projects")];
+    mkdirSync(home, { recursive: true });
+    // Each of these is a typo away from a scratchDir, and each would be a recursive delete of something that matters.
+    assert.match(scratchProblem({ scratchDir: path.parse(root).root, home, dataDir, keep }), /drive root/);
+    assert.match(scratchProblem({ scratchDir: home, home, dataDir, keep }), /home folder/);
+    assert.match(scratchProblem({ scratchDir: path.join(root, "users"), home, dataDir, keep }), /home folder/, "an ancestor of home contains it");
+    assert.match(scratchProblem({ scratchDir: dataDir, home: path.join(root, "elsewhere"), dataDir, keep }), /data directory/);
+    assert.match(scratchProblem({ scratchDir: checkout, home, dataDir, keep }), /agent-worktree-gui/);
+    assert.match(scratchProblem({ scratchDir: path.join(root, "projects"), home, dataDir, keep }), /projects/);
+    assert.match(scratchProblem({ scratchDir: "", home, dataDir, keep }), /no scratch directory/);
+    // ...and still allows the folders it exists for: the default under tmp, and a folder INSIDE the data directory
+    // (the second-instance layout keeps its scratch there).
+    assert.equal(scratchProblem({ scratchDir: path.join(root, "tmp", "wag"), home, dataDir, keep }), null);
+    assert.equal(scratchProblem({ scratchDir: path.join(dataDir, "scratch"), home, dataDir, keep }), null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("cleanScratch honours scratchProblem before it looks at a single file", async () => {
+  const root = tmp();
+  try {
+    const home = path.join(root, "home");
+    mkdirSync(home, { recursive: true });
+    writeFileSync(path.join(home, "keep.txt"), "mine");
+    writeFileSync(path.join(home, SCRATCH_MARKER), "");
+    const out = await cleanScratch({ scratchDir: home, jobs: [], home });
+    assert.equal(out.refused, true);
+    assert.match(out.error, /home folder/, "even a marked folder is refused when it is the home folder");
+    assert.equal(readFileSync(path.join(home, "keep.txt"), "utf8"), "mine");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

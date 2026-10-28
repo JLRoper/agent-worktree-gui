@@ -8,8 +8,8 @@ import { promisify } from "node:util";
 import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 // The push-guard record is a few hundred bytes read at boot and written on an install: sync is the honest shape
 // for it, and it is the same file the Settings row reports from.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { cpus } from "node:os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpus, homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "./lib/pool.js";
@@ -47,7 +47,10 @@ import { modelCatalogue, refreshModelCatalogue } from "./lib/hermes-models.js";
 import { createSpawn } from "./lib/features/spawn.js";
 // The panel's own directories, and every state path derived from them. Nothing below builds one of those
 // paths itself any more: `resolveDirs` answers where, `statePaths` answers which file.
-import { cleanScratch, ensureDirs, humanBytes, migrateState, resolveConfigPath, resolveDirs, sizeOf, statePaths } from "./lib/paths.js";
+import {
+  cleanScratch, ensureDirs, humanBytes, measureSize, migrateState, readMigrationJournal, resolveConfigPath, resolveDirs,
+  SCRATCH_MARKER, sizeOf, statePaths,
+} from "./lib/paths.js";
 // HTTP framing lives in lib/http/: transport.js knows about req/res and nothing about worktrees,
 // and static.js serves public/. Both are handed the state they used to read by closure.
 import { authorised, handleStream, readBody, readRawBody, sendJson } from "./lib/http/transport.js";
@@ -173,9 +176,14 @@ async function loadConfig() {
   //
   // A config that names one of these files itself still wins (that is how a sandbox points at its own store); the
   // rest follow it, which is the behaviour every existing `PANEL_CONFIG` sandbox relies on.
-  const dirs = resolveDirs({ config: cfg });
+  //
+  // A PANEL_CONFIG instance that names no `dataDir` is a second instance, and it keeps its own folder: it resolves
+  // to `<dir of its config>/logs` (flat, as it always did) and ignores WAG_HOME / WAG_SCRATCH. Resolving it to the
+  // shared `~/.wag` instead would point every verify tool and test sandbox at the reader's live job store.
+  const dirs = resolveDirs({ config: cfg, configSource: CONFIG_FILE.source, configDir: path.dirname(CONFIG_PATH) });
   cfg.dataDir = dirs.dataDir;
   cfg.dataDirSource = dirs.dataSource;
+  cfg.dataLayout = dirs.dataLayout;
   cfg.scratchDir = dirs.scratchDir;
   cfg.scratchDirSource = dirs.scratchSource;
   Object.assign(cfg, statePaths(cfg));
@@ -224,14 +232,20 @@ const stateMigration = migrateState({
   dataDir: config.dataDir,
   stateFile: config.jobsFile,
   legacyDir: path.join(path.dirname(CONFIG_PATH), "logs"),
+  layout: config.dataLayout,
   onLog: log,
 });
-if (!stateMigration.migrated && stateMigration.reason && stateMigration.reason !== "no job store beside the checkout") {
+// A second instance (PANEL_CONFIG, no dataDir) has nothing to move, and saying so on every sandbox boot is noise.
+if (!stateMigration.migrated && stateMigration.reason && stateMigration.reason !== "no job store beside the checkout" && config.dataLayout !== "flat") {
   log(`state migration skipped: ${stateMigration.reason}`);
 }
-// Prime the two size readings so the first /api/state (and the first Settings open) does not pay for a walk.
-sizeOf(config.dataDir, { fresh: true });
-sizeOf(config.scratchDir, { fresh: true });
+// Start the two size readings in the background so the first /api/state (and the first Settings open) finds a number
+// waiting. They are async walks: a scratch folder holding a copied checkout must not hold up the listener.
+void measureSize(config.dataDir).catch(() => {});
+void measureSize(config.scratchDir).catch(() => {});
+// What the data directory's own journal says about where its board came from. Read once, here: the journal only
+// changes at boot, and /api/state is polled far too often to read a file for it.
+const lastMigration = readMigrationJournal(config.stateDir).slice(-1)[0] || null;
 let pool = new Pool(config.threads);
 const store = new Store();
 const registry = new ProjectRegistry({
@@ -1050,26 +1064,34 @@ function withTreeNames(snap) {
 function pathsInfo() {
   const data = sizeOf(config.dataDir);
   const scratch = sizeOf(config.scratchDir);
+  const iso = (ms) => (ms ? new Date(ms).toISOString() : null);
   return {
     dataDir: config.dataDir,
     dataSource: config.dataDirSource,
+    // `split` (state/, attachments/, logs/ inside) or `flat` (a PANEL_CONFIG instance's own folder).
+    dataLayout: config.dataLayout,
     dataBytes: data.bytes,
     dataFiles: data.files,
+    // null until the first background walk lands, so the row says "measuring…" instead of a false "0 B".
+    dataMeasuredAt: iso(data.at),
     scratchDir: config.scratchDir,
     scratchSource: config.scratchDirSource,
     scratchBytes: scratch.bytes,
     scratchFiles: scratch.files,
     scratchDirs: scratch.dirs,
+    scratchMeasuredAt: iso(scratch.at),
+    // Whether Clean scratch will work at all: it refuses a folder the panel did not make (paths.js, SCRATCH_MARKER).
+    scratchMarked: existsSync(path.join(config.scratchDir, SCRATCH_MARKER)),
     // Where the pieces sit, so the row can say "the job store is under state/" without the reader guessing.
     stateDir: config.stateDir,
     attachmentsDir: config.attachmentsDir,
     logsDir: config.logsDir,
-    // What the one-time move off the checkout did on this boot: the page reports it once, and never again because a
-    // second boot finds a store and copies nothing.
-    migrated: stateMigration.migrated
-      ? { files: stateMigration.copied.length, from: stateMigration.from, to: stateMigration.to, at: new Date().toISOString() }
+    // Where this board's history came from, from the data directory's own journal — so it is still answerable on
+    // every later boot. `thisBoot` is true only on the boot that did the copy.
+    migrated: lastMigration
+      ? { files: (lastMigration.copied || []).length, from: lastMigration.from, to: lastMigration.to, at: lastMigration.at, thisBoot: stateMigration.migrated }
       : null,
-    at: new Date(data.at || Date.now()).toISOString(),
+    at: iso(data.at || Date.now()),
   };
 }
 
@@ -1565,12 +1587,26 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, which, path: target, opened: bin });
     }
 
-    // Empty the scratch directory. A live run whose cwd is inside it REFUSES the whole thing — on Windows the
-    // delete would half-fail under a process holding the files, and the agent would be left with a tree that no
-    // longer adds up. The refusal names the runs, and the reader stops them (or cleans it by hand).
+    // Empty the scratch directory. Three things REFUSE the whole clean, none of them a partial one: a folder the panel
+    // did not make or one that holds its own state/checkout/projects (paths.js, `scratchProblem` and the marker file),
+    // and a live run that is working in it or was told to write in it — on Windows the delete would half-fail under a
+    // process holding the files, and the agent would be left with a tree that no longer adds up. The refusal names the
+    // reason, and the reader fixes the setting, stops the run, or cleans it by hand.
     if (route === "/api/scratch/clean" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const out = cleanScratch({ scratchDir: config.scratchDir, jobs: jobs.list() });
+      const out = await cleanScratch({
+        scratchDir: config.scratchDir,
+        jobs: jobs.list(),
+        dataDir: config.dataDir,
+        home: homedir(),
+        // Everything a mistyped scratchDir could be an ancestor of: this checkout, the config's folder, the panel's own
+        // state, its default working folder, the scan roots and every project the registry knows.
+        keep: [
+          HERE, path.dirname(CONFIG_PATH), config.stateDir, config.attachmentsDir, config.logsDir, config.defaultCwd,
+          ...(Array.isArray(config.scanRoots) ? config.scanRoots : []),
+          ...registry.projects.map((p) => p.path),
+        ],
+      });
       if (!out.ok) {
         log(`scratch NOT cleaned: ${out.error}`);
         return sendJson(res, out.refused ? 409 : 500, { ...out, freed: "0 B", paths: pathsInfo() });

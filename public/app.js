@@ -14173,7 +14173,13 @@ $("btn-guard-install")?.addEventListener("click", (e) => {
 // directory). Both are outside the checkout, both are reported with their size, and the scratch one can be
 // emptied — but only when no live run is standing in it: the server decides that and answers 409 with the run
 // named, and this row repeats the refusal rather than looking like a press that did nothing.
-const PATH_SOURCE_WORD = { config: "set in config.json", env: "from the environment", default: "the default" };
+const PATH_SOURCE_WORD = {
+  config: "set in config.json",
+  env: "from the environment",
+  default: "the default",
+  // A second instance (PANEL_CONFIG with no dataDir) keeps its own folder and ignores the environment on purpose.
+  PANEL_CONFIG: "this instance's own folder, beside its PANEL_CONFIG file — name dataDir in that config to move it",
+};
 
 function fmtBytes(n) {
   const v = Number(n);
@@ -14201,19 +14207,24 @@ function paintPaths(note = "", bad = false) {
     if (scratchPath) scratchPath.textContent = "…";
     return;
   }
-  if (dataSize) dataSize.textContent = `${fmtBytes(p.dataBytes)} · ${p.dataFiles} file${p.dataFiles === 1 ? "" : "s"}`;
-  if (scratchSize) scratchSize.textContent = `${fmtBytes(p.scratchBytes)} · ${p.scratchFiles} file${p.scratchFiles === 1 ? "" : "s"}`;
+  const sizeText = (bytes, files, measuredAt) => (measuredAt ? `${fmtBytes(bytes)} · ${files} file${files === 1 ? "" : "s"}` : "measuring…");
+  if (dataSize) dataSize.textContent = sizeText(p.dataBytes, p.dataFiles, p.dataMeasuredAt);
+  if (scratchSize) scratchSize.textContent = sizeText(p.scratchBytes, p.scratchFiles, p.scratchMeasuredAt);
   if (dataPath) {
-    // The one-time move off the checkout is the thing a reader will not otherwise know happened: a board that came
-    // up carrying last week's cards should say where they came from, once, on the boot that copied them.
-    const moved = p.migrated ? ` · copied ${p.migrated.files} file${p.migrated.files === 1 ? "" : "s"} here from ${pathText(p.migrated.from)} on this boot (the originals were left where they were)` : "";
-    dataPath.textContent = bad ? `${note}` : `${pathText(p.dataDir)} — ${PATH_SOURCE_WORD[p.dataSource] || p.dataSource} · state/, attachments/ and logs/ inside it${moved}`;
+    // Where this board's history came from is the thing a reader will not otherwise know happened: a board that came
+    // up carrying last week's cards should say where they came from. The data directory's own journal keeps the answer
+    // across boots, so the line is still true tomorrow; `thisBoot` only says it happened on this very start.
+    const m = p.migrated;
+    const moved = m ? ` · ${m.files} file${m.files === 1 ? "" : "s"} copied here from ${pathText(m.from)} ${m.thisBoot ? "on this boot" : `on ${String(m.at || "").slice(0, 10)}`} (the originals were left where they were)` : "";
+    dataPath.textContent = bad ? `${note}` : `${pathText(p.dataDir)} — ${PATH_SOURCE_WORD[p.dataSource] || p.dataSource} · ${p.dataLayout === "flat" ? "everything in this one folder" : "state/, attachments/ and logs/ inside it"}${moved}`;
     dataPath.classList.toggle("bad", Boolean(bad));
   }
   if (scratchPath) {
+    // A folder the panel did not make cannot be cleaned: say so on the row, before a press finds out.
+    const unmarked = p.scratchMarked === false ? " · not made by the panel, so Clean scratch will refuse (add an empty .wag-scratch file to allow it)" : "";
     scratchPath.textContent = bad
       ? `${note}`
-      : note || `${pathText(p.scratchDir)} — ${PATH_SOURCE_WORD[p.scratchSource] || p.scratchSource} · every spawn prompt names its own folder under it`;
+      : note || `${pathText(p.scratchDir)} — ${PATH_SOURCE_WORD[p.scratchSource] || p.scratchSource} · every spawn prompt names its own folder under it${unmarked}`;
     scratchPath.classList.toggle("bad", Boolean(bad));
   }
 }
@@ -14224,7 +14235,7 @@ function paintScratchActions(armed = false) {
   const row = $("scratch-actions");
   if (!row) return;
   const p = state.paths;
-  const size = p ? `${fmtBytes(p.scratchBytes)} in ${p.scratchFiles} file${p.scratchFiles === 1 ? "" : "s"}` : "everything under it";
+  const size = p && p.scratchMeasuredAt ? `${fmtBytes(p.scratchBytes)} in ${p.scratchFiles} file${p.scratchFiles === 1 ? "" : "s"}` : "everything under it";
   row.innerHTML = armed
     ? `<button type="button" id="btn-clean-cancel">cancel</button><button type="button" id="btn-clean-go" class="bad">clean ${esc(size)}</button>`
     : `<button type="button" id="btn-clean-scratch" title="delete everything in the scratch directory and report how much it freed. Refused with the run named if a live agent is working inside it.">clean scratch</button>`;
