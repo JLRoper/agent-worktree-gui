@@ -90,6 +90,15 @@ seeded the way the board really gets one back: an interrupted card with a run id
 against a stub Runs API. Point it at a Playwright install with `PANEL_PLAYWRIGHT_ROOT`; without one the browser half
 reports `BROWSER-HALF-NOT-RUN` and the rest still runs.
 
+`node tools/verify-console-flicker.mjs` is the browser repro for the console's flicker: a panel of its own with a
+seeded job store, the seeded turn flipped to `running` on the page's own captured `EventSource`, then every console
+line delivered as a real `jobline` frame while a MutationObserver records each `.tgrp` added, removed or re-flagged
+and a screenshot is taken per state. It proves an append never toggles a group body, and asserts the two things it
+does not: one console never holds a flat group and a condensed group at once, and the 🌊 toggle repaints the card it
+changes. **It fails on today's tree — that is the finding**, written up in
+`C:/CodeReviews/agent-worktree-gui/console-flicker-playwright.md`; useful after touching `toolGroupHtml`, the flat
+flag or `conversationSignature`.
+
 `node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
 `--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
 ancestry cannot see the merge: the repository ruleset requires linear history, so a PR lands as a squash or a
