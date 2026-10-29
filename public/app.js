@@ -183,12 +183,14 @@ const state = {
   // The individual calls behind a collapsed "+ N commands" batch, once the reader has asked for them:
   // "<burst id>|<tool>" -> [{ name, summary }] read from the session transcript.
   batchCalls: new Map(),
-  // Which code boxes (a file's body, folded by default) the reader has opened: "<burst id>|<segment>|<at>".
-  // Kept here for the same reason toolGroupOpen is — every rebuild replaces the console's markup, and a box
-  // that snapped shut under the reader's cursor would read as the panel losing the click.
+  // Which result boxes (every tool result's lines, a diff's windows, a file's body — core/console-format.js) the
+  // reader has opened: "<burst id>|<segment>|<at>". Every box starts FOLDED, in the condensed view and in the one-stream
+  // view alike, so this is the set of the ones they opened. Kept here for the same reason toolGroupOpen is — every
+  // rebuild replaces the console's markup, and a box that snapped shut under the reader's cursor would read as the
+  // panel losing the click.
   codeBoxOpen: new Set(),
-  // The same for a card drawn as ONE stream (the 🌊 beside the 🧠), where a file's code box starts OPEN because nothing in
-  // that stream is folded: here it is the boxes the reader SHUT that are remembered, by the same key.
+  // The opposite book, for the boxes that are drawn OPEN because the reader asked for them (the whole stored text a
+  // fold note's click reads): there it is the ones they SHUT that are remembered, by the same key.
   codeBoxShut: new Set(),
   // Which tool calls the reader has folded: "<burst id>|<segment>". A call's own row is its handle, and the fold
   // covers that call's output and nothing else. Kept here for the same reason codeBoxOpen is: a repaint or a
@@ -1430,12 +1432,17 @@ async function ensureToolStore(turnId, tool, grp = null) {
 // This is the DOM being handed the rest of a result, never the job's own lines: the console's ring buffer
 // (jobs.js MAX_LINES = 600) is what a big result would evict, and a result the reader asked to see is not
 // something the card has to keep — it is one click away again after any repaint.
-function wholeStoredHtml(got, tool = "", arg = "", boxKey = "", codeOpen = null) {
+//
+// The box it is drawn in is OPEN: the reader pressed "click to read" on the note, so a second press to unfold what
+// they just asked for would read as the panel ignoring them. That is the one box that is open by default, which is
+// why it keeps the boxes the reader SHUT (state.codeBoxShut) where every other box keeps the ones they opened.
+const READ_CODE_OPEN = { openByDefault: true, has: (key) => !state.codeBoxShut.has(key) };
+function wholeStoredHtml(got, tool = "", arg = "", boxKey = "", codeOpen = READ_CODE_OPEN) {
   const LF = String.fromCharCode(10);
   const all = String((got && got.text) || "").split(LF);
   if (!all.some((l) => l.trim())) return `<div class="jl jl-dim jl-note">  the stored result has no text</div>`;
   return (
-    consoleBodyHtml(all.map((l) => ({ kind: "store", text: l })), { tool, arg, codeOpen, codeKey: boxKey }) +
+    consoleBodyHtml(all.map((l) => ({ kind: "store", text: l })), { tool, arg, codeOpen, codeKey: boxKey, whole: true }) +
     (got.truncated ? `<div class="jl jl-dim jl-note">… this stored result was cut as well</div>` : "")
   );
 }
@@ -1819,7 +1826,7 @@ function trimmedBurstHtml(lines, turnId, gkey, codeOpen = state.codeBoxOpen) {
       continue;
     }
     flush();
-    out.push(wholeStoredHtml(opened, fold.tool, "", `${gkey}|${fold.tool}`, codeOpen === state.codeBoxOpen ? null : codeOpen));
+    out.push(wholeStoredHtml(opened, fold.tool, "", `${gkey}|${fold.tool}`));
   }
   flush();
   return out.join("");
@@ -1865,11 +1872,11 @@ function trimmedGroupHtml(lines, key, anchor = "", flat = false, codeOpen = stat
 // ---- end trimmed group head
 
 // ---- one stream: a tool call, drawn as a line of it -------------------------------------------------------------------
-// A card drawn as ONE stream (the 🌊 beside the 🧠) has no tool groups to condense a run of calls into and nothing
-// folded, so a call is simply its line — purple, led by the tool's emoji, exactly the line the group's "N lines"
-// button opens onto in the condensed view. Two things the group's head row carried have to live on the line instead:
-// the clock of the call still in flight, and the "+ N commands" tail the gateway puts on a parallel batch.
-const FLAT_CODE_OPEN = { has: (key) => !state.codeBoxShut.has(key) };
+// A card drawn as ONE stream (the 🌊 beside the 🧠) has no tool groups to condense a run of calls into, so a call is
+// simply its line — purple, led by the tool's emoji, exactly the line the group's "N lines" button opens onto in the
+// condensed view. Two things the group's head row carried have to live on the line instead: the clock of the call
+// still in flight, and the "+ N commands" tail the gateway puts on a parallel batch. What the call returned is still
+// the result box under it, folded like everywhere else: the stream is one flow of what happened, not a wall of output.
 
 function flatCallHtml(l, gkey, live = "") {
   const text = String(l.text ?? "");
@@ -1896,7 +1903,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
   // What it must not lose is BEING A GROUP: a head row that says what the block is, the data-gstate/data-gat the
   // reader's open state is remembered under, and the fold that state opens. Drawn as bare lines it dropped out of
   // the panel's own map of its groups - nothing to click, nothing to remember, nothing for the sweep to find.
-  if (!rows.length) return trimmedGroupHtml(lines, key, anchor, flat, flat ? FLAT_CODE_OPEN : state.codeBoxOpen);
+  if (!rows.length) return trimmedGroupHtml(lines, key, anchor, flat, state.codeBoxOpen);
   // The reader's own choice wins over the caller's default: a rebuild is not the reader closing the block.
   const gkey = toolGroupStateKey(key, lines, anchor);
   const saved = flat ? null : state.toolGroupOpen.get(gkey);
@@ -1944,9 +1951,9 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
   // The index takeStored is ABOUT to take: a result's fold names which of the turn's rows it is, and the pairing
   // above is where that number comes from (the click then reads exactly that row back out of the store).
   const storedRowAt = (tool) => cursors.get(tool) || 0;
-  // Code boxes: folded until opened in the condensed view; in a stream nothing is folded, so they start open and it is
-  // the boxes the reader shut that are remembered.
-  const codeOpenSet = flat ? FLAT_CODE_OPEN : state.codeBoxOpen;
+  // Result boxes: folded until the reader opens one, in the condensed view and in a stream alike; the ones they
+  // opened are remembered by key.
+  const codeOpenSet = state.codeBoxOpen;
   const storedHtml = (got, tool = "", arg = "", boxKey = "", at = null) => {
     const all = String(got.text || "").split(LF);
     const cut = got.truncated && !/characters not shown/.test(got.text || "");
@@ -1955,7 +1962,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
     // display cap exactly like the live stream's, and re-folding a result the reader just opened reads as the
     // panel losing the click.
     const opened = at == null ? null : state.foldRows.get(foldKey(turnId, tool, at));
-    if (opened) return wholeStoredHtml(opened, tool, arg, boxKey, flat ? FLAT_CODE_OPEN : null) + (cut ? `<div class="jl jl-dim jl-note">… this result was cut</div>` : "");
+    if (opened) return wholeStoredHtml(opened, tool, arg, `${boxKey}|whole`) + (cut ? `<div class="jl jl-dim jl-note">… this result was cut</div>` : "");
     const shown = all.slice(0, STORE_LINES);
     const more = all.length - shown.length;
     // The tail is the same affordance the live stream's fold ends with — one renderer, one click — and it is only
@@ -2076,7 +2083,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
         out =
           render(resultLine) +
           render(preview.filter((_, k) => k !== foldAt)) +
-          wholeStoredHtml(opened, seg.tool, arg, boxKey, flat ? FLAT_CODE_OPEN : null);
+          wholeStoredHtml(opened, seg.tool, arg, `${boxKey}|whole`);
       } else if (foldAt >= 0) {
         out =
           render(resultLine) +
@@ -6037,6 +6044,35 @@ function paceThinkBlock(turn, block) {
   return P.feed(lid, String(turn.id), String(block.text ?? ""));
 }
 
+// A SKILL'S RESULT is written like prose and reasoning are. Its lines are fed to the pacer as they join a console,
+// and every row a console draws asks `typedShown` (core/console-format.js's hook) how much of itself it may show, so
+// the lines of a skill type out at the reader's words-a-second inside the result's box — and walk in at their
+// lines-a-second, because the gate in front of this already holds every line. Which results those are is
+// wtType.isPacedTool; every other tool's result is drawn whole, exactly as before.
+//
+// A result's lines arrive together, behind the "↳ tool" header that names it, so the tool a body line belongs to is
+// the nearest header above it in its burst. The header itself, the panel's fold note and the gateway's own notes
+// are not words of the result and are never typed.
+function resultToolOf(lines, line) {
+  for (let k = lines.length - 1; k >= 0; k--) {
+    const l = lines[k];
+    if (!l || l === line) continue;
+    if (l.kind === "tool") return "";
+    if (l.kind !== "tool-out") continue;
+    const m = TOOL_DONE_RE.exec(String(l.text || ""));
+    if (m) return m[1];
+  }
+  return "";
+}
+
+function paceResultLine(lines, line, jobId) {
+  if (!state.typePacer || !globalThis.wtType || line.kind !== "tool-out" || line.lid == null) return;
+  const text = String(line.text ?? "");
+  if (TOOL_DONE_RE.test(text) || consoleFoldNote(text) || /^\s*(?:…|\.\.\.)\s/.test(text)) return;
+  if (!globalThis.wtType.isPacedTool(resultToolOf(lines, line))) return;
+  typedText(line, jobId);
+}
+
 // The words of a line that may be drawn now: the live append asks for them, and every render path asks too, so a
 // repaint mid-paragraph draws the same prefix the console is showing instead of jumping to the wire's whole text.
 function typedText(line, jobId) {
@@ -6053,30 +6089,31 @@ function typedShown(line) {
   if (!P || !line || line.lid == null) return null;
   return P.shownFor(String(line.lid));
 }
+// The console's own row renderer asks the same question for every row it draws (see consoleSetShownFor).
+window.WMApp?.core?.consoleFormat?.setShownFor?.(typedShown);
 
 // The pacer says which lines grew; every pane carrying one gets the new prefix (a pinned turn draws its own copy,
 // so the same line can be in two consoles at once).
 function paintTypedLines(lids) {
   const P = state.typePacer;
   if (!P) return;
+  // A skill types forty lines at once, so a console is asked where its bottom is ONCE per paint — before anything in
+  // it grows — and scrolled once after, instead of once per line (each ask forces a layout of everything above it).
+  const stuck = new Map();
   for (const lid of lids) {
     const shown = P.shownFor(lid);
     if (shown == null) continue;
     for (const el of document.querySelectorAll(`[data-lid="${CSS.escape(String(lid))}"]`)) {
       if (!el.isConnected) continue;
-      el.innerHTML = linkifyText(shown);
       // A reasoning block types inside its thinking block, which follows its own stickiness, not the console's.
       const body = el.closest(".think-body");
-      if (body) {
-        stickThinkBody(body);
-        continue;
-      }
-      const out = el.closest("pre.job-out");
-      if (!out) continue;
-      const stick = consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
-      if (stick) setScroll(out, out.scrollHeight);
+      const out = body ? null : el.closest("pre.job-out");
+      if (out && !stuck.has(out)) stuck.set(out, consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40);
+      el.innerHTML = linkifyText(shown);
+      if (body) stickThinkBody(body);
     }
   }
+  for (const [out, stick] of stuck) if (stick) setScroll(out, out.scrollHeight);
 }
 
 // The turn is over: nothing may be left waiting in either buffer, and the last of a paragraph's words are released
@@ -7084,6 +7121,9 @@ function drawJobLine(evt) {
       // A group that came from a full render has no `_burst`; read its lines back from the DOM so the new call joins
       // the burst the reader is looking at instead of starting a group that shows this line alone.
       const lines = [...(openGroup ? openGroup._burst || groupLines(openGroup) : []), line];
+      // The lines of a skill's result are written, not dropped in: this is where each one is handed to the pacer, BEFORE
+      // the burst is drawn, so its first paint already shows only the words that may be shown.
+      paceResultLine(lines, line, evt.id);
       // A tool chosen by the reader keeps its filter and open body while the burst grows under it.
       const filter = openGroup ? openGroup.dataset.filter || "" : "";
       const bodyEl = openGroup ? openGroup.querySelector(".tgrp-body") : null;
@@ -13394,9 +13434,11 @@ document.addEventListener("click", async (e) => {
     }
     return;
   }
-  // A code box inside a burst: a file's body, folded until the reader asks for it. The fold is remembered by
-  // key (the burst plus the segment), because every rebuild replaces this markup and a box that snapped shut
-  // under the cursor would read as the panel losing the click.
+  // A result box inside a burst: a tool's output, folded until the reader asks for it. The fold is remembered by
+  // key (the burst plus the segment), because every rebuild replaces this markup and a box that snapped shut under
+  // the cursor would read as the panel losing the click. Which book it is written in depends on the box: every box
+  // starts folded and the book holds the ones that were opened; the one drawn open because the reader asked for
+  // it (data-code-inverted — the whole stored text a fold note reads) is the other way round.
   const codeFold = e.target.closest("[data-code-fold]");
   if (codeFold) {
     e.preventDefault();
@@ -13410,11 +13452,15 @@ document.addEventListener("click", async (e) => {
       codeFold.setAttribute("aria-expanded", open ? "true" : "false");
       const caret = codeFold.querySelector(".code-caret");
       if (caret) caret.textContent = open ? "▾" : "▸";
+      const hint = codeFold.querySelector(".code-hint");
+      if (hint) hint.textContent = open ? "click to fold" : "click to read";
       const key = codeFold.dataset.codeKey || "";
-      if (open) state.codeBoxOpen.add(key);
-      else state.codeBoxOpen.delete(key);
+      const book = codeFold.dataset.codeInverted === "1" ? state.codeBoxShut : state.codeBoxOpen;
+      // Boxes that start folded remember the ones opened; boxes that start open remember the ones shut.
+      if (open !== (codeFold.dataset.codeInverted === "1")) book.add(key);
+      else book.delete(key);
       // A long-lived tab would otherwise keep one entry per box it ever opened.
-      while (state.codeBoxOpen.size > 500) state.codeBoxOpen.delete(state.codeBoxOpen.values().next().value);
+      while (book.size > 500) book.delete(book.values().next().value);
     }
     return;
   }

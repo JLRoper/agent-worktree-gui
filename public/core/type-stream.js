@@ -3,7 +3,8 @@
 // A turn's prose reaches the browser as coalesced frames (lib/jobs.js TEXT_FLUSH_MS, 120 ms) and a fast model
 // fills each one with several words, so the console line jumps a phrase at a time. Tool results and reasoning
 // blocks arrive as whole lines instead. Both are honest — they are what the wire sent — but neither reads like an
-// agent writing, and the reader asked to watch it flow.
+// agent writing, and the reader asked to watch it flow. The result of a skill is the one tool result that gets the
+// same treatment as the prose and the reasoning: it is the longest thing a console is handed at once.
 //
 // Two mechanisms, deliberately separate, because they answer two different questions:
 //
@@ -11,7 +12,8 @@
 //     new text and returns the prefix that may be drawn NOW; the rest leaves on the pacer's own clock. What is
 //     drawn is always an exact prefix of the wire's text cut on a word boundary, so a copy of a half-typed line
 //     copies what is on screen and the next frame simply extends it. Rate 0 keeps nothing: every frame is drawn
-//     whole, exactly as before this existed.
+//     whole, exactly as before this existed. Three kinds of line are fed to it: a paragraph of the agent's own
+//     words, a reasoning block, and the lines of a skill's result (isPacedTool below).
 //   * the GATE holds WHOLE LINES that have just joined a console and releases them one at a time. That is the
 //     line-by-line setting: a burst of tool lines and results walks in instead of landing in one paint. A growth
 //     frame for a line the gate is still holding updates the held copy instead of jumping the queue, and a held
@@ -45,6 +47,16 @@
     if (!Number.isFinite(n) || n <= 0) return 0;
     return Math.min(MAX_LINES, n);
   };
+
+  // WHICH TOOL RESULTS ARE WRITTEN, NOT DROPPED IN. Prose and reasoning type out through the pacer; so does the
+  // result of a SKILL. It is the biggest block of text a run hands a console in one go — a SKILL.md is the card's
+  // whole 40-line, 400-character head arriving in a single paint — and it is the one result a reader watches arrive,
+  // so the lines of skill_view / skills_list / skill_manage are fed to the pacer as they join the console and type
+  // out at the same words-a-second as everything else (and walk in at the same lines-a-second: the gate already
+  // holds every line). Every other tool's result is still drawn whole, exactly as before; widening this is this one
+  // predicate and nothing else.
+  const PACED_TOOL_RE = /^skill/i;
+  const isPacedTool = (name) => PACED_TOOL_RE.test(String(name ?? "").trim());
 
   const isSpace = (c) => c === " " || c === "\n" || c === "\r" || c === "\t" || c === "\f" || c === "\v" || c === "\u00a0";
 
@@ -378,5 +390,5 @@
     };
   }
 
-  root.wtType = { DEFAULT_WORDS, MAX_WORDS, MAX_LINES, MIN_TICK_MS, wordsIn, advance, createPacer, createLineGate, clampWords, clampLines };
+  root.wtType = { DEFAULT_WORDS, MAX_WORDS, MAX_LINES, MIN_TICK_MS, wordsIn, advance, createPacer, createLineGate, clampWords, clampLines, isPacedTool };
 })(globalThis);

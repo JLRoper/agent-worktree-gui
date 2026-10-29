@@ -415,16 +415,22 @@ Semantics, all verified against real runs:
 - **Output** is the run's event stream: each tool call with its argument preview, the assistant's text
   as it arrives, approval requests, and a closing line with tokens and exit. Tool results are the
   gateway's redacted, 500-character preview (the full payload stays in the session transcript).
-- **A file is drawn as a file, not as lines.** A unified diff in a tool's output becomes one framed
-  window per `@@` hunk: the `diff --git` / `--- ` / `+++ ` headers and the hunk line ride as labels, and
-  the body is two sides — the before lines on the left (yellow where a line was modified, red where it
-  was purely removed) and the after lines on the right in green, with unchanged context dim across
-  both. Any other file body (`read_file`, `write_file`, a shell `cat` / `head` / `sed -n`) folds into a
-  code box whose header names the file and counts its lines, so a reader can see that a file was
-  printed, and which one, without reading it. Both wrap, so a 300-character line never forces the
-  console sideways. The classification is made at render time from a line's own text and only ever
-  looks at a tool's own output: a call line, the agent's sentences, a shell transcript, an `ls` listing
-  and the gateway's own notes stay plain lines, in the colours they always had.
+- **Every tool result is one box, folded until you open it.** Whatever a call returned — a shell
+  transcript, a search, a file, a skill, a diff — sits in a single bordered box under its `↳ tool` line,
+  with a header that names what is inside (`terminal output`, `read_file · package.json`) and counts
+  its lines. A click opens it to its full size and a second click shuts it; the choice survives a
+  repaint. A unified diff is drawn inside its box as one framed window per `@@` hunk: the `diff --git` /
+  `--- ` / `+++ ` headers and the hunk line ride as labels, and the body is two sides — the after lines on
+  the left in green and the before lines on the right (yellow where a line was modified, red where it
+  was purely removed), with unchanged context dim across both — and its header says what it adds and
+  removes (`+3 −2`), so a shut box still says how big the change was. Everything wraps, so a
+  300-character line never forces the console sideways. The result's own `↳ tool · 3.27s` line and the
+  notes under it (`… result truncated by the gateway`, `… 214 lines hidden — click to read`) stay outside
+  the box. The classification is made at render time from a line's own text and only ever looks at a
+  tool's own output: a call line, the agent's sentences and the panel's own notes are never boxed.
+- **A skill is written, not dropped in.** The lines of a skill's result (`skill_view`, `skills_list`,
+  `skill_manage` — the longest thing a run hands the console at once) type out at Settings → Display →
+  **Stream display speed**, like the agent's prose and its reasoning, and walk in at **Stream line rate**.
 - **Cancel** posts `/v1/runs/<id>/stop`; stopping is cooperative, so the card settles as `cancelled`
   when the turn actually ends.
 - **A run can outlive the panel.** Restarting the panel marks in-flight cards `interrupted` and keeps

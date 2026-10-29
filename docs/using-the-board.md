@@ -418,7 +418,7 @@ releases it.
 | Thread name | The Hermes session id (or your label for it) — the thing a reply continues. |
 | `📌` | Pin this card: it keeps its screen position while cards above it grow. One pin at a time; clicking again releases it, and clearing the thread releases it too. |
 | `🧠` | Show this session's reasoning (see below). |
-| `🌊` | Draw this session as **one stream**: what the agent thought (while `🧠` is on), said, called and got back, in the order it happened, with nothing folded. Per session, remembered in this browser; off, the card is the separate thinking block and the condensed tool bursts it always was. |
+| `🌊` | Draw this session as **one stream**: what the agent thought (while `🧠` is on), said, called and got back, in the order it happened, with no burst to open — each result is still the shut box it is everywhere else. Per session, remembered in this browser; off, the card is the separate thinking block and the condensed tool bursts it always was. |
 | `✎` | Rename the session **in the panel only**. The Hermes thread id never changes. |
 | `⤢` | Maximize the card to the window (`Esc` closes). |
 | `✕` | Forget this session: the first click arms it (`✕ sure?`), the second removes its turns and transcript from the panel. The worktree it made stays on disk. |
@@ -477,12 +477,24 @@ pairs with its own results, so a second run of the same tool later in the turn s
 first run's. A call the store has nothing for says `no output recorded for this call` — or `no output in the session
 store yet` while the turn is still running.
 
+**Every tool result is one box, folded.** Whatever a call returned — a shell transcript, a search, a file, a skill, a
+diff — sits in a single bordered box under its `↳ tool · 3.27s` line, shut until you open it. The header names what is
+inside (`terminal output`, `read_file · package.json`, `skill_view output`), counts its lines and says `click to
+read`; a diff's header also says what it adds and removes (`patch · …/package.json +3 −2`), so a shut box already tells
+you how big the change was. A click opens the box to its **full size** — every line, wrapped, no inner scroll — and
+the same click shuts it again. The box you opened stays open through a repaint, a new line arriving or a rebuilt
+burst; the `… result truncated` / `… N lines hidden — click to read` notes stay outside it, under it, so a shut box
+still says when there is more. A diff's framed windows (one per hunk) are drawn inside the box, so the box is the
+only frame. The one-stream view (🌊) draws the same boxes, shut the same way. What a block's copy button copies is
+what it shows, so the output of a box you have not opened is not in the copy.
+
 A long result is folded by the panel itself: the card keeps its **first 40 lines** (and shortens any line past 400
 characters), because a whole 5,000-line read in the console would push every other line of the card out of its
 600-line ring buffer. The fold ends with a sentence you can click — `… 214 lines hidden — click to read`, or
 `… 12 lines hidden, 3 lines shortened — click to read` when the head wore the line cap too. The click reads **that
-one result** back out of the session store, uncapped, and draws the whole thing in place; nothing is added to the
-console's own lines, so the card stays as long as it was. A store with no copy of the result says so instead of
+one result** back out of the session store, uncapped, and draws the whole thing in place — in a second box, `… · full
+result`, that is drawn **open** because you asked for it (shutting it is remembered the same way); nothing is added to
+the console's own lines, so the card stays as long as it was. A store with no copy of the result says so instead of
 inventing output: `… the session store has no copy of this result — the lines above are all of it here`. Both
 truncation notes are honest about which cap cut: `… result truncated by the gateway` is the gateway's preview cap,
 the `… N lines hidden — click to read` sentence is this panel's fold, and each only appears when its own cap really
@@ -490,9 +502,11 @@ dropped something.
 
 **How fast it fills in** is yours to set, because the wire's pace is not a reading pace: prose arrives in coalesced
 bursts, and a burst of tool lines lands all at once. Settings → Display → **Stream display speed** types a paragraph —
-and a 🧠 reasoning block — out at that many words a second, and **Stream line rate** walks whole new lines into the
-console one at a time. A reasoning block only types the first time the panel sees it on a live turn, so opening an
-old card or reloading draws history whole; both settings
+a 🧠 reasoning block, and the result of a **skill** (`skill_view`, `skills_list`, `skill_manage`: the longest thing a
+run hands the console in one go, typed out line by line inside its box) — out at that many words a second, and
+**Stream line rate** walks whole new lines into the console one at a time (a skill's lines included, like every
+other line). Every other tool's result is drawn whole. A reasoning block or a skill's result only types the first time
+the panel sees it on a live turn, so opening an old card or reloading draws history whole; both settings
 are `0` = off, which is the console filling exactly as the run sent it, and both are saved in this browser. A line
 still held back is not in the console yet, so a repaint in the middle of one (a scan, a pinned turn's second copy)
 shows the transcript as far as it has got — and a turn that settles, or a tab that goes to the background, releases
@@ -628,7 +642,7 @@ setting):
 | Display | Page zoom | `Ctrl+` / `Ctrl-` / `Ctrl+0` (reset), or the `−`/`+` buttons here. `Ctrl+wheel` zooms the page too, except over a console, where it sizes that console's text. |
 | Display | Panel font | Headings, labels, buttons and the text you type. |
 | Display | Terminal font · Console size · Console weight | The console and the tool lines inside it. |
-| Display | Stream display speed | Words a second at which an agent's own prose and reasoning blocks type out, 0–200 (`off`/10/20/40/80 presets, 40 by default — what a long answer here streams at). `0` is off — the console fills exactly as the run sent it. Whatever is still queued is released when the turn settles. |
+| Display | Stream display speed | Words a second at which an agent's own prose, its reasoning blocks and the results of the skills it loads type out, 0–200 (`off`/10/20/40/80 presets, 40 by default — what a long answer here streams at). `0` is off — the console fills exactly as the run sent it. Whatever is still queued is released when the turn settles. |
 | Display | Stream line rate | Lines a second at which whole new lines join a console, 0–40 (`off`/2/4/8/16 presets). A tool burst walks in instead of landing in one paint; a held line is not in the console's record yet, and a settled turn flushes what is left. `0` is off. |
 | Display | Panel contrast | How far apart the layered surfaces sit: 0% flattens them, 100% pushes the page to near-black and lifts the panels. The swatch strip below previews the layers. |
 | Display | Add-agent bar | The green of the **+** bar in a worktree's agents, 0% (deep and quiet) to 100% (vivid). Lightness and saturation move together; the swatch below the row is the bar itself, so the preview cannot disagree with the button. |
