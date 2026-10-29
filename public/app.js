@@ -12008,6 +12008,8 @@ function applySnapshot(data) {
   // sections on screen are still valid and a full re-render would be pure cost.
   const beforeSig = [...state.projects.keys()].sort().join("|");
   state.settings = data.settings || state.settings;
+  // Another tab (or Settings, or a hand edit and /api/reload) can end — or restart — first-run setup.
+  paintSetup();
   // The panel's own two folders and their sizes. A snapshot is the only thing that carries them, so the Settings
   // row repaints from here as well as from its own presses — the clean's answer, a boot that migrated, a job event.
   if (data.paths) {
@@ -15154,6 +15156,110 @@ async function saveProjectsSetting() {
   }
 }
 
+// ---- first-run setup ------------------------------------------------------------------------------
+// Gated on one fact the server owns: config.json names no scan roots (settings.needsSetup). While it holds, this
+// screen stands in place of the board; once a folder is saved it never shows again, and Settings > Projects &
+// Folders is where roots change. Each folder is previewed before it is saved, with the same "a repo is a directory
+// with a .git directory in it" rule discovery uses, so the count here is the board the reader will get.
+const setupState = { roots: [], previews: new Map(), saving: false };
+
+function paintSetup() {
+  const on = Boolean(state.settings?.needsSetup);
+  $("setup")?.classList.toggle("hidden", !on);
+  document.querySelector("main")?.classList.toggle("hidden", on);
+  if (!on) return;
+  $("setup-roots").innerHTML = setupState.roots
+    .map((root, i) => {
+      const p = setupState.previews.get(root);
+      const n = p?.repos?.length || 0;
+      const [tone, text] = !p
+        ? ["", "checking…"]
+        : p.error
+          ? ["bad", p.error]
+          : !p.exists
+            ? ["bad", "not a folder on this machine"]
+            : n
+              ? ["ok", `${n} git repo${n === 1 ? "" : "s"}`]
+              : ["warn", "no git repos directly inside"];
+      return `<li class="setup-root"><span class="setup-root-path">${esc(root)}</span><span class="setup-root-count ${tone}" title="${esc((p?.repos || []).join(", "))}">${esc(text)}</span><button type="button" data-setup-remove="${i}" title="remove this folder" aria-label="remove ${esc(root)}">✕</button></li>`;
+    })
+    .join("");
+  // The server refuses a folder that does not exist, so the button waits until every folder listed is a real one.
+  const ready = setupState.roots.length > 0 && setupState.roots.every((r) => setupState.previews.get(r)?.exists);
+  $("setup-save").disabled = setupState.saving || !ready;
+}
+
+function setupStatus(text, bad = false) {
+  const el = $("setup-status");
+  el.textContent = text;
+  el.classList.toggle("bad", bad);
+}
+
+async function previewSetupRoot(root) {
+  try {
+    const r = await apiFetch(`/api/settings/scan-preview?root=${encodeURIComponent(root)}`);
+    const d = await r.json();
+    setupState.previews.set(root, r.ok ? d : { error: d.error || `HTTP ${r.status}` });
+  } catch (e) {
+    setupState.previews.set(root, { error: e.message });
+  }
+  paintSetup();
+}
+
+$("setup-form")?.addEventListener("submit", (e) => {
+  e.preventDefault();
+  // "Copy as path" on Windows wraps the path in quotes; a trailing slash is the same folder.
+  const root = $("setup-path").value.trim().replace(/^"(.*)"$/, "$1").trim().replace(/(.)[\\/]+$/, "$1");
+  if (!root) return;
+  $("setup-path").value = "";
+  setupStatus("");
+  if (!setupState.roots.includes(root)) {
+    setupState.roots.push(root);
+    void previewSetupRoot(root);
+  }
+  paintSetup();
+});
+
+$("setup-roots")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-setup-remove]");
+  if (!btn) return;
+  const [root] = setupState.roots.splice(Number(btn.dataset.setupRemove), 1);
+  setupState.previews.delete(root);
+  paintSetup();
+});
+
+$("setup-save")?.addEventListener("click", async () => {
+  setupState.saving = true;
+  setupStatus("saving…");
+  paintSetup();
+  try {
+    const r = await apiFetch("/api/settings/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scanRoots: setupState.roots }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      setupStatus(d.error || `HTTP ${r.status}`, true);
+      return;
+    }
+    state.scanRoots = d.scanRoots;
+    state.savedScanRoots = [...d.scanRoots];
+    state.settings = { ...(state.settings || {}), needsSetup: false };
+    setupStatus("");
+    // The server is already sweeping the new roots and broadcasts the board when the sweep lands. No resync here: one
+    // now would paint the empty pre-sweep board as "No git repos found", right after the preview counted them.
+    $("projects").innerHTML = '<p class="empty">Scanning your folders…</p>';
+    paintSetup();
+    paintConfigLine();
+  } catch (e) {
+    setupStatus(e.message, true);
+  } finally {
+    setupState.saving = false;
+    paintSetup();
+  }
+});
+
 $("btn-settings")?.addEventListener("click", (e) => {
   e.stopPropagation();
   toggleSettings();
@@ -15561,6 +15667,7 @@ function applySettings(settings) {
   if (!settings) return;
   state.settings = { ...(state.settings || {}), ...settings };
   paintConfigLine();
+  paintSetup();
   const scanMode = $("scan-mode");
   if (scanMode) scanMode.value = state.settings.scanMode === "visible" ? "visible" : "all";
   paintRemotePolicy();
@@ -15866,6 +15973,8 @@ startVisibilityReporting();
     $("f-worktree").textContent = cfg.worktreeSeconds;
     $("f-slow").textContent = cfg.slowSeconds;
     paintConfigLine();
+    paintSetup();
+    if (cfg.needsSetup) $("setup-path")?.focus();
     // Deliberately no seeding of state.projects from cfg.projects here: before discovery has
     // run that list is only the config fallback, and a project seeded that way can never be
     // removed by a later snapshot (heroes-js showed up forever this way on a machine that does

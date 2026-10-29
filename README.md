@@ -19,8 +19,8 @@ Then open **http://127.0.0.1:7331**. The page itself — every control, chip and
 verification section, and what each failure mode means. The repo is private, so hand an agent on the
 other machine this:
 
-> Clone `JLRoper/agent-worktree-gui` with `gh` (it is private), follow `SETUP.md`, set `scanRoots` to
-> where my repos live, verify it, and give me the URL to open.
+> Clone `JLRoper/agent-worktree-gui` with `gh` (it is private), follow `SETUP.md`, verify it, and give
+> me the URL to open.
 
 Make the repo public and the raw URL works by itself:
 https://raw.githubusercontent.com/JLRoper/agent-worktree-gui/main/SETUP.md
@@ -33,8 +33,11 @@ By hand — Node 22.5+ and nothing else, no dependencies, no build step:
     ./setup.sh           # macOS/Linux: same checks
     start.cmd            # or: node server.js
 
-Edit `config.json` first: `scanRoots` is where your repos live (every git repo under it is
-monitored), plus `host`/`port`. If `config.json` is missing the panel starts on defaults and says so.
+The first time you open the board it asks where your repos live, previews the git repos it finds in each
+folder, and saves your choice to `config.json` as `scanRoots` (every git repo directly under one is
+monitored). It asks whenever `scanRoots` is empty or missing, and never once it is set — Settings › Projects
+& Folders changes it after that. `host`/`port` are still edited in `config.json`; if the file is missing the
+panel starts on defaults and says so.
 
 The two gateway-connected bits are Windows-flavoured and degrade elsewhere:
 `API_SERVER_KEY` is read from the process environment, else `$HERMES_HOME/.env`; the `:port` /
@@ -184,7 +187,7 @@ the project's remote and confirm the mapping it proposes. The tokens, the preced
 and the landing doctrine are in [docs/hosts.md](docs/hosts.md).
 
 **Projects are grouped under their folder.** Each scan root is an accordion
-(`C:\ProjectDevelopment\` by default) holding every project that is actually inside it; a project
+(for example `C:\Projects\`) holding every project that is actually inside it; a project
 that lives outside every configured root — an explicit `projects[]` entry can point anywhere —
 gets its own sibling accordion for its parent folder, so nothing is ever filed under a folder it
 is not in. The folder header carries the aggregate chips (projects, worktrees, unmerged, dirty,
@@ -954,7 +957,7 @@ Watches without a deadline, and finished ones, say so instead.
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `port` | 7331 | HTTP port |
-| `scanRoots` | `["C:/ProjectDevelopment"]` | directories scanned for git repos; every repo found becomes a monitored project |
+| `scanRoots` | none (unset) | directories scanned for git repos; every repo found becomes a monitored project |
 | `host` | `127.0.0.1` | bind address. Loopback keeps the board to this machine. `0.0.0.0` makes it reachable from the LAN or a tailnet — set `PANEL_TOKEN` in the same breath, because this panel spawns processes and can write files |
 | `PANEL_TOKEN` | *(unset)* | **an environment variable, not a config key.** The shared secret for writes from **other** machines; loopback is never challenged, so a local browser needs nothing. With it missing (or empty) every off-machine write is refused — the door closes, it does not open. With one, a remote browser authenticates once by opening `http://<host>:7331/?token=…` (the client remembers it and sends `x-panel-token` from then on). Reads — `/api/state`, `/api/stream`, the static files — stay open to anyone who can reach the port, so keep it on a LAN or a tailnet and never a public network |
 | `token` | — | *ignored.* A leftover `token` key in `config.json` is logged and then disregarded: that file is tracked by git, so a secret in it would be a secret in the repository. Use `PANEL_TOKEN` |

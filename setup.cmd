@@ -22,9 +22,9 @@ where hermes >nul 2>nul
 if errorlevel 1 (echo [warn] hermes not on PATH -- monitoring works, spawning agents will not) else (echo [ok]   hermes)
 
 if exist config.json (
-  echo [ok]   config.json present -- check "scanRoots" points at where your repos live
+  echo [ok]   config.json present -- if it names no "scanRoots", the board asks where your repos live
 ) else (
-  echo [info] no config.json -- the panel will start on defaults ^(scanRoots = the parent folder^)
+  echo [info] no config.json -- the panel starts on defaults and the board asks where your repos live
 )
 
 echo.

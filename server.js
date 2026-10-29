@@ -15,7 +15,7 @@ import { Pool } from "./lib/pool.js";
 import { worktreeList } from "./lib/project.js";
 import { Store } from "./lib/store.js";
 import { Scheduler } from "./lib/scheduler.js";
-import { ProjectRegistry } from "./lib/projects.js";
+import { ProjectRegistry, reposUnder } from "./lib/projects.js";
 // isLiveJobStatus is main's: the 429 hold asks whether a card's run is live before it re-arms the timer.
 // previewRequest is not: this commit moves both previewRequest call sites into lib/features/spawn.js, so
 // server.js has no use for the name any more — the import keeps their new name and drops the moved one.
@@ -145,9 +145,12 @@ async function loadConfig() {
     cfg = JSON.parse(await readFile(CONFIG_PATH, "utf8"));
   } catch (e) {
     log(`no readable config.json (${String((e && e.message) || e)}) — using defaults`);
-    // Default to the folder the panel itself sits in, so a bare clone is immediately useful.
-    cfg = { scanRoots: [path.dirname(HERE)] };
+    // No scan roots: the page opens on first-run setup and asks where the repos live, rather than guessing a folder.
+    // The first save writes the file (patchPanelConfig starts from an empty object when there is none).
+    cfg = {};
   }
+  // Where the repos live. Empty is the first-run state (needsSetup), and only an entry the reader chose ends it.
+  cfg.scanRoots = Array.isArray(cfg.scanRoots) ? cfg.scanRoots.map((r) => String(r || "").trim()).filter(Boolean) : [];
   cfg.port = Number(cfg.port) || 7331;
   // Loopback by default. This panel can now spawn agents, so binding it to the LAN
   // would be unauthenticated remote code execution.
@@ -701,6 +704,8 @@ setTimeout(() => {
 }, 4_000).unref?.();
 const settingsOut = () => ({
   version: VERSION,
+  // First-run setup is gated on this and nothing else: no scan roots in config.json means the page asks for them.
+  needsSetup: !config.scanRoots.length,
   refreshSeconds: config.refreshSeconds,
   worktreeSeconds: config.worktreeSeconds,
   midSeconds: config.midSeconds,
@@ -1695,10 +1700,20 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/settings/projects" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
-      const scanRoots = Array.isArray(body.scanRoots) ? body.scanRoots.filter((r) => String(r || "").trim()) : [];
+      const given = Array.isArray(body.scanRoots) ? body.scanRoots.map((r) => String(r || "").trim()).filter(Boolean) : [];
+      const scanRoots = [...new Set(given)];
       if (!scanRoots.length) return sendJson(res, 400, { error: "scanRoots cannot be empty" });
+      // A root that is not a directory on this machine would save, end first-run setup, and then scan nothing.
+      const missing = [];
+      for (const root of scanRoots) {
+        const info = await stat(root).catch(() => null);
+        if (!info?.isDirectory()) missing.push(root);
+      }
+      if (missing.length) {
+        return sendJson(res, 400, { error: `not a folder on this machine: ${missing.join(", ")}`, missing });
+      }
       try {
         await patchPanelConfig({ scanRoots });
         config.scanRoots = scanRoots;
@@ -1719,6 +1734,22 @@ const server = createServer(async (req, res) => {
         });
       } catch (e) {
         return sendJson(res, 500, { error: String((e && e.message) || e) });
+      }
+    }
+
+    // What one candidate scan root holds, before it is saved: the first-run screen shows "found 12 repos" per folder
+    // so the reader can tell a right folder from a wrong one. It lists directory names, so it is gated like a write.
+    if (route === "/api/settings/scan-preview" && req.method === "GET") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const root = String(url.searchParams.get("root") || "").trim();
+      if (!root) return sendJson(res, 400, { error: "root is required" });
+      const info = await stat(root).catch(() => null);
+      if (!info?.isDirectory()) return sendJson(res, 200, { root, exists: false, repos: [] });
+      try {
+        const { repos } = await reposUnder(root);
+        return sendJson(res, 200, { root, exists: true, repos: repos.map((r) => r.name).sort((a, b) => a.localeCompare(b)) });
+      } catch (e) {
+        return sendJson(res, 200, { root, exists: true, repos: [], error: `cannot read: ${String((e && e.message) || e)}` });
       }
     }
 

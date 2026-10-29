@@ -19,8 +19,8 @@ If it is ever made private again the raw URL stops working and the agent needs `
 (`gh repo edit JLRoper/agent-worktree-gui --visibility public` is the way back):
 
 > Clone `JLRoper/agent-worktree-gui` with `gh` (it is private), then follow `SETUP.md` inside the
-> clone: set `scanRoots` = `TODO: where your repos live`, start it, run the verification steps in
-> section 5, and tell me the URL to open.
+> clone: start it, run the verification steps in section 5, and tell me the URL to open — the board asks
+> me where my repos live the first time I open it.
 
 One thing a clone does **not** carry: the panel's own operating skill lives in the **Hermes profile's
 skills directory**, not in this repo — on the author's machine that is
@@ -69,14 +69,16 @@ whose own commits carry no version bump — see `docs/versioning.md`):
 
 ## 3. Configure — one file
 
-Edit `config.json`. Only `scanRoots` normally matters:
+Nothing has to be edited before the first start: while `config.json` names no `scanRoots`, the board opens
+on a setup screen that asks for the folder(s) your repos live in, shows how many git repos each holds, and
+saves them. The rest of `config.json` is optional:
 
 | key | what to set |
 | --- | --- |
-| `scanRoots` | the directory your repos live in. Every git repo directly under it becomes a project. Defaults to the folder the panel sits in. |
+| `scanRoots` | written by first-run setup. The directories your repos live in; every git repo directly under one becomes a project. Empty or missing means the setup screen shows; Settings › Projects & Folders edits it afterwards. |
 | `port`, `host` | bind address. `127.0.0.1` keeps it local. `0.0.0.0` puts the board on the LAN or tailnet: a remote browser authenticates once by opening `http://<this-machine>:7331/?token=…`, but only writes are gated — reads stay open to anyone who can reach the port, so never expose it to a public network. |
 | `PANEL_TOKEN` (environment, not a key here) | the secret behind `?token=…`. Set it in the environment the panel inherits — `setx PANEL_TOKEN "<43 random chars>"` on Windows, then restart the panel — and keep it out of `config.json`, which is tracked by git. With it unset, writes from other machines are refused. |
-| `projects` | optional per-repo overrides: `remote` name, `mainBranch`. The PR column does **not** come from here — it comes from the project's host record (`logs/hosts.json`, `docs/hosts.md`), which is also where a project that is not on github.com gets its host |
+| `projects` | optional per-repo overrides, matched by repo `name`: `remote` name, `mainBranch`. An entry needs a `path` only for a repo outside every scan root. The PR column does **not** come from here — it comes from the project's host record (`logs/hosts.json`, `docs/hosts.md`), which is also where a project that is not on github.com gets its host |
 | `hermesBin`, `defaultCwd` | optional; auto-detected. |
 
 No `config.json`? The panel starts on defaults and logs that it did, so a bare `node server.js`
@@ -177,6 +179,8 @@ Then open **http://127.0.0.1:7331**.
 ## 6. Failure modes and what they mean
 
 - **`EADDRINUSE` on start** — something already has the port. `stop-background.cmd`, or change `port`.
+- **The setup screen keeps coming back** — `scanRoots` in `config.json` is empty or missing; the board
+  asks until it names a folder. Check that the panel can write `config.json` (the path is in Settings).
 - **No projects listed** — `scanRoots` is wrong, or the directories in it are not git repos. Non-git
   directories are named in the footer as "skipped" rather than hidden.
 - **Spawn refused: "has no commits yet (unborn HEAD)"** — `git worktree add` needs a HEAD to branch

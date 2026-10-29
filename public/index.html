@@ -440,6 +440,24 @@
 
   <div id="banner" class="banner hidden"></div>
 
+  <!-- First-run setup. Shown in place of the board while config.json names no scan roots (settings.needsSetup),
+       and never otherwise: once a folder is saved, Settings > Projects & Folders is where roots change. -->
+  <section id="setup" class="setup hidden" aria-labelledby="setup-title">
+    <h2 id="setup-title">Where do your repos live?</h2>
+    <p class="setup-lede">Pick the folder (or folders) that hold your git repositories. Every repo directly inside one
+      becomes a project on the board. This is saved to <code>config.json</code> as <code>scanRoots</code>, and you can
+      change it later in Settings.</p>
+    <form id="setup-form" class="setup-add" autocomplete="off">
+      <input id="setup-path" type="text" placeholder="full path, e.g. C:\Users\you\Projects or /home/you/code" spellcheck="false" aria-label="folder path" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" />
+      <button id="setup-add" type="submit">Add folder</button>
+    </form>
+    <ul id="setup-roots" class="setup-roots"></ul>
+    <div class="setup-foot">
+      <button id="setup-save" type="button" class="primary" disabled>Start scanning</button>
+      <span id="setup-status" class="setup-status" role="status"></span>
+    </div>
+  </section>
+
   <main>
     <!-- Spawn cards waiting for a click: a worker the assistant proposed and nothing has started yet. It sits
          at the top of the board on purpose — an unclicked card used to exist only as a number on the header

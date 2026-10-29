@@ -334,7 +334,8 @@ test("the boot backfill writes down every tree it finds, under the name it was f
 });
 
 test("the boot backfill seeds the fleet from `git worktree list`, before any row is scanned", async () => {
-  // A panel that cannot discover anything — no scan root — over a discovery cache naming the repo. The only
+  // A panel that cannot discover anything — a scan root with no repo in it — over a discovery cache naming the repo.
+  // (No scan root at all is first-run setup, which ignores the cache on purpose.) The only
   // listing that can answer for these trees is the boot backfill's own, which is what "seeded at boot" means:
   // the record exists before the board has a row for the tree, so no run can ever find it unrecorded.
   const dir = mkdtempSync(path.join(tmpdir(), "wtgui-naming-boot-"));
@@ -345,8 +346,10 @@ test("the boot backfill seeds the fleet from `git worktree list`, before any row
     JSON.stringify({ savedAt: new Date().toISOString(), projects: [{ name: "demo-repo", path: repo() }] }),
     "utf8",
   );
+  const emptyRoot = path.join(dir, "no-repos-here");
+  mkdirSync(emptyRoot, { recursive: true });
   const boot = await startPanel({
-    config: { scanRoots: [], jobsFile: path.join(logs, "jobs.json"), projectsCacheFile: path.join(logs, "projects.json") },
+    config: { scanRoots: [emptyRoot], jobsFile: path.join(logs, "jobs.json"), projectsCacheFile: path.join(logs, "projects.json") },
   });
   try {
     const file = path.join(logs, "tree-names.json");
