@@ -114,7 +114,10 @@ test("a project with no mapping gets NO url, and a sentence naming the file to e
   const link = linkFor(seed, { name: "JIRA-cleanup-edp-epics", mainBranch: "master" }, "branch", { branch: "master" });
   assert.equal(link.url, null);
   assert.match(link.why, /has no host mapping/);
-  assert.match(link.why, /logs\/hosts\.json/);
+  assert.match(link.why, /hosts\.json/);
+  // The file lives in the panel's state folder now (lib/paths.js), never under the checkout's logs/: a sentence that
+  // still sent the reader to logs/ would send them to a folder the panel no longer reads.
+  assert.doesNotMatch(link.why, /logs\//);
   // The PR link is the same answer: never a github.com guess for a project nobody mapped.
   assert.equal(linkFor(seed, { name: "JIRA-cleanup-edp-epics" }, "pull", { pr: 3 }).url, null);
   assert.equal(linkFor(seed, { name: "JIRA-cleanup-edp-epics" }, "pull", { pr: 3 }).url === null, true);
