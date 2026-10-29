@@ -235,6 +235,210 @@ test("a tree nobody recorded is never renamed, and nothing is decided before the
 });
 
 // =============================================================================================
+// the rule, stated three ways: ONE name for the session that first runs in a new tree, NOTHING for
+// the sessions that follow it, and nothing at all for a tree whose name predates the lock
+// =============================================================================================
+
+// A tree whose directory and branch this harness models, so "untouched" can be asserted rather than assumed: the
+// fake rename below is the only thing that may move them, and the only thing counted.
+function modelledTree(name, tag) {
+  return { path: `/repo/demo/.worktrees/${name}-${tag}`, branch: `wtgui/${name}-${tag}`, tag };
+}
+
+// The same slug rule the panel's rename uses (server.js `worktreeDirName`), so the fake rename lands on the same
+// directory name a real one would and a second rename would be visible as a second move.
+function dirNameFor(name, tag) {
+  const slug = String(name || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/, "");
+  return slug ? `${slug}-${tag}` : "";
+}
+
+// A rename that behaves like the real one: it moves the modelled tree and settles the ledger record. Anything the
+// policy refuses therefore shows up twice — no rename counted, and the tree exactly where it was.
+function renamingHarness({ ledger, tree, session, thread, renames }) {
+  return namingHarness({
+    ledger,
+    rename: async ({ name }) => {
+      renames.count += 1;
+      // The git work is not instant, so a second event of the same turn lands inside the first attempt.
+      await sleep(20);
+      const dirName = dirNameFor(name, tree.tag);
+      tree.path = `/repo/demo/.worktrees/${dirName}`;
+      tree.branch = `wtgui/${dirName}`;
+      ledger.settle(treeKey({ project: "demo", path: tree.path }), {
+        name: dirName,
+        dir: dirName,
+        branch: tree.branch,
+        tag: tree.tag,
+        by: `run ${session} (${thread})`,
+        how: `Hermes named the session “${name}”`,
+        at: new Date().toISOString(),
+        moved: true,
+      });
+      return { ok: true, moved: true };
+    },
+  });
+}
+
+test("the first session in a new tree names it once, and the lock it writes outlives the panel", async () => {
+  const { dir, ledger } = freshLedger();
+  const session = "sess-first";
+  const thread = "thread-first";
+  const tree = modelledTree("land-every-piece-of-unla", "adc74e");
+  const key = treeKey({ project: "demo", path: tree.path });
+  // What lib/jobs.js writes before `git worktree add`: this session, and only this session, may name the tree.
+  ledger.claimCut(key, {
+    name: path.basename(tree.path),
+    dir: path.basename(tree.path),
+    branch: tree.branch,
+    tag: tree.tag,
+    by: `run ${session} (${thread})`,
+    how: "cut by this panel — its one name is the run's to give",
+    at: new Date().toISOString(),
+    cutRun: session,
+    cutThread: thread,
+  });
+
+  const renames = { count: 0 };
+  const { naming, calls } = renamingHarness({ ledger, tree, session, thread, renames });
+  const base = { id: session, thread, worktreePath: tree.path, title: "Fix the export" };
+  // Two events on one tick — the running one carrying the first title, the done one following it — then one more
+  // from the same session. One tree, one name.
+  await Promise.all([
+    naming.consider({ ...base, status: "running" }),
+    naming.consider({ ...base, status: "done" }),
+  ]);
+  await naming.consider({ ...base, status: "failed", title: "A later title from the same session" });
+  assert.equal(renames.count, 1, "the first session named the tree exactly once");
+  assert.equal(calls.length, 1);
+
+  // The lock, read off the record the rename wrote: WHO named it (the session id, not a path) and WHEN.
+  const rec = ledger.get(key);
+  assert.equal(rec.cut, false, "settled — the tree is nobody's to cut again");
+  assert.equal(rec.by, `run ${session} (${thread})`, "the lock names the session that renamed it");
+  assert.ok(Number.isFinite(Date.parse(rec.renamedAt || "")), "and stamps the moment it happened");
+  assert.equal(rec.name, path.basename(tree.path), "the record's name is the name the tree now carries");
+
+  // Written down, not held in memory: a fresh ledger over the same file is the panel after a restart, and it must
+  // still know this tree is named — otherwise the very first event after a restart would rename it again.
+  const reloaded = new TreeNames({ file: path.join(dir, "tree-names.json") });
+  const after = reloaded.get(key);
+  assert.equal(namingState(after), "named");
+  assert.equal(after.by, `run ${session} (${thread})`, "the session that named it is on disk");
+  assert.equal(after.renamedAt, rec.renamedAt, "and so is the moment");
+  assert.match(autoNameRefusal(after, "sess-second"), /already named by run sess-first/);
+});
+
+test("a second and a third session in the same tree leave its branch and its directory alone", async () => {
+  const { ledger } = freshLedger();
+  const session = "sess-first";
+  const thread = "thread-first";
+  const tree = modelledTree("land-every-piece-of-unla", "470b28");
+  const key = treeKey({ project: "demo", path: tree.path });
+  ledger.claimCut(key, {
+    name: path.basename(tree.path),
+    dir: path.basename(tree.path),
+    branch: tree.branch,
+    tag: tree.tag,
+    by: `run ${session} (${thread})`,
+    how: "cut by this panel — its one name is the run's to give",
+    at: new Date().toISOString(),
+    cutRun: session,
+    cutThread: thread,
+  });
+
+  const renames = { count: 0 };
+  const { naming, calls } = renamingHarness({ ledger, tree, session, thread, renames });
+  await naming.consider({ id: session, thread, worktreePath: tree.path, status: "done", title: "Fix the export" });
+  assert.equal(renames.count, 1, "the first session names it");
+  const named = { path: tree.path, branch: tree.branch, name: ledger.get(key).name };
+
+  // Two more threads in the same tree, each with a title of its own. Their slugs reach their thread titles and
+  // nothing else: no rename is attempted, so neither the directory nor the branch can move.
+  const second = await naming.consider({
+    id: "sess-second",
+    thread: "thread-second",
+    worktreePath: tree.path,
+    status: "done",
+    title: "Something the second session decided to call it",
+  });
+  const third = await naming.consider({
+    id: "sess-third",
+    thread: "thread-third",
+    worktreePath: tree.path,
+    status: "running",
+    title: "And a third session's title",
+  });
+  assert.equal(renames.count, 1, "no second rename was even attempted");
+  assert.equal(calls.length, 1);
+  assert.equal(tree.path, named.path, "the directory is exactly where the first session left it");
+  assert.equal(tree.branch, named.branch, "and the branch is still the one the first session gave it");
+  assert.match(second.skipped, /already named by run sess-first/, "the second session is told whose name it is");
+  assert.match(third.skipped, /already named by run sess-first/, "so is the third");
+  assert.equal(ledger.get(key).name, named.name, "the record still carries the first name");
+  assert.equal(ledger.get(key).by, `run ${session} (${thread})`, "and credits the first session, not the later ones");
+});
+
+test("a tree whose name predates the lock — a wtgui branch and a directory, no record — is left alone", async () => {
+  const { ledger } = freshLedger();
+  const tree = modelledTree("build-a-project-steward", "667552");
+  const at = { path: tree.path, branch: tree.branch };
+  const key = treeKey({ project: "demo", path: tree.path });
+  assert.equal(ledger.get(key), null, "no record at all: what every tree cut before the ledger looked like");
+
+  const renames = { count: 0 };
+  const { naming, calls } = namingHarness({
+    ledger,
+    rename: async () => {
+      renames.count += 1;
+      return { ok: true, moved: true };
+    },
+  });
+  // A session starts in it. The tree already HAS a wtgui/… branch and a directory, so it is already named —
+  // the absence of a lock is not an invitation to write one.
+  const second = await naming.consider({
+    id: "sess-second",
+    thread: "thread-second",
+    worktreePath: tree.path,
+    status: "done",
+    existing: false,
+    title: "A name it must not take",
+  });
+  assert.equal(renames.count, 0, "nothing moved it");
+  assert.equal(calls.length, 0);
+  assert.equal(tree.path, at.path, "the directory is where it was");
+  assert.equal(tree.branch, at.branch, "and so is the branch");
+  assert.match(second.skipped, /no cut record/, "the refusal says why: no run cut this tree");
+
+  // The boot backfill then writes it down under the name it was found with — and that is a NAME, not a licence.
+  ledger.seed(key, {
+    name: path.basename(tree.path),
+    dir: path.basename(tree.path),
+    branch: tree.branch,
+    tag: tree.tag,
+    by: "the panel",
+    how: "seeded — this tree was already here the first time the panel listed it",
+    at: new Date().toISOString(),
+  });
+  const third = await naming.consider({
+    id: "sess-third",
+    thread: "thread-third",
+    worktreePath: tree.path,
+    status: "done",
+    title: "Another name entirely",
+  });
+  assert.equal(renames.count, 0, "still nothing moved it");
+  assert.equal(tree.path, at.path);
+  assert.equal(tree.branch, at.branch);
+  assert.match(third.skipped, /already named by the panel/);
+  assert.equal(namingState(ledger.get(key)), "named", "the record says named, so no later session may ask again");
+});
+
+// =============================================================================================
 // the panel, over a real repo
 // =============================================================================================
 const FIXED = "build-a-project-steward-667552"; // a tree that predates the ledger: no entry, must be seeded
