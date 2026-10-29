@@ -522,12 +522,12 @@ pairs with its own results, so a second run of the same tool later in the turn s
 first run's. A call the store has nothing for says `no output recorded for this call` — or `no output in the session
 store yet` while the turn is still running.
 
-**Every tool result is one box, folded.** Whatever a call returned — a shell transcript, a search, a file, a skill, a
-diff — sits in a single bordered box under its `↳ tool · 3.27s` line, shut until you open it. The header names what is
-inside (`terminal output`, `read_file · package.json`, `skill_view output`), counts its lines and says `click to
-read`; a diff's header also says what it adds and removes (`patch · …/package.json +3 −2`), so a shut box already tells
-you how big the change was. A click opens the box to its **full size** — every line, wrapped, no inner scroll — and
-the same click shuts it again. The box you opened stays open through a repaint, a new line arriving or a rebuilt
+**Every tool result starts in one folded box.** Whatever a call returned — a shell transcript, a search, a file, a
+skill, a diff — sits in a single bordered box under its `↳ tool · 3.27s` line, shut until you open it. The header names
+what is inside (`terminal output`, `read_file · package.json`, `skill_view output`), counts the lines the box holds and
+says `click to read`; a diff's header also says what it adds and removes (`patch · …/package.json +3 −2`). Clicking the
+header opens **the text already in that box**, wrapped with no inner scroll; it does not fetch any omitted lines.
+The same click shuts it again. The box you opened stays open through a repaint, a new line arriving or a rebuilt
 burst; the `… result truncated` / `… N lines hidden — click to read` notes stay outside it, under it, so a shut box
 still says when there is more. A diff's framed windows (one per hunk) are drawn inside the box, so the box is the
 only frame. The one-stream view (🌊) draws the same boxes, shut the same way. What a block's copy button copies is
@@ -536,14 +536,20 @@ what it shows, so the output of a box you have not opened is not in the copy.
 A long result is folded by the panel itself: the card keeps its **first 40 lines** (and shortens any line past 400
 characters), because a whole 5,000-line read in the console would push every other line of the card out of its
 600-line ring buffer. The fold ends with a sentence you can click — `… 214 lines hidden — click to read`, or
-`… 12 lines hidden, 3 lines shortened — click to read` when the head wore the line cap too. The click reads **that
-one result** back out of the session store, uncapped, and draws the whole thing in place — in a second box, `… · full
-result`, that is drawn **open** because you asked for it (shutting it is remembered the same way); nothing is added to
-the console's own lines, so the card stays as long as it was. A store with no copy of the result says so instead of
+`… 12 lines hidden, 3 lines shortened — click to read` when the head wore the line cap too. **N hidden lines means
+additional lines of that same result beyond the preview above**, not the lines concealed by shutting its box: a
+`40 lines` box followed by `… 24 lines hidden` represents 64 output lines. These are logical text lines, not wrapped
+screen rows or a count of tool calls.
+
+Clicking **the note below the box** reads that one result back out of the session store, uncapped; it does not run
+the tool again. For a result with a retained live preview, the note is replaced by a second box, `… · full result`,
+drawn **open** because you asked for it. The original preview box stays above it, so opening both shows the first
+40 lines twice. The full result's fold is remembered separately. No lines are added to the console's own ring buffer,
+but the visible card can grow as the full-result box appears. A store with no copy of the result says so instead of
 inventing output: `… the session store has no copy of this result — the lines above are all of it here`. Both
 truncation notes are honest about which cap cut: `… result truncated by the gateway` is the gateway's preview cap,
 the `… N lines hidden — click to read` sentence is this panel's fold, and each only appears when its own cap really
-dropped something.
+dropped something. See [the code investigation](tool-output-hidden-lines.md) for the two click paths and verification.
 
 **How fast it fills in** is yours to set, because the wire's pace is not a reading pace: prose arrives in coalesced
 bursts, and a burst of tool lines lands all at once. Settings → Display → **Stream display speed** types a paragraph —
