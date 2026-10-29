@@ -2247,7 +2247,7 @@ function turnBody(turn, copy = "") {
           const live = i === busy ? `<span class="jl-live" data-live-from="${Number(l.at) || Date.now()}">${liveSuffix(Number(l.at) || Date.now())}</span>` : "";
           return lineHtml(l, live);
         })
-        .join("") || '<div class="jl jl-dim">waiting for output…</div>';
+        .join("") || '<div class="jl jl-dim" data-wait="1">waiting for output…</div>';
   return (stream ? "" : thinkHtml(turn, copy)) +
     // `out-tab` carries the 18px left tab the console itself has, so the wrapper is the console's box: the chip
     // centred in the wrapper is centred in the console, not 9px off it.
@@ -7059,7 +7059,11 @@ function drawJobLine(evt) {
     // Streamed lines follow the newest output only for a reader who is already at the bottom; someone
     // scrolled up to read stays where they are.
     const stick = consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
-    if (out.firstElementChild?.classList.contains("jl-dim")) out.innerHTML = "";
+    // Only the placeholder an empty console shows gives way to the first line. This used to ask whether the first CHILD
+    // was dim, but a dim line is transcript too ("⇢ asked to work in …", "cut from …", "push guard: …") and every
+    // repaint — the thinking sweep, a new deliverable, an approval — puts one back on top, so the next live line wiped
+    // everything the reader had on screen and drew only itself until the following repaint put it all back.
+    out.querySelector(":scope > [data-wait]")?.remove();
     // A tool call joins the burst at the tail of the console and updates its tally in place; anything said in
     // between ends that burst, so the next call starts a fresh tally where the transcript has got to.
     const isTool = line.kind === "tool" || line.kind === "tool-out";
@@ -11934,6 +11938,12 @@ function applySnapshot(data) {
   // sections on screen are still valid and a full re-render would be pure cost.
   const beforeSig = [...state.projects.keys()].sort().join("|");
   state.settings = data.settings || state.settings;
+  // The panel's own two folders and their sizes. A snapshot is the only thing that carries them, so the Settings
+  // row repaints from here as well as from its own presses — the clean's answer, a boot that migrated, a job event.
+  if (data.paths) {
+    state.paths = data.paths;
+    paintPaths();
+  }
   if (data.hosts) state.hosts = data.hosts;
   if (Array.isArray(data.scanRoots)) state.scanRoots = data.scanRoots;
   if (data.spawn) {
@@ -14435,6 +14445,11 @@ function toggleSettings(open = null) {
   // The browser-owned rows are read at boot; painting them again here just means the panel always opens on
   // what is in effect, even if another tab changed it.
   paintQLook();
+  // The two folders, always on the last snapshot the page received (their sizes are computed server-side and cached
+  // for ten seconds, so opening Settings never waits on a walk), and the clean button disarmed: an armed press left
+  // over from last time must not be one Enter away from deleting a folder.
+  paintPaths();
+  paintScratchActions(false);
   // Read the gateway's window every time the panel opens: it can be changed from a CLI, and the
   // panel is not the owner of that value.
   void loadApprovalSetting();
@@ -15194,6 +15209,135 @@ $("btn-guard-install")?.addEventListener("click", (e) => {
   void installPushGuardNow(e.target);
 });
 
+// ---- the panel's own two folders ---------------------------------------------------------------
+// Where the board's state lives (the data directory) and where an agent may throw things away (the scratch
+// directory). Both are outside the checkout, both are reported with their size, and the scratch one can be
+// emptied — but only when no live run is standing in it: the server decides that and answers 409 with the run
+// named, and this row repeats the refusal rather than looking like a press that did nothing.
+const PATH_SOURCE_WORD = {
+  config: "set in config.json",
+  env: "from the environment",
+  default: "the default",
+  // A second instance (PANEL_CONFIG with no dataDir) keeps its own folder and ignores the environment on purpose.
+  PANEL_CONFIG: "this instance's own folder, beside its PANEL_CONFIG file — name dataDir in that config to move it",
+};
+
+function fmtBytes(n) {
+  const v = Number(n);
+  if (!Number.isFinite(v) || v <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let x = v;
+  while (x >= 1024 && i < units.length - 1) {
+    x /= 1024;
+    i += 1;
+  }
+  return `${i === 0 ? Math.round(x) : Math.round(x * 10) / 10} ${units[i]}`;
+}
+
+const pathText = (p) => String(p || "").replace(/\\/g, "/");
+
+function paintPaths(note = "", bad = false) {
+  const p = state.paths;
+  const dataSize = $("data-dir-size");
+  const dataPath = $("data-dir-path");
+  const scratchSize = $("scratch-dir-size");
+  const scratchPath = $("scratch-dir-path");
+  if (!p) {
+    if (dataPath) dataPath.textContent = "…";
+    if (scratchPath) scratchPath.textContent = "…";
+    return;
+  }
+  const sizeText = (bytes, files, measuredAt) => (measuredAt ? `${fmtBytes(bytes)} · ${files} file${files === 1 ? "" : "s"}` : "measuring…");
+  if (dataSize) dataSize.textContent = sizeText(p.dataBytes, p.dataFiles, p.dataMeasuredAt);
+  if (scratchSize) scratchSize.textContent = sizeText(p.scratchBytes, p.scratchFiles, p.scratchMeasuredAt);
+  if (dataPath) {
+    // Where this board's history came from is the thing a reader will not otherwise know happened: a board that came
+    // up carrying last week's cards should say where they came from. The data directory's own journal keeps the answer
+    // across boots, so the line is still true tomorrow; `thisBoot` only says it happened on this very start.
+    const m = p.migrated;
+    const moved = m ? ` · ${m.files} file${m.files === 1 ? "" : "s"} copied here from ${pathText(m.from)} ${m.thisBoot ? "on this boot" : `on ${String(m.at || "").slice(0, 10)}`} (the originals were left where they were)` : "";
+    dataPath.textContent = bad ? `${note}` : `${pathText(p.dataDir)} — ${PATH_SOURCE_WORD[p.dataSource] || p.dataSource} · ${p.dataLayout === "flat" ? "everything in this one folder" : "state/, attachments/ and logs/ inside it"}${moved}`;
+    dataPath.classList.toggle("bad", Boolean(bad));
+  }
+  if (scratchPath) {
+    // A folder the panel did not make cannot be cleaned: say so on the row, before a press finds out.
+    const unmarked = p.scratchMarked === false ? " · not made by the panel, so Clean scratch will refuse (add an empty .wag-scratch file to allow it)" : "";
+    scratchPath.textContent = bad
+      ? `${note}`
+      : note || `${pathText(p.scratchDir)} — ${PATH_SOURCE_WORD[p.scratchSource] || p.scratchSource} · every spawn prompt names its own folder under it${unmarked}`;
+    scratchPath.classList.toggle("bad", Boolean(bad));
+  }
+}
+
+// One press to empty the scratch directory, two to confirm — Cancel then clean, left to right, like every other
+// destructive control on this board. Swapping the button for the pair in place keeps the panel's height still.
+function paintScratchActions(armed = false) {
+  const row = $("scratch-actions");
+  if (!row) return;
+  const p = state.paths;
+  const size = p && p.scratchMeasuredAt ? `${fmtBytes(p.scratchBytes)} in ${p.scratchFiles} file${p.scratchFiles === 1 ? "" : "s"}` : "everything under it";
+  row.innerHTML = armed
+    ? `<button type="button" id="btn-clean-cancel">cancel</button><button type="button" id="btn-clean-go" class="bad">clean ${esc(size)}</button>`
+    : `<button type="button" id="btn-clean-scratch" title="delete everything in the scratch directory and report how much it freed. Refused with the run named if a live agent is working inside it.">clean scratch</button>`;
+  if (!armed) return;
+  $("btn-clean-cancel")?.addEventListener("click", () => paintScratchActions(false));
+  $("btn-clean-go")?.addEventListener("click", () => void cleanScratchNow());
+}
+
+async function openPathFolder(which) {
+  try {
+    const r = await apiFetch("/api/paths/open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ which }),
+    }, { timeoutMs: 10000 });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    // Silent on success (a file manager window opening is the answer); the path is on the row if it did not.
+    paintPaths(d.path ? `opened ${pathText(d.path)}` : "", false);
+  } catch (err) {
+    showBanner(`could not open the ${which} folder: ${err.message}`);
+  }
+}
+
+async function cleanScratchNow() {
+  const row = $("scratch-actions");
+  if (row) row.innerHTML = `<span class="settings-unit mono">cleaning…</span>`;
+  try {
+    const r = await apiFetch("/api/scratch/clean", { method: "POST" }, { timeoutMs: 60000 });
+    const d = await r.json().catch(() => ({}));
+    if (d.paths) state.paths = d.paths;
+    if (!r.ok) {
+      // The refusal is the answer: name the runs holding it, and leave the size alone because nothing was deleted.
+      const why = d.error || `HTTP ${r.status}`;
+      paintScratchActions(false);
+      paintPaths(why, true);
+      showBanner(`scratch NOT cleaned — ${why}`);
+      return;
+    }
+    const freed = d.freed || fmtBytes(d.freedBytes);
+    const what = `freed ${freed} · ${d.removedFiles} file${d.removedFiles === 1 ? "" : "s"} removed${d.leftBehind ? ` · ${d.leftBehind} still open` : ""}`;
+    paintScratchActions(false);
+    paintPaths(what, false);
+    showBanner(`scratch cleaned — ${what}`);
+  } catch (err) {
+    paintScratchActions(false);
+    paintPaths(`the clean failed: ${err.message}`, true);
+  }
+}
+
+$("btn-open-data")?.addEventListener("click", () => void openPathFolder("data"));
+$("btn-open-scratch")?.addEventListener("click", () => void openPathFolder("scratch"));
+// The presets row is rebuilt on every arm, so the first button is wired here and the pair inside
+// paintScratchActions wires itself.
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest ? e.target.closest("#btn-clean-scratch") : null;
+  if (!btn) return;
+  e.preventDefault();
+  paintScratchActions(true);
+});
+
 // Settings that arrive from the SERVER apply here, in one place: a snapshot carries them, and a `settings` event
 // carries them after a change made anywhere else (another tab, or "Always allow" in the permission box).
 function applySettings(settings) {
@@ -15361,7 +15505,11 @@ for (const btn of document.querySelectorAll("[data-approval-set]")) {
 document.addEventListener("click", (e) => {
   const panel = $("settings");
   if (!panel || panel.classList.contains("hidden")) return;
-  if (panel.contains(e.target) || (e.target.closest && e.target.closest("#btn-settings"))) return;
+  // The click's path was fixed when it was dispatched, so it still names the panel after an earlier handler has swapped
+  // the pressed button out of the DOM. The Clean scratch buttons do exactly that (button -> cancel/clean pair -> button),
+  // and `panel.contains(e.target)` calls a detached target "outside", which closed the drawer under the reader's press.
+  const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+  if (path.includes(panel) || panel.contains(e.target) || (e.target.closest && e.target.closest("#btn-settings"))) return;
   toggleSettings(false);
 });
 
