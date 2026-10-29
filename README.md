@@ -41,6 +41,13 @@ The two gateway-connected bits are Windows-flavoured and degrade elsewhere:
 `● board` liveness signals read `netstat` / `tasklist`, so off Windows those two signals simply stay
 dark — everything else works.
 
+There are 50+ `tools/verify-*.mjs` harnesses, one per claim, and each is still a program: it boots what it
+needs, prints what it measured and exits non-zero when the claim failed. `node tools/verify.mjs --list` says
+what is there, `--only <substr>` runs the ones about a subject, `--all` runs every one with a per-harness
+timeout — so a claim is one command away instead of a remembered file name. A browser harness resolves
+Playwright through `tools/browser.mjs` (`PANEL_PLAYWRIGHT_ROOT` when it lives outside the repo) and
+`withBrowser()` closes the browser even when the harness throws.
+
 `node tools/verify-verdicts.mjs [project]` re-derives every row's merge verdict straight from git and
 diffs it against the panel (exit 1 on any mismatch) — useful after touching the scan logic.
 
@@ -90,6 +97,18 @@ seeded the way the board really gets one back: an interrupted card with a run id
 against a stub Runs API. Point it at a Playwright install with `PANEL_PLAYWRIGHT_ROOT`; without one the browser half
 reports `BROWSER-HALF-NOT-RUN` and the rest still runs.
 
+`node tools/verify-console-flicker.mjs` is the browser repro for the dark console's flicker, driven by a real run's
+output: a panel of its own (spare port, own `PANEL_CONFIG`, own `jobs.json`, own `HERMES_HOME`) pointed at a stub Runs
+API that plays a scripted agent turn over real SSE, so every console line the browser draws is the server's own
+`jobline` frame, and a card spawned and replied to through the panel's own routes. The page records what the console
+holds and where the reply box under it sits, and every wholesale write to a console with its stack. It asserts that a
+live line never wipes or shortens a console that holds transcript and that nothing under it jumps, in a condensed
+console with deliverables arriving and in a 🌊 console. `--label before|after` names a capture, `--root <checkout>`
+serves another checkout (run `before` against a checkout without the fix), and `--compose` merges the two captures
+into `C:/CodeReviews/agent-worktree-gui/console-flicker-playwright.md` with paired screenshots of the console as a
+repaint left it and one live line later. Useful after touching `drawJobLine`, `paintStreamConsole`,
+`conversationSignature` or anything else that repaints a live console.
+
 `node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
 `--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
 ancestry cannot see the merge: the repository ruleset requires linear history, so a PR lands as a squash or a
@@ -117,6 +136,12 @@ level is a judgement the landing agent makes from the diff and lands in the same
 `node tools/version.mjs suggest` advises, `apply <patch|minor|major>` writes the one place the version lives,
 and `docs/versioning.md` is the scale. The merge prompt tells the landing agent to do it. Same install covers
 both hooks, and the same `--no-verify` bypasses this one.
+
+Those two hooks are the repo's own; the panel adds three more gates on top of them — the project's
+`remoteBranchPolicy`, the pre-push hook it installs into `<git-common-dir>/wtgui-hooks/`, and the permission box
+that hook parks a push on — plus the host's ruleset on the default branch. All of them, in the order a `git push`
+meets them and with what waives each, are enumerated in
+[docs/pushing-to-a-remote.md](docs/pushing-to-a-remote.md).
 
 `node tools/verify-charter.mjs` seeds a charter from a store full of rules and notes, checks the prescribed
 headings and the cap, checks that the whole file is in the per-turn briefing while the polled state carries
@@ -209,7 +234,7 @@ Per-worktree verdict:
 | `MERGED (N commits)` | the branch really did carry commits and they are now in remote main (reflog evidence; N counts only commits the branch itself made, not main commits it merged in) |
 | `NO COMMITS` | the branch never moved off its creation commit — there is nothing to merge, and nothing was merged |
 | `ON MAIN` | this is the primary checkout of the main branch |
-| `UNMERGED (N commits)` | carries commits not on remote main |
+| `UNMERGED (N commits)` | carries commits not on remote main — the badge is a control: roll it into its parent, open a PR, have an agent check whether the change is already on main (deleting the tree when it is), or ask where it goes |
 
 `MERGED` is only claimed when the branch has commits of its own **and** they are in remote main. A
 worktree whose branch has zero commits (a freshly made `wtgui/…` tree, or a branch created and never
@@ -390,16 +415,22 @@ Semantics, all verified against real runs:
 - **Output** is the run's event stream: each tool call with its argument preview, the assistant's text
   as it arrives, approval requests, and a closing line with tokens and exit. Tool results are the
   gateway's redacted, 500-character preview (the full payload stays in the session transcript).
-- **A file is drawn as a file, not as lines.** A unified diff in a tool's output becomes one framed
-  window per `@@` hunk: the `diff --git` / `--- ` / `+++ ` headers and the hunk line ride as labels, and
-  the body is two sides — the before lines on the left (yellow where a line was modified, red where it
-  was purely removed) and the after lines on the right in green, with unchanged context dim across
-  both. Any other file body (`read_file`, `write_file`, a shell `cat` / `head` / `sed -n`) folds into a
-  code box whose header names the file and counts its lines, so a reader can see that a file was
-  printed, and which one, without reading it. Both wrap, so a 300-character line never forces the
-  console sideways. The classification is made at render time from a line's own text and only ever
-  looks at a tool's own output: a call line, the agent's sentences, a shell transcript, an `ls` listing
-  and the gateway's own notes stay plain lines, in the colours they always had.
+- **Every tool result is one box, folded until you open it.** Whatever a call returned — a shell
+  transcript, a search, a file, a skill, a diff — sits in a single bordered box under its `↳ tool` line,
+  with a header that names what is inside (`terminal output`, `read_file · package.json`) and counts
+  its lines. A click opens it to its full size and a second click shuts it; the choice survives a
+  repaint. A unified diff is drawn inside its box as one framed window per `@@` hunk: the `diff --git` /
+  `--- ` / `+++ ` headers and the hunk line ride as labels, and the body is two sides — the after lines on
+  the left in green and the before lines on the right (yellow where a line was modified, red where it
+  was purely removed), with unchanged context dim across both — and its header says what it adds and
+  removes (`+3 −2`), so a shut box still says how big the change was. Everything wraps, so a
+  300-character line never forces the console sideways. The result's own `↳ tool · 3.27s` line and the
+  notes under it (`… result truncated by the gateway`, `… 214 lines hidden — click to read`) stay outside
+  the box. The classification is made at render time from a line's own text and only ever looks at a
+  tool's own output: a call line, the agent's sentences and the panel's own notes are never boxed.
+- **A skill is written, not dropped in.** The lines of a skill's result (`skill_view`, `skills_list`,
+  `skill_manage` — the longest thing a run hands the console at once) type out at Settings → Display →
+  **Stream display speed**, like the agent's prose and its reasoning, and walk in at **Stream line rate**.
 - **Cancel** posts `/v1/runs/<id>/stop`; stopping is cooperative, so the card settles as `cancelled`
   when the turn actually ends.
 - **A run can outlive the panel.** Restarting the panel marks in-flight cards `interrupted` and keeps

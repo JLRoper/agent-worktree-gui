@@ -129,12 +129,14 @@ A remote the panel cannot map is a proposal it refuses, not a host it invents.
 | `pr` | `{number, state, mergedAt, title, matched}`, or `null` when no PR owns the branch |
 | `prUrl` | the PR's page from `links.pull`, or `null` |
 | `prWhy` | the sentence saying why `prUrl` is `null` while `pr` exists |
-| `branchUrl` / `branchWhy` / `branchLinkFrom` | the branch page, why there is none, and whether it came from `ls-remote` or the last fetch's refs |
-| `branchLocalOnly` | `true` only when the remote listed its heads and this branch was not among them — the branch cell's `local` chip, and the one state that word is allowed to describe. `unknown` (unreachable remote, row not read yet) and a project with no remote are `false` |
+| `branchUrl` / `branchWhy` / `branchLinkFrom` | the branch page, why there is none, and whether it came from `ls-remote` or the last fetch's refs. `branchWhy` quotes the project's `fetchNote` when the reason is a failed fetch |
+| `branchChip` | the one word the branch cell draws, or `null`: `local` (the remote listed its heads and this branch was not among them), `unverified` (the panel could not get an answer — the sentence behind it quotes the project's `fetchNote`), or nothing at all for a linked branch |
+| `branchLocalOnly` | `true` only for `branchChip === "local"` — the one state that word is allowed to describe. `unknown` (unreachable remote, row not read yet) and a project with no remote are `false` |
 
-The chip is drawn from `branchLocalOnly`, not from `remoteBranch`: a row whose remote could not be reached carries no
-chip at all, because "cannot tell whether the remote has this branch yet" and "this branch exists only on this box"
-are different claims and the cell must not show the stronger one.
+The chip is drawn from `branchChip`, not from `remoteBranch`: a row whose remote could not be reached wears
+`unverified`, never `local`, because "cannot tell whether the remote has this branch yet" and "this branch exists only
+on this box" are different claims and the cell must not show the stronger one — nor, as it once did, nothing at all,
+which made an unverifiable branch look like one nobody had pushed.
 
 All of them are computed from the ROW'S BRANCH, so a tree that switches branch (a follow-up cut in place, a `git
 branch -m` rename the panel made) is decorated again on the read that sees the new name — see `scanOne` in

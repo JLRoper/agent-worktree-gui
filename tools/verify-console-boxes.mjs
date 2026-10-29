@@ -311,6 +311,9 @@ async function browserPhase(pw) {
         // anchor (its first line's timestamp), so the group is opened the way a click opens it - through the
         // shipped rememberToolGroup - rather than by guessing the key here.
         renderJobs();
+        // Every result is a box and every box starts folded (core/console-format.js). A probe about what a CALL's fold
+        // hides asks for them open the way a reader does: a real click on each box's own head.
+        if (opts.openBoxes) for (const head of document.querySelectorAll("pre.job-out .code-head")) head.click();
         const grp = document.querySelector("pre.job-out .tgrp");
         const body = grp && grp.querySelector(".tgrp-body");
         if (body && body.hidden) {
@@ -550,7 +553,26 @@ async function browserPhase(pw) {
     JSON.stringify(c0.bodyText.map((t) => t.slice(0, 24))),
   );
   ok("(c) the cut row is inside the frame, never a line printed after it", (await page.evaluate(() => window.__probe.looseCut())) === 0, `${await page.evaluate(() => window.__probe.looseCut())} cut row(s) outside a .df-win`);
+
+  // ---- every result is one folded box, with the frame inside it ---------------------------------
+  console.log("\n== the box around the frame ==");
   await show({});
+  const boxed = await page.evaluate(() =>
+    [...document.querySelectorAll("pre.job-out .call")].map((c) => ({
+      boxes: c.querySelectorAll(".code-box").length,
+      shut: [...c.querySelectorAll(".code-box")].every((b) => b.querySelector(".code-body").hidden),
+      framesInside: c.querySelectorAll(".code-box .df-win").length,
+      framesOutside: [...c.querySelectorAll(".df-win")].filter((w) => !w.closest(".code-box")).length,
+      shown: [...c.querySelectorAll(".df-win")].some((w) => w.getBoundingClientRect().height > 0),
+      head: c.querySelector(".code-head")?.textContent || "",
+    })),
+  );
+  check("each patch result is one box", boxed.map((b) => b.boxes), [1, 1]);
+  ok("and it starts folded, so no frame is on screen until the reader opens it", boxed.every((b) => b.shut && !b.shown), JSON.stringify(boxed.map((b) => [b.shut, b.shown])));
+  ok("every frame is inside its box, none outside", boxed.every((b) => b.framesInside >= 1 && b.framesOutside === 0), JSON.stringify(boxed.map((b) => [b.framesInside, b.framesOutside])));
+  ok("the header of a folded diff says what it changes", boxed.every((b) => /\+\d+/.test(b.head) && /−\d+/.test(b.head)), JSON.stringify(boxed.map((b) => b.head)));
+  await show({ openBoxes: true });
+  ok("a click on a box's head shows the frame", (await page.evaluate(() => [...document.querySelectorAll("pre.job-out .df-win")].every((w) => w.getBoundingClientRect().height > 0))));
 
   // ---- (d) the fold ------------------------------------------------------------------------------
   console.log("\n== (d) a click on a tool call's own row ==");

@@ -4,11 +4,11 @@
 import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 // The push-guard record is a few hundred bytes read at boot and written on an install: sync is the honest shape
 // for it, and it is the same file the Settings row reports from.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { cpus } from "node:os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpus, homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "./lib/pool.js";
@@ -19,14 +19,20 @@ import { ProjectRegistry } from "./lib/projects.js";
 // isLiveJobStatus is main's: the 429 hold asks whether a card's run is live before it re-arms the timer.
 // previewRequest is not: this commit moves both previewRequest call sites into lib/features/spawn.js, so
 // server.js has no use for the name any more — the import keeps their new name and drops the moved one.
-import { Jobs, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js";
+import { Jobs, RELEASE_BRIEF, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js";
 import { gitIn, scanWorktree } from "./lib/scan.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
+import { verifyLabel, verifyPrompt } from "./lib/verify-prompt.js";
+import { answerDeletes, answerLine, answeredChecks } from "./lib/verify-landed.js";
+import { deleteWorktreeRow } from "./lib/worktree-remove.js";
+import { ReleaseRequests, releaseWorktree, releasesEnabled } from "./lib/worktrees.js";
 import { Hosts, proposeMapping } from "./lib/hosts.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
 import { WorktreeNaming } from "./lib/worktree-naming.js";
-import { Locks, describeLock } from "./lib/locks.js";
+import { Locks, describeLock, rebaseKey, writerLocks } from "./lib/locks.js";
+import { rebaseWorktree } from "./lib/rebase.js";
+import { ownCopyOf } from "./lib/sync-state.js";
 import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { REFRESH_LINES_SHOWN, RefreshJournal, liveRunIn, mergeDelta, normaliseRefreshAgent, parseCommitFiles, todoProposals } from "./lib/refresh-row.js";
@@ -36,7 +42,7 @@ import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
 import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyForProject, policyLabel } from "./lib/remote-writes.js";
 import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
-import { safeUrl, openerFor } from "./lib/open-url.js";
+import { safeUrl, openerFor, openerForFolder } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
@@ -50,6 +56,12 @@ import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./
 import { thinkingFor } from "./lib/thinking.js";
 import { modelCatalogue, refreshModelCatalogue } from "./lib/hermes-models.js";
 import { createSpawn } from "./lib/features/spawn.js";
+// The panel's own directories, and every state path derived from them. Nothing below builds one of those
+// paths itself any more: `resolveDirs` answers where, `statePaths` answers which file.
+import {
+  cleanScratch, ensureDirs, humanBytes, measureSize, migrateState, readMigrationJournal, resolveConfigPath, resolveDirs,
+  SCRATCH_MARKER, sizeOf, statePaths,
+} from "./lib/paths.js";
 // HTTP framing lives in lib/http/: transport.js knows about req/res and nothing about worktrees,
 // and static.js serves public/. Both are handed the state they used to read by closure.
 import { authorised, handleStream, readBody, readRawBody, sendJson } from "./lib/http/transport.js";
@@ -95,7 +107,16 @@ const VERSION = await readFile(path.join(HERE, "package.json"), "utf8")
 // PANEL_CONFIG lets a second instance run from the same code with its own config and port —
 // a sandbox or a demo you can click around in without touching the real one:
 //   set PANEL_CONFIG=C:\path\to\panel-config.json && node server.js
-const CONFIG_PATH = process.env.PANEL_CONFIG ? path.resolve(process.env.PANEL_CONFIG) : path.join(HERE, "config.json");
+//
+// Otherwise the file has two homes, and lib/paths.js decides between them: `<dataDir>/config.json` when an
+// install has been moved there, else `config.json` beside this checkout — so an existing install keeps
+// running untouched, and moving the file is what opts into the new home.
+const CONFIG_FILE = resolveConfigPath({ here: HERE });
+const CONFIG_PATH = CONFIG_FILE.path;
+// The folder the config was read from. It is a PROTECTED path (the clean route must never empty it) and the place a
+// second instance keeps its own files, never a place to derive a state file from: that is lib/paths.js's job, and a
+// guard in test/paths.test.js fails on any other `path.dirname(CONFIG_PATH)`.
+const CONFIG_DIR = path.dirname(CONFIG_PATH);
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
@@ -165,60 +186,47 @@ async function loadConfig() {
   // project sections are on screen and only those are re-read - with ~100 projects that is most of the git work
   // the board does. The setting lives in this file so it survives a restart and applies to every browser.
   cfg.scanMode = String(cfg.scanMode || "all").toLowerCase() === "visible" ? "visible" : "all";
-  // Keyed off the config's own directory, so a PANEL_CONFIG sandbox keeps its own registry.
-  if (!cfg.jobsFile) cfg.jobsFile = path.join(path.dirname(CONFIG_PATH), "logs", "jobs.json");
-  // The assistant's scratchpad lives beside the job store; `assistant` is an optional block of knobs
-  // (mode, model, rule escalations) that the page can also change at runtime.
+  // ---- where the panel keeps things ----------------------------------------------------------------
+  // Two directories, resolved once, here, by lib/paths.js — and every state file derived from the data one.
+  // This used to be eleven separate `path.dirname(CONFIG_PATH)` lines, which put the job store, the assistant,
+  // the TODOs, the naming ledger, the labels and the push-guard record INSIDE the checkout: a fresh clone opened
+  // on an empty board, a re-clone lost the history, and `git status` could never be trusted to be about the code.
+  //
+  // `dataDir` is the durable half (default `~/.wag`), `scratchDir` the throwaway half (default `<os tmpdir>/wag`).
+  // Explicit `dataDir` / `scratchDir` keys win, then WAG_HOME / WAG_SCRATCH, then those defaults — and the source
+  // of each travels with it, so the Settings row can answer "why is my board empty" without a docs hunt.
+  //
+  // A config that names one of these files itself still wins (that is how a sandbox points at its own store); the
+  // rest follow it, which is the behaviour every existing `PANEL_CONFIG` sandbox relies on.
+  //
+  // A PANEL_CONFIG instance that names no `dataDir` is a second instance, and it keeps its own folder: it resolves
+  // to `<dir of its config>/logs` (flat, as it always did) and ignores WAG_HOME / WAG_SCRATCH. Resolving it to the
+  // shared `~/.wag` instead would point every verify tool and test sandbox at the reader's live job store.
+  const dirs = resolveDirs({ config: cfg, configSource: CONFIG_FILE.source, configDir: CONFIG_DIR });
+  cfg.dataDir = dirs.dataDir;
+  cfg.dataDirSource = dirs.dataSource;
+  cfg.dataLayout = dirs.dataLayout;
+  cfg.scratchDir = dirs.scratchDir;
+  cfg.scratchDirSource = dirs.scratchSource;
+  Object.assign(cfg, statePaths(cfg));
+  // The assistant's `assistant` block is an optional set of knobs (mode, model, rule escalations) that the page can
+  // also change at runtime. It is not a path, but it is read by the same callers, so it is resolved here too.
   cfg.assistant = cfg.assistant && typeof cfg.assistant === "object" ? cfg.assistant : {};
-  if (!cfg.assistantFile) cfg.assistantFile = path.join(path.dirname(cfg.jobsFile), "assistant.json");
-  // The continuity file the assistant is handed every turn, beside its scratchpad for the same reason: it is
-  // state, not source. A sandbox config that names its own jobsFile therefore gets its own charter too.
-  if (!cfg.charterFile) cfg.charterFile = path.join(path.dirname(cfg.assistantFile), "assistant-charter.md");
-  // Which trees have already been named, and by whom — the panel's own, never git's, so it lives beside the job
-  // store and a PANEL_CONFIG sandbox keeps its own copy of it.
-  if (!cfg.treeNamesFile) cfg.treeNamesFile = path.join(path.dirname(cfg.jobsFile), "tree-names.json");
-  // Which worktrees and branches the READER has locked. The last word on a delete, and the one record in this panel
-  // that is neither git's nor an agent's — state, not source, so it lives beside the job store and a PANEL_CONFIG
-  // sandbox keeps its own copy. Absence of the file means everything is unlocked, which is the default.
-  if (!cfg.locksFile) cfg.locksFile = path.join(path.dirname(cfg.jobsFile), "locks.json");
-  // What each branch was started to do, extracted once from the earliest run in that tree: the same state-not-source
-  // rule as the naming ledger, so a PANEL_CONFIG sandbox keeps its own copy of this too.
-  if (!cfg.descriptionsFile) cfg.descriptionsFile = path.join(path.dirname(cfg.jobsFile), "descriptions.json");
-  // The TODO list of each worktree — written by the assistant, kept current by every agent in the tree, read by the
-  // row. State, not source, and beside the job store for the same reason as the two records above: a PANEL_CONFIG
-  // sandbox gets its own copy. NEVER inside the worktree, where it would be git noise and a merge conflict.
-  if (!cfg.todosFile) cfg.todosFile = path.join(path.dirname(cfg.jobsFile), "todos.json");
-  // What each row's own ⟳ found: one journal line per action, kept per row so the row's detail can say what the last
-  // refresh changed instead of flashing. State like the three records above, beside the job store.
-  if (!cfg.refreshFile) cfg.refreshFile = path.join(path.dirname(cfg.jobsFile), "refresh.json");
-  // Where each worktree was cut from: the branch (the parent) and the sha that ref resolved to. Git keeps no such
-  // record, so this file IS the record — beside the job store, state not source, and a PANEL_CONFIG sandbox keeps its
-  // own copy like every other ledger here.
-  if (!cfg.parentsFile) cfg.parentsFile = path.join(path.dirname(cfg.jobsFile), "parents.json");
-  // The steward's plan files (one .plan.md + one .plan.json per project), and the ledger of "where should this go?"
-  // questions. Both are state: a sandbox that names its own jobsFile gets its own plans.
-  if (!cfg.stewardDir) cfg.stewardDir = path.dirname(cfg.jobsFile);
-  if (!cfg.stewardQuestionsFile) cfg.stewardQuestionsFile = path.join(path.dirname(cfg.jobsFile), "steward-questions.json");
+  // `assistant.cwd` (lib/assistant.js) defaults to `assistant-cwd` beside `assistantFile`, so it follows this store
+  // into the data directory with no extra key: state, not source, and never a folder inside the checkout.
+  // The locks, the parent book, the steward's plan files (`stewardDir`) and its questions ledger, the model prices, the
+  // push-guard record, the host mappings and the branch-parent ledger are state like everything above: lib/paths.js
+  // derives every one of them beside the job store, so they follow it into the data directory.
   // `steward.prodBranch` names the one branch a roll-up must never be done inline: production is handed to a worker
   // (or a TO), never merged by editing a tree. null means this project has no such branch.
   cfg.steward = cfg.steward && typeof cfg.steward === "object" ? cfg.steward : {};
   if (!("prodBranch" in cfg.steward)) cfg.steward.prodBranch = null;
   cfg.stewardRefreshSeconds = Number(cfg.stewardRefreshSeconds) > 0 ? Number(cfg.stewardRefreshSeconds) : 300;
-  // The model menu's price/rating half: what the dropdown decorates each row with, rebuilt only by the
-  // Settings refresh (POST /api/models/refresh). State, not source — beside the job store, so a sandbox
-  // config that names its own jobsFile gets its own copy.
-  if (!cfg.modelPricingFile) cfg.modelPricingFile = path.join(path.dirname(cfg.jobsFile), "model-prices.json");
-  // Which worktrees carry the push guard, and when it went in. The panel's own record (git holds the hooks path
-  // itself), beside the job store, so a sandbox config keeps its own copy of it.
-  if (!cfg.pushGuardFile) cfg.pushGuardFile = path.join(path.dirname(cfg.jobsFile), "push-guard.json");
-  // Where each project's branches and pull requests live (lib/hosts.js). Reader-edited state, so it sits beside the job
-  // store and not in logs/projects.json, which the discovery sweep rewrites every pass. The SEED is the opposite: it
-  // ships with the code (hosts.seed.json next to this file) and supplies defaults the live file overrides.
-  if (!cfg.hostsFile) cfg.hostsFile = path.join(path.dirname(cfg.jobsFile), "hosts.json");
+  // Where each project's branches and pull requests live (lib/hosts.js). The live file (`hostsFile`) is reader-edited state,
+  // so lib/paths.js puts it beside the job store above, and not in projects.json, which the discovery sweep rewrites every
+  // pass. The SEED is the opposite: it ships with the code (hosts.seed.json next to this file) and supplies defaults the
+  // live file overrides.
   if (!cfg.hostsSeedFile) cfg.hostsSeedFile = path.join(HERE, "hosts.seed.json");
-  // Which branch each tree was cut FROM — the one fact `git worktree add -b` throws away, and the fact the worker's
-  // landing paragraph names. Beside the job store, so a PANEL_CONFIG sandbox keeps its own copy.
-  if (!cfg.branchParentsFile) cfg.branchParentsFile = path.join(path.dirname(cfg.jobsFile), "branch-parents.json");
   // Whether a branch may exist on a REMOTE at all: the setting the reader's permission box writes, and what the
   // installed pre-push guard reads. local-only by default — a value that cannot be read falls back to it rather
   // than to a permissive one.
@@ -243,6 +251,36 @@ async function patchPanelConfig(patch) {
 }
 
 let config = await loadConfig();
+// ---- both directories exist before anything writes into them --------------------------------------
+// Nothing is created lazily any more: a boot that dies between "store opened" and "attachment saved" used to leave
+// a half-made `logs/`, and the next boot could not tell that from a fresh install. `ensureDirs` is `mkdir -p`, so
+// two panels racing on one data directory is a no-op rather than a failure.
+const madeDirs = ensureDirs(config);
+for (const target of madeDirs.made) log(`created ${target}`);
+log(`data directory: ${config.dataDir} (${config.dataDirSource}) · scratch directory: ${config.scratchDir} (${config.scratchDirSource})`);
+// ---- the one-time move off the checkout -----------------------------------------------------------
+// An install that has been running from a checkout keeps its whole history in `<repo>/logs`. The first boot with a
+// data directory that holds no store COPIES it across. Never moved, never deleted: a downgrade, a second build, or a
+// reader who deliberately points PANEL_CONFIG at the old file all still find what was there. The line names the
+// count and the directory so a board that comes up full of last week's cards is explainable from the log alone.
+const stateMigration = migrateState({
+  dataDir: config.dataDir,
+  stateFile: config.jobsFile,
+  legacyDir: path.join(CONFIG_DIR, "logs"),
+  layout: config.dataLayout,
+  onLog: log,
+});
+// A second instance (PANEL_CONFIG, no dataDir) has nothing to move, and saying so on every sandbox boot is noise.
+if (!stateMigration.migrated && stateMigration.reason && stateMigration.reason !== "no job store beside the checkout" && config.dataLayout !== "flat") {
+  log(`state migration skipped: ${stateMigration.reason}`);
+}
+// Start the two size readings in the background so the first /api/state (and the first Settings open) finds a number
+// waiting. They are async walks: a scratch folder holding a copied checkout must not hold up the listener.
+void measureSize(config.dataDir).catch(() => {});
+void measureSize(config.scratchDir).catch(() => {});
+// What the data directory's own journal says about where its board came from. Read once, here: the journal only
+// changes at boot, and /api/state is polled far too often to read a file for it.
+const lastMigration = readMigrationJournal(config.stateDir).slice(-1)[0] || null;
 let pool = new Pool(config.threads);
 const store = new Store();
 // A tree's name is the panel's fact, never git's. The ledger of which trees have a name, who gave it and when
@@ -253,7 +291,7 @@ const treeNames = new TreeNames({ file: config.treeNamesFile, log });
 // hosts.seed.json's) so the reader has something to edit, and lib/hosts.js merges the seed under it per host id and
 // per project — a new seed record reaches this install without anybody merging JSON by hand.
 const hosts = new Hosts({
-  file: config.hostsFile || path.join("logs", "hosts.json"),
+  file: config.hostsFile,
   seedFile: config.hostsSeedFile || "hosts.seed.json",
   log: (line) => log(line),
 });
@@ -263,8 +301,10 @@ const registry = new ProjectRegistry({
   getConfig: () => config,
   store,
   onLog: log,
-  // Last successful sweep, so a restart opens on the board it had instead of "no git repos found".
-  cacheFile: config.projectsCacheFile || path.join("logs", "projects.json"),
+  // Last successful sweep, so a restart opens on the board it had instead of "no git repos found". Resolved by
+  // lib/paths.js — it used to default to a path relative to the process cwd, which a sandbox then shared with the
+  // live board while its own seeded rows stayed invisible.
+  cacheFile: config.projectsCacheFile,
 });
 let scheduler = new Scheduler({
   config,
@@ -326,6 +366,9 @@ function adoptFromJob(evt) {
 // real-turn proof and the single resume wake. Declared before the assistant because the assistant is
 // handed its `request` as the one act it cannot perform itself.
 let restart = null;
+// Declared before the job stream that feeds it: a job event arrives on the same tick as construction, so the release
+// sweep is armed here as an optional hook and filled in below, once its store exists.
+let scheduleReleaseSweep = null;
 // Declared before the job stream that feeds it: a job event arrives on the same tick as construction,
 // and the observer is optional until the assistant exists.
 let assistant = null;
@@ -346,6 +389,9 @@ const jobs = new Jobs({
     // A run that just arrived (or changed) is a new chance to learn what a tree was started to do: the earliest
     // brief in a tree is in this store, and a harvest is collapsed into one pass per couple of seconds.
     guard("description harvest", () => descriptions.harvest());
+    // A settled turn is the moment a release request can be acted on — and only then: the request was recorded as the
+    // run ended, and this sweep is a different pass of this process, never a step inside the run.
+    guard("release sweep", () => scheduleReleaseSweep?.());
     guard("assistant observation", () => assistant?.observe(evt));
   },
   onLog: log,
@@ -441,6 +487,26 @@ function policyForProjectPath(projectPath, project = null) {
   const key = guardPathKey(projectPath);
   const found = key ? registry.projects.find((p) => guardPathKey(p.path) === key) || null : null;
   return policyForProject(found, config.remoteBranchPolicy);
+}
+
+// The project a tree belongs to: what a REPLY's brief needs in order to quote the right policy and the right remote.
+// The panel's own guard record names the project of every tree it cut; a tree it did not cut sits under its project's
+// directory, so the longest project path that prefixes it is the second answer. null = nobody owns it, and the global
+// policy applies.
+function projectOfTree(dir) {
+  const key = guardPathKey(dir);
+  if (!key) return null;
+  const recorded = guardRecord.trees[normTree(dir)]?.projectPath;
+  if (recorded) {
+    const hit = registry.projects.find((p) => guardPathKey(p.path) === guardPathKey(recorded));
+    if (hit) return hit;
+  }
+  let best = null;
+  for (const p of registry.projects) {
+    const pk = guardPathKey(p.path);
+    if (pk && (key === pk || key.startsWith(`${pk}/`)) && (!best || pk.length > guardPathKey(best.path).length)) best = p;
+  }
+  return best;
 }
 
 // Install (or refresh) the guard for ONE worktree and remember it. Called the moment the panel cuts a tree, and by
@@ -795,6 +861,28 @@ const descriptions = createDescriptions({
   log,
 });
 
+// The trees this panel may NAME — a path, a directory name, a branch, a six-hex tag, a thread. Read per question, never
+// captured: a rename moves a row and every store that answers a name must see the new one. Shared by the TODO store
+// and the release store (lib/worktrees.js), so both resolve a slug against exactly the same list.
+function panelTrees() {
+  const out = [];
+  const seen = new Set();
+  for (const p of registry.projects || []) {
+    const key = `${p.name}::${normPathKey(p.path)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ project: p.name, path: String(p.path || "").replace(/\\/g, "/"), branch: null });
+  }
+  for (const [rowKey, row] of store.rows) {
+    const project = String(rowKey).split("::")[0];
+    const n = `${project}::${normPathKey(row.path)}`;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    out.push({ project, path: String(row.path || "").replace(/\\/g, "/"), branch: row.branch || null });
+  }
+  return out;
+}
+
 // ---- the TODO list of each worktree --------------------------------------------------------------------------------
 // Written by the assistant (a `TODO <text>` line, normally under the SPAWN that starts the work), kept current by
 // every agent in the tree (a run's FINAL message is harvested when it settles), and read by the row. ONE store for
@@ -804,26 +892,7 @@ const descriptions = createDescriptions({
 const todos = new TodoLists({
   file: config.todosFile,
   log,
-  // The trees this store may NAME — a path, a directory name, a branch, a six-hex tag, a thread. Read per question,
-  // never captured: a rename moves a row and the store must see the new one.
-  trees: () => {
-    const out = [];
-    const seen = new Set();
-    for (const p of registry.projects || []) {
-      const key = `${p.name}::${normPathKey(p.path)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ project: p.name, path: String(p.path || "").replace(/\\/g, "/"), branch: null });
-    }
-    for (const [rowKey, row] of store.rows) {
-      const project = String(rowKey).split("::")[0];
-      const n = `${project}::${normPathKey(row.path)}`;
-      if (seen.has(n)) continue;
-      seen.add(n);
-      out.push({ project, path: String(row.path || "").replace(/\\/g, "/"), branch: row.branch || null });
-    }
-    return out;
-  },
+  trees: panelTrees,
   // …and the job store, so a THREAD can name its tree (that is how the assistant points a TODO line at a card).
   jobs: () => jobs,
 });
@@ -841,13 +910,119 @@ if (assistant) {
   assistant.todosChanged = broadcastTodos;
 }
 
-// ---- what each row's own ⟳ found -----------------------------------------------------------------------------------
-// The journal a per-row refresh writes: one line per action ("verdict MERGED -> UNMERGED", "0 -> 3 ahead", "1 item looks
+// ---- what each row's own reconcile found ---------------------------------------------------------------------------
+// The journal the row's ⟳ writes: one line per action ("verdict MERGED -> UNMERGED", "0 -> 3 ahead", "1 item looks
 // closed"), kept per row beside the stores above. The row's detail reads the newest few from the snapshot, so a click
 // leaves a record the reader can come back to instead of a flash that is gone in a second.
 const refreshLog = new RefreshJournal({ file: config.refreshFile, log });
 
-// The last few lines of each row's refresh journal travel with the snapshot the way its TODO list does.
+// ---- the release requests a finished worker leaves behind ------------------------------------------------------------
+// A worker can never remove its own tree: its cwd is inside it, and on Windows an open handle keeps the directory
+// busy. So it asks — ONE `RELEASE <tree> | <why it is finished>` line in its FINAL message — and lib/jobs.js records
+// the request here as the turn ends, against the tree's row. `sweepReleases()` below is the ONLY thing that acts on
+// one, after the run settled, and lib/worktrees.js refuses unless every gate passes on evidence this process measured
+// itself (clean tree, PR MERGED, nothing the landed commit does not already contain, no job still holding it). No path
+// inside a run reaches the executor, so an agent cannot evict the tree it is standing in.
+const releases = new ReleaseRequests({ file: config.releasesFile, log, trees: panelTrees });
+jobs.releases = releases;
+// The paragraph that tells a worker it MAY ask for its tree (lib/jobs.js RELEASE_BRIEF), handed over only for a
+// project whose `releaseWorktrees` is on: telling a worker about a marker the panel would refuse at its first gate is
+// a paragraph of noise, and one that reads as an instruction the board will not honour.
+jobs.releaseBrief = (opts) => {
+  const record = (registry.projects || []).find((p) => p.name === opts?.project) || null;
+  return releasesEnabled(record) ? RELEASE_BRIEF : "";
+};
+// One sentence for a console line: whitespace collapsed, and cut where the panel always cuts (a trailing ellipsis, so
+// a truncated sentence never reads as a finished one).
+const oneLine = (s, n = 200) => {
+  const t = String(s ?? "").replace(/\s+/g, " ").trim();
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+};
+
+// What the row carries: the tree, when it was asked for, by which run, why, and the executor's answer — `removed`, or
+// `refused: <the gate that said no>`. A tree nobody has asked about carries no `release` field at all.
+function withReleases(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const rec = releases.forRow(project.name, row.path);
+      if (!rec) {
+        delete row.release;
+        continue;
+      }
+      row.release = rec;
+    }
+  }
+  return snap;
+}
+
+// The executor's clock. One pass at a time, a pass shortly after any turn settles, and a slow tick for a request that
+// arrived while the panel was busy — a `removed` or `refused:` outcome is final, so a pass only ever looks at requests
+// nothing has answered yet. The gates come first, so a request with the project's switch off is refused here and
+// nothing on disk is touched.
+let releaseSweepBusy = false;
+async function sweepReleases(reason = "tick") {
+  if (releaseSweepBusy) return [];
+  const pending = releases.pending();
+  if (!pending.length) return [];
+  releaseSweepBusy = true;
+  const done = [];
+  try {
+    for (const request of pending) {
+      const project = scheduler.getProjects().find((p) => p.name === request.project) || projectOfTree(request.path);
+      if (!project) {
+        releases.finish(request.key, { outcome: `refused: no project owns ${request.path}` });
+        done.push({ request, outcome: `refused: no project owns ${request.path}` });
+        continue;
+      }
+      const row = scheduler.store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(request.path)) || null;
+      let out = null;
+      try {
+        out = await releaseWorktree({ project, request, row, jobs, locks, log });
+      } catch (e) {
+        out = { ok: false, outcome: `refused: the executor failed — ${String((e && e.message) || e)}`, detail: "", steps: [] };
+      }
+      releases.finish(request.key, { outcome: out.outcome, detail: out.detail, steps: out.steps });
+      // One line on the card that asked, so the sentence outlives the row it was written on. `panel:` is the panel's
+      // own voice in the console, next to the `⇢ RELEASE requested` line the request left there.
+      const asked = request.runId ? jobs.get(request.runId) : null;
+      if (asked) {
+        jobs.push(asked, {
+          kind: out.ok ? "dim" : "raw",
+          text: `panel: release of ${request.path} — ${out.outcome}${out.detail && !out.ok ? ` (${oneLine(out.detail, 200)})` : ""}`,
+        });
+        jobs.emit(asked);
+      }
+      done.push({ request, outcome: out.outcome, ok: Boolean(out.ok) });
+      log(`release ${request.path}: ${out.outcome}${reason ? ` (${reason})` : ""}`);
+    }
+  } finally {
+    releaseSweepBusy = false;
+    if (done.length) {
+      broadcast({ type: "snapshot", data: snapshot() });
+      for (const item of done) {
+        // The row of a removed tree is left for the next scan to drop (it drops a row whose folder is gone); a refusal
+        // keeps its row, because that row is where the reader reads why.
+        if (item.ok) log(`release ${item.request.path}: the row goes on the next scan`);
+      }
+    }
+  }
+  return done;
+}
+
+// The hook the job stream calls, collapsed into one pass per couple of seconds: a turn emits many events and only the
+// settle matters.
+let releaseSweepTimer = null;
+scheduleReleaseSweep = (delayMs = 2000) => {
+  if (releaseSweepTimer) return;
+  releaseSweepTimer = setTimeout(() => {
+    releaseSweepTimer = null;
+    void sweepReleases("turn settled").catch(() => {});
+  }, Math.max(0, Number(delayMs) || 0));
+  if (releaseSweepTimer.unref) releaseSweepTimer.unref();
+};
+
+// What the row's own ⟳ found last time travels with the snapshot too, newest first: a click's record is read from here,
+// so a reload comes back to the same journal instead of losing it with the page.
 function withRefreshJournal(snap) {
   for (const project of snap.projects || []) {
     for (const row of project.worktrees || []) {
@@ -1400,6 +1575,44 @@ function withTreeNames(snap) {
   return snap;
 }
 
+// ---- the two directories the panel keeps its things in ---------------------------------------------
+// The page shows these, with their sizes, and offers to open either or to empty the scratch one. Both numbers come
+// from lib/paths.js's cached walk (10 s), so a board polled every few seconds never pays for a fresh stat of the
+// attachments folder; `at` says how old the reading is rather than the page pretending it is live.
+function pathsInfo() {
+  const data = sizeOf(config.dataDir);
+  const scratch = sizeOf(config.scratchDir);
+  const iso = (ms) => (ms ? new Date(ms).toISOString() : null);
+  return {
+    dataDir: config.dataDir,
+    dataSource: config.dataDirSource,
+    // `split` (state/, attachments/, logs/ inside) or `flat` (a PANEL_CONFIG instance's own folder).
+    dataLayout: config.dataLayout,
+    dataBytes: data.bytes,
+    dataFiles: data.files,
+    // null until the first background walk lands, so the row says "measuring…" instead of a false "0 B".
+    dataMeasuredAt: iso(data.at),
+    scratchDir: config.scratchDir,
+    scratchSource: config.scratchDirSource,
+    scratchBytes: scratch.bytes,
+    scratchFiles: scratch.files,
+    scratchDirs: scratch.dirs,
+    scratchMeasuredAt: iso(scratch.at),
+    // Whether Clean scratch will work at all: it refuses a folder the panel did not make (paths.js, SCRATCH_MARKER).
+    scratchMarked: existsSync(path.join(config.scratchDir, SCRATCH_MARKER)),
+    // Where the pieces sit, so the row can say "the job store is under state/" without the reader guessing.
+    stateDir: config.stateDir,
+    attachmentsDir: config.attachmentsDir,
+    logsDir: config.logsDir,
+    // Where this board's history came from, from the data directory's own journal — so it is still answerable on
+    // every later boot. `thisBoot` is true only on the boot that did the copy.
+    migrated: lastMigration
+      ? { files: (lastMigration.copied || []).length, from: lastMigration.from, to: lastMigration.to, at: lastMigration.at, thisBoot: stateMigration.migrated }
+      : null,
+    at: iso(data.at || Date.now()),
+  };
+}
+
 // ---- the steward's own reads ------------------------------------------------------------------------------------
 // One project, re-read from git and classified: the parent book is refreshed first, because a plan that guessed a
 // different parent from the board would be two answers to one question, and the row is the one the reader is looking
@@ -1419,35 +1632,38 @@ async function stewardProject(name) {
 
 function snapshot() {
   return withRefreshJournal(
-    withTodos(
-      descriptions.withDescriptions(
-        withLocks(
-          withTreeNames(
-            withLiveAgents({
-              ...store.snapshot({ settings: settingsOut() }),
-              jobs: jobs.list(),
-              approvals: approvals.list(),
-              // The panel's own permission requests (a push a worker's guard parked, a merge the panel itself wants to
-              // write to a remote for). They ride with the snapshot the way the CLI-transport approvals do, so a reload
-              // comes back to the same open question instead of losing it.
-              remoteWrites: remoteWrites.state(),
-              // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
-              // thread id, so a reload comes back to the same conversation and the same watches.
-              assistant: assistant.state(),
-              // Where the board's links go: the host records a reader can choose from, plus what each project resolves to
-              // right now. One object, because the header's chip and the Discover strip must read the same answer.
-              hosts: { ...hosts.state(), projects: Object.fromEntries(registry.projects.map((p) => [p.name, hosts.view(p)])) },
-              skipped: registry.skipped,
-              scanRoots: config.scanRoots || [],
-              spawn: {
-                // Spawning is no longer "is there a hermes.exe on this box": it is "is the gateway's api_server
-                // reachable and keyed". The panel probes and reports, instead of assuming.
-                transport: jobs.transportInfo(),
-                defaultCwd: config.defaultCwd,
-                maxRuntimeSeconds: jobs.maxRuntimeSeconds,
-                projects: registry.projects.map((p) => ({ name: p.name, path: p.path, activityAt: p.activityAt || null, empty: Boolean(p.empty) })),
-              },
-            }),
+    withReleases(
+      withTodos(
+        descriptions.withDescriptions(
+          withLocks(
+            withTreeNames(
+              withLiveAgents({
+                ...store.snapshot({ settings: settingsOut() }),
+                paths: pathsInfo(),
+                jobs: jobs.list(),
+                approvals: approvals.list(),
+                // The panel's own permission requests (a push a worker's guard parked, a merge the panel itself wants to
+                // write to a remote for). They ride with the snapshot the way the CLI-transport approvals do, so a reload
+                // comes back to the same open question instead of losing it.
+                remoteWrites: remoteWrites.state(),
+                // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
+                // thread id, so a reload comes back to the same conversation and the same watches.
+                assistant: assistant.state(),
+                // Where the board's links go: the host records a reader can choose from, plus what each project resolves to
+                // right now. One object, because the header's chip and the Discover strip must read the same answer.
+                hosts: { ...hosts.state(), projects: Object.fromEntries(registry.projects.map((p) => [p.name, hosts.view(p)])) },
+                skipped: registry.skipped,
+                scanRoots: config.scanRoots || [],
+                spawn: {
+                  // Spawning is no longer "is there a hermes.exe on this box": it is "is the gateway's api_server
+                  // reachable and keyed". The panel probes and reports, instead of assuming.
+                  transport: jobs.transportInfo(),
+                  defaultCwd: config.defaultCwd,
+                  maxRuntimeSeconds: jobs.maxRuntimeSeconds,
+                  projects: registry.projects.map((p) => ({ name: p.name, path: p.path, activityAt: p.activityAt || null, empty: Boolean(p.empty) })),
+                },
+              }),
+            ),
           ),
         ),
       ),
@@ -1495,43 +1711,9 @@ function warmModelPrices(cfg, catalogue) {
 
 const cleanPath = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "");
 
-const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// Remove a directory that something may still hold open. `force: true` makes a missing path a
-// success; anything left behind is a handle, not a missing file. Returns true when the path is gone.
-async function removeDirNow(target) {
-  try {
-    await rm(target, { recursive: true, force: true, maxRetries: 2, retryDelay: 100 });
-  } catch {
-    /* held open — the check below is the answer */
-  }
-  return !(await stat(target).then((s) => s.isDirectory()).catch(() => false));
-}
-
-// Windows refuses to delete (or rename) a directory that a process is using as its working directory,
-// and a worktree is exactly that whenever an agent, an editor, or a panel started from it is still
-// running. Nothing the panel can do makes the holder let go — it has to exit — so the cleanup keeps
-// trying after the response for minutes rather than leaving an empty folder on disk forever.
-function retryDirCleanup(target, { everyMs = 5_000, forMs = 10 * 60_000 } = {}) {
-  const until = Date.now() + forMs;
-  const tick = async () => {
-    if (await removeDirNow(target)) {
-      log(`worktree cleanup: removed the leftover folder ${target}`);
-      return;
-    }
-    if (Date.now() < until) setTimeout(tick, everyMs).unref();
-    else log(`worktree cleanup: gave up on ${target} — a process still holds it`);
-  };
-  setTimeout(tick, everyMs).unref();
-}
-
-// Is this path an ancestor of (or equal to) a process's working directory? A panel cannot delete the
-// folder it was started from, and saying so is more use to the reader than "another process".
-function holdsCwd(target, cwd) {
-  const a = cleanPath(target).toLowerCase();
-  const b = cleanPath(cwd).toLowerCase();
-  return Boolean(b) && (b === a || b.startsWith(`${a}/`));
-}
+// Removing a worktree's folder - the Recycle Bin attempt, the retry for a folder a process still holds, and
+// the question of whether the panel itself is what holds it - lives in lib/worktree-remove.js with the rest of
+// the act, because the answer a CHECKING agent gives ends in the same removal.
 
 // The Hermes sessions the scheduler attributes to one worktree row — the same attribution the row's
 // own "Hermes session open here but idle" claim is built from, so this list can never offer a session
@@ -1973,6 +2155,72 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, snapshot());
     }
 
+    // ---- the panel's own folders, acted on only when the reader asks -------------------------------------
+    // Settings > Data shows the data and scratch directories with their sizes (both ride in /api/state as
+    // `paths`). These two routes are the only things that touch them: one opens a folder, one empties the
+    // scratch directory. Both are writes, so both are authorised.
+    if (route === "/api/paths/open" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const which = String(body.which || "data").trim().toLowerCase();
+      const target = which === "data" ? config.dataDir : which === "scratch" ? config.scratchDir : which === "logs" ? config.logsDir : null;
+      if (!target) return sendJson(res, 400, { error: `unknown folder “${which}” — one of data, scratch, logs` });
+      // Created before it is opened: the button says "open the folder", and a folder that exists but is empty is
+      // a better answer than "there is no such folder" on a panel that has simply not written anything yet.
+      try {
+        ensureDirs(config);
+      } catch (e) {
+        return sendJson(res, 500, { error: `could not create ${target}: ${String((e && e.message) || e)}` });
+      }
+      const { bin, args, error } = openerForFolder(target);
+      if (error) return sendJson(res, 400, { error });
+      try {
+        // Detached, exactly like /api/open-url: explorer.exe reports an exit code before the window is up, so the
+        // spawn is the only thing this route can honestly report on.
+        const child = spawn(bin, args, { detached: true, stdio: "ignore", windowsHide: true });
+        child.on("error", (e) => log(`could not open ${target}: ${String((e && e.message) || e)}`));
+        child.unref();
+      } catch (e) {
+        return sendJson(res, 500, { error: String((e && e.message) || e) });
+      }
+      return sendJson(res, 200, { ok: true, which, path: target, opened: bin });
+    }
+
+    // Empty the scratch directory. Three things REFUSE the whole clean, none of them a partial one: a folder the panel
+    // did not make or one that holds its own state/checkout/projects (paths.js, `scratchProblem` and the marker file),
+    // and a live run that is working in it or was told to write in it — on Windows the delete would half-fail under a
+    // process holding the files, and the agent would be left with a tree that no longer adds up. The refusal names the
+    // reason, and the reader fixes the setting, stops the run, or cleans it by hand.
+    if (route === "/api/scratch/clean" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const out = await cleanScratch({
+        scratchDir: config.scratchDir,
+        jobs: jobs.list(),
+        dataDir: config.dataDir,
+        home: homedir(),
+        // Everything a mistyped scratchDir could be an ancestor of: this checkout, the config's folder, the panel's own
+        // state, its default working folder, the scan roots and every project the registry knows.
+        keep: [
+          HERE, CONFIG_DIR, config.stateDir, config.attachmentsDir, config.logsDir, config.defaultCwd,
+          ...(Array.isArray(config.scanRoots) ? config.scanRoots : []),
+          ...registry.projects.map((p) => p.path),
+        ],
+      });
+      if (!out.ok) {
+        log(`scratch NOT cleaned: ${out.error}`);
+        return sendJson(res, out.refused ? 409 : 500, { ...out, freed: "0 B", paths: pathsInfo() });
+      }
+      sizeOf(config.scratchDir, { fresh: true });
+      const freed = humanBytes(out.freedBytes);
+      log(
+        `scratch cleaned: freed ${freed} (${out.removedFiles} file(s), ${out.removedDirs} folder(s)) from ${config.scratchDir}` +
+          `${out.leftBehind ? ` — ${out.leftBehind} entr${out.leftBehind === 1 ? "y" : "ies"} could not be removed (still open)` : ""}`,
+      );
+      // Every open Settings tab repaints from this: the size in the row has to move with the press.
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, { ...out, freed, paths: pathsInfo() });
+    }
+
     // On-demand cleanup audit for ONE project, straight from `hermes worktree list --json`:
     // linked trees, externally-registered trees (with locked/missing), and a keep/reap verdict
     // with a reason for every local branch. ~6s per repo, so it is never polled — the UI (or a
@@ -2140,6 +2388,98 @@ const server = createServer(async (req, res) => {
       log(`rollup: ${row.branch} → ${parentBranch} in ${project.name} (${out.method}${out.sha ? ` ${out.sha}` : ""})`);
       broadcast({ type: "snapshot", data: snapshot() });
       return sendJson(res, 200, out);
+    }
+
+    // ---- rebasing one child onto the newest commit of the branch it was cut from ----------------------------------
+    // The UNMERGED chip's rebase outcome, and the ONE action in that chooser that is not an agent: `git rebase` is a
+    // single deterministic command whose outcome git reports itself, so the panel runs it here — no run, no gateway,
+    // no bill. It writes exactly one branch: the one checked out in this worktree. The parent, the base branch and the
+    // remote are untouched, so this route never reaches the remote-write box. `lib/rebase.js` picks the target by
+    // proof (the commits a replay would move must belong to this branch alone) and aborts a conflicted replay back to
+    // the state it started from. `{dryRun: true}` answers with the plan and writes nothing.
+    if (route === "/api/worktree/rebase" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const asked = String(body.path || "").trim();
+      if (!asked) return sendJson(res, 400, { error: "path is required" });
+      // Forward slashes, the spelling every row on the board already carries: `store.rowKey` is the raw string, so a
+      // backslashed path here would name a DIFFERENT row — and `scanOne`'s "must stay deleted" guard would then
+      // return the row it just read without storing it, leaving the board on the pre-rebase tip. The rename route
+      // spells its path the same way, for the same reason.
+      const worktree = path.resolve(asked).replace(/\\/g, "/");
+      const info = await stat(worktree).catch(() => null);
+      if (!info || !info.isDirectory()) return sendJson(res, 404, { error: `no such directory: ${worktree}` });
+      // The same resolution every worktree route does: the row's project is the hint and git's worktree list is the
+      // proof the hint is real. A tree can live anywhere, so a path outside the project root is not an error.
+      let project = spawnFeature.projectForPath(worktree) || registry.projects.find((p) => normPathKey(p.path) === normPathKey(worktree));
+      if (!project) {
+        const hinted = registry.projects.find((p) => p.name === String(body.project || "").trim());
+        if (hinted) {
+          const listed = await worktreeList(hinted.path).catch(() => []);
+          if (listed.some((w) => normPathKey(w.path) === normPathKey(worktree))) project = hinted;
+        }
+      }
+      if (!project) return sendJson(res, 400, { error: `${worktree} is not inside a known project, and is not one of its worktrees` });
+      const base = String(project.mainBranch || "");
+      if (!base) return sendJson(res, 400, { error: `${project.name} has no base branch to measure the branch against` });
+      const remote = project.remote || null;
+      const baseRef = remote ? `${remote}/${base}` : base;
+      const row = await scanWorktree(worktree, { remoteRef: baseRef, mainBranch: base }, "fast");
+      if (row.error) return sendJson(res, 400, { error: row.error });
+      const preview = { project: project.name, base, baseRef, remote, branch: row.branch, worktree: worktree.replace(/\\/g, "/") };
+      if (row.branch === base) {
+        return sendJson(res, 409, { error: `${path.basename(worktree)} is on ${base} itself — there is no branch of its own to replay`, ...preview });
+      }
+      const dirty = Number(row.dirty) || 0;
+      const untracked = Number(row.untracked) || 0;
+      if (dirty || untracked) {
+        return sendJson(res, 409, {
+          error: `the tree is not clean (${dirty} modified, ${untracked} untracked) — a rebase would either refuse to start or carry somebody's unfinished work through the replay, so commit or stash first`,
+          ...preview,
+        });
+      }
+      // The reader's lock is a "not this tree" that outlives the process, and a replay rewrites the branch it names.
+      const lock = locks.check({ project: project.name, path: worktree, branch: row.branch });
+      if (lock.locked) return sendJson(res, 409, { error: `nothing was rebased: ${lock.reason}`, lock, ...preview });
+      if (row.ahead === 0) return sendJson(res, 409, { error: `${row.branch} has no commits of its own off ${baseRef} — a replay would have nothing to move`, ...preview });
+      // One replay per branch at a time: a second would drive the same index while the first is half-applied.
+      const out = await writerLocks
+        .with(
+          rebaseKey(project.path, row.branch),
+          () => rebaseWorktree({ worktree, branch: row.branch, parent: row.parent || null, baseRef, mainBranch: base, dryRun: body.dryRun === true, log }),
+          { holder: `rebase ${row.branch}`, waitMs: 60000 },
+        )
+        .catch((e) => ({ ok: false, refused: "busy", error: String((e && e.message) || e) }));
+      if (!out.ok) return sendJson(res, 409, { ...out, ...preview });
+      // A dry run wrote nothing, so there is nothing to re-read and no replay to log: its answer is the plan. Sending
+      // it here also keeps a second read of the same tree out of flight for the real press to queue behind.
+      if (body.dryRun === true) {
+        return sendJson(res, 200, {
+          ...out,
+          ...preview,
+          published: Boolean(ownCopyOf(row)),
+          row: store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(worktree)) || null,
+        });
+      }
+      log(`rebase: ${row.branch} onto ${out.target} (${out.fromShort} -> ${out.toShort}, ${out.replayed} commit(s) replayed)`);
+      // The board is a scan behind, and the whole point of the control is that the row shows the new tip: read this
+      // one tree now (the same claim the next-read ring makes) instead of leaving a fresh replay looking un-rebased.
+      // Waiting for the path to fall idle first is not politeness: `pool.run` DEDUPES per path, so a read issued while
+      // a scan of this tree is still running would join that PRE-replay read and answer with the old tip. Any scan that
+      // starts once the path is idle reads the replay, whoever asked for it, so the wait is bounded rather than a race.
+      for (let waited = 0; waited < 30 && scheduler.pool.isBusy(worktree); waited += 1) {
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      {
+        // The scheduler's own record of the project, not this route's: `ctxFor` reads the fetch/scan settings off it.
+        const scanProject = scheduler.getProjects().find((p) => p.name === project.name) || project;
+        scheduler.lastFast.set(`${project.name}::${worktree}`, Date.now());
+        await scheduler.scanOne(scanProject, worktree, "full").catch(() => null);
+      }
+      broadcast({ type: "snapshot", data: snapshot() });
+      // A branch with its own copy on the remote has just rewritten shas that copy still holds: the next push needs
+      // `--force-with-lease`, and the page's banner says so rather than letting the Ahead / Behind column look wrong.
+      return sendJson(res, 200, { ...out, ...preview, published: Boolean(ownCopyOf(row)), row: store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(worktree)) || null });
     }
 
     // "Where should this go?" — the chip's third outcome, and the only thing it does: write the question down and
@@ -2507,7 +2847,9 @@ const server = createServer(async (req, res) => {
         name = "";
       }
       name = path.basename(name || "pasted-file").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").slice(0, 120) || "pasted-file";
-      const dir = config.attachmentsDir || path.join(path.dirname(config.jobsFile || path.join(process.cwd(), "logs")), "attachments");
+      // Under the data directory, never inside the checkout: an attachment is state the panel keeps, and its
+      // absolute path is what goes into the run's prompt (lib/paths.js owns the default).
+      const dir = config.attachmentsDir;
       const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const target = path.join(dir, `${stamp}-${name}`);
       try {
@@ -2561,6 +2903,7 @@ const server = createServer(async (req, res) => {
         }
       }
       const origin = body.origin && typeof body.origin === "object" ? body.origin : null;
+      const home = projectOfTree(dir);
       const job = await jobs.create({
         prompt: text,
         thread: first.thread,
@@ -2576,6 +2919,11 @@ const server = createServer(async (req, res) => {
         yolo: body.yolo ?? first.yolo,
         // A reply continues the SAME agent, so it keeps the tree that agent was created for.
         ownerPath: first.ownerPath || null,
+        // …and the paragraph about where that tree's branch goes has to quote the policy of ITS project, and its remote,
+        // the way the spawn did. A reply that carried neither fell back to the global default and told a worker in a
+        // project that ALLOWS pushes that a push "will park and then fail".
+        branchPolicy: policyForProjectPath(home?.path || dir, home),
+        remote: home?.remote || null,
       });
       // A delivery turn closes the offer on the turn it answers, for every reader and every reload.
       if (origin && origin.fromTurn) jobs.markCollected(origin.fromTurn, job.id);
@@ -2994,8 +3342,11 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, removedFile, kind: hit.artifact.kind || "file" });
     }
 
-    // Remove a worktree from the board: the directory goes to the Windows Recycle Bin (recoverable), then
-    // git's own bookkeeping is pruned. Never the project's own checkout, never a tree with a live agent.
+    // Remove a worktree from the board: the directory goes to the Windows Recycle Bin (recoverable), then git's
+    // own bookkeeping is pruned. Never the project's own checkout, never a tree with a live agent, never a locked
+    // tree. The act itself is lib/worktree-remove.js, because the answer a CHECKING agent gives (LANDED: YES) ends in
+    // the same removal and has to pass through the same guards - the lock, the live-agent check and what git still
+    // lists are enforced there, so a second caller cannot arrive one guard short of this one.
     if (route === "/api/worktree/delete" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
@@ -3003,121 +3354,18 @@ const server = createServer(async (req, res) => {
       const target = path.resolve(String(body.path || "").trim());
       const project = scheduler.getProjects().find((p) => p.name === projectName);
       if (!project) return sendJson(res, 404, { error: `unknown project: ${projectName}` });
-      if (path.resolve(project.path) === target) {
-        return sendJson(res, 400, { error: "that is the project's own checkout, not a worktree" });
-      }
       const row = scheduler.store.rowsFor(projectName).find((r) => path.resolve(r.path) === target);
       if (!row) return sendJson(res, 404, { error: `not a worktree row of ${projectName}: ${target}` });
-      // The reader's lock, before anything is even looked at: the row's ✕, a merge agent tidying up, a script that
-      // found this route — every one of them arrives here, and every one of them is refused with the lock named. A
-      // silent no-op would read as a broken button, so this is a 409 with the whole sentence (the board banners it).
-      const lock = locks.check({ project: projectName, path: row.path, branch: row.branch });
-      if (lock.locked) {
-        log(`worktree delete refused for ${row.path}: ${lock.reason}`);
-        return sendJson(res, 409, { error: lock.reason, lock });
-      }
-      const busy = jobs
-        .list()
-        .find(
-          (j) =>
-            isLiveJobStatus(j.status) &&
-            [j.cwd, j.ownerPath].filter(Boolean).some((p) => path.resolve(p) === target),
-        );
-      if (busy) return sendJson(res, 409, { error: `an agent is running in that worktree (${busy.id})` });
-
-      // Recycle first: a mistaken click is recoverable from the Recycle Bin for as long as Windows keeps
-      // it. `git worktree remove --force` is the fallback when the shell cannot reach the Recycle Bin.
-      const psCommand =
-        "Add-Type -AssemblyName Microsoft.VisualBasic; " +
-        `[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory('${target.replace(/'/g, "''")}','OnlyErrorDialogs','SendToRecycleBin')`;
-      const stillThere = () => stat(target).then((s) => s.isDirectory()).catch(() => false);
-      // Recorded before anything is deleted: the response should say whether this call removed a
-      // directory or merely cleaned up the panel's record of one that was already gone.
-      const hadDirectory = await stillThere();
-      let recycled = false;
-      let recycleError = null;
-      if (process.platform === "win32" && hadDirectory) {
-        try {
-          await execP("powershell", ["-NoProfile", "-NonInteractive", "-Command", psCommand], { timeout: 90_000, windowsHide: true });
-          recycled = !(await stillThere());
-          if (!recycled) recycleError = "the Recycle Bin refused it — the directory is still there";
-        } catch (e) {
-          recycleError = String((e && e.message) || e);
-        }
-      }
-      // git's removal empties the tree and drops its own record. Its LAST step is the rmdir, and on
-      // Windows that fails whenever a process still has the folder as its working directory — which a
-      // worktree routinely is, because the agent that built it, an editor, or a panel started from it is
-      // still running. So `failed to delete …: Permission denied` does NOT mean the worktree survived: by
-      // then the files and the record are gone and only an EMPTY folder is left. Treating that error as
-      // a failure is what left the row on the board (re-read as a worktree with no branch) while the
-      // folder stayed on disk. What git still lists is the arbiter, below.
-      let gitError = null;
-      if (await stillThere()) {
-        try {
-          await execP("git", ["-C", project.path, "worktree", "remove", "--force", target], { timeout: 90_000, windowsHide: true });
-        } catch (e) {
-          gitError = String((e && e.message) || e);
-        }
-      }
-      await execP("git", ["-C", project.path, "worktree", "prune"], { timeout: 30_000, windowsHide: true }).catch(() => {});
-
-      const listing = await worktreeList(project.path).catch(() => null);
-      const stillRegistered = listing ? listing.some((w) => path.resolve(w.path) === target) : null;
-      if (stillRegistered === true) {
-        // git never let go of it: the worktree is still real, so the row has to stay and the caller has
-        // to hear a failure rather than a claim of deletion.
-        const why = String(gitError || "git still lists it").trim().split("\n").filter(Boolean).pop();
-        return sendJson(res, 500, { error: `could not remove the worktree: ${why}` });
-      }
-      const heldOpen = /failed to delete|Permission denied|being used by another process|EBUSY|EPERM/i.test(
-        String(gitError || ""),
-      );
-      if (stillRegistered === null && (await stillThere()) && gitError && !heldOpen) {
-        // git's listing could not be read AND its removal failed for some other reason: nothing here
-        // proves the worktree is gone, so do not pretend it is.
-        return sendJson(res, 500, { error: `could not remove the worktree: ${gitError}` });
-      }
-
-      // Only the folder can disagree now. An empty leftover goes at once; one a process still holds is
-      // retried here, then kept after the response until the holder exits — the row goes either way,
-      // because it describes a worktree git no longer has.
-      let dirLeft = await stillThere();
-      for (let i = 0; dirLeft && i < 4; i += 1) {
-        dirLeft = !(await removeDirNow(target));
-        if (dirLeft) await sleepMs(600);
-      }
-      if (dirLeft) retryDirCleanup(target);
-      // Whether the panel itself is what holds the folder: a panel started from this worktree cannot
-      // delete it while it runs, and "restart the panel" is the only useful thing to say.
-      const panelHolds = dirLeft && holdsCwd(target, process.cwd());
-
-      // Drop by the path the STORE knows, not by `path.resolve(target)`: rows are keyed by the scanned
-      // path with forward slashes, so a resolved Windows path is a different key and the row survived
-      // its own deletion.
+      const out = await deleteWorktreeRow({ project, row, target, jobs, locks, onLog: log });
+      if (!out.ok) return sendJson(res, out.status || 500, { error: out.error, lock: out.lock || undefined });
+      // Drop by the path the STORE knows, not by `path.resolve(target)`: rows are keyed by the scanned path with
+      // forward slashes, so a resolved Windows path is a different key and the row survived its own deletion.
       scheduler.store.dropRow(projectName, row.path);
-      // A snapshot only refreshes the rows it carries — it never retracts one — so the removal needs
-      // its own event or the row sits on every open board for a worktree that no longer exists.
+      // A snapshot only refreshes the rows it carries - it never retracts one - so the removal needs its own event
+      // or the row sits on every open board for a worktree that no longer exists.
       broadcast({ type: "drop", project: projectName, path: row.path });
       broadcast({ type: "snapshot", data: snapshot() });
-      return sendJson(res, 200, {
-        ok: true,
-        recycled,
-        // The Recycle Bin is best effort: when it declined, say why and let the card say the files are
-        // gone permanently instead of promising recoverability that does not exist.
-        recycleError,
-        // Files deleted, git record pruned, row dropped — and the folder itself survived because a
-        // process holds it. The panel keeps trying in the background.
-        dirLeft,
-        panelHolds,
-        path: target,
-        name: row.name,
-        branch: row.branch || null,
-        // The key the panel and its rows use, so the browser can remove the right node.
-        rowPath: row.path,
-        // The folder was already gone when this ran: say so rather than pretending we removed it.
-        alreadyGone: !hadDirectory,
-      });
+      return sendJson(res, 200, out);
     }
 
     // Open a file an agent produced for the reader. Not a URL: a real path, opened in an editor.
@@ -3468,6 +3716,97 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 202, { pending: { id: parked.id, deadline: parked.deadline, timeoutSeconds: parked.timeoutSeconds, kind: "merge" }, ...preview, prompt: undefined });
     }
 
+    // The UNMERGED chip's fourth outcome: an agent that CHECKS the branch against the base, because the commit count
+    // cannot answer it. A squash, a rebase or a hand-rewritten patch leaves the branch carrying commits of its own
+    // while the base holds the change under another sha, so "is it on main?" is a question about CONTENT, and
+    // lib/verify-prompt.js is the script that answers it from the content itself (a reverse-apply of the branch's own
+    // patch to a pristine export of the base).
+    //
+    // The run writes nothing to either branch, so it does NOT pass through the remote-write box: the only act that
+    // follows its answer is the panel's own delete - on LANDED: YES, through the same lib/worktree-remove.js the ✕
+    // uses, so a locked tree, a tree with a live agent and a tree with uncommitted work are all still refused.
+    // `dryRun` hands the script back without starting anything, the way the merge route does.
+    if (route === "/api/worktree/verify-landed" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const asked = String(body.path || "").trim();
+      if (!asked) return sendJson(res, 400, { error: "path is required" });
+      const worktree = path.resolve(asked);
+      const info = await stat(worktree).catch(() => null);
+      if (!info || !info.isDirectory()) return sendJson(res, 404, { error: `no such directory: ${worktree}` });
+      // The same resolution the merge route does, for the same reason: a worktree can live anywhere, so the row's
+      // project is the hint and git's own worktree list is the proof that the hint is real.
+      let project = spawnFeature.projectForPath(worktree) || registry.projects.find((p) => normPathKey(p.path) === normPathKey(worktree));
+      let trees = project ? await worktreeList(project.path).catch(() => []) : [];
+      if (!project) {
+        const hinted = registry.projects.find((p) => p.name === String(body.project || "").trim());
+        if (hinted) {
+          const listed = await worktreeList(hinted.path).catch(() => []);
+          if (listed.some((w) => normPathKey(w.path) === normPathKey(worktree))) {
+            project = hinted;
+            trees = listed;
+          }
+        }
+      }
+      if (!project) return sendJson(res, 400, { error: `${worktree} is not inside a known project, and is not one of its worktrees` });
+      const base = String(project.mainBranch || "");
+      if (!base) return sendJson(res, 400, { error: `${project.name} has no base branch (no main/master and no remote default) to check against` });
+      const remote = project.remote || null;
+      const baseRef = remote ? `${remote}/${base}` : base;
+      const row = await scanWorktree(worktree, { remoteRef: baseRef, mainBranch: base }, "fast");
+      if (row.error) return sendJson(res, 400, { error: row.error });
+      if (row.branch === base) return sendJson(res, 409, { error: `${path.basename(worktree)} is on ${base} itself - there is nothing to check` });
+      if (row.ahead === null) return sendJson(res, 409, { error: `cannot count commits against ${baseRef} in this worktree - is the base ref there?` });
+      if (row.ahead === 0) return sendJson(res, 409, { error: `${row.branch} has no commits off ${base} - there is nothing to check` });
+      const label = verifyLabel(base);
+      // One check agent per worktree: a second would spend the gateway's run on the answer the first one is writing.
+      const running = jobs
+        .list()
+        .find((j) => isLiveJobStatus(j.status) && normPathKey(j.ownerPath || j.cwd) === normPathKey(worktree) && String(j.label || "").startsWith("CHECKING "));
+      if (running) return sendJson(res, 409, { error: `an agent is already checking this worktree (${running.label || running.thread})` });
+      const list = await gitIn(worktree, ["log", "--oneline", "-20", `${baseRef}..HEAD`], 20000);
+      const commitList = list.ok ? list.out.split("\n").filter(Boolean) : [];
+      const root = (trees.find((w) => w.branch === base) || trees[0] || { path: project.path }).path;
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const lock = locks.check({ project: project.name, path: worktree, branch: row.branch });
+      const prompt = verifyPrompt({
+        project: project.name,
+        worktree,
+        root,
+        branch: row.branch,
+        base,
+        baseRef,
+        remote,
+        ahead: row.ahead,
+        commits: commitList,
+        stamp,
+        // What the board knows, so the agent reads a clean tree rather than trusting this line: the panel will refuse
+        // the delete for a dirty tree, and the report has to say so before the reader wonders why nothing moved.
+        dirty: row.dirty,
+        untracked: row.untracked,
+        locked: lock.locked ? lock : null,
+        panelPort: config.port,
+        scratchBase: tmpdir(),
+      });
+      const thread = makeThreadName(`${label} ${project.name}`);
+      const preview = { project: project.name, base, baseRef, remote, branch: row.branch, ahead: row.ahead, root, worktree: worktree.replace(/\\/g, "/"), label, thread, prompt, lock: lock.locked ? lock : null };
+      if (body.dryRun) return sendJson(res, 200, { dryRun: true, ...preview });
+      const transport = await jobs.probe();
+      if (!transport.reachable || !transport.capabilities?.runs) {
+        return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}`, ...preview, prompt: undefined });
+      }
+      const top = await gitIn(worktree, ["rev-parse", "--show-toplevel"], 15000);
+      const ownerPath = top.ok && top.out ? top.out : worktree;
+      // `remoteWrite: "none"` is the promise this run makes: a check reads, so the landing paragraphs stay out of its
+      // brief and no push guard is installed for a push it must never make.
+      const job = await jobs.create({ prompt, thread, cwd: worktree, existing: true, ownerPath, project: project.name, remoteWrite: "none" });
+      // The label is what the sweep reads the answer back from, so it is set before the card draws.
+      jobs.setLabel(job.thread, label);
+      if (job.status === "failed") return sendJson(res, 502, { error: job.error || "the run could not be started", job, ...preview, prompt: undefined });
+      log(`check ${row.branch} against ${base} in ${project.name}: job ${job.id} (${job.status})`);
+      return sendJson(res, 202, { job, ...preview });
+    }
+
     // Give a worktree a name of its own: the directory and its branch. The row is looked up by path, and the whole
     // operation refuses while an agent is running in the tree - see renameWorktree().
     //
@@ -3674,10 +4013,90 @@ async function warmParents() {
   }
   if (learned) log(`parents: ${learned} branch(es) resolved (${guessed} backfilled guess(es) in total — a guess never drives a write)`);
 }
+// ---- the CHECKING agent's answer, acted on -------------------------------------------------------------------
+// A check run is read-only, so its answer is the whole product: on LANDED: YES the panel does the one thing that
+// answer is for and moves the tree to the Recycle Bin, through the ✕'s own act (lib/worktree-remove.js) so the
+// reader's lock, a live agent and the project's own checkout still refuse it. Every other word - PARTIAL, NO,
+// SUPERSEDED, or no readable line at all - leaves the tree exactly where it is and the card says which word it read.
+//
+// A pass over the JOB STORE rather than a callback on the run that answered: a panel restarted between the answer and
+// the delete still acts on it, and the store is what survives a restart. `checkedAnswers` keeps one answer to one
+// delete per process, and lib/verify-landed.js bounds how old an answer may be before it is history rather than an
+// instruction.
+const checkedAnswers = new Set();
+// Answers whose tree the board has not re-adopted yet. Not `acted`: the answer is still good, and the next tick may
+// find the row. Only the one log line is deduped.
+const pendingChecked = new Set();
+let sweepingChecked = false;
+async function sweepCheckedLandings() {
+  if (sweepingChecked) return;
+  sweepingChecked = true;
+  try {
+    // The summary `jobs.list()` hands back has no `finalMessage` (the card store drops it), so each candidate is
+    // enriched from the LIVE job first: the answer is the last line of a message the completion payload may have
+    // truncated from the start.
+    const rows = jobs.list().map((s) => ({ ...s, finalMessage: jobs.get(s.id)?.finalMessage || s.completion?.final?.text || "" }));
+    for (const { job, answer } of answeredChecks(rows, { acted: checkedAnswers })) {
+      checkedAnswers.add(job.id);
+      const live = jobs.get(job.id);
+      const tree = job.ownerPath || job.cwd || "";
+      const project = (tree && spawnFeature.projectForPath(tree)) || null;
+      const row = project ? store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(tree)) : null;
+      const base = String(project?.mainBranch || "main");
+      const say = (text) => {
+        if (live) jobs.push(live, { kind: "raw", text });
+      };
+      if (!answerDeletes(answer)) {
+        say(answerLine(answer, { base }));
+        log(`check ${job.id}: answered LANDED: ${answer.verdict} for ${row?.branch || tree || "(no tree)"} - nothing was deleted`);
+        continue;
+      }
+      if (!project) {
+        say(answerLine(answer, { base, error: "it is no longer a worktree row of this project, so there was nothing to remove" }));
+        continue;
+      }
+      if (!row) {
+        // The project is known but its row is not in the store YET - the answer arrived before a discovery pass put
+        // the tree back on the board (a restart between the answer and the delete is exactly that). Do not spend the
+        // answer: leave it for the next tick, inside lib/verify-landed.js's age window, and say so once.
+        if (!pendingChecked.has(job.id)) {
+          pendingChecked.add(job.id);
+          log(`check ${job.id}: LANDED: YES, but ${tree} is not on the board yet - waiting for the scan`);
+        }
+        continue;
+      }
+      const out = await deleteWorktreeRow({ project, row, target: row.path, jobs, locks, onLog: log });
+      if (!out.ok) {
+        say(answerLine(answer, { base, error: out.error }));
+        log(`check ${job.id}: LANDED: YES for ${row.branch}, but ${row.path} was not deleted - ${out.error}`);
+        continue;
+      }
+      store.dropRow(project.name, row.path);
+      broadcast({ type: "drop", project: project.name, path: row.path });
+      broadcast({ type: "snapshot", data: snapshot() });
+      say(answerLine(answer, { base, deleted: true }));
+      log(`check ${job.id}: LANDED: YES for ${row.branch} - removed ${row.path} (recycled: ${out.recycled ? "yes" : "no"})`);
+    }
+  } catch (e) {
+    log(`checked-landing sweep failed: ${String((e && e.message) || e)}`);
+  } finally {
+    sweepingChecked = false;
+  }
+}
+setInterval(() => void sweepCheckedLandings(), 10_000).unref?.();
+// One pass shortly after boot, so an answer a restart interrupted is acted on without waiting for the first tick.
+setTimeout(() => void sweepCheckedLandings(), 6_000).unref?.();
+
 setInterval(() => void warmParents(), Math.max(30_000, config.stewardRefreshSeconds * 500));
 // First pass 20s in: late enough that the board is up (the boot pass is local git only), early enough that a legacy
 // tree stops reading "unknown" within one screen of the panel opening.
 setTimeout(() => void warmParents(), 20_000).unref?.();
+
+// The release executor's own clock (lib/worktrees.js, swept above). A request is normally acted on a couple of seconds
+// after the turn that wrote it settles; this tick is for one that arrived while the panel was busy, and the boot pass
+// for one a restart interrupted. Zero pending requests cost one pass over a Map and no subprocess at all.
+setInterval(() => void sweepReleases("tick").catch(() => {}), 60_000).unref?.();
+setTimeout(() => void sweepReleases("boot").catch(() => {}), 12_000).unref?.();
 
 server.listen(config.port, config.host, () => {
   log(`agent-worktree-gui on http://${config.host}:${config.port}`);

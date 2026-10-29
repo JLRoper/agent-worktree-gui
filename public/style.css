@@ -679,6 +679,11 @@ button.btn-pin.is-on { color: #c8a6ff; border-color: #55407a; background: #2a204
 button.btn-think { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dimmer); font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; }
 button.btn-think:hover { color: var(--text); border-color: var(--line); }
 button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241d33; }
+/* The 🌊 beside the 🧠: the same button, saying the card is drawn as ONE stream. Blue rather than violet, because it
+   is a different choice rather than a second level of the same one. */
+button.btn-stream { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dimmer); font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; }
+button.btn-stream:hover { color: var(--text); border-color: var(--line); }
+button.btn-stream.is-on { color: #9ed4ff; border-color: #2f4a63; background: #14202b; }
 
 
 /* A steer the turn never read: offered back, unsent, rather than sent as a second turn. */
@@ -948,6 +953,13 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
 /* The console is a <pre>: the template's own newlines would render as blank lines, so the block normalises
    whitespace and only its real transcript lines keep it. */
 .tgrp { margin: 3px 0 6px; padding-left: 8px; border-left: 2px solid #2c3542; white-space: normal; }
+/* A piece of ONE stream: the same markup without the rail, the indent or the gap, so a call sits in the flow exactly
+   like the prose and the reasoning around it. Nothing in it is folded, so nothing in it is chrome either. */
+.tgrp.tgrp-flat { margin: 0; padding-left: 0; border-left: 0; }
+.tgrp-flat > .tgrp-body { margin-top: 0; padding-top: 0; border-top: 0; }
+/* The reasoning, drawn as a line of that stream rather than as a block above it. It keeps the block's own voice
+   (italic, dim) so it still reads as thought and not as something the agent said out loud. */
+.jl-think { color: #b3a8cc; font-style: italic; }
 .tgrp .jl { white-space: pre-wrap; }
 .tgrp-head { display: flex; flex-direction: column; gap: 1px; }
 .tgrp-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; cursor: pointer; border-radius: 3px; }
@@ -955,6 +967,9 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
 .tgrp-row.is-active { background: rgba(200, 166, 255, .10); }
 .tgrp-row.is-active .tgrp-name { color: #ecd9ff; }
 .tgrp-row:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+/* A trimmed burst's head row names the block; it is not a filter target like a tool row, so it must not look clickable. */
+.tgrp-row.tgrp-row-trimmed { cursor: default; }
+.tgrp-row.tgrp-row-trimmed:hover { background: none; }
 .tgrp-g { flex: none; width: 15px; }
 .tgrp-name { flex: none; color: #c8a6ff; }
 .tgrp-n { flex: none; color: var(--dim); }
@@ -1132,6 +1147,16 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 /* The UA's own [hidden] rule is one attribute selector and loses to a class: without this the folded body
    would render anyway. */
 .code-body[hidden] { display: none; }
+/* Every tool result is one of these boxes (core/console-format.js): its lines, a file's body, or a diff. A diff's
+   framed windows are drawn INSIDE it, so the box is the only frame — the windows give up their own border and the
+   next window is told from the one above by a rule — and what the change adds and removes sits in the header, so a
+   closed box still says how big the change is. */
+.code-box.is-diff > .code-body { padding: 0; }
+.code-box .df-win { margin: 0; border: 0; border-radius: 0; background: transparent; }
+.code-box .df-win + .df-win { border-top: 1px solid var(--line); }
+.code-delta { flex: none; display: inline-flex; gap: 6px; }
+.code-delta .is-add { color: #7ee787; }
+.code-delta .is-del { color: #ff9c94; }
 
 /* The panel's own fold, at the foot of a result the card kept only the head of: "… 214 lines hidden — click to
    read". It is a button because the rest of the result is one click away (the session store has it verbatim), and
@@ -1845,6 +1870,26 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
 .desc-body { padding: 2px 0 4px 28px; }
 /* Which run the words came from, and when: the description is quoted from that brief, never written for the board. */
 .desc-from { margin-top: 3px; font-size: 11px; color: var(--dimmer); }
+/* A RELEASE request (lib/worktrees.js) is one line at the top of the detail: the verdict the panel's executor wrote
+   back and the reason the worker gave. The left rule carries the state colour — green removed, amber refused, blue
+   still waiting on the executor — and the gate that said no is part of the sentence, so a refusal needs no second
+   line. Signal colours, so they stay out of the contrast slider's surface map. */
+.release-block {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0;
+  margin: 0 0 5px; padding: 2px 0 2px 9px; border-left: 2px solid var(--line);
+  font: 11.5px/1.6 var(--mono); color: var(--dim);
+}
+.release-block .release-mark { flex: none; color: var(--dimmer); }
+.release-block .release-word { flex: none; color: var(--dim); }
+.release-block .release-state { flex: none; color: var(--text); }
+.release-block .release-when { flex: none; color: var(--dimmer); }
+.release-block .release-why { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); }
+.release-block.removed { border-left-color: var(--green); }
+.release-block.removed .release-state { color: var(--green); }
+.release-block.refused { border-left-color: var(--amber); }
+.release-block.refused .release-state { color: var(--amber); }
+.release-block.requested { border-left-color: var(--blue); }
+.release-block.requested .release-state { color: var(--blue); }
 
 /* ---- the worktree's TODO list ------------------------------------------------------------------------------------ */
 /* The third strip in the row's family, with the description above it and MERGE STATE under it. FOLDED it reads the
@@ -2265,6 +2310,10 @@ td.branch a.branch-link:focus-visible { outline: 1px solid #7fb2e8; outline-offs
 /* No copy on the remote: plain text, and one dim word that answers "which trees have a remote copy" at a glance.
    Deliberately small and quiet — most rows of a research fleet carry it, and a loud marker on most rows is noise. */
 td.branch .branch-local { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: #55606e; border: 1px solid #2b323c; border-radius: 3px; padding: 0 3px; vertical-align: 1px; }
+/* The remote could not be asked: the same little word, in the amber the panel uses for "not answered" everywhere
+   else. It must not read as `local` — that would be the panel inventing an answer — so it says `unverified` and its
+   tooltip quotes the project's fetch note. Same box, different colour: the shape is familiar, the claim is weaker. */
+td.branch .branch-unverified { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: #8a7448; border: 1px dashed #4a3f28; border-radius: 3px; padding: 0 3px; vertical-align: 1px; }
 td.branch .branch-plain { color: #9aa6b4; }
 .dim { color: var(--dim); }
 .dimmer { color: var(--dimmer); }
@@ -2303,10 +2352,11 @@ td.branch .branch-plain { color: #9aa6b4; }
 .badge.merge-start.is-merging,
 .badge.merge-start.is-starting { opacity: .7; background: var(--red-bg); border-color: #57262a; color: #ff9c94; }
 
-/* The chip's chooser: three outcomes, no write until one is clicked. It is a popover on the body (not inside the cell)
-   because the board rebuilds the table on every scan and a re-rank would take a nested popover with it. The three
-   buttons are drawn as a stack rather than a row: "Roll into <parent>" and "Open a PR" are different destinations,
-   and a reader picking one should see the other two whole. */
+/* The chip's chooser: five outcomes, no write until one is clicked. It is a popover on the body (not inside the cell)
+   because the board rebuilds the table on every scan and a re-rank would take a nested popover with it. The buttons
+   are drawn as a stack rather than a row: "Roll into <parent>" and "Open a PR" are different destinations, and a
+   reader picking one should see the others whole. "Check whether it is on <main>" is the fourth: read-only in the
+   branches, and the one that ends in this worktree going to the Recycle Bin. */
 .merge-chooser {
   position: fixed;
   z-index: 60;
@@ -2339,11 +2389,27 @@ td.branch .branch-plain { color: #9aa6b4; }
 .mc-choice:disabled { cursor: default; opacity: .55; }
 .mc-choice.is-roll:not(:disabled) { border-color: #4f6d3a; color: #b8e08a; }
 .mc-choice.is-roll:not(:disabled):hover { background: #1d2419; }
+/* The rebase is mechanical — one git command, no run — so it reads as a tool rather than a destination: a quiet steel
+   outline that never competes with the green roll or the blue check. */
+.mc-choice.is-rebase:not(:disabled) { border-color: #3f4a5a; color: #c8d3e2; }
+.mc-choice.is-rebase:not(:disabled):hover { background: #1b2129; border-color: #55647a; }
 .mc-choice.is-ask { color: var(--dim); }
+/* The check is the one outcome that can delete the tree, so it is coloured like the ON MAIN badge it is trying to
+   prove: quiet when it is just a question, blue when the answer is one it can act on. */
+.mc-choice.is-check:not(:disabled) { border-color: #1c3a56; color: #9ecbff; }
+.mc-choice.is-check:not(:disabled):hover { background: #16202c; border-color: #2b527a; }
+.mc-note-check { color: #7d93a8; }
+.mc-note-rebase { color: #8d9bb0; }
 .mc-note { font-size: 10px; color: var(--dimmer); padding: 2px 4px; line-height: 1.45; }
 
 .clean { color: #7ee787; }
 .dirty { color: #f0c674; }
+/* The Ahead / Behind cell (public/app.js, "ahead / behind cell"): ↑ not pushed lights with .dirty, ↓ not pulled lights
+   blue, and a count taken while the last fetch was failing is dotted with a ? beside it. */
+.ab-down { color: var(--blue); }
+.ab-stale { border-bottom: 1px dotted #6b7686; opacity: .75; }
+.ab-q { color: #8a7448; margin-left: 2px; }
+.ab-legacy { cursor: help; }
 .pr-open { color: #f0c674; }
 .pr-merged { color: var(--dim); }
 /* A PR whose page the project's host record can build: the chip is the link, coloured as it already was, so the cell

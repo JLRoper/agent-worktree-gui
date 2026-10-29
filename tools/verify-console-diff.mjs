@@ -128,18 +128,21 @@ const readBody = [
 ];
 const boxHtml = CF.bodyHtml(out(readBody), { tool: "read_file", arg: "CONSOLIDATED-playthrough-findings.md" });
 ok("code box: the result header stays a console line", boxHtml.includes('class="jl jl-tool-out" data-ltext="  ↳ read_file · 1.64s"'));
-ok("code box: one box", (boxHtml.match(/class="code-box"/g) || []).length === 1, boxHtml.slice(0, 120));
+ok("code box: one box", (boxHtml.match(/class="code-box is-file"/g) || []).length === 1, boxHtml.slice(0, 120));
 ok("code box: its header names the file", boxHtml.includes("read_file · CONSOLIDATED-playthrough-findings.md"));
 ok("code box: it says how many lines", boxHtml.includes("3 lines"));
 ok("code box: folded by default", boxHtml.includes('class="code-body" hidden'));
 ok("code box: the file's lines are inside it", boxHtml.includes("1|# Consolidated playthrough findings — heroes-js"));
 ok("code box: blank lines are content, not a break", boxHtml.includes('data-ltext="2|"'));
-// Nothing to box for a tool whose output is not a file: a shell transcript stays a shell transcript.
+// A tool whose output is not a file is boxed too — every result is one folded box (the module header says why) — but
+// it is not called a file: a shell transcript stays a shell transcript, in a box that says so.
 const termHtml = CF.bodyHtml(out(["  ↳ terminal · 0.58s", "(clean above = no tracked change)", "fatal: no such file"]), {
   tool: "terminal",
   arg: "git status --short + 3 commands",
 });
-ok("code box: a terminal batch gets no box", !termHtml.includes("code-box"), termHtml.slice(0, 160));
+ok("code box: a terminal batch is one folded box of its own", (termHtml.match(/class="code-box is-out"/g) || []).length === 1 && termHtml.includes('class="code-body" hidden'), termHtml.slice(0, 160));
+ok("code box: …named for the tool, not for a file", termHtml.includes("terminal output") && !termHtml.includes("is-file"));
+ok("code box: its result header stays outside, as a console line", termHtml.indexOf("↳ terminal · 0.58s") < termHtml.indexOf("code-box"));
 // A bare file print through the shell is a file's body: the call line says which command ran.
 check("file output: a read_file call names its file", CF.fileOutput("read_file", "docs/map.md"), { file: "docs/map.md" });
 check("file output: `cat x` names x", CF.fileOutput("terminal", "cat package.json"), { file: "package.json" });

@@ -25,9 +25,11 @@ function freePort() {
 }
 
 // A panel with no projects, no gateway key and its own HERMES_HOME: it can answer HTTP but it
-// cannot spawn anything, which is exactly what a route test wants.
-export async function startPanel({ token = null, config = {}, env = {} } = {}) {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-test-"));
+// cannot spawn anything, which is exactly what a route test wants. `dir` lets a test hand in a folder it has
+// already seeded (a legacy store to migrate), and `keep` leaves that folder behind on stop() so the SAME sandbox
+// can be booted a second time — the only way to prove what a restart does.
+export async function startPanel({ token = null, config = {}, env = {}, dir: givenDir = null, keep = false } = {}) {
+  const dir = givenDir || (await mkdtemp(path.join(os.tmpdir(), "wtgui-test-")));
   const repos = path.join(dir, "repos");
   await mkdir(repos, { recursive: true });
   const port = await freePort();
@@ -114,7 +116,7 @@ export async function startPanel({ token = null, config = {}, env = {} } = {}) {
         while (!exited && Date.now() < until) await new Promise((r) => setTimeout(r, 50));
         if (!exited) child.kill("SIGKILL");
       }
-      await rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+      if (!keep) await rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
     },
   };
 }

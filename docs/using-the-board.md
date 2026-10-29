@@ -213,9 +213,9 @@ Rows are the trees this project **owns**: its own checkout and the worktrees ins
 | Column | Meaning |
 | --- | --- |
 | **Worktree** | The directory name, a green **▶** that **probes** the agents already in it (see below), and the `⧉ N` badge for agents this panel has in it (with `running` / `awaiting approval` when they are busy). Clicking the badge opens the row and its cards; the **+** bar in the row starts a new agent there. |
-| **Branch** | The checked-out branch. A link to the branch's page on its host when the remote actually has the branch; plain text with a `local` chip when the remote answered its head list and this branch was not in it, and the reason in the tooltip. When the remote could not be reached the cell is plain text with no chip and a tooltip that says how far the panel got ("cannot tell whether the remote has this branch yet", or "not on the remote as of the last fetch" when its refs were checked) — "unknown" is not "local". The link follows the branch: a tree that switches or renames its branch is read again and wears the new branch's page and PR, not the old one's. |
+| **Branch** | The checked-out branch. A link to the branch's page on its host when the remote actually has the branch; plain text with a `local` chip when the remote answered its head list and this branch was not in it, and the reason in the tooltip. When the remote could not be reached the cell is plain text with an `unverified` chip and a tooltip that says how far the panel got ("cannot tell whether the remote has this branch yet", or "not on the remote as of the last fetch" when its refs were checked) and then quotes the project's last fetch failure — so a row the panel could not check is visibly not the same as one nobody ever pushed, and the reason is on the row. A chip is never drawn on a row the last fetch's refs did resolve to a page. "unknown" is not "local". The link follows the branch: a tree that switches or renames its branch is read again and wears the new branch's page and PR, not the old one's. |
 | **Tip** | Short SHA of the branch tip. |
-| **Ahead / Behind** | Commits the branch has that the project's base ref (remote main) does not, and commits main has that it does not. `—` when there is no base ref yet. |
+| **Ahead / Behind** | The branch against its **own copy on the remote**, counted the way `git status` counts it: `↑N` is commits here that the copy does not have (not pushed), `↓M` is commits on the copy that are not here (not pulled). The side with work to do is lit (↑ amber, ↓ blue), a side with none is dim, and `↑0 ↓0` is level. When there is no copy to count against the cell is a word: `—` the branch has no copy on the remote (never pushed; a worktree cut from `origin/main` tracks main until its first `git push -u`, and main is not its copy), `gone` the copy was deleted (a merged PR's branch usually is), `?` the remote has a branch of that name but this tree is not set to track it (the tooltip gives the `git branch -u` that fixes it). The counts are as of the last fetch: a dotted count with a `?` after it was taken while the project's last fetch was failing, and the tooltip quotes the failure. The count against the project's main — what the verdict is built from — is in the verdict's tooltip (`Against origin/main: 3 ahead, 1 behind.`) and at the end of this cell's tooltip. A page served by a board process older than the page draws the old numbers as `N / M` with a tooltip that says to restart the board. |
 | **Cherry** | `+N/−N` from `git cherry`: `+` commits with no equivalent upstream, `−` commits already upstream by patch id (the evidence that a squash or rebase landed them). |
 | **PR** | `#123 OPEN` / `#123 MERGED`, `none`, or `none · branch gone` when the branch existed remotely and no longer does. The number is a link to the pull request's own page on the project's host; it stays plain text (with the reason in its tooltip) when no page can be built. Hover it for the title. |
 | **Dirty** | Modified files, and `+N?` untracked, or `clean`. |
@@ -261,7 +261,7 @@ If none of them fired, the row is not live — whatever processes may be running
 | `MERGED (N commits)` | The branch carried commits of its own and they are in remote main. `MERGED (squash/rebase, N commits)` is the same claim proved by patch id instead of ancestry; `MERGED (content identical)` says the branch's tree already matches main. |
 | `NO COMMITS` | The branch never moved off the commit it was created at. Nothing to merge; nothing was merged — and it is deliberately *not* counted as safe to remove. `NO COMMITS?` means the reflog is missing or expired, so the panel cannot tell whether the branch ever moved and will not claim it did. |
 | `ON MAIN` | This is the primary checkout of the main branch. |
-| `UNMERGED (N commits)` | Carries `N` commits that are not on remote main. On a clean tree the badge **is a button** (`⇥` on its face): it starts a `MERGING into MAIN` agent for that row — see [Merging a branch from the board](#merging-a-branch-from-the-board). |
+| `UNMERGED (N commits)` | Carries `N` commits that are not on remote main. On a clean tree the badge **is a button** (`⇥` on its face): it opens five outcomes for that row — roll it into its parent, **rebase it onto its parent's newest commit**, open a PR, have an agent **check whether the change is already on main** (which deletes the tree when it is), or ask where it should go. See [Merging a branch from the board](#merging-a-branch-from-the-board), [Rebasing a branch onto its parent](#rebasing-a-branch-onto-its-parent) and [Checking whether a branch already landed](#checking-whether-a-branch-already-landed). |
 | `EMPTY REPO` / `NO BASE REF` | There is nothing to judge against: the repo has no commits yet, or its remote base ref does not exist here. |
 | *(empty, grey)* | Not computed yet. A dashed grey badge is a verdict being reclassified after a change. |
 
@@ -293,10 +293,77 @@ names the agent. The route (`POST /api/worktree/merge {project, path}`) refuses 
 a board that is a scan behind cannot start one by accident; `{dryRun: true}` returns the prompt without starting
 anything, and the script itself is `lib/merge-prompt.js`.
 
+### Rebasing a branch onto its parent
+
+The chooser's second outcome, **Rebase on `<parent>`**, is the one that starts no agent. `git rebase <target>` is a
+single deterministic command that reports its own outcome in about a tenth of a second, so the server runs it directly:
+no run, no gateway, no bill. It writes **exactly one branch** — the one checked out in that worktree. The parent, the
+base branch, the remote and every other worktree's index are untouched, and nothing is pushed. Catching a child up to
+its parent is also what makes a later roll a fast-forward instead of a merge commit in the parent.
+
+The button names the ref it would replay onto: the recorded parent when the panel has one, otherwise the ref the board
+already measures the branch against (`origin/main`). That is a label, not the decision — the route picks the target by
+**proof**, and its answer names the ref it actually used:
+
+- a candidate ref is accepted only when every commit the replay would move belongs to this branch alone. One
+  `rev-list <merge-base>..HEAD --not <every other local branch>` per candidate buys that, and the first-parent spine
+  decides which shared commits are inherited history (a wrong target would replay them as new work) rather than a side
+  branch this one merged on purpose. A ref that fails is refused by name — `replaying onto main would carry 1 commit
+  this branch does not own (feature/parent)` — because that history belongs to another branch;
+- a branch that already contains the target's tip is refused with the sentence rather than "rebased" over a no-op;
+- a branch carrying merge commits of its own is replayed with `--rebase-merges`, so the resolutions somebody did by
+  hand are not flattened away.
+
+The route refuses, in sentences, a tree that is on the base branch itself, a tree with modified or untracked files
+(the replay would carry unfinished work), a locked tree, a branch with no commits of its own, a rebase already open in
+that worktree (`git rebase --continue` or `--abort` first), and a second replay of the same branch while the first is
+running. A **conflict is an abort**, not a half-rebased tree: the tree was clean when the replay started, so the abort
+puts it back byte for byte and the banner names the colliding paths. A branch with its own copy on the remote has just
+had its shas rewritten, so the popover's note says before the press that the copy will need a force-push, and the
+banner repeats it afterwards. After a successful replay the row is re-read so the board shows the new tip, not the one
+the scan drew before the press.
+
+The route is `POST /api/worktree/rebase {project, path}`; `{dryRun: true}` answers with the plan (target, commits to
+replay, why) and writes nothing, and the engine is `lib/rebase.js`.
+
+### Checking whether a branch already landed
+
+The `UNMERGED` count is a count of **commits**, not a verdict on content: a branch that landed by squash, rebase,
+cherry-pick or a hand-rewritten patch keeps commits of its own while main holds the change under another sha, so it
+reads `UNMERGED` forever. The chooser's check outcome answers that. **Check whether it is on main** (or `… on
+master`, or whatever the project's base branch is called) starts a Hermes agent in that worktree, named
+`CHECKING MAIN`, and it reads only:
+
+- it reverse-applies the branch's own patch to a pristine `git archive` export of the base, under the OS temp dir. A
+  patch that reverses cleanly is content the base already has, whatever the sha or the subject says — which is the
+  one test a squash merge survives;
+- it corroborates with `git cherry` (patch ids), `git diff --quiet` for an identical tree, and `git cat-file -e` for
+  every file the branch adds: an absent file is what settles a half-landed branch;
+- it answers in one line, on its own: `LANDED: YES`, `LANDED: PARTIAL`, `LANDED: NO` or `LANDED: SUPERSEDED` (the base
+  delivers the same behaviour another way — that is not landed, and it deletes nothing);
+- on `LANDED: YES` the panel moves the worktree's folder to the Windows Recycle Bin and prunes git's record of it,
+  exactly as the row's ✕ does. A **locked** tree is refused with the lock named, a tree with modified or untracked
+  files is refused with that reason on the card, and a tree an agent is still running in is refused too;
+- every other answer deletes nothing, and the card's console carries the word the agent read and why.
+
+The agent writes nothing: no commit, no stash, no checkout, no push — a dirty tree is reported, never tidied. The
+route (`POST /api/worktree/verify-landed {project, path}`) refuses a tree that is on the base branch itself, a branch
+with no commits off the base, and a second check in the same tree; `{dryRun: true}` returns the script without
+starting anything, and the script is `lib/verify-prompt.js`.
+
 ### Opening a row
 
 Click a row to expand it. The detail is built not to bury the agents:
 
+- **Release** — one line at the top of the detail, drawn only on a tree a worker asked to release:
+  `⇢ release removed 3m ago · run ab12cd34 · <why it said it was finished>`, or `⇢ release refused: the tree is not
+  clean (1 changed path) …`. A worker can never remove its own worktree — its shell is inside it, and Windows keeps a
+  busy directory — so it ends its turn with one `RELEASE <tree> | <why it is finished>` line. The panel records that
+  request on the row and decides it AFTER the turn has settled, from its own git and `gh` reads: the tree must be
+  clean, the branch's PR must read **MERGED**, nothing on the branch may be missing from that merge commit, and no run
+  may still be holding the tree. Only then does it remove the worktree, delete the branch locally and on the remote,
+  and write `removed` (or `refused: <the gate that said no>`) back onto the row. With the project's
+  `releaseWorktrees` off — the default — every request is refused with that reason and nothing is touched.
 - **Merge state** — folded to one line (`ON MAIN · branch main · 2 untracked · last commit 6m ago`). Open it for the
   full list: ancestor of remote main, cherry counts, branch reflog, whether the branch ever carried its own commits,
   the remote branch, and then **every commit not on remote main** — one per line, short sha and subject, the full
@@ -386,6 +453,7 @@ releases it.
 | Thread name | The Hermes session id (or your label for it) — the thing a reply continues. |
 | `📌` | Pin this card: it keeps its screen position while cards above it grow. One pin at a time; clicking again releases it, and clearing the thread releases it too. |
 | `🧠` | Show this session's reasoning (see below). |
+| `🌊` | Draw this session as **one stream**: what the agent thought (while `🧠` is on), said, called and got back, in the order it happened, with no burst to open — each result is still the shut box it is everywhere else. Per session, remembered in this browser; off, the card is the separate thinking block and the condensed tool bursts it always was. |
 | `✎` | Rename the session **in the panel only**. The Hermes thread id never changes. |
 | `⤢` | Maximize the card to the window (`Esc` closes). |
 | `✕` | Forget this session: the first click arms it (`✕ sure?`), the second removes its turns and transcript from the panel. The worktree it made stays on disk. |
@@ -444,16 +512,40 @@ pairs with its own results, so a second run of the same tool later in the turn s
 first run's. A call the store has nothing for says `no output recorded for this call` — or `no output in the session
 store yet` while the turn is still running.
 
+**Every tool result is one box, folded.** Whatever a call returned — a shell transcript, a search, a file, a skill, a
+diff — sits in a single bordered box under its `↳ tool · 3.27s` line, shut until you open it. The header names what is
+inside (`terminal output`, `read_file · package.json`, `skill_view output`), counts its lines and says `click to
+read`; a diff's header also says what it adds and removes (`patch · …/package.json +3 −2`), so a shut box already tells
+you how big the change was. A click opens the box to its **full size** — every line, wrapped, no inner scroll — and
+the same click shuts it again. The box you opened stays open through a repaint, a new line arriving or a rebuilt
+burst; the `… result truncated` / `… N lines hidden — click to read` notes stay outside it, under it, so a shut box
+still says when there is more. A diff's framed windows (one per hunk) are drawn inside the box, so the box is the
+only frame. The one-stream view (🌊) draws the same boxes, shut the same way. What a block's copy button copies is
+what it shows, so the output of a box you have not opened is not in the copy.
+
 A long result is folded by the panel itself: the card keeps its **first 40 lines** (and shortens any line past 400
 characters), because a whole 5,000-line read in the console would push every other line of the card out of its
 600-line ring buffer. The fold ends with a sentence you can click — `… 214 lines hidden — click to read`, or
 `… 12 lines hidden, 3 lines shortened — click to read` when the head wore the line cap too. The click reads **that
-one result** back out of the session store, uncapped, and draws the whole thing in place; nothing is added to the
-console's own lines, so the card stays as long as it was. A store with no copy of the result says so instead of
+one result** back out of the session store, uncapped, and draws the whole thing in place — in a second box, `… · full
+result`, that is drawn **open** because you asked for it (shutting it is remembered the same way); nothing is added to
+the console's own lines, so the card stays as long as it was. A store with no copy of the result says so instead of
 inventing output: `… the session store has no copy of this result — the lines above are all of it here`. Both
 truncation notes are honest about which cap cut: `… result truncated by the gateway` is the gateway's preview cap,
 the `… N lines hidden — click to read` sentence is this panel's fold, and each only appears when its own cap really
 dropped something.
+
+**How fast it fills in** is yours to set, because the wire's pace is not a reading pace: prose arrives in coalesced
+bursts, and a burst of tool lines lands all at once. Settings → Display → **Stream display speed** types a paragraph —
+a 🧠 reasoning block, and the result of a **skill** (`skill_view`, `skills_list`, `skill_manage`: the longest thing a
+run hands the console in one go, typed out line by line inside its box) — out at that many words a second, and
+**Stream line rate** walks whole new lines into the console one at a time (a skill's lines included, like every
+other line). Every other tool's result is drawn whole. A reasoning block or a skill's result only types the first time
+the panel sees it on a live turn, so opening an old card or reloading draws history whole; both settings
+are `0` = off, which is the console filling exactly as the run sent it, and both are saved in this browser. A line
+still held back is not in the console yet, so a repaint in the middle of one (a scan, a pinned turn's second copy)
+shows the transcript as far as it has got — and a turn that settles, or a tab that goes to the background, releases
+everything at once, so nothing is ever left waiting in a buffer.
 
 **A run of tool calls is condensed.** Consecutive calls between two pieces of prose become one group, one row per
 tool name: `💻 terminal ×11 curl …` with the last input and either a duration or a live clock. Click a row to filter
@@ -585,6 +677,8 @@ setting):
 | Display | Page zoom | `Ctrl+` / `Ctrl-` / `Ctrl+0` (reset), or the `−`/`+` buttons here. `Ctrl+wheel` zooms the page too, except over a console, where it sizes that console's text. |
 | Display | Panel font | Headings, labels, buttons and the text you type. |
 | Display | Terminal font · Console size · Console weight | The console and the tool lines inside it. |
+| Display | Stream display speed | Words a second at which an agent's own prose, its reasoning blocks and the results of the skills it loads type out, 0–200 (`off`/10/20/40/80 presets, 40 by default — what a long answer here streams at). `0` is off — the console fills exactly as the run sent it. Whatever is still queued is released when the turn settles. |
+| Display | Stream line rate | Lines a second at which whole new lines join a console, 0–40 (`off`/2/4/8/16 presets). A tool burst walks in instead of landing in one paint; a held line is not in the console's record yet, and a settled turn flushes what is left. `0` is off. |
 | Display | Panel contrast | How far apart the layered surfaces sit: 0% flattens them, 100% pushes the page to near-black and lifts the panels. The swatch strip below previews the layers. |
 | Display | Add-agent bar | The green of the **+** bar in a worktree's agents, 0% (deep and quiet) to 100% (vivid). Lightness and saturation move together; the swatch below the row is the bar itself, so the preview cannot disagree with the button. |
 | Display | Add-agent bar at top | Draw the **+** bar above a worktree's agent cards instead of under them. On by default; off restores the old position. |
@@ -679,6 +773,11 @@ immediately. The config line then ends with `refresh on screen only`.
 
 Configured in `config.json` (`liveSeconds`, `worktreeSeconds`, `dormantSeconds`, `slowSeconds`, `fetchSeconds`,
 `refreshSeconds`), and the footer prints the values in use.
+
+`projects[].releaseWorktrees` is the one key that lets a worker's `RELEASE` line be acted on, and it is off unless it
+is literally `true` — a string, a `1` or a missing key all leave it closed. With it on, the panel still refuses
+unless the tree is clean, the branch's PR reads MERGED, nothing on the branch is missing from that PR's merge commit,
+and no run is still holding the tree; the row carries the answer either way (`removed`, or `refused: <gate>`).
 
 The panel's own build is separate from all of that. `index.html` is served `no-store` and every script and stylesheet
 it loads carries a `?v=` hash of the bytes; a restarted panel (or an edit under `public/` while it runs) is a new
