@@ -118,7 +118,7 @@ test("an unmapped project keeps the PR number and drops the page, saying why", a
 // that read "unknown" as local is the bug this pins.
 test("decorate's chip claim is the remote's own head list: listed, not listed, and not answered are three rows", async () => {
   const hosts = new Hosts({ file: null, seedFile: DEFAULT_SEED_FILE });
-  const { scheduler } = schedulerFor(hosts);
+  const { scheduler, store } = schedulerFor(hosts);
   const index = buildPrIndex(LIVE_PRS);
   const row = rowFor("20261023_1724_DMR-44452_internalFrom", "d55e04d");
   const twice = () => ({ ...row });
@@ -128,6 +128,7 @@ test("decorate's chip claim is the remote's own head list: listed, not listed, a
   await scheduler.decorate(PROJECT, listed, new Set([row.branch]), index);
   assert.equal(listed.remoteBranch, "exists");
   assert.equal(listed.branchLocalOnly, false);
+  assert.equal(listed.branchChip, null, "a linked branch says nothing more");
   assert.match(listed.branchUrl, /browse\?at=refs\/heads\/20261023_1724_DMR-44452_internalFrom$/);
 
   // 2. The remote answered, and the branch is not in its head list: plain text, the reason, and the chip.
@@ -135,37 +136,46 @@ test("decorate's chip claim is the remote's own head list: listed, not listed, a
   await scheduler.decorate(PROJECT, absent, new Set(["20260928_confluence-doc-sync"]), index);
   assert.equal(absent.remoteBranch, "gone");
   assert.equal(absent.branchLocalOnly, true, "the one state that may carry the word");
+  assert.equal(absent.branchChip, "local");
   assert.equal(absent.branchUrl, null);
   assert.match(absent.branchWhy, /^local only/);
 
-  // 3. The remote could not be reached (`ls-remote` returned nothing): the panel cannot tell, so no chip — and the
-  // sentence says exactly that. This is the row that used to wear `local` beside a tooltip admitting it did not know.
+  // 3. The remote could not be reached (`ls-remote` returned nothing): the panel cannot tell, so it says so in a
+  // word of its own — and the sentence carries the project's own fetch note, which is the only place the reason lives.
+  const note = "fetch failed: Could not resolve host: github.com";
+  store.patchProject(PROJECT.name, { fetchNote: note });
   const unreachable = twice();
   await scheduler.decorate(PROJECT, unreachable, new Set(), index);
   assert.equal(unreachable.remoteBranch, "unknown");
   assert.equal(unreachable.branchLocalOnly, false);
+  assert.equal(unreachable.branchChip, "unverified", "the row is marked, but not with the remote's denial");
   assert.equal(unreachable.branchUrl, null);
   assert.match(unreachable.branchWhy, /^cannot tell/);
+  assert.ok(unreachable.branchWhy.includes(note), `the sentence quotes the fetch note: ${unreachable.branchWhy}`);
 
-  // …and the last fetch's refs do not upgrade that to a chip either, whichever way they point: stale refs are not
-  // the remote's answer, so the word stays off and the title says the remote itself was not asked.
+  // …and the last fetch's refs never upgrade that to the `local` word, whichever way they point: stale refs are not
+  // the remote's answer, so `local` stays off and the title says the remote itself was not asked.
   const offlineHas = twice();
   await scheduler.decorate(PROJECT, offlineHas, new Set(), index, null, new Set([row.branch]));
   assert.equal(offlineHas.branchLocalOnly, false);
+  assert.equal(offlineHas.branchChip, null, "a page from the last fetch's refs is already the at-a-glance answer");
   assert.equal(offlineHas.branchLinkFrom, "local-refs");
   assert.match(offlineHas.branchUrl, /browse\?at=refs\/heads\/20261023_1724_DMR-44452_internalFrom$/);
   const offlineHasnt = twice();
   await scheduler.decorate(PROJECT, offlineHasnt, new Set(), index, null, new Set());
   assert.equal(offlineHasnt.branchLocalOnly, false);
+  assert.equal(offlineHasnt.branchChip, "unverified", "no ref and no remote answer: the panel says it could not tell");
   assert.equal(offlineHasnt.branchUrl, null);
   assert.match(offlineHasnt.branchWhy, /^not on the remote as of the last fetch — /, "the stale-refs answer is not phrased as the remote's own");
   assert.doesNotMatch(offlineHasnt.branchWhy, /^local only/, "…and it does not open with the claim the remote refused to make");
   assert.match(offlineHasnt.branchWhy, /the remote itself was not asked/);
+  assert.ok(offlineHasnt.branchWhy.includes(note), "…and it quotes the fetch note for why the remote was not asked");
 
   // 4. A project with no remote: every branch is local by construction, and the cell says so instead of marking rows.
   const noRemote = twice();
   await scheduler.decorate({ ...PROJECT, remote: null }, noRemote, new Set(), index);
   assert.equal(noRemote.remoteBranch, "n/a");
+  assert.equal(noRemote.branchChip, null, "no remote is not a claim about one");
   assert.equal(noRemote.branchLocalOnly, false);
   assert.equal(noRemote.branchWhy, "no remote configured");
 });

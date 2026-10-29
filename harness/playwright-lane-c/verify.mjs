@@ -115,7 +115,10 @@ async function readCells(keys) {
       const pr = tr.querySelectorAll("td")[5];
       const link = b?.querySelector("a.branch-link") || null;
       const plain = b?.querySelector(".branch-plain") || null;
-      const chip = b?.querySelector(".branch-local") || null;
+      // TWO words live in this cell: `local` (the remote's own denial) and `unverified` (the panel could not ask it).
+      // The chip readers below treat them apart, because "an unknown row never reads as local" is a check about the
+      // WORD, not about the presence of a marker — the row has to say something either way.
+      const chip = b?.querySelector(".branch-local, .branch-unverified") || null;
       const chipStyle = chip ? getComputedStyle(chip) : null;
       out[key] = {
         branch: {
@@ -124,6 +127,7 @@ async function readCells(keys) {
           href: link?.getAttribute("href") || null,
           title: (link || plain)?.getAttribute("title") || "",
           chipText: chip ? chip.textContent.trim() : null,
+          chipLocal: Boolean(chip && chip.classList.contains("branch-local")),
           chipVisibleText: chip && chipStyle ? (chipStyle.textTransform === "uppercase" ? chip.textContent.trim().toUpperCase() : chip.textContent.trim()) : null,
           chipTitle: chip?.getAttribute("title") || null,
           saysLocal: [...(b?.querySelectorAll("span, a") || [])].some((el) => el.textContent.trim().toLowerCase() === "local"),
@@ -157,23 +161,40 @@ const isWorktree = (v) => norm(v.row.path) !== norm(v.project.path);
 const existsPick = pick(existsRows, (v) => v.row.pr && isWorktree(v)) || pick(existsRows, isWorktree) || existsRows[0];
 const gonePick = pick(goneRows, (v) => String(v.row.path).includes("playwright-lane-c")) || goneRows[0];
 // The unknown state has two shapes in the same API answer, and they draw differently: no local ref either (plain
-// text, the "cannot tell" sentence) and a ref in refs/remotes from the last fetch (a link whose tooltip says the
-// remote itself was not asked). Both are pinned, because the brief's chip has to be judged in both.
+// text, the "cannot tell" sentence, and the `unverified` chip) and a ref in refs/remotes from the last fetch (a link
+// whose tooltip says the remote itself was not asked, and no chip at all). Both are pinned, because the brief's chip
+// has to be judged in both. A row whose project carries a `fetchNote` is preferred for the plain shape: the chip's
+// sentence is supposed to QUOTE that note, and a project that has never failed a fetch has nothing to quote.
 const byNote = (a, b) => String(a[1].project.fetchNote || "").length - String(b[1].project.fetchNote || "").length;
-const unknownPlain = unknownRows.filter(([, v]) => !v.row.branchUrl).sort(byNote)[0] || null;
+const unknownPlainRows = unknownRows.filter(([, v]) => !v.row.branchUrl).sort(byNote);
+const unknownPlain = unknownPlainRows.find(([, v]) => String(v.project.fetchNote || "").trim()) || unknownPlainRows[0] || null;
 const unknownLink = unknownRows.find(([, v]) => v.row.branchUrl) || null;
 const prPick = prRows.find(([, v]) => isWorktree(v)) || prRows[0];
 
+// A state the board does not offer is REPORTED, not thrown on. `gonePick[0]` on an undefined pick is a TypeError, and
+// that is exactly what a board whose every branch is pushed — or one with no worktree at all — used to get instead of
+// a verdict. The unknown pins were conditional from the start; every pin is now, and the run says which states it
+// could not judge instead of passing a half it never saw.
+const SKIPPED = [];
+const pin = (id, pick, kind, expect) => {
+  if (!pick) {
+    SKIPPED.push({ id, why: `no row on this board is in the \`${id}\` state` });
+    return [];
+  }
+  return [{ id, kind, key: pick[0], expect }];
+};
+
 const PINNED = [
-  { id: "exists", kind: "exists", key: existsPick[0], expect: "a link to the branch page, no local chip" },
-  { id: "gone", kind: "gone", key: gonePick[0], expect: "a LOCAL chip and the sentence that the remote does not list it" },
+  ...pin("exists", existsPick, "exists", "a link to the branch page, no local chip"),
+  ...pin("gone", gonePick, "gone", "a LOCAL chip and the sentence that the remote does not list it"),
   ...(unknownPlain
-    ? [{ id: "unknown", kind: "unknown-plain", key: unknownPlain[0], expect: "a chip quoting the project's fetchNote, never a local chip" }]
+    ? [{ id: "unknown", kind: "unknown-plain", key: unknownPlain[0], expect: "an UNVERIFIED chip quoting the project's fetchNote, never a local chip" }]
     : []),
   ...(unknownLink
     ? [{ id: "unknown-link", kind: "unknown-link", key: unknownLink[0], expect: "no local chip; the link says the remote itself was not asked" }]
     : []),
 ];
+if (!unknownPlain && !unknownLink) SKIPPED.push({ id: "unknown", why: "no row on this board is in the `unknown` state" });
 
 const api = Object.fromEntries(PINNED.map((p) => [p.key, byKey.get(p.key)]));
 
@@ -242,26 +263,37 @@ for (const pin of PINNED) {
     );
     entries.push(checks(eq(norm(cell.branch.title), norm(a.row.branchWhy)), "the sentence is the API's branchWhy", a.row.branchWhy, cell.branch.title));
   } else if (pin.kind === "unknown-plain") {
-    const note = a.project.fetchNote || "";
+    const note = String(a.project.fetchNote || "").trim();
     const cellTitle = norm(`${cell.branch.title} ${cell.branch.chipTitle || ""}`);
-    entries.push(checks(!cell.branch.saysLocal && !cell.branch.chipText, "an unknown state never reads as local", "no chip", `chip=${JSON.stringify(cell.branch.chipText)} saysLocal=${cell.branch.saysLocal}`));
+    // The claim is about the WORD. A row the panel could not verify must say so (it used to say nothing, and read as
+    // one nobody had pushed); what it must never say is `local`, which is the remote's own denial.
+    entries.push(
+      checks(
+        !cell.branch.saysLocal && !cell.branch.chipLocal,
+        "an unknown state never reads as local",
+        "a chip, but never the LOCAL word",
+        `chip=${JSON.stringify(cell.branch.chipText)} local=${cell.branch.chipLocal} saysLocal=${cell.branch.saysLocal}`,
+      ),
+    );
     entries.push(checks(cell.branch.href === null, "no link is invented when the remote was not asked and no local ref has it", "no <a>", cell.branch.href));
     entries.push(
       checks(
         cell.branch.chipText !== null,
         "a chip is drawn for the unknown state",
-        "a chip whose title quotes the project's fetchNote",
+        "a .branch-unverified chip",
         `no chip in the branch cell: ${cell.branch.html.slice(0, 160)}`,
       ),
     );
+    entries.push(checks(eq(norm(cell.branch.chipVisibleText), "UNVERIFIED"), "the chip reads UNVERIFIED", "UNVERIFIED", cell.branch.chipVisibleText));
     entries.push(
       checks(
-        Boolean(note) && cellTitle.includes(norm(note)),
-        "the cell quotes the project's fetchNote",
-        note,
+        note ? cellTitle.includes(norm(note)) : cell.branch.chipText !== null,
+        note ? "the cell quotes the project's fetchNote" : "no fetchNote on this project, so the sentence carries the state alone",
+        note || "(none on this project)",
         cellTitle,
       ),
     );
+    results.unknownPlainFetchNote = { fetchNote: note, inCell: Boolean(note) && cellTitle.includes(norm(note)) };
   } else if (pin.kind === "unknown-link") {
     const note = a.project.fetchNote || "";
     const cellTitle = norm(`${cell.branch.title} ${cell.branch.chipTitle || ""}`);
@@ -348,11 +380,13 @@ for (const [key, v] of byKey) {
     continue;
   }
   const remoteBacked = w.remoteBranch !== "gone";
-  if (remoteBacked && (c.branch.saysLocal || c.branch.chipText)) {
+  // `unverified` is allowed on a remote-backed row (the panel could not ask); the `local` claim is what must never
+  // appear there, because it is the remote's own denial and there is none.
+  if (remoteBacked && (c.branch.saysLocal || c.branch.chipLocal)) {
     sweep.localOnRemoteBacked.push({ key, remoteBranch: w.remoteBranch, chip: c.branch.chipText, html: c.branch.html.slice(0, 160) });
   }
   if (w.remoteBranch === "gone") {
-    if (c.branch.chipText) sweep.localOnGone += 1;
+    if (c.branch.chipLocal) sweep.localOnGone += 1;
     else sweep.goneWithoutChip.push({ key, api: w.branchWhy });
   }
   if (w.branchUrl && c.branch.href !== w.branchUrl) sweep.linkMismatch.push({ key, api: w.branchUrl, ui: c.branch.href });
@@ -436,6 +470,7 @@ results.totals = {
   failed: allChecks.filter((c) => !c.ok).length,
   sweepFailures,
   pinned: results.pinned.length,
+  skippedStates: SKIPPED.map((s) => s.id),
   prRows: prRows.length,
   refreshUnchanged: results.refresh.every((r) => r.cellUnchanged && r.apiUnchanged),
   sweepLocalOnRemoteBacked: sweep.localOnRemoteBacked.length,
@@ -447,6 +482,8 @@ writeFileSync(path.join(OUT, "results.json"), JSON.stringify(results, null, 1));
 
 console.log(`base ${BASE}`);
 console.log(`opened ${opened} collapsed project section(s); rows in API ${allKeys.length}, drawn ${allKeys.length - sweep.missingFromDom.length}`);
+// What this board could not show. A skipped state is not a pass: it is the harness saying the claim was not judged.
+for (const s of SKIPPED) console.log(`\n[skipped] ${s.id}: ${s.why} — that claim was NOT judged by this run`);
 for (const p of results.pinned) {
   console.log(`\n[${p.id}] ${p.project} · ${p.branch} · remoteBranch=${p.remoteBranch}`);
   console.log(`  cell: ${JSON.stringify(p.cell && { text: p.cell.text, href: p.cell.href, chip: p.cell.chipVisibleText, title: (p.cell.chipTitle || p.cell.title || "").slice(0, 130) })}`);

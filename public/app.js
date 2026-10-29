@@ -8681,10 +8681,12 @@ function prMatchNote(pr) {
 //
 // A branch with no copy on the remote says why in its title AND carries one dim word. That word is the answer to
 // the question the chart was asked to answer at a glance — which trees exist on the remote and which are local
-// only — and it is the SERVER's answer (`row.branchLocalOnly`, written by decorate from the remote's own head
-// list), never one re-derived here. A project without a remote has every branch local, and the title says that
-// instead of marking each row. "The remote could not be reached" and "the scan has not read this branch yet" are
-// NOT that claim: those rows carry no word at all, because the panel could not tell and its tooltip says so.
+// only — and it is the SERVER's answer (`row.branchChip`, written by decorate from the remote's own head list),
+// never one re-derived here. Two words, because there are two different claims: `local` is the remote's own denial,
+// and `unverified` is the panel admitting it could not tell (the remote was unreachable, or the scan had not read
+// the branch yet). The second is not a weaker `local` — a row wearing nothing at all looked identical to one that was
+// never pushed, which is the bug: the reader had to open a tooltip to learn the branch was probably on the remote.
+// A project without a remote has every branch local, and the title says that instead of marking each row.
 // ---- branch cell: the link, and the local chip
 function branchCellHtml(row) {
   const name = esc(row.branch || "—");
@@ -8693,8 +8695,16 @@ function branchCellHtml(row) {
     return `<a class="branch-link" href="${esc(row.branchUrl)}" target="_blank" rel="noopener" title="${esc(`open ${row.branch} on the remote${how}`)}">${name}</a>`;
   }
   const why = row.branchWhy || (row.remoteBranch === "n/a" ? "no remote configured" : "not read yet — the remote has not been asked about this branch");
-  const localOnly = row.branchLocalOnly === true;
-  return `<span class="branch-plain" title="${esc(why)}">${name}</span>${localOnly ? ` <span class="branch-local" title="${esc(why)}">local</span>` : ""}`;
+  // `branchChip` is decorate's; the `branchLocalOnly` fallback keeps a row drawn from an older payload's field honest.
+  // A row with no branch at all carries no word: there is nothing for `local` or `unverified` to be about.
+  const chip = row.branch ? row.branchChip || (row.branchLocalOnly === true ? "local" : null) : null;
+  const chipHtml =
+    chip === "local"
+      ? `<span class="branch-local" title="${esc(why)}">local</span>`
+      : chip === "unverified"
+        ? `<span class="branch-unverified" title="${esc(why)}">unverified</span>`
+        : "";
+  return `<span class="branch-plain" title="${esc(why)}">${name}</span>${chipHtml ? ` ${chipHtml}` : ""}`;
 }
 // ---- end branch cell
 

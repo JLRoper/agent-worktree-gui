@@ -22,9 +22,9 @@ ignores `NODE_PATH`.
 |---|---|
 | `exists` | an `<a class="branch-link">` whose `href` is `row.branchUrl` (the `…/tree/<branch>` page), no chip |
 | `gone` | no link; a `.branch-local` chip reading **LOCAL**; the tooltip is the API's `branchWhy`, naming the remote that does not list it |
-| `unknown` | never a `local` chip; a chip whose title quotes the project's `fetchNote` |
+| `unknown` | never a `local` chip; a `.branch-unverified` chip reading **UNVERIFIED** whose title quotes the project's `fetchNote` (and no chip at all when the last fetch's refs did resolve a page) |
 | no branch | `—`, no link, no chip |
-| whole board | no cell says "local" on a row the API calls remote-backed (`remoteBranch !== "gone"`); every `branchUrl` is drawn verbatim |
+| whole board | no cell says "local" on a row the API calls remote-backed (`remoteBranch !== "gone"`); `unverified` is allowed there, `local` is not; every `branchUrl` is drawn verbatim |
 | PR cell | `#<number> <state>`, `href === row.prUrl`, `pr-open`/`pr-merged`, and `none` where the API has no PR |
 | hard refresh | a full `page.reload()` leaves every pinned cell's text/href/chip/tooltip unchanged, with the API re-read in between |
 
@@ -38,5 +38,8 @@ Notes that cost time:
 - The page's model is `state.rows` (a `Map` keyed `project::path`) and `state.expandedProjects` (a `Set`), not the
   `/api/state` payload's shape. The "no branch" fixture inserts a row there and calls `renderProjectRows(project)`;
   no live row has an empty branch, and creating a detached worktree for one would write product state.
+- A state the board does not offer is reported as `[skipped]`, never thrown on and never counted as a pass: a board
+  whose every branch is pushed has no `gone` row, and pinning one used to die with `Cannot read properties of
+  undefined`. Judge the exit code together with the `[skipped]` lines — each names a claim this run did NOT judge.
 - The screenshot of a cell is evidence of the word, not of the `href` — read the attribute, and follow the link
   separately if the claim is that its page exists.
