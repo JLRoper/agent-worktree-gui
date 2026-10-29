@@ -260,7 +260,7 @@ If none of them fired, the row is not live — whatever processes may be running
 | `MERGED (N commits)` | The branch carried commits of its own and they are in remote main. `MERGED (squash/rebase, N commits)` is the same claim proved by patch id instead of ancestry; `MERGED (content identical)` says the branch's tree already matches main. |
 | `NO COMMITS` | The branch never moved off the commit it was created at. Nothing to merge; nothing was merged — and it is deliberately *not* counted as safe to remove. `NO COMMITS?` means the reflog is missing or expired, so the panel cannot tell whether the branch ever moved and will not claim it did. |
 | `ON MAIN` | This is the primary checkout of the main branch. |
-| `UNMERGED (N commits)` | Carries `N` commits that are not on remote main. On a clean tree the badge **is a button** (`⇥` on its face): it opens four outcomes for that row — roll it into its parent, open a PR, have an agent **check whether the change is already on main** (which deletes the tree when it is), or ask where it should go. See [Merging a branch from the board](#merging-a-branch-from-the-board) and [Checking whether a branch already landed](#checking-whether-a-branch-already-landed). |
+| `UNMERGED (N commits)` | Carries `N` commits that are not on remote main. On a clean tree the badge **is a button** (`⇥` on its face): it opens five outcomes for that row — roll it into its parent, **rebase it onto its parent's newest commit**, open a PR, have an agent **check whether the change is already on main** (which deletes the tree when it is), or ask where it should go. See [Merging a branch from the board](#merging-a-branch-from-the-board), [Rebasing a branch onto its parent](#rebasing-a-branch-onto-its-parent) and [Checking whether a branch already landed](#checking-whether-a-branch-already-landed). |
 | `EMPTY REPO` / `NO BASE REF` | There is nothing to judge against: the repo has no commits yet, or its remote base ref does not exist here. |
 | *(empty, grey)* | Not computed yet. A dashed grey badge is a verdict being reclassified after a change. |
 
@@ -292,11 +292,44 @@ names the agent. The route (`POST /api/worktree/merge {project, path}`) refuses 
 a board that is a scan behind cannot start one by accident; `{dryRun: true}` returns the prompt without starting
 anything, and the script itself is `lib/merge-prompt.js`.
 
+### Rebasing a branch onto its parent
+
+The chooser's second outcome, **Rebase on `<parent>`**, is the one that starts no agent. `git rebase <target>` is a
+single deterministic command that reports its own outcome in about a tenth of a second, so the server runs it directly:
+no run, no gateway, no bill. It writes **exactly one branch** — the one checked out in that worktree. The parent, the
+base branch, the remote and every other worktree's index are untouched, and nothing is pushed. Catching a child up to
+its parent is also what makes a later roll a fast-forward instead of a merge commit in the parent.
+
+The button names the ref it would replay onto: the recorded parent when the panel has one, otherwise the ref the board
+already measures the branch against (`origin/main`). That is a label, not the decision — the route picks the target by
+**proof**, and its answer names the ref it actually used:
+
+- a candidate ref is accepted only when every commit the replay would move belongs to this branch alone. One
+  `rev-list <merge-base>..HEAD --not <every other local branch>` per candidate buys that, and the first-parent spine
+  decides which shared commits are inherited history (a wrong target would replay them as new work) rather than a side
+  branch this one merged on purpose. A ref that fails is refused by name — `replaying onto main would carry 1 commit
+  this branch does not own (feature/parent)` — because that history belongs to another branch;
+- a branch that already contains the target's tip is refused with the sentence rather than "rebased" over a no-op;
+- a branch carrying merge commits of its own is replayed with `--rebase-merges`, so the resolutions somebody did by
+  hand are not flattened away.
+
+The route refuses, in sentences, a tree that is on the base branch itself, a tree with modified or untracked files
+(the replay would carry unfinished work), a locked tree, a branch with no commits of its own, a rebase already open in
+that worktree (`git rebase --continue` or `--abort` first), and a second replay of the same branch while the first is
+running. A **conflict is an abort**, not a half-rebased tree: the tree was clean when the replay started, so the abort
+puts it back byte for byte and the banner names the colliding paths. A branch with its own copy on the remote has just
+had its shas rewritten, so the popover's note says before the press that the copy will need a force-push, and the
+banner repeats it afterwards. After a successful replay the row is re-read so the board shows the new tip, not the one
+the scan drew before the press.
+
+The route is `POST /api/worktree/rebase {project, path}`; `{dryRun: true}` answers with the plan (target, commits to
+replay, why) and writes nothing, and the engine is `lib/rebase.js`.
+
 ### Checking whether a branch already landed
 
 The `UNMERGED` count is a count of **commits**, not a verdict on content: a branch that landed by squash, rebase,
 cherry-pick or a hand-rewritten patch keeps commits of its own while main holds the change under another sha, so it
-reads `UNMERGED` forever. The chooser's fourth outcome answers that. **Check whether it is on main** (or `… on
+reads `UNMERGED` forever. The chooser's check outcome answers that. **Check whether it is on main** (or `… on
 master`, or whatever the project's base branch is called) starts a Hermes agent in that worktree, named
 `CHECKING MAIN`, and it reads only:
 

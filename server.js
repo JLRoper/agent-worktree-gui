@@ -29,7 +29,9 @@ import { Hosts, proposeMapping } from "./lib/hosts.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
 import { WorktreeNaming } from "./lib/worktree-naming.js";
-import { Locks, describeLock } from "./lib/locks.js";
+import { Locks, describeLock, rebaseKey, writerLocks } from "./lib/locks.js";
+import { rebaseWorktree } from "./lib/rebase.js";
+import { ownCopyOf } from "./lib/sync-state.js";
 import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { ParentBook } from "./lib/parents.js";
@@ -2184,6 +2186,98 @@ const server = createServer(async (req, res) => {
       log(`rollup: ${row.branch} → ${parentBranch} in ${project.name} (${out.method}${out.sha ? ` ${out.sha}` : ""})`);
       broadcast({ type: "snapshot", data: snapshot() });
       return sendJson(res, 200, out);
+    }
+
+    // ---- rebasing one child onto the newest commit of the branch it was cut from ----------------------------------
+    // The UNMERGED chip's rebase outcome, and the ONE action in that chooser that is not an agent: `git rebase` is a
+    // single deterministic command whose outcome git reports itself, so the panel runs it here — no run, no gateway,
+    // no bill. It writes exactly one branch: the one checked out in this worktree. The parent, the base branch and the
+    // remote are untouched, so this route never reaches the remote-write box. `lib/rebase.js` picks the target by
+    // proof (the commits a replay would move must belong to this branch alone) and aborts a conflicted replay back to
+    // the state it started from. `{dryRun: true}` answers with the plan and writes nothing.
+    if (route === "/api/worktree/rebase" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const asked = String(body.path || "").trim();
+      if (!asked) return sendJson(res, 400, { error: "path is required" });
+      // Forward slashes, the spelling every row on the board already carries: `store.rowKey` is the raw string, so a
+      // backslashed path here would name a DIFFERENT row — and `scanOne`'s "must stay deleted" guard would then
+      // return the row it just read without storing it, leaving the board on the pre-rebase tip. The rename route
+      // spells its path the same way, for the same reason.
+      const worktree = path.resolve(asked).replace(/\\/g, "/");
+      const info = await stat(worktree).catch(() => null);
+      if (!info || !info.isDirectory()) return sendJson(res, 404, { error: `no such directory: ${worktree}` });
+      // The same resolution every worktree route does: the row's project is the hint and git's worktree list is the
+      // proof the hint is real. A tree can live anywhere, so a path outside the project root is not an error.
+      let project = spawnFeature.projectForPath(worktree) || registry.projects.find((p) => normPathKey(p.path) === normPathKey(worktree));
+      if (!project) {
+        const hinted = registry.projects.find((p) => p.name === String(body.project || "").trim());
+        if (hinted) {
+          const listed = await worktreeList(hinted.path).catch(() => []);
+          if (listed.some((w) => normPathKey(w.path) === normPathKey(worktree))) project = hinted;
+        }
+      }
+      if (!project) return sendJson(res, 400, { error: `${worktree} is not inside a known project, and is not one of its worktrees` });
+      const base = String(project.mainBranch || "");
+      if (!base) return sendJson(res, 400, { error: `${project.name} has no base branch to measure the branch against` });
+      const remote = project.remote || null;
+      const baseRef = remote ? `${remote}/${base}` : base;
+      const row = await scanWorktree(worktree, { remoteRef: baseRef, mainBranch: base }, "fast");
+      if (row.error) return sendJson(res, 400, { error: row.error });
+      const preview = { project: project.name, base, baseRef, remote, branch: row.branch, worktree: worktree.replace(/\\/g, "/") };
+      if (row.branch === base) {
+        return sendJson(res, 409, { error: `${path.basename(worktree)} is on ${base} itself — there is no branch of its own to replay`, ...preview });
+      }
+      const dirty = Number(row.dirty) || 0;
+      const untracked = Number(row.untracked) || 0;
+      if (dirty || untracked) {
+        return sendJson(res, 409, {
+          error: `the tree is not clean (${dirty} modified, ${untracked} untracked) — a rebase would either refuse to start or carry somebody's unfinished work through the replay, so commit or stash first`,
+          ...preview,
+        });
+      }
+      // The reader's lock is a "not this tree" that outlives the process, and a replay rewrites the branch it names.
+      const lock = locks.check({ project: project.name, path: worktree, branch: row.branch });
+      if (lock.locked) return sendJson(res, 409, { error: `nothing was rebased: ${lock.reason}`, lock, ...preview });
+      if (row.ahead === 0) return sendJson(res, 409, { error: `${row.branch} has no commits of its own off ${baseRef} — a replay would have nothing to move`, ...preview });
+      // One replay per branch at a time: a second would drive the same index while the first is half-applied.
+      const out = await writerLocks
+        .with(
+          rebaseKey(project.path, row.branch),
+          () => rebaseWorktree({ worktree, branch: row.branch, parent: row.parent || null, baseRef, mainBranch: base, dryRun: body.dryRun === true, log }),
+          { holder: `rebase ${row.branch}`, waitMs: 60000 },
+        )
+        .catch((e) => ({ ok: false, refused: "busy", error: String((e && e.message) || e) }));
+      if (!out.ok) return sendJson(res, 409, { ...out, ...preview });
+      // A dry run wrote nothing, so there is nothing to re-read and no replay to log: its answer is the plan. Sending
+      // it here also keeps a second read of the same tree out of flight for the real press to queue behind.
+      if (body.dryRun === true) {
+        return sendJson(res, 200, {
+          ...out,
+          ...preview,
+          published: Boolean(ownCopyOf(row)),
+          row: store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(worktree)) || null,
+        });
+      }
+      log(`rebase: ${row.branch} onto ${out.target} (${out.fromShort} -> ${out.toShort}, ${out.replayed} commit(s) replayed)`);
+      // The board is a scan behind, and the whole point of the control is that the row shows the new tip: read this
+      // one tree now (the same claim the next-read ring makes) instead of leaving a fresh replay looking un-rebased.
+      // Waiting for the path to fall idle first is not politeness: `pool.run` DEDUPES per path, so a read issued while
+      // a scan of this tree is still running would join that PRE-replay read and answer with the old tip. Any scan that
+      // starts once the path is idle reads the replay, whoever asked for it, so the wait is bounded rather than a race.
+      for (let waited = 0; waited < 30 && scheduler.pool.isBusy(worktree); waited += 1) {
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      {
+        // The scheduler's own record of the project, not this route's: `ctxFor` reads the fetch/scan settings off it.
+        const scanProject = scheduler.getProjects().find((p) => p.name === project.name) || project;
+        scheduler.lastFast.set(`${project.name}::${worktree}`, Date.now());
+        await scheduler.scanOne(scanProject, worktree, "full").catch(() => null);
+      }
+      broadcast({ type: "snapshot", data: snapshot() });
+      // A branch with its own copy on the remote has just rewritten shas that copy still holds: the next push needs
+      // `--force-with-lease`, and the page's banner says so rather than letting the Ahead / Behind column look wrong.
+      return sendJson(res, 200, { ...out, ...preview, published: Boolean(ownCopyOf(row)), row: store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(worktree)) || null });
     }
 
     // "Where should this go?" — the chip's third outcome, and the only thing it does: write the question down and

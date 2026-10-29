@@ -6,9 +6,11 @@
 //
 // Two halves:
 //   - verdictHtml: the chip, its classes, its disabled states and the data attributes the pointerup handler reads;
-//   - openMergeChooser: the four outcomes it offers. The fourth is the CHECKING agent, which is read-only in both
+//   - openMergeChooser: the five outcomes it offers. The fourth is the CHECKING agent, which is read-only in both
 //     branches and ends in the tree going to the Recycle Bin when the answer is yes - so the popover has to SAY that,
-//     and the button has to name the project's own base branch rather than a hardcoded "main".
+//     and the button has to name the project's own base branch rather than a hardcoded "main". The fifth is the
+//     REBASE, the one outcome that is a plain git command: it has to name the ref it would replay onto (the recorded
+//     parent, else the base ref) and say that it writes only this branch.
 //
 // The colour class comes from the panel's existing verdictClass(); this stubs its rule and asserts the chip's own
 // classes. The DOM the chooser touches is stubbed to exactly what it uses (createElement, appendChild, a null chip),
@@ -165,18 +167,24 @@ for (const verdict of ["MERGED (2 commits)", "MERGED (content identical)", "ON M
   check("no project meta falls back to main", has(html, "already on main"), true);
 }
 
-// ── the chooser: four outcomes, and the check is the one that says what it costs ──────────────
+// ── the chooser: five outcomes, and the check is the one that says what it costs ──────────────
 {
   const r = row();
   state.rows.set(keyOf(r.project, r.path), r);
   openMergeChooser(keyOf(r.project, r.path));
   const pop = made.at(-1)?.innerHTML || "";
   const choices = [...pop.matchAll(/data-merge-choice="([a-z]+)"/g)].map((m) => m[1]);
-  check("the popover offers four outcomes, in order", choices, ["roll", "pr", "check", "ask"]);
+  check("the popover offers five outcomes, in order", choices, ["roll", "rebase", "pr", "check", "ask"]);
   check("…the check names the base branch", has(pop, ">Check whether it is on main<"), true);
   check("…and the note says the tree goes to the Recycle Bin", has(pop, "moves this worktree to the Recycle Bin"), true);
   check("…and that the branches are not written", has(pop, "writes nothing to either branch"), true);
   check("…and the check class is on its button", has(pop, "mc-choice is-check"), true);
+  // The rebase: no parent recorded on this row, so the base ref is what it names — and it has to say it is mechanical.
+  check("…the rebase names the base ref when no parent is recorded", has(pop, ">Rebase on main<"), true);
+  check("…and its own class", has(pop, "mc-choice is-rebase"), true);
+  check("…and it says it replays this branch's own commits", has(pop, "rebase replays this branch's own commits onto main"), true);
+  check("…and that no agent is started", has(pop, "no agent, nothing else is written"), true);
+  check("…and that a conflict aborts", has(pop, "a conflict aborts leaving the tree exactly as it was"), true);
   closeMergeChooser();
 }
 
@@ -205,6 +213,9 @@ for (const verdict of ["MERGED (2 commits)", "MERGED (content identical)", "ON M
   openMergeChooser(keyOf(r.project, r.path));
   const pop = made.at(-1)?.innerHTML || "";
   check("a recorded cut offers the roll", has(pop, ">Roll into feature/turnover<") && !/is-roll"[^>]*disabled/.test(pop), true);
+  // The rebase follows the same parent, and it is offered on a guess too: it writes only this branch, so a parent the
+  // panel will not MERGE into is still a legal place to replay this one's commits onto.
+  check("a recorded cut offers the rebase on that parent", has(pop, ">Rebase on feature/turnover<"), true);
   closeMergeChooser();
   const guessed = row({ branch: "feat/child", parent: "feature/turnover", parentSource: "backfilled" });
   state.rows.set(keyOf(guessed.project, guessed.path), guessed);
