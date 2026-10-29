@@ -19,12 +19,13 @@ import { ProjectRegistry } from "./lib/projects.js";
 // isLiveJobStatus is main's: the 429 hold asks whether a card's run is live before it re-arms the timer.
 // previewRequest is not: this commit moves both previewRequest call sites into lib/features/spawn.js, so
 // server.js has no use for the name any more — the import keeps their new name and drops the moved one.
-import { Jobs, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js";
+import { Jobs, RELEASE_BRIEF, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js";
 import { gitIn, scanWorktree } from "./lib/scan.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { verifyLabel, verifyPrompt } from "./lib/verify-prompt.js";
 import { answerDeletes, answerLine, answeredChecks } from "./lib/verify-landed.js";
 import { deleteWorktreeRow } from "./lib/worktree-remove.js";
+import { ReleaseRequests, releaseWorktree, releasesEnabled } from "./lib/worktrees.js";
 import { Hosts, proposeMapping } from "./lib/hosts.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
@@ -364,6 +365,9 @@ function adoptFromJob(evt) {
 // real-turn proof and the single resume wake. Declared before the assistant because the assistant is
 // handed its `request` as the one act it cannot perform itself.
 let restart = null;
+// Declared before the job stream that feeds it: a job event arrives on the same tick as construction, so the release
+// sweep is armed here as an optional hook and filled in below, once its store exists.
+let scheduleReleaseSweep = null;
 // Declared before the job stream that feeds it: a job event arrives on the same tick as construction,
 // and the observer is optional until the assistant exists.
 let assistant = null;
@@ -384,6 +388,9 @@ const jobs = new Jobs({
     // A run that just arrived (or changed) is a new chance to learn what a tree was started to do: the earliest
     // brief in a tree is in this store, and a harvest is collapsed into one pass per couple of seconds.
     guard("description harvest", () => descriptions.harvest());
+    // A settled turn is the moment a release request can be acted on — and only then: the request was recorded as the
+    // run ended, and this sweep is a different pass of this process, never a step inside the run.
+    guard("release sweep", () => scheduleReleaseSweep?.());
     guard("assistant observation", () => assistant?.observe(evt));
   },
   onLog: log,
@@ -853,6 +860,28 @@ const descriptions = createDescriptions({
   log,
 });
 
+// The trees this panel may NAME — a path, a directory name, a branch, a six-hex tag, a thread. Read per question, never
+// captured: a rename moves a row and every store that answers a name must see the new one. Shared by the TODO store
+// and the release store (lib/worktrees.js), so both resolve a slug against exactly the same list.
+function panelTrees() {
+  const out = [];
+  const seen = new Set();
+  for (const p of registry.projects || []) {
+    const key = `${p.name}::${normPathKey(p.path)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ project: p.name, path: String(p.path || "").replace(/\\/g, "/"), branch: null });
+  }
+  for (const [rowKey, row] of store.rows) {
+    const project = String(rowKey).split("::")[0];
+    const n = `${project}::${normPathKey(row.path)}`;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    out.push({ project, path: String(row.path || "").replace(/\\/g, "/"), branch: row.branch || null });
+  }
+  return out;
+}
+
 // ---- the TODO list of each worktree --------------------------------------------------------------------------------
 // Written by the assistant (a `TODO <text>` line, normally under the SPAWN that starts the work), kept current by
 // every agent in the tree (a run's FINAL message is harvested when it settles), and read by the row. ONE store for
@@ -862,26 +891,7 @@ const descriptions = createDescriptions({
 const todos = new TodoLists({
   file: config.todosFile,
   log,
-  // The trees this store may NAME — a path, a directory name, a branch, a six-hex tag, a thread. Read per question,
-  // never captured: a rename moves a row and the store must see the new one.
-  trees: () => {
-    const out = [];
-    const seen = new Set();
-    for (const p of registry.projects || []) {
-      const key = `${p.name}::${normPathKey(p.path)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ project: p.name, path: String(p.path || "").replace(/\\/g, "/"), branch: null });
-    }
-    for (const [rowKey, row] of store.rows) {
-      const project = String(rowKey).split("::")[0];
-      const n = `${project}::${normPathKey(row.path)}`;
-      if (seen.has(n)) continue;
-      seen.add(n);
-      out.push({ project, path: String(row.path || "").replace(/\\/g, "/"), branch: row.branch || null });
-    }
-    return out;
-  },
+  trees: panelTrees,
   // …and the job store, so a THREAD can name its tree (that is how the assistant points a TODO line at a card).
   jobs: () => jobs,
 });
@@ -898,6 +908,111 @@ if (assistant) {
   // applied inside its harvest, which has no SSE handle of its own.
   assistant.todosChanged = broadcastTodos;
 }
+
+// ---- the release requests a finished worker leaves behind ------------------------------------------------------------
+// A worker can never remove its own tree: its cwd is inside it, and on Windows an open handle keeps the directory
+// busy. So it asks — ONE `RELEASE <tree> | <why it is finished>` line in its FINAL message — and lib/jobs.js records
+// the request here as the turn ends, against the tree's row. `sweepReleases()` below is the ONLY thing that acts on
+// one, after the run settled, and lib/worktrees.js refuses unless every gate passes on evidence this process measured
+// itself (clean tree, PR MERGED, nothing the landed commit does not already contain, no job still holding it). No path
+// inside a run reaches the executor, so an agent cannot evict the tree it is standing in.
+const releases = new ReleaseRequests({ file: config.releasesFile, log, trees: panelTrees });
+jobs.releases = releases;
+// The paragraph that tells a worker it MAY ask for its tree (lib/jobs.js RELEASE_BRIEF), handed over only for a
+// project whose `releaseWorktrees` is on: telling a worker about a marker the panel would refuse at its first gate is
+// a paragraph of noise, and one that reads as an instruction the board will not honour.
+jobs.releaseBrief = (opts) => {
+  const record = (registry.projects || []).find((p) => p.name === opts?.project) || null;
+  return releasesEnabled(record) ? RELEASE_BRIEF : "";
+};
+// One sentence for a console line: whitespace collapsed, and cut where the panel always cuts (a trailing ellipsis, so
+// a truncated sentence never reads as a finished one).
+const oneLine = (s, n = 200) => {
+  const t = String(s ?? "").replace(/\s+/g, " ").trim();
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
+};
+
+// What the row carries: the tree, when it was asked for, by which run, why, and the executor's answer — `removed`, or
+// `refused: <the gate that said no>`. A tree nobody has asked about carries no `release` field at all.
+function withReleases(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const rec = releases.forRow(project.name, row.path);
+      if (!rec) {
+        delete row.release;
+        continue;
+      }
+      row.release = rec;
+    }
+  }
+  return snap;
+}
+
+// The executor's clock. One pass at a time, a pass shortly after any turn settles, and a slow tick for a request that
+// arrived while the panel was busy — a `removed` or `refused:` outcome is final, so a pass only ever looks at requests
+// nothing has answered yet. The gates come first, so a request with the project's switch off is refused here and
+// nothing on disk is touched.
+let releaseSweepBusy = false;
+async function sweepReleases(reason = "tick") {
+  if (releaseSweepBusy) return [];
+  const pending = releases.pending();
+  if (!pending.length) return [];
+  releaseSweepBusy = true;
+  const done = [];
+  try {
+    for (const request of pending) {
+      const project = scheduler.getProjects().find((p) => p.name === request.project) || projectOfTree(request.path);
+      if (!project) {
+        releases.finish(request.key, { outcome: `refused: no project owns ${request.path}` });
+        done.push({ request, outcome: `refused: no project owns ${request.path}` });
+        continue;
+      }
+      const row = scheduler.store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(request.path)) || null;
+      let out = null;
+      try {
+        out = await releaseWorktree({ project, request, row, jobs, locks, log });
+      } catch (e) {
+        out = { ok: false, outcome: `refused: the executor failed — ${String((e && e.message) || e)}`, detail: "", steps: [] };
+      }
+      releases.finish(request.key, { outcome: out.outcome, detail: out.detail, steps: out.steps });
+      // One line on the card that asked, so the sentence outlives the row it was written on. `panel:` is the panel's
+      // own voice in the console, next to the `⇢ RELEASE requested` line the request left there.
+      const asked = request.runId ? jobs.get(request.runId) : null;
+      if (asked) {
+        jobs.push(asked, {
+          kind: out.ok ? "dim" : "raw",
+          text: `panel: release of ${request.path} — ${out.outcome}${out.detail && !out.ok ? ` (${oneLine(out.detail, 200)})` : ""}`,
+        });
+        jobs.emit(asked);
+      }
+      done.push({ request, outcome: out.outcome, ok: Boolean(out.ok) });
+      log(`release ${request.path}: ${out.outcome}${reason ? ` (${reason})` : ""}`);
+    }
+  } finally {
+    releaseSweepBusy = false;
+    if (done.length) {
+      broadcast({ type: "snapshot", data: snapshot() });
+      for (const item of done) {
+        // The row of a removed tree is left for the next scan to drop (it drops a row whose folder is gone); a refusal
+        // keeps its row, because that row is where the reader reads why.
+        if (item.ok) log(`release ${item.request.path}: the row goes on the next scan`);
+      }
+    }
+  }
+  return done;
+}
+
+// The hook the job stream calls, collapsed into one pass per couple of seconds: a turn emits many events and only the
+// settle matters.
+let releaseSweepTimer = null;
+scheduleReleaseSweep = (delayMs = 2000) => {
+  if (releaseSweepTimer) return;
+  releaseSweepTimer = setTimeout(() => {
+    releaseSweepTimer = null;
+    void sweepReleases("turn settled").catch(() => {});
+  }, Math.max(0, Number(delayMs) || 0));
+  if (releaseSweepTimer.unref) releaseSweepTimer.unref();
+};
 
 // The list travels with the snapshot the way a description does: the row carries the counts, the OLDEST incomplete
 // item (the one thing the collapsed strip reads) and the items themselves. A tree with no list carries no `todo`
@@ -1495,7 +1610,8 @@ async function stewardProject(name) {
 }
 
 function snapshot() {
-  return withTodos(
+  return withReleases(
+    withTodos(
     descriptions.withDescriptions(
       withLocks(
         withTreeNames(
@@ -1527,6 +1643,7 @@ function snapshot() {
       ),
     ),
   ),
+    ),
   );
 }
 
@@ -3743,6 +3860,12 @@ setInterval(() => void warmParents(), Math.max(30_000, config.stewardRefreshSeco
 // First pass 20s in: late enough that the board is up (the boot pass is local git only), early enough that a legacy
 // tree stops reading "unknown" within one screen of the panel opening.
 setTimeout(() => void warmParents(), 20_000).unref?.();
+
+// The release executor's own clock (lib/worktrees.js, swept above). A request is normally acted on a couple of seconds
+// after the turn that wrote it settles; this tick is for one that arrived while the panel was busy, and the boot pass
+// for one a restart interrupted. Zero pending requests cost one pass over a Map and no subprocess at all.
+setInterval(() => void sweepReleases("tick").catch(() => {}), 60_000).unref?.();
+setTimeout(() => void sweepReleases("boot").catch(() => {}), 12_000).unref?.();
 
 server.listen(config.port, config.host, () => {
   log(`agent-worktree-gui on http://${config.host}:${config.port}`);

@@ -354,6 +354,15 @@ starting anything, and the script is `lib/verify-prompt.js`.
 
 Click a row to expand it. The detail is built not to bury the agents:
 
+- **Release** — one line at the top of the detail, drawn only on a tree a worker asked to release:
+  `⇢ release removed 3m ago · run ab12cd34 · <why it said it was finished>`, or `⇢ release refused: the tree is not
+  clean (1 changed path) …`. A worker can never remove its own worktree — its shell is inside it, and Windows keeps a
+  busy directory — so it ends its turn with one `RELEASE <tree> | <why it is finished>` line. The panel records that
+  request on the row and decides it AFTER the turn has settled, from its own git and `gh` reads: the tree must be
+  clean, the branch's PR must read **MERGED**, nothing on the branch may be missing from that merge commit, and no run
+  may still be holding the tree. Only then does it remove the worktree, delete the branch locally and on the remote,
+  and write `removed` (or `refused: <the gate that said no>`) back onto the row. With the project's
+  `releaseWorktrees` off — the default — every request is refused with that reason and nothing is touched.
 - **Merge state** — folded to one line (`ON MAIN · branch main · 2 untracked · last commit 6m ago`). Open it for the
   full list: ancestor of remote main, cherry counts, branch reflog, whether the branch ever carried its own commits,
   the remote branch, and then **every commit not on remote main** — one per line, short sha and subject, the full
@@ -737,6 +746,11 @@ immediately. The config line then ends with `refresh on screen only`.
 
 Configured in `config.json` (`liveSeconds`, `worktreeSeconds`, `dormantSeconds`, `slowSeconds`, `fetchSeconds`,
 `refreshSeconds`), and the footer prints the values in use.
+
+`projects[].releaseWorktrees` is the one key that lets a worker's `RELEASE` line be acted on, and it is off unless it
+is literally `true` — a string, a `1` or a missing key all leave it closed. With it on, the panel still refuses
+unless the tree is clean, the branch's PR reads MERGED, nothing on the branch is missing from that PR's merge commit,
+and no run is still holding the tree; the row carries the answer either way (`removed`, or `refused: <gate>`).
 
 The panel's own build is separate from all of that. `index.html` is served `no-store` and every script and stylesheet
 it loads carries a `?v=` hash of the bytes; a restarted panel (or an edit under `public/` while it runs) is a new

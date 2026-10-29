@@ -1838,6 +1838,26 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
 .desc-body { padding: 2px 0 4px 28px; }
 /* Which run the words came from, and when: the description is quoted from that brief, never written for the board. */
 .desc-from { margin-top: 3px; font-size: 11px; color: var(--dimmer); }
+/* A RELEASE request (lib/worktrees.js) is one line at the top of the detail: the verdict the panel's executor wrote
+   back and the reason the worker gave. The left rule carries the state colour — green removed, amber refused, blue
+   still waiting on the executor — and the gate that said no is part of the sentence, so a refusal needs no second
+   line. Signal colours, so they stay out of the contrast slider's surface map. */
+.release-block {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0;
+  margin: 0 0 5px; padding: 2px 0 2px 9px; border-left: 2px solid var(--line);
+  font: 11.5px/1.6 var(--mono); color: var(--dim);
+}
+.release-block .release-mark { flex: none; color: var(--dimmer); }
+.release-block .release-word { flex: none; color: var(--dim); }
+.release-block .release-state { flex: none; color: var(--text); }
+.release-block .release-when { flex: none; color: var(--dimmer); }
+.release-block .release-why { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--dim); }
+.release-block.removed { border-left-color: var(--green); }
+.release-block.removed .release-state { color: var(--green); }
+.release-block.refused { border-left-color: var(--amber); }
+.release-block.refused .release-state { color: var(--amber); }
+.release-block.requested { border-left-color: var(--blue); }
+.release-block.requested .release-state { color: var(--blue); }
 
 /* ---- the worktree's TODO list ------------------------------------------------------------------------------------ */
 /* The third strip in the row's family, with the description above it and MERGE STATE under it. FOLDED it reads the
