@@ -2241,6 +2241,10 @@ td.branch a.branch-link:focus-visible { outline: 1px solid #7fb2e8; outline-offs
 /* No copy on the remote: plain text, and one dim word that answers "which trees have a remote copy" at a glance.
    Deliberately small and quiet — most rows of a research fleet carry it, and a loud marker on most rows is noise. */
 td.branch .branch-local { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: #55606e; border: 1px solid #2b323c; border-radius: 3px; padding: 0 3px; vertical-align: 1px; }
+/* The remote could not be asked: the same little word, in the amber the panel uses for "not answered" everywhere
+   else. It must not read as `local` — that would be the panel inventing an answer — so it says `unverified` and its
+   tooltip quotes the project's fetch note. Same box, different colour: the shape is familiar, the claim is weaker. */
+td.branch .branch-unverified { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: #8a7448; border: 1px dashed #4a3f28; border-radius: 3px; padding: 0 3px; vertical-align: 1px; }
 td.branch .branch-plain { color: #9aa6b4; }
 .dim { color: var(--dim); }
 .dimmer { color: var(--dimmer); }
