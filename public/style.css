@@ -2330,6 +2330,12 @@ td.branch .branch-plain { color: #9aa6b4; }
 
 .clean { color: #7ee787; }
 .dirty { color: #f0c674; }
+/* The Ahead / Behind cell (public/app.js, "ahead / behind cell"): ↑ not pushed lights with .dirty, ↓ not pulled lights
+   blue, and a count taken while the last fetch was failing is dotted with a ? beside it. */
+.ab-down { color: var(--blue); }
+.ab-stale { border-bottom: 1px dotted #6b7686; opacity: .75; }
+.ab-q { color: #8a7448; margin-left: 2px; }
+.ab-legacy { cursor: help; }
 .pr-open { color: #f0c674; }
 .pr-merged { color: var(--dim); }
 /* A PR whose page the project's host record can build: the chip is the link, coloured as it already was, so the cell
