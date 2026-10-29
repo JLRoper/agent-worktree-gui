@@ -1295,6 +1295,11 @@ function groupLines(grp) {
     const line = {
       kind: d.dataset.lkind || (d.className.match(/jl-([a-z-]+)/) || [])[1] || "raw",
       text: d.dataset.ltext != null ? d.dataset.ltext : d.textContent,
+      // …and the id the row was drawn with, because it is what the next update looks the row up by: the live
+      // append replaces a growing line's text through `[data-lid]`, and `paintTypedLines` finishes a half-typed one
+      // the same way. A rebuild that read this back without it handed every row it redrew an empty id, so the
+      // identity did not survive the group being re-cut.
+      lid: d.dataset.lid || undefined,
     };
     // …and which result a fold note names travels with it too: the sentence cannot say it (that is what the
     // stamp on the line is for), and a rebuild that lost it would put the reader back in front of "click to
@@ -6754,6 +6759,11 @@ function conversationSignature(conv) {
     l.pendingSteer ? `s${l.pendingSteer.at || 1}` : "",
     conv.turns.map((x) => `${x.origin ? `o${x.id}` : ""}${x.collected ? "c" : ""}`).join(""),
     thinkingOn(conv.thread) ? "t" : "-",
+    // …and the 🌊 beside it, for exactly that reason: `streamOn` decides which console renderer the card uses
+    // (`turnBody` draws one stream or the condensed groups), so without a term here a press writes its choice to
+    // localStorage, asks for a repaint, and the repaint concludes nothing changed — the card flips only when some
+    // unrelated event moves this signature.
+    streamOn(conv.thread) ? "s" : "-",
     // A card stays RUNNING while children it delegated are out, so that answer belongs in the signature.
     (subagentFallback.get(conv.thread) || []).some((s) => s.running) ||
     conv.turns.some((t) => (t.subagents || []).some((s) => s.running))

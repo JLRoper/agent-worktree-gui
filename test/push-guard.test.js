@@ -191,18 +191,34 @@ test("an env-granted push neither asks the panel nor parks", { skip: NO_SH }, as
     await rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   });
 
+  // The control first: the SAME hook with no grant, so it asks the stub panel and parks in the guard's own 1 s poll
+  // loop until the 3 s window this fixture installs runs out. Both runs are then measured on one host at one moment,
+  // which is what makes their difference a fact about the guard rather than about the machine: every git/sh spawn
+  // costs about a second here, and the fixed 2.5 s ceiling this test used to assert measured the host — 2325 ms solo,
+  // 6222-7359 ms inside the full suite on the same tree.
+  const parked = await runHook({ dir, cwd: dir });
+  const parkedWhere = `exit=${parked.code} after ${parked.ms}ms\n--- stderr ---\n${parked.err}`;
+  assert.match(parked.err, /is parked until it is answered/, `the control really parks — otherwise there is no wait to compare against\n${parkedWhere}`);
+  assert.ok(parked.ms >= 3000, `the control waited out the fixture's 3 s window: ${parked.ms}ms\n${parkedWhere}`);
+  const askedByControl = panel.seen.length;
+
   const r = await runHook({ dir, env: { WTGUI_PUSH_GRANT: "1" }, cwd: dir });
   const where = `exit=${r.code} signal=${r.signal} after ${r.ms}ms\n--- stderr ---\n${r.err}`;
 
   // The grant has to be honest about itself: it says the guard was bypassed...
   assert.match(r.err, /bypassed by WTGUI_PUSH_GRANT=1/, `the granted path has to say what it did\n${where}`);
   assert.doesNotMatch(r.err, /command not found/, `the granted path has to run, not die on a missing function\n${where}`);
-  // ...and it must not ask the panel: no permission box, no parked push, no request on the wire.
+  // ...and it must not ask the panel: no permission box, no parked push, no request on the wire for THIS run.
   assert.doesNotMatch(r.err, /waiting on the panel's permission box/, `a granted push asks nobody\n${where}`);
   assert.doesNotMatch(r.err, /is parked until it is answered/, `a granted push never parks\n${where}`);
-  assert.deepEqual(panel.seen, [], `nothing reached the panel, and it was asked: ${JSON.stringify(panel.seen)}\n${where}`);
-  // It finishes now, not at the end of the guard's window (the timeout file in this fixture is 3 s).
-  assert.ok(r.ms < 2500, `a granted push is not a wait: ${r.ms}ms\n${where}`);
+  assert.deepEqual(panel.seen.slice(askedByControl), [], `nothing reached the panel for the granted run, and it was asked: ${JSON.stringify(panel.seen.slice(askedByControl))}\n${where}`);
+  // It finishes without waiting the window the control just waited out — one hook run's cost, not the guard's window.
+  // The margin is the control's shelf: it spent 3 s in `sleep 1` alone, so a granted push that parked with it would
+  // land within a second of it, and this fails. Relative, so a loaded box moves both numbers together.
+  assert.ok(
+    r.ms < parked.ms - 1000,
+    `a granted push costs one hook run, not the guard's window: granted ${r.ms}ms vs the parked control ${parked.ms}ms\n${where}`,
+  );
   assert.equal(r.code, 0, `a granted push succeeds\n${where}`);
   // And the hook this worktree already had still runs: taking the hooks path never switches off somebody
   // else's hook.

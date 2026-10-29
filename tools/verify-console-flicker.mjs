@@ -5,7 +5,7 @@
 //   node tools/verify-console-flicker.mjs --root <checkout>    # serve another checkout's server.js + public/
 //   node tools/verify-console-flicker.mjs --compose            # merge the `before` and `after` captures into the report
 //   --report <dir>   where the captures, screenshots and report go (default C:/CodeReviews/agent-worktree-gui)
-//   --only <name>    one scenario: deliverables | stream
+//   --only <name>    one scenario: deliverables | stream | repainters
 //
 // WHAT THE FLICKER IS (the finding this tool carries)
 //   The dark console of a live turn is not wiped by a tool group re-cutting itself; it is wiped by the NEXT live
@@ -33,6 +33,11 @@
 //       tool calls the live path drew (a call counted twice, or lost, shows as a different tally)
 //   (4) nothing under the console jumps up by more than 40px at an unchanged window scroll
 //   (5) the repainters really fired (>= 3), so a clean run means the see-saw was exercised and survived
+//   (6) parked console (the `repainters` scenario): with the console scrolled away from the bottom, an approval
+//       arriving mid-turn and the turn flipping running → done each rebuild the card — and each rebuild has to hand
+//       the reader the same line, at the same place, still scrolled away. This is the check the deliverable phase
+//       makes by proxy (the reply box's top); here it names the line itself. A rebuild that lands on another line,
+//       or throws the console back to the bottom, fails it.
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -82,7 +87,7 @@ function buildScript(plan) {
     steps.push({ at: t, evt: { event: "tool.completed", tool, duration: dur, error: false, preview: body } });
     t += gap;
   };
-  plan({ say, call, pause: (ms) => (t += ms) });
+  plan({ say, call, pause: (ms) => (t += ms), approve: (command, extra = {}) => { steps.push({ at: t, evt: { event: "approval.request", request_id: `prompt_stub_${steps.length}`, command, choices: ["once", "deny"], ...extra } }); t += 120; } });
   steps.push({ at: t + 300, evt: { event: "run.completed", output: "done", usage: { total_tokens: 4321, input_tokens: 4000, output_tokens: 321 } } });
   return steps;
 }
@@ -93,6 +98,27 @@ const SHORT = () =>
     call("read_file", "public/app.js", "1|const a = 1;\n2|const b = 2;\n3|module.exports = { a, b };");
     say("Nothing odd. Done with turn one.");
   });
+// The two repainters the deliverable phase covers only by proxy: an approval arriving mid-turn, and the turn
+// flipping running → done. Both change conversationSignature (runApprovals / turns), so both replace the card node,
+// and the page has to hand the reader back the line they were reading. A burst of long paragraphs fills the console
+// first, so there is history above the fold to be parked in.
+const REPAINTERS = () =>
+  buildScript(({ say, call, pause, approve }) => {
+    say("Reading the tree before anything asks for a decision. The console is filled here on purpose — ordinary prose, a paragraph at a time — because a parked console needs history above the fold before a repaint can be asked to hand it back. Nothing below is special: the panel's own code turns every frame into the lines on the card.", { perDelta: 45 });
+    call("terminal", "git status --short", "M public/app.js\nM lib/jobs.js\n?? notes.md", { envelope: true });
+    say("The status shows two modified files. I will read the code that draws a console line next, then search for every writer that can replace the card under the reader, and only then touch anything. A repaint that moves the page is worse than a slow turn, so the reads come first and the writes come after them.", { perDelta: 45 });
+    call("read_file", "public/app.js", Array.from({ length: 14 }, (_, i) => `${i + 1}|function part${i}() { return ${i}; }`).join("\n"));
+    say("That is the renderer. It draws one line per console line and keeps the text on the row it was given, which is why a re-cut row has to carry its own identity rather than be re-identified by position. The next few paragraphs are here only to give the console some height to scroll.", { perDelta: 45 });
+    say("Scrolling history is what a reader does while an agent works and they want to read what it already said. Everything above the fold stays put while the run keeps writing below it, and the card is rebuilt from the transcript on every event that changes its signature: a deliverable, an approval, a status flip.", { perDelta: 45 });
+    say("So the console has to come back from a rebuild the way it went in: same line, same place, still parked. This scenario parks it in the middle of the transcript, then lets an approval land mid-turn and lets the turn finish, and asks the page for the line it was reading each time.", { perDelta: 45 });
+    pause(3000); // the page parks its console here, away from the bottom
+    approve("git push origin main");
+    pause(4000); // time to see the permission box and the card it was drawn on
+    call("terminal", "echo after the approval", "after the approval", { envelope: true });
+    say("That is the turn.", { para: false });
+    pause(1500);
+  });
+
 // ~15 s of an ordinary turn: prose, bursts of mixed calls, prose between them. `files` adds deliverables — files the
 // agent writes and a URL it hands over — and a new artifact is a changed card signature on the page.
 const LONG = (dir, files) =>
@@ -148,7 +174,7 @@ function makeGateway() {
       req.on("end", () => {
         state.posts += 1;
         const id = `run_stub_${state.posts}`;
-        const script = state.posts === 1 ? SHORT() : LONG(state.dir, state.files);
+        const script = state.posts === 1 ? SHORT() : state.kind === "repainters" ? REPAINTERS() : LONG(state.dir, state.files);
         state.runs.set(id, { id, status: "running", output: "", script, startedAt: null });
         json(200, { run_id: id, status: "running" });
       });
@@ -302,7 +328,7 @@ function pageInit({ storage, thread }) {
   } catch {
     /* storage may be unavailable */
   }
-  const R = { t0: performance.now(), epoch0: performance.timeOrigin + performance.now(), writes: [], rebuilds: [], tools: [], lines: [], draws: [], dups: [], samples: [], attrFlips: 0, attrTargets: [] };
+  const R = { t0: performance.now(), epoch0: performance.timeOrigin + performance.now(), writes: [], rebuilds: [], tools: [], lines: [], draws: [], dups: [], samples: [], attrFlips: 0, attrTargets: [], readings: [] };
   const P = { armed: false, frozen: false, minRows: 6, queue: [] };
   window.__rec = R;
   window.__pair = P;
@@ -326,6 +352,43 @@ function pageInit({ storage, thread }) {
     const box = card && card.querySelector(".reply-box");
     return box ? Math.round(box.getBoundingClientRect().top) : -1;
   };
+  // The line the reader is on, in a console they have taken over. Null while they are following the run (at the
+  // bottom, or a console with nothing to scroll): there is no reading position to keep then, and jumping to the
+  // newest line is the intended behaviour. The card's LAST console is the newest turn, which is the one being
+  // repainted by a live event.
+  const parkedReading = (card) => {
+    if (!card) return null;
+    const outs = [...card.querySelectorAll("pre.job-out")];
+    const out = outs[outs.length - 1];
+    if (!out) return null;
+    const max = out.scrollHeight - out.clientHeight;
+    if (max < 40) return null;
+    if (out.scrollHeight - out.scrollTop - out.clientHeight < 40) return null;
+    const box = out.getBoundingClientRect();
+    const row = [...out.querySelectorAll(".jl")].find((r) => r.getBoundingClientRect().bottom > box.top + 1);
+    if (!row) return null;
+    const rect = row.getBoundingClientRect();
+    return {
+      out: out.dataset.out,
+      lid: row.dataset.lid || "",
+      text: String(row.dataset.ltext || row.textContent || "").replace(/\s+/g, " ").trim().slice(0, 80),
+      top: Math.round(rect.top),
+      boxTop: Math.round(box.top),
+      scrollTop: Math.round(out.scrollTop),
+      max: Math.round(max),
+    };
+  };
+  // Why a console had no reading position, for the run that fails: every console on the card and where it stands.
+  const consoleState = (card) =>
+    card
+      ? [...card.querySelectorAll("pre.job-out")].map((o) => ({
+          out: o.dataset.out,
+          scrollTop: Math.round(o.scrollTop),
+          max: Math.round(o.scrollHeight - o.clientHeight),
+          rows: o.querySelectorAll(".jl").length,
+          pinned: state.outPinned[o.dataset.out] !== false,
+        }))
+      : [];
   // Every wholesale write to a console, with what it held and the stack that wrote it.
   const d = Object.getOwnPropertyDescriptor(Element.prototype, "innerHTML");
   Object.defineProperty(Element.prototype, "innerHTML", {
@@ -359,6 +422,16 @@ function pageInit({ storage, thread }) {
   const tick = () => {
     const j = liveJob();
     const out = j ? consoleOf(j.id) : null;
+    if (R.traceOn && out) {
+      // Where a parked console actually stands, per painted change: scrollTop, the room below it, and whether the
+      // panel still thinks it may follow the newest line. This is how a run says WHO moved it.
+      const rec2 = [now(), Math.round(out.scrollTop), Math.round(out.scrollHeight - out.clientHeight), consolePinned(out.dataset.out) ? 1 : 0];
+      const key2 = rec2.slice(1).join(",");
+      if (key2 !== R.traceKey) {
+        R.traceKey = key2;
+        (R.parkTrace = R.parkTrace || []).push(rec2);
+      }
+    }
     if (out) {
       const lids = [...out.querySelectorAll("[data-lid]")].map((e) => e.dataset.lid).filter(Boolean); // rows a re-cut group redraws carry data-lid=""
       const rec = [now(), j.id, out.children.length, lids.length, lids.length - new Set(lids).size, out.scrollHeight, out.clientHeight, Math.round(scrollY), document.documentElement.scrollHeight, boxTop(j.id), out.querySelector("[data-wait]") ? 1 : 0];
@@ -436,10 +509,19 @@ function pageInit({ storage, thread }) {
         return m;
       };
       const drawn = toolRows(before);
+      // The reader's line, read before the card is replaced and again once it is back: the same claim the deliverable
+      // phase makes through the reply box, but naming the row itself.
+      const readBefore = parkedReading(before);
+      const attached = consoleState(before);
       const r = o.apply(this, a);
       const after = document.querySelector(sel);
       if (before && after && before !== after) {
         const live = liveJob();
+        const readAfter = parkedReading(after);
+        const readJob = state.jobs.get(readAfter ? readAfter.out : "") || [...state.jobs.values()].find((x) => readAfter && x.id === readAfter.out) || live || null;
+        // Recorded even when one half is null, so a run that fails can say which half was missing (a console the
+        // reader was following has no reading position; that is legitimate and shows as `before: null`).
+        R.readings.push({ t: now(), before: readBefore, after: readAfter, status: readJob ? readJob.status : "", approval: readJob && readJob.approval ? 1 : 0, consoles: attached });
         R.rebuilds.push({ t: now(), job: live ? live.id : null, stack: frames(new Error().stack).split(" < ").slice(0, 4).join(" < ") });
         // …and as the repaint drew them from the transcript. The two must agree: a call drawn twice live, or lost, shows here.
         const rebuilt = toolRows(after);
@@ -466,6 +548,9 @@ function pageInit({ storage, thread }) {
 const SCENARIOS = [
   { name: "deliverables", title: "condensed console, deliverables arrive mid-run", storage: {}, files: true, restorer: "a card rebuild: a new deliverable changes conversationSignature, renderConversation replaces the card" },
   { name: "stream", title: "🌊 one-stream console", storage: { [`wtgui.stream.${THREAD}`]: "1" }, files: false, restorer: "the thinking sweep: sweepThinking → loadThinking → paintThink → paintStreamConsole rewrites the console" },
+  // The two repainters the deliverable phase reaches only through the signature: an approval landing mid-turn and
+  // the turn flipping running → done, both with the console scrolled away from the bottom, both rebuilt in place.
+  { name: "repainters", title: "condensed console, an approval and a status flip land on a parked console", storage: {}, files: false, parked: true, restorer: "a card rebuild: an approval (runApprovals) and a status flip (turns) each change conversationSignature" },
 ];
 
 async function runScenario(pw, sc, { pair }) {
@@ -474,6 +559,7 @@ async function runScenario(pw, sc, { pair }) {
   const sb = await startSandbox(gwPort);
   gw.state.dir = sb.repo;
   gw.state.files = sc.files;
+  gw.state.kind = sc.name;
   const browser = await pw.chromium.launch({ headless: true });
   const out = { name: sc.name, shots: [], errors: [], paired: null };
   try {
@@ -550,6 +636,33 @@ async function runScenario(pw, sc, { pair }) {
     if (!rep.json || !rep.json.job) throw new Error(`reply failed: ${JSON.stringify(rep)}`);
     const job2 = rep.json.job;
     await page.waitForFunction((id) => state.jobs.has(id), job2.id, { timeout: 15000 });
+    if (sc.parked) {
+      // Take the console over the way a reader does, once there is history above the fold. The pin is a reader's own
+      // input in this page, so it is set here instead of left for a scroll event to guess; `_selfTop` is recorded the
+      // way setScroll() records it, so the next rebuild reads "not at the bottom" rather than "a node never placed".
+      await page.waitForFunction(
+        (id) => {
+          const o = document.querySelector(`pre.job-out[data-out="${id}"]`);
+          return Boolean(o && o.scrollHeight - o.clientHeight > 80);
+        },
+        job2.id,
+        { timeout: 30000 },
+      );
+      out.parked = await page.evaluate((id) => {
+        const o = document.querySelector(`pre.job-out[data-out="${id}"]`);
+        const max = o.scrollHeight - o.clientHeight;
+        state.outPinned[o.dataset.out] = false;
+        // Park 50px above the bottom: the page's own "still following" tests sit at 32/40px, so this is a console the
+        // reader has taken over, and there is enough transcript below it that a jump to the newest line shows.
+        o.scrollTop = Math.max(0, max - 50);
+        o._selfTop = o.scrollTop;
+        return { scrollTop: Math.round(o.scrollTop), max: Math.round(max), rows: o.querySelectorAll(".jl").length };
+      }, job2.id);
+      console.log(`   parked console: ${out.parked.rows} rows, scrollTop ${out.parked.scrollTop}/${out.parked.max}`);
+      await page.evaluate(() => {
+        window.__rec.traceOn = true;
+      });
+    }
     out.turn2 = await waitDone(job2.id);
     if (pair) await Promise.race([pairDone, sleep(6000)]);
     await sleep(2500);
@@ -689,6 +802,7 @@ async function capture() {
     result.scenarios.push({
       name: sc.name, title: sc.title, restorer: sc.restorer, turnStates: [measured.turn1, measured.turn2], turns, errors: measured.errors, instrumented: measured.instrumented,
       attrFlips: measured.R.attrFlips, attrTargets: measured.R.attrTargets, toolMismatches: measured.R.tools, appends: measured.R.lines.length, paired: paired.paired, shots: paired.shots, pairedErrors: paired.errors,
+      parked: measured.parked || null, readings: measured.R.readings || [], parkTrace: measured.R.parkTrace || [],
     });
     const wipes = turns.flatMap((t) => t.wipes);
     const drops = turns.flatMap((t) => t.rowDrops);
@@ -702,8 +816,22 @@ async function capture() {
     check(`${sc.name}: no line is drawn twice`, Math.max(...turns.map((t) => t.dupMax)), 0);
     check(`${sc.name}: a repaint draws the same tool calls the live path drew`, measured.R.tools.length, 0, measured.R.tools.slice(0, 3).map((x) => `@${x.t}ms live ${x.live} vs repainted ${x.rebuilt}`).join("; "));
     check(`${sc.name}: nothing under the console jumps up by more than 40px`, bounces.length, 0, bounces.slice(0, 3).map((b) => `@${b.t}ms by ${b.by}px`).join("; "));
-    check(`${sc.name}: the repainters fired at least 3 times`, restores.length >= 3, true);
+    // The parked scenario rebuilds twice on purpose (an approval, then the flip); the see-saw scenarios have to show
+    // at least three repaints, and that threshold stays as it was.
+    if (sc.parked) check(`${sc.name}: both repainters fired`, restores.length >= 2, true);
+    else check(`${sc.name}: the repainters fired at least 3 times`, restores.length >= 3, true);
     check(`${sc.name}: no page errors`, measured.errors.length + paired.errors.length, 0);
+    if (sc.parked) {
+      const all = measured.R.readings || [];
+      const rd = all.filter((x) => x.before && x.after);
+      // A rebuild must hand back the same line, in the same place, still scrolled away from the bottom. The 40px
+      // allowance is the tool's existing threshold, for the card's own head/foot changing height around the console.
+      const moved = rd.filter((x) => x.before.text !== x.after.text || x.after.top - x.before.top < -40 || x.after.top - x.before.top > 40 || x.after.max - x.after.scrollTop < 40);
+      check(`${sc.name}: every rebuild of a parked console keeps the line the reader was reading`, moved.length, 0, moved.slice(0, 3).map((x) => `@${r1(x.t)}ms "${x.before.text.slice(0, 44)}" at ${x.before.top}px → "${x.after.text.slice(0, 44)}" at ${x.after.top}px (scrollTop ${x.after.scrollTop}, ${x.after.max - x.after.scrollTop}px from the bottom)`).join("\n        "));
+      check(`${sc.name}: an approval arriving mid-turn is one of those rebuilds`, rd.filter((x) => x.approval && x.status === "running").length >= 1, true, `readings: ${rd.length}`);
+      check(`${sc.name}: the status flip running → done is the other`, rd.filter((x) => x.status === "done").length >= 1, true, `readings: ${rd.length}`);
+      console.log(`   rebuilds while the console was parked: ${all.map((x) => `${Math.round(x.t)}ms ${x.status}${x.approval ? "+approval" : ""} ${x.before ? "line" : "no-line-before"}/${x.after ? "line" : "no-line-after"} [${(x.consoles || []).map((c) => `${c.rows}r ${c.scrollTop}/${c.max}${c.pinned ? " pinned" : ""}`).join(", ")}]${x.before && x.after ? ` Δ${x.after.top - x.before.top}px` : ""}`).join(" | ") || "none"}`);
+    }
     if (!paired.paired) console.log("   (no paired shot: no repaint landed on a console of 6+ lines)");
   }
   result.failures = failures;
@@ -853,7 +981,7 @@ function compose() {
     "",
     "## Limits",
     "",
-    "- The run is a scripted stub gateway, not a live Hermes agent. Everything between the stub and the browser is the panel's own code; what the model says and which tools it calls are scripted. Approvals, questions, status flips and title landing were not exercised, though by the signature they are the same kind of repainter as a deliverable.",
+    "- The run is a scripted stub gateway, not a live Hermes agent. Everything between the stub and the browser is the panel's own code; what the model says and which tools it calls are scripted. The two repainters the signature treats like a deliverable are now played, by the `repainters` scenario: an approval lands mid-turn and the turn then flips running → done, each with the console parked away from the bottom, and each rebuild must leave the reader's own line at its own place (`every rebuild of a parked console keeps the line the reader was reading`). Questions and title landing are still not exercised — neither is in this tool's script.",
     "- The page is headless Chromium at 1180×900 with the card centred; a different window changes the pixel distances, not the cause.",
     "- The screenshots come from a separate pairing pass in which the page holds its live lines for a moment; the measured numbers come from an untouched pass.",
     "",
