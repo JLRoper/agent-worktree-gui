@@ -1,13 +1,14 @@
 // Static + JSON + SSE server for the worktree monitor, plus Stage-1 agent spawning.
 // The HTTP layer never runs git: the scheduler scans in worker threads and the
 // store holds the results. Spawned agents go through lib/jobs.js.
-import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { gzipSync as zlibGzipSync } from "node:zlib";
-import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
-import { cpus } from "node:os";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+// The push-guard record is a few hundred bytes read at boot and written on an install: sync is the honest shape
+// for it, and it is the same file the Settings row reports from.
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpus, homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "./lib/pool.js";
@@ -15,15 +16,30 @@ import { worktreeList } from "./lib/project.js";
 import { Store } from "./lib/store.js";
 import { Scheduler } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
-import { Jobs, hermesHome, makeThreadName, previewRequest } from "./lib/jobs.js";
+// isLiveJobStatus is main's: the 429 hold asks whether a card's run is live before it re-arms the timer.
+// previewRequest is not: this commit moves both previewRequest call sites into lib/features/spawn.js, so
+// server.js has no use for the name any more — the import keeps their new name and drops the moved one.
+import { Jobs, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js";
 import { gitIn, scanWorktree } from "./lib/scan.js";
-import { resolveExistingTarget, resolutionNote } from "./lib/spawn-target.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
+import { verifyLabel, verifyPrompt } from "./lib/verify-prompt.js";
+import { answerDeletes, answerLine, answeredChecks } from "./lib/verify-landed.js";
+import { deleteWorktreeRow } from "./lib/worktree-remove.js";
+import { Hosts, proposeMapping } from "./lib/hosts.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
-import { TreeNames, describeNaming, tagOf, treeKey, WORKTREE_TAG_RE } from "./lib/tree-names.js";
-import { auditRepo } from "./lib/hermes-worktrees.js";
+import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
+import { WorktreeNaming } from "./lib/worktree-naming.js";
+import { Locks, describeLock } from "./lib/locks.js";
+import { createDescriptions } from "./lib/features/descriptions.js";
+import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
+import { ParentBook } from "./lib/parents.js";
+import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees, writePlan } from "./lib/steward.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
+import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyForProject, policyLabel } from "./lib/remote-writes.js";
+import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
+import { safeUrl, openerFor, openerForFolder } from "./lib/open-url.js";
+import { errorStatus } from "./lib/errors.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
   clarifyWindowSeconds, approvalWindowSeconds,
@@ -34,7 +50,19 @@ import { hermesSessionTail } from "./lib/activity.js";
 import { Assistant, ASSISTANT_THREAD } from "./lib/assistant.js";
 import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./lib/subagents.js";
 import { thinkingFor } from "./lib/thinking.js";
-import { modelCatalogue } from "./lib/hermes-models.js";
+import { modelCatalogue, refreshModelCatalogue } from "./lib/hermes-models.js";
+import { createSpawn } from "./lib/features/spawn.js";
+// The panel's own directories, and every state path derived from them. Nothing below builds one of those
+// paths itself any more: `resolveDirs` answers where, `statePaths` answers which file.
+import {
+  cleanScratch, ensureDirs, humanBytes, measureSize, migrateState, readMigrationJournal, resolveConfigPath, resolveDirs,
+  SCRATCH_MARKER, sizeOf, statePaths,
+} from "./lib/paths.js";
+// HTTP framing lives in lib/http/: transport.js knows about req/res and nothing about worktrees,
+// and static.js serves public/. Both are handed the state they used to read by closure.
+import { authorised, handleStream, readBody, readRawBody, sendJson } from "./lib/http/transport.js";
+import { serveStatic, PUBLIC_DIR } from "./lib/http/static.js";
+import { createBuild } from "./lib/build-version.js";
 
 // A file an agent produced is meant to be OPENED, and the shell association may hand a .md to a
 // browser. Prefer a text editor: Notepad++ when installed, else Windows' notepad (always present),
@@ -67,7 +95,6 @@ async function editorFor(target) {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const execP = promisify(execFile);
-const PUBLIC_DIR = path.join(HERE, "public");
 // The panel's version is declared once, in package.json: read it here so the page can say which
 // build is running without a second copy to keep in step.
 const VERSION = await readFile(path.join(HERE, "package.json"), "utf8")
@@ -76,18 +103,40 @@ const VERSION = await readFile(path.join(HERE, "package.json"), "utf8")
 // PANEL_CONFIG lets a second instance run from the same code with its own config and port —
 // a sandbox or a demo you can click around in without touching the real one:
 //   set PANEL_CONFIG=C:\path\to\panel-config.json && node server.js
-const CONFIG_PATH = process.env.PANEL_CONFIG ? path.resolve(process.env.PANEL_CONFIG) : path.join(HERE, "config.json");
-
-const TYPES = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".ico": "image/x-icon",
-};
+//
+// Otherwise the file has two homes, and lib/paths.js decides between them: `<dataDir>/config.json` when an
+// install has been moved there, else `config.json` beside this checkout — so an existing install keeps
+// running untouched, and moving the file is what opts into the new home.
+const CONFIG_FILE = resolveConfigPath({ here: HERE });
+const CONFIG_PATH = CONFIG_FILE.path;
+// The folder the config was read from. It is a PROTECTED path (the clean route must never empty it) and the place a
+// second instance keeps its own files, never a place to derive a state file from: that is lib/paths.js's job, and a
+// guard in test/paths.test.js fails on any other `path.dirname(CONFIG_PATH)`.
+const CONFIG_DIR = path.dirname(CONFIG_PATH);
 
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
+
+// The versioned static bundle: one hash over everything the shell loads, computed here at boot and
+// re-read when a file under public/ moves. The shell's asset URLs carry it and GET /api/build
+// answers with it — that is how a tab open since yesterday learns the panel changed.
+const build = createBuild({ publicDir: PUBLIC_DIR, log });
+const buildAtBoot = await build.current();
+
+// How old a worktree's last activity has to be before the chart holds its row out of the view it opens on (the row
+// is never lost — one arrow on that chart shows every tree again). Measured from ACTIVITY, never from when the
+// directory was created: a tree cut months ago that somebody is working in right now is not stale, and hiding it
+// would be the one thing this setting must not do. 0 shows everything.
+//
+// A value that cannot be read as a number or a count of days falls back to the DEFAULT rather than to 0: an
+// unreadable number must never silently switch a filter off (and Number(null) is 0, so "absent" is handled first).
+const AGE_DAYS_DEFAULT = 7;
+const AGE_DAYS_MAX = 3650;
+function ageDaysFrom(value) {
+  if (value == null || value === "") return AGE_DAYS_DEFAULT;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return AGE_DAYS_DEFAULT;
+  return Math.min(AGE_DAYS_MAX, Math.round(n));
+}
 
 async function loadConfig() {
   // A fresh clone may have no config.json yet: start on defaults and say so, rather than dying.
@@ -124,24 +173,63 @@ async function loadConfig() {
   cfg.slowSeconds = Number(cfg.slowSeconds ?? 60);
   cfg.fetchSeconds = Number(cfg.fetchSeconds ?? 600);
   cfg.threads = Number(cfg.threads) || Math.max(1, Math.min(4, cpus().length - 1));
+  // How old a worktree's last activity has to be before the chart hides its row. Server-side, like scanMode below:
+  // it lives in this file so it survives a restart and applies to every browser.
+  cfg.hideOlderThanDays = ageDaysFrom(cfg.hideOlderThanDays);
   cfg.projects = Array.isArray(cfg.projects) ? cfg.projects : [];
   if (!cfg.defaultCwd) cfg.defaultCwd = cfg.projects[0]?.path || process.cwd();
   // "all": keep every project fresh, whether or not anyone is looking at it. "visible": the page reports which
   // project sections are on screen and only those are re-read - with ~100 projects that is most of the git work
   // the board does. The setting lives in this file so it survives a restart and applies to every browser.
   cfg.scanMode = String(cfg.scanMode || "all").toLowerCase() === "visible" ? "visible" : "all";
-  // Keyed off the config's own directory, so a PANEL_CONFIG sandbox keeps its own registry.
-  if (!cfg.jobsFile) cfg.jobsFile = path.join(path.dirname(CONFIG_PATH), "logs", "jobs.json");
-  // The assistant's scratchpad lives beside the job store; `assistant` is an optional block of knobs
-  // (mode, model, rule escalations) that the page can also change at runtime.
+  // ---- where the panel keeps things ----------------------------------------------------------------
+  // Two directories, resolved once, here, by lib/paths.js — and every state file derived from the data one.
+  // This used to be eleven separate `path.dirname(CONFIG_PATH)` lines, which put the job store, the assistant,
+  // the TODOs, the naming ledger, the labels and the push-guard record INSIDE the checkout: a fresh clone opened
+  // on an empty board, a re-clone lost the history, and `git status` could never be trusted to be about the code.
+  //
+  // `dataDir` is the durable half (default `~/.wag`), `scratchDir` the throwaway half (default `<os tmpdir>/wag`).
+  // Explicit `dataDir` / `scratchDir` keys win, then WAG_HOME / WAG_SCRATCH, then those defaults — and the source
+  // of each travels with it, so the Settings row can answer "why is my board empty" without a docs hunt.
+  //
+  // A config that names one of these files itself still wins (that is how a sandbox points at its own store); the
+  // rest follow it, which is the behaviour every existing `PANEL_CONFIG` sandbox relies on.
+  //
+  // A PANEL_CONFIG instance that names no `dataDir` is a second instance, and it keeps its own folder: it resolves
+  // to `<dir of its config>/logs` (flat, as it always did) and ignores WAG_HOME / WAG_SCRATCH. Resolving it to the
+  // shared `~/.wag` instead would point every verify tool and test sandbox at the reader's live job store.
+  const dirs = resolveDirs({ config: cfg, configSource: CONFIG_FILE.source, configDir: CONFIG_DIR });
+  cfg.dataDir = dirs.dataDir;
+  cfg.dataDirSource = dirs.dataSource;
+  cfg.dataLayout = dirs.dataLayout;
+  cfg.scratchDir = dirs.scratchDir;
+  cfg.scratchDirSource = dirs.scratchSource;
+  Object.assign(cfg, statePaths(cfg));
+  // The assistant's `assistant` block is an optional set of knobs (mode, model, rule escalations) that the page can
+  // also change at runtime. It is not a path, but it is read by the same callers, so it is resolved here too.
   cfg.assistant = cfg.assistant && typeof cfg.assistant === "object" ? cfg.assistant : {};
-  if (!cfg.assistantFile) cfg.assistantFile = path.join(path.dirname(cfg.jobsFile), "assistant.json");
-  // The continuity file the assistant is handed every turn, beside its scratchpad for the same reason: it is
-  // state, not source. A sandbox config that names its own jobsFile therefore gets its own charter too.
-  if (!cfg.charterFile) cfg.charterFile = path.join(path.dirname(cfg.assistantFile), "assistant-charter.md");
-  // Which trees have already been named, and by whom — the panel's own, never git's, so it lives beside the job
-  // store and a PANEL_CONFIG sandbox keeps its own copy of it.
-  if (!cfg.treeNamesFile) cfg.treeNamesFile = path.join(path.dirname(cfg.jobsFile), "tree-names.json");
+  // `assistant.cwd` (lib/assistant.js) defaults to `assistant-cwd` beside `assistantFile`, so it follows this store
+  // into the data directory with no extra key: state, not source, and never a folder inside the checkout.
+  // The locks, the parent book, the steward's plan files (`stewardDir`) and its questions ledger, the model prices, the
+  // push-guard record, the host mappings and the branch-parent ledger are state like everything above: lib/paths.js
+  // derives every one of them beside the job store, so they follow it into the data directory.
+  // `steward.prodBranch` names the one branch a roll-up must never be done inline: production is handed to a worker
+  // (or a TO), never merged by editing a tree. null means this project has no such branch.
+  cfg.steward = cfg.steward && typeof cfg.steward === "object" ? cfg.steward : {};
+  if (!("prodBranch" in cfg.steward)) cfg.steward.prodBranch = null;
+  cfg.stewardRefreshSeconds = Number(cfg.stewardRefreshSeconds) > 0 ? Number(cfg.stewardRefreshSeconds) : 300;
+  // Where each project's branches and pull requests live (lib/hosts.js). The live file (`hostsFile`) is reader-edited state,
+  // so lib/paths.js puts it beside the job store above, and not in projects.json, which the discovery sweep rewrites every
+  // pass. The SEED is the opposite: it ships with the code (hosts.seed.json next to this file) and supplies defaults the
+  // live file overrides.
+  if (!cfg.hostsSeedFile) cfg.hostsSeedFile = path.join(HERE, "hosts.seed.json");
+  // Whether a branch may exist on a REMOTE at all: the setting the reader's permission box writes, and what the
+  // installed pre-push guard reads. local-only by default — a value that cannot be read falls back to it rather
+  // than to a permissive one.
+  cfg.remoteBranchPolicy = policyFrom(cfg.remoteBranchPolicy);
+  // How long a parked remote-write question waits before it is denied: the guard's own poll window as well, since
+  // the panel hands it this number at install time.
+  cfg.remoteWriteSeconds = Number(cfg.remoteWriteSeconds) > 0 ? Math.min(3600, Number(cfg.remoteWriteSeconds)) : 300;
   return cfg;
 }
 
@@ -158,105 +246,73 @@ async function patchPanelConfig(patch) {
   await writeFile(CONFIG_PATH, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
 }
 
-const gzip = (buf) => zlibGzipSync(buf, { level: 6 });
-
-function acceptsGzip(req) {
-  return /\bgzip\b/.test(String((req && req.headers["accept-encoding"]) || ""));
-}
-
-function sendJson(res, code, body) {
-  const req = res.req;
-  const text = JSON.stringify(body);
-  const raw = Buffer.from(text);
-  const head = { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", Vary: "Accept-Encoding" };
-  // /api/state is half a megabyte of JSON and the page asks for it periodically; gzip costs a few
-  // ms of CPU and removes ~90% of the bytes and most of the client's parse time.
-  if (raw.length > 2048 && acceptsGzip(req)) {
-    const gz = gzip(raw);
-    res.writeHead(code, { ...head, "Content-Encoding": "gzip", "Content-Length": gz.length });
-    return res.end(gz);
-  }
-  res.writeHead(code, { ...head, "Content-Length": raw.length });
-  res.end(raw);
-}
-
-// Attachments arrive as raw bytes (no multipart parser here): the filename rides in x-filename, so the
-// body is exactly the file.
-function readRawBody(req, limit) {
-  return new Promise((resolve, reject) => {
-    let size = 0;
-    const chunks = [];
-    req.on("data", (d) => {
-      size += d.length;
-      if (size > limit) {
-        reject(Object.assign(new Error(`attachment is larger than ${Math.round(limit / (1024 * 1024))} MB`), { tooLarge: true }));
-        req.destroy();
-        return;
-      }
-      chunks.push(d);
-    });
-    req.on("end", () => resolve(Buffer.concat(chunks)));
-    req.on("error", reject);
-  });
-}
-
-function readBody(req, limit = 256 * 1024) {
-  return new Promise((resolve, reject) => {
-    let size = 0;
-    const chunks = [];
-    req.on("data", (d) => {
-      size += d.length;
-      if (size > limit) {
-        reject(new Error("body too large"));
-        req.destroy();
-        return;
-      }
-      chunks.push(d);
-    });
-    req.on("end", () => {
-      const raw = Buffer.concat(chunks).toString("utf8");
-      if (!raw) return resolve({});
-      try {
-        resolve(JSON.parse(raw));
-      } catch (e) {
-        reject(new Error(`invalid JSON body: ${e.message}`));
-      }
-    });
-    req.on("error", reject);
-  });
-}
-
-// A worktree branches from HEAD, so a repo with no commits cannot host one. Refuse with a reason up
-// front instead of letting the run start in a tree that cannot exist.
-async function spawnBlocker(cwd, target) {
-  if (target?.empty) {
-    return `${target.name} has no commits yet (unborn HEAD), so a worktree cannot be created there — make an initial commit first.`;
-  }
-  const head = await gitIn(cwd, ["rev-parse", "--verify", "--quiet", "HEAD"], 15000);
-  if (head.ok) return null;
-  const err = String(head.err || head.out || "");
-  if (/not a git repository/i.test(err)) return `${cwd} is not a git repository — an agent works in a worktree, which needs one.`;
-  return `${cwd} has no commits yet (unborn HEAD), so a worktree cannot be created there — make an initial commit first.`;
-}
-
 let config = await loadConfig();
+// ---- both directories exist before anything writes into them --------------------------------------
+// Nothing is created lazily any more: a boot that dies between "store opened" and "attachment saved" used to leave
+// a half-made `logs/`, and the next boot could not tell that from a fresh install. `ensureDirs` is `mkdir -p`, so
+// two panels racing on one data directory is a no-op rather than a failure.
+const madeDirs = ensureDirs(config);
+for (const target of madeDirs.made) log(`created ${target}`);
+log(`data directory: ${config.dataDir} (${config.dataDirSource}) · scratch directory: ${config.scratchDir} (${config.scratchDirSource})`);
+// ---- the one-time move off the checkout -----------------------------------------------------------
+// An install that has been running from a checkout keeps its whole history in `<repo>/logs`. The first boot with a
+// data directory that holds no store COPIES it across. Never moved, never deleted: a downgrade, a second build, or a
+// reader who deliberately points PANEL_CONFIG at the old file all still find what was there. The line names the
+// count and the directory so a board that comes up full of last week's cards is explainable from the log alone.
+const stateMigration = migrateState({
+  dataDir: config.dataDir,
+  stateFile: config.jobsFile,
+  legacyDir: path.join(CONFIG_DIR, "logs"),
+  layout: config.dataLayout,
+  onLog: log,
+});
+// A second instance (PANEL_CONFIG, no dataDir) has nothing to move, and saying so on every sandbox boot is noise.
+if (!stateMigration.migrated && stateMigration.reason && stateMigration.reason !== "no job store beside the checkout" && config.dataLayout !== "flat") {
+  log(`state migration skipped: ${stateMigration.reason}`);
+}
+// Start the two size readings in the background so the first /api/state (and the first Settings open) finds a number
+// waiting. They are async walks: a scratch folder holding a copied checkout must not hold up the listener.
+void measureSize(config.dataDir).catch(() => {});
+void measureSize(config.scratchDir).catch(() => {});
+// What the data directory's own journal says about where its board came from. Read once, here: the journal only
+// changes at boot, and /api/state is polled far too often to read a file for it.
+const lastMigration = readMigrationJournal(config.stateDir).slice(-1)[0] || null;
 let pool = new Pool(config.threads);
 const store = new Store();
+// A tree's name is the panel's fact, never git's. The ledger of which trees have a name, who gave it and when
+// (lib/tree-names.js) is read before anything can rename a tree and written the moment the panel learns one:
+// at the cut for a tree this panel makes, at first sight for a tree that was already there.
+const treeNames = new TreeNames({ file: config.treeNamesFile, log });
+// Where each project's branches and pull requests live. The file is created on first boot (empty: the defaults are
+// hosts.seed.json's) so the reader has something to edit, and lib/hosts.js merges the seed under it per host id and
+// per project — a new seed record reaches this install without anybody merging JSON by hand.
+const hosts = new Hosts({
+  file: config.hostsFile,
+  seedFile: config.hostsSeedFile || "hosts.seed.json",
+  log: (line) => log(line),
+});
+const hostsFile = hosts.ensure();
+for (const warning of hosts.doc().warnings) log(`hosts: ${warning}`);
 const registry = new ProjectRegistry({
   getConfig: () => config,
   store,
   onLog: log,
-  // Last successful sweep, so a restart opens on the board it had instead of "no git repos found".
-  cacheFile: config.projectsCacheFile || path.join("logs", "projects.json"),
+  // Last successful sweep, so a restart opens on the board it had instead of "no git repos found". Resolved by
+  // lib/paths.js — it used to default to a path relative to the process cwd, which a sandbox then shared with the
+  // live board while its own seeded rows stayed invisible.
+  cacheFile: config.projectsCacheFile,
 });
 let scheduler = new Scheduler({
   config,
   store,
   pool,
   registry,
+  hosts,
   getProjects: () => registry.projects,
   panelAgents: () => jobs.agentPaths(),
   panelThreads: () => jobs.panelRunThreads(),
+  // Every worktree a listing turns up, before it becomes a row: the naming ledger's seeding (see seedTreeName).
+  onWorktreeSeen: (project, tree) => seedTreeName(project, tree),
 });
 
 const clients = new Set();
@@ -309,14 +365,23 @@ let restart = null;
 // Declared before the job stream that feeds it: a job event arrives on the same tick as construction,
 // and the observer is optional until the assistant exists.
 let assistant = null;
+// Declared before the job stream that feeds it. The naming policy itself is created below, once the ledger and the
+// panel's own worktree cut are wired; an event that arrives before then is not lost — the 10-second title sweep
+// emits again for any card that still has no name.
+let naming = null;
 const jobs = new Jobs({
   config,
   onEvent: (evt) => {
     guard("event broadcast", () => broadcast(evt));
     guard("worktree adopt", () => adoptFromJob(evt));
-    // A turn that just ended is the first moment the session has a name of its own, and the tree is idle: give the
-    // worktree that name. Swallowed on purpose - a rename is never worth failing a job event over.
-    void autoNameWorktree(evt).catch(() => {});
+    // Every event that carries a session title is a chance to give a tree the name its run chose for it — the
+    // sweep that emits on the first title, the run's own events, and the settle that follows. The policy (which
+    // tree, which run, and the ledger that allows it exactly once) is lib/worktree-naming.js; a rename is never
+    // worth failing a job event over, so the whole call is fire-and-forget.
+    guard("worktree naming", () => void naming?.consider(evt?.job));
+    // A run that just arrived (or changed) is a new chance to learn what a tree was started to do: the earliest
+    // brief in a tree is in this store, and a harvest is collapsed into one pass per couple of seconds.
+    guard("description harvest", () => descriptions.harvest());
     guard("assistant observation", () => assistant?.observe(evt));
   },
   onLog: log,
@@ -327,9 +392,215 @@ const jobs = new Jobs({
   // offering "Allow once" long after the gateway had already denied the command and moved on.
   approvalWindow: () => approvalWindowSeconds(),
 });
+// Where the work of a card whose run the gateway has forgotten still is: the tree the turn ran in, and the PR its
+// branch has. Read from the board's own rows — a scan already carries the PR per branch (lib/scheduler.js), so this
+// is a lookup, not a measurement: no git call, no gh call, and nothing the boot reconcile would have to pay per
+// card. The manual press is its only caller.
+function gonePointers(id) {
+  const j = jobs.get(id);
+  if (!j) return null;
+  const store = scheduler.store;
+  const wanted = [j.worktreePath, j.ownerPath, j.cwd].filter(Boolean).map(normPathKey);
+  // The rows are the store's, keyed by "<project>::<path>", so the search walks that store's own project names:
+  // discovery publishes a project to the registry on its own clock, and a press must not miss a row that is already
+  // on the board just because the registry has not named its project yet.
+  let found = null;
+  for (const name of store.projects.keys()) {
+    const hit = (store.rowsFor(name) || []).find((r) => wanted.includes(normPathKey(r.path))) || null;
+    if (hit) {
+      found = { project: store.projects.get(name), row: hit };
+      break;
+    }
+  }
+  const row = found?.row || null;
+  const pr = row?.pr || null;
+  return {
+    worktree: row?.path || j.worktreePath || j.ownerPath || j.cwd || null,
+    branch: row?.branch || j.branch || null,
+    // The scan's PR index carries the number, the state and the title; the URL is the one form of a pointer the
+    // console renders as a link, and it comes from the project's host record — the same template the board's PR cell
+    // uses. No host mapping means no URL: the console then shows the PR number and says where the mapping is missing
+    // rather than sending the reader to a github.com page that may not exist.
+    pr: pr
+      ? {
+          number: pr.number,
+          state: pr.state || null,
+          title: pr.title || null,
+          url: hosts.linkFor(found?.project || { name: "" }, "pull", { pr: pr.number, branch: row?.branch, sha: row?.head, main: found?.project?.mainBranch }).url || null,
+        }
+      : null,
+  };
+}
+
 // Human side of the Hermes approval-transport contract: the plugin presents, the panel answers,
 // the host decides. Nothing here can approve anything by itself.
 const approvals = new Approvals({ onEvent: broadcast });
+
+// ---- who may put a branch on a remote ------------------------------------------------------------
+// The reader's rule: a worktree the panel cuts is LOCAL ONLY unless the work is going to land. The setting
+// (`remoteBranchPolicy`) is the standing answer, the permission box is how an exception is granted, and the
+// installed pre-push guard is what makes the default hold against a worker's own `git push`. Three surfaces, one
+// decision — RemoteWrites owns it, this block is only the wiring.
+//
+// Which worktrees carry the guard, and when it went in. git holds the hooks path itself; this is the panel's list
+// of what it installed, so the Settings row can report it without walking 90 repositories' git dirs.
+function readGuardRecord() {
+  try {
+    const raw = JSON.parse(readFileSync(config.pushGuardFile, "utf8"));
+    return raw && typeof raw === "object" && raw.trees ? raw : { version: 1, trees: {} };
+  } catch {
+    return { version: 1, trees: {} };
+  }
+}
+function writeGuardRecord() {
+  try {
+    mkdirSync(path.dirname(config.pushGuardFile), { recursive: true });
+    writeFileSync(config.pushGuardFile, `${JSON.stringify(guardRecord, null, 2)}\n`, "utf8");
+  } catch (e) {
+    log(`could not write ${config.pushGuardFile}: ${String((e && e.message) || e)}`);
+  }
+}
+const guardRecord = readGuardRecord();
+
+// The url the guard calls back on. Loopback on purpose: the hook runs on this box, and a loopback request is never
+// challenged for the panel token (authorised), so the guard needs no secret of its own.
+const guardPanelUrl = () => `http://127.0.0.1:${config.port}`;
+
+// THE POLICY IN FORCE FOR ONE PROJECT. The global `remoteBranchPolicy` is the default for every checkout here; a
+// project's own entry in config.json overrides it. That override is not a nicety: this panel and heroes-js LAND by
+// pushing a branch and opening a PR, so a blanket local-only would refuse their own landing path, while every other
+// repository on this box is local work whose child branches must merge into their parent instead of appearing on a
+// shared remote. Unknown names and unreadable values fall back to the global (lib/remote-writes.js `policyForProject`).
+const guardPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+function policyForProjectPath(projectPath, project = null) {
+  if (project) return policyForProject(project, config.remoteBranchPolicy);
+  const key = guardPathKey(projectPath);
+  const found = key ? registry.projects.find((p) => guardPathKey(p.path) === key) || null : null;
+  return policyForProject(found, config.remoteBranchPolicy);
+}
+
+// Install (or refresh) the guard for ONE worktree and remember it. Called the moment the panel cuts a tree, and by
+// the Settings button for trees that predate this feature.
+async function installGuardFor({ projectPath, worktree, branch = null, landing = false, project = null }) {
+  // `project` is the registry record when the caller has it (the spawn path does); a Settings install passes the path
+  // alone. Either way the guard's own copy of the policy is the PROJECT's, not the global one.
+  const policy = policyForProjectPath(projectPath, project && typeof project === "object" ? project : null);
+  const out = await installGuard({
+    projectPath,
+    worktree,
+    panelUrl: guardPanelUrl(),
+    timeoutSeconds: config.remoteWriteSeconds,
+    policy,
+    landing: [...remoteWrites.landing],
+    log,
+  });
+  if (!out.ok) return out;
+  // A tree started to LAND is allowed to push by design; recorded on the panel side too, so the guard's own file
+  // and this process agree about it.
+  if (landing) remoteWrites.markLanding(worktree);
+  guardRecord.trees[normTree(worktree)] = {
+    tree: normTree(worktree),
+    path: cleanPath(worktree),
+    project: (project && typeof project === "object" ? project.name : project) || path.basename(projectPath || ""),
+    projectPath: cleanPath(projectPath || worktree),
+    branch: branch || null,
+    landing: Boolean(landing),
+    // The policy this tree's guard was actually written with, so the Settings row can never show the global one for a
+    // project that overrides it.
+    policy,
+    dir: out.dir,
+    at: new Date().toISOString(),
+  };
+  writeGuardRecord();
+  log(`push guard installed: ${cleanPath(worktree)} -> ${out.dir} (policy ${policy}${policy !== config.remoteBranchPolicy ? ` — this project's own, the global is ${config.remoteBranchPolicy}` : ""}${landing ? ", started to land" : ""})`);
+  return { ...out, policy };
+}
+
+// The panel's own worktree creation (lib/jobs.js calls this) — the one place a spawned tree is cut, so it is the
+// one place the guard has to go in.
+jobs.afterWorktreeCreate = async ({ repoDir, path: tree, branch, landing }) => {
+  try {
+    const project = registry.projects.find((p) => normPathKey(p.path) === normPathKey(repoDir));
+    // The record, not its name: it carries this project's own `remoteBranchPolicy`, which is what the guard must obey.
+    return await installGuardFor({ projectPath: repoDir, worktree: tree, branch, landing, project: project || null });
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+};
+
+// Every guard the panel installed gets the current setting and the current landing list written into it. Cheap: a
+// handful of one-word files, one call per project.
+async function refreshGuards() {
+  const dirs = new Map();
+  for (const rec of Object.values(guardRecord.trees)) if (rec?.projectPath) dirs.set(normTree(rec.projectPath), rec.projectPath);
+  const landing = [...remoteWrites.landing].map((t) => guardRecord.trees[t]?.path || t);
+  const out = [];
+  for (const [key, projectPath] of dirs) {
+    // Each project's guard gets ITS policy: a settings change of the global must not overwrite a project that
+    // carries its own answer, and an "Always allow" click must not turn every other checkout's default off either.
+    const policy = policyForProjectPath(projectPath);
+    const r = await refreshGuardFiles({ projectPath, panelUrl: guardPanelUrl(), timeoutSeconds: config.remoteWriteSeconds, policy, landing, log });
+    out.push({ project: key, policy, ...r });
+  }
+  return out;
+}
+
+// What the Settings row reports, and what the tests read: which trees carry the guard, what it replaced, and which
+// of them were started to land. The record is the panel's own — this is one file read, never a git call per tree.
+function guardReport() {
+  const trees = Object.values(guardRecord.trees || {});
+  const projects = new Set(trees.map((t) => normTree(t.projectPath)).filter(Boolean));
+  return {
+    file: config.pushGuardFile,
+    count: trees.length,
+    projects: projects.size,
+    landing: [...remoteWrites.landing],
+    dirs: [...new Set(trees.map((t) => t.dir).filter(Boolean))],
+    latest: trees
+      .slice()
+      .sort((a, b) => String(b.at).localeCompare(String(a.at)))
+      .slice(0, 8)
+      .map((t) => ({ tree: t.path, project: t.project, branch: t.branch, landing: Boolean(t.landing), at: t.at })),
+  };
+}
+
+// "Always allow" in the permission box IS this setting, so the box and Settings cannot tell two different stories.
+async function setRemotePolicy(policy, { by = "reader", why = "" } = {}) {
+  const clean = policyFrom(policy, config.remoteBranchPolicy);
+  try {
+    await patchPanelConfig({ remoteBranchPolicy: clean });
+  } catch (e) {
+    return { error: `could not write the setting: ${String((e && e.message) || e)}` };
+  }
+  const before = config.remoteBranchPolicy;
+  config.remoteBranchPolicy = clean;
+  log(`remoteBranchPolicy: ${before} -> ${clean}${by ? ` (by ${by}${why ? `: ${why}` : ""})` : ""}`);
+  await refreshGuards();
+  broadcast({ type: "settings", settings: settingsOut() });
+  return { ok: true, policy: clean, before };
+}
+
+const remoteWrites = new RemoteWrites({
+  getPolicy: () => config.remoteBranchPolicy,
+  onEvent: broadcast,
+  onLog: log,
+  timeoutSeconds: config.remoteWriteSeconds,
+  onPolicy: (policy, { by, why }) => setRemotePolicy(policy, { by, why }),
+  // A grant reaches the guard's own files too, so a tree the reader allowed does not have to reach the panel to
+  // find that out — and a tree started to land keeps its permission across a panel restart.
+  onGrant: () => void refreshGuards(),
+});
+
+// ---- spawning ---------------------------------------------------------------------------
+// The New-agent card, its preview and the assistant's spawner all ask the same question, so they
+// ask it in one place (lib/features/spawn.js), named `spawnFeature` because node:child_process
+// already owns `spawn` in this module. The two answers that go stale are passed as getters:
+// /api/reload replaces `config` wholesale, and every registry refresh replaces the project array.
+const spawnFeature = createSpawn({
+  getConfig: () => config,
+  getProjects: () => registry.projects,
+  jobs,
+});
 
 // The sentry + the assistant's own thread. It reads the same job summaries the page does, so nothing
 // here can see more than the board shows; its own clock is `settings.seconds`. `spawner` is the one act it
@@ -342,7 +613,7 @@ assistant = new Assistant({
   // delegated children the gateway keeps in `state.db`, which never reach a parent's run stream.
   getRows: () => [...store.rows.values()],
   getChildren: () => subagentRoster({ dbPath: path.join(hermesHome(), "state.db") }),
-  spawner: assistantSpawnRun,
+  spawner: spawnFeature.assistantSpawnRun,
   // The one act this module cannot perform itself: a RESTART line's gateway/panel restart, queued by
   // the controller and run only once the turn that asked for it has ended.
   onRestart: (spec) => restart.request(spec),
@@ -418,75 +689,16 @@ setInterval(() => {
     });
 }, 15_000).unref?.();
 
-// Start a worker on the assistant's behalf. Deliberately the same mechanics as the New-agent card —
-// registry for the project, gateway probe before anything is promised, `git rev-parse`/`worktree add` in
-// lib/jobs.js — but with no dry run and no model field, so the worker runs on the gateway default rather
-// than on the small model the assistant itself uses.
-async function assistantSpawnRun(spec = {}) {
-  const prompt = String(spec.prompt || "").trim();
-  if (!prompt) throw new Error("a spawn needs a prompt");
-  const transport = await jobs.probe();
-  if (!transport.reachable || !transport.capabilities?.runs) {
-    throw new Error(`the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}`);
-  }
-  const target = spec.project
-    ? registry.projects.find((p) => p.name === spec.project)
-    : projectForPath(spec.target);
-  if (spec.existing) {
-    // An agent in a directory that already exists: no tree is cut, and the card attaches to the git top level.
-    // The directory named is not taken on trust any more: the panel renames a finished run's worktree directory
-    // AND its branch after the thread title, so the path an assistant wrote down when it watched that worker
-    // finish, or a reader typed from an older report, is one rename out of date while the tree stands. Resolve
-    // it against git's own worktree list (lib/spawn-target.js) — one match is used and named on the card,
-    // several are an error that lists them, none keeps the refusal this line always gave.
-    const res = await resolveExistingTarget({
-      target: spec.target || target?.path,
-      // A path inside a project is that project's business; a branch or a bare worktree name carries no path to
-      // place, so the registry is the search space.
-      project: target,
-      projects: registry.projects,
-      thread: spec.thread || null,
-    });
-    if (!res.ok) throw new Error(res.error);
-    const cwd = res.path;
-    const blocked = await spawnBlocker(cwd, null);
-    const top = await gitIn(cwd, ["rev-parse", "--show-toplevel"]);
-    const ownerPath = top.ok && top.out ? top.out : cwd;
-    const norm = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-    // A resolved tree can name a project the line itself never did (a branch is not a path), and that project is
-    // what decides whether this run stays in the project's own checkout rather than a branch of its own.
-    const home = target || registry.projects.find((p) => p.name === res.project) || null;
-    const note = resolutionNote(res);
-    return jobs.create({
-      prompt,
-      cwd,
-      existing: true,
-      ownerPath,
-      ownerPending: false,
-      baseCheckout: Boolean(home && norm(ownerPath) === norm(home.path)),
-      // The card says which tree a stale name resolved to, not just that something ran.
-      note: note ? `SPAWN IN ${note}` : null,
-      origin: {
-        kind: "assistant-spawn",
-        where: "existing",
-        ...(res.resolved ? { resolvedFrom: res.asked, resolvedPath: res.path, resolvedHow: res.how } : {}),
-      },
-    });
-  }
-  if (!target) throw new Error(`unknown project: ${spec.target || spec.project || "(none)"}`);
-  const blocked = await spawnBlocker(target.path, target);
-  if (blocked) throw new Error(blocked);
-  return jobs.create({
-    prompt,
-    cwd: target.path,
-    project: target.name,
-    existing: false,
-    // The worktree appears a moment later; adoptFromJob files the card under its own row when it does.
-    ownerPending: true,
-    origin: { kind: "assistant-spawn", project: target.name },
-  });
-}
-
+// The installed guards read their policy from files of their own, so a config.json edited by hand while the panel
+// was down is mirrored into them once at boot. Silent when nothing is installed, which is the case on a fresh clone.
+setTimeout(() => {
+  void refreshGuards()
+    .then((out) => {
+      const refreshed = out.filter((o) => o && o.ok);
+      if (refreshed.length) log(`push guard: ${refreshed.length} project(s) refreshed at boot (policy ${config.remoteBranchPolicy})`);
+    })
+    .catch((e) => log(`push guard refresh failed at boot: ${String((e && e.message) || e)}`));
+}, 4_000).unref?.();
 const settingsOut = () => ({
   version: VERSION,
   refreshSeconds: config.refreshSeconds,
@@ -497,12 +709,24 @@ const settingsOut = () => ({
   slowSeconds: config.slowSeconds,
   fetchSeconds: config.fetchSeconds,
   liveMinutes: config.liveMinutes ?? 5,
+  hideOlderThanDays: config.hideOlderThanDays,
   threads: config.threads,
   host: config.host,
   defaultCwd: config.defaultCwd,
   worktreeSource: String(config.discovery?.worktreeSource || "git").toLowerCase(),
   scanMode: config.scanMode === "visible" ? "visible" : "all",
   scanVisible: scheduler ? scheduler.visibilityReport() : null,
+  // Whether a branch may exist on a remote at all. It travels with every snapshot because the Settings row, the
+  // spawn card's default and the permission box all read the same fact — and the guard's own copy of it is written
+  // from here too, so a hook cannot be reading a different policy than the page shows.
+  remoteBranchPolicy: config.remoteBranchPolicy,
+  remoteBranchPolicyLabel: policyLabel(config.remoteBranchPolicy),
+  // The policy actually in force per project, because the global is only the default: a project's own entry in
+  // config.json (this panel, heroes-js) overrides it, and the page must be able to say which repo is which.
+  remoteBranchPolicies: Object.fromEntries(
+    (registry?.projects || []).map((p) => [p.name, policyForProject(p, config.remoteBranchPolicy)]),
+  ),
+  remoteWriteSeconds: config.remoteWriteSeconds,
   spawnEnabled: true,
 });
 
@@ -514,11 +738,190 @@ const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "
 // the panel's own bookkeeping - the jobs that ran there (a run's body carries its cwd), the store's row, and the row
 // the board draws.
 //
-// A tree is named ONCE, and the record of that (who, when — lib/tree-names.js) is what stops a name churning. The
-// automatic half of this (`once: true`, from a finished turn's title) refuses a tree the ledger already knows;
-// the deliberate half (the ✎ and the ✦ in the row, i.e. a reader asking) does not, because replacing a name is
-// the point of it. Either way the six-hex tag is kept and the 409 stands while an agent is running in the tree.
-const treeNames = new TreeNames({ file: config.treeNamesFile, log });
+// A tree is named ONCE, and the record of that (who, when — lib/tree-names.js, constructed above) is what stops a
+// name churning. There are exactly two ways a name is written: the automatic half (`once: true`, from the run that
+// CUT the tree, the moment its session title first exists) and the deliberate half (the ✎ and the ✦ in the row, i.e.
+// a reader asking), which may replace a name because replacing a name is the point of it. A tree the panel found
+// rather than cut is seeded under the name it was found with and is never the automatic half's to move. Either way
+// the six-hex tag is kept and the 409 stands while an agent is running in the tree.
+//
+// Seeding is what makes the first of those safe. Every tree the panel enumerates and has never recorded is written
+// down under its CURRENT name, attributed to the panel, before a run can be offered the chance to rename it: the
+// fleet that existed when the ledger shipped has no entry, and "no entry" used to read exactly like "a tree waiting
+// for its one name" — so nothing but the job's own `existing` flag stood between those trees and a rename, and a flag
+// set wrong moved a tree the reader considers fixed.
+function seedTreeName(project, tree) {
+  try {
+    const dir = String(tree?.path || "").replace(/\\/g, "/").replace(/\/+$/, "");
+    if (!dir) return false;
+    // The project's own checkout is not a tree the panel names, and `renameWorktree` refuses it by this same
+    // comparison. A record for it would also put "named by the panel" on the one row whose name is the folder's.
+    if (normPathKey(project?.path) && normPathKey(project.path) === normPathKey(dir)) return false;
+    const name = path.basename(dir);
+    const branch = String(tree?.branch || "").replace(/^refs\/heads\//, "") || null;
+    const key = treeKey({ project: project?.name, path: dir, branch });
+    const rec = treeNames.seed(key, {
+      name,
+      dir,
+      branch,
+      tag: tagOf(dir) || tagOf(branch) || null,
+      by: "the panel",
+      how: "seeded — this tree was already here the first time the panel listed it, so its name is the one it had",
+      at: new Date().toISOString(),
+    });
+    if (rec) log(`tree-names: seeded ${project?.name || "?"}::${name} as it was found — this name is fixed`);
+    return Boolean(rec);
+  } catch (e) {
+    log(`tree-names: could not seed ${tree?.path || "a tree"}: ${String((e && e.message) || e)}`);
+    return false;
+  }
+}
+
+// One `git worktree list` per project at boot, so the fleet that predates the ledger is written down before the
+// first job event is considered for naming. Bounded in time and width, and it never rejects: a project whose git
+// cannot answer is seeded by its own discovery pass instead, which calls the same hook on every listing.
+async function seedTreeNamesAtBoot({ timeoutMs = 30_000, width = 4 } = {}) {
+  const started = Date.now();
+  const projects = (registry.projects || []).slice();
+  let next = 0;
+  let seeded = 0;
+  const lane = async () => {
+    while (next < projects.length && Date.now() - started < timeoutMs) {
+      const project = projects[next++];
+      if (!project?.path) continue;
+      try {
+        const trees = await worktreeList(project.path);
+        for (const t of trees) if (seedTreeName(project, t)) seeded += 1;
+      } catch {
+        /* no answer from git here: discovery will seed this project's trees on its next listing */
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(width, projects.length)) }, lane));
+  if (seeded) log(`tree-names: ${seeded} tree(s) had no record and now do — their names are fixed from here`);
+  else log(`tree-names: ${treeNames.size} tree(s) on record, nothing to seed at boot`);
+  return seeded;
+}
+
+// Started here, before the job store is constructed: a restored run's event can name a tree the moment the store
+// loads, and that must not beat the seeding. WorktreeNaming awaits this before it decides anything.
+const treeNamesReady = seedTreeNamesAtBoot();
+
+// ---- the reader's locks ---------------------------------------------------------------------------------------
+// A worktree or a branch the reader has locked (lib/locks.js): the one record here that is the reader's and not
+// git's, persisted under logs/ so it survives a restart, and consulted before ANY delete touches a tree. The row
+// wears it as an emoji, so an agent reading the board sees the lock without opening anything.
+const locks = new Locks({ file: config.locksFile, log });
+
+// Where every tree the panel cuts was cut from (lib/parents.js), and the ledger of trees nobody can place. Both are
+// read by the /api/state row through the scheduler's scan context, so the board and the steward never disagree.
+const parents = new ParentBook({ file: config.parentsFile, onLog: log });
+const questions = new Questions({ file: config.stewardQuestionsFile });
+
+const descriptions = createDescriptions({
+  getConfig: () => config,
+  // The RAW maps, not list()/rowsFor(): the earliest brief in a tree needs `prompt` and `startedAt`,
+  // which those projections trim on purpose.
+  getJobs: () => jobs.jobs,
+  getRows: () => store.rows,
+  normPathKey,
+  snapshot,
+  broadcast,
+  guard,
+  log,
+});
+
+// ---- the TODO list of each worktree --------------------------------------------------------------------------------
+// Written by the assistant (a `TODO <text>` line, normally under the SPAWN that starts the work), kept current by
+// every agent in the tree (a run's FINAL message is harvested when it settles), and read by the row. ONE store for
+// the whole panel, keyed the way the row already is (`keyOf(project, path)` — `${project}::${path}` in
+// public/app.js), and never a file inside the worktree: it is state, not source, and a file in the tree would be git
+// noise and a merge conflict. Every writer goes through this one Node process, so the store is its own lock.
+const todos = new TodoLists({
+  file: config.todosFile,
+  log,
+  // The trees this store may NAME — a path, a directory name, a branch, a six-hex tag, a thread. Read per question,
+  // never captured: a rename moves a row and the store must see the new one.
+  trees: () => {
+    const out = [];
+    const seen = new Set();
+    for (const p of registry.projects || []) {
+      const key = `${p.name}::${normPathKey(p.path)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ project: p.name, path: String(p.path || "").replace(/\\/g, "/"), branch: null });
+    }
+    for (const [rowKey, row] of store.rows) {
+      const project = String(rowKey).split("::")[0];
+      const n = `${project}::${normPathKey(row.path)}`;
+      if (seen.has(n)) continue;
+      seen.add(n);
+      out.push({ project, path: String(row.path || "").replace(/\\/g, "/"), branch: row.branch || null });
+    }
+    return out;
+  },
+  // …and the job store, so a THREAD can name its tree (that is how the assistant points a TODO line at a card).
+  jobs: () => jobs,
+});
+// The two writers that need the store: lib/jobs.js prepends the list to a worker's brief and harvests the run's own
+// last words; the assistant seeds a tree and keeps the list honest against what a worker actually did.
+jobs.todos = todos;
+// The parent book: the panel records every tree it cuts (lib/jobs.js), the scheduler hands the answer to each scan so
+// the row carries it, and the steward + the UNMERGED chip read it from there.
+jobs.parents = parents;
+scheduler.parents = parents;
+if (assistant) {
+  assistant.todos = todos;
+  // …and the one thing the assistant cannot do itself: tell the page a list moved. The assistant's own TODO lines are
+  // applied inside its harvest, which has no SSE handle of its own.
+  assistant.todosChanged = broadcastTodos;
+}
+
+// The list travels with the snapshot the way a description does: the row carries the counts, the OLDEST incomplete
+// item (the one thing the collapsed strip reads) and the items themselves. A tree with no list carries no `todo`
+// field at all, so the section is simply absent rather than an empty box.
+function withTodos(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const rec = todos.forRow(project.name, row.path);
+      if (!rec) {
+        delete row.todo;
+        continue;
+      }
+      row.todo = rec;
+    }
+  }
+  return snap;
+}
+
+// A list that changed is a row that changed: the same full snapshot the description harvest sends, so the strip
+// repaints without waiting for the next scan to happen to mention that row.
+function broadcastTodos() {
+  broadcast({ type: "snapshot", data: snapshot() });
+}
+
+// What the page says after a reader's own press. It names the item and the id, because the id is what the assistant
+// and every worker are told to write, and a press that says nothing is a press the reader cannot trust.
+function todoSay(op, item) {
+  if (!item) return null;
+  const id = `#${item.id}`;
+  if (op === "add") return `added ${id}: ${item.text}`;
+  if (op === "edit") return `${id} rewritten`;
+  if (op === "note") return item.note ? `${id} note saved` : `${id} note cleared`;
+  if (op === "files") return `${id} files ${item.files?.length ? `set to ${item.files.join(", ")}` : "cleared"}`;
+  if (item.status === "done") return `${id} done`;
+  if (item.status === "dropped") return `${id} dropped`;
+  if (item.status === "doing") return `${id} claimed — doing`;
+  return `${id} reopened`;
+}
+
+// The two events that can add what a harvest needs — a row written by a scan, a job arriving or changing — plus one
+// pass at boot, because a panel started over a store whose trees were all scanned long ago has no row event coming.
+store.onEvent((evt) => {
+  if (evt?.type === "row") descriptions.harvest();
+});
+descriptions.harvest(2500);
+
 function worktreeDirName(name, tag) {
   const slug = String(name || "")
     .toLowerCase()
@@ -533,13 +936,13 @@ function worktreeDirName(name, tag) {
 // tree's (`.git/worktrees/<name>`). Asked of git rather than inferred from a path, so a checkout reached by a
 // different spelling, or a project whose registry path is not the top of the repo, is still recognised as main.
 async function isMainCheckout(dir) {
-  const gitDir = await execP("git", ["-C", dir, "rev-parse", "--absolute-git-dir"], { timeout: 20_000 })
+  const gitDir = await execP("git", ["-C", dir, "rev-parse", "--absolute-git-dir"], { timeout: 20_000, windowsHide: true })
     .then((r) => String(r.stdout || "").trim())
     .catch(() => "");
   return Boolean(gitDir) && normPathKey(path.dirname(gitDir)) === normPathKey(dir);
 }
 
-async function renameWorktree({ projectName, target, name, by = null, how = null, once = false }) {
+async function renameWorktree({ projectName, target, name, by = null, how = null, once = false, run = null }) {
   const project = scheduler.getProjects().find((p) => p.name === projectName);
   if (!project) return { error: `unknown project: ${projectName}`, status: 404 };
   const oldPath = path.resolve(String(target || ""));
@@ -552,25 +955,98 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
   }
   const row = scheduler.store.rowsFor(projectName).find((r) => path.resolve(r.path) === oldPath);
   if (!row) return { error: `not a worktree row of ${projectName}: ${oldPath}`, status: 404 };
+  // A rename keys the naming ledger on the six-hex tag and keeps that tag as the one part of the name it does not
+  // rebuild, so a directory carrying none has no identity to rename by — lib/tree-names.js `renameRefusal` has the
+  // full reason. Refused here, before anything is claimed or moved, for the automatic half and the deliberate one
+  // alike. The old code invented a tag for a bare name, which gave the tree a second identity and a ledger record
+  // keyed on a path the rename then moved out from under itself.
+  const refusal = renameRefusal(oldPath);
+  if (refusal) return { error: refusal, status: 400 };
   const base = path.basename(oldPath);
   // Keep the six-hex tag: it is what tells two trees named alike apart, and it makes a repeated rename a no-op
-  // instead of a second suffix.
-  const tag = ((WORKTREE_TAG_RE.exec(base) || [])[1] || randomUUID().slice(0, 6)).toLowerCase();
+  // instead of a second suffix. `tagOf` also reads a directory that IS six hex, which is the tag being named.
+  const tag = tagOf(base);
   // The tag is also the tree's identity for the naming ledger, and it is the same key before and after a rename —
   // which is exactly what the old in-memory Set of paths could not say, its key going stale the moment the first
-  // rename landed. A tree already in the ledger keeps its name: this is the automatic path asking (`once`), and a
-  // second run in the same tree is not allowed to rename the directory or the branch under the first one.
+  // rename landed. This is the automatic path asking (`once`), so the LEDGER decides: only the run that cut this tree
+  // may give it its one name, only until one lands, and a tree that was seeded (found, not cut) or already named has
+  // an entry that can never qualify. `job.existing` is never consulted — a flag set wrong is how a tree the reader
+  // considers fixed got moved.
   const key = treeKey({ project: projectName, path: oldPath });
   if (once) {
     const named = treeNames.get(key);
-    if (named) {
+    const refusal = autoNameRefusal(named, run);
+    if (refusal) {
       return {
         ok: true,
         unchanged: true,
-        skipped: `already named by ${named.by || "the panel"}`,
+        skipped: refusal,
         named,
         path: oldPath.replace(/\\/g, "/"),
         branch: row.branch || null,
+        jobs: 0,
+      };
+    }
+  }
+  // ---- the name belongs to the work once there is work --------------------------------------------
+  // A tree is named BEFORE its work exists, and that is a rule now rather than a hope. Two gates, both read from git
+  // rather than from the store (the store is a scan behind, and a rename is the irreversible half of this):
+  //
+  //   * the branch is published — it exists on the project's remote. A remote branch and any PR are keyed on the
+  //     name, so moving it silently detaches the row from both. Refused even for the deliberate ✦; the reader can
+  //     still rename it themselves.
+  //   * the automatic half (`once`) stops at the branch's first own commit. Measured on this board: one tree's
+  //     rename landed 95 seconds AFTER its second commit, leaving a directory named one thing and a branch named
+  //     another, and 12 of 180 rows sit in that split state. After the first commit the name is part of the work.
+  const branchNow = await execP("git", ["-C", oldPath, "symbolic-ref", "--short", "HEAD"], { timeout: 20_000, windowsHide: true })
+    .then((r) => String(r.stdout || "").trim())
+    .catch(() => "");
+  if (project.remote && branchNow) {
+    const published = await execP("git", ["-C", project.path, "rev-parse", "--verify", "--quiet", `refs/remotes/${project.remote}/${branchNow}`], { timeout: 20_000, windowsHide: true })
+      .then((r) => Boolean(String(r.stdout || "").trim()))
+      .catch(() => false);
+    if (published) {
+      return {
+        error: `${branchNow} is already on the remote (${project.remote}/${branchNow}) — its name is published, so the panel will not move it. Rename it yourself with \`git branch -m\` if it really has to change.`,
+        status: 409,
+      };
+    }
+  }
+  if (once && branchNow) {
+    const baseRef = project.remote ? `${project.remote}/${project.mainBranch}` : project.mainBranch || null;
+    const ahead = baseRef
+      ? await execP("git", ["-C", oldPath, "rev-list", "--count", `${baseRef}..HEAD`], { timeout: 30_000, windowsHide: true })
+          .then((r) => Number.parseInt(String(r.stdout || "").trim(), 10))
+          .catch(() => Number.NaN)
+      : Number.NaN;
+    // Unknown is not zero: a branch whose base cannot be read is one the panel cannot prove is empty.
+    if (!Number.isFinite(ahead) || ahead > 0) {
+      const why = Number.isFinite(ahead)
+        ? `the branch already carries ${ahead} commit${ahead === 1 ? "" : "s"} of its own`
+        : "the branch's base could not be read, so it cannot be proved to carry no work";
+      // Written down, not merely returned: the sweeper asks again after every restart, and a tree this rule spared
+      // must not be offered a new name each time. `skipped` keeps it off the board's `named` line — the tree was not
+      // renamed, so it must not claim it was (`withTreeNames`).
+      const skippedRec = treeNames.record(key, {
+        name: base,
+        dir: base,
+        branch: branchNow,
+        tag,
+        by: by || "the panel",
+        how: `${why} — the name stays`,
+        at: new Date().toISOString(),
+        skipped: true,
+        claimedOnly: false,
+        from: base,
+      });
+      log(`naming ${oldPath}: refused — ${why}; a tree is named before its work is committed, not after`);
+      return {
+        ok: true,
+        unchanged: true,
+        skipped: `${why} — a tree is named before its work is committed, not after`,
+        named: skippedRec,
+        path: oldPath.replace(/\\/g, "/"),
+        branch: branchNow,
         jobs: 0,
       };
     }
@@ -580,9 +1056,10 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
   if (!dirName) return { error: "a name is required", status: 400 };
   const newPath = path.join(project.path, ".worktrees", dirName);
   if (path.resolve(newPath) === oldPath) {
-    // Already called that, so there is nothing to move — but a tree that has never been written down still gets
-    // its record here, or the automatic half would keep trying the same rename for the rest of the tree's life.
-    const named = treeNames.record(key, {
+    // Already called that, so there is nothing to move — but the name still has to be settled here, or the automatic
+    // half would keep trying the same rename for the rest of the tree's life. Written through settle() so the entry
+    // stops being "a cut tree waiting for its one name" whatever it was before.
+    const named = treeNames.settle(key, {
       name: dirName,
       dir: dirName,
       branch: row.branch || null,
@@ -596,19 +1073,48 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
   const taken = await stat(newPath)
     .then((s) => s.isDirectory())
     .catch(() => false);
-  if (taken) return { error: `${dirName} already exists`, status: 409 };
+  if (taken) {
+    // The automatic half spends its one chance HERE rather than trying the same taken name on every later event: the
+    // tree is settled under the name it already has, and the row says why. The reader's own rename does not settle
+    // anything — a 409 leaves the tree exactly as eligible as it was, and it stays that way until it is renamed.
+    if (once) {
+      const named = treeNames.settle(key, {
+        name: base,
+        dir: base,
+        branch: row.branch || null,
+        tag,
+        by: "the panel",
+        how: `left under its first name — ${dirName} was already taken`,
+        at: new Date().toISOString(),
+        collision: true,
+        moved: false,
+      });
+      return {
+        ok: true,
+        unchanged: true,
+        collision: true,
+        path: oldPath.replace(/\\/g, "/"),
+        branch: row.branch || null,
+        jobs: 0,
+        named,
+        warning: `${dirName} already exists — the tree keeps its first name`,
+      };
+    }
+    return { error: `${dirName} already exists`, status: 409 };
+  }
   // A running agent holds the tree as its cwd, and git refuses to move a worktree something is standing in.
   const busy = jobs
     .list()
     .find(
       (j) =>
-        (j.status === "running" || j.status === "starting") &&
+        isLiveJobStatus(j.status) &&
         [j.cwd, j.ownerPath, j.worktreePath].filter(Boolean).some((p) => path.resolve(p) === oldPath),
     );
   if (busy) return { error: `an agent is running in that worktree (${busy.id}) — stop it first`, status: 409 };
-  // Claim it BEFORE the git work, and only for the automatic half: two events of one finished turn settle within a
-  // second of each other, and both of them would otherwise find an un-named tree and rename it. The claim is rolled
-  // back below if nothing lands, so a tree is never frozen under a name it did not get.
+  // Claim it BEFORE the git work, and only for the automatic half: two events of one turn settle within a second of
+  // each other, and both of them would otherwise find a tree whose one name has not landed yet. The claim keeps the
+  // cut marker (so the tree is still this run's to name if the git work dies with the process) and is settled below
+  // once something lands, so a tree is never frozen under a name it did not get.
   if (once) {
     treeNames.record(key, {
       name: dirName,
@@ -618,52 +1124,102 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
       by: by || "the panel",
       how: how || "the automatic rename",
       at: new Date().toISOString(),
+      cut: true,
+      cutRun: run || null,
       claimedOnly: true,
+      // A claim is a real attempt at a name: clear any earlier `skipped` mark, or a tree that was spared once
+      // would keep claiming it had been named and hide its own name from the board.
+      skipped: false,
     });
   }
-  // Windows will not rename a directory that any process has open, and an agent's shell lives in its tree long after
-  // its turn ends — so the directory move is best-effort and the branch rename is the part that always lands.
-  let moved = true;
-  let whyNot = "";
-  try {
-    await execP("git", ["-C", project.path, "worktree", "move", oldPath, newPath], { timeout: 90_000 });
-  } catch (e) {
-    moved = false;
-    whyNot = String((e && e.message) || e)
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .pop() || "the directory is held open";
-  }
-  // The branch the tree is actually on, not the store's copy of it: the store is a scan behind, and a second rename
-  // seconds later would otherwise try to move a branch that no longer exists.
-  const oldBranch = await execP("git", ["-C", oldPath, "symbolic-ref", "--short", "HEAD"], { timeout: 20_000 })
+  // The branch the tree is actually on, read BEFORE the directory is moved: after `worktree move` the old path is
+  // gone, so the same question asked there can only fall back to the store — and a row that discovery has not
+  // scanned yet has no branch at all, which left the directory renamed and the branch behind. Git is the authority
+  // and it is asked while it can still answer.
+  const oldBranch = await execP("git", ["-C", oldPath, "symbolic-ref", "--short", "HEAD"], { timeout: 20_000, windowsHide: true })
     .then((r) => String(r.stdout || "").trim())
     .catch(() => row.branch || null);
+  // Windows will not rename a directory that any process has open, and an agent's shell lives in its tree long after
+  // its turn ends — so the directory move is best-effort and the branch rename is the part that lands. Both halves
+  // are retried: a file indexer, a scan worker or a ref lock holds one of them for a moment, and one retry each is
+  // what keeps a transient lock from leaving a tree's name and its branch disagreeing.
+  let moved = false;
+  let whyNot = "";
+  for (let attempt = 0; attempt < 3 && !moved; attempt += 1) {
+    try {
+      await execP("git", ["-C", project.path, "worktree", "move", oldPath, newPath], { timeout: 90_000, windowsHide: true });
+      moved = true;
+    } catch (e) {
+      whyNot =
+        String((e && e.message) || e)
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .pop() || "the directory is held open";
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 250));
+    }
+  }
   const newBranch = `wtgui/${dirName}`;
   let branchRenamed = false;
   if (oldBranch && oldBranch !== newBranch) {
     // A scan running in a worker thread can hold a ref lock for a moment ("cannot lock ref"), and the whole point of
-    // this is a name: try again before giving up on the branch half.
-    for (let attempt = 0; attempt < 3 && !branchRenamed; attempt += 1) {
+    // this is a name: try again, longer than a scan's tick, before giving up on the branch half.
+    for (let attempt = 0; attempt < 6 && !branchRenamed; attempt += 1) {
       try {
-        await execP("git", ["-C", project.path, "branch", "-m", oldBranch, newBranch], { timeout: 30_000 });
+        await execP("git", ["-C", project.path, "branch", "-m", oldBranch, newBranch], { timeout: 30_000, windowsHide: true });
         branchRenamed = true;
       } catch {
-        await new Promise((r) => setTimeout(r, 150));
+        await new Promise((r) => setTimeout(r, 300));
       }
     }
   }
   const finalPath = moved ? newPath : oldPath;
+  // A locked BRANCH follows its own rename. `git branch -m` keeps the branch's identity — its history and its ref —
+  // so a branch the reader locked is the SAME branch under a new name. Leaving the lock on the old name would
+  // silently unprotect a turnover branch the moment the panel auto-named a tree on it, which is exactly the case
+  // the branch scope exists for. Tied to `branchRenamed`, not to `moved`: the branch half lands on its own when a
+  // process holds the directory open, and the protection has to follow whichever half moved.
+  const heldBranch = oldBranch ? locks.branchEntry(projectName, oldBranch) : null;
+  if (branchRenamed && heldBranch) {
+    locks.setBranch(projectName, oldBranch, false);
+    locks.setBranch(projectName, newBranch, true, { by: heldBranch.by || "the reader", path: finalPath });
+    log(`branch lock follows the rename: ${oldBranch} -> ${newBranch}`);
+  }
   const repointed = jobs.repointPath(oldPath, finalPath);
   if (moved) {
+    // A locked tree stays locked when it moves. The lock is keyed by the directory (lib/locks.js), so a rename would
+    // otherwise unlock a tree nobody asked to unlock — the old key goes and the new path carries the same record.
+    const held = locks.treeEntry(projectName, row.path);
+    if (held) {
+      locks.setTree(projectName, row.path, false);
+      locks.setTree(projectName, finalPath, true, { by: held.by || "the reader", branch: branchRenamed ? newBranch : held.branch || oldBranch });
+      log(`lock follows the rename: ${row.path} -> ${finalPath.replace(/\\/g, "/")}`);
+    }
     scheduler.store.dropRow(projectName, row.path);
     broadcast({ type: "drop", project: projectName, path: row.path });
   }
-  // Nothing of the rename landed (the directory is held open AND the branch would not move): hand the tree back so a
-  // later run may name it, rather than leaving a claim on a tree that is still called what it was.
+  // Nothing of the rename landed (the directory is held open AND the branch would not move): hand the tree back as the
+  // cut tree it still is, rather than leaving a claim on a name it never got. Handing it back to the CUT state (not
+  // forgetting it) keeps "this run cut it, nobody has named it" intact: a later event of the same run may try again,
+  // and a seed — which would fix the name for good — can never slip in behind it.
   if (!moved && !branchRenamed) {
-    if (once) treeNames.forget(key);
+    if (once) {
+      treeNames.record(key, {
+        name: base,
+        dir: base,
+        branch: oldBranch || row.branch || null,
+        tag,
+        by: "the panel",
+        how: "cut for this run — its one name did not land, so it is still this run's to give",
+        at: new Date().toISOString(),
+        cut: true,
+        cutRun: run || null,
+        claimedOnly: false,
+      });
+    }
+    // Said out loud: a rename that did not land is the one case a reader (or a harness) cannot see from the board, and
+    // the reason is otherwise only in the code.
+    log(`naming ${oldPath}: the directory would not move (${whyNot}) and the branch would not move either — nothing was renamed`);
     const scanned = await scheduler.scanOne(project, finalPath.replace(/\\/g, "/"), "full").catch(() => null);
     return {
       ok: true,
@@ -680,10 +1236,12 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
   const scanned = await scheduler.scanOne(project, finalPath.replace(/\\/g, "/"), "full").catch(() => null);
   const finalBranch = (scanned && scanned.branch) || (branchRenamed ? newBranch : oldBranch);
   // The record follows the tree: a name with no tag gets one here (rename keeps a tag, and makes one when the tree
-  // had none), so the key changes with the name and the old one is dropped.
+  // had none), so the key changes with the name and the old one is dropped. settle() — not record() — is the write
+  // that says the name is final: it clears the cut marker so no later event, and no later run, can give this tree
+  // another one.
   const keyAfter = treeKey({ project: projectName, path: finalPath });
   if (keyAfter !== key) treeNames.forget(key);
-  const named = treeNames.record(keyAfter, {
+  const named = treeNames.settle(keyAfter, {
     name: path.basename(finalPath),
     dir: path.basename(finalPath),
     branch: finalBranch || null,
@@ -694,6 +1252,8 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
     moved,
     from: base,
     claimedOnly: false,
+    // A rename that actually landed is the tree's name: clear any `skipped` mark left by an earlier refusal.
+    skipped: false,
   });
   return {
     ok: true,
@@ -708,73 +1268,59 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
 }
 
 // A tree is named from the prompt, and Hermes names the session from the work itself a moment later ("Fix delete
-// worktree button not removing directory"). Once that name exists and the tree is idle, the tree takes it - the
-// agent's own name for the job beats the reader's first sentence cut at 24 characters. ONCE PER TREE, and that
-// "once" is a record rather than a hope (lib/tree-names.js): a second run started into the same tree must not be
-// able to rename the directory or the branch under the first one, and neither may the second, third and fourth
-// event of one finished turn - each of which used to walk past the old in-memory Set because the first rename had
-// already moved the path that Set was keyed on.
-const autoNamingInFlight = new Set();
-async function autoNameWorktree(evt) {
-  if (evt?.type !== "job") return;
-  const j = evt.job;
-  if (!j || !j.worktreePath || j.existing || j.reply) return;
-  // A base-checkout run lives in the project's own checkout, whose name is the folder's name. It is never the
-  // agent's to take, even if a job ever carries a worktree path that resolves there.
-  if (j.baseCheckout) return;
-  if (!["done", "failed", "cancelled", "interrupted"].includes(String(j.status))) return;
-  const project = projectForPath(j.worktreePath);
-  if (!project) return;
-  // The project's own checkout is the parent of every tree cut from it and keeps the folder's name.
-  if (normPathKey(project.path) === normPathKey(j.worktreePath)) return;
-  const key = treeKey({ project: project.name, path: j.worktreePath });
-  // Already named - by the run that cut the tree, or by the reader - so the name stays. This is the whole of the
-  // fix for a shared tree: nothing here can rename it a second time, whoever is running in it.
-  const already = treeNames.get(key);
-  if (already) return;
-  // Two events of one turn settle within a second of each other and land here on the same tick: the ledger is
-  // written by renameWorktree itself (it claims the tree before touching git), and this is only the guard for the
-  // moment before that write.
-  if (autoNamingInFlight.has(key)) return;
-  // Only when the tree is idle: moving a directory out from under a running turn is what git refuses.
-  const busy = jobs
-    .list()
-    .some((x) => (x.status === "running" || x.status === "starting") && normPathKey(x.ownerPath || x.cwd) === normPathKey(j.worktreePath));
-  if (busy) return;
-  const title = jobs.sessionInfoFor(j.thread).title;
-  if (!title) return;
-  autoNamingInFlight.add(key);
-  try {
-    // The rename's own refusal is logged rather than swallowed: a tree that misses its name because the row had not
-    // been scanned yet looks exactly like one that was never named, and the sweep that offers the name runs once.
-    const out = await renameWorktree({
-      projectName: project.name,
-      target: j.worktreePath,
-      name: title,
-      once: true,
-      by: `run ${j.id} (${j.thread})`,
-      how: `Hermes named the session “${title}” at the end of its turn`,
-    }).catch((e) => ({ error: String((e && e.message) || e) }));
-    if (out?.error) log(`auto-naming ${j.worktreePath}: ${out.error}`);
-    else if (out?.skipped) log(`auto-naming ${j.worktreePath}: ${out.skipped}`);
-  } finally {
-    autoNamingInFlight.delete(key);
-  }
-}
+// worktree button not removing directory"). The reader wants the tree to take that name the moment the session is
+// first named — not at the end of a later turn — so the policy is asked on every job event that carries a title.
+// ONCE PER TREE, and that "once" is the ledger rather than a hope (lib/tree-names.js): the panel records the tree at
+// the cut with the id of the run that cut it, only that record is eligible, and a rename settles it. A tree that was
+// already here is seeded under the name it was found with and never enters this path at all.
+naming = new WorktreeNaming({
+  ledger: treeNames,
+  // The project a tree belongs to, by path — the same lookup the board uses to place a row.
+  projectForPath: (p) => spawnFeature.projectForPath(p),
+  // The title from the event's own summary (jobs.summary carries it), falling back to the session store for an event
+  // that arrived before Hermes wrote the name — the 10-second sweep emits again as soon as it has one.
+  titleFor: (job) => job.title || jobs.sessionInfoFor(job.thread).title,
+  // A tree a live run is standing in cannot be moved by git, so the attempt waits for the settle rather than fail.
+  isBusy: (dir) => jobs.list().some((x) => isLiveJobStatus(x.status) && normPathKey(x.ownerPath || x.cwd) === normPathKey(dir)),
+  rename: (args) => renameWorktree(args),
+  log,
+  // The boot backfill: a tree that was here before this process must be written down before any restored run's
+  // title is considered, or "no entry" would let it through.
+  ready: treeNamesReady,
+});
 
-// Which project a directory belongs to: the innermost project root that contains it (a project can be nested inside
-// another checkout), matched on a path boundary so `…/app-other` is not inside `…/app`.
-const projectForPath = (dir) => {
-  const key = normPathKey(dir);
-  if (!key) return null;
-  let best = null;
-  for (const proj of registry.projects) {
-    const root = normPathKey(proj.path);
-    if (!root) continue;
-    if (key !== root && !key.startsWith(`${root}/`)) continue;
-    if (!best || root.length > normPathKey(best.path).length) best = proj;
-  }
-  return best;
+// The cut half of the ledger, called by lib/jobs.js around `git worktree add`: BEFORE the directory exists the tree is
+// recorded as this run's to name, and if git then fails the record is handed back. Injected here because the ledger
+// and the project registry are this file's, and lib/jobs.js must stay usable without either.
+jobs.naming = {
+  cut: ({ repoDir, path: tree, branch, tag, run, thread }) => {
+    const project = registry.projects.find((p) => normPathKey(p.path) === normPathKey(repoDir));
+    if (!project?.name) return null; // not a project the panel watches: discovery will seed it instead
+    const key = treeKey({ project: project.name, path: tree, branch });
+    const rec = treeNames.claimCut(key, {
+      name: path.basename(tree),
+      dir: path.basename(tree),
+      branch: branch || null,
+      tag: tag || tagOf(tree) || null,
+      by: `run ${run || "?"} (${thread || "?"})`,
+      how: "cut by this panel — its one name is the run's to give",
+      at: new Date().toISOString(),
+      cutRun: run || null,
+      cutThread: thread || null,
+    });
+    if (rec?.cut) log(`tree-names: ${project.name}::${path.basename(tree)} is cut for run ${run || "?"} — one name allowed`);
+    return rec;
+  },
+  release: ({ repoDir, path: tree, tag, run }) => {
+    const project = registry.projects.find((p) => normPathKey(p.path) === normPathKey(repoDir));
+    if (!project?.name) return false;
+    const key = treeKey({ project: project.name, path: tree });
+    // Only the record THIS cut wrote is withdrawn: a tree that already had one (seeded, named, cut by another run)
+    // is not this run's to erase, and a failed `git worktree add` must not leave a claim on a directory nobody made.
+    const rec = treeNames.get(key);
+    if (!rec?.cut || (rec.cutRun && run && String(rec.cutRun) !== String(run))) return false;
+    return treeNames.forget(key);
+  },
 };
 
 // Rows are written by the scheduler, so their copy of the panel-agent state is as old as that
@@ -812,6 +1358,36 @@ function withLiveAgents(snap) {
   return snap;
 }
 
+// The reader's lock travels with the snapshot the way the naming ledger does: git knows nothing about it, the
+// scanner must not have to, and the row is where it has to be visible. A row with no `lock` is unlocked — absence is
+// the default, so an unlocked row costs nothing on the wire and a store that cannot be read cannot make a tree look
+// protected. `tree` and `branch` are independent bits: the row draws one toggle for each, and `by` says which one
+// refused a delete.
+function withLocks(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const lock = locks.check({ project: project.name, path: row.path, branch: row.branch });
+      if (!lock.locked) {
+        delete row.lock;
+        continue;
+      }
+      row.lock = {
+        tree: lock.tree,
+        // `branch` is the branch's NAME and `branchLocked` is the boolean; a row that merely HAS a branch must not
+        // read as a locked one. The row draws one toggle per bit and names the branch in its tooltip.
+        branch: lock.branch,
+        branchLocked: lock.branchLocked,
+        locked: true,
+        by: lock.by,
+        at: lock.at,
+        reason: lock.reason,
+        line: describeLock(lock.by === "branch" ? { at: lock.at, by: lock.branchBy } : { at: lock.at, by: lock.treeBy }, lock.by === "branch" ? "branch" : "worktree"),
+      };
+    }
+  }
+  return snap;
+}
+
 // What the panel itself knows about a tree's name — who gave it and when — is in no git repository, so it travels
 // with the snapshot the way the live agent state does. A row that carries `named` is a row the automatic rename
 // will never touch again; one without it is a tree still waiting for the run that will name it.
@@ -819,7 +1395,12 @@ function withTreeNames(snap) {
   for (const project of snap.projects || []) {
     for (const row of project.worktrees || []) {
       const rec = treeNames.forTree({ project: project.name, path: row.path, branch: row.branch });
-      if (!rec) {
+      // A cut record is a tree waiting for its one name, not a tree that has one: the row must not claim a name
+      // nobody has given it yet (the tooltip is the only place this shows, and it would say "named by run …").
+      // A `skipped` record says the panel looked and LEFT THE NAME ALONE (the branch already carried its own
+      // commits): it is written so the title sweep stops asking, not because a name landed, so the row must not
+      // claim to have been named either. The ledger keeps the reason for anyone reading the file.
+      if (!rec || namingState(rec) === "cut" || rec.skipped) {
         delete row.named;
         continue;
       }
@@ -836,26 +1417,94 @@ function withTreeNames(snap) {
   return snap;
 }
 
+// ---- the two directories the panel keeps its things in ---------------------------------------------
+// The page shows these, with their sizes, and offers to open either or to empty the scratch one. Both numbers come
+// from lib/paths.js's cached walk (10 s), so a board polled every few seconds never pays for a fresh stat of the
+// attachments folder; `at` says how old the reading is rather than the page pretending it is live.
+function pathsInfo() {
+  const data = sizeOf(config.dataDir);
+  const scratch = sizeOf(config.scratchDir);
+  const iso = (ms) => (ms ? new Date(ms).toISOString() : null);
+  return {
+    dataDir: config.dataDir,
+    dataSource: config.dataDirSource,
+    // `split` (state/, attachments/, logs/ inside) or `flat` (a PANEL_CONFIG instance's own folder).
+    dataLayout: config.dataLayout,
+    dataBytes: data.bytes,
+    dataFiles: data.files,
+    // null until the first background walk lands, so the row says "measuring…" instead of a false "0 B".
+    dataMeasuredAt: iso(data.at),
+    scratchDir: config.scratchDir,
+    scratchSource: config.scratchDirSource,
+    scratchBytes: scratch.bytes,
+    scratchFiles: scratch.files,
+    scratchDirs: scratch.dirs,
+    scratchMeasuredAt: iso(scratch.at),
+    // Whether Clean scratch will work at all: it refuses a folder the panel did not make (paths.js, SCRATCH_MARKER).
+    scratchMarked: existsSync(path.join(config.scratchDir, SCRATCH_MARKER)),
+    // Where the pieces sit, so the row can say "the job store is under state/" without the reader guessing.
+    stateDir: config.stateDir,
+    attachmentsDir: config.attachmentsDir,
+    logsDir: config.logsDir,
+    // Where this board's history came from, from the data directory's own journal — so it is still answerable on
+    // every later boot. `thisBoot` is true only on the boot that did the copy.
+    migrated: lastMigration
+      ? { files: (lastMigration.copied || []).length, from: lastMigration.from, to: lastMigration.to, at: lastMigration.at, thisBoot: stateMigration.migrated }
+      : null,
+    at: iso(data.at || Date.now()),
+  };
+}
+
+// ---- the steward's own reads ------------------------------------------------------------------------------------
+// One project, re-read from git and classified: the parent book is refreshed first, because a plan that guessed a
+// different parent from the board would be two answers to one question, and the row is the one the reader is looking
+// at. Cost is a handful of git calls per local branch, which is why nothing here runs on a scan tick.
+async function stewardProject(name) {
+  const project = (registry.projects || []).find((p) => p.name === name) || null;
+  if (!project) return { status: 404, error: `unknown project: ${name || "(none)"}` };
+  const rows = store.rowsFor(project.name) || [];
+  const branches = rows.map((r) => r.branch).filter(Boolean);
+  await parents.refresh({ project: project.name, repoDir: project.path, mainBranch: project.mainBranch, branches });
+  const map = new Map();
+  for (const rec of parents.state(project.name)) map.set(rec.branch, rec);
+  const entries = await inspectProject({ project: project.name, repoDir: project.path, rows, parents: map, mainBranch: project.mainBranch });
+  const plan = buildPlan({ project: project.name, repoDir: project.path, entries, questions: questions.list(project.name), mainBranch: project.mainBranch });
+  return { project, rows, map, entries, plan };
+}
+
 function snapshot() {
-  return withTreeNames(
-    withLiveAgents({
-      ...store.snapshot({ settings: settingsOut() }),
-      jobs: jobs.list(),
-      approvals: approvals.list(),
-      // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
-      // thread id, so a reload comes back to the same conversation and the same watches.
-      assistant: assistant.state(),
-      skipped: registry.skipped,
-      scanRoots: config.scanRoots || [],
-      spawn: {
-        // Spawning is no longer "is there a hermes.exe on this box": it is "is the gateway's api_server
-        // reachable and keyed". The panel probes and reports, instead of assuming.
-        transport: jobs.transportInfo(),
-        defaultCwd: config.defaultCwd,
-        maxRuntimeSeconds: jobs.maxRuntimeSeconds,
-        projects: registry.projects.map((p) => ({ name: p.name, path: p.path, activityAt: p.activityAt || null, empty: Boolean(p.empty) })),
-      },
-    }),
+  return withTodos(
+    descriptions.withDescriptions(
+      withLocks(
+        withTreeNames(
+          withLiveAgents({
+          ...store.snapshot({ settings: settingsOut() }),
+          paths: pathsInfo(),
+          jobs: jobs.list(),
+          approvals: approvals.list(),
+          // The panel's own permission requests (a push a worker's guard parked, a merge the panel itself wants to
+          // write to a remote for). They ride with the snapshot the way the CLI-transport approvals do, so a reload
+          // comes back to the same open question instead of losing it.
+          remoteWrites: remoteWrites.state(),        // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
+          // thread id, so a reload comes back to the same conversation and the same watches.
+          assistant: assistant.state(),
+          // Where the board's links go: the host records a reader can choose from, plus what each project resolves to
+          // right now. One object, because the header's chip and the Discover strip must read the same answer.
+          hosts: { ...hosts.state(), projects: Object.fromEntries(registry.projects.map((p) => [p.name, hosts.view(p)])) },
+          skipped: registry.skipped,
+        scanRoots: config.scanRoots || [],
+        spawn: {
+          // Spawning is no longer "is there a hermes.exe on this box": it is "is the gateway's api_server
+          // reachable and keyed". The panel probes and reports, instead of assuming.
+          transport: jobs.transportInfo(),
+          defaultCwd: config.defaultCwd,
+          maxRuntimeSeconds: jobs.maxRuntimeSeconds,
+          projects: registry.projects.map((p) => ({ name: p.name, path: p.path, activityAt: p.activityAt || null, empty: Boolean(p.empty) })),
+        },
+        }),
+      ),
+    ),
+  ),
   );
 }
 
@@ -870,86 +1519,38 @@ const heartbeat = setInterval(() => {
   }
 }, 5000);
 
-function handleStream(req, res) {
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream; charset=utf-8",
-    "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
-  });
-  res.write(`event: snapshot\ndata: ${JSON.stringify(snapshot())}\n\n`);
-  clients.add(res);
-  log(`client connected (${clients.size} streaming)`);
-  req.on("close", () => {
-    clients.delete(res);
-    log(`client disconnected (${clients.size} streaming)`);
-  });
-}
-
-// Did this request come in over loopback — i.e. from the machine the panel runs on? That is the panel's
-// own UI, and it is the only caller allowed in without a token.
-function isLoopback(req) {
-  const addr = String((req.socket && req.socket.remoteAddress) || "").toLowerCase().replace(/^::ffff:/, "");
-  return addr === "::1" || addr.startsWith("127.");
-}
-
-// Loopback is allowed exactly as before, so the local board is untouched. Anything else — the LAN, a
-// tailnet — is allowed only when the panel holds a token (PANEL_TOKEN, from the environment, never
-// config.json) AND the request sends it in x-panel-token; with no token configured off-machine writes
-// are refused outright. Every write route
-// can spawn a process or write a file, so an unauthenticated one reachable from another host is remote
-// code execution — the refusal has to be the default, not something a route has to remember.
-// A refusal is logged with the address it came from: a 403 nobody can see is a bug report nobody can act on.
-function authorised(req) {
-  if (isLoopback(req)) return true;
-  const addr = (req.socket && req.socket.remoteAddress) || "?";
-  if (!config.token) {
-    log(`write refused from ${addr}: no PANEL_TOKEN in the environment, so non-loopback writes are off`);
-    return false;
-  }
-  if (req.headers["x-panel-token"] === config.token) return true;
-  log(`write refused from ${addr}: missing or wrong x-panel-token`);
-  return false;
+// ---- the model menu's prices, kept warm without ever blocking a read ---------------------------
+// The dropdown reads a cache file and nothing else, so the one thing that can refresh it is a
+// gateway call, and that call re-fetches every provider's live list. It is therefore deliberately
+// rare: at most one attempt per process minute, and only while the panel has no prices at all or has
+// not regenerated them for over a week. A press in Settings (POST /api/models/refresh) is the
+// deliberate path and is never throttled.
+const MODEL_PRICING_WARM_MS = 7 * 24 * 60 * 60 * 1000;
+let modelPricingWarm = null; // the in-flight warm, so a burst of page loads starts exactly one
+let modelPricingWarmTriedAt = 0;
+function warmModelPrices(cfg, catalogue) {
+  if (modelPricingWarm) return;
+  const ageSeconds = catalogue?.pricingAge;
+  const stale = !Number.isFinite(ageSeconds) || ageSeconds * 1000 > MODEL_PRICING_WARM_MS;
+  if (!stale || Date.now() - modelPricingWarmTriedAt < 60_000) return;
+  modelPricingWarmTriedAt = Date.now();
+  modelPricingWarm = refreshModelCatalogue({
+    home: hermesHome(),
+    pricingFile: cfg.modelPricingFile,
+    api: jobs.api,
+    log,
+  })
+    .catch((e) => log(`model prices: the background warm failed — ${String((e && e.message) || e)}`))
+    .finally(() => {
+      modelPricingWarm = null;
+    });
 }
 
 const cleanPath = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "");
 
-const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// Remove a directory that something may still hold open. `force: true` makes a missing path a
-// success; anything left behind is a handle, not a missing file. Returns true when the path is gone.
-async function removeDirNow(target) {
-  try {
-    await rm(target, { recursive: true, force: true, maxRetries: 2, retryDelay: 100 });
-  } catch {
-    /* held open — the check below is the answer */
-  }
-  return !(await stat(target).then((s) => s.isDirectory()).catch(() => false));
-}
-
-// Windows refuses to delete (or rename) a directory that a process is using as its working directory,
-// and a worktree is exactly that whenever an agent, an editor, or a panel started from it is still
-// running. Nothing the panel can do makes the holder let go — it has to exit — so the cleanup keeps
-// trying after the response for minutes rather than leaving an empty folder on disk forever.
-function retryDirCleanup(target, { everyMs = 5_000, forMs = 10 * 60_000 } = {}) {
-  const until = Date.now() + forMs;
-  const tick = async () => {
-    if (await removeDirNow(target)) {
-      log(`worktree cleanup: removed the leftover folder ${target}`);
-      return;
-    }
-    if (Date.now() < until) setTimeout(tick, everyMs).unref();
-    else log(`worktree cleanup: gave up on ${target} — a process still holds it`);
-  };
-  setTimeout(tick, everyMs).unref();
-}
-
-// Is this path an ancestor of (or equal to) a process's working directory? A panel cannot delete the
-// folder it was started from, and saying so is more use to the reader than "another process".
-function holdsCwd(target, cwd) {
-  const a = cleanPath(target).toLowerCase();
-  const b = cleanPath(cwd).toLowerCase();
-  return Boolean(b) && (b === a || b.startsWith(`${a}/`));
-}
+// Removing a worktree's folder - the Recycle Bin attempt, the retry for a folder a process still holds, and
+// the question of whether the panel itself is what holds it - lives in lib/worktree-remove.js with the rest of
+// the act, because the answer a CHECKING agent gives ends in the same removal.
 
 // The Hermes sessions the scheduler attributes to one worktree row — the same attribution the row's
 // own "Hermes session open here but idle" claim is built from, so this list can never offer a session
@@ -965,6 +1566,12 @@ const server = createServer(async (req, res) => {
   try {
     if (route === "/api/health") {
       return sendJson(res, 200, { ok: true, host: config.host, projects: registry.projects.map((p) => p.name), settings: settingsOut(), clients: clients.size });
+    }
+
+    // The build this process is serving: the page carries the version it loaded with, polls this,
+    // and offers (or takes) a reload when the two part company. A read, like every other GET here.
+    if (route === "/api/build" && req.method === "GET") {
+      return sendJson(res, 200, await build.info());
     }
 
     if (route === "/api/config") {
@@ -991,7 +1598,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/settings/sessions" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const state = await sessionSettings();
       if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
@@ -1021,7 +1628,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/settings/approvals" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const state = approvalState({ gatewayUrl: jobs.api.url });
       if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
@@ -1055,7 +1662,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/settings/provider" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const state = providerState();
       if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
@@ -1117,9 +1724,34 @@ const server = createServer(async (req, res) => {
 
     // The models the New-agent form offers. Read from the gateway home, not from the run stream: the
     // provider's live list is what Hermes itself fetched, and a stale one is reported as stale rather
-    // than presented as truth.
+    // than presented as truth. Each row also carries the in/out price per Mtok and the 0-10 coding
+    // rating the shipped CLI picker shows — read from this panel's own cache file and NOT fetched
+    // here, so opening the menu can never wait on a cold endpoint.
     if (route === "/api/models" && req.method === "GET") {
-      return sendJson(res, 200, modelCatalogue());
+      const catalogue = modelCatalogue({ home: hermesHome(), pricingFile: config.modelPricingFile });
+      warmModelPrices(config, catalogue); // fire and forget: the answer above is file-only
+      return sendJson(res, 200, catalogue);
+    }
+
+    // Regenerate the menu rather than re-read it. The gateway re-fetches every authenticated
+    // provider's live /v1/models list and persists it — the same file `hermes model --refresh`
+    // writes, and the file the menu above lists from — and the panel then rebuilds its price/rating
+    // cache from that answer, having deleted its own copy first. Both files' row counts and mtimes
+    // come back with the reply, because "the press did something" is otherwise indistinguishable
+    // from "the page re-read the same bytes".
+    if (route === "/api/models/refresh" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      try {
+        const result = await refreshModelCatalogue({
+          home: hermesHome(),
+          pricingFile: config.modelPricingFile,
+          api: jobs.api,
+          log,
+        });
+        return sendJson(res, 200, result);
+      } catch (e) {
+        return sendJson(res, 502, { error: String((e && e.message) || e), ...((e && e.partial) || {}) });
+      }
     }
 
     // ---- the assistant: a sentry over this board, and one thread the reader talks to ----------------
@@ -1127,6 +1759,22 @@ const server = createServer(async (req, res) => {
     // returns the whole assistant state so the float repaints from one answer instead of guessing.
     if (route === "/api/assistant" && req.method === "GET") {
       return sendJson(res, 200, assistant.state());
+    }
+
+    // The message board between the assistant and the agents. Deliberately NOT part of the polled state:
+    // it is the whole seven-day conversation, it is only read while its tab is open, and it is built from
+    // the job store and the journal on every request (no cache to prune). The cap and the window travel
+    // with the answer, so the tab can say which one it is up against.
+    if (route === "/api/assistant/messages" && req.method === "GET") {
+      const q = new URL(req.url, "http://127.0.0.1").searchParams;
+      const days = Number(q.get("days"));
+      const cap = Number(q.get("cap"));
+      return sendJson(res, 200, {
+        messages: assistant.messages({
+          ...(Number.isFinite(days) && days > 0 ? { days: Math.min(30, days) } : {}),
+          ...(Number.isFinite(cap) && cap > 0 ? { cap: Math.min(2000, Math.round(cap)) } : {}),
+        }),
+      });
     }
 
     // The continuity file — the long tier of the assistant's memory, injected into every turn. GET carries
@@ -1137,7 +1785,7 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { charter: assistant.charterPayload(), assistant: assistant.state() });
     }
     if (route === "/api/assistant/charter" && req.method === "PUT") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       let body;
       try {
         body = await readBody(req);
@@ -1157,7 +1805,7 @@ const server = createServer(async (req, res) => {
     // A message from the reader. The board digest and the scratchpad are attached to the run's input by
     // the module, so the card shows the sentence the reader typed.
     if (route === "/api/assistant/say" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const text = String(body.text || "").trim();
       if (!text) return sendJson(res, 400, { error: "text is required" });
@@ -1170,15 +1818,27 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/assistant/settings" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       return sendJson(res, 200, { settings: assistant.setSettings(body), assistant: assistant.state() });
+    }
+
+    // The header's aggressive-mode toggle. One route for one button: `on` is the requested state and the answer
+    // says whether anything changed — pressing it twice, or switching off a mode that was never on, comes back
+    // changed:false with a reason instead of silently pretending it did something. The whole assistant state
+    // rides with the answer so the float repaints from one response.
+    if (route === "/api/assistant/aggressive" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const wanted = body.on === undefined ? !assistant.aggressive.on : Boolean(body.on);
+      const out = assistant.setAggressive(wanted);
+      return sendJson(res, 200, { ...out, settings: assistant.settings, assistant: assistant.state() });
     }
 
     // Dismiss an alert, or hand it to the assistant (one digest, rate limited). Nothing here answers an
     // approval: that stays on the agent's own card, where the gateway validates the choice.
     if (route === "/api/assistant/alert" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const alert = assistant.alertAction(String(body.id || ""), String(body.action || ""));
@@ -1190,7 +1850,7 @@ const server = createServer(async (req, res) => {
 
     // The reader pressing Send on a draft: the one path that posts into a worker's thread by hand.
     if (route === "/api/assistant/answer" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const job = await assistant.answerThread(String(body.thread || ""), body.text, {
@@ -1199,14 +1859,16 @@ const server = createServer(async (req, res) => {
         });
         return sendJson(res, 202, { job, assistant: assistant.state() });
       } catch (e) {
-        return sendJson(res, 400, { error: String((e && e.message) || e) });
+        // 409 for a worker that is already turning: the request was well-formed and understood, and the answer is
+        // "not now" (the code a steer that missed the last tool boundary already gets). 400 for everything else.
+        return sendJson(res, (e && e.code) === "thread_busy" ? 409 : 400, { error: String((e && e.message) || e) });
       }
     }
 
     // Answer a question the run is parked on (the `clarify` tool). Not a reply: it settles the prompt the
     // gateway is holding, so the turn resumes where it stopped.
     if (route === "/api/assistant/answer-question" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const result = await assistant.answerParked(String(body.id || ""), body.answer);
@@ -1221,7 +1883,7 @@ const server = createServer(async (req, res) => {
     // card the assistant proposed; the spec form is the same act without a card. Both go through the one
     // spawner, so neither can skip the gateway probe or the unborn-HEAD refusal.
     if (route === "/api/assistant/spawn" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const spec = body.id ? assistant.pendingSpawn(String(body.id)) : body;
@@ -1235,7 +1897,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/assistant/watch" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const watch = assistant.addWatch(body, "reader");
@@ -1245,13 +1907,13 @@ const server = createServer(async (req, res) => {
       }
     }
     if (route === "/api/assistant/watch/remove" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       return sendJson(res, 200, { watches: assistant.removeWatch(String(body.id || "")), assistant: assistant.state() });
     }
 
     if (route === "/api/assistant/rule" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const rules = assistant.addRule(body.text);
@@ -1261,13 +1923,13 @@ const server = createServer(async (req, res) => {
       }
     }
     if (route === "/api/assistant/rule/remove" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       return sendJson(res, 200, { rules: assistant.removeRule(String(body.id || "")), assistant: assistant.state() });
     }
 
     if (route === "/api/assistant/notes" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       return sendJson(res, 200, { notes: assistant.setNotes(body.text), assistant: assistant.state() });
     }
@@ -1275,13 +1937,120 @@ const server = createServer(async (req, res) => {
     // One sentry pass on demand. Used by the page after a change that should be judged at once, and by
     // the verification probes instead of waiting for the clock.
     if (route === "/api/assistant/check" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       assistant.tick();
       return sendJson(res, 200, { assistant: assistant.state() });
     }
 
+    // The reader's lock, toggled from the row's emoji (lib/locks.js). `scope` says which lock the press is about —
+    // "tree" for this worktree, "branch" for the branch it is on and every worktree cut from that branch later — and
+    // `locked` omitted means flip. The answer carries the checked state so the button can paint what the server now
+    // holds rather than what the page hoped; every open board repaints from the snapshot the write broadcasts.
+    if (route === "/api/worktree/lock" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const projectName = String(body.project || "").trim();
+      const project = scheduler.getProjects().find((p) => p.name === projectName);
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${projectName}` });
+      const scope = String(body.scope || "tree").toLowerCase() === "branch" ? "branch" : "tree";
+      // The row is the authority for both halves: its path is the key git and the store use, and its branch is what a
+      // branch lock is about. A path the caller names that is not this project's row is refused rather than locked,
+      // so a typo cannot protect a directory nobody is looking at.
+      const asked = body.path ? normPathKey(body.path) : null;
+      const row = asked ? scheduler.store.rowsFor(projectName).find((r) => normPathKey(r.path) === asked) : null;
+      if (asked && !row) return sendJson(res, 404, { error: `not a worktree row of ${projectName}: ${body.path}` });
+      if (!asked && scope === "tree") return sendJson(res, 400, { error: "a worktree path is required to lock a worktree" });
+      const branch = scope === "branch" ? String(body.branch || row?.branch || "").trim() : row?.branch || null;
+      if (scope === "branch" && !branch) return sendJson(res, 400, { error: "this row has no branch to lock" });
+      const out = locks.toggle({
+        project: projectName,
+        path: row?.path || String(body.path || ""),
+        branch,
+        scope,
+        locked: body.locked === undefined ? null : Boolean(body.locked),
+      });
+      if (!out.ok) return sendJson(res, 400, { error: out.error || "the lock could not be changed" });
+      const lock = locks.check({ project: projectName, path: row?.path || String(body.path || ""), branch: row?.branch || branch });
+      const what = scope === "branch" ? `branch ${branch}` : `worktree ${row?.name || path.basename(String(row?.path || body.path || ""))}`;
+      log(`lock ${out.locked ? "set" : "cleared"} on ${what} in ${projectName}${out.locked ? " — deletes are refused until it is removed" : ""}`);
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, {
+        ok: true,
+        scope,
+        locked: Boolean(out.locked),
+        lock,
+        say: out.locked ? `🔒 ${what} is locked — nothing may delete it until you unlock it` : `🔓 ${what} is unlocked`,
+      });
+    }
+
     if (route === "/api/state" || route === "/api/audit") {
       return sendJson(res, 200, snapshot());
+    }
+
+    // ---- the panel's own folders, acted on only when the reader asks -------------------------------------
+    // Settings > Data shows the data and scratch directories with their sizes (both ride in /api/state as
+    // `paths`). These two routes are the only things that touch them: one opens a folder, one empties the
+    // scratch directory. Both are writes, so both are authorised.
+    if (route === "/api/paths/open" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const which = String(body.which || "data").trim().toLowerCase();
+      const target = which === "data" ? config.dataDir : which === "scratch" ? config.scratchDir : which === "logs" ? config.logsDir : null;
+      if (!target) return sendJson(res, 400, { error: `unknown folder “${which}” — one of data, scratch, logs` });
+      // Created before it is opened: the button says "open the folder", and a folder that exists but is empty is
+      // a better answer than "there is no such folder" on a panel that has simply not written anything yet.
+      try {
+        ensureDirs(config);
+      } catch (e) {
+        return sendJson(res, 500, { error: `could not create ${target}: ${String((e && e.message) || e)}` });
+      }
+      const { bin, args, error } = openerForFolder(target);
+      if (error) return sendJson(res, 400, { error });
+      try {
+        // Detached, exactly like /api/open-url: explorer.exe reports an exit code before the window is up, so the
+        // spawn is the only thing this route can honestly report on.
+        const child = spawn(bin, args, { detached: true, stdio: "ignore", windowsHide: true });
+        child.on("error", (e) => log(`could not open ${target}: ${String((e && e.message) || e)}`));
+        child.unref();
+      } catch (e) {
+        return sendJson(res, 500, { error: String((e && e.message) || e) });
+      }
+      return sendJson(res, 200, { ok: true, which, path: target, opened: bin });
+    }
+
+    // Empty the scratch directory. Three things REFUSE the whole clean, none of them a partial one: a folder the panel
+    // did not make or one that holds its own state/checkout/projects (paths.js, `scratchProblem` and the marker file),
+    // and a live run that is working in it or was told to write in it — on Windows the delete would half-fail under a
+    // process holding the files, and the agent would be left with a tree that no longer adds up. The refusal names the
+    // reason, and the reader fixes the setting, stops the run, or cleans it by hand.
+    if (route === "/api/scratch/clean" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const out = await cleanScratch({
+        scratchDir: config.scratchDir,
+        jobs: jobs.list(),
+        dataDir: config.dataDir,
+        home: homedir(),
+        // Everything a mistyped scratchDir could be an ancestor of: this checkout, the config's folder, the panel's own
+        // state, its default working folder, the scan roots and every project the registry knows.
+        keep: [
+          HERE, CONFIG_DIR, config.stateDir, config.attachmentsDir, config.logsDir, config.defaultCwd,
+          ...(Array.isArray(config.scanRoots) ? config.scanRoots : []),
+          ...registry.projects.map((p) => p.path),
+        ],
+      });
+      if (!out.ok) {
+        log(`scratch NOT cleaned: ${out.error}`);
+        return sendJson(res, out.refused ? 409 : 500, { ...out, freed: "0 B", paths: pathsInfo() });
+      }
+      sizeOf(config.scratchDir, { fresh: true });
+      const freed = humanBytes(out.freedBytes);
+      log(
+        `scratch cleaned: freed ${freed} (${out.removedFiles} file(s), ${out.removedDirs} folder(s)) from ${config.scratchDir}` +
+          `${out.leftBehind ? ` — ${out.leftBehind} entr${out.leftBehind === 1 ? "y" : "ies"} could not be removed (still open)` : ""}`,
+      );
+      // Every open Settings tab repaints from this: the size in the row has to move with the press.
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, { ...out, freed, paths: pathsInfo() });
     }
 
     // On-demand cleanup audit for ONE project, straight from `hermes worktree list --json`:
@@ -1299,6 +2068,182 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         return sendJson(res, 502, { project: target.name, path: target.path, tookMs: Date.now() - t0, error: String((e && e.message) || e) });
       }
+    }
+
+    // ---- where a project's branches and PRs live ---------------------------------------------------------------
+    // The mapping is data (logs/hosts.json + hosts.seed.json), so the page needs to read it and the reader needs a way
+    // to fill one in without hand-editing JSON. Three routes: the whole mapping, a PROPOSAL read off the project's
+    // own remote (never written), and the confirm that writes it. The proposal is separate from the write on purpose:
+    // nothing here guesses a host into the file, and a mapping the reader did not confirm is not a mapping.
+    if (route === "/api/hosts" && req.method === "GET") {
+      const doc = hosts.doc({ fresh: true });
+      return sendJson(res, 200, {
+        ...hosts.state(),
+        warnings: doc.warnings,
+        projects: Object.fromEntries(registry.projects.map((p) => [p.name, hosts.view(p)])),
+      });
+    }
+
+    if (route === "/api/hosts/propose" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const project = registry.projects.find((p) => p.name === String(body.project || "").trim());
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${body.project || "(none)"}` });
+      let remoteUrl = "";
+      if (project.remote) {
+        const r = await gitIn(project.path, ["remote", "get-url", project.remote], 15000);
+        remoteUrl = r.ok ? String(r.out || "").trim() : "";
+      }
+      const proposal = proposeMapping(hosts.doc({ fresh: true }), project, remoteUrl);
+      return sendJson(res, 200, { project: project.name, remote: project.remote || null, proposal, current: hosts.view(project) });
+    }
+
+    if (route === "/api/hosts/mapping" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const project = registry.projects.find((p) => p.name === String(body.project || "").trim());
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${body.project || "(none)"}` });
+      const doc = hosts.doc({ fresh: true });
+      const hostId = String(body.host || "").trim();
+      if (!doc.hosts[hostId]) {
+        return sendJson(res, 400, { error: `unknown host "${hostId}" — known hosts: ${Object.keys(doc.hosts).join(", ") || "(none)"}` });
+      }
+      // Coordinates arrive as an object, or as the one line a reader types: "owner/repo" for github, "PROJECTKEY/slug"
+      // for a Bitbucket project. The second form is parsed here so the page does not have to know the kind.
+      let coordinates = body.coordinates;
+      if (typeof coordinates === "string") {
+        const [first, second] = coordinates.split(/[\/,\s]+/).filter(Boolean);
+        coordinates = doc.hosts[hostId].kind === "bitbucket-server" ? { projectKey: first, repoSlug: second } : { owner: first, repo: second };
+      }
+      try {
+        hosts.save(project.name, { host: hostId, coordinates: coordinates || null });
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
+      const view = hosts.view(project);
+      log(`hosts: ${project.name} mapped to ${hostId}${view.links?.repo ? ` (${view.links.repo})` : ""}`);
+      // The rows carry their link as a scan result, so the board repaints on the next pass; this event lets the page
+      // show the new chip at once, and a resync from the page refreshes the rows.
+      broadcast({ type: "hosts", hosts: hosts.state() });
+      return sendJson(res, 200, { ok: true, project: project.name, mapping: view, file: hostsFile.file || null });
+    }
+
+    // ---- the steward: every local branch of one project, classified --------------------------------------------
+    // Stage 3 of this feature, and it ACTS ON NOTHING. GET answers the last plan file; POST re-reads the repo and
+    // writes a fresh one (the .md the reader can open, the .json the page reads). The plan says what it would delete,
+    // what it would roll and what it needs the reader to answer.
+    if (route === "/api/steward" && req.method === "GET") {
+      const name = String(url.searchParams.get("project") || "").trim();
+      const plan = name ? readPlan(config.stewardDir, name) : null;
+      if (!plan) return sendJson(res, 404, { error: `no plan yet for ${name || "(no project)"} — POST /api/steward to write one` });
+      return sendJson(res, 200, { ...plan, parents: parents.state(name) });
+    }
+
+    if (route === "/api/steward" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const name = String(body.project || "").trim();
+      const out = await stewardProject(name);
+      if (out.error) return sendJson(res, out.status || 400, { error: out.error });
+      const written = writePlan(config.stewardDir, out.plan);
+      log(`steward: ${name} — ${out.plan.counts.total} branch(es): ${out.plan.counts.delete} to delete, ${out.plan.counts.roll} to roll, ${out.plan.counts.ask} need an answer → ${written.md}`);
+      return sendJson(res, 200, { ...out.plan, file: written.md, text: written.text, parents: parents.state(name) });
+    }
+
+    // The only writer. A dry run is the default: `confirm: true` alone is not enough — the body must name the plan
+    // the reader was looking at (`planAt`), and the entries are re-read from git before anything is touched.
+    if (route === "/api/steward/apply" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const name = String(body.project || "").trim();
+      const out = await stewardProject(name);
+      if (out.error) return sendJson(res, out.status || 400, { error: out.error });
+      const file = readPlan(config.stewardDir, name);
+      const listing = await stewardWorktrees(out.project.path);
+      const result = await applyPlan({
+        plan: file,
+        fresh: out.plan,
+        expectedAt: body.planAt ? String(body.planAt) : null,
+        repoDir: out.project.path,
+        trees: listing.trees,
+        dryRun: body.dryRun !== false && body.confirm !== true,
+        confirm: body.confirm === true,
+        prodBranch: config.steward.prodBranch,
+        onLog: log,
+      });
+      if (!result.ok) return sendJson(res, 409, result);
+      if (result.dryRun) log(`steward apply (dry run): ${name} — ${result.delete.length} would be deleted, ${result.roll.length} would be rolled`);
+      else {
+        log(`steward apply: ${name} — deleted ${result.deleted.length}, rolled ${result.rolled.length}, refused ${result.refused.length}`);
+        broadcast({ type: "snapshot", data: snapshot() });
+      }
+      return sendJson(res, 200, result);
+    }
+
+    // ---- rolling one child into its parent ---------------------------------------------------------------------
+    // The UNMERGED chip's first outcome. The merge happens inside the PARENT's own worktree, serialised per parent
+    // branch (lib/locks.js), and is refused outright when the parent is master/main, when the parent is a guess rather
+    // than a recorded cut, or when the parent branch is the project's production branch (that is a worker's or a TO's
+    // job, never a merge run from here).
+    if (route === "/api/worktree/rollup" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const project = (registry.projects || []).find((p) => p.name === String(body.project || "").trim()) || null;
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${body.project || "(none)"}` });
+      const row = store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(body.path)) || null;
+      if (!row) return sendJson(res, 404, { error: `no row for ${body.path || "(no path)"} in ${project.name}` });
+      const rec = parents.get(project.name, row.branch) || null;
+      const parentBranch = String(body.parent || rec?.parent || "").trim();
+      // One gate, shared with lib/steward.js, so the chip and the steward cannot disagree about what may be written.
+      // The parent named by the request must be the parent on record: a body cannot promote a row to a rollable one.
+      if (parentBranch && rec && rec.parent && parentBranch !== rec.parent) {
+        return sendJson(res, 409, { error: `refused: ${parentBranch} is not ${row.branch || "this branch"}'s recorded parent (${rec.parent})` });
+      }
+      const listing = await stewardWorktrees(project.path);
+      const parentWorktree = parentWorktreeOf(listing.trees, parentBranch);
+      const gate = rollGate({ parentBranch, parentSource: rec?.parentSource || "unknown", mainBranch: project.mainBranch, prodBranch: config.steward.prodBranch, parentWorktree });
+      if (!gate.ok) return sendJson(res, 409, gate);
+      if (body.confirm !== true) {
+        return sendJson(res, 428, { error: `nothing was rolled: confirming starts a merge into ${parentBranch} in its own worktree`, parent: parentBranch, branch: row.branch, preview: true });
+      }
+      const out = await rollUp({
+        repoDir: project.path,
+        parentBranch,
+        parentWorktree,
+        childBranch: row.branch,
+        mainBranch: project.mainBranch,
+        prodBranch: config.steward.prodBranch,
+        parentSource: rec?.parentSource || "unknown",
+        dryRun: body.dryRun === true,
+      });
+      if (!out.ok) return sendJson(res, 409, out);
+      log(`rollup: ${row.branch} → ${parentBranch} in ${project.name} (${out.method}${out.sha ? ` ${out.sha}` : ""})`);
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, out);
+    }
+
+    // "Where should this go?" — the chip's third outcome, and the only thing it does: write the question down and
+    // start nothing. It lands in the ledger the steward's plan reads, so the next plan lists it under "needs you".
+    if (route === "/api/worktree/parent-question" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const project = (registry.projects || []).find((p) => p.name === String(body.project || "").trim()) || null;
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${body.project || "(none)"}` });
+      const row = store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(body.path)) || null;
+      const question = questions.ask({
+        project: project.name,
+        path: body.path || row?.path || "",
+        branch: body.branch || row?.branch || null,
+        note: String(body.note || "").slice(0, 300),
+        by: String(body.by || "the reader").slice(0, 80),
+      });
+      log(`steward: question recorded for ${question.branch || question.path} in ${project.name} — nothing was started`);
+      return sendJson(res, 202, { ok: true, question, started: false });
+    }
+
+    if (route === "/api/parents" && req.method === "GET") {
+      const name = String(url.searchParams.get("project") || "").trim();
+      return sendJson(res, 200, { project: name || null, parents: parents.state(name || null) });
     }
 
     if (route === "/api/stats") {
@@ -1325,7 +2270,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/approvals" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
         const request = approvals.present(body || {});
@@ -1337,7 +2282,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/approvals/answer" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const r = approvals.answer(body.id, body.choice, body.by || "ui");
       return sendJson(res, r.ok ? 200 : 409, r);
@@ -1348,90 +2293,242 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, approvals.status(id));
     }
 
-    // Preview the exact request that would be sent — the confirm affordance.
-    if (route === "/api/agents/preview" && req.method === "POST") {
+    // ---- the TODO list of one worktree -------------------------------------------------------------------------
+    // Read on demand (the row carries its own copy in /api/state; this is for the expanded strip's journal and for a
+    // check that wants the whole list), and written by the reader's own buttons. Every write is stamped
+    // `by: "reader"` and every refusal comes back WITH its reason — the page says it rather than looking like a
+    // press that did nothing.
+    if (route === "/api/todos" && req.method === "GET") {
+      const key = todos.keyFor({ project: url.searchParams.get("project"), path: url.searchParams.get("path") || url.searchParams.get("tree") });
+      if (!key) return sendJson(res, 400, { error: "a worktree is required: pass project and path (the row's own key)" });
+      const rec = todos.list(key);
+      return sendJson(res, 200, { key, list: rec ? { project: rec.project, path: rec.path, items: rec.items, journal: rec.journal } : null, summary: todos.summary(key) });
+    }
+
+    if (route === "/api/todos" && req.method === "POST") {
       if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
-      const target = body?.project ? registry.projects.find((p) => p.name === body.project) : null;
-      const cwd = body?.cwd || target?.path || config.defaultCwd;
-      const blocked = await spawnBlocker(cwd, target);
-      // The thread name carries a random suffix, so the preview shows its shape.
-      const req0 = previewRequest({ ...(body || {}), thread: makeThreadName(body?.prompt || "") });
-      return sendJson(res, 200, { transport: jobs.transportInfo(), request: req0, cwd, project: target?.name || null, blocked, command: `POST ${jobs.api.url}${req0.path}\n${JSON.stringify(req0.body, null, 1)}` });
+      const op = String(body?.op || "").toLowerCase();
+      const args = {
+        project: body?.project || null,
+        path: body?.path || null,
+        id: body?.id === undefined || body?.id === null || body?.id === "" ? null : Number(body.id),
+        text: body?.text ?? "",
+        note: body?.note ?? null,
+        files: Array.isArray(body?.files) ? body.files : null,
+        by: "reader",
+        owner: null,
+        from: "reader",
+      };
+      let r;
+      if (op === "add") r = todos.write({ ...args, op: "add" });
+      else if (op === "edit") r = todos.write({ ...args, op: "edit" });
+      else if (op === "note") r = todos.write({ ...args, op: "note" });
+      else if (op === "files") r = todos.write({ ...args, op: "files" });
+      else if (["done", "doing", "drop", "dropped", "reopen", "todo"].includes(op)) r = todos.setStatus({ ...args, op });
+      else r = { ok: false, error: `unknown todo op “${op || "(none)"}” — one of add, edit, note, done, doing, drop, reopen` };
+      if (r.ok) broadcastTodos();
+      return sendJson(res, r.ok ? 200 : 400, {
+        ok: Boolean(r.ok),
+        error: r.error || null,
+        message: r.ok ? todoSay(op, r.item) : null,
+        key: r.key || null,
+        summary: r.key ? todos.summary(r.key) : null,
+        journal: r.list ? r.list.journal.slice(-6) : [],
+      });
+    }
+
+    // ---- who may put a branch on a remote ------------------------------------------------------------
+    // The page's own view of it: what is parked, what the setting is, and which trees carry the guard.
+    if (route === "/api/remote-write/state" && req.method === "GET") {
+      return sendJson(res, 200, {
+        ...remoteWrites.state(),
+        policies: POLICIES,
+        defaultPolicy: DEFAULT_POLICY,
+        configPath: CONFIG_PATH,
+        guards: guardReport(),
+      });
+    }
+
+    // THE GUARD ASKING. A local-only worktree's `git push` reaches here (lib/push-guard.js writes the hook that
+    // calls it) and this is what draws the permission box. Three answers, and the hook reads them off the body:
+    //   allowed:true          — go ahead (the setting allows it, the tree was started to land, or a grant stands)
+    //   refused:true          — no, and no question to ask (the setting is `deny`)
+    //   id + deadline         — a question is parked in the dock; the hook polls the status route for the answer
+    if (route === "/api/remote-write/request" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const worktree = String(body.worktree || "");
+      // The project that owns this tree decides, not the global default (which is local-only for every other
+      // checkout): a repo that lands by PR is allowed here, and one whose branches merge into a parent is refused.
+      const found = spawnFeature.projectForPath(worktree);
+      const policy = policyForProject(found, config.remoteBranchPolicy);
+      const decision = remoteWrites.decision(worktree, policy);
+      if (decision.allowed) {
+        // A one-shot grant is spent by the write it was given for.
+        if (decision.consume) remoteWrites.spend(worktree);
+        return sendJson(res, 200, { allowed: true, why: decision.why, policy });
+      }
+      if (!decision.ask) {
+        log(`remote write refused without asking: ${cleanPath(worktree)} (${decision.why}, policy ${policy})`);
+        return sendJson(res, 200, { allowed: false, refused: true, why: decision.why, policy });
+      }
+      const remote = String(body.remote || "") || found?.remote || "";
+      const branch = String(body.branch || "");
+      const req0 = remoteWrites.request({
+        kind: "push",
+        worktree,
+        project: found?.name || "",
+        branch,
+        remote,
+        refs: String(body.refs || ""),
+        title: `${path.basename(worktree || "") || worktree} wants to push`,
+        command: `git push ${remote || "<remote>"} ${branch || "<branch>"}   — from ${cleanPath(worktree)}${body.remoteUrl ? ` (${String(body.remoteUrl).slice(0, 120)})` : ""}`,
+        description: "a worker in this LOCAL-ONLY worktree is trying to put a branch on the remote. Nothing is pushed until you answer, and Deny leaves the remote untouched.",
+      });
+      return sendJson(res, 200, {
+        allowed: false,
+        id: req0.id,
+        deadline: req0.deadline,
+        timeoutSeconds: req0.timeoutSeconds,
+        policy,
+        why: `${policy === "local-only" ? "local only" : policy} — this push is parked on your permission box`,
+      });
+    }
+
+    // What the parked hook long-polls. A request nobody answered reads as `deny` once its window closes.
+    if (route === "/api/remote-write/status" && req.method === "GET") {
+      const id = url.searchParams.get("id") || "";
+      const st = remoteWrites.status(id);
+      // The one-shot grant is handed to the hook that asked for it: it is spent as soon as the hook has been told,
+      // so a second push cannot ride the same answer.
+      if (st.status === "answered" && st.choice === "once") remoteWrites.spend(remoteWrites.treeOfDecision(id));
+      return sendJson(res, 200, st);
+    }
+
+    // The reader's answer, from the panel's own permission box. Same four choices, same semantics as an approval:
+    // once / this session / always (which IS the setting) / deny. Anything the question was parked on is resumed
+    // here — the panel's own merge flow starts only after a yes.
+    if (route === "/api/remote-write/answer" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const id = String(body.id || "");
+      // Read the resumable action BEFORE the answer clears the request, and never twice: a second press finds
+      // nothing to run.
+      const resume = remoteWrites.takeResume(id);
+      const out = remoteWrites.answer(id, body.choice, { by: body.by || "reader" });
+      if (!out.ok) return sendJson(res, 409, out);
+      let resumed = null;
+      if (resume && out.choice !== "deny") {
+        try {
+          resumed = await resume();
+          log(`remote-write ${id}: the granted write was resumed (${resumed?.status || "ok"})`);
+        } catch (e) {
+          resumed = { status: 500, error: String((e && e.message) || e) };
+          log(`remote-write ${id}: resuming the granted write failed — ${resumed.error}`);
+        }
+      }
+      return sendJson(res, 200, { ...out, resumed, state: remoteWrites.state() });
+    }
+
+    // The setting itself. Written into this panel's config.json (with every other key left exactly as it was),
+    // pushed into the guards' own copies, and broadcast so a second tab sees it at once.
+    if (route === "/api/settings/remote-branches" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const wanted = String(body.policy || "").trim().toLowerCase();
+      if (!POLICIES.includes(wanted)) {
+        return sendJson(res, 400, { error: `the setting must be one of: ${POLICIES.join(", ")}`, settings: settingsOut() });
+      }
+      const out = await setRemotePolicy(wanted, { by: "the Settings row" });
+      if (out.error) return sendJson(res, 500, { error: out.error, settings: settingsOut() });
+      return sendJson(res, 200, {
+        ok: true,
+        ...out,
+        settings: settingsOut(),
+        guards: guardReport(),
+        note:
+          wanted === "allow"
+            ? "saved — remote writes go through without asking from now on (the guard's own copy says so too)"
+            : wanted === "deny"
+              ? "saved — remote writes are refused outright, and the box will not even be offered"
+              : "saved — branches stay local unless you allow a write in the permission box",
+      });
+    }
+
+    // Put the guard in (or take it out of) the worktrees of a project, or in every local-only tree the board
+    // knows. The automatic path is the panel's own worktree creation; this is the deliberate one, for trees that
+    // were cut before the guard existed.
+    if (route === "/api/remote-write/guard" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const action = String(body.action || "install").toLowerCase();
+      const one = String(body.path || "").trim();
+      if (action === "remove") {
+        if (!one) return sendJson(res, 400, { error: "path is required to remove the guard" });
+        const out = await uninstallGuard({ worktree: path.resolve(one), log });
+        delete guardRecord.trees[normTree(one)];
+        writeGuardRecord();
+        return sendJson(res, out.ok ? 200 : 500, { ...out, guards: guardReport() });
+      }
+      const targets = [];
+      if (one) {
+        targets.push({ tree: path.resolve(one), projectPath: null });
+      } else if (String(body.project || "").trim()) {
+        const project = registry.projects.find((p) => p.name === String(body.project).trim());
+        if (!project) return sendJson(res, 404, { error: `unknown project: ${body.project}` });
+        for (const row of scheduler.store.rowsFor(project.name)) targets.push({ tree: row.path, projectPath: project.path, project: project.name, branch: row.branch });
+      } else {
+        // Every LOCAL-ONLY tree the board holds: a branch that exists on the remote is not one of these, and the
+        // project's own checkout is never touched (the reader pushes there himself).
+        for (const project of registry.projects) {
+          for (const row of scheduler.store.rowsFor(project.name)) {
+            if (normPathKey(row.path) === normPathKey(project.path)) continue;
+            if (row.remoteBranch === "exists") continue;
+            targets.push({ tree: row.path, projectPath: project.path, project: project.name, branch: row.branch });
+          }
+        }
+      }
+      const done = [];
+      for (const t of targets) {
+        if (!t.projectPath) {
+          const proj = spawnFeature.projectForPath(t.tree);
+          t.projectPath = proj?.path || t.tree;
+          t.project = proj?.name || null;
+        }
+        // Idempotent, and never a reason to fail the request: one tree that cannot take a hooks path (a directory
+        // held open, a git dir that is not there) is reported and the rest carry on.
+        const out = await installGuardFor({ projectPath: t.projectPath, worktree: t.tree, branch: t.branch, project: t.project }).catch((e) => ({ ok: false, error: String((e && e.message) || e) }));
+        done.push({ tree: cleanPath(t.tree), ok: Boolean(out.ok), error: out.error || null, dir: out.dir || null, shims: out.shims || [] });
+      }
+      log(`push guard: install asked for ${done.length} worktree(s), ${done.filter((d) => d.ok).length} ok`);
+      return sendJson(res, 200, { ok: true, installed: done.filter((d) => d.ok).length, failed: done.filter((d) => !d.ok).length, trees: done, guards: guardReport() });
+    }
+    // Preview the exact request that would be sent — the confirm affordance.
+    if (route === "/api/agents/preview" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      return sendJson(res, 200, await spawnFeature.previewPayload(body));
     }
 
     if (route === "/api/agents" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
-      const pickerTarget = body.project ? registry.projects.find((p) => p.name === body.project) : null;
-      if (body.project && !pickerTarget) return sendJson(res, 400, { error: `unknown project: ${body.project}` });
-      // The directory is the ground truth: a cwd inside a known project overrides a stale project picker, so a spawn
-      // aimed at one worktree can never be checked, filed or cut against another project.
-      const cwdProject = projectForPath(body.cwd);
-      if (cwdProject && body.project !== cwdProject.name) body.project = cwdProject.name;
-      const target = cwdProject || pickerTarget;
-      if (body.dryRun) {
-        const req0 = previewRequest(body);
-        return sendJson(res, 200, { dryRun: true, project: body.project || null, transport: jobs.transportInfo(), request: req0, cwd: body.cwd || target?.path || config.defaultCwd, command: `POST ${jobs.api.url}${req0.path}\n${JSON.stringify(req0.body, null, 1)}` });
-      }
+      // Which project, and which directory: the directory is the ground truth, so a stale project
+      // picker is corrected here, before anything downstream reads it.
+      const aimed = spawnFeature.targetForSpawn(body);
+      if (!aimed.ok) return sendJson(res, 400, { error: aimed.error });
+      if (aimed.project !== undefined) body.project = aimed.project;
+      if (body.dryRun) return sendJson(res, 200, spawnFeature.dryRunPayload(body, aimed.target));
       // Which backend runs it. Hermes is the default; anything the panel has no transport for is refused here.
       const agent = String(body.agent || "hermes");
       if (!jobs.transports[agent]) return sendJson(res, 400, { error: `unknown agent: ${agent} (one of: ${Object.keys(jobs.transports).join(", ")})` });
       body.agent = agent;
-      // Refuse before promising a job: a stopped gateway or a missing key is the answer to "why did
+      // Refuse before promising a job: a stopped gateway, a missing key or an absent CLI is the answer to "why did
       // nothing happen", not a card that says "starting" forever.
-      if (agent === "claude") {
-        const cli = await jobs.claude.probe();
-        if (!cli.reachable) return sendJson(res, 503, { error: `the Claude CLI is not usable: ${cli.error || "no answer"}` });
-      } else {
-        const transport = await jobs.probe();
-        if (!transport.reachable || !transport.capabilities?.runs) {
-          return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}` });
-        }
-      }
-      let cwd = body.cwd || target?.path || config.defaultCwd;
-      // "existing": run in a directory that is already there (a worktree you picked), so no
-      // worktree is created and the agent's edits land directly in that tree.
-      const existing = Boolean(body.existing);
-      // A directory that is already there is still the first answer, but a missing one is no longer the end of
-      // the request: the panel renames a finished run's worktree directory and its branch after the thread
-      // title, so a path this card was holding can be one rename out of date while the tree stands. Resolved
-      // against git's own worktree list — one match is used and named on the card, several list themselves,
-      // none keeps the refusal this endpoint always gave.
-      let picked = null;
-      if (existing) {
-        picked = await resolveExistingTarget({ target: cwd, project: cwdProject || pickerTarget, projects: registry.projects });
-        if (!picked.ok) return sendJson(res, 400, { error: picked.error, candidates: picked.candidates });
-        cwd = picked.path;
-      }
-      const blocked = await spawnBlocker(cwd, existing ? null : target);
-      if (blocked) return sendJson(res, 400, { error: blocked, blocked });
-      // Attach to the worktree the spawn actually runs in, not to the directory that was typed: a cwd
-      // inside `…/lib` is still the same worktree, and an owner path matching no row would show up as
-      // unattached even though it is sitting in a tree we know.
-      let ownerPath = null;
-      if (existing) {
-        const top = await gitIn(cwd, ["rev-parse", "--show-toplevel"]);
-        ownerPath = top.ok && top.out ? top.out : cwd;
-      }
-      // A spawn that stays in the project's own checkout is not "an existing worktree": the card should
-      // say so, because that is the difference between an agent working in a branch of its own and one
-      // editing the tree the reader has checked out.
-      const norm = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-      // A resolved tree can belong to a project the typed directory never named (a branch is not a path).
-      const home = (picked?.project ? registry.projects.find((p) => p.name === picked.project) : null) || cwdProject || null;
-      const baseCheckout = Boolean(existing && home && norm(ownerPath || cwd) === norm(home.path));
-      const note = picked ? resolutionNote(picked) : "";
-      const job = await jobs.create({
-        ...body,
-        cwd,
-        existing,
-        ownerPath,
-        ownerPending: !existing,
-        baseCheckout,
-        // The card says which tree a stale path resolved to, not just that something ran.
-        note: note ? `SPAWN IN ${note}` : null,
-      });
+      const linked = await spawnFeature.linkSpawn(body, aimed.target, aimed.cwdProject);
+      if (!linked.ok) return sendJson(res, linked.status, linked.payload);
+      const job = await jobs.create({ ...body, ...linked.fields });
       return sendJson(res, 202, { job });
     }
 
@@ -1440,7 +2537,7 @@ const server = createServer(async (req, res) => {
     // refuses with that reason. This is the one-line fix that reason asks for: an EMPTY commit, so no
     // file is invented for the repo, and never a push — the commit stays local.
     if (route === "/api/repo/first-commit" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const target = path.resolve(String(body.path || "").trim());
       const info = await stat(target).catch(() => null);
@@ -1479,7 +2576,7 @@ const server = createServer(async (req, res) => {
     // gateway's runs API has no attachment field, but the agent has file tools — and an absolute path
     // is independent of the run's cwd, which this gateway does not honour anyway.
     if (route === "/api/attachments" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const LIMIT = 25 * 1024 * 1024;
       let bytes;
       try {
@@ -1495,7 +2592,9 @@ const server = createServer(async (req, res) => {
         name = "";
       }
       name = path.basename(name || "pasted-file").replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").slice(0, 120) || "pasted-file";
-      const dir = config.attachmentsDir || path.join(path.dirname(config.jobsFile || path.join(process.cwd(), "logs")), "attachments");
+      // Under the data directory, never inside the checkout: an attachment is state the panel keeps, and its
+      // absolute path is what goes into the run's prompt (lib/paths.js owns the default).
+      const dir = config.attachmentsDir;
       const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const target = path.join(dir, `${stamp}-${name}`);
       try {
@@ -1510,7 +2609,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/threads/model" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const thread = String(body.thread || "").trim();
       if (!thread) return sendJson(res, 400, { error: "thread is required" });
@@ -1518,7 +2617,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/threads/context" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const thread = String(body.thread || "").trim();
       if (!thread) return sendJson(res, 400, { error: "thread is required" });
@@ -1526,7 +2625,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/agents/reply" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const text = String(body.text || "").trim();
       if (!text) return sendJson(res, 400, { error: "reply text is required" });
@@ -1571,7 +2670,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/jobs/cancel" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       return sendJson(res, 200, { ok: jobs.cancel(String(body.id || "")) });
     }
@@ -1579,7 +2678,7 @@ const server = createServer(async (req, res) => {
     // Steer a turn that is already running: the text is injected at the agent's next tool boundary,
     // so it can change course without ending the turn. 409 means it crossed the last boundary.
     if (route === "/api/jobs/steer" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const r = await jobs.steer(String(body.id || ""), body.text ?? body.input);
       // A steer lands inside the turn that is already running, so its documents belong to that turn's
@@ -1588,10 +2687,40 @@ const server = createServer(async (req, res) => {
       return sendJson(res, r.ok ? 200 : r.code === "run_not_accepting_steer" ? 409 : 400, r);
     }
 
+    // The NOT-RUNNABLE chip's press: ask the gateway about ONE interrupted card's run and take the same decision
+    // the boot reconcile takes (lib/jobs.js settleRestoredRun — one implementation, not two). The pointers are
+    // looked up only here, because only this answer leaves the reader with nothing left to click: a run the gateway
+    // has forgotten settles as interrupted, and the card has to name the tree the work is in and its PR.
+    if (route === "/api/jobs/reattach" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const id = String(body?.id || "").trim();
+      const r = await jobs.reattachNow(id, { pointers: gonePointers(id) });
+      // 400 for a card this route cannot ask about at all (unknown, no run id, not interrupted), and for a gateway
+      // that will not answer: the press is a question the panel understood and cannot settle, and the card keeps its
+      // verdict. A decision always comes back as 200 with the card it left behind.
+      return sendJson(res, r.ok ? 200 : 400, r);
+    }
+
+    // The press on a finished card's COMPLETE chip: queue ONE ask for the board assistant and send nothing to the
+    // agent. It goes through the assistant's own wake queue — the path an alert handed over uses — and never through
+    // /api/assistant/say, which starts a turn at once and would talk over a run already in flight. The answer carries
+    // what the queue decided, so the chip can say the ask landed or say why it did not; a card this route cannot ask
+    // about (unknown, or no longer `done`) is a 400 with the reason.
+    if (route === "/api/jobs/ask-complete" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        return sendJson(res, 200, assistant.askAboutComplete(String(body?.id || "").trim()));
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e), ok: false });
+      }
+    }
+
     // Answer a parked run's approval. The gateway validates the choice a second time, so a stale
     // card cannot widen what the host allows.
     if (route === "/api/jobs/approve" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const r = await jobs.approve(String(body.id || ""), body.choice, body.requestId ?? body.request_id);
       // 409 for "there is nothing to answer any more" — the gateway's own verdict on a prompt it has let go, and
@@ -1603,7 +2732,7 @@ const server = createServer(async (req, res) => {
     // gateway re-validates the prompt id against the run's pending controls and its execution
     // generation, so a stale card cannot answer a question that has already been settled.
     if (route === "/api/jobs/answer" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const r = await jobs.answerQuestion(String(body.id || ""), body.answer, body.requestId ?? body.request_id);
       return sendJson(res, r.ok ? 200 : r.code === "approval_not_pending" ? 409 : 400, r);
@@ -1616,12 +2745,11 @@ const server = createServer(async (req, res) => {
     // it — never automatically, because a tree accumulates every session ever run in it and the
     // board must not refill with all of them at once.
     if (route === "/api/thinking" && req.method === "GET") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const thread = String(url.searchParams.get("thread") || "").trim();
       if (!thread) return sendJson(res, 400, { error: "thread is required" });
       const from = Number(url.searchParams.get("from"));
       const to = Number(url.searchParams.get("to"));
-      const { hermesHome } = await import("./lib/jobs.js");
       return sendJson(res, 200, {
         thread,
         blocks: thinkingFor(thread, {
@@ -1633,7 +2761,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/tool-results" && req.method === "GET") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const thread = String(url.searchParams.get("thread") || "").trim();
       const tool = String(url.searchParams.get("tool") || "").trim();
       const from = Number(url.searchParams.get("from")) || 0;
@@ -1641,20 +2769,29 @@ const server = createServer(async (req, res) => {
       // How many results the console is about to draw: a burst of six calls needs six, not a default of eight
       // that silently stops halfway through a longer run.
       const limit = Math.max(1, Math.min(60, Number(url.searchParams.get("n")) || 20));
+      // One row, exactly as stored, for the console's fold: `row` picks which of the turn's results (the order the
+      // console paired them in) and `full=1` lifts the store reader's own 6,000-character display cap. Without
+      // them this is the array the burst pairing reads; with them it is the whole text behind one folded result.
+      const rowParam = url.searchParams.get("row");
+      const index = rowParam === null ? null : Math.max(0, Number(rowParam) || 0);
+      const full = url.searchParams.get("full") === "1";
       if (!thread || !tool) return sendJson(res, 400, { error: "thread and tool are required" });
-      const { hermesHome } = await import("./lib/jobs.js");
       const { toolResults } = await import("./lib/tool-results.js");
-      const results = toolResults({ dbPath: path.join(hermesHome(), "state.db"), sessionId: thread, tool, from, to, limit });
+      // `full=1` reads the row exactly as it was stored (maxChars 0 = no cap); without it the store reader's own
+      // 6,000-character display cap applies to every row of the array.
+      const results = toolResults({
+        dbPath: path.join(hermesHome(), "state.db"), sessionId: thread, tool, from, to, limit, index,
+        ...(full ? { maxChars: 0 } : {}),
+      });
       return sendJson(res, 200, { thread, tool, results });
     }
 
     if (route === "/api/subagents/collect" && req.method === "GET") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const thread = String(url.searchParams.get("thread") || "").trim();
       if (!thread) return sendJson(res, 400, { error: "thread is required" });
       const from = Number(url.searchParams.get("from"));
       const to = Number(url.searchParams.get("to"));
-      const { hermesHome } = await import("./lib/jobs.js");
       const out = collectPrompt(thread, {
         dbPath: path.join(hermesHome(), "state.db"),
         from: Number.isFinite(from) ? from : 0,
@@ -1665,10 +2802,9 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/subagents/console" && req.method === "GET") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const session = String(url.searchParams.get("session") || "").trim();
       if (!session) return sendJson(res, 400, { error: "session is required" });
-      const { hermesHome } = await import("./lib/jobs.js");
       const out = childTranscript(session, { dbPath: path.join(hermesHome(), "state.db") });
       if (!out) return sendJson(res, 404, { error: "no such session" });
       return sendJson(res, 200, out);
@@ -1680,7 +2816,7 @@ const server = createServer(async (req, res) => {
     if (route === "/api/tool-calls" && req.method === "GET") {
       // Same rule as the child-console read: this returns transcript text, so it is behind the panel token when one
       // is configured.
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const thread = String(url.searchParams.get("thread") || "").trim();
       const tool = String(url.searchParams.get("tool") || "").trim();
       const limit = Math.max(1, Math.min(20, Number(url.searchParams.get("n")) || 8));
@@ -1694,7 +2830,6 @@ const server = createServer(async (req, res) => {
       const job = jobs.firstOfThread(thread);
       const sessionId = job && job.sessionId;
       if (!sessionId) return sendJson(res, 404, { error: `no session recorded for ${thread}`, calls: [] });
-      const { hermesHome } = await import("./lib/jobs.js");
       const { recentToolCalls } = await import("./lib/tool-calls.js");
       const calls = recentToolCalls({
         dbPath: path.join(hermesHome(), "state.db"),
@@ -1711,11 +2846,10 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/subagents" && req.method === "GET") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const thread = String(url.searchParams.get("thread") || "").trim();
       // Children the run delegated: their sessions, their state and the last thing each one did. Polled while a
       // card is working, because the gateway does not put a child's work on the parent's event stream.
-      const { hermesHome } = await import("./lib/jobs.js");
       const dbPath = path.join(hermesHome(), "state.db");
       return thread
         ? sendJson(res, 200, { thread, subagents: subagentsFor(thread, { dbPath }) })
@@ -1740,7 +2874,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/sessions/revive" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const sessionId = String(body.sessionId || "").trim();
       const target = cleanPath(body.path);
@@ -1778,7 +2912,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/jobs/attach" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const thread = String(body.thread || "").trim();
       const target = String(body.path || "").trim();
@@ -1810,7 +2944,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/jobs/label" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const thread = String(body.thread || "").trim();
       if (!thread) return sendJson(res, 400, { error: "thread is required" });
@@ -1823,7 +2957,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/jobs/clear" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const thread = String(body.thread || "").trim();
       if (thread) {
@@ -1845,15 +2979,17 @@ const server = createServer(async (req, res) => {
       // Every POST goes through authorised(): with the panel reachable off this machine, "this route
       // forgot to check" is not a thing the next route should be able to repeat. Loopback is exempt, so
       // the local board is unaffected.
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       await scheduler.fastPass();
       return sendJson(res, 200, { ok: true });
     }
 
     // Which project sections the page can see right now. Sent when the set changes and as a heartbeat; in
-    // scanMode "visible" it is what the scheduler reads instead of the whole fleet. Cheap and read-only, so it
-    // needs no token.
+    // scanMode "visible" it is what the scheduler reads instead of the whole fleet. It writes the scheduler's
+    // visible set, so it is a write like any other: a route does not get to decide that the panel token does
+    // not apply to it.
     if (route === "/api/visible" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const known = new Set(registry.projects.map((p) => p.name));
       const names = (Array.isArray(body.projects) ? body.projects : [])
@@ -1866,7 +3002,7 @@ const server = createServer(async (req, res) => {
     // Refresh everything, or only what is on screen. Server-side: the scans happen here, so the choice has to
     // outlive a tab and apply to whichever browser is open.
     if (route === "/api/settings/scan" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const mode = String(body.mode || "").toLowerCase() === "visible" ? "visible" : "all";
       try {
@@ -1883,39 +3019,50 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, mode, settings: settingsOut() });
     }
 
-    // Open a link from an agent's console in the OS default browser. Only http(s) gets through: this
-    // hands a string to the operating system, so nothing else may pass. execFile (no shell) means the
-    // URL can never become part of a command line.
-    if (route === "/api/open-url" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+    // How old a worktree has to be before the chart holds its row back, so the board can open on the trees that
+    // are still being worked in. Server-side for the same reason the refresh mode is: the number goes into this
+    // panel's own config.json, so it survives a restart and applies to whichever browser is open — and it is the
+    // config.json the reader edits by hand. `days: 0` shows everything.
+    if (route === "/api/settings/age" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
-      let parsed;
+      const days = ageDaysFrom(body.days);
       try {
-        parsed = new URL(String(body.url || "").trim());
-      } catch {
-        return sendJson(res, 400, { error: "not a URL" });
+        await patchPanelConfig({ hideOlderThanDays: days });
+      } catch (e) {
+        return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
       }
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        return sendJson(res, 400, { error: "only http(s) links can be opened" });
+      config.hideOlderThanDays = days;
+      log(`worktrees older than: ${days ? `${days} day${days === 1 ? "" : "s"} held back (the chart's arrow shows them)` : "none held back"}`);
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, { ok: true, days, settings: settingsOut() });
+    }
+
+    // Open a link from an agent's console in the OS default browser. Only http(s) gets through, and the
+    // URL is handed to the opener as a single argv element: no shell, no `cmd.exe /c start`, so a query
+    // string cannot become a second command. See lib/open-url.js for what that cost before.
+    if (route === "/api/open-url" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const { url, error } = safeUrl(body.url);
+      if (!url) return sendJson(res, 400, { error });
+      const { bin, args } = openerFor(url);
+      try {
+        // Detached: the browser outlives this request, and its exit code says nothing about whether a
+        // page opened. A spawn failure is the only failure this route can honestly report.
+        const child = spawn(bin, args, { detached: true, stdio: "ignore", windowsHide: true });
+        child.on("error", (e) => log(`could not open ${url}: ${String((e && e.message) || e)}`));
+        child.unref();
+      } catch (e) {
+        return sendJson(res, 500, { error: String((e && e.message) || e) });
       }
-      const url = parsed.toString();
-      const [bin, args] =
-        process.platform === "win32"
-          ? ["cmd.exe", ["/c", "start", "", url]]
-          : process.platform === "darwin"
-            ? ["open", [url]]
-            : ["xdg-open", [url]];
-      execFile(bin, args, (err) => {
-        if (err) sendJson(res, 500, { error: err.message });
-        else sendJson(res, 200, { ok: true, url });
-      });
-      return;
+      return sendJson(res, 200, { ok: true, url });
     }
 
     // Delete a deliverable. The confirmation lives in the UI; this only acts on a path or URL the panel
     // itself recorded, so a stray string from the page can never delete an arbitrary file.
     if (route === "/api/jobs/artifact/delete" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const key = String(body.key || body.path || body.url || "").trim();
       const hit = jobs.findArtifact(key);
@@ -1934,127 +3081,35 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, removedFile, kind: hit.artifact.kind || "file" });
     }
 
-    // Remove a worktree from the board: the directory goes to the Windows Recycle Bin (recoverable), then
-    // git's own bookkeeping is pruned. Never the project's own checkout, never a tree with a live agent.
+    // Remove a worktree from the board: the directory goes to the Windows Recycle Bin (recoverable), then git's
+    // own bookkeeping is pruned. Never the project's own checkout, never a tree with a live agent, never a locked
+    // tree. The act itself is lib/worktree-remove.js, because the answer a CHECKING agent gives (LANDED: YES) ends in
+    // the same removal and has to pass through the same guards - the lock, the live-agent check and what git still
+    // lists are enforced there, so a second caller cannot arrive one guard short of this one.
     if (route === "/api/worktree/delete" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const projectName = String(body.project || "").trim();
       const target = path.resolve(String(body.path || "").trim());
       const project = scheduler.getProjects().find((p) => p.name === projectName);
       if (!project) return sendJson(res, 404, { error: `unknown project: ${projectName}` });
-      if (path.resolve(project.path) === target) {
-        return sendJson(res, 400, { error: "that is the project's own checkout, not a worktree" });
-      }
       const row = scheduler.store.rowsFor(projectName).find((r) => path.resolve(r.path) === target);
       if (!row) return sendJson(res, 404, { error: `not a worktree row of ${projectName}: ${target}` });
-      const busy = jobs
-        .list()
-        .find(
-          (j) =>
-            (j.status === "running" || j.status === "starting") &&
-            [j.cwd, j.ownerPath].filter(Boolean).some((p) => path.resolve(p) === target),
-        );
-      if (busy) return sendJson(res, 409, { error: `an agent is running in that worktree (${busy.id})` });
-
-      // Recycle first: a mistaken click is recoverable from the Recycle Bin for as long as Windows keeps
-      // it. `git worktree remove --force` is the fallback when the shell cannot reach the Recycle Bin.
-      const psCommand =
-        "Add-Type -AssemblyName Microsoft.VisualBasic; " +
-        `[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory('${target.replace(/'/g, "''")}','OnlyErrorDialogs','SendToRecycleBin')`;
-      const stillThere = () => stat(target).then((s) => s.isDirectory()).catch(() => false);
-      // Recorded before anything is deleted: the response should say whether this call removed a
-      // directory or merely cleaned up the panel's record of one that was already gone.
-      const hadDirectory = await stillThere();
-      let recycled = false;
-      let recycleError = null;
-      if (process.platform === "win32" && hadDirectory) {
-        try {
-          await execP("powershell", ["-NoProfile", "-NonInteractive", "-Command", psCommand], { timeout: 90_000 });
-          recycled = !(await stillThere());
-          if (!recycled) recycleError = "the Recycle Bin refused it — the directory is still there";
-        } catch (e) {
-          recycleError = String((e && e.message) || e);
-        }
-      }
-      // git's removal empties the tree and drops its own record. Its LAST step is the rmdir, and on
-      // Windows that fails whenever a process still has the folder as its working directory — which a
-      // worktree routinely is, because the agent that built it, an editor, or a panel started from it is
-      // still running. So `failed to delete …: Permission denied` does NOT mean the worktree survived: by
-      // then the files and the record are gone and only an EMPTY folder is left. Treating that error as
-      // a failure is what left the row on the board (re-read as a worktree with no branch) while the
-      // folder stayed on disk. What git still lists is the arbiter, below.
-      let gitError = null;
-      if (await stillThere()) {
-        try {
-          await execP("git", ["-C", project.path, "worktree", "remove", "--force", target], { timeout: 90_000 });
-        } catch (e) {
-          gitError = String((e && e.message) || e);
-        }
-      }
-      await execP("git", ["-C", project.path, "worktree", "prune"], { timeout: 30_000 }).catch(() => {});
-
-      const listing = await worktreeList(project.path).catch(() => null);
-      const stillRegistered = listing ? listing.some((w) => path.resolve(w.path) === target) : null;
-      if (stillRegistered === true) {
-        // git never let go of it: the worktree is still real, so the row has to stay and the caller has
-        // to hear a failure rather than a claim of deletion.
-        const why = String(gitError || "git still lists it").trim().split("\n").filter(Boolean).pop();
-        return sendJson(res, 500, { error: `could not remove the worktree: ${why}` });
-      }
-      const heldOpen = /failed to delete|Permission denied|being used by another process|EBUSY|EPERM/i.test(
-        String(gitError || ""),
-      );
-      if (stillRegistered === null && (await stillThere()) && gitError && !heldOpen) {
-        // git's listing could not be read AND its removal failed for some other reason: nothing here
-        // proves the worktree is gone, so do not pretend it is.
-        return sendJson(res, 500, { error: `could not remove the worktree: ${gitError}` });
-      }
-
-      // Only the folder can disagree now. An empty leftover goes at once; one a process still holds is
-      // retried here, then kept after the response until the holder exits — the row goes either way,
-      // because it describes a worktree git no longer has.
-      let dirLeft = await stillThere();
-      for (let i = 0; dirLeft && i < 4; i += 1) {
-        dirLeft = !(await removeDirNow(target));
-        if (dirLeft) await sleepMs(600);
-      }
-      if (dirLeft) retryDirCleanup(target);
-      // Whether the panel itself is what holds the folder: a panel started from this worktree cannot
-      // delete it while it runs, and "restart the panel" is the only useful thing to say.
-      const panelHolds = dirLeft && holdsCwd(target, process.cwd());
-
-      // Drop by the path the STORE knows, not by `path.resolve(target)`: rows are keyed by the scanned
-      // path with forward slashes, so a resolved Windows path is a different key and the row survived
-      // its own deletion.
+      const out = await deleteWorktreeRow({ project, row, target, jobs, locks, onLog: log });
+      if (!out.ok) return sendJson(res, out.status || 500, { error: out.error, lock: out.lock || undefined });
+      // Drop by the path the STORE knows, not by `path.resolve(target)`: rows are keyed by the scanned path with
+      // forward slashes, so a resolved Windows path is a different key and the row survived its own deletion.
       scheduler.store.dropRow(projectName, row.path);
-      // A snapshot only refreshes the rows it carries — it never retracts one — so the removal needs
-      // its own event or the row sits on every open board for a worktree that no longer exists.
+      // A snapshot only refreshes the rows it carries - it never retracts one - so the removal needs its own event
+      // or the row sits on every open board for a worktree that no longer exists.
       broadcast({ type: "drop", project: projectName, path: row.path });
       broadcast({ type: "snapshot", data: snapshot() });
-      return sendJson(res, 200, {
-        ok: true,
-        recycled,
-        // The Recycle Bin is best effort: when it declined, say why and let the card say the files are
-        // gone permanently instead of promising recoverability that does not exist.
-        recycleError,
-        // Files deleted, git record pruned, row dropped — and the folder itself survived because a
-        // process holds it. The panel keeps trying in the background.
-        dirLeft,
-        panelHolds,
-        path: target,
-        name: row.name,
-        branch: row.branch || null,
-        // The key the panel and its rows use, so the browser can remove the right node.
-        rowPath: row.path,
-        // The folder was already gone when this ran: say so rather than pretending we removed it.
-        alreadyGone: !hadDirectory,
-      });
+      return sendJson(res, 200, out);
     }
 
     // Open a file an agent produced for the reader. Not a URL: a real path, opened in an editor.
     if (route === "/api/open-path" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const target = path.resolve(String(body.path || "").trim());
       const info = await stat(target).catch(() => null);
@@ -2063,7 +3118,10 @@ const server = createServer(async (req, res) => {
       try {
         // Detached, and no waiting: an editor stays open until the reader closes it, so an execFile
         // callback would hold this response (and the browser) hostage for the whole editing session.
-        const child = spawn(bin, args, { detached: true, stdio: "ignore" });
+        // windowsHide belongs with detached: a detached child is the one Windows gives its own console,
+        // so leaving it out here is a console window appearing next to the editor (and off a .cmd shim,
+        // the cmd.exe that hosts it).
+        const child = spawn(bin, args, { detached: true, stdio: "ignore", windowsHide: true });
         child.on("error", () => {});
         child.unref();
       } catch (e) {
@@ -2075,7 +3133,7 @@ const server = createServer(async (req, res) => {
     // One worktree, read now — the next-read ring on a row is a button. Refused while that row is
     // already being read: two scans of one worktree at once is exactly what the pool prevents.
     if (route === "/api/refresh/row" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const projectName = String(body.project || "").trim();
       const rowPath = String(body.path || "").trim();
@@ -2095,7 +3153,7 @@ const server = createServer(async (req, res) => {
     // claims is re-read here, from git, before a run exists. The prompt is lib/merge-prompt.js (the script the agent
     // is held to); `dryRun` hands it back for a preview without starting anything.
     if (route === "/api/worktree/merge" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const asked = String(body.path || "").trim();
       if (!asked) return sendJson(res, 400, { error: "path is required" });
@@ -2104,7 +3162,7 @@ const server = createServer(async (req, res) => {
       if (!info || !info.isDirectory()) return sendJson(res, 404, { error: `no such directory: ${worktree}` });
       // A worktree can live anywhere (`git worktree add ../tree`), so a path outside the project's own root is not an
       // error by itself: the row's project is the hint, and git's own worktree list is the proof that the hint is real.
-      let project = projectForPath(worktree) || registry.projects.find((p) => normPathKey(p.path) === normPathKey(worktree));
+      let project = spawnFeature.projectForPath(worktree) || registry.projects.find((p) => normPathKey(p.path) === normPathKey(worktree));
       let trees = project ? await worktreeList(project.path).catch(() => []) : [];
       if (!project) {
         const hinted = registry.projects.find((p) => p.name === String(body.project || "").trim());
@@ -2137,7 +3195,7 @@ const server = createServer(async (req, res) => {
       // One merge agent per worktree: a second would race the first over the same base branch.
       const live = jobs
         .list()
-        .find((j) => ["running", "starting"].includes(String(j.status)) && normPathKey(j.ownerPath || j.cwd) === normPathKey(worktree) && String(j.label || "").startsWith("MERGING into "));
+        .find((j) => isLiveJobStatus(j.status) && normPathKey(j.ownerPath || j.cwd) === normPathKey(worktree) && String(j.label || "").startsWith("MERGING into "));
       if (live) return sendJson(res, 409, { error: `an agent is already merging this worktree (${live.label || live.thread})` });
       const list = await gitIn(worktree, ["log", "--oneline", "-20", `${baseRef}..HEAD`], 20000);
       const commitList = list.ok ? list.out.split("\n").filter(Boolean) : [];
@@ -2146,6 +3204,10 @@ const server = createServer(async (req, res) => {
       // directory.
       const root = (trees.find((w) => w.branch === base) || trees[0] || { path: project.path }).path;
       const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      // The reader's lock goes into the agent's own script, not just into the board: a merge agent's last phase is
+      // cleanup, and that is exactly where a locked tree must not be touched. The delete route refuses it too — this
+      // is so the agent never tries and then reports a failure it cannot understand.
+      const lock = locks.check({ project: project.name, path: worktree, branch: row.branch });
       const prompt = mergePrompt({
         project: project.name,
         worktree,
@@ -2157,23 +3219,164 @@ const server = createServer(async (req, res) => {
         ahead: row.ahead,
         commits: commitList,
         stamp,
+        locked: lock.locked ? lock : null,
         panelPort: config.port,
+        // Where this branch lands — the doctrine of the project's host (logs/hosts.json), not a shape chosen here. A
+        // project with no mapping hands over null, and the prompt says so instead of inventing a PR.
+        host: hosts.landing(project, { branch: row.branch }),
       });
       const thread = makeThreadName(`${label} ${project.name}`);
-      const preview = { project: project.name, base, baseRef, remote, branch: row.branch, ahead: row.ahead, root, worktree: worktree.replace(/\\/g, "/"), label, thread, prompt };
+      const preview = { project: project.name, base, baseRef, remote, branch: row.branch, ahead: row.ahead, root, worktree: worktree.replace(/\\/g, "/"), label, thread, prompt, lock: lock.locked ? lock : null };
+      if (body.dryRun) return sendJson(res, 200, { dryRun: true, ...preview });
+      // The whole start, as its own function, because a local-only panel may have to PARK it on the reader's
+      // permission box first and run it the moment they say yes. The one thing the merge agent does that touches
+      // the world outside this box is PHASE 4's push, so that is the panel's own remote write and it asks first.
+      const startMerge = async () => {
+        const transport = await jobs.probe();
+        if (!transport.reachable || !transport.capabilities?.runs) {
+          return { status: 503, body: { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}`, ...preview, prompt: undefined } };
+        }
+        const top = await gitIn(worktree, ["rev-parse", "--show-toplevel"], 15000);
+        const ownerPath = top.ok && top.out ? top.out : worktree;
+        // `remoteWrite: "land"` is what tells lib/jobs.js this worker MAY push and names the landing step: the
+        // merge prompt says so in every phase, and the brief line must not contradict it.
+        const job = await jobs.create({ prompt, thread, cwd: worktree, existing: true, ownerPath, project: project.name, remoteWrite: "land", remote, baseBranch: base });
+        // The card is named for the job it is doing before it draws: the label survives the thread for good, and it
+        // is what the route above reads back to refuse a second merge agent in the same tree.
+        jobs.setLabel(job.thread, label);
+        if (job.status === "failed") return { status: 502, body: { error: job.error || "the run could not be started", job, ...preview, prompt: undefined } };
+        log(`merge ${row.branch} -> ${base} in ${project.name}: job ${job.id} (${job.status})`);
+        return { status: 202, body: { job, ...preview } };
+      };
+      // The MERGE flow asks under this project's policy too: a repo that lands by PR is answered from its own
+      // setting, and one that is local-only asks the reader like anything else.
+      const decision = remoteWrites.decision(worktree, policyForProject(project, config.remoteBranchPolicy));
+      if (decision.allowed) {
+        // A one-shot grant is spent by the write it was granted for.
+        if (decision.consume) remoteWrites.spend(worktree);
+        const out = await startMerge();
+        return sendJson(res, out.status, out.body);
+      }
+      if (!decision.ask) {
+        return sendJson(res, 403, {
+          error: `nothing was started: ${decision.why}. The merge agent pushes the base branch as its last phase, so the panel will not start one while remote writes are refused.`,
+          ...preview,
+          prompt: undefined,
+        });
+      }
+      // Local only (the default): park it on the permission box. Answering Allow starts the merge; Deny starts
+      // nothing at all, which is the difference between asking and telling.
+      const parked = remoteWrites.request({
+        kind: "merge",
+        worktree,
+        project: project.name,
+        branch: row.branch,
+        remote,
+        title: `${label} — ${project.name}`,
+        command: `git push ${remote || "<remote>"} ${base}   (PHASE 4 of ${label}, in ${root} — the merge itself is only staged first)`,
+        description:
+          "the panel's OWN merge flow, which pushes the base branch once the branch has landed and the tests pass. Allow starts the merge agent; Deny starts nothing and touches neither tree.",
+        timeoutSeconds: config.remoteWriteSeconds,
+        resume: async () => {
+          const out = await startMerge();
+          if (out.status >= 400) log(`remote-write ${parked.id}: the granted merge could not start — ${out.body?.error || out.status}`);
+          // The page finds the new card through the ordinary job events this emits.
+          broadcast({ type: "jobs", jobs: jobs.list() });
+          return out;
+        },
+      });
+      log(`merge ${row.branch} -> ${base} in ${project.name}: parked on the permission box (${parked.id}) — the setting is local-only`);
+      return sendJson(res, 202, { pending: { id: parked.id, deadline: parked.deadline, timeoutSeconds: parked.timeoutSeconds, kind: "merge" }, ...preview, prompt: undefined });
+    }
+
+    // The UNMERGED chip's fourth outcome: an agent that CHECKS the branch against the base, because the commit count
+    // cannot answer it. A squash, a rebase or a hand-rewritten patch leaves the branch carrying commits of its own
+    // while the base holds the change under another sha, so "is it on main?" is a question about CONTENT, and
+    // lib/verify-prompt.js is the script that answers it from the content itself (a reverse-apply of the branch's own
+    // patch to a pristine export of the base).
+    //
+    // The run writes nothing to either branch, so it does NOT pass through the remote-write box: the only act that
+    // follows its answer is the panel's own delete - on LANDED: YES, through the same lib/worktree-remove.js the ✕
+    // uses, so a locked tree, a tree with a live agent and a tree with uncommitted work are all still refused.
+    // `dryRun` hands the script back without starting anything, the way the merge route does.
+    if (route === "/api/worktree/verify-landed" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const asked = String(body.path || "").trim();
+      if (!asked) return sendJson(res, 400, { error: "path is required" });
+      const worktree = path.resolve(asked);
+      const info = await stat(worktree).catch(() => null);
+      if (!info || !info.isDirectory()) return sendJson(res, 404, { error: `no such directory: ${worktree}` });
+      // The same resolution the merge route does, for the same reason: a worktree can live anywhere, so the row's
+      // project is the hint and git's own worktree list is the proof that the hint is real.
+      let project = spawnFeature.projectForPath(worktree) || registry.projects.find((p) => normPathKey(p.path) === normPathKey(worktree));
+      let trees = project ? await worktreeList(project.path).catch(() => []) : [];
+      if (!project) {
+        const hinted = registry.projects.find((p) => p.name === String(body.project || "").trim());
+        if (hinted) {
+          const listed = await worktreeList(hinted.path).catch(() => []);
+          if (listed.some((w) => normPathKey(w.path) === normPathKey(worktree))) {
+            project = hinted;
+            trees = listed;
+          }
+        }
+      }
+      if (!project) return sendJson(res, 400, { error: `${worktree} is not inside a known project, and is not one of its worktrees` });
+      const base = String(project.mainBranch || "");
+      if (!base) return sendJson(res, 400, { error: `${project.name} has no base branch (no main/master and no remote default) to check against` });
+      const remote = project.remote || null;
+      const baseRef = remote ? `${remote}/${base}` : base;
+      const row = await scanWorktree(worktree, { remoteRef: baseRef, mainBranch: base }, "fast");
+      if (row.error) return sendJson(res, 400, { error: row.error });
+      if (row.branch === base) return sendJson(res, 409, { error: `${path.basename(worktree)} is on ${base} itself - there is nothing to check` });
+      if (row.ahead === null) return sendJson(res, 409, { error: `cannot count commits against ${baseRef} in this worktree - is the base ref there?` });
+      if (row.ahead === 0) return sendJson(res, 409, { error: `${row.branch} has no commits off ${base} - there is nothing to check` });
+      const label = verifyLabel(base);
+      // One check agent per worktree: a second would spend the gateway's run on the answer the first one is writing.
+      const running = jobs
+        .list()
+        .find((j) => isLiveJobStatus(j.status) && normPathKey(j.ownerPath || j.cwd) === normPathKey(worktree) && String(j.label || "").startsWith("CHECKING "));
+      if (running) return sendJson(res, 409, { error: `an agent is already checking this worktree (${running.label || running.thread})` });
+      const list = await gitIn(worktree, ["log", "--oneline", "-20", `${baseRef}..HEAD`], 20000);
+      const commitList = list.ok ? list.out.split("\n").filter(Boolean) : [];
+      const root = (trees.find((w) => w.branch === base) || trees[0] || { path: project.path }).path;
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const lock = locks.check({ project: project.name, path: worktree, branch: row.branch });
+      const prompt = verifyPrompt({
+        project: project.name,
+        worktree,
+        root,
+        branch: row.branch,
+        base,
+        baseRef,
+        remote,
+        ahead: row.ahead,
+        commits: commitList,
+        stamp,
+        // What the board knows, so the agent reads a clean tree rather than trusting this line: the panel will refuse
+        // the delete for a dirty tree, and the report has to say so before the reader wonders why nothing moved.
+        dirty: row.dirty,
+        untracked: row.untracked,
+        locked: lock.locked ? lock : null,
+        panelPort: config.port,
+        scratchBase: tmpdir(),
+      });
+      const thread = makeThreadName(`${label} ${project.name}`);
+      const preview = { project: project.name, base, baseRef, remote, branch: row.branch, ahead: row.ahead, root, worktree: worktree.replace(/\\/g, "/"), label, thread, prompt, lock: lock.locked ? lock : null };
       if (body.dryRun) return sendJson(res, 200, { dryRun: true, ...preview });
       const transport = await jobs.probe();
       if (!transport.reachable || !transport.capabilities?.runs) {
-        return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}` });
+        return sendJson(res, 503, { error: `the Hermes gateway API is not usable at ${jobs.api.url}${transport.error ? `: ${transport.error}` : ""}`, ...preview, prompt: undefined });
       }
       const top = await gitIn(worktree, ["rev-parse", "--show-toplevel"], 15000);
       const ownerPath = top.ok && top.out ? top.out : worktree;
-      const job = await jobs.create({ prompt, thread, cwd: worktree, existing: true, ownerPath, project: project.name });
-      // The card is named for the job it is doing before it draws: the label survives the thread for good, and it is
-      // what the route above reads back to refuse a second merge agent in the same tree.
+      // `remoteWrite: "none"` is the promise this run makes: a check reads, so the landing paragraphs stay out of its
+      // brief and no push guard is installed for a push it must never make.
+      const job = await jobs.create({ prompt, thread, cwd: worktree, existing: true, ownerPath, project: project.name, remoteWrite: "none" });
+      // The label is what the sweep reads the answer back from, so it is set before the card draws.
       jobs.setLabel(job.thread, label);
       if (job.status === "failed") return sendJson(res, 502, { error: job.error || "the run could not be started", job, ...preview, prompt: undefined });
-      log(`merge ${row.branch} -> ${base} in ${project.name}: job ${job.id} (${job.status})`);
+      log(`check ${row.branch} against ${base} in ${project.name}: job ${job.id} (${job.status})`);
       return sendJson(res, 202, { job, ...preview });
     }
 
@@ -2184,7 +3387,7 @@ const server = createServer(async (req, res) => {
     // already named (replacing a name is the point), and it writes down who asked and when - the naming ledger's
     // record is what stops every later automatic rename of this tree.
     if (route === "/api/worktree/rename" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const out = await renameWorktree({
         projectName: String(body.project || "").trim(),
@@ -2201,7 +3404,7 @@ const server = createServer(async (req, res) => {
     // project's base branch. It renames NOTHING - the row's ✦ shows this name, the commits behind it and where they
     // came from, and the rename itself is the reader's second click on /api/worktree/rename above.
     if (route === "/api/worktree/suggest-name" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const projectName = String(body.project || "").trim();
       const project = scheduler.getProjects().find((p) => p.name === projectName);
@@ -2213,6 +3416,10 @@ const server = createServer(async (req, res) => {
       if (normPathKey(dir) === normPathKey(project.path) || (await isMainCheckout(dir))) {
         return sendJson(res, 400, { error: "that is the project's own checkout, not a worktree — its name is the project folder's" });
       }
+      // The naming path, so it obeys the rename's rule: an untagged directory has no tag for the offered name to
+      // keep, and `Name it` would post a rename that refuses. Say so here rather than offering a name that cannot land.
+      const refusal = renameRefusal(dir);
+      if (refusal) return sendJson(res, 400, { error: refusal });
       // The tag every rename keeps, so the name this offers is already the whole directory name the row would get.
       const tag = tagOf(dir) || tagOf(row.branch) || null;
       const picked = await suggestWorktreeName({
@@ -2248,7 +3455,7 @@ const server = createServer(async (req, res) => {
     // Responds as soon as git finishes; discovery picks the new repo up on the next pass (the
     // refresh below is deliberately not awaited — probing 94 repos would stall the response).
     if (route === "/api/clone" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "");
       const rootNorm = norm(body.root);
@@ -2283,23 +3490,23 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/fetch" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       // Fire and forget: a sweep across every project is minutes of git work, and the button must not
       // hold the request open for it. Rows update over SSE as each fetch lands.
       void scheduler
         .fetchPass({ force: true })
-        .then(() => scheduler.fullPass({ discover: true }))
+        .then(() => scheduler.fullPass())
         .catch(() => {});
       return sendJson(res, 200, { ok: true, started: true });
     }
 
     if (route === "/api/reload" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       config = await loadConfig();
       scheduler.stop();
       pool.close();
       pool = new Pool(config.threads);
-      scheduler = new Scheduler({ config, store, pool, registry, getProjects: () => registry.projects, panelAgents: () => jobs.agentPaths(), panelThreads: () => jobs.panelRunThreads() });
+      scheduler = new Scheduler({ config, store, pool, registry, getProjects: () => registry.projects, panelAgents: () => jobs.agentPaths(), panelThreads: () => jobs.panelRunThreads(), onWorktreeSeen: (project, tree) => seedTreeName(project, tree) });
       await registry.refresh();
       await scheduler.start();
       broadcast({ type: "snapshot", data: snapshot() });
@@ -2316,7 +3523,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (route === "/api/restart" && req.method === "POST") {
-      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       try {
         const record = restart.request({ target: body.target, reason: body.reason, waitFor: body.waitFor || body.thread });
@@ -2327,36 +3534,140 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    if (route === "/api/stream") return handleStream(req, res);
+    if (route === "/api/stream") return handleStream(req, res, { clients, snapshot });
 
-    const rel = route === "/" ? "index.html" : route.replace(/^\/+/, "");
-    const filePath = path.join(PUBLIC_DIR, rel);
-    if (!filePath.startsWith(PUBLIC_DIR)) {
-      res.writeHead(403).end("forbidden");
-      return;
-    }
-    try {
-      const body = await readFile(filePath);
-      const type = TYPES[path.extname(filePath)] || "application/octet-stream";
-      const head = { "Content-Type": type, "Cache-Control": "no-store", Vary: "Accept-Encoding" };
-      // app.js is ~80KB of text the client parses on every load; gzip is free at this size.
-      if (body.length > 2048 && /^(text\/|application\/(javascript|json))/.test(type) && acceptsGzip(req)) {
-        const gz = gzip(body);
-        res.writeHead(200, { ...head, "Content-Encoding": "gzip", "Content-Length": gz.length });
-        return res.end(gz);
-      }
-      res.writeHead(200, { ...head, "Content-Length": body.length });
-      res.end(body);
-    } catch {
-      res.writeHead(404, { "Content-Type": "text/plain" }).end("not found");
-    }
+    return serveStatic(req, res, route, build);
   } catch (e) {
-    sendJson(res, 400, { error: String((e && e.message) || e) });
+    // The answer may already be on the wire (a static file half-written, an SSE client that died
+    // mid-write). sendJson there throws ERR_HTTP_HEADERS_SENT *inside* the catch, which rejects the
+    // async handler - an unhandled rejection from a routine client disconnect, and a possible exit.
+    if (res.headersSent) {
+      log(`${req.method} ${route} failed after the headers were sent: ${String((e && e.message) || e)}`);
+      return res.destroy();
+    }
+    // A caller's mistake is one the handler named (HttpError). Everything else is a bug in this
+    // process: 500 and a log line, instead of the 400 that used to make it invisible.
+    const status = errorStatus(e);
+    const detail = String((e && e.message) || e);
+    if (status >= 500) log(`${req.method} ${route} failed (${status}): ${detail}${e?.stack ? `\n${e.stack}` : ""}`);
+    return sendJson(res, status, { error: status >= 500 ? `the panel could not answer that: ${detail}` : detail });
   }
 });
 
+// ---- legacy trees get a parent, slowly ---------------------------------------------------------------------------
+// A tree the panel did not cut has no record, so its parent is reconstructed (lib/parents.js): from the branch's own
+// reflog when git still has the creation line, and from the ticket id in its name when it does not. That is git work
+// per unresolved branch, it changes only when somebody branches or merges, and a reconstruction can never drive a
+// write — so it runs on its own slow clock over the trees the board is actually showing, never on a scan tick, and
+// never in the boot path (the board must come up before this).
+let parentsWarmAt = 0;
+async function warmParents() {
+  if (Date.now() - parentsWarmAt < config.stewardRefreshSeconds * 1000) return;
+  // A pass with nothing to look at must not spend the whole window: the first one fires 20 s in, and on a slow boot
+  // discovery has not finished by then, so a pass that returned here after setting the clock left every legacy tree
+  // reading "unknown" for the next five minutes. The configured projects are known at boot, so they are the fallback.
+  const projects = (registry.projects?.length ? registry.projects : config.projects) || [];
+  if (!projects.length) return;
+  parentsWarmAt = Date.now();
+  let learned = 0;
+  let guessed = 0;
+  for (const project of projects) {
+    // The whole REPO, never the rows the board happens to be showing: this pass exists to fill in every legacy tree,
+    // and a board that has only scanned the project's own checkout so far used to hand it [`master`] — one branch,
+    // resolved, window spent, and every other tree still reading "unknown" five minutes later. `refresh()` starts from
+    // the repo's own branch list anyway; what it skips cheaply is the branches it already has an answer for.
+    try {
+      const out = await parents.refresh({ project: project.name, repoDir: project.path, mainBranch: project.mainBranch });
+      learned += out.learned || 0;
+      guessed += parents.state(project.name).filter((r) => r.parentSource === "backfilled").length;
+    } catch (e) {
+      log(`parent backfill for ${project.name} failed: ${String((e && e.message) || e)}`);
+    }
+  }
+  if (learned) log(`parents: ${learned} branch(es) resolved (${guessed} backfilled guess(es) in total — a guess never drives a write)`);
+}
+// ---- the CHECKING agent's answer, acted on -------------------------------------------------------------------
+// A check run is read-only, so its answer is the whole product: on LANDED: YES the panel does the one thing that
+// answer is for and moves the tree to the Recycle Bin, through the ✕'s own act (lib/worktree-remove.js) so the
+// reader's lock, a live agent and the project's own checkout still refuse it. Every other word - PARTIAL, NO,
+// SUPERSEDED, or no readable line at all - leaves the tree exactly where it is and the card says which word it read.
+//
+// A pass over the JOB STORE rather than a callback on the run that answered: a panel restarted between the answer and
+// the delete still acts on it, and the store is what survives a restart. `checkedAnswers` keeps one answer to one
+// delete per process, and lib/verify-landed.js bounds how old an answer may be before it is history rather than an
+// instruction.
+const checkedAnswers = new Set();
+// Answers whose tree the board has not re-adopted yet. Not `acted`: the answer is still good, and the next tick may
+// find the row. Only the one log line is deduped.
+const pendingChecked = new Set();
+let sweepingChecked = false;
+async function sweepCheckedLandings() {
+  if (sweepingChecked) return;
+  sweepingChecked = true;
+  try {
+    // The summary `jobs.list()` hands back has no `finalMessage` (the card store drops it), so each candidate is
+    // enriched from the LIVE job first: the answer is the last line of a message the completion payload may have
+    // truncated from the start.
+    const rows = jobs.list().map((s) => ({ ...s, finalMessage: jobs.get(s.id)?.finalMessage || s.completion?.final?.text || "" }));
+    for (const { job, answer } of answeredChecks(rows, { acted: checkedAnswers })) {
+      checkedAnswers.add(job.id);
+      const live = jobs.get(job.id);
+      const tree = job.ownerPath || job.cwd || "";
+      const project = (tree && spawnFeature.projectForPath(tree)) || null;
+      const row = project ? store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(tree)) : null;
+      const base = String(project?.mainBranch || "main");
+      const say = (text) => {
+        if (live) jobs.push(live, { kind: "raw", text });
+      };
+      if (!answerDeletes(answer)) {
+        say(answerLine(answer, { base }));
+        log(`check ${job.id}: answered LANDED: ${answer.verdict} for ${row?.branch || tree || "(no tree)"} - nothing was deleted`);
+        continue;
+      }
+      if (!project) {
+        say(answerLine(answer, { base, error: "it is no longer a worktree row of this project, so there was nothing to remove" }));
+        continue;
+      }
+      if (!row) {
+        // The project is known but its row is not in the store YET - the answer arrived before a discovery pass put
+        // the tree back on the board (a restart between the answer and the delete is exactly that). Do not spend the
+        // answer: leave it for the next tick, inside lib/verify-landed.js's age window, and say so once.
+        if (!pendingChecked.has(job.id)) {
+          pendingChecked.add(job.id);
+          log(`check ${job.id}: LANDED: YES, but ${tree} is not on the board yet - waiting for the scan`);
+        }
+        continue;
+      }
+      const out = await deleteWorktreeRow({ project, row, target: row.path, jobs, locks, onLog: log });
+      if (!out.ok) {
+        say(answerLine(answer, { base, error: out.error }));
+        log(`check ${job.id}: LANDED: YES for ${row.branch}, but ${row.path} was not deleted - ${out.error}`);
+        continue;
+      }
+      store.dropRow(project.name, row.path);
+      broadcast({ type: "drop", project: project.name, path: row.path });
+      broadcast({ type: "snapshot", data: snapshot() });
+      say(answerLine(answer, { base, deleted: true }));
+      log(`check ${job.id}: LANDED: YES for ${row.branch} - removed ${row.path} (recycled: ${out.recycled ? "yes" : "no"})`);
+    }
+  } catch (e) {
+    log(`checked-landing sweep failed: ${String((e && e.message) || e)}`);
+  } finally {
+    sweepingChecked = false;
+  }
+}
+setInterval(() => void sweepCheckedLandings(), 10_000).unref?.();
+// One pass shortly after boot, so an answer a restart interrupted is acted on without waiting for the first tick.
+setTimeout(() => void sweepCheckedLandings(), 6_000).unref?.();
+
+setInterval(() => void warmParents(), Math.max(30_000, config.stewardRefreshSeconds * 500));
+// First pass 20s in: late enough that the board is up (the boot pass is local git only), early enough that a legacy
+// tree stops reading "unknown" within one screen of the panel opening.
+setTimeout(() => void warmParents(), 20_000).unref?.();
+
 server.listen(config.port, config.host, () => {
   log(`agent-worktree-gui on http://${config.host}:${config.port}`);
+  log(`static build ${buildAtBoot.version || "(unversioned)"} — ${Object.keys(buildAtBoot.files).length} file(s) hashed; the shell is no-store, its assets carry ?v= and are cached hard`);
   // Binding off loopback is a deliberate act, so say out loud what it opens and whether the token that
   // guards it is there at all. Reads are still open to anyone who can reach the port.
   if (!["127.0.0.1", "localhost", "::1"].includes(String(config.host).toLowerCase())) {
@@ -2371,7 +3682,7 @@ server.listen(config.port, config.host, () => {
       log(`agent transport UNREACHABLE: ${t.error} — spawns will be refused until the gateway is back`);
       return; // nothing to ask: every restored turn keeps its interrupted verdict, which is the safe one
     }
-    log(`agent transport ready: hermes ${t.capabilities?.version || "?"} · runs ${t.capabilities?.runs ? "yes" : "no"} · steer ${t.capabilities?.steer ? "yes" : "no"} · per-run cwd ${t.capabilities?.runCwd ? "yes (patched gateway)" : "NO (stock gateway — agents run in the gateway's directory)"}`);
+    log(`agent transport ready: hermes ${t.capabilities?.version || "?"} · runs ${t.capabilities?.runs ? "yes" : "no"} · steer ${t.capabilities?.steer ? "yes" : "no"} · per-run cwd ${t.capabilities?.runCwd ? "advertised (a run's tools still start in the gateway's directory — measured 2026-10-27)" : "NO (stock gateway — agents run in the gateway's directory)"}`);
     // What the gateway did with the turns this panel lost in a restart. `load()` stamps them `interrupted`
     // without asking, and a run that finished in the meantime must not keep reading "may still be live".
     try {
@@ -2379,6 +3690,17 @@ server.listen(config.port, config.host, () => {
       if (settled.length) log(`reconciled ${settled.length} turn(s) a restart cut off: ${settled.join(", ")}`);
     } catch (e) {
       log(`reconcile of restored turns failed: ${String((e && e.message) || e)}`);
+    }
+    // ...and the runs the reconcile could not give back to a live card because the gateway answering now is
+    // not the process that was issued them. A run lives in one process's memory: a card stamped with an older
+    // gateway identity is a turn nobody here can watch, and one nobody has told the gateway to stop — nine of
+    // those once held every concurrency slot with their session_turn_leases never released. A stop is asked for
+    // on each (404/409 tolerated), after the reconcile, so nothing it re-attached is touched.
+    try {
+      const stopped = await jobs.stopStaleRuns();
+      if (stopped.length) log(`asked the gateway to stop ${stopped.length} run(s) this panel inherited from an earlier gateway: ${stopped.map((a) => `${a.runId || a.jobId}${a.already ? " (already gone)" : a.ok ? "" : ` (failed: ${a.error})`}`).join(", ")}`);
+    } catch (e) {
+      log(`stopping the runs inherited from an earlier gateway failed: ${String((e && e.message) || e)}`);
     }
   });
 });

@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Assistant, ASSISTANT_THREAD, RULE_DEFS, parseActions, looksLikeQuestion, detectRepeat, detectCycle, detectErrorRepeat, isFailureLine, matchRule } from "../lib/assistant.js";
+import { LIVE_JOB_STATUS } from "../lib/jobs.js";
 
 const dir = mkdtempSync(path.join(tmpdir(), "assistant-test-"));
 const file = path.join(dir, "assistant.json");
@@ -55,7 +56,28 @@ const stopped = [];
 let board = [];
 const jobs = {
   list: () => board,
+  // The real store's own holder predicate (lib/jobs.js `runningJobs` + `runInTree`), over this fake board: a run
+  // whose status is live holds the tree it works in. The tree comparison itself is the real store's, driven in
+  // lib/jobs.test.js; this stub exists so the assistant's skip decision can be driven without a gateway.
+  runningJobs: () => board.filter((j) => LIVE_JOB_STATUS.has(String(j.status || ""))),
+  runInTree: (treePath) => {
+    const want = String(treePath || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    if (!want) return null;
+    const tree = (j) => String(j.ownerPath || j.worktreePath || j.cwd || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+    return jobs.runningJobs().find((j) => tree(j) === want) || null;
+  },
   firstOfThread: (thread) => board.find((j) => j.thread === thread) || null,
+  // The same question the real store answers (lib/jobs.js busyFor): is this thread — or the tree it works in —
+  // already turning? This stub board carries no ownerPath fixtures, so the thread half is what it covers; the tree
+  // half is driven against the real store in lib/jobs.test.js.
+  busyFor: (thread, { exceptId = null } = {}) => {
+    const t = String(thread || "");
+    const live = board.filter((j) => (j.status === "running" || j.status === "starting") && j.id !== exceptId);
+    const brief = (j) => ({ id: j.id, thread: j.thread, status: j.status, prompt: String(j.prompt || "").slice(0, 120) });
+    const onThread = live.filter((j) => j.thread === t);
+    if (onThread.length) return { held: true, where: "thread", thread: t, tree: null, by: onThread.map(brief) };
+    return { held: false, where: null, thread: t, tree: null, by: [] };
+  },
   modelFor: () => null,
   create: async (opts) => {
     created.push(opts);
@@ -326,7 +348,7 @@ console.log("the assistant's own actions: draft by default, sent only when allow
 {
   created.length = 0;
   const a = make();
-  board = [job({ thread: "wtgui-worker-b", label: "worker b" })];
+  board = [job({ thread: "wtgui-worker-b", label: "worker b", status: "done", endedAt: iso(t0) })];
   const answer = "I read it as the second option.\nTO wtgui-worker-b: Go with option two — the QA target.\nNOTE: worker b prefers option two.\nWATCH wtgui-worker-b: the deploy finishes | 20";
   a.settings.autonomy = "draft";
   a.harvest({ id: "asst-turn-1", thread: ASSISTANT_THREAD, lines: [line("text", answer)] });
@@ -341,6 +363,27 @@ console.log("the assistant's own actions: draft by default, sent only when allow
   await new Promise((r) => setTimeout(r, 20));
   eq(created.length, 1, "auto-safe sends the assistant's own reply");
   ok(created[0].origin?.kind === "assistant-reply" && created[0].thread === "wtgui-worker-b", "the reply is tagged as the assistant's", JSON.stringify(created[0]?.origin));
+}
+
+// A reply is not a steer. The same TO line, aimed at a worker that is still going, must be refused rather than posted:
+// measured on the board, two TOs to one thread took its worktree from one live run to three, all editing one tree.
+console.log("one run per thread: a TO into a thread that is still going is refused");
+{
+  created.length = 0;
+  const a = make();
+  board = [job({ thread: "wtgui-busy-worker", label: "busy worker" })]; // status defaults to running
+  a.settings.autonomy = "auto-safe";
+  a.harvest({ id: "asst-turn-busy", thread: ASSISTANT_THREAD, lines: [line("text", "TO wtgui-busy-worker: keep going?")] });
+  await new Promise((r) => setTimeout(r, 20));
+  eq(created.length, 0, "nothing was posted into the thread that is turning");
+  const st = a.state();
+  ok(
+    st.journal.some((j) => j.kind === "to-skipped" && /already has a live run/.test(j.text || "")),
+    "the journal says the TO was refused and why",
+    JSON.stringify(st.journal.filter((j) => j.kind === "to-skipped").slice(-1)),
+  );
+  const draft = st.alerts.find((x) => x.title === "the assistant drafted a reply");
+  eq(Boolean(draft), false, "…and no draft was offered either: one press later it would be the same second run");
 }
 
 console.log("creating worktrees: ask, auto and off");
@@ -565,6 +608,54 @@ console.log("work left in a finished tree");
   board = [job({ thread: "wtgui-gone", status: "done", endedAt: iso(t0 - 60_000), worktreePath: goneDir, baseCheckout: false })];
   f.tick();
   eq(f.state().alerts.filter((x) => x.rule === "leftover").length, 0, "a deleted worktree is not reported as holding work");
+
+  // A tree a LIVE run now holds is that run's worktree, not the finished worker's leftover. The sweep re-checks
+  // the tree at sweep time, so a SPAWN IN into a just-finished tree read the new agent's own edits as the old
+  // worker's abandoned work and re-fired as it worked (measured four times on one tree, 1 modified → 2 modified →
+  // 2 modified + 1 untracked → 2 modified + 2 untracked). Same tree, same row, same dirty files — only the live
+  // holder differs from case `a` above, which is what makes the pair prove the skip.
+  const g = make();
+  g.getRows = () => rows;
+  board = [
+    job({ thread: "wtgui-left", status: "done", endedAt: iso(t0 - 60_000), worktreePath: leftDir }),
+    job({ thread: "wtgui-held", status: "running", worktreePath: leftDir, lines: [line("tool", "🔧 patch · a.md")] }),
+  ];
+  g.tick();
+  eq(g.state().alerts.filter((x) => x.rule === "leftover").length, 0, "a tree a live run holds raises no leftover");
+  // The same tree spelled the other way (backslashes, a trailing slash, upper case) is the same tree: a holder
+  // whose path came from a different producer must still count.
+  const h = make();
+  h.getRows = () => rows;
+  board = [
+    job({ thread: "wtgui-left", status: "done", endedAt: iso(t0 - 60_000), worktreePath: leftDir }),
+    job({ thread: "wtgui-held", status: "running", ownerPath: `${leftDir}\\`.toUpperCase() }),
+  ];
+  h.tick();
+  eq(h.state().alerts.filter((x) => x.rule === "leftover").length, 0, "…and the same tree in another spelling is still held");
+
+  // …and once nothing live holds it, the same dirty tree alerts exactly as it did before the change: the skip is
+  // about who holds the tree NOW, not about the tree having been held once. The second turn ended hours ago, so
+  // it is outside the leftover window and is not the alert being counted.
+  const i = make();
+  i.getRows = () => rows;
+  board = [
+    job({ thread: "wtgui-left", status: "done", endedAt: iso(t0 - 60_000), worktreePath: leftDir }),
+    job({ thread: "wtgui-held", status: "done", endedAt: iso(t0 - 3 * 3600_000), worktreePath: leftDir }),
+  ];
+  i.tick();
+  const unheld = i.state().alerts.filter((x) => x.rule === "leftover");
+  eq(unheld.length, 1, "a tree no live run holds still raises its leftover");
+  ok(unheld[0]?.thread === "wtgui-left", "…and it names the worker whose work is sitting there", unheld[0]?.thread);
+  // A settled run is not a holder: `interrupted` is exactly the state standing rule 16 warns can still be
+  // running, but it is not a live run, so it must not suppress the alert either.
+  const k = make();
+  k.getRows = () => rows;
+  board = [
+    job({ thread: "wtgui-left", status: "done", endedAt: iso(t0 - 60_000), worktreePath: leftDir }),
+    job({ thread: "wtgui-held", status: "interrupted", endedAt: iso(t0 - 2 * 3600_000), worktreePath: leftDir }),
+  ];
+  k.tick();
+  eq(k.state().alerts.filter((x) => x.rule === "leftover").length, 1, "an interrupted run does not hold a tree");
 }
 
 console.log("a delegated child that has gone quiet");
