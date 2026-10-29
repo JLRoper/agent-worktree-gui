@@ -8418,8 +8418,16 @@ function verdictHtml(row) {
   const verdict = String(row.verdict || "");
   const cls = `badge ${verdictClass(verdict)}${row.verdictStale ? " stale" : ""}`;
   const text = esc(row.verdict);
+  // The count against the project's main lives HERE now: the Ahead / Behind column counts the branch against its own
+  // copy on the remote. Every title below ends with it, and a plain badge, which had no title at all, carries it alone.
+  // Inline, not a helper: this region is read out of the page on its own (tools/verify-merge-chip.mjs).
+  const vs =
+    row.baseRef && row.ahead !== null && row.ahead !== undefined
+      ? `Against ${row.baseRef}: ${Number(row.ahead) || 0} ahead, ${Number(row.behind) || 0} behind.`
+      : "";
+  const withVs = (t) => (vs ? `${t} — ${vs}` : t);
   // Every other verdict is a statement; only UNMERGED has an action behind it.
-  if (!verdict.startsWith("UNMERGED")) return `<span class="${cls}">${text}</span>`;
+  if (!verdict.startsWith("UNMERGED")) return `<span class="${cls}"${vs ? ` title="${esc(vs)}"` : ""}>${text}</span>`;
   const key = keyOf(row.project, row.path);
   const attrs =
     `data-merge-start="${esc(key)}" data-merge-project="${esc(row.project)}" data-merge-path="${esc(row.path)}"` +
@@ -8427,7 +8435,7 @@ function verdictHtml(row) {
   const merging = mergeAgentLabel(row);
   if (merging) {
     return `<button type="button" class="${cls} merge-start is-merging" ${attrs} disabled title="${esc(
-      `${merging} is working this tree now — its card is under this row`,
+      withVs(`${merging} is working this tree now — its card is under this row`),
     )}">${text}</button>`;
   }
   const dirty = Number(row.dirty) || 0;
@@ -8436,13 +8444,13 @@ function verdictHtml(row) {
     // Not a dead button: the chip stays a statement and its tooltip says what would make it an action, so a click
     // can never start a merge over uncommitted work.
     return `<span class="${cls}" title="${esc(
-      `this is merged by an agent, not by hand: ${dirty} modified and ${untracked} untracked file(s) are somebody's unfinished work — commit or stash them and the button appears`,
+      withVs(`this is merged by an agent, not by hand: ${dirty} modified and ${untracked} untracked file(s) are somebody's unfinished work — commit or stash them and the button appears`),
     )}">${text}</span>`;
   }
   const base = baseBranchOf(row);
   const parent = mergeParentOf(row);
   return `<button type="button" class="${cls} merge-start" ${attrs} title="${esc(
-    mergeChooserTitle(row, parent),
+    withVs(mergeChooserTitle(row, parent)),
   )}">${text}<span class="merge-glyph" aria-hidden="true">\u21e5</span></button>`;
 }
 // ---- end merge control
@@ -8712,6 +8720,74 @@ function branchCellHtml(row) {
 }
 // ---- end branch cell
 
+// ---- ahead / behind cell: the branch against its OWN copy on the remote -------------------------------------------
+// ↑ is work that is not pushed, ↓ is work that is not pulled — what `git status` and every git client mean by "ahead /
+// behind". The count is the SERVER's answer (`row.sync`, lib/sync-state.js, derived from the fresh `status` read of
+// every scan); the page draws it and picks no word of its own. `row.ahead` / `row.behind` are the count against the
+// project's main — a different question, "is this work in main?" — and they live in the verdict and in this cell's
+// tooltip, not in the cell.
+//
+//   level / ahead / behind / diverged   ↑N ↓M, the side with work to do lit, a side with none dim
+//   gone       the branch's copy was deleted on the remote
+//   untracked  the remote has a branch of this name, but this tree does not track it
+//   none       no copy on the remote: never pushed
+//   stale      the project's last fetch FAILED, so the counts are as of the last fetch that worked: dotted, with a `?`
+//
+// A page newer than the server that feeds it (the board serves public/ fresh while a process keeps the code it started
+// with) gets rows with no `row.sync`: the old numbers are drawn, labelled for what they count, with the one sentence
+// that says how to get the real ones.
+function vsMainLine(row) {
+  if (!row || row.ahead === null || row.ahead === undefined || !row.baseRef) return "";
+  const a = Number(row.ahead) || 0;
+  const b = Number(row.behind) || 0;
+  return `Against ${row.baseRef}: ${a} commit${a === 1 ? "" : "s"} here that it does not have, ${b} on it that this branch does not have (the verdict is built from this).`;
+}
+
+function aheadBehindCellHtml(row) {
+  const main = vsMainLine(row);
+  const s = row?.sync;
+  if (!s) {
+    const body =
+      row?.ahead === null || row?.ahead === undefined
+        ? "—"
+        : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`;
+    const why = `${main ? `${main} ` : ""}This board's server is older than this page, so it cannot count against the branch's own copy on the remote yet — restart the board.`;
+    return `<span class="ab ab-legacy" data-sync="legacy" title="${esc(why)}">${body}</span>`;
+  }
+  const dim = (t) => `<span class="dimmer">${t}</span>`;
+  const up = (n) => `<span class="dirty ab-up">↑${n}</span>`;
+  const down = (n) => `<span class="ab-down">↓${n}</span>`;
+  let body;
+  switch (s.state) {
+    case "level":
+      body = `${dim("↑0")} ${dim("↓0")}`;
+      break;
+    case "ahead":
+      body = `${up(s.ahead)} ${dim("↓0")}`;
+      break;
+    case "behind":
+      body = `${dim("↑0")} ${down(s.behind)}`;
+      break;
+    case "diverged":
+      body = `${up(s.ahead)} ${down(s.behind)}`;
+      break;
+    case "gone":
+      body = dim("gone");
+      break;
+    case "untracked":
+      body = dim("?");
+      break;
+    default:
+      body = dim("—");
+  }
+  const counted = ["level", "ahead", "behind", "diverged"].includes(s.state);
+  const stale = counted && Boolean(s.stale);
+  const title = [s.why, main].filter(Boolean).join(" ");
+  const data = counted ? ` data-ahead="${esc(s.ahead)}" data-behind="${esc(s.behind)}"` : "";
+  return `<span class="ab${stale ? " ab-stale" : ""}" data-sync="${esc(s.state)}"${data} title="${esc(title)}">${body}${stale ? `<span class="ab-q" aria-label="stale">?</span>` : ""}</span>`;
+}
+// ---- end ahead / behind cell
+
 // The PR cell: the number and state are the server's (row.pr), and the PAGE is the project's host record — `row.prUrl`
 // is built by the same template as the branch cell, so `.../pull-requests/12` and `.../pull/12` both come out right
 // without this file knowing which host it is looking at. No URL (an unmapped project, or a host whose pull template
@@ -8792,7 +8868,7 @@ function rowHtml(row) {
       title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${treeLockBtn}${renameBtn}${nameFromWorkBtn}${agentBadgeHtml(row)}</div></td>
     <td class="mono branch">${branchCellHtml(row)}${branchLockBtn}</td>
     <td class="mono dim nowrap">${esc(row.head || "—")}</td>
-    <td class="mono nowrap">${row.ahead === null ? "—" : `<span class="${row.ahead ? "dirty" : "dimmer"}">${row.ahead}</span> / ${row.behind ?? "—"}`}</td>
+    <td class="mono nowrap">${aheadBehindCellHtml(row)}</td>
     <td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>
     <td>${pr}</td>
     <td class="mono nowrap">${dirty}</td>
@@ -11049,7 +11125,7 @@ function projectSection(name) {
     ${hostPanelHtml(name)}
     <div class="wt-scroll">
       <table><thead><tr>
-        <th>Worktree</th><th>Branch</th><th>Tip</th><th>Ahead / Behind</th><th>Cherry</th>
+        <th>Worktree</th><th>Branch</th><th>Tip</th><th title="↑ commits this branch has that its own copy on the remote does not (not pushed yet). ↓ commits that copy has that this tree does not (not pulled). gone: the copy was deleted on the remote. —: never pushed. A dotted count with a ? is as of the last fetch that worked, because the latest one failed. The count against main is in the verdict's tooltip.">Ahead / Behind</th><th>Cherry</th>
         <th>PR</th><th>Dirty</th><th title="time since this worktree was last seen alive (any evidence firing) · the ring fills up to green as the row becomes due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited">Life / next read</th><th>Verdict</th><th title="remove a worktree (sent to the Recycle Bin)"></th>
       </tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
     </div>
