@@ -1,5 +1,27 @@
-// core/console-format.js — how a console draws a file: a framed diff window for a unified diff, a code box
-// for any other file dump. One classifier, one builder, and every console uses them.
+// core/console-format.js — how a console draws a tool's output: ONE folded box per result, holding a framed diff
+// window per hunk for a unified diff and the lines themselves for anything else. One classifier, one builder, and
+// every console uses them.
+//
+// EVERY RESULT IS IN A BOX, AND THE BOX STARTS FOLDED
+//
+// A result used to be drawn in whichever shape it happened to have: a diff got its framed windows (always open), a
+// file dump got a folded code box, and everything else — a shell transcript, a search, a skill, a todo list — was
+// bare lines poured into the console. The reader asked for one shape: every tool output in a clean box that is
+// folded up until they open it, and then shows the whole result at its full size. So the rule is made here, once:
+//
+//   - a run of a tool's output lines is one box; a unified diff is one box too, and its windows are drawn INSIDE it
+//     (the box is the only frame, the windows lose their own border). A result that MIXES the two — a `git show`'s
+//     commit header, then its diff, then a summary — is still one box: the run continues across both shapes and
+//     stops only at the next `↳ tool` line, at a note, or at a line that is not the tool's own output. The box's
+//     header names the tool (and the file, when the result is one), says how many lines it holds — and for a diff,
+//     how many it adds and removes — so a folded box already says what it is without being read;
+//   - the result's own header line ("↳ patch · 3.27s") and the notes under a result (the gateway's cut sentence, the
+//     panel's own "… 214 lines hidden — click to read" button) are NOT inside it: the first is the console's record
+//     of the result and the second are controls the reader may need while the box is folded;
+//   - the box is folded by default, in the condensed view and in the one-stream view alike; the reader's open boxes
+//     are remembered by key in the caller's set (opts.codeOpen), so a repaint never snaps one shut under them. A
+//     box the reader ASKED for (the whole stored text a fold note's click reads) is drawn open instead, and the
+//     caller says so by handing in a set that is `openByDefault` — then it is the boxes they SHUT that are kept.
 //
 // WHY ONE RENDERER
 //
@@ -138,8 +160,9 @@ const CF_FILE_TOOLS = new Set(["read_file", "write_file", "cat", "bat", "type", 
 // A shell call that prints a file: cat/head/tail/type/less/more/bat, or `sed -n '1,50p' file`.
 const CF_PRINT_CMD_RE = /^(?:cat|bat|type|less|more|head|tail)\s+(.+)$/;
 const CF_SED_PRINT_RE = /^sed\s+-n\s+['"]?[\d,$]+p['"]?\s+(\S.*)$/;
-// How many lines a run needs before it is worth a code box. One line is not a file being printed, and folding
-// it away would hide the whole result behind a header for no gain.
+// How many lines a run needs before it is classified as a FILE'S body ("code"). One line is not a file being
+// printed. It no longer decides whether a result gets a box — every result does, see consoleBodyHtml — only what the
+// box calls itself.
 const CF_CODE_MIN_LINES = 2;
 
 const CF_DIFF_CLASSES = new Set(["githead", "fileminus", "fileplus", "hunk", "ctx", "del", "mod", "add", "cut"]);
@@ -336,14 +359,28 @@ function consoleFileOutput(tool, arg) {
 
 const cfEsc = (s) => (typeof esc === "function" ? esc(s) : String(s ?? ""));
 const cfLink = (s) => (typeof linkifyText === "function" ? linkifyText(s) : cfEsc(s));
+// A line the stream is still writing: the page registers the one function that knows which lines those are (the
+// word pacer, core/type-stream.js through app.js `typedShown`), and a row it names is drawn up to the words that may
+// be shown NOW instead of whole. Registered rather than imported so this module stays text in, markup out — with no
+// hook (a harness, a console nobody is typing into) every row is drawn whole, exactly as before.
+let cfShownFor = null;
+function consoleSetShownFor(fn) {
+  cfShownFor = typeof fn === "function" ? fn : null;
+}
 // One console line, whatever block it lands in. data-ltext/data-lkind are how a burst rebuild reads its lines
 // back out of the DOM (groupLines): the cell's own text, never the rendered text of a link or a clock. `shown`
 // overrides only what the reader sees — the chrome of a diff window shortens a path, and the line the console
-// drew stays in data-ltext.
+// drew stays in data-ltext. A line still being written shows its typed prefix the same way: data-ltext keeps the
+// whole line, so a rebuild in the middle of the typing does not shorten what the run said.
 function cfLine(row, extra = "", shown = null) {
   const kind = String((row && row.kind) || "tool-out");
   const lid = row && row.lid != null && row.lid !== "" ? ` data-lid="${cfEsc(row.lid)}"` : "";
-  const body = shown == null ? cfLink(cfText(row)) : cfEsc(shown);
+  let body;
+  if (shown != null) body = cfEsc(shown);
+  else {
+    const typed = cfShownFor ? cfShownFor(row) : null;
+    body = cfLink(typed != null ? typed : cfText(row));
+  }
   return `<div class="jl jl-${cfEsc(kind)}${extra ? ` ${extra}` : ""}" data-ltext="${cfEsc(cfText(row))}" data-lkind="${cfEsc(kind)}"${lid}>${body}</div>`;
 }
 // A window's labels: the file headers, the hunk line and the git/mode lines. They stay console lines (so a
@@ -484,12 +521,16 @@ function cfDiffHtml(rows, classes, pair, from, to) {
 }
 
 /**
- * The console's file renderer. Rows in, HTML out.
+ * The console's result renderer. Rows in, HTML out.
  * @param rows - [{ kind, text, lid }] in draw order.
  * @param opts.tool - the tool this run came from ("" when the caller cannot know).
- * @param opts.arg - that call's argument, for a code box's header.
- * @param opts.codeOpen - a Set of code-box keys the reader has opened; the caller owns it (this stays pure).
- * @param opts.codeKey - the prefix a code box's key is built from (stable across a rebuild).
+ * @param opts.arg - that call's argument, for a box's header.
+ * @param opts.codeOpen - a Set-like of box keys (`has(key)`); the caller owns it (this stays pure). A box is folded
+ *   and a key in the set is one the reader opened; a set that is `openByDefault` inverts that — the box is open and
+ *   `has` answers for it, which is how a box the reader asked for (the whole stored text) is drawn.
+ * @param opts.codeKey - the prefix a box's key is built from (stable across a rebuild).
+ * @param opts.whole - these rows are the whole stored text of a result the reader asked to read, not the head the
+ *   card kept, and the box says so.
  */
 function consoleBodyHtml(rows, opts = {}) {
   const list = Array.isArray(rows) ? rows.filter(Boolean) : [];
@@ -503,19 +544,26 @@ function consoleBodyHtml(rows, opts = {}) {
   const out = [];
   let i = 0;
   while (i < n) {
-    if (CF_DIFF_CLASSES.has(classes[i])) {
+    // ONE BOX PER RESULT, even when the result is not one kind of thing. A `git show` hands the console a commit
+    // header, then a diff, then sometimes a trailing summary, and a diff run used to end the box: the reader got a
+    // "terminal output" box and a second "terminal · file" box for the one call. So the run that becomes one box
+    // continues across BOTH shapes — a result's own line, a diff line — and stops where a result stops: at the next
+    // `↳ tool` header, at a note, or at a line that is not the tool's own output (cfBoxable says which).
+    const isBoxPart = (k) => CF_DIFF_CLASSES.has(classes[k]) || cfBoxable(list, classes, k);
+    if (isBoxPart(i)) {
       let end = i;
-      while (end < n && CF_DIFF_CLASSES.has(classes[end])) end++;
-      out.push(cfDiffHtml(list, classes, pair, i, end));
-      i = end;
-      continue;
-    }
-    if (classes[i] === "code") {
-      let end = i;
-      while (end < n && classes[end] === "code") end++;
-      out.push(cfCodeBox(list.slice(i, end), i, file, opts, open));
-      i = end;
-      continue;
+      let solid = 0;
+      while (end < n && isBoxPart(end)) {
+        if (cfText(list[end]).trim()) solid++;
+        end++;
+      }
+      // A run that is nothing but blanks has nothing to put in a box; it falls through and is drawn as the blank
+      // lines it is.
+      if (solid > 0) {
+        out.push(cfResultBox(list, classes, pair, i, end, file, opts, open));
+        i = end;
+        continue;
+      }
     }
     // The panel's own fold, as the button that opens it. Which result it names is read, in order of how much
     // the answer is worth:
@@ -541,21 +589,98 @@ function consoleBodyHtml(rows, opts = {}) {
   return out.join("");
 }
 
-function cfCodeBox(rows, at, file, opts, open) {
+// A row that belongs INSIDE a result's box: a tool's own output (never a call, a sentence or a panel note), that is
+// not the result's header line and not a note under it. Those two stay outside — see the module header — so they are
+// drawn as the lines and the button they have always been. A diff row is not judged here (it is never "plain"), but
+// it does not end a box either: consoleBodyHtml takes a run of diff rows as part of the same result, so one call
+// that prints a header, a diff and a summary is still one box.
+function cfBoxable(list, classes, k) {
+  if (!cfEligible(list[k])) return false;
+  if (classes[k] !== "plain" && classes[k] !== "code") return false;
+  const t = cfText(list[k]);
+  return !CF_NOTE_RE.test(t) && !CF_RESULT_HEAD_RE.test(t);
+}
+
+// "3 lines", "1 line".
+const cfCount = (n) => `${n} line${n === 1 ? "" : "s"}`;
+
+// The one frame. `kind` says what is in it (a file's body, a diff, anything else), `at` is the index of its first
+// row in the rows the caller handed over — with the caller's `codeKey` that is the box's key, the handle the
+// reader's open state is kept under across a repaint. The key is also why a box grows in place while its result is
+// still arriving: the run starts at the same row every time, only its length changes.
+function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open }) {
   const key = `${String(opts.codeKey || "")}|${at}`;
   const isOpen = Boolean(open && open.has(key));
-  const name = file && file.file ? cfTailPath(file.file) : "";
-  const what = name ? `${cfEsc(opts.tool || "output")} · ${cfEsc(name)}` : cfEsc(opts.tool || "output");
-  const count = `${rows.length} line${rows.length === 1 ? "" : "s"}`;
-  const title = file && file.file ? ` title="${cfEsc(file.file)}"` : "";
+  // A set that is open BY DEFAULT keeps the boxes the reader shut; the click handler has to know which of the two
+  // sets to write, and the box is where that is stated.
+  const inverted = Boolean(open && open.openByDefault);
   return (
-    `<div class="code-box${isOpen ? " is-open" : ""}">` +
-    `<button type="button" class="code-head" data-code-fold="1" data-code-key="${cfEsc(key)}" aria-expanded="${isOpen ? "true" : "false"}"${title}>` +
-    `<span class="code-caret">${isOpen ? "▾" : "▸"}</span><span class="code-what">${what}</span>` +
-    `<span class="code-n">${count}</span><span class="code-hint">click to read</span></button>` +
-    `<div class="code-body"${isOpen ? "" : " hidden"}>${rows.map((r) => cfLine(r)).join("")}</div>` +
+    `<div class="code-box is-${kind}${isOpen ? " is-open" : ""}">` +
+    `<button type="button" class="code-head" data-code-fold="1" data-code-key="${cfEsc(key)}"${inverted ? ' data-code-inverted="1"' : ""} aria-expanded="${isOpen ? "true" : "false"}"${title ? ` title="${cfEsc(title)}"` : ""}>` +
+    `<span class="code-caret">${isOpen ? "▾" : "▸"}</span><span class="code-what">${cfEsc(what)}</span>${delta}` +
+    `<span class="code-n">${cfCount(rows)}</span><span class="code-hint">${isOpen ? "click to fold" : "click to read"}</span></button>` +
+    `<div class="code-body"${isOpen ? "" : " hidden"}>${body}</div>` +
     `</div>`
   );
+}
+
+// A result's box. Whatever the result is made of — a shell transcript, a file's body, a search, a skill's lines, a
+// diff, or a mix of a diff with the plain lines around it — it is ONE frame, and what sits inside it is whatever each
+// run of rows is: a unified diff keeps its framed windows (one per hunk), anything else is its own lines. The parts
+// are drawn in the order they arrived, so a `git show`'s commit header stays above its diff instead of being lifted
+// into a box of its own ahead of it.
+//
+// The header carries what the whole result has: the file the diff names (the new side, unless that is /dev/null),
+// else the file the call was handed, its line count, and — when the result carries a diff — what it adds and removes,
+// so a shut box still says how big the change was. The box is the only frame: the windows lose their own border in
+// the stylesheet.
+function cfResultBox(list, classes, pair, from, to, file, opts, open) {
+  const parts = [];
+  let adds = 0;
+  let dels = 0;
+  let plus = "";
+  let minus = "";
+  let diff = false;
+  let k = from;
+  while (k < to) {
+    if (CF_DIFF_CLASSES.has(classes[k])) {
+      let end = k;
+      while (end < to && CF_DIFF_CLASSES.has(classes[end])) end++;
+      parts.push(cfDiffHtml(list, classes, pair, k, end));
+      diff = true;
+      for (let j = k; j < end; j++) {
+        const c = classes[j];
+        if (c === "add") adds++;
+        else if (c === "del" || c === "mod") dels++;
+        else if (c === "fileplus" && !plus) plus = cfDiffFile(list[j]);
+        else if (c === "fileminus" && !minus) minus = cfDiffFile(list[j]);
+      }
+      k = end;
+      continue;
+    }
+    const lines = [];
+    let end = k;
+    while (end < to && !CF_DIFF_CLASSES.has(classes[end])) {
+      lines.push(cfLine(list[end]));
+      end++;
+    }
+    parts.push(lines.join(""));
+    k = end;
+  }
+  const tool = String(opts.tool || "");
+  // The new side's name when the diff has one; the old side's unless that is /dev/null (a file the change creates);
+  // the call's own argument for a tool that is handed the file (patch, write_file) when the diff names neither; and
+  // for a result with no diff at all, the file the CALL printed.
+  let name = plus || (minus && minus !== "/dev/null" ? minus : "");
+  if (!name && diff && (tool === "patch" || tool === "write_file") && opts.arg) name = String(opts.arg);
+  if (!name && file && file.file) name = String(file.file);
+  let what = name ? `${tool || (diff ? "diff" : "output")} · ${cfTailPath(name)}` : diff ? tool || "diff" : tool ? `${tool} output` : "output";
+  if (opts.whole) what = `${what} · full result`;
+  const delta = diff
+    ? `<span class="code-delta" title="${adds} added, ${dels} removed">` +
+      `<span class="is-add">+${adds}</span><span class="is-del">\u2212${dels}</span></span>`
+    : "";
+  return cfBox({ kind: diff ? "diff" : name ? "file" : "out", at: from, rows: to - from, what, title: name, delta, body: parts.join(""), opts, open });
 }
 
 window.WMApp = window.WMApp || {};
@@ -575,4 +700,7 @@ window.WMApp.core.consoleFormat = {
   // The fold note's own sentence, shared so the server's push (lib/jobs/console-lines.js) and this matcher cannot
   // drift apart — a harness drives both against the same string.
   foldText: foldNoteText,
+  // The page's word pacer, so a line that is still being written is drawn up to the words that may be shown now
+  // (the lines of a skill the agent is loading, typed out like its prose). Without it every row is drawn whole.
+  setShownFor: consoleSetShownFor,
 };

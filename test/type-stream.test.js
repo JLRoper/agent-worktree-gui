@@ -266,3 +266,40 @@ test("a flood of lines cannot turn into a stall", () => {
   assert.ok(b.released.length >= 20, `the overflow went out, saw ${b.released.length}`);
   assert.equal(b.released[0], "line 0", "and it went out oldest first");
 });
+// A skill's result is the third kind of output written through the pacer, after the agent's prose and its reasoning.
+// Which results those are is ONE predicate, so widening it (or narrowing it) is a visible one-line change with a test.
+test("the results written like prose are the skill tools', and no other tool's", () => {
+  const { isPacedTool } = globalThis.wtType;
+  for (const name of ["skill_view", "skills_list", "skill_manage", "Skill_View", " skill_view "]) {
+    assert.equal(isPacedTool(name), true, `${name} is a skill`);
+  }
+  for (const name of ["terminal", "read_file", "patch", "search_files", "memory", "todo_list", "tool_search", "browser_exec", "", null, undefined]) {
+    assert.equal(isPacedTool(name), false, `${String(name)} is drawn whole`);
+  }
+});
+
+test("a skill's lines type out together, each on its own words-a-second, and the turn's end releases the rest", () => {
+  // Forty lines of a SKILL.md join the console at once. Every line is its own pacer entry: they all start typing
+  // together and the longest decides how long the dump takes, rather than the forty queueing behind each other.
+  const b = bench({ words: 20 });
+  const line = (i) => Array.from({ length: 30 }, (_, k) => `w${i}x${k}`).join(" ");
+  for (let i = 0; i < 40; i++) assert.equal(b.pacer.feed(`s${i}`, "job", line(i)), "", "nothing is drawn before the first word is due");
+  b.step(500);
+  for (let i = 0; i < 40; i++) {
+    const shown = b.pacer.shownFor(`s${i}`);
+    assert.ok(shown.length > 0 && shown.length < line(i).length, `line ${i} is part-way at 0.5 s: ${shown.length} of ${line(i).length}`);
+    assert.ok(line(i).startsWith(shown), "what is drawn is an exact prefix of the line");
+  }
+  b.step(1500);
+  for (let i = 0; i < 40; i++) assert.equal(b.pacer.shownFor(`s${i}`), line(i), `line ${i} is whole after 30 words at 20/s`);
+
+  // The turn ends in the middle of another dump: nothing may be left in the buffer.
+  const c = bench({ words: 2 });
+  for (let i = 0; i < 5; i++) c.pacer.feed(`k${i}`, "job", line(i));
+  c.step(1000);
+  assert.ok(c.pacer.pendingWords() > 100, "most of it is still waiting at 2 words a second");
+  c.pacer.flushJob("job");
+  for (let i = 0; i < 5; i++) assert.equal(c.pacer.shownFor(`k${i}`), line(i));
+  assert.equal(c.pacer.pendingWords(), 0);
+});
+

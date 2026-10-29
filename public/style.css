@@ -1147,6 +1147,16 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 /* The UA's own [hidden] rule is one attribute selector and loses to a class: without this the folded body
    would render anyway. */
 .code-body[hidden] { display: none; }
+/* Every tool result is one of these boxes (core/console-format.js): its lines, a file's body, or a diff. A diff's
+   framed windows are drawn INSIDE it, so the box is the only frame — the windows give up their own border and the
+   next window is told from the one above by a rule — and what the change adds and removes sits in the header, so a
+   closed box still says how big the change is. */
+.code-box.is-diff > .code-body { padding: 0; }
+.code-box .df-win { margin: 0; border: 0; border-radius: 0; background: transparent; }
+.code-box .df-win + .df-win { border-top: 1px solid var(--line); }
+.code-delta { flex: none; display: inline-flex; gap: 6px; }
+.code-delta .is-add { color: #7ee787; }
+.code-delta .is-del { color: #ff9c94; }
 
 /* The panel's own fold, at the foot of a result the card kept only the head of: "… 214 lines hidden — click to
    read". It is a button because the rest of the result is one click away (the session store has it verbatim), and

@@ -481,6 +481,26 @@ function policyForProjectPath(projectPath, project = null) {
   return policyForProject(found, config.remoteBranchPolicy);
 }
 
+// The project a tree belongs to: what a REPLY's brief needs in order to quote the right policy and the right remote.
+// The panel's own guard record names the project of every tree it cut; a tree it did not cut sits under its project's
+// directory, so the longest project path that prefixes it is the second answer. null = nobody owns it, and the global
+// policy applies.
+function projectOfTree(dir) {
+  const key = guardPathKey(dir);
+  if (!key) return null;
+  const recorded = guardRecord.trees[normTree(dir)]?.projectPath;
+  if (recorded) {
+    const hit = registry.projects.find((p) => guardPathKey(p.path) === guardPathKey(recorded));
+    if (hit) return hit;
+  }
+  let best = null;
+  for (const p of registry.projects) {
+    const pk = guardPathKey(p.path);
+    if (pk && (key === pk || key.startsWith(`${pk}/`)) && (!best || pk.length > guardPathKey(best.path).length)) best = p;
+  }
+  return best;
+}
+
 // Install (or refresh) the guard for ONE worktree and remember it. Called the moment the panel cuts a tree, and by
 // the Settings button for trees that predate this feature.
 async function installGuardFor({ projectPath, worktree, branch = null, landing = false, project = null }) {
@@ -2701,6 +2721,7 @@ const server = createServer(async (req, res) => {
         }
       }
       const origin = body.origin && typeof body.origin === "object" ? body.origin : null;
+      const home = projectOfTree(dir);
       const job = await jobs.create({
         prompt: text,
         thread: first.thread,
@@ -2716,6 +2737,11 @@ const server = createServer(async (req, res) => {
         yolo: body.yolo ?? first.yolo,
         // A reply continues the SAME agent, so it keeps the tree that agent was created for.
         ownerPath: first.ownerPath || null,
+        // …and the paragraph about where that tree's branch goes has to quote the policy of ITS project, and its remote,
+        // the way the spawn did. A reply that carried neither fell back to the global default and told a worker in a
+        // project that ALLOWS pushes that a push "will park and then fail".
+        branchPolicy: policyForProjectPath(home?.path || dir, home),
+        remote: home?.remote || null,
       });
       // A delivery turn closes the offer on the turn it answers, for every reader and every reload.
       if (origin && origin.fromTurn) jobs.markCollected(origin.fromTurn, job.id);

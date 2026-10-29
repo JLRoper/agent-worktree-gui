@@ -34,8 +34,15 @@ that stops a push today is the instruction the tree was cut with.
 
 The same line carries `guardTail`, one sentence on what the guard will do — "a push is not asked about" under
 `allow`, "will park and then fail" under `local-only`, "will fail" under `deny`. The parent is read from the panel's
-record at cut time, never assumed; when it cannot be read the line is omitted and the worker falls back to the
-blanket rule.
+record at cut time, never assumed, and it is a branch NAME: the ref `git worktree add` was told to cut from, `main`
+included. (The parent book's own record is an object whose `parent` is null for a tree cut from main, because main is
+not a branch to roll up into — handing that record over is how a brief once said "cut from `[object Object]`" and told
+a tree in a project that allows pushes to merge locally and not push.) The record is filed under the tree's six-hex
+tag, so it survives the panel renaming the tree's branch, and a reply's brief carries the tree's project policy and
+remote just as the first turn's did (`POST /api/agents/reply`). When the parent still cannot be read the line is
+omitted and the worker falls back to the blanket rule, which follows the policy too: `LOCAL-ONLY` under `local-only`,
+`REMOTE WRITES ALLOWED` under `allow` (a worker still pushes only when the reader asks or the work is meant to land),
+`NO REMOTE WRITES` under `deny`.
 
 This is advice. The panel cannot see inside a worker's shell, which is why gates 3 and 4 exist.
 
