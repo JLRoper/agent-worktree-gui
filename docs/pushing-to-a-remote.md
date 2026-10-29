@@ -179,6 +179,27 @@ remote. And its only bypass actor is `RepositoryRole` 5 (**admin**) with `bypass
 else, and every non-admin token, from rewriting `main`. This repo has no CI, so nothing else checks a branch at PR
 time.
 
+## 9. Where a lane lands, and why a local `main` is not it
+
+The ruleset in section 8 is the reason. `required_linear_history` means the only shape `origin/main` accepts from a
+lane is a squash or a rebase, and `non_fast_forward` means whatever gets there cannot be rewritten afterwards. A
+local `main` that lanes are merged into is therefore a dead end: its merge commits cannot be pushed, and the next
+lane cut from it carries every one of them into its pull request.
+
+Measured on 2026-10-28: local `main` was 33 commits ahead of `origin/main`, 16 of them merge commits from 15 lane
+branches (28 files, 5,423 insertions), and `origin/main` was an ancestor — a clean fast-forward. The push would have
+been accepted only through the admin bypass, and it would have put 16 merge commits on the branch whose rule exists
+to keep them off it.
+
+So:
+
+- a lane branch is cut from `origin/main`, and `git fetch` plus `git rebase origin/main` is how it stays current;
+- a lane lands as a pull request that is squashed on `main`; nothing is merged into the local `main`;
+- a local `main` that has already drifted is not repaired by pushing it. It is replaced (`git reset --hard
+  origin/main`) only after every lane it carries has landed through a pull request, because the rewrite changes
+  every worktree's base and every lane branch's ancestry. That is a stopping-the-panel operation, never something a
+  lane does to itself.
+
 ## What is NOT in the way
 
 - `git push --no-verify` skips the guard AND the chained version gate, in one flag.
