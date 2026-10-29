@@ -40,6 +40,7 @@
       "mainBranch": "main",
       "prRepo": "JLRoper/agent-worktree-gui",
       "remoteBranchPolicy": "allow",
+      "releaseWorktrees": true,
       "worktrees": null
     }
   ]

@@ -10723,7 +10723,33 @@ function detailHtml(row) {
   // Ten columns, not nine: the row-actions cell is the tenth, and a colspan of 9 left the card area short of the
   // table's right edge by that column, so the expanded agent section ended in a bare strip of panel on the right
   // while the left was flush. (The delete confirmation row below already spans 10.)
+  // A RELEASE request a worker asked for (lib/worktrees.js): the tree, when it was asked for, the run that asked, why
+  // it said it was finished, and what the panel's executor answered — `removed`, or `refused: <gate>`. It is one line,
+  // never a block: a reader needs the verdict and the reason, and the gates are named in the sentence. A tree nobody
+  // has asked about has no `release` field and draws nothing here.
+  const rel = row.release || null;
+  const relWhen = rel ? relTime(rel.at || rel.requestedAt) : "";
+  const relState = rel ? String(rel.state || "") : "";
+  const releaseBlock = rel
+    ? `<div class="release-block ${esc(relState)}" data-release="${esc(key)}" title="${esc(
+        [
+          rel.outcome ? `outcome ${rel.outcome}` : "no outcome yet — the executor has not run",
+          rel.detail || null,
+          rel.runId ? `asked by run ${rel.runId}` : null,
+          rel.requestedAt ? `requested ${new Date(rel.requestedAt).toLocaleString()}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      )}">
+        <span class="release-mark">⇢</span>
+        <span class="release-word">release</span>
+        <span class="release-state">${esc(rel.outcome || "requested")}</span>
+        <span class="release-when mono">${esc(relWhen)} ago${rel.runId ? ` · run ${esc(rel.runId)}` : ""}</span>
+        <span class="release-why">${esc(rel.why || "")}</span>
+      </div>`
+    : "";
   return `<tr class="detail" data-detail="${esc(key)}"><td colspan="10"><div class="detail-inner">
+    ${releaseBlock}
     ${descBlock}
     ${todoBlockHtml(row, key)}
     <div class="git-block${gitOpen ? "" : " collapsed"}" data-git-block="${esc(key)}">
