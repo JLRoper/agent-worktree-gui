@@ -32,6 +32,12 @@
 //   driven        the 409 while an agent is running in the tree, against a stub run held live
 //   driven        the ✦'s two requests: /api/worktree/suggest-name (renames nothing) and /api/worktree/rename
 //                 (renames once, keeps the tag, and records the reader as the one who named it)
+//   driven        the name stops moving once the branch has work: a tree whose branch already carries a commit of its
+//                 own keeps its directory AND its branch through a real title sweep (the refusal is written into the
+//                 ledger, and the row does not claim to have been named), with a no-commits control tree renamed by
+//                 the same sweeper in the same window so "untouched" cannot mean "asleep"
+//   driven        a published branch is never renamed: the harness pushes a worktree's branch to a bare remote of its
+//                 own before the panel starts, and the deliberate rename answers 409 naming origin/<branch>
 //   driven        the record: who and when, in the panel's own tree-names.json, and the same on the board's row
 //   inspected     the browser half — the ✦ button, its confirm box and the release-time click handling live in
 //                 public/app.js; this script drives the two HTTP requests behind them and asserts their answers,
@@ -266,6 +272,27 @@ git(repo, ["add", "."]);
 git(repo, ["-c", "user.name=verify", "-c", "user.email=verify@localhost", "commit", "-q", "-m", "first"]);
 const PROJECT = "sandbox-repo";
 
+// A REMOTE, so the "a published name is not the panel's to move" half is DRIVEN rather than inspected. It is a bare
+// repository beside the sandbox (no network): main is pushed so the project's base ref resolves, and one worktree's
+// branch is pushed on purpose — that tree's name is public, and the panel must refuse to move it.
+const remotePath = path.join(dir, "remote.git");
+const PUB_TAG = "beef01";
+const PUBLISHED_TREE = path.join(repo, ".worktrees", `published-before-the-panel-${PUB_TAG}`);
+const PUBLISHED_BRANCH = `wtgui/published-before-the-panel-${PUB_TAG}`;
+// `-c core.hooksPath=` so the panel's push guard (installed into this repo when it cuts a worktree) never runs for the
+// harness's own setup: the guard is what a WORKER's push meets, and these are fixtures, not work leaving the box.
+const push = (args) => git(repo, ["-c", "core.hooksPath=", "push", "-q", ...args]);
+git(repo, ["init", "-q", "--bare", remotePath]);
+git(repo, ["remote", "add", "origin", remotePath.replace(/\\/g, "/")]);
+check("the sandbox repo has a remote to publish to", push(["origin", "main"]).ok, true);
+check(
+  "a tree cut by hand, whose branch is already on the remote",
+  git(repo, ["worktree", "add", "-q", "-b", PUBLISHED_BRANCH, PUBLISHED_TREE]).ok &&
+    commit(PUBLISHED_TREE, { "published.txt": "pushed before the panel saw it\n" }, "land something on a published branch") &&
+    push(["-u", "origin", PUBLISHED_BRANCH]).ok,
+  true,
+);
+
 const stub = makeStub();
 await new Promise((r) => stub.server.listen(0, "127.0.0.1", r));
 const stubUrl = `http://127.0.0.1:${stub.server.address().port}`;
@@ -367,9 +394,13 @@ const settledRecord = async (treePath) => {
   return recordFor(treePath);
 };
 // The one tree of the sandbox repo whose directory name is not the project root and is not `except` — how a phase
-// finds "the tree that run N got" without depending on the exact slug the panel built.
+// finds "the tree that run N got" without depending on the exact slug the panel built. The tree this harness cut by
+// hand (and published) is never one of them: every phase that counts trees is counting what the PANEL's naming did,
+// and that tree was never the panel's to name.
 const treesExcept = (except = []) =>
-  listTrees(repo).filter((t) => norm(t.path) !== norm(repo) && !except.some((e) => norm(e) === norm(t.path)));
+  listTrees(repo).filter(
+    (t) => norm(t.path) !== norm(repo) && norm(t.path) !== norm(PUBLISHED_TREE) && !except.some((e) => norm(e) === norm(t.path)),
+  );
 const treeByTag = (tag, except = []) => treesExcept(except).find((t) => tagOf(t.path) === tag) || null;
 // The panel offers a run's title to a tree ONCE per process (`sweepTitles` sets its per-job flag on the first emit),
 // so an attempt that arrives before the tree has been scanned into the store is simply lost. Seed the title only
@@ -614,6 +645,64 @@ try {
   check("an unknown project is refused", unknownProject.status, 404);
   check("the ledger has one record per tree it has named", Object.keys(ledger().trees || {}).length, 2);
   ok("each of them names who and when", Object.values(ledger().trees || {}).every((r) => r.by && r.at && r.tag), JSON.stringify(Object.values(ledger().trees || {}).map((r) => r.by)));
+  // =============================================================================================
+  phase = "phase 6 — the name stops moving once the branch has work";
+  console.log(`\n== ${phase}`);
+  // A tree the panel cuts, whose run commits BEFORE its title arrives. The old rule renamed it at the end of that
+  // turn — on the live board, 95 seconds after the tree's second commit, leaving a directory named one thing and a
+  // branch named another. The rule now: the automatic half never moves a name that work already sits on.
+  const THREAD4 = "wtgui-sandbox-run-four";
+  const spawn4 = await api("/api/agents", { project: PROJECT, cwd: repo, prompt: "Page the team when the sweep finds work", thread: THREAD4 });
+  check("a fourth run was accepted", spawn4.status, 202);
+  const cut4 = spawn4.body.job?.worktreePath || null;
+  ok("it got a tree of its own", Boolean(cut4) && existsSync(cut4), cut4 || "");
+  if (!cut4) throw new Error("run four got no worktree");
+  const tag4 = tagOf(cut4);
+  check(
+    "its branch carries a commit of its own before any title is offered",
+    commit(cut4, { "docs/retention-paging.md": "page the team\n" }, "page the team when the retention sweep finds work"),
+    true,
+  );
+  check("…one commit ahead of main", git(repo, ["rev-list", "--count", `main..${branchOf(cut4)}`]).out, "1");
+  await rowExists(cut4);
+  seedSession(THREAD4, "Page the team when the retention sweep finds work");
+  const refusedName = await waitFor(() => Boolean(recordFor(cut4)?.skipped), { timeoutMs: 40_000, what: "the naming refusal to be written down" });
+  const rec4 = recordFor(cut4);
+  ok("the automatic rename refused, and wrote the refusal down so the sweeper stops asking", refusedName && rec4?.skipped === true, JSON.stringify(rec4 && { skipped: rec4.skipped, how: rec4.how }));
+  ok("…in the tree's own terms", /already carries 1 commit of its own/.test(String(rec4?.how || "")), String(rec4?.how || ""));
+  check("the directory is where it was cut", norm(treesExcept().find((t) => tagOf(t.path) === tag4)?.path), norm(cut4));
+  check("the branch is the branch it was cut with", branchOf(cut4), `wtgui/${baseOf(cut4)}`);
+  check("and the board does not claim the tree was named", (await rowFor(cut4))?.named ?? null, null);
+
+  // The positive control in the same window: a tree with NO commits of its own, its title read by the same sweeper.
+  const THREAD5 = "wtgui-sandbox-run-five";
+  const spawn5 = await api("/api/agents", { project: PROJECT, cwd: repo, prompt: "Chart the sweep's backlog", thread: THREAD5 });
+  check("the control run was accepted", spawn5.status, 202);
+  const cut5 = spawn5.body.job?.worktreePath || null;
+  const tag5 = tagOf(cut5);
+  ok("the control tree exists", Boolean(cut5) && existsSync(cut5), cut5 || "");
+  if (!cut5) throw new Error("the control run got no worktree");
+  await rowExists(cut5);
+  seedSession(THREAD5, "Chart the retention sweep's backlog");
+  const control5 = await awaitAutoName(cut5, tag5, [cut5]);
+  // The control is "the same sweeper acted on a no-commits tree in this window", read from the ledger rather than from
+  // one outcome: a moved directory gives `control5`, and a directory another process held (so only the branch moved)
+  // still leaves the record the rename writes. Silence is the only outcome that fails it.
+  const controlTree5 = treeByTag(tag5, [cut5]);
+  const controlRec5 = recordFor(controlTree5?.path || cut5);
+  ok(
+    "a tree with no commits of its own WAS acted on in the same window — the refusal above is the rule, not a sleep",
+    control5 || Boolean(controlRec5),
+    control5 ? "renamed, directory and all" : controlRec5 ? `branch renamed (moved: ${controlRec5.moved})` : "no record at all",
+  );
+
+  // The published half: the tree this harness cut and pushed before the panel started. Its name is on the remote.
+  const pubRow = await rowExists(PUBLISHED_TREE);
+  ok("the published tree is a row of the board", pubRow);
+  const pubRename = await api("/api/worktree/rename", { project: PROJECT, path: PUBLISHED_TREE, name: "a name the remote has never heard of", by: "verify" });
+  check("renaming a published branch is refused", pubRename.status, 409);
+  ok("…naming the remote ref it is already on", /already on the remote \(origin\/wtgui\/published-before-the-panel-beef01\)/.test(String(pubRename.body.error || "")), String(pubRename.body.error || ""));
+  check("…and the directory and the branch are untouched", [existsSync(PUBLISHED_TREE), branchOf(PUBLISHED_TREE)], [true, PUBLISHED_BRANCH]);
 } catch (err) {
   failures += 1;
   console.log(`FAIL  ${phase}: ${String((err && err.stack) || err)}`);
