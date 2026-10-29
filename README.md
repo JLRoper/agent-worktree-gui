@@ -41,6 +41,13 @@ The two gateway-connected bits are Windows-flavoured and degrade elsewhere:
 `● board` liveness signals read `netstat` / `tasklist`, so off Windows those two signals simply stay
 dark — everything else works.
 
+There are 50+ `tools/verify-*.mjs` harnesses, one per claim, and each is still a program: it boots what it
+needs, prints what it measured and exits non-zero when the claim failed. `node tools/verify.mjs --list` says
+what is there, `--only <substr>` runs the ones about a subject, `--all` runs every one with a per-harness
+timeout — so a claim is one command away instead of a remembered file name. A browser harness resolves
+Playwright through `tools/browser.mjs` (`PANEL_PLAYWRIGHT_ROOT` when it lives outside the repo) and
+`withBrowser()` closes the browser even when the harness throws.
+
 `node tools/verify-verdicts.mjs [project]` re-derives every row's merge verdict straight from git and
 diffs it against the panel (exit 1 on any mismatch) — useful after touching the scan logic.
 
