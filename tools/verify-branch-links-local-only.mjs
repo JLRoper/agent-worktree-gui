@@ -21,6 +21,7 @@
 // read rather than driven is the URL policy table (phase 2) — that is a pure function over the four URL forms a
 // real remote uses, and it is called directly rather than observed through the panel.
 import { createRequire } from "node:module";
+import { loadPlaywright as sharedLoadPlaywright } from "./browser.mjs";
 import { createServer } from "node:http";
 import { execFile, execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -594,22 +595,13 @@ async function phase8MergeAsksFirst() {
 // ---------------------------------------------------------------------------------------------------------------
 // the browser half: the CELL as it is really rendered, and the click not firing the row's own gesture
 // ---------------------------------------------------------------------------------------------------------------
+// The lookup is shared (tools/browser.mjs): PANEL_PLAYWRIGHT_ROOT, PLAYWRIGHT_ROOT, the repo, the cwd and the
+// Windows global prefix, in one place instead of one copy per harness. Memoised so the phases that ask twice do not
+// resolve twice.
+let loadedPlaywright = null;
 function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, REPO, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    for (const candidate of [path.join(root, "node_modules", "playwright"), root]) {
-      try {
-        return require(candidate);
-      } catch {
-        /* not there */
-      }
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
+  if (loadedPlaywright === null) loadedPlaywright = sharedLoadPlaywright() || false;
+  return loadedPlaywright || null;
 }
 
 async function phase9Browser() {

@@ -9,14 +9,12 @@
 //   node harness/playwright-lane-c/verify.mjs [--base http://127.0.0.1:7331] [--out <dir>] [--project <name>]
 //
 // Exit code is 0 when every pinned check passes, 1 otherwise (the report carries the detail either way).
-import { createRequire } from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
-// playwright is installed globally (npm -g) and this repo has no node_modules of its own; ESM does not honour
-// NODE_PATH, so it is resolved through a CJS require rooted at the global module directory.
-const require = createRequire(process.env.WTGUI_GLOBAL_MODULES || "C:/Users/roper/AppData/Roaming/npm/node_modules/");
-const { chromium } = require("playwright");
+// Where playwright lives, and what to say when it does not: one bootstrap for every harness (tools/browser.mjs)
+// instead of a copy of the lookup in each file.
+import { loadPlaywright, notRun } from "../../tools/browser.mjs";
 
 const args = Object.fromEntries(
   process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith("--") ? [...acc, [a.slice(2), all[i + 1]]] : acc), []),
@@ -41,7 +39,12 @@ const byKey = new Map();
 for (const p of state.projects || []) for (const w of p.worktrees || []) byKey.set(rowKey(p.name, w), { project: p, row: w });
 
 // ---- the page --------------------------------------------------------------------------------
-const browser = await chromium.launch();
+const playwright = loadPlaywright();
+if (!playwright) {
+  console.log(notRun("the branch and PR cells", "no Playwright install found — set PANEL_PLAYWRIGHT_ROOT to a directory holding node_modules/playwright"));
+  process.exit(2);
+}
+const browser = await playwright.chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 1760, height: 1000 }, deviceScaleFactor: 2 });
 page.on("pageerror", (e) => results.failures.push({ where: "page", error: String(e) }));
 await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
