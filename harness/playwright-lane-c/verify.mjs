@@ -171,9 +171,22 @@ const unknownPlain = unknownPlainRows.find(([, v]) => String(v.project.fetchNote
 const unknownLink = unknownRows.find(([, v]) => v.row.branchUrl) || null;
 const prPick = prRows.find(([, v]) => isWorktree(v)) || prRows[0];
 
+// A state the board does not offer is REPORTED, not thrown on. `gonePick[0]` on an undefined pick is a TypeError, and
+// that is exactly what a board whose every branch is pushed — or one with no worktree at all — used to get instead of
+// a verdict. The unknown pins were conditional from the start; every pin is now, and the run says which states it
+// could not judge instead of passing a half it never saw.
+const SKIPPED = [];
+const pin = (id, pick, kind, expect) => {
+  if (!pick) {
+    SKIPPED.push({ id, why: `no row on this board is in the \`${id}\` state` });
+    return [];
+  }
+  return [{ id, kind, key: pick[0], expect }];
+};
+
 const PINNED = [
-  { id: "exists", kind: "exists", key: existsPick[0], expect: "a link to the branch page, no local chip" },
-  { id: "gone", kind: "gone", key: gonePick[0], expect: "a LOCAL chip and the sentence that the remote does not list it" },
+  ...pin("exists", existsPick, "exists", "a link to the branch page, no local chip"),
+  ...pin("gone", gonePick, "gone", "a LOCAL chip and the sentence that the remote does not list it"),
   ...(unknownPlain
     ? [{ id: "unknown", kind: "unknown-plain", key: unknownPlain[0], expect: "an UNVERIFIED chip quoting the project's fetchNote, never a local chip" }]
     : []),
@@ -181,6 +194,7 @@ const PINNED = [
     ? [{ id: "unknown-link", kind: "unknown-link", key: unknownLink[0], expect: "no local chip; the link says the remote itself was not asked" }]
     : []),
 ];
+if (!unknownPlain && !unknownLink) SKIPPED.push({ id: "unknown", why: "no row on this board is in the `unknown` state" });
 
 const api = Object.fromEntries(PINNED.map((p) => [p.key, byKey.get(p.key)]));
 
@@ -456,6 +470,7 @@ results.totals = {
   failed: allChecks.filter((c) => !c.ok).length,
   sweepFailures,
   pinned: results.pinned.length,
+  skippedStates: SKIPPED.map((s) => s.id),
   prRows: prRows.length,
   refreshUnchanged: results.refresh.every((r) => r.cellUnchanged && r.apiUnchanged),
   sweepLocalOnRemoteBacked: sweep.localOnRemoteBacked.length,
@@ -467,6 +482,8 @@ writeFileSync(path.join(OUT, "results.json"), JSON.stringify(results, null, 1));
 
 console.log(`base ${BASE}`);
 console.log(`opened ${opened} collapsed project section(s); rows in API ${allKeys.length}, drawn ${allKeys.length - sweep.missingFromDom.length}`);
+// What this board could not show. A skipped state is not a pass: it is the harness saying the claim was not judged.
+for (const s of SKIPPED) console.log(`\n[skipped] ${s.id}: ${s.why} — that claim was NOT judged by this run`);
 for (const p of results.pinned) {
   console.log(`\n[${p.id}] ${p.project} · ${p.branch} · remoteBranch=${p.remoteBranch}`);
   console.log(`  cell: ${JSON.stringify(p.cell && { text: p.cell.text, href: p.cell.href, chip: p.cell.chipVisibleText, title: (p.cell.chipTitle || p.cell.title || "").slice(0, 130) })}`);

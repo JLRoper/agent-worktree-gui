@@ -38,5 +38,8 @@ Notes that cost time:
 - The page's model is `state.rows` (a `Map` keyed `project::path`) and `state.expandedProjects` (a `Set`), not the
   `/api/state` payload's shape. The "no branch" fixture inserts a row there and calls `renderProjectRows(project)`;
   no live row has an empty branch, and creating a detached worktree for one would write product state.
+- A state the board does not offer is reported as `[skipped]`, never thrown on and never counted as a pass: a board
+  whose every branch is pushed has no `gone` row, and pinning one used to die with `Cannot read properties of
+  undefined`. Judge the exit code together with the `[skipped]` lines — each names a claim this run did NOT judge.
 - The screenshot of a cell is evidence of the word, not of the `href` — read the attribute, and follow the link
   separately if the claim is that its page exists.
