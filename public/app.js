@@ -4052,7 +4052,7 @@ function conversationHtml(conv) {
       <span class="mono dimmer thread-name" data-thread-name="${esc(thread)}" data-label="${esc(latest.label || "")}" title="${latest.label ? esc(`${latest.label} — Hermes thread ${thread}`) : "Hermes session thread — continue it any time"}">${esc(latest.label || thread)}</span>
       <button class="btn-pin${state.anchorThread === thread ? " is-on" : ""}" data-pin-thread="${esc(thread)}" type="button" title="${state.anchorThread === thread ? "this card holds its place while anything above it grows — click to release" : "pin this card: hold its place on screen while other cards above it grow (one pin at a time)"}">\u{1F4CC}</button>
       <button class="btn-think${thinkingOn(thread) ? " is-on" : ""}" data-think-thread="${esc(thread)}" type="button" title="${thinkingOn(thread) ? "showing this session's reasoning — open live while a turn runs, folded afterwards. click to hide it" : "show this session's reasoning: live and open while a turn runs, folded per turn afterwards (read from the session store)"}">🧠</button>
-      <button class="btn-stream${streamOn(thread) ? " is-on" : ""}" data-stream-thread="${esc(thread)}" type="button" aria-pressed="${streamOn(thread) ? "true" : "false"}" title="${streamOn(thread) ? "this session is drawn as ONE stream — reasoning, tool calls, their output and the agent's own words in the order they happened, nothing folded. click to go back to the separate thinking block and the condensed tool groups" : "draw this session as ONE stream: what the agent thought, said, called and got back, in the order it happened, with nothing folded (reasoning joins it while 🧠 is on; subagents keep their own strip)"}">🌊</button>
+      <button class="btn-stream${streamOn(thread) ? " is-on" : ""}" data-stream-thread="${esc(thread)}" type="button" aria-pressed="${streamOn(thread) ? "true" : "false"}" title="${streamOn(thread) ? "this session is drawn as ONE stream — reasoning, tool calls, their output and the agent's own words in the order they happened, with no burst to open; each result is still the shut box it is everywhere else. click to go back to the separate thinking block and the condensed tool groups" : "draw this session as ONE stream: what the agent thought, said, called and got back, in the order it happened, with no burst to open — each result is still the shut box it is everywhere else, so a call's output is one click away (reasoning joins it while 🧠 is on; subagents keep their own strip)"}">🌊</button>
       <button class="btn-rename" data-rename-thread="${esc(thread)}" type="button" title="rename this session — a label for the panel only; the Hermes thread id never changes">\u270e</button>
       <button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>
       <button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>
@@ -5948,8 +5948,10 @@ function setThinking(thread, on) {
 
 // ---- one stream ------------------------------------------------------------------------------
 // The 🌊 beside the 🧠: draw this session as ONE stream — what the agent thought, said, called and got back, in the
-// order it happened, nothing folded. Per session like thinking, but with no global default: a card that never
-// pressed it renders exactly as it always did, which is what every card did before this existed.
+// order it happened, with no burst to open. What is NOT folded there is the run of calls itself: a result is still the
+// shut box it is in the condensed view (core/console-format.js), so the stream is one flow of what happened rather
+// than a wall of output. Per session like thinking, but with no global default: a card that never pressed it renders
+// exactly as it always did, which is what every card did before this existed.
 const STREAM_KEY = "wtgui.stream";
 
 // NOT `setStream`. That name is already core/sse.js's connection label (the ● live / offline pill, called from
