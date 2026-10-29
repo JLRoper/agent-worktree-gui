@@ -10,9 +10,11 @@
 // folded up until they open it, and then shows the whole result at its full size. So the rule is made here, once:
 //
 //   - a run of a tool's output lines is one box; a unified diff is one box too, and its windows are drawn INSIDE it
-//     (the box is the only frame, the windows lose their own border). The box's header names the tool (and the file,
-//     when the result is one), says how many lines it holds — and for a diff, how many it adds and removes — so a
-//     folded box already says what it is without being read;
+//     (the box is the only frame, the windows lose their own border). A result that MIXES the two — a `git show`'s
+//     commit header, then its diff, then a summary — is still one box: the run continues across both shapes and
+//     stops only at the next `↳ tool` line, at a note, or at a line that is not the tool's own output. The box's
+//     header names the tool (and the file, when the result is one), says how many lines it holds — and for a diff,
+//     how many it adds and removes — so a folded box already says what it is without being read;
 //   - the result's own header line ("↳ patch · 3.27s") and the notes under a result (the gateway's cut sentence, the
 //     panel's own "… 214 lines hidden — click to read" button) are NOT inside it: the first is the console's record
 //     of the result and the second are controls the reader may need while the box is folded;
@@ -542,24 +544,23 @@ function consoleBodyHtml(rows, opts = {}) {
   const out = [];
   let i = 0;
   while (i < n) {
-    if (CF_DIFF_CLASSES.has(classes[i])) {
-      let end = i;
-      while (end < n && CF_DIFF_CLASSES.has(classes[end])) end++;
-      out.push(cfDiffBox(list, classes, pair, i, end, opts, open));
-      i = end;
-      continue;
-    }
-    // A run of the result's own lines — a file's body, a shell transcript, a search, a skill — is one box. Blank
-    // rows inside it are content (a file keeps them); a run that is nothing but blanks has nothing to put in a box.
-    if (cfBoxable(list, classes, i)) {
+    // ONE BOX PER RESULT, even when the result is not one kind of thing. A `git show` hands the console a commit
+    // header, then a diff, then sometimes a trailing summary, and a diff run used to end the box: the reader got a
+    // "terminal output" box and a second "terminal · file" box for the one call. So the run that becomes one box
+    // continues across BOTH shapes — a result's own line, a diff line — and stops where a result stops: at the next
+    // `↳ tool` header, at a note, or at a line that is not the tool's own output (cfBoxable says which).
+    const isBoxPart = (k) => CF_DIFF_CLASSES.has(classes[k]) || cfBoxable(list, classes, k);
+    if (isBoxPart(i)) {
       let end = i;
       let solid = 0;
-      while (end < n && cfBoxable(list, classes, end)) {
+      while (end < n && isBoxPart(end)) {
         if (cfText(list[end]).trim()) solid++;
         end++;
       }
+      // A run that is nothing but blanks has nothing to put in a box; it falls through and is drawn as the blank
+      // lines it is.
       if (solid > 0) {
-        out.push(cfOutputBox(list.slice(i, end), i, file, opts, open));
+        out.push(cfResultBox(list, classes, pair, i, end, file, opts, open));
         i = end;
         continue;
       }
@@ -589,8 +590,10 @@ function consoleBodyHtml(rows, opts = {}) {
 }
 
 // A row that belongs INSIDE a result's box: a tool's own output (never a call, a sentence or a panel note), that is
-// not part of a diff, not the result's header line and not a note under it. Those two stay outside — see the
-// module header — so they are drawn as the lines and the button they have always been.
+// not the result's header line and not a note under it. Those two stay outside — see the module header — so they are
+// drawn as the lines and the button they have always been. A diff row is not judged here (it is never "plain"), but
+// it does not end a box either: consoleBodyHtml takes a run of diff rows as part of the same result, so one call
+// that prints a header, a diff and a summary is still one box.
 function cfBoxable(list, classes, k) {
   if (!cfEligible(list[k])) return false;
   if (classes[k] !== "plain" && classes[k] !== "code") return false;
@@ -621,50 +624,63 @@ function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open 
   );
 }
 
-// Any result that is not a diff: the lines themselves, in the box.
-function cfOutputBox(rows, at, file, opts, open) {
-  const tool = String(opts.tool || "");
-  const name = file && file.file ? cfTailPath(file.file) : "";
-  let what = name ? `${tool || "output"} · ${name}` : tool ? `${tool} output` : "output";
-  if (opts.whole) what = `${what} · full result`;
-  return cfBox({
-    kind: name ? "file" : "out",
-    at,
-    rows: rows.length,
-    what,
-    title: file && file.file ? file.file : "",
-    body: rows.map((r) => cfLine(r)).join(""),
-    opts,
-    open,
-  });
-}
-
-// A unified diff: the same box, with the framed windows (one per hunk) inside it and what the change adds and
-// removes in its header, so a folded diff still says how big the change is. The box is the frame; the windows lose
-// their own border in the stylesheet, so a diff is not a frame inside a frame.
-function cfDiffBox(list, classes, pair, from, to, opts, open) {
+// A result's box. Whatever the result is made of — a shell transcript, a file's body, a search, a skill's lines, a
+// diff, or a mix of a diff with the plain lines around it — it is ONE frame, and what sits inside it is whatever each
+// run of rows is: a unified diff keeps its framed windows (one per hunk), anything else is its own lines. The parts
+// are drawn in the order they arrived, so a `git show`'s commit header stays above its diff instead of being lifted
+// into a box of its own ahead of it.
+//
+// The header carries what the whole result has: the file the diff names (the new side, unless that is /dev/null),
+// else the file the call was handed, its line count, and — when the result carries a diff — what it adds and removes,
+// so a shut box still says how big the change was. The box is the only frame: the windows lose their own border in
+// the stylesheet.
+function cfResultBox(list, classes, pair, from, to, file, opts, open) {
+  const parts = [];
   let adds = 0;
   let dels = 0;
   let plus = "";
   let minus = "";
-  for (let k = from; k < to; k++) {
-    const c = classes[k];
-    if (c === "add") adds++;
-    else if (c === "del" || c === "mod") dels++;
-    else if (c === "fileplus" && !plus) plus = cfDiffFile(list[k]);
-    else if (c === "fileminus" && !minus) minus = cfDiffFile(list[k]);
+  let diff = false;
+  let k = from;
+  while (k < to) {
+    if (CF_DIFF_CLASSES.has(classes[k])) {
+      let end = k;
+      while (end < to && CF_DIFF_CLASSES.has(classes[end])) end++;
+      parts.push(cfDiffHtml(list, classes, pair, k, end));
+      diff = true;
+      for (let j = k; j < end; j++) {
+        const c = classes[j];
+        if (c === "add") adds++;
+        else if (c === "del" || c === "mod") dels++;
+        else if (c === "fileplus" && !plus) plus = cfDiffFile(list[j]);
+        else if (c === "fileminus" && !minus) minus = cfDiffFile(list[j]);
+      }
+      k = end;
+      continue;
+    }
+    const lines = [];
+    let end = k;
+    while (end < to && !CF_DIFF_CLASSES.has(classes[end])) {
+      lines.push(cfLine(list[end]));
+      end++;
+    }
+    parts.push(lines.join(""));
+    k = end;
   }
   const tool = String(opts.tool || "");
   // The new side's name when the diff has one; the old side's unless that is /dev/null (a file the change creates);
-  // the call's own argument for a tool that is handed the file (patch, write_file) when the diff names neither.
+  // the call's own argument for a tool that is handed the file (patch, write_file) when the diff names neither; and
+  // for a result with no diff at all, the file the CALL printed.
   let name = plus || (minus && minus !== "/dev/null" ? minus : "");
-  if (!name && (tool === "patch" || tool === "write_file") && opts.arg) name = String(opts.arg);
-  let what = name ? `${tool || "diff"} · ${cfTailPath(name)}` : tool || "diff";
+  if (!name && diff && (tool === "patch" || tool === "write_file") && opts.arg) name = String(opts.arg);
+  if (!name && file && file.file) name = String(file.file);
+  let what = name ? `${tool || (diff ? "diff" : "output")} · ${cfTailPath(name)}` : diff ? tool || "diff" : tool ? `${tool} output` : "output";
   if (opts.whole) what = `${what} · full result`;
-  const delta =
-    `<span class="code-delta" title="${adds} added, ${dels} removed">` +
-    `<span class="is-add">+${adds}</span><span class="is-del">\u2212${dels}</span></span>`;
-  return cfBox({ kind: "diff", at: from, rows: to - from, what, title: name, delta, body: cfDiffHtml(list, classes, pair, from, to), opts, open });
+  const delta = diff
+    ? `<span class="code-delta" title="${adds} added, ${dels} removed">` +
+      `<span class="is-add">+${adds}</span><span class="is-del">\u2212${dels}</span></span>`
+    : "";
+  return cfBox({ kind: diff ? "diff" : name ? "file" : "out", at: from, rows: to - from, what, title: name, delta, body: parts.join(""), opts, open });
 }
 
 window.WMApp = window.WMApp || {};

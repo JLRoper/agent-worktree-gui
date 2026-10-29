@@ -171,6 +171,45 @@ test("the reader's open boxes come from the caller's set, keyed by the run's fir
   assert.equal(folded(html(["a", "b"], { ...opts, codeOpen: new Set(["some|other|key"]) })), 1, "any other key stays folded");
 });
 
+test("a result that is a header, a diff and a summary is still ONE box", () => {
+  // What `git show` hands the console: the commit's own lines, then the diff, then the summary. A diff run used to
+  // end the box, so this arrived as a "terminal output" box and a second "terminal · file" box for the one call.
+  const rows = [
+    "commit 1a2b3c4 — tidy the console",
+    "Author: Jake Roper",
+    "--- a/public/style.css",
+    "+++ b/public/style.css",
+    "@@ -1,2 +1,2 @@",
+    "-  old rule",
+    "+  new rule",
+    " 1 file changed, 1 insertion(+), 1 deletion(-)",
+  ];
+  const h = html(rows, { tool: "terminal", arg: "git show HEAD" });
+  assert.equal(boxes(h), 1, "one box for the call, not a header box and a diff box");
+  assert.match(h, /code-box is-diff/);
+  assert.match(h, /<span class="code-what">terminal · public\/style\.css<\/span>/, "the box is named by the file the diff changes");
+  assert.match(h, /<span class="is-add">\+1<\/span><span class="is-del">−1<\/span>/, "and it still says what the change adds and removes");
+  assert.equal(count(h, /class="df-win"/g), 1, "the diff keeps its framed window, inside the box");
+  assert.equal(folded(h), 1);
+  const inside = h.slice(h.indexOf('<div class="code-body"'));
+  for (const line of rows) assert.ok(inside.includes(`data-ltext="${line.replace(/"/g, "&quot;")}"`), `${line} is inside the box`);
+});
+
+test("a diff followed by a plain line the diff does not own is one box, in the order it arrived", () => {
+  const rows = ["--- a/x", "+++ b/x", "@@ -1,1 +1,1 @@", "-old", "+new", "3 files changed"];
+  const h = html(rows, { tool: "terminal", arg: "git diff HEAD~1" });
+  assert.equal(boxes(h), 1);
+  const body = h.slice(h.indexOf('<div class="code-body"'));
+  assert.ok(body.indexOf("data-ltext=\"3 files changed\"") > body.indexOf("df-win"), "the summary comes after the window, not in a box of its own");
+});
+
+test("a second result's header still ends the box: a ↳ line splits two calls", () => {
+  const h = CF.bodyHtml(out(["one", "↳ terminal", "two"]), { tool: "terminal", arg: "x", codeKey: "k" });
+  assert.equal(boxes(h), 2);
+  assert.deepEqual([...h.matchAll(/data-code-key="([^"]*)"/g)].map((m) => m[1]), ["k|0", "k|2"]);
+  assert.ok(h.includes('data-ltext="↳ terminal"'), "the header is a console line, outside both boxes");
+});
+
 test("two results in one list are two boxes with two keys", () => {
   const rows = ["one", "two", "… 5 lines hidden — click to read", "three"];
   const h = CF.bodyHtml(out(rows), { tool: "terminal", arg: "x", codeKey: "k" });
