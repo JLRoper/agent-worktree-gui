@@ -66,7 +66,7 @@ Things that will bite:
    
 3. **[2c DONE, mapping 2d]** The prompt goes on stdin, never in argv. Thread names (`wtgui-…`) map to Claude session UUIDs, persisted.
    
-4. **[2d TODO]** Reply = a new process with `--resume`. Steer = a stdin `user` message. Stop = interrupt, then
+4. **[2d DONE]** Reply = a new process with `--resume`. Steer = a stdin `user` message. Stop = interrupt, then
    `taskkill /T` as the fallback.
    
 5. **[2f TODO]** `claudeSessionRoots` takes an `exclude` set of panel-owned session ids, so a panel agent is not also drawn as
@@ -85,7 +85,7 @@ Things that will bite:
 | 2b | transport split, no behaviour change (verify with a real Hermes run) | 0.2.2 | ✓ done |
 | 2b follow-up | `job.agent`, `transportFor(job)`, `info()` | 0.2.3 | ✓ done (re-landed in 2c, see below) |
 | 2c | Claude spawn, stream, stop | 0.2.4 | ✓ done |
-| 2d | reply (resume) and steer | 0.2.5 | |
+| 2d | reply (resume) and steer | 0.2.5 | ✓ done |
 | 2e | approvals | 0.2.6 | |
 | 2f | dedup, UI picker, docs | 0.2.7 | |
 | done | `Status: complete` | 0.3.0 | |
@@ -146,6 +146,51 @@ about a Claude job; a panel restart marks it interrupted and kills its process.
 crash, yolo, routing). Both offline.
 
 Protocol pinned to Claude Code CLI **2.1.310**.
+
+## Milestone 2d Delivery (v0.2.5)
+
+**Reply** (`Jobs.create` on a Claude thread with siblings): a new `claude -p` process with `--resume <session>`,
+where `<session>` is the `sessionId` of the thread's latest turn that actually started (has a `runId`). It runs in
+the cwd the reply route already picks (the first turn's worktree while it exists, else the project), and makes no
+tree of its own. The new turn's `runId` is `claude-<session>-t<turn>` (the session is shared, the run id must not be).
+
+- **`--resume` does not combine with `--session-id`** on 2.1.310: the CLI exits with "--session-id can only be used
+  with --continue or --resume if --fork-session is also specified". So a reply passes `--resume` alone, and
+  `j.sessionId` starts as the resumed id and is overwritten by whatever `system/init` reports (`claude.init`). A
+  resume keeps the id; if a future CLI forks, the next reply still resumes the right one.
+- The mapping is persisted: `sessionId` (and now `resumeSession`, for the record) are in the job store, so a reply
+  after a panel restart resumes the same session (tested).
+- Refused, with a 409 from `/api/agents/reply`: a reply while a turn of the thread is still running (two processes
+  would write one session; steer is the way in), and a reply to a thread whose first turn never started.
+- `/api/agents/reply` probes the Claude CLI (`claude --version`, free) for a Claude thread instead of assuming the
+  gateway, and answers 503 if it is not usable.
+- **Budget bug fixed on the way:** the reply route and the assistant's `answerThread` defaulted `budget` to `1800`
+  (the gateway's run budget). For a Claude turn that would have become `--max-budget-usd 1800`. A Claude reply now
+  falls through to `claudeBudgetUsd`.
+
+**Steer** (`ClaudeTransport.steer`): a `userTurn(text)` line on the running process's stdin, and a
+`⇢ steer sent: …` dim line, as Hermes does. Accepted only while the process is alive, no `result` is held and no stop
+was asked; otherwise `{ ok: false, code: "run_not_accepting_steer" }`, which the steer route maps to 409 like Hermes.
+After the `result` stdin is closed (that is what lets the process exit), so there is no way in after it: reply instead.
+
+- **One result or two?** A steer that reaches the CLI before the turn's last tool boundary is folded into that turn:
+  one `result` (spike 2a, and the live check below). A steer that lands after the last boundary but before the
+  `result` reached the panel is read by the CLI as a turn of its own and answered with a second `result` before the
+  process sees stdin close. The transport holds the latest `result`, settles on process exit as before, and the card
+  says `claude answered N times in this turn` when that happens. Either way the job ends exactly once.
+- approve / clarify still answer `not_in_2c` (2e).
+
+**Tests:** `tools/verify-claude-reply.mjs` (offline): resume argv and cwd, no `--session-id` beside `--resume`, init's
+session wins, the mapping survives a restart, both refusals, steer folded into one result, steer after the result
+refused with the Hermes code and never written, two results settle on the last, a Hermes reply unchanged.
+`tools/stub-claude.mjs` gained `steer` and `twice` modes, `--resume` in its log, `STUB_CLAUDE_SESSION` and
+`STUB_CLAUDE_LINGER_MS`, and replays the fixture under the argv session id as the real CLI would.
+
+**Live check** (sandbox panel on 7399, haiku, `claudeBudgetUsd: 0.10`, CLI 2.1.310): "Remember the word KIWI.
+Reply OK." → `OK`; the reply "What word did I ask you to remember?" ran `--resume <same uuid>` in the same worktree
+with `--max-budget-usd 0.1` and answered `KIWI`; init reported the same session id. Steer sent 10 s into a 30 s shell
+command ("reply BANANA instead of APPLE") → one result, `BANANA`, job settled on exit. Hermes `PONG` on the same panel
+completed. Claude spend: $0.0196 over four turns.
 
 ## Open Decisions
 

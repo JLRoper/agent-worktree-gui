@@ -4,8 +4,8 @@
 //   node tools/verify-claude-spawn.mjs
 //
 // Covers: spawn into a fresh worktree, the stdin protocol and argv, events onto the card, settle on process exit,
-// stop -> cancelled (cooperative and forced kill), a crash -> failed with stderr, yolo, the 2d/2e stubs, and that a
-// job with no agent is still a Hermes job.
+// stop -> cancelled (cooperative and forced kill), a crash -> failed with stderr, yolo, the 2e stubs, and that a
+// job with no agent is still a Hermes job. Reply and steer (2d) are in tools/verify-claude-reply.mjs.
 import { spawn, execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -122,7 +122,7 @@ try {
   check("...with the exit code and the stderr tail", [/code 2/.test(job(s4.id).error || ""), /simulated crash/.test(job(s4.id).error || "")], [true, true]);
 
   // ── 5. options and the calls that are later phases ──────────────────────────────────────────────
-  console.log("\n5. yolo, budget, 2d/2e stubs, routing");
+  console.log("\n5. yolo, budget, 2e stubs, routing");
   process.env.STUB_CLAUDE_MODE = "replay";
   const s5 = await jobs.create({ agent: "claude", prompt: "y", cwd: repo, existing: true, worktree: false, yolo: true, budget: 0.05 });
   await waitFor(settled(s5.id));
@@ -132,14 +132,14 @@ try {
   process.env.STUB_CLAUDE_MODE = "hang";
   const s6 = await jobs.create({ agent: "claude", prompt: "z", cwd: repo, existing: true, worktree: false });
   await waitFor(() => /sleep 600/.test(text(s6.id)));
-  check("steer is not in 2c", (await jobs.steer(s6.id, "hi")).code, "not_in_2c");
+  check("approvals are not wired yet (2e)", (await jobs.transportFor(job(s6.id)).approve(job(s6.id), "once")).code, "not_in_2c");
   let replyErr = null;
   try {
     await jobs.create({ prompt: "again", thread: job(s6.id).thread, reply: true, cwd: repo, existing: true });
   } catch (e) {
     replyErr = String(e.message);
   }
-  check("a reply to a Claude thread is refused until 2d", /2d/.test(replyErr || ""), true);
+  check("a reply while the thread's turn is running is refused", /turn running/.test(replyErr || ""), true);
   await jobs.stop(s6.id);
   await waitFor(settled(s6.id));
   let unknown = null;
