@@ -15259,48 +15259,60 @@ function applyGreyFlash(on) {
 }
 
 // ---- settings group folds --------------------------------------------------------------------------------
-// Seven groups of rows is a tall panel, and a reader who is done with Display should not have to scroll past it
-// to reach Board. The heading is the control: clicking it — or Enter/Space on it — folds the rest of that group
-// away, and the shape is remembered per browser, so the panel opens the way it was left. The markup ships
-// unfolded and the panel is static (no repaint rebuilds it), so the class on the group is the whole state.
-const SETTINGS_FOLD_KEY = "wtgui.settingsFolded";
+// Seven groups of rows is a tall panel, and none of them is a number a reader checks on every visit — so every
+// group STARTS FOLDED, and its heading is the control: click it, or press Enter/Space on it, to open that one
+// group. What is remembered per browser is therefore the UNFOLDS, not the folds: an absent key, a cleared store
+// and a first visit all read the same way — "nothing has been opened" — which is exactly the default. A key
+// holding the fold list could not say that, because "absent" and "empty" would have to mean different things,
+// and a group the reader had opened would look like one they had never touched.
+//
+// The older `wtgui.settingsFolded` list is deliberately neither read nor rewritten. It recorded the opposite
+// fact: reading it as an unfold list would open the groups a reader had closed and close the ones they had
+// opened, and rewriting it would turn their own saved choice into its reverse. It is left where it is, inert.
+//
+// The markup ships `class="folded"` with `aria-expanded="false"` for the same reason, so the panel never paints
+// an open group for the instant before this runs. The panel is static (no repaint rebuilds it), so the class on
+// the group is the whole state.
+const SETTINGS_FOLD_KEY = "wtgui.settingsUnfolded";
 
-function settingsFolds() {
+function settingsUnfolds() {
   try {
-    const raw = JSON.parse(localStorage.getItem(SETTINGS_FOLD_KEY) || "[]");
+    const raw = JSON.parse(localStorage.getItem(SETTINGS_FOLD_KEY) || "null");
     return new Set(Array.isArray(raw) ? raw.filter((n) => typeof n === "string") : []);
   } catch {
     return new Set();
   }
 }
 
-function paintSettingsFold(group, folded) {
-  group.classList.toggle("folded", folded);
+// One painter for both halves of the fact, because they are one fact: the class the stylesheet hides the rows
+// with, and the state a keyboard or screen-reader user is told.
+function paintSettingsFold(group, unfolded) {
+  group.classList.toggle("folded", !unfolded);
   const head = group.querySelector(":scope > .settings-group-head");
-  if (head) head.setAttribute("aria-expanded", folded ? "false" : "true");
+  if (head) head.setAttribute("aria-expanded", unfolded ? "true" : "false");
 }
 
-function saveSettingsFolds(folded) {
+function saveSettingsUnfolds(open) {
   try {
-    localStorage.setItem(SETTINGS_FOLD_KEY, JSON.stringify([...folded]));
+    localStorage.setItem(SETTINGS_FOLD_KEY, JSON.stringify([...open]));
   } catch {
-    /* private mode: the fold lasts for this visit */
+    /* private mode: the open group lasts for this visit */
   }
 }
 
 function initSettingsGroups() {
-  const folds = settingsFolds();
+  const open = settingsUnfolds();
   for (const group of document.querySelectorAll("#settings .settings-group")) {
     const head = group.querySelector(":scope > .settings-group-head");
     if (!head || !head.dataset.settingsGroup) continue;
-    paintSettingsFold(group, folds.has(head.dataset.settingsGroup));
+    paintSettingsFold(group, open.has(head.dataset.settingsGroup));
     const toggle = () => {
-      const folded = !group.classList.contains("folded");
-      paintSettingsFold(group, folded);
-      const next = settingsFolds();
-      if (folded) next.add(head.dataset.settingsGroup);
+      const unfolded = group.classList.contains("folded");
+      paintSettingsFold(group, unfolded);
+      const next = settingsUnfolds();
+      if (unfolded) next.add(head.dataset.settingsGroup);
       else next.delete(head.dataset.settingsGroup);
-      saveSettingsFolds(next);
+      saveSettingsUnfolds(next);
     };
     head.addEventListener("click", toggle);
     // A heading is not a button, so nothing else answers these keys here — and Space would scroll the panel.
@@ -15314,17 +15326,147 @@ function initSettingsGroups() {
 
 // ---- end settings group folds
 
+// ---- settings search -------------------------------------------------------------------------------------
+// The panel is a long list of rows and every group now starts folded, so the way to a setting is the search box
+// the panel's fixed head keeps on screen. What it searches is the row itself: its text, its own `title`, and the
+// `title` of any control inside it (`zoom out` lives only in a button's tooltip, and it is exactly the word a
+// reader would try). A row that does not answer goes away, a group left with no row goes away with it, and a
+// group that does answer is shown OPEN for the search — the reader's own fold is read from storage and never
+// written here, so clearing the box puts every group back exactly as they left it.
+//
+// The match is painted with the CSS Custom Highlight API: one Range per hit over the row's own text nodes.
+// Nothing is re-rendered, so a keystroke cannot take the focus ring, a select's value or a half-typed number with
+// it — and a browser without Custom Highlight still filters, it just does not mark the text.
+const SETTINGS_SEARCH_ID = "settings-search";
+const SETTINGS_SEARCH_CLEAR_ID = "btn-settings-search-clear";
+const SETTINGS_SEARCH_HIGHLIGHT = "settings-search-match";
+
+function settingsRowText(row) {
+  const parts = [String(row.textContent || "")];
+  if (typeof row.getAttribute === "function") parts.push(row.getAttribute("title") || "");
+  if (typeof row.querySelectorAll === "function") {
+    for (const node of row.querySelectorAll("[title]")) parts.push(node.getAttribute("title") || "");
+  }
+  return parts.join(" ").toLowerCase();
+}
+
+function paintSettingsSearch() {
+  const box = document.getElementById(SETTINGS_SEARCH_ID);
+  const query = String((box && box.value) || "").trim().toLowerCase();
+  const open = settingsUnfolds(); // the reader's state: read, never written — a search must not rewrite a fold
+  const matched = [];
+  for (const group of document.querySelectorAll("#settings .settings-group")) {
+    const head = group.querySelector(":scope > .settings-group-head");
+    let hits = 0;
+    let follows = true; // a preview strip or a preset row belongs to the row above it
+    for (const child of [...group.children]) {
+      if (child === head) continue;
+      if (child.classList && child.classList.contains("settings-row")) {
+        const hit = !query || settingsRowText(child).includes(query);
+        child.classList.toggle("search-hidden", !hit);
+        follows = hit;
+        if (hit) {
+          hits += 1;
+          matched.push(child);
+        }
+      } else if (child.classList) {
+        child.classList.toggle("search-hidden", Boolean(query) && !follows);
+      }
+    }
+    group.classList.toggle("search-hidden", Boolean(query) && hits === 0);
+    // A group with a match is opened for the search only. With no query every group goes back to what the reader
+    // left it as — storage is the only owner of that, and this function never writes to it.
+    if (query && hits > 0) paintSettingsFold(group, true);
+    else if (!query && head && head.dataset.settingsGroup) {
+      paintSettingsFold(group, open.has(head.dataset.settingsGroup));
+    }
+  }
+  const clear = document.getElementById(SETTINGS_SEARCH_CLEAR_ID);
+  if (clear) clear.hidden = !query;
+  paintSettingsSearchHighlight(matched, query);
+}
+
+function paintSettingsSearchHighlight(rows, query) {
+  const highlights = typeof CSS !== "undefined" && CSS ? CSS.highlights : null;
+  const unsupported =
+    !highlights ||
+    typeof Highlight !== "function" ||
+    typeof Range !== "function" ||
+    typeof NodeFilter === "undefined" ||
+    typeof document.createTreeWalker !== "function";
+  if (unsupported) return; // the filter still works; only the marking is missing
+  if (!query) {
+    highlights.delete(SETTINGS_SEARCH_HIGHLIGHT);
+    return;
+  }
+  const ranges = [];
+  for (const row of rows) {
+    const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = String(node.nodeValue || "").toLowerCase();
+      for (let at = text.indexOf(query); at !== -1; at = text.indexOf(query, at + query.length)) {
+        const range = new Range();
+        range.setStart(node, at);
+        range.setEnd(node, at + query.length);
+        ranges.push(range);
+      }
+    }
+  }
+  if (!ranges.length) highlights.delete(SETTINGS_SEARCH_HIGHLIGHT);
+  else highlights.set(SETTINGS_SEARCH_HIGHLIGHT, new Highlight(...ranges));
+}
+
+function clearSettingsSearch() {
+  const box = document.getElementById(SETTINGS_SEARCH_ID);
+  if (!box || !box.value) return;
+  box.value = "";
+  paintSettingsSearch();
+}
+
+function initSettingsSearch() {
+  const box = document.getElementById(SETTINGS_SEARCH_ID);
+  if (!box) return;
+  box.addEventListener("input", () => paintSettingsSearch());
+  box.addEventListener("search", () => paintSettingsSearch()); // the browser's own ✕ in a type=search box
+  box.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    // Esc in a box with something in it clears the search rather than closing the panel — the first Esc is about
+    // what you typed, and stopPropagation keeps the page's own Esc handler (which closes Settings) out of it. On
+    // an empty box this returns early and Esc closes the panel exactly as it always did.
+    if (!box.value) return;
+    e.preventDefault();
+    e.stopPropagation();
+    box.value = "";
+    paintSettingsSearch();
+  });
+  const clear = document.getElementById(SETTINGS_SEARCH_CLEAR_ID);
+  if (clear) {
+    clear.addEventListener("click", () => {
+      box.value = "";
+      paintSettingsSearch();
+      box.focus();
+    });
+  }
+}
+
+// ---- end settings search
+
 function toggleSettings(open = null) {
   const panel = $("settings");
   if (!panel) return;
   const show = open === null ? panel.classList.contains("hidden") : open;
   panel.classList.toggle("hidden", !show);
-  if (!show) return;
-  const sel = $("font-select");
-  if (sel) {
-    sel.value = currentFontId("ui");
-    sel.focus();
+  if (!show) {
+    // A panel that is opened again must not come back filtered: the search belongs to the visit that typed it.
+    clearSettingsSearch();
+    return;
   }
+  // The groups start folded, so the first control is the search box the fixed head keeps on screen. Focus used to
+  // land on the font select — which is now inside a folded (display:none) group, where focus() does nothing at all.
+  const searchBox = $("settings-search");
+  if (searchBox) searchBox.focus();
+  const sel = $("font-select");
+  if (sel) sel.value = currentFontId("ui");
   // The browser-owned rows are read at boot; painting them again here just means the panel always opens on
   // what is in effect, even if another tab changed it.
   paintQLook();
@@ -15826,9 +15968,11 @@ $("btn-settings")?.addEventListener("click", (e) => {
   toggleSettings();
 });
 $("btn-settings-close")?.addEventListener("click", () => toggleSettings(false));
-// The groups' folds are painted at load, not when the panel opens: the reader who folded Display away last time
-// should not see it unfold for the instant the panel takes to open.
+// The groups' folds are painted at load, not when the panel opens: a reader who opened Board last time should not
+// see it folded for the instant the panel takes to open. The search box is wired here too, on an empty box, so the
+// panel is never filtered by a query left in the DOM.
 initSettingsGroups();
+initSettingsSearch();
 // A second way in that is always on screen at the top left: the title opens Settings.
 $("title-settings")?.addEventListener("click", (e) => {
   e.stopPropagation();

@@ -738,9 +738,17 @@ restart.
 ## Settings
 
 `⚙ Settings`, the title, or `Ctrl+,`. `Esc`, the `✕`, or a click outside closes it. The head is fixed and the body
-scrolls; every explanation is the row's own tooltip on the `ⓘ`. Each group folds: click its heading — or press
-`Enter`/`Space` on it — and the rows under it go away, the caret turning from `▾` to `▸`. The folds are remembered
-in this browser, so the panel opens in the shape it was left in.
+scrolls; every explanation is the row's own tooltip on the `ⓘ`. Every group **starts folded**, so the panel opens as
+seven headings: click one — or press `Enter`/`Space` on it — and its rows appear, the caret turning from `▸` to
+`▾`. What this browser remembers is which groups you opened: the panel reopens with exactly those open and every
+other group folded, and a group you never opened stays folded.
+
+The **search box** in the fixed head narrows the panel to the rows that answer it. It reads each row's own words and
+its tooltip, so `zoom out` finds Page zoom through the `−` button's explanation as readily as `Panel font` finds
+itself. A row with no match goes away, a group left with no row goes away with it, and a group that has one is shown
+open while you type. The matched text is highlighted, and nothing in the panel is rebuilt as you type — a select
+keeps its value and a half-typed number keeps its caret. `Esc`, or the `✕` beside the box, clears the search and puts
+every group back exactly as you had it; on an empty box `Esc` closes the panel as usual.
 
 The **Board** group opens with **Read now**, the two gestures that read the board at once instead of on the clock:
 **Refresh now** re-reads every worktree row of the projects in view (the same cheap pass the board runs every few
@@ -809,6 +817,7 @@ only its own line so your comments and formatting survive.
 | `Ctrl+Enter` (⌘+Enter) | Reply box | **Steer turn** — send the text into the live turn. With no live turn to steer it means what `Enter` means. |
 | `Alt+Right` / `Alt+Left` | During NOT-RUNNING | Skip forward / go back. |
 | `Ctrl+,` | Anywhere | Settings. |
+| `Esc` | In the Settings search box | Clear the search and put every group back as you had it. On an empty box it closes Settings. |
 | `Esc` | Anywhere | Close what is open: an artifacts list, Settings, a maximized card, a clone row, or a folder filter. |
 | `Ctrl+wheel` | Over a console or a thinking block | Size that text for that card; anywhere else it zooms the page. |
 | `Ctrl+` / `Ctrl-` / `Ctrl+0` | Anywhere | Page zoom in, out, reset. |
