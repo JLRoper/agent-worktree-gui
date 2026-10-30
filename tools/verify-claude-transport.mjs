@@ -70,15 +70,45 @@ check("thinking blocks are not shown", translateLine({ type: "assistant", messag
   check("non-JSON line comes back as unparsed", out[0].event, "claude.unparsed");
 }
 
-// ── 5. a permission prompt is never answered by the translator ───────────────────────────────────
+// ── 5. a permission prompt becomes an approval.request, never auto-answered ──────────────────────
 {
-  const out = translateLine({
-    type: "control_request",
-    request_id: "r1",
-    request: { subtype: "can_use_tool", tool_name: "Write", input: {} },
-  });
-  check("can_use_tool is reported, not auto-allowed (2e owns approvals)", out.map((e) => e.event), ["claude.unparsed"]);
-  check("...and the transport gets the raw request to decide on", out[0].control?.request_id, "r1");
+  const out = translateLine(
+    {
+      type: "control_request",
+      request_id: "r1",
+      request: { subtype: "can_use_tool", tool_name: "Write", input: { file_path: "a.txt" }, tool_use_id: "tu1", permission_suggestions: [] },
+    },
+    newStreamState(),
+    5000,
+  );
+  check("can_use_tool becomes an approval.request (2e owns it)", out.map((e) => e.event), ["approval.request"]);
+  check("...carries the request_id the transport answers with", out[0].request_id, "r1");
+  check("...and a readable command", out[0].command, "Write · a.txt");
+  check("...no permission_suggestions -> no session choice", out[0].choices, ["once", "deny"]);
+  check("...the raw request rides along for the transport to answer", out[0].control?.request_id, "r1");
+  check("...timestamp is epoch seconds, not ms", out[0].timestamp, 5);
+}
+{
+  const out = translateLine(
+    {
+      type: "control_request",
+      request_id: "r2",
+      request: {
+        subtype: "can_use_tool",
+        tool_name: "Write",
+        input: { file_path: "b.txt" },
+        tool_use_id: "tu2",
+        permission_suggestions: [{ type: "setMode", mode: "acceptEdits", destination: "session" }],
+      },
+    },
+    newStreamState(),
+  );
+  check("a suggestion offered -> session is offered too", out[0].choices, ["once", "session", "deny"]);
+  check("suggestions ride along for approve() to copy", out[0].permissionSuggestions, [{ type: "setMode", mode: "acceptEdits", destination: "session" }]);
+}
+{
+  const out = translateLine({ type: "control_request", request_id: "r3", request: { subtype: "interrupt" } });
+  check("a control_request this host did not send stays unparsed", out[0].event, "claude.unparsed");
 }
 
 // ── 6. stop vs failure: the same result line means different things depending on who asked ───────

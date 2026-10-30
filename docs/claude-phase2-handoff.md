@@ -1,7 +1,16 @@
 # Claude Code agents in the panel — phase 2 handoff
 
 Status: in progress
-Version line: 0.2.x
+Version line: 0.3.x
+
+**Version-line decision (2e, recorded per section 0 of `docs/2e_handoff.md`):** `origin/main` moved to `0.3.1` from
+unrelated work while this plan held `Version line: 0.2.x` — a 2e code PR could not pass the check either way (bump
+to `0.3.2` fails "stay on 0.2.x while in progress"; bump to `0.2.6`, the old forecast, fails "must go up from
+0.3.1"). No other plan is in progress on a `0.3.x` line (checked: `docs/claude-phase2-handoff.md` is the only file
+with a `Version line:` field). Chosen: **re-set the line to `0.3.x`** (option 1). Between writing that decision
+and landing this code, unrelated work merged into `main` again and took `0.3.2` — so 2e ships as `0.3.3` (one
+above `main`'s tip at merge time, re-checked right before landing), 2f will be `0.3.4`, and the close-out's old
+`0.3.0` forecast is void; `Status: complete` will take the next minor, `0.4.0`.
 
 Repo: `Millerfly91/agent-worktree-gui` (a fork of `JLRoper/agent-worktree-gui`). Work happens and is reviewed
 here: `origin` is the fork, `upstream` is the original, and PRs are opened inside the fork. The version check's
@@ -62,20 +71,24 @@ Things that will bite:
    
 2. **[2c DONE]** `lib/claude-stream.js` translates Claude events to the panel's vocabulary:
    `init` → `init`, `tool_use` → `tool.started`, `tool_result` → `tool.completed`, `text` → `message.delta`,
-   `can_use_tool` → `approval.request` (2e; surfaced raw until then), `result` → `run.completed` / `run.failed` (+ stats, cost).
+   `can_use_tool` → `approval.request` (2e DONE), `result` → `run.completed` / `run.failed` (+ stats, cost).
    
 3. **[2c DONE, mapping 2d]** The prompt goes on stdin, never in argv. Thread names (`wtgui-…`) map to Claude session UUIDs, persisted.
    
 4. **[2d DONE]** Reply = a new process with `--resume`. Steer = a stdin `user` message. Stop = interrupt, then
    `taskkill /T` as the fallback.
    
-5. **[2f TODO]** `claudeSessionRoots` takes an `exclude` set of panel-owned session ids, so a panel agent is not also drawn as
-   an external `⧉ claude`.
+5. **[2e DONE]** `--permission-prompt-tool stdio`, always; `can_use_tool` becomes `approval.request` (once/session/deny);
+   `ClaudeTransport.approve()` answers it on stdin; a per-request deadline timer denies and records "nothing decided
+   here" if nobody does; `stop()` denies every pending request first.
    
 6. **[2f TODO]** Config: `claudeBin`, default model, per-run budget cap. Permission mode defaults to panel-prompted; `yolo`
    is the only route to `bypassPermissions`. Localhost binding stays.
    
 7. **[2f TODO]** UI: Hermes / Claude picker on the New-agent card, Claude model list, a cost readout, a "claude found" chip.
+
+8. **[2f TODO]** `claudeSessionRoots` takes an `exclude` set of panel-owned session ids, so a panel agent is not also
+   drawn as an external `⧉ claude`.
 
 ## Milestones — one PR each; a patch bump only where code changes
 
@@ -86,9 +99,13 @@ Things that will bite:
 | 2b follow-up | `job.agent`, `transportFor(job)`, `info()` | 0.2.3 | ✓ done (re-landed in 2c, see below) |
 | 2c | Claude spawn, stream, stop | 0.2.4 | ✓ done |
 | 2d | reply (resume) and steer | 0.2.5 | ✓ done |
-| 2e | approvals | 0.2.6 | |
-| 2f | dedup, UI picker, docs | 0.2.7 | |
-| done | `Status: complete` | 0.3.0 | |
+| 2e | approvals | 0.3.3 | ✓ done |
+| 2f | dedup, UI picker, docs | 0.3.4 | |
+| done | `Status: complete` | 0.4.0 | |
+
+The `2e`/`2f`/`done` versions were re-forecast twice: once when the version line moved to `0.3.x` (see the
+version-line decision above), and again just before landing when unrelated work had already taken `0.3.2` on
+`main` — the original `0.2.6`/`0.2.7`/`0.3.0` row, and the once-current `0.3.2`/`0.3.3` row, are both void.
 
 If a milestone splits and both halves change code, the second takes the next patch number; the table is a
 forecast, the rule is the contract.
@@ -178,7 +195,7 @@ After the `result` stdin is closed (that is what lets the process exit), so ther
   `result` reached the panel is read by the CLI as a turn of its own and answered with a second `result` before the
   process sees stdin close. The transport holds the latest `result`, settles on process exit as before, and the card
   says `claude answered N times in this turn` when that happens. Either way the job ends exactly once.
-- approve / clarify still answer `not_in_2c` (2e).
+- approve is wired in 2e (see below); clarify still answers `not_in_2c`.
 
 **Tests:** `tools/verify-claude-reply.mjs` (offline): resume argv and cwd, no `--session-id` beside `--resume`, init's
 session wins, the mapping survives a restart, both refusals, steer folded into one result, steer after the result
@@ -191,6 +208,96 @@ Reply OK." → `OK`; the reply "What word did I ask you to remember?" ran `--res
 with `--max-budget-usd 0.1` and answered `KIWI`; init reported the same session id. Steer sent 10 s into a 30 s shell
 command ("reply BANANA instead of APPLE") → one result, `BANANA`, job settled on exit. Hermes `PONG` on the same panel
 completed. Claude spend: $0.0196 over four turns.
+
+## Milestone 2e Delivery (v0.3.3)
+
+**2e shapes** (step 1 of `docs/2e_handoff.md`, proven live against CLI 2.1.314, haiku, a throwaway repo under
+`tools/spike-claude-stream.mjs deny|session <cwd>`):
+
+- **deny**, proven: answer `{"behavior":"deny","message":"..."}` in the `control_response`. The file was never
+  created; the agent's own turn said so without retrying or using another tool. `message` is read back by the
+  CLI but its exact wording is not echoed to the user — any short string works.
+- **allow for the session**, proven: the CLI offers exactly one `permission_suggestions` entry —
+  `{"type":"setMode","mode":"acceptEdits","destination":"session"}` — on every `can_use_tool` request seen so far
+  (Write). Copying that single entry verbatim into `updatedPermissions` (`{"behavior":"allow","updatedInput":...,
+  "updatedPermissions":[<the suggestion>]}`) suppressed the prompt for a second `Write` call in the same turn: no
+  second `can_use_tool` request arrived. `session` is offered on the card only when `permission_suggestions` is
+  non-empty (every case observed so far).
+- `permission_suggestions` was never empty on the tools exercised (`Write`), so the empty-suggestions / no-`session`
+  branch is implemented (`choices` drops `session`) but unexercised live.
+- A steer while a request is parked, and `permission_suggestions` for a tool other than `Write`, were not checked
+  live — see "Deviations" below.
+
+**Translator** (`lib/claude-stream.js`): `control_request`/`can_use_tool` → `{ event: "approval.request",
+request_id, command, choices, timestamp, toolUseId, toolName, input, permissionSuggestions, control }`. `command`
+is `"<tool_name> · <previewFor(...)>"` (e.g. `Write · C:\...\approved.txt`), reusing the existing preview table.
+`choices` is `["once","deny"]`, or `["once","session","deny"]` when a suggestion was offered. `timestamp` is epoch
+seconds (`Jobs.consume` multiplies by 1000) — the translator's own clock, there being no arrival time on the wire.
+Every other `control_request` subtype still comes back `claude.unparsed`, unchanged.
+
+**Transport** (`lib/claude-transport.js`):
+- `--permission-prompt-tool stdio` is now always in the spawn args (the 2c comment calling it "not passed" is
+  gone) — always paired with `approve()`, so the flag never ships without an answer path.
+- `p.pending`: `Map<request_id, { toolUseId, input, suggestions, timer }>`, filled in `onLine` the moment the
+  translator emits `approval.request` (right after `jobs.consume(j, evt)` sets `j.approval`, so the per-request
+  timer reads the card's own deadline).
+- `approve(j, choice, requestId)`: `once` → allow with the original `input`; `session` → allow with
+  `updatedPermissions: [suggestions[0]]`; anything else (`deny`, or a choice the card should never send) → deny.
+  Writes the `control_response`; a failed write is reported as an error and answers nothing. On success: clears
+  the request's timer, removes it from `p.pending`, pushes a console line, calls
+  `jobs.consume(j, { event: "approval.responded", choice })`, returns `{ ok: true, choice, resolved: null }`. A
+  `requestId` that names nothing pending is refused (`approval_expired`) rather than silently falling back to the
+  one real pending request — only an *absent* `requestId` (an offline caller) uses the size-1 fallback.
+- **Expiry fires on the transport's own clock, not the generic sweep.** Unlike the Hermes gateway (an HTTP service
+  the panel can only poll for — `Jobs.sweepApprovals`'s 5s tick), this transport knows the exact instant it is
+  about to deny, so `expirePending()` calls `jobs.expireApproval(j, …, "expired")` directly before writing the
+  deny. Without this the turn can finish (on the deny) and `settle()` silently clear `j.approval` before the 5s
+  sweep ever notices — losing the "nothing was decided here" record in the race. Confirmed by a live run (300s
+  default window, nobody answered): the card recorded `approvalDone.expired === true` and the agent said the file
+  was not created.
+- **Never auto-allow**: nothing answers a request but `approve()`, the deadline timer, or `stop()`'s pre-interrupt
+  deny below.
+- `stop(j)` denies every entry in `p.pending` (with a short message) before sending the interrupt. `settle()`
+  (reached through the `run.cancelled` the interrupt produces) clears `j.approval` for the card; `stop()` does not
+  touch it directly.
+- Process exit (`finish()`): any surviving `p.pending` timers are cleared and the map dropped — nothing is left to
+  answer, and the card's own box is cleared by `settle()`.
+- `steer()` now also refuses (`run_not_accepting_steer`) while `p.pending.size > 0` — not proven live (see
+  deviations), kept conservative rather than guessed.
+- The stale card note "approvals are not wired for Claude jobs yet" next to the denied-count is gone (approvals
+  are wired now); the line is just `cost $… · N turn(s) · M tool call(s) denied` when the CLI denied any.
+- `clarify()` is unchanged (`not_in_2c`) — not part of 2e.
+
+**Deviations from the plan:**
+- `session`'s exact UI gating (offered only when `permission_suggestions` is non-empty) was confirmed for `Write`
+  only; other tools were not exercised live, but the gating logic reads the array generically, not by tool name.
+- A steer sent while an approval is parked is refused (2d's conservative default), not proven against the live
+  CLI — the plan said to verify this before coding; it was not reachable in the sandboxed live check's time
+  budget, so the refusal stays and is called out here instead of guessing the CLI's behaviour.
+
+**Tests:** `tools/verify-claude-transport.mjs` extended (`can_use_tool` → `approval.request`, not
+`claude.unparsed`; choices with/without a suggestion; command string; epoch-seconds timestamp; other
+`control_request` subtypes unaffected). `tools/verify-claude-spawn.mjs`: the flag is now always in argv; an
+`approve()` with nothing pending is `approval_expired`, not `not_in_2c`. New `tools/stub-claude.mjs` mode
+`approval` (a `Write` `can_use_tool` request with the proven `permission_suggestions` shape; `allow` →
+`FILE_WRITTEN`, `deny` → `FILE_NOT_WRITTEN`, driven purely by whatever `control_response` arrives — the host's
+timer or `stop()` answer it exactly like a reader would). New `tools/verify-claude-approval.mjs` (26 checks,
+offline): approval.request shape and choices, `once`/`deny`/`session` exact wire shapes, an unknown `request_id`
+refused without touching the real pending one, an answer after expiry refused `approval_expired`, the deadline
+denying with no reader action and recording `expired: true`, `stop()` denying pending requests and ending
+`cancelled`. `tools/spike-claude-stream.mjs` gained `deny` and `session` scenarios for the live proof above.
+`node --test test/*.test.js`: 307 pass, 2 skipped, 0 failed (unaffected by this change).
+
+**Live check** (sandbox panel on 7399, haiku, `claudeBudgetUsd: 0.15`, CLI 2.1.314, real spend ≈ $0.025 total
+across this phase's live runs): a real job asking for a `Write` parked on the card within ~1s of spawn
+(`approval.request` with `choices: ["once","session","deny"]`); `POST /api/jobs/approve {choice:"once"}` → file
+written, turn replied `DONE-APPROVAL`, and after a reload the browser showed the collapsed `✓ approved once: Write
+· <path>` line under the turn. A second run answered `{choice:"deny"}` → the file was never created and the agent
+said so, twice (once live against the panel's up-to-date code, confirming the stale "not wired" text is gone from
+the console). A third run was left unanswered: the transport's own 300s deadline denied it on its own clock, the
+agent said the file did not exist, and `approvalDone` recorded `{choice:"", expired:true, reason:"expired"}` with
+no reader action. A Hermes `PONG` job on the same panel still completed (`status: done`). The sandbox panel and
+its scratch repos were torn down after the check; nothing was pushed.
 
 ## Open Decisions
 
