@@ -4444,11 +4444,13 @@ async function refreshTreeRow(btn) {
   btn.classList.add("is-starting");
   try {
     const r = await apiFetch(
-      "/api/worktree/refresh",
+      // The ring's own route, one depth deeper: `reconcile` asks it to go on to the TODO, the description and the
+      // journal. Sending it here rather than to a second endpoint is the whole point — there is one refresh path.
+      "/api/refresh/row",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ project: row.project, path: row.path, refreshAgent: refreshAgentMode() }),
+        body: JSON.stringify({ project: row.project, path: row.path, reconcile: true, refreshAgent: refreshAgentMode() }),
       },
       { timeoutMs: 60000 },
     );
@@ -4484,7 +4486,7 @@ async function startRefreshAgentFromCard(btn) {
   btn.disabled = true;
   try {
     const r = await apiFetch(
-      "/api/worktree/refresh/agent",
+      "/api/refresh/row/agent",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

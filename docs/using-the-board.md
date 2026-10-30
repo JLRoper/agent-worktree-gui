@@ -221,7 +221,7 @@ Rows are the trees this project **owns**: its own checkout and the worktrees ins
 | **Dirty** | Modified files, and `+N?` untracked, or `clean`. |
 | **Life / next read** | Time since anything last said this worktree is alive, the evidence chips, and a ring that fills toward the next scheduled read. Click the ring to read the row **now**. |
 | **Verdict** | See below. |
-| ⟳ | Re-read this one worktree now and reconcile it (see **Refreshing one row** below). Not offered on the project's own checkout row. |
+| ⟳ | Reconcile this one worktree now: re-read its git state, then its TODO list and its description against what the tree now holds (see **Reconciling one row** below). Not offered on the project's own checkout row. |
 | ✕ | Remove the worktree (not offered on the project's own checkout row). |
 
 **Column widths are measured, not fixed.** Each column is sized from the widest thing it actually holds — its
@@ -391,10 +391,13 @@ Rows sort by what is worth reading first — a running panel agent, then the mos
 have open keeps its exact slot while the closed ones re-sort around it. Settings → Board → **Board reorder** controls
 how often that happens (default 5 s; off is allowed).
 
-### Refreshing one row
+### Reconciling one row
 
-The ⟳ in a row's actions cell (left of the ✕) re-reads **that one worktree** instead of waiting for the sweep, and does
-four things, journalling each:
+The ⟳ in a row's actions cell (left of the ✕) reconciles **that one worktree**: it re-reads it instead of waiting for
+the sweep, and then checks the things the sweep cannot — the TODO list against what the branch actually carries, and
+the description against the commits it has since gained. It is the same request the next-read ring sends, asked one
+depth deeper (`reconcile: true` on `POST /api/refresh/row`), so there is one refresh path and not two. It does five
+things, journalling each:
 
 1. **Merge state.** `git status`, the counts against the branch's base, `git cherry`, the verdict and the PR are all
    re-read, and the row is repainted from the answer. The journal line names what actually moved — `verdict MERGED -> UNMERGED`,
@@ -406,15 +409,18 @@ four things, journalling each:
 3. **Description.** Re-derived only when there is none, or when it shares no significant word with any commit the branch
    now carries — and never when you wrote it by hand. The panel owns that text (`lib/descriptions.js`), so a refresh can
    ask for it again but cannot invent it or overwrite yours.
-4. **Journal.** One line per action, kept with the row (beside the panel's other stores) and shown under **Merge state**,
-   newest first. It survives a reload — a refresh that changed nothing leaves that record too.
+4. **The agent pass.** When the cheap pass finds a mismatch it may also **offer one agent**: Settings → Board →
+   **Row refresh → agent** is `never` / **ask first** (the default) / `start it`. In *ask first* a single card appears
+   under the row — **not now** / **start agent**, left to right — and starting it runs one agent **in that worktree**
+   to double-check the TODO, the description and the merge state and report back; its turn is marked `↳ from the row's
+   ⟳`. It is refused while any run is already live in the tree (409), and it is told to change nothing — no commits, no
+   push, no merge. *Never* leaves the cheap pass and its journal; *start it* skips the card. The start is its own request
+   (`POST /api/refresh/row/agent`) because it spawns, the way checking a row against main does.
+5. **Journal.** One line per action, kept with the row (beside the panel's other stores) and shown under **Merge state**,
+   newest first. It survives a reload — a reconcile that changed nothing leaves that record too.
 
-When the cheap pass finds a mismatch, the click may also **offer one agent**: Settings → Board → **Row refresh → agent**
-is `never` / **ask first** (the default) / `start it`. In *ask first* a single card appears under the row —
-**not now** / **start agent**, left to right — and starting it runs one agent **in that worktree** to double-check the
-TODO, the description and the merge state and report back; its turn is marked `↳ from the row's ⟳`. It is refused while
-any run is already live in the tree (409), and it is told to change nothing — no commits, no push, no merge. *Never*
-leaves the cheap pass and its journal; *start it* skips the card.
+The ring in the **Life** column is the same read without the reconcile: click it to refresh that row's git facts now,
+and the ⟳ when you are deciding whether to land or drop the tree.
 
 ### Removing a worktree
 

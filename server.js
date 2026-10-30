@@ -3393,6 +3393,13 @@ const server = createServer(async (req, res) => {
 
     // One worktree, read now — the next-read ring on a row is a button. Refused while that row is
     // already being read: two scans of one worktree at once is exactly what the pool prevents.
+    //
+    // `reconcile: true` is the row's own ⟳, and asks for the same read ONE DEPTH DEEPER: the tree is read with the
+    // network answers (heads, PRs, upstreams), then its TODO list is reconciled against the commits the branch now
+    // carries and the files those commits touched (a PROPOSAL beside the list, never a close), its description is
+    // re-derived only when that is empty or demonstrably stale, and one journal line per action is kept with the row.
+    // One route with two depths, not a second refresh endpoint: the ring's cheap read is untouched, and there is
+    // nothing here for a later change to keep in step.
     if (route === "/api/refresh/row" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
@@ -3403,58 +3410,30 @@ const server = createServer(async (req, res) => {
       const row = scheduler.store.rowsFor(projectName).find((r) => r.path === rowPath);
       if (!row) return sendJson(res, 404, { error: `unknown row: ${rowPath}` });
       if (scheduler.pool.isBusy(rowPath)) return sendJson(res, 409, { error: "that row is already being read" });
+      const reconcile = Boolean(body.reconcile);
+      // The facts BEFORE the read: what moved is the whole point of the reconcile's answer, and `putRow` replaces
+      // the row object, so nothing here can be read afterwards.
+      const before = reconcile
+        ? {
+            verdict: row.verdict,
+            ahead: row.ahead,
+            behind: row.behind,
+            dirty: row.dirty,
+            untracked: row.untracked,
+            cherryPlus: row.cherryPlus,
+            cherryMinus: row.cherryMinus,
+            head: row.head,
+            branch: row.branch,
+            pr: row.pr ? { number: row.pr.number, state: row.pr.state } : null,
+          }
+        : null;
       // Claim the slot, or the timer will scan it again the moment this finishes.
       scheduler.lastFast.set(`${projectName}::${rowPath}`, Date.now());
-      const merged = await scheduler.scanOne(project, rowPath, "full");
-      return sendJson(res, 200, { ok: true, row: merged });
-    }
-
-    // ---- one row's own refresh: the ⟳ in the row's actions cell ------------------------------------------------
-    // Not the sweep. This re-reads ONE tree — dirty and untracked, ahead/behind against its base, the cherry tally, the
-    // verdict and the PR — from the scheduler's own full-scan path, then reconciles this tree's TODO list against what
-    // the tree now holds (a PROPOSAL, never a close), re-derives its description only when that is empty or
-    // demonstrably stale, and writes one journal line per action. Authorisation and refusal shape follow
-    // /api/worktree/delete: same token, same row lookup, same 409 while the row is busy.
-    if (route === "/api/worktree/refresh" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const asked = String(body.path || "").trim();
-      if (!asked) return sendJson(res, 400, { error: "path is required" });
-      const target = path.resolve(asked);
-      // The ROW is the authority on which project owns a tree (a nested worktree, a re-cased path, a project whose folder
-      // moved): the body's project only narrows the search.
-      const hint = String(body.project || "").trim();
-      let project = hint ? scheduler.getProjects().find((p) => p.name === hint) : null;
-      let row = project ? scheduler.store.rowsFor(project.name).find((r) => path.resolve(r.path) === target) : null;
-      if (!row) {
-        for (const p of scheduler.getProjects()) {
-          const hit = scheduler.store.rowsFor(p.name).find((r) => path.resolve(r.path) === target);
-          if (hit) {
-            project = p;
-            row = hit;
-            break;
-          }
-        }
+      if (!reconcile) {
+        const merged = await scheduler.scanOne(project, rowPath, "full");
+        return sendJson(res, 200, { ok: true, row: merged });
       }
-      if (!project || !row) return sendJson(res, 404, { error: `not a worktree row: ${target}` });
-      if (scheduler.pool.isBusy(row.path)) return sendJson(res, 409, { error: "that row is already being read" });
-
-      // The facts BEFORE the read: what moved is the whole point of the answer, and `putRow` replaces the row object.
-      const before = {
-        verdict: row.verdict,
-        ahead: row.ahead,
-        behind: row.behind,
-        dirty: row.dirty,
-        untracked: row.untracked,
-        cherryPlus: row.cherryPlus,
-        cherryMinus: row.cherryMinus,
-        head: row.head,
-        branch: row.branch,
-        pr: row.pr ? { number: row.pr.number, state: row.pr.state } : null,
-      };
-      // Claim the slot, or the timer scans it again the moment this finishes.
-      scheduler.lastFast.set(`${project.name}::${row.path}`, Date.now());
-      const after = await scheduler.fullScan(project, row.path);
+      const after = await scheduler.fullScan(project, rowPath);
       if (!after) return sendJson(res, 409, { error: "that row could not be read just now — try again" });
 
       const lines = [];
@@ -3462,17 +3441,17 @@ const server = createServer(async (req, res) => {
       const delta = mergeDelta(before, after);
       lines.push(...(delta.length ? delta : ["re-read, nothing moved"]));
 
-      // What the tree now holds, read once: the commits off the base and the files they touched. Both halves of the TODO
-      // reconcile want it, and the description's staleness test reads the same subjects.
-      const base = after.baseRef || project.remoteRef || project.mainBranch || null;
+      // What the tree now holds, read once: the commits off the base and the files they touched. Both halves of the
+      // TODO reconcile want it, and the description's staleness test reads the same subjects.
+      const base = after.baseRef || project.mainBranch || null;
       let tree = { commits: [], subjects: [], touched: [] };
       if (base) {
-        const log = await gitIn(after.path, ["log", "--name-only", "--format=%h %s", "-60", `${base}..HEAD`], 20_000);
-        if (log.ok) tree = parseCommitFiles(log.out);
+        const gitlog = await gitIn(after.path, ["log", "--name-only", "--format=%h %s", "-60", `${base}..HEAD`], 20_000);
+        if (gitlog.ok) tree = parseCommitFiles(gitlog.out);
       }
 
-      // (2) TODO — propose closures from the commits and from the files those commits touched. Nothing is applied: the
-      // proposal rides on the list (`row.todo.proposal`) and the row's badge says how many items look closed.
+      // (2) TODO — propose closures from the commits and from the files those commits touched. Nothing is applied:
+      // the proposal rides on the list (`row.todo.proposal`) and the row's badge says how many items look closed.
       let proposed = { ok: false, changed: false, proposals: [] };
       const list = todos.forRow(project.name, after.path, { journal: 0 });
       if (list?.items?.length) {
@@ -3487,18 +3466,18 @@ const server = createServer(async (req, res) => {
         lines.push("TODO nothing written down for this tree — nothing to reconcile");
       }
 
-      // (3) DESCRIPTION — lib/descriptions.js owns the text and the "never overwrite the reader's" rule; this asks it to
-      // re-derive from the earliest run still in the store, and it writes only if the record is missing or demonstrably
-      // stale against the commits above.
+      // (3) DESCRIPTION — lib/descriptions.js owns the text and the "never overwrite the reader's" rule; this asks it
+      // to re-derive from the earliest run still in the store, and it writes only if the record is missing or
+      // demonstrably stale against the commits above.
       const desc = descriptions.refreshTree({ project: project.name, path: after.path, branch: after.branch, commits: tree.subjects });
       lines.push(`description ${desc.wrote ? `re-derived — ${desc.why}` : desc.why}`);
 
-      // (4) THE AGENT PASS — offered, started or refused. `off|ask|auto`, defaulting to `ask`; a mismatch is what makes it
-      // worth an agent at all, and a live run already holding the tree is a refusal rather than a second worker in it.
+      // (4) THE AGENT PASS — offered, started or refused. `off|ask|auto`, defaulting to `ask`; a mismatch is what makes
+      // it worth an agent at all, and a live run already holding the tree is a refusal rather than a second worker.
       const mode = normaliseRefreshAgent(body.refreshAgent);
       const mismatch = delta.length > 0 || proposed.proposals.length > 0 || Boolean(desc.stale) || desc.wrote;
       const busy = liveRunIn(jobs.list(), after.path, { isLive: isLiveJobStatus });
-      let agent = { mode, mismatch, offered: false, started: null, refused: null };
+      const agent = { mode, mismatch, offered: false, started: null, refused: null };
       if (mode === "off") lines.push("agent pass off (setting: off) — the cheap pass is all this refresh does");
       else if (!mismatch) lines.push("agent pass not needed — the cheap pass found nothing to double-check");
       else if (busy) {
@@ -3518,11 +3497,11 @@ const server = createServer(async (req, res) => {
         lines.push("agent pass offered — one card under the row starts it (setting: ask)");
       }
 
-      // (4) JOURNAL — one line per action, kept with the row and shipped back with it.
+      // (5) JOURNAL — one line per action, kept with the row and shipped back with it.
       const rowKey = store.rowKey(project.name, after.path);
       refreshLog.append({ key: rowKey, project: project.name, path: after.path, lines });
 
-      // The row as the page should draw it now: the store's own row plus the three things that ride with the snapshot.
+      // The row as the page should draw it now: the store's own row plus the things that ride with the snapshot.
       const out = { ...after };
       const todoNow = todos.forRow(project.name, after.path);
       if (todoNow) out.todo = todoNow;
@@ -3534,7 +3513,7 @@ const server = createServer(async (req, res) => {
       // Every open board agrees with the click, not only the tab that made it.
       broadcast({ type: "row", project: project.name, row: out, changed: true });
 
-      log(`row refresh: ${project.name} ${after.path} — ${lines.join(" · ")}`);
+      log(`row reconcile: ${project.name} ${after.path} — ${lines.join(" · ")}`);
       return sendJson(res, 200, {
         ok: true,
         project: project.name,
@@ -3549,10 +3528,11 @@ const server = createServer(async (req, res) => {
       });
     }
 
-    // The offer card's button: start the double-check agent the ⟳ offered. It re-answers every gate the refresh did (the
-    // row is still there, nothing live holds the tree, the gateway is usable), so a card that sat on the page for a
-    // minute cannot start a run in a tree that no longer needs one.
-    if (route === "/api/worktree/refresh/agent" && req.method === "POST") {
+    // The offer card's button: start the double-check agent the ⟳ offered. Not a refresh route — it spawns, which is
+    // why it is its own path under the row it belongs to (the way /api/worktree/verify-landed is). It re-answers every
+    // gate the reconcile did (the row is still there, nothing live holds the tree, the gateway is usable), so a card
+    // that sat on the page for a minute cannot start a run in a tree that no longer needs one.
+    if (route === "/api/refresh/row/agent" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
       const asked = String(body.path || "").trim();
