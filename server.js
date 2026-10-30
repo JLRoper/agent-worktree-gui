@@ -3089,14 +3089,14 @@ const server = createServer(async (req, res) => {
       if (!thread) return sendJson(res, 400, { error: "thread is required" });
       const from = Number(url.searchParams.get("from"));
       const to = Number(url.searchParams.get("to"));
-      return sendJson(res, 200, {
-        thread,
-        blocks: thinkingFor(thread, {
-          dbPath: path.join(hermesHome(), "state.db"),
-          from: Number.isFinite(from) ? from : null,
-          to: Number.isFinite(to) && to > 0 ? to : null,
-        }),
+      // `error` rides along so the card can tell "the store could not be read" from "this turn recorded nothing":
+      // an empty `blocks` on a failed read would blank a live block that has text (see lib/thinking.js).
+      const read = thinkingFor(thread, {
+        dbPath: path.join(hermesHome(), "state.db"),
+        from: Number.isFinite(from) ? from : null,
+        to: Number.isFinite(to) && to > 0 ? to : null,
       });
+      return sendJson(res, 200, { thread, blocks: read.blocks, error: read.error });
     }
 
     if (route === "/api/tool-results" && req.method === "GET") {
