@@ -9138,7 +9138,7 @@ function rowHtml(row) {
     <td class="mono nowrap">${dirty}</td>
     ${ageCellHtml(row)}
     <td class="verdict">${badge}</td>
-    <td class="row-actions">${isProjectRoot ? "" : `<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="re-read this one worktree now — its git state (dirty, ahead/behind, cherry, verdict, PR), its TODO list against what the tree now contains (a proposal, nothing closed), and its description only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>
+    <td class="row-actions">${isProjectRoot ? "" : `<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="reconcile this one worktree — re-read its git state (dirty, ahead/behind, cherry, verdict, PR), then check its TODO list against what the tree now contains (a proposal, nothing closed) and its description, re-derived only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>
   </tr>`;
 }
 
