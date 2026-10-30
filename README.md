@@ -653,7 +653,7 @@ so the box you type in is on screen at any panel height with the last message di
 shorter than the panel starts at its foot instead of leaving empty panel under its last turn. It is two things:
 
 - **A sentry** that runs in the panel's own process, on `settings.seconds` (default 5 s), over the same job
-  summaries the cards are drawn from. It costs no tokens and it is always awake. Fifteen rules:
+  summaries the cards are drawn from. It costs no tokens and it is always awake. Sixteen rules:
   `loop` (the same tool with the same input N times, read-only helpers held to a higher bar), `errorloop`
   (identical failing output), `quiet` (a running turn with no new output — a long build looks exactly like
   this, so it only journals by default), `approval` (parked longer than the threshold), `question` (a turn
@@ -671,7 +671,11 @@ shorter than the panel starts at its foot instead of leaving empty panel under i
   on the alert as context rather than being a trigger)
   and `child` (a delegated subagent that has written nothing for `childQuietSeconds` — the wording is "no
   activity for 6m", never "hung": a long tool call looks the same; read from the gateway's session store, and
-  only for threads this board is showing), plus `interrupted` (a thread whose latest turn ended `interrupted` —
+  only for threads this board is showing), plus `settle` (a worker's run ended — `done` or `failed` — and no watch
+  covers its thread: the board's default notice, which carries the completion payload so the assistant can say
+  whether that branch is ready to land. It never fires for the assistant's own turns, however many runs settle in
+  one pass is one wake, and a thread with an open watch keeps the watch's single notice), plus `interrupted` (a
+  thread whose latest turn ended `interrupted` —
   a turn stopped without finishing, usually a panel restart; an interrupted turn a later turn has taken over is
   history and does not fire. It alerts rather than wakes by default, because one restart rewrites every running
   turn as interrupted at once and would spend the whole hourly wake budget in a single pass; raise it per rule
@@ -774,6 +778,19 @@ there was anything to merge. Wakes fired by one sentry pass are collected for 15
 watches on the same worker are one answer, not two — and one finish is one wake however many rules notice it (a
 watch closing and a turn cut off mid-flight are the same terminal result; the second alert is filed, journaled as
 `wake-once`, not sent). A scratchpad written before this default changed is migrated once (file `version: 2`).
+
+**A run that settles is news, even when nothing asked for it.** A clean completion used to change only its card: the
+assistant woke on watches and on trouble — a restart, a loop, silence, a question — so a worker that ended `done`
+and left a branch ready to land was the one thing on the board nobody was told about, and the work sat unlanded until
+the reader happened to look. `settle` closes that: every run that ends `done` or `failed` wakes the assistant once
+with the same completion payload a watch carries — its `final` block is the worker's own last message, or the
+transcript tail when it published none — so "is this branch ready to land" is answered from evidence instead of from
+the card's colour. Four guardrails, because that is a wake per run: the assistant's own turns are marked
+`assistant: true` on the card and are never woken about (no self-loop); a settled card is emitted again as its tree
+is measured and as a title lands, and one terminal key is one notice; several runs settling in one 150 ms pass are
+ONE alert and ONE wake, naming each of them; and a thread the reader has a watch on keeps the watch's notice, since
+that is the one they asked for. The notice is held back while the run's tree is still being measured — the same 30 s
+ceiling a watch uses — because a notice that says "commits not measured" cannot answer the question it exists for.
 
 **Something supervises the supervisor.** The sentry cannot report its own clock stopping, so the server runs a
 small watchdog outside it (every 10 s): a cleared timer is restarted, and a pass is run if the last one is older
