@@ -60,6 +60,7 @@ const frame = (page) =>
     return {
       l: +a.left.toFixed(1), t: +a.top.toFixed(1), r: +a.right.toFixed(1), b: +a.bottom.toFixed(1),
       w: +a.width.toFixed(1), h: +a.height.toFixed(1),
+      vw: document.documentElement.clientWidth, vh: document.documentElement.clientHeight,
     };
   });
 
@@ -82,6 +83,25 @@ async function place(page, base, rect) {
   await page.waitForTimeout(600);
   await page.evaluate(() => window.__assistantToggle(true));
   await page.waitForTimeout(250);
+  return frame(page);
+}
+
+// The same, on a page zoomed by the panel's own control (`applyZoom`, persisted in `wtgui.zoom`).
+async function placeZoomed(page, base, rect, zoom) {
+  await openPage(page, base, { selector: "#btn-assistant" });
+  await page.evaluate((r) => {
+    if (r) localStorage.setItem("wm.assistantRect", JSON.stringify(r));
+    else localStorage.removeItem("wm.assistantRect");
+    localStorage.setItem("wm.assistantOpen", "1");
+  }, rect);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForSelector("#as-grips", { state: "attached", timeout: 30_000 });
+  await page.waitForTimeout(600);
+  await page.evaluate((z) => {
+    applyZoom(z);
+    window.__assistantToggle(true);
+  }, zoom);
+  await page.waitForTimeout(300);
   return frame(page);
 }
 
@@ -402,6 +422,71 @@ async function main() {
         "with two turns open only the lowest one takes the room", JSON.stringify(two));
       void shareA; void shareB; void shareC; void shareD;
     }, { viewport: { width: 1400, height: 1200 } });
+
+    // ---- 6. the same gesture at a page zoom other than 100%
+    //
+    // The panel's own zoom (`applyZoom`, persisted in `wtgui.zoom`) scales LAYOUT but not client coordinates: at
+    // 110% a 380px-wide float measures 418px, `clientX` is a client-pixel number, and a length written to
+    // `style.width` is layout px that renders 10% larger. The gesture used to write measurements straight back
+    // into the style, so a 120px corner drag grew the frame 174px (304px at 130%), its corner sat 66px (210px)
+    // from the pointer and drifted further with every step, and the frame could be carried outside the window.
+    // Every length written is now divided by the zoom, so the corner keeps a constant offset at every zoom.
+    for (const zoom of [110, 130]) {
+      await withBrowser(async ({ page }) => {
+        const before = await placeZoomed(page, panel.base, { x: 120, y: 90, w: 380, h: 330 }, zoom);
+        const { down, trail } = await drag(page, "se", 120, 120, 8);
+        check(still(delta(before, down)),
+          `zoom ${zoom}%: nothing moves on pointerdown`, JSON.stringify(delta(before, down)));
+
+        const after = trail[trail.length - 1];
+        const moved = delta(before, after);
+        check(Math.abs(moved.dw - 120) <= 1 && Math.abs(moved.dh - 120) <= 1,
+          `zoom ${zoom}%: a 120px corner drag grows the frame by 120px, not by 120 x zoom`,
+          `grew ${moved.dw}x${moved.dh}`);
+
+        const gaps = trail.map((f) => offsets(f, "se", f.mx, f.my));
+        const xs = gaps.map((g) => g.x);
+        const ys = gaps.map((g) => g.y);
+        const drift = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+        check(drift <= 1, `zoom ${zoom}%: the corner keeps a constant offset from the pointer`,
+          `drift ${drift.toFixed(1)}px (offset ${xs[0]} -> ${xs[xs.length - 1]})`);
+
+        check(after.r <= after.vw && after.b <= after.vh && after.l >= 0 && after.t >= 0,
+          `zoom ${zoom}%: the resized frame stays inside the window`,
+          `right ${after.r}/${after.vw} bottom ${after.b}/${after.vh}`);
+
+        // the header drag writes left/top, so it is the same units problem
+        const preMove = await frame(page);
+        const head = await page.locator("#as-drag").boundingBox();
+        const hx = head.x + 60, hy = head.y + head.height / 2;
+        await page.mouse.move(hx, hy);
+        await page.mouse.down();
+        const held = await frame(page);
+        for (let i = 1; i <= 6; i += 1) {
+          await page.mouse.move(hx - i * 8, hy + i * 5);
+          await page.waitForTimeout(25);
+        }
+        await page.mouse.up();
+        const movedTo = await frame(page);
+        check(still(delta(preMove, held)), `zoom ${zoom}%: the header moves nothing on pointerdown`,
+          JSON.stringify(delta(preMove, held)));
+        check(Math.abs((preMove.l - movedTo.l) - 48) <= 1 && Math.abs((movedTo.t - preMove.t) - 30) <= 1,
+          `zoom ${zoom}%: the header drag moves the frame with the pointer`,
+          `moved ${(preMove.l - movedTo.l).toFixed(1)},${(movedTo.t - preMove.t).toFixed(1)} wanted 48,30`);
+      }, { viewport: VIEW });
+    }
+
+    // ---- 6b. at 130% the stylesheet's own frame is taller than the window, so the default has to be clamped
+    await withBrowser(async ({ page }) => {
+      const opened = await placeZoomed(page, panel.base, null, 130);
+      check(opened.b <= opened.vh && opened.r <= opened.vw,
+        "zoom 130%: the stylesheet's own frame opens inside the window",
+        `${opened.w}x${opened.h} at ${opened.l},${opened.t}, bottom ${opened.b}/${opened.vh}`);
+      const b = await gripBox(page, "se");
+      check(Boolean(b) && b.y + b.height <= opened.vh,
+        "zoom 130%: and its bottom-right grab is on screen to be grabbed", JSON.stringify(b));
+    }, { viewport: VIEW });
+
   } finally {
     await panel.stop();
   }

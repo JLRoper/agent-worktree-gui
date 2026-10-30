@@ -113,15 +113,28 @@
     // Maximized, the frame is the viewport: `inset: 0` in CSS owns it, and any remembered rect written here
     // would fight it.
     if (state.assistantFull) return;
-    const r = state.assistantRect || readRect();
-    if (!r) return;
     const { vw, vh } = viewportBox();
+    let r = state.assistantRect || readRect();
+    if (!r) {
+      // Nothing remembered: the stylesheet's own frame is the starting point, measured rather than assumed.
+      // The stylesheet's lengths are LAYOUT px and so render `zoom`× larger, while the window is not zoomed at
+      // all — at 130% the default `min(72vh, 780px)` is 842px on screen and the float's bottom edge, with its
+      // bottom-right grab, opened 38px below the window. It fits at 100%, and there the stylesheet keeps
+      // owning the frame (the float follows the window's right edge); only an overhanging frame is clamped.
+      const b = el.getBoundingClientRect();
+      if (!b.width || !b.height) return; // closed: a hidden frame measures nothing
+      if (b.left >= EDGE && b.top >= EDGE && b.right <= vw - EDGE && b.bottom <= vh - EDGE) return;
+      r = { x: b.left, y: b.top, w: b.width, h: b.height };
+    }
     const w = Math.max(320, Math.min(r.w, vw - 2 * EDGE));
     const h = Math.max(320, Math.min(r.h, vh - 2 * EDGE));
-    el.style.width = `${w}px`;
-    el.style.height = `${h}px`;
-    el.style.left = `${Math.max(EDGE, Math.min(r.x, vw - w - EDGE))}px`;
-    el.style.top = `${Math.max(EDGE, Math.min(r.y, vh - h - EDGE))}px`;
+    const x = Math.max(EDGE, Math.min(r.x, vw - w - EDGE));
+    const y = Math.max(EDGE, Math.min(r.y, vh - h - EDGE));
+    const z = zoomScale();
+    el.style.width = cssPx(w, z);
+    el.style.height = cssPx(h, z);
+    el.style.left = cssPx(x, z);
+    el.style.top = cssPx(y, z);
     el.style.right = "auto";
     el.style.bottom = "auto";
   }
@@ -147,6 +160,24 @@
       vw: doc.clientWidth || window.innerWidth,
       vh: doc.clientHeight || window.innerHeight,
     };
+  }
+
+  // The page zoom this panel applies to `documentElement` (`applyZoom` in app.js, persisted in `wtgui.zoom`).
+  //
+  // It scales LAYOUT, not client coordinates: `getBoundingClientRect()` and `clientX/Y` are already VISUAL px
+  // (a 480px-wide float measures 528 at 110%, and `elementFromPoint(168, …)` — 3px inside its visual edge —
+  // hits its grab), while a length written to `style.left`/`style.width` is LAYOUT px and renders `zoom`× larger.
+  // Writing a measured client length straight back into the style therefore made every gesture zoom-scaled: at
+  // 110% the first move of a corner grab jumped the frame a tenth of its own size, its corner sat 148px past the
+  // cursor, and a 150px drag carried the frame 135px outside the window. Divide every written length by this.
+  function zoomScale() {
+    const z = parseFloat(getComputedStyle(document.documentElement).zoom);
+    return Number.isFinite(z) && z > 0 ? z : 1;
+  }
+
+  // A client-pixel length as a CSS length for this zoom.
+  function cssPx(v, z) {
+    return `${v / (z || 1)}px`;
   }
 
   // The chat's scroll box: the card's body, and the only thing in the float that scrolls.
@@ -1867,12 +1898,12 @@
     // Anchor the frame with left/top before any gesture. The stylesheet right-anchors it (`right: 16px`), and a float
     // anchored by `right` grows its LEFT edge: with no remembered rect the first resize drag could travel 8px before
     // its own clamp froze it, while the pointer walked on. `getBoundingClientRect` is the state it actually has.
-    const pinFrame = () => {
+    const pinFrame = (z) => {
       const r = el.getBoundingClientRect();
-      el.style.left = `${r.left}px`;
-      el.style.top = `${r.top}px`;
-      el.style.width = `${r.width}px`;
-      el.style.height = `${r.height}px`;
+      el.style.left = cssPx(r.left, z);
+      el.style.top = cssPx(r.top, z);
+      el.style.width = cssPx(r.width, z);
+      el.style.height = cssPx(r.height, z);
       el.style.right = "auto";
       el.style.bottom = "auto";
       return r;
@@ -1901,8 +1932,11 @@
       const p = pressState;
       pressState = null;
       if (!p) return false;
-      const r = pinFrame();
-      dragState = { mode: p.mode, dir: p.dir, px: p.px, py: p.py, x: r.left, y: r.top, w: r.width, h: r.height };
+      // The zoom is read once per gesture: it cannot change mid-drag, and every length written below is a
+      // client-pixel measurement that has to be handed back to CSS in layout px (see `zoomScale`).
+      const z = zoomScale();
+      const r = pinFrame(z);
+      dragState = { mode: p.mode, dir: p.dir, px: p.px, py: p.py, x: r.left, y: r.top, w: r.width, h: r.height, z };
       el.classList.add("is-dragging");
       // Growing the panel hands the room to a turn's console, so a resize with everything folded opens the newest
       // turn first: a folded turn has no console on the page for the room to land in.
@@ -1921,6 +1955,9 @@
         if (!beginGesture()) return;
       }
       const d = dragState;
+      // Client px in, layout px out: `d.x/y/w/h`, the pointer and `vw/vh` are all client measurements, while
+      // the style lengths are layout ones that the page zoom scales (see `zoomScale`).
+      const z = d.z || 1;
       const { vw, vh } = viewport();
       const dx = e.clientX - d.px;
       const dy = e.clientY - d.py;
@@ -1933,8 +1970,8 @@
         // pulls it back in — clamping it to `EDGE` here would snap it to the top-left corner on the grab itself.
         const x = clamp(d.x + dx, Math.min(EDGE, d.x), Math.max(maxX, d.x));
         const y = clamp(d.y + dy, Math.min(EDGE, d.y), Math.max(maxY, d.y));
-        el.style.left = `${x}px`;
-        el.style.top = `${y}px`;
+        el.style.left = cssPx(x, z);
+        el.style.top = cssPx(y, z);
         el.style.right = "auto";
         el.style.bottom = "auto";
         // Absorb what the clamp ate into the drag's own origin. Otherwise the pointer has to walk the whole overshoot
@@ -1972,10 +2009,10 @@
         d.py += wantY - y;
       }
 
-      el.style.left = `${x}px`;
-      el.style.top = `${y}px`;
-      el.style.width = `${w}px`;
-      el.style.height = `${h}px`;
+      el.style.left = cssPx(x, z);
+      el.style.top = cssPx(y, z);
+      el.style.width = cssPx(w, z);
+      el.style.height = cssPx(h, z);
       el.style.right = "auto";
       el.style.bottom = "auto";
       // The console that takes the room has to be told again: a repaint between two moves may have dropped the class.
