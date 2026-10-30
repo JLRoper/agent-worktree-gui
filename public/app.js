@@ -4384,7 +4384,7 @@ function refreshOfferHtml(offer) {
   const evidence = (offer.evidence || []).filter(Boolean);
   const what = evidence.length ? evidence.join(" · ") : "a mismatch the cheap pass cannot resolve by itself";
   return `<tr class="row-confirm refresh-offer" data-refresh-offer="${esc(offer.key)}">
-      <td colspan="10">
+      <td colspan="${wtColspan()}">
         <div class="row-confirm-cell">
           <span class="rc-msg"><span class="dimmer">⟳ re-read</span> <b>${esc(row.name)}</b> <span class="dimmer">found</span> <span class="mono">${esc(what)}</span>
             <span class="dimmer">— start one agent in this worktree to double-check the TODO, the description and the merge state? It reads the tree itself and reports back; nothing is pushed or merged.</span></span>
@@ -8196,7 +8196,7 @@ function showWorktreeConfirm(key) {
     const held = document.createElement("tr");
     held.className = "row-confirm row-locked";
     held.dataset.confirmRow = key;
-    held.innerHTML = `<td colspan="10">
+    held.innerHTML = `<td colspan="${wtColspan()}">
         <div class="row-confirm-cell">
           <span class="rc-msg"><span class="rc-lock">${"\u{1F512}"} locked</span> <b>${esc(row.name)}</b> <span class="dimmer">cannot be deleted:</span> ${esc(row.lock.reason || "this worktree is locked by the reader")}</span>
           <span class="rc-actions"><button class="btn-del-no" type="button" data-del-tree-no="${esc(key)}">Close</button></span>
@@ -8215,7 +8215,7 @@ function showWorktreeConfirm(key) {
   // where `.project`'s overflow clipped them and nothing could be clicked.
   // The flex layout lives on a div INSIDE the cell: a td with `display:flex` stops being a table cell and loses
   // its colspan, which collapsed this row to its content width instead of the card's.
-  confirm.innerHTML = `<td colspan="10">
+  confirm.innerHTML = `<td colspan="${wtColspan()}">
       <div class="row-confirm-cell">
         <span class="rc-msg"><span class="dimmer">Remove worktree</span> <b>${esc(row.name)}</b> <span class="dimmer">on</span> <span class="mono">${esc(row.branch || "—")}</span><span class="dimmer">? Its files go to the Recycle Bin (recoverable there) and git's record of it is pruned.</span></span>
         <span class="rc-actions"><button class="btn-del-no" type="button" data-del-tree-no="${esc(key)}">Cancel</button><button class="btn-del-yes" type="button" data-del-tree-yes="${esc(key)}">Delete</button></span>
@@ -8431,7 +8431,7 @@ function showNameConfirm(key, d) {
        <span class="dimmer">· ${esc(d.why || "")}${named ? ` · currently ${esc(named)}` : ""}</span>
        ${commits || files ? `<div class="rc-evidence mono dimmer">${commits ? `commits: ${commits}` : ""}${commits && files ? " — " : ""}${files ? `files: ${files}` : ""}</div>` : ""}`
     : `<span class="dimmer">Nothing to name this one from —</span> ${esc(d.why || "no commits against the base branch and no changed files")}`;
-  confirm.innerHTML = `<td colspan="10">
+  confirm.innerHTML = `<td colspan="${wtColspan()}">
       <div class="row-confirm-cell">
         <span class="rc-msg">${msg}</span>
         <span class="rc-actions">${
@@ -9174,18 +9174,24 @@ function rowHtml(row) {
     ? ""
     : `<button class="btn-row-lock btn-branch-lock${branchLockedByBranch ? " is-locked" : ""}" type="button" data-lock-scope="branch" data-lock-tree="${lockKeyAttr}"
       title="${esc(branchLockTitle)}" aria-pressed="${branchLockedByBranch ? "true" : "false"}" aria-label="lock this branch">${branchLockedByBranch ? "\u{1F512}" : "\u{1F513}"}</button>`;
+  // One cell per column, keyed by the column's id (CHART_COLUMNS), so the row and the header cannot disagree about
+  // which cell is which: a hidden column is simply not in `cells`, and the row is the shown set in table order. The
+  // age cell carries its own <td> (it is painted in place every second), which is why `life` is read, not wrapped.
+  const cells = {
+    name: `<td class="name"><div class="name-line"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
+      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${treeLockBtn}${renameBtn}${nameFromWorkBtn}${agentBadgeHtml(row)}</div></td>`,
+    branch: `<td class="mono branch">${branchCellHtml(row)}${branchLockBtn}</td>`,
+    tip: `<td class="mono dim nowrap">${esc(row.head || "—")}</td>`,
+    ahead: `<td class="mono nowrap">${aheadBehindCellHtml(row)}</td>`,
+    cherry: `<td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>`,
+    pr: `<td>${pr}</td>`,
+    dirty: `<td class="mono nowrap">${dirty}</td>`,
+    life: ageCellHtml(row),
+    verdict: `<td class="verdict">${badge}</td>`,
+    actions: `<td class="row-actions">${isProjectRoot ? "" : `${childBtn}<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="reconcile this one worktree — re-read its git state (dirty, ahead/behind, cherry, verdict, PR), then check its TODO list against what the tree now contains (a proposal, nothing closed) and its description, re-derived only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>`,
+  };
   return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
-    <td class="name"><div class="name-line"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
-      title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${treeLockBtn}${renameBtn}${nameFromWorkBtn}${agentBadgeHtml(row)}</div></td>
-    <td class="mono branch">${branchCellHtml(row)}${branchLockBtn}</td>
-    <td class="mono dim nowrap">${esc(row.head || "—")}</td>
-    <td class="mono nowrap">${aheadBehindCellHtml(row)}</td>
-    <td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>
-    <td>${pr}</td>
-    <td class="mono nowrap">${dirty}</td>
-    ${ageCellHtml(row)}
-    <td class="verdict">${badge}</td>
-    <td class="row-actions">${isProjectRoot ? "" : `${childBtn}<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="reconcile this one worktree — re-read its git state (dirty, ahead/behind, cherry, verdict, PR), then check its TODO list against what the tree now contains (a proposal, nothing closed) and its description, re-derived only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>
+    ${shownColumns().map((i) => cells[CHART_COLUMNS[i].id]).join("\n    ")}
   </tr>`;
 }
 
@@ -10986,7 +10992,7 @@ function detailHtml(row) {
         <span class="release-why">${esc(rel.why || "")}</span>
       </div>`
     : "";
-  return `<tr class="detail" data-detail="${esc(key)}"><td colspan="10"><div class="detail-inner">
+  return `<tr class="detail" data-detail="${esc(key)}"><td colspan="${wtColspan()}"><div class="detail-inner">
     ${releaseBlock}
     ${descBlock}
     ${todoBlockHtml(row, key)}
@@ -11489,10 +11495,7 @@ function projectSection(name) {
     </div>
     ${hostPanelHtml(name)}
     <div class="wt-scroll">
-      <table><thead><tr>
-        <th>Worktree</th><th>Branch</th><th>Tip</th><th title="↑ commits this branch has that its own copy on the remote does not (not pushed yet). ↓ commits that copy has that this tree does not (not pulled). gone: the copy was deleted on the remote. —: never pushed. A dotted count with a ? is as of the last fetch that worked, because the latest one failed. The count against main is in the verdict's tooltip.">Ahead / Behind</th><th>Cherry</th>
-        <th>PR</th><th>Dirty</th><th title="time since this worktree was last seen alive (any evidence firing) · the ring fills up to green as the row becomes due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited">Life / next read</th><th>Verdict</th><th title="remove a worktree (sent to the Recycle Bin)"></th>
-      </tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
+      <table><thead><tr>${chartHeaderHtml()}</tr></thead><tbody data-tbody="${esc(name)}"></tbody></table>
     </div>
     <div class="legend"><span class="age-slot" data-age-slot="${esc(name)}"></span>liveness evidence: <span class="sig sig-hermes">⧉ hermes</span> session active · <span class="sig sig-claude">⧉ claude</span> Claude Code session active · <span class="sig sig-board">● board</span> live board PID · <span class="sig sig-port">:port</span> dev server listening · <span class="sig sig-files">✎ files</span> edited recently — a row is live only if one of these fired · the number is time since that last happened, the ring fills up to green as the row becomes due for its next read</div>
   </section>`;
@@ -11505,24 +11508,94 @@ function refreshChips(name) {
   refreshAgeToggle(name);
 }
 
-// ---- column widths: measured from the rows, draggable, remembered ----------------------------
-// The table is `table-layout: fixed` on purpose (auto layout let one long branch grow it past its card), so every
-// column width is a number somebody has to choose. Percentages chose badly: the verdict column held 12.6% of the
-// row to show "NO COMMITS", and the worktree column held 28% to carry a name, a rename ✎ and the agent chips -
-// exactly what the name alone used up, so the chips were the part that got clipped while the far side of the row
-// sat empty. The split is now measured: each column asks for its widest cell, the columns that read the same at any
-// width give their room up first when the table is narrower than that, and the spare room goes to the two text
-// columns. A drag on the edge between two headers sets those two by hand (remembered in this browser, shared by
-// every project table); a double-click on any edge hands the board back to the measurement.
-const WT_COLS = 10;
+// ---- chart columns: which of the table's ten the reader keeps ---------------------------------------------
+// Ten columns on every row is a lot of chart, and a reader chasing one fact (which trees are merged, which are
+// behind) does not need the other nine on screen. Hiding a column is a settings choice stored in this panel's
+// config.json (`hiddenColumns`, POST /api/settings/columns), and the column set is DATA here rather than ten
+// hand-written cells: the header, every row, the two column-spanning rows and the width measurement all read this
+// list, so a hidden column is one absent <td> everywhere instead of a table whose cells disagree with its headers.
+// The ids are the server's too (lib/chart-columns.js validates them); test/chart-columns.test.js asserts the two
+// lists are the same, because a typo on either side hides nothing and looks like a broken button.
+//
+// Each column carries its own width floor and its own readiness to give room back. The table is `table-layout: fixed`
+// on purpose (auto layout let one long branch grow it past its card), so every column width is a number somebody has
+// to choose. Percentages chose badly: the verdict column held 12.6% of the row to show "NO COMMITS", and the
+// worktree column held 28% to carry a name, a rename ✎ and the agent chips - exactly what the name alone used up, so
+// the chips were the part that got clipped while the far side of the row sat empty. The split is now measured: each
+// column asks for its widest cell, the columns that read the same at any width give their room up first when the
+// table is narrower than that, and the spare room goes to the two text columns. A drag on the edge between two
+// headers sets those two by hand (remembered in this browser, shared by every project table); a double-click on any
+// edge hands the board back to the measurement.
+const CHART_COLUMNS = [
+  { id: "name", label: "Worktree", min: 170, give: 0.35 },
+  { id: "branch", label: "Branch", min: 110, give: 0.45 },
+  { id: "tip", label: "Tip", min: 70, give: 1 },
+  {
+    id: "ahead",
+    label: "Ahead / Behind",
+    min: 58,
+    give: 1,
+    title:
+      "↑ commits this branch has that its own copy on the remote does not (not pushed yet). ↓ commits that copy has that this tree does not (not pulled). gone: the copy was deleted on the remote. —: never pushed. A dotted count with a ? is as of the last fetch that worked, because the latest one failed. The count against main is in the verdict's tooltip.",
+  },
+  { id: "cherry", label: "Cherry", min: 56, give: 1.1 },
+  { id: "pr", label: "PR", min: 62, give: 1.1 },
+  { id: "dirty", label: "Dirty", min: 64, give: 1 },
+  {
+    id: "life",
+    label: "Life / next read",
+    min: 120,
+    give: 0.5,
+    title:
+      "time since this worktree was last seen alive (any evidence firing) · the ring fills up to green as the row becomes due for its next read · chips are the evidence: ⧉ hermes session · ● board PID · :port dev server · ✎ files edited",
+  },
+  { id: "verdict", label: "Verdict", min: 104, give: 0.5 },
+  { id: "actions", label: "", min: 52, give: 0.15, title: "remove a worktree (sent to the Recycle Bin)" },
+];
+const WT_COLS = CHART_COLUMNS.length;
 // Floors, measured off the real cell text at the panel's own font sizes: the hash, `0 / 0`, `+0/−0`, `none`,
 // `clean`/`3 +1?`, `0s` with the ring and one chip, `NO COMMITS` and the row's ⟳ then ✕ each fit whole at these numbers.
 // A long branch or a long `MERGED (squash/rebase, 3 commits)` still ellipsizes - that is the cheapest thing to lose.
-const COL_MIN = [170, 110, 70, 58, 56, 62, 64, 120, 104, 52];
+const COL_MIN = CHART_COLUMNS.map((c) => c.min);
 // How readily a column gives width back when the content is wider than the table, per column: 1 is a column that
 // says little at any width (`+0/−0`, `none`), 0.15 is one that must not move (the row's ✕). A column only ever gives
 // up its own slack above its floor, so the numbers decide how the squeeze is shared, not who is cut to the bone.
-const COL_GIVE = [0.35, 0.45, 1, 1, 1.1, 1.1, 1, 0.5, 0.5, 0.15];
+const COL_GIVE = CHART_COLUMNS.map((c) => c.give);
+
+// The columns the chart hides. Read from the panel's config.json on every render rather than cached, so the row
+// that arrives on the next scan and the header rebuilt by a `project` event agree with the switch the reader moved.
+function hiddenColumnIds() {
+  const raw = state.settings?.hiddenColumns;
+  return new Set((Array.isArray(raw) ? raw : []).map((x) => String(x || "").toLowerCase()));
+}
+
+// The columns actually drawn, as indexes into CHART_COLUMNS, in the table's own order. At least one always
+// survives: an empty table is not a narrower chart, and the last column carries the row's ⟳ and ✕. The server keeps
+// the same floor (lib/chart-columns.js), so a config that hides everything still draws that cell after a restart.
+function shownColumns() {
+  const hidden = hiddenColumnIds();
+  const shown = CHART_COLUMNS.map((_, i) => i).filter((i) => !hidden.has(CHART_COLUMNS[i].id));
+  return shown.length ? shown : [WT_COLS - 1];
+}
+
+// How many cells a column-spanning row needs: an expanded worktree, a delete question, a lock refusal, a rename
+// offer. It used to be the literal 10 in five places, which is exactly how a hidden column leaves a bare strip of
+// panel at the right edge (or a cell one column short, silently dropping the last one).
+function wtColspan() {
+  return shownColumns().length;
+}
+
+function chartHeaderHtml() {
+  return shownColumns()
+    .map((i) => {
+      const c = CHART_COLUMNS[i];
+      const attrs = `data-col-id="${esc(c.id)}"${c.title ? ` title="${esc(c.title)}"` : ""}`;
+      return `<th ${attrs}>${esc(c.label)}</th>`;
+    })
+    .join("");
+}
+// ---- end chart columns
+
 const COL_WIDTHS_KEY = "wtgui.colWidths";
 
 function loadColWidths() {
@@ -11569,52 +11642,58 @@ function naturalColumnWidths(table) {
   return natural;
 }
 
-// What the columns want turned into what they get, in px, adding up to the table's own width.
-function columnPlan(natural, total) {
-  const fixed = colWidths.map((w) => w != null);
-  const want = natural.map((n, i) => (fixed[i] ? colWidths[i] : Math.max(COL_MIN[i], n)));
+// What the columns want turned into what they get, in px, adding up to the table's own width. `cols` is the shown
+// subset of CHART_COLUMNS (indexes), so `natural`, `want` and `room` are POSITIONS on screen while the floors, the
+// squeeze weights and a hand-set width are looked up by the column's stable id-position in CHART_COLUMNS. Hiding a
+// column therefore neither renames a remembered width nor moves the floor onto its neighbour.
+function columnPlan(natural, total, cols = CHART_COLUMNS.map((_, i) => i)) {
+  const fixed = cols.map((i) => colWidths[i] != null);
+  const want = natural.map((n, k) => (fixed[k] ? colWidths[cols[k]] : Math.max(COL_MIN[cols[k]], n)));
   const sum = (xs) => xs.reduce((a, b) => a + b, 0);
   let spare = total - sum(want);
   if (spare > 0) {
-    // Spare room belongs to the columns whose text truncates: 70/30 worktree and branch. A column the reader sized
-    // by hand is a promise, so it is skipped; with both text columns hand-set the room is spread over the rest.
-    let pool = [0, 1].filter((i) => !fixed[i]);
-    if (!pool.length) pool = want.map((_, i) => i).filter((i) => !fixed[i]);
-    if (!pool.length) pool = [0, 1];
+    // Spare room belongs to the columns whose text truncates: 70/30 worktree and branch, as far as they are drawn.
+    // A column the reader sized by hand is a promise, so it is skipped; with both text columns hand-set the room is
+    // spread over the rest.
+    const namePos = cols.indexOf(0);
+    const branchPos = cols.indexOf(1);
+    let pool = [namePos, branchPos].filter((p) => p >= 0 && !fixed[p]);
+    if (!pool.length) pool = want.map((_, p) => p).filter((p) => !fixed[p]);
+    if (!pool.length) pool = [0];
     if (pool.length === 1) want[pool[0]] += spare;
-    else if (pool.includes(0) && pool.includes(1)) {
+    else if (pool.includes(namePos) && pool.includes(branchPos)) {
       const toName = Math.round(spare * 0.7);
-      want[0] += toName;
-      want[1] += spare - toName;
-    } else for (const i of pool) want[i] += Math.floor(spare / pool.length);
+      want[namePos] += toName;
+      want[branchPos] += spare - toName;
+    } else for (const p of pool) want[p] += Math.floor(spare / pool.length);
   } else if (spare < 0) {
     // Too narrow for the content: every column gives up the same fraction of what it can spare above its floor,
     // weighted by how little that costs it. Proportional rather than one column at a time - draining the first
     // column to its floor left it clipped mid-word while its neighbour sat at its full natural width.
     let over = -spare;
     for (let pass = 0; pass < 4 && over > 0.5; pass += 1) {
-      const room = want.map((w, i) => (fixed[i] ? 0 : Math.max(0, w - COL_MIN[i]) * COL_GIVE[i]));
+      const room = want.map((w, p) => (fixed[p] ? 0 : Math.max(0, w - COL_MIN[cols[p]]) * COL_GIVE[cols[p]]));
       const avail = sum(room);
       if (!avail) break;
       const take = Math.min(over, avail);
-      for (let i = 0; i < want.length; i += 1) if (room[i]) want[i] -= (room[i] / avail) * take;
+      for (let p = 0; p < want.length; p += 1) if (room[p]) want[p] -= (room[p] / avail) * take;
       over -= take;
     }
     // Every column at its floor and still too wide (a very narrow window): scale instead of letting the table grow
     // past its card, which is the bug `table-layout: fixed` exists to prevent.
     if (over > 0) {
       const scale = Math.min(1, total / sum(want));
-      for (let i = 0; i < want.length; i += 1) want[i] = Math.max(24, Math.floor(want[i] * scale));
+      for (let p = 0; p < want.length; p += 1) want[p] = Math.max(24, Math.floor(want[p] * scale));
     }
   }
-  // Integers that add up to the table's width exactly: rounding lands on the worktree column, the one with room.
+  // Integers that add up to the table's width exactly: rounding lands on the leftmost column, the one with room.
   want[0] = Math.max(24, want[0] + (total - sum(want)));
   return want;
 }
 
 function applyColumnWidths(table, widths) {
-  headerCells(table).forEach((th, i) => {
-    th.style.width = `${Math.max(24, Math.round(widths[i]))}px`;
+  headerCells(table).forEach((th, p) => {
+    th.style.width = `${Math.max(24, Math.round(widths[p]))}px`;
   });
 }
 
@@ -11631,7 +11710,9 @@ const WT_SCROLL = "wt-scroll";
 function fitTarget(table) {
   const wrap = table.parentElement && table.parentElement.classList.contains(WT_SCROLL) ? table.parentElement : null;
   const box = Math.floor((wrap || table).clientWidth);
-  const floor = COL_MIN.reduce((a, b) => a + b, 0);
+  // Only the columns on the chart set the width below which it scrolls: hiding five columns lowers that floor, which
+  // is the room a reader is buying back by hiding them.
+  const floor = shownColumns().reduce((a, i) => a + COL_MIN[i], 0);
   const scroll = Boolean(wrap) && box > 0 && box < floor;
   return { wrap, box, total: scroll ? floor : box, scroll };
 }
@@ -11667,7 +11748,11 @@ function fitColumns(table) {
   // A scan landing mid-drag must not fight the pointer for the pair being sized.
   if (colDrag) return;
   const ths = headerCells(table);
-  if (ths.length !== WT_COLS) return;
+  // The header and the rows are built from the same shown set, so a table whose header does not match it is a stale
+  // node (a settings change between the header paint and this fit): skip rather than measure a split for a table that
+  // is about to be replaced.
+  const cols = shownColumns();
+  if (ths.length !== cols.length) return;
   installColumnGrips(table);
   const tbody = table.tBodies[0];
   const fit = fitTarget(table);
@@ -11678,7 +11763,7 @@ function fitColumns(table) {
   const sig = columnSignature(tbody);
   if (columnSigs.get(table) === sig && ths[0].style.width) return;
   columnSigs.set(table, sig);
-  applyColumnWidths(table, columnPlan(naturalColumnWidths(table), fit.total));
+  applyColumnWidths(table, columnPlan(naturalColumnWidths(table), fit.total, cols));
 }
 
 // One measurement per table per frame, however many rows arrived this tick.
@@ -11746,7 +11831,10 @@ function beginColumnDrag(e) {
   const i = Number(grip.dataset.col);
   const widths = headerCells(table).map((th) => th.getBoundingClientRect().width);
   if (!widths.length || widths[i + 1] == null) return;
-  colDrag = { grip, table, i, x: e.clientX, widths, pair: widths[i] + widths[i + 1], left: null };
+  // The pair is remembered by COLUMN, not by position: the header is rebuilt from the shown set on every render, so a
+  // position is only true for the table it was measured on.
+  const cols = shownColumns();
+  colDrag = { grip, table, i, cols, x: e.clientX, widths, pair: widths[i] + widths[i + 1], left: null };
   grip.classList.add("is-dragging");
   document.body.classList.add("col-resizing");
   e.preventDefault();
@@ -11758,9 +11846,11 @@ function beginColumnDrag(e) {
 
 function dragColumn(e) {
   if (!colDrag) return;
-  const { table, i, x, widths, pair } = colDrag;
+  const { table, i, cols, x, widths, pair } = colDrag;
   const ths = headerCells(table);
-  const left = Math.max(COL_MIN[i], Math.min(pair - COL_MIN[i + 1], Math.round(widths[i] + (e.clientX - x))));
+  const floorLeft = COL_MIN[cols[i]];
+  const floorRight = COL_MIN[cols[i + 1]];
+  const left = Math.max(floorLeft, Math.min(pair - floorRight, Math.round(widths[i] + (e.clientX - x))));
   colDrag.left = left;
   colDrag.right = Math.round(pair - left);
   ths[i].style.width = `${colDrag.left}px`;
@@ -11769,15 +11859,15 @@ function dragColumn(e) {
 
 function endColumnDrag() {
   if (!colDrag) return;
-  const { grip, i, left, right } = colDrag;
+  const { grip, i, cols, left, right } = colDrag;
   colDrag = null;
   window.removeEventListener("pointermove", dragColumn);
   grip.classList.remove("is-dragging");
   document.body.classList.remove("col-resizing");
   // A press with no movement is a click on the edge, not a decision about the width.
   if (left == null) return;
-  colWidths[i] = left;
-  colWidths[i + 1] = right;
+  colWidths[cols[i]] = left;
+  colWidths[cols[i + 1]] = right;
   saveColWidths();
   fitAllColumns();
 }
@@ -15607,6 +15697,91 @@ for (const btn of document.querySelectorAll("[data-age-set]")) {
   });
 }
 
+// ---- which of the chart's columns are drawn ------------------------------------------------------
+// The choice lives in this panel's config.json (POST /api/settings/columns, `hiddenColumns`), like the refresh mode
+// and the age threshold above: one answer for every browser, and it survives a restart. The switches are BUILT from
+// CHART_COLUMNS, so a column cannot be added to the chart and left out of Settings — or named one thing in the table
+// and another in the row.
+function chartColumnsStored() {
+  const raw = state.settings?.hiddenColumns;
+  const hidden = new Set((Array.isArray(raw) ? raw : []).map((x) => String(x || "").toLowerCase()));
+  return CHART_COLUMNS.filter((c) => hidden.has(c.id)).map((c) => c.id);
+}
+
+function chartColumnsSentence(hidden = chartColumnsStored()) {
+  const shown = CHART_COLUMNS.length - hidden.length;
+  return hidden.length
+    ? `${shown} of ${CHART_COLUMNS.length} columns on the chart · hidden: ${hidden.join(", ")}`
+    : `every column is on the chart (${CHART_COLUMNS.length})`;
+}
+
+function paintChartColumns(note = "", bad = false) {
+  const stored = chartColumnsStored();
+  const hidden = new Set(stored);
+  const holder = $("chart-cols");
+  if (holder) {
+    if (!holder.childElementCount) {
+      holder.innerHTML = CHART_COLUMNS.map(
+        (c) =>
+          `<label title="${esc(c.title || `${c.label} — the chart's ${c.label || "actions"} column`)}"><input type="checkbox" data-chart-col="${esc(c.id)}"> ${esc(c.label || "Actions")}</label>`,
+      ).join("");
+    }
+    for (const box of holder.querySelectorAll("[data-chart-col]")) box.checked = !hidden.has(box.dataset.chartCol);
+  }
+  const count = $("chart-cols-count");
+  if (count) count.textContent = `${CHART_COLUMNS.length - stored.length}/${CHART_COLUMNS.length}`;
+  const preview = $("chart-cols-preview");
+  if (preview) {
+    preview.textContent = bad
+      ? `NOT SAVED — ${note}. config.json still says: ${chartColumnsSentence()}.`
+      : note
+        ? `${note} — set in config.json, so it applies to every browser and survives a restart`
+        : `${chartColumnsSentence()} · set in config.json, so it applies to every browser and survives a restart`;
+    preview.classList.toggle("bad", bad);
+  }
+}
+
+async function saveChartColumns(hidden) {
+  // Canonical order, so the file does not depend on the order the reader clicked the switches.
+  const ids = CHART_COLUMNS.map((c) => c.id);
+  const want = ids.filter((id) => hidden.includes(id));
+  const preview = $("chart-cols-preview");
+  if (preview) {
+    preview.textContent = "saving…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch(
+      "/api/settings/columns",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ hidden: want }) },
+      { timeoutMs: 10000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    state.settings.hiddenColumns = Array.isArray(d.hidden) ? d.hidden.slice() : want;
+    // The chart is a TABLE: a hidden column is one missing cell in the header and in every row of every project, so
+    // the board is rebuilt rather than patched. The column fit is scheduled by that rebuild.
+    renderAll();
+    paintChartColumns();
+    showBanner(chartColumnsSentence(state.settings.hiddenColumns));
+  } catch (err) {
+    paintChartColumns(String((err && err.message) || err), true);
+  }
+}
+
+$("chart-cols")?.addEventListener("change", () => {
+  const holder = $("chart-cols");
+  if (!holder) return;
+  const hidden = [...holder.querySelectorAll("[data-chart-col]")].filter((b) => !b.checked).map((b) => b.dataset.chartCol);
+  void saveChartColumns(hidden);
+});
+$("btn-cols-all")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  const holder = $("chart-cols");
+  if (holder) for (const box of holder.querySelectorAll("[data-chart-col]")) box.checked = true;
+  void saveChartColumns([]);
+});
+
 // The chart's own arrow: one press shows this project every tree, or holds the stale ones back again.
 document.addEventListener("click", (e) => {
   const btn = e.target.closest ? e.target.closest("[data-age-toggle]") : null;
@@ -15855,11 +16030,17 @@ document.addEventListener("click", (e) => {
 // carries them after a change made anywhere else (another tab, or "Always allow" in the permission box).
 function applySettings(settings) {
   if (!settings) return;
+  // Which columns are drawn is the one setting here that changes the table's SHAPE: another tab (or a hand-edited
+  // config the panel re-broadcasts) can hide a column, and a board that only repainted its cells would leave the old
+  // header over rows that no longer match it.
+  const colsBefore = (state.settings?.hiddenColumns || []).join(",");
   state.settings = { ...(state.settings || {}), ...settings };
   paintConfigLine();
   const scanMode = $("scan-mode");
   if (scanMode) scanMode.value = state.settings.scanMode === "visible" ? "visible" : "all";
   paintRemotePolicy();
+  paintChartColumns();
+  if ((state.settings.hiddenColumns || []).join(",") !== colsBefore) renderAll();
 }
 
 // ---- the anchor's two signals: hover and last touched, each switched and timed on its own ----------
@@ -16150,6 +16331,7 @@ startVisibilityReporting();
     updateColorsRow();
     paintAnchorSettings();
     paintAgeSetting();
+    paintChartColumns();
     paintRemotePolicy();
     void refreshRemoteGuards();
     // "On screen" mode: say what is visible before the first paint settles, so the rows in front of the reader are
