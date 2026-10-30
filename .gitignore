@@ -6,3 +6,4 @@ node_modules/
 __pycache__/
 data/aa-rating-pages.json
 /PROMPT.md
+config.json
