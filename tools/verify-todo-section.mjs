@@ -682,6 +682,71 @@ async function browserPhase(pw) {
       /* a screenshot is a courtesy */
     }
   }
+  // A long item's glyph, words and buttons must share one inline wrapping context. A wrapping flex row treats the
+  // entire text span as one item: status on one line, the words below it, then a third line just for the buttons.
+  const wrappingText = "Keep the status beside the beginning of this longer TODO while its words wrap naturally across the available width and the action buttons follow the final words on the same line.";
+  for (const id of [1, 2, 3, 4]) {
+    const text = id === 3 ? `Check C:/${"LongTodoIdentifier".repeat(14)}` : wrappingText;
+    const edited = await api("/api/todos", { project: PROJECT, path: slash(TREE_MIX), op: "edit", id, text });
+    check(`browser: seed the wrapping fixture for #${id}`, [edited.status, edited.body.ok], [200, true]);
+  }
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await openRow(TREE_MIX);
+  await page.locator(`${todoSel} .todo-text`).first().waitFor();
+  await page.evaluate(() => document.fonts.ready);
+  let sharedTails = 0;
+  // The panel can repaint the detail between samples. A fixture width in the stylesheet survives that repaint.
+  await page.addStyleTag({ content: `${todoSel} { width: var(--todo-wrap-width); }` });
+  for (const width of [360, 720, 1100]) {
+    await page.evaluate((w) => document.documentElement.style.setProperty("--todo-wrap-width", `${w}px`), width);
+    const geometry = await page.locator(`${todoSel} .todo-item`).evaluateAll((els) => els.map((el) => {
+      const line = el.querySelector(".todo-line");
+      const text = el.querySelector(".todo-text");
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      const rects = [...range.getClientRects()].filter((r) => r.width > 0);
+      const center = (r) => r.top + r.height / 2;
+      const bounds = line.getBoundingClientRect();
+      const buttons = [...line.querySelectorAll(".todo-btn")].map((b) => b.getBoundingClientRect());
+      const first = rects[0];
+      const last = rects.at(-1);
+      return {
+        id: el.dataset.todoItem,
+        lines: rects.length,
+        statusY: center(el.querySelector(".todo-glyph").getBoundingClientRect()),
+        firstTextY: center(first),
+        lastTextY: center(last),
+        buttonsY: buttons.map(center),
+        fits: rects.every((r) => r.left >= bounds.left - 1 && r.right <= bounds.right + 1)
+          && line.scrollWidth <= line.clientWidth + 1,
+        roomForButtons: last.right + buttons.reduce((sum, r) => sum + r.width, 0) + 8 * (buttons.length + 1) <= bounds.right,
+      };
+    }));
+    note(`wrapping at ${width}px: ${JSON.stringify(geometry)}`);
+    for (const g of geometry) {
+      ok(`browser: ${width}px #${g.id} starts its text beside its status`, Math.abs(g.statusY - g.firstTextY) <= 2);
+      ok(`browser: ${width}px #${g.id} stays within the line width, even for an unbroken identifier`, g.fits);
+      if (g.id !== "5") ok(`browser: ${width}px #${g.id} really wraps its long text`, g.lines > 1);
+      if (g.roomForButtons) {
+        if (g.id !== "5") sharedTails += 1;
+        ok(`browser: ${width}px #${g.id} keeps every action beside the final words when they fit`, g.buttonsY.every((y) => Math.abs(y - g.lastTextY) <= 2));
+      }
+      if (g.id === "5") check(`browser: ${width}px the short item still occupies one text line`, g.lines, 1);
+    }
+    if (width === 720 && shot) {
+      // Fit the whole block inside the viewport before capturing it: Chromium can leave an off-screen clip unpainted.
+      try {
+        await page.setViewportSize({ width: 1400, height: 2200 });
+        await page.locator(todoSel).screenshot({ path: path.join(shot, "todo-wrapping.png"), animations: "disabled" });
+        note(`wrapping screenshot: ${path.join(shot, "todo-wrapping.png")}`);
+      } catch (err) {
+        note(`wrapping screenshot not captured (the geometry checks still ran): ${String(err.message || err)}`);
+      } finally {
+        await page.setViewportSize({ width: 1400, height: 1000 });
+      }
+    }
+  }
+  ok("browser: the fixtures exercise actions sharing the final text line", sharedTails > 0, String(sharedTails));
   check("browser: no page errors", pageErrors, []);
   await browser.close();
 }

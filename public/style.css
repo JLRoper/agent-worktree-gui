@@ -1926,7 +1926,10 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
    a screen apart and the reader had to zoom out to read one row. Nothing about the line itself changed; only where its
    facts sit. The left rule is what makes the nesting visible at a glance: bullets hang off the item they describe. */
 .todo-item { display: block; padding: 1px 0 3px; }
-.todo-line { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
+/* Inline flow lets the words share their first line with the status and their last with the action buttons.
+   Flex wrapping would move the entire text span onto a line of its own. Keep flex only for the inline editor. */
+.todo-line { display: block; min-width: 0; overflow-wrap: anywhere; }
+.todo-line:has(.todo-edit) { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 /* The disclosure that folds ONE item's facts away, in front of its line so what it opens starts at the same left edge
    as the words it belongs to. FOLDED is an item's default: the facts are up to three bullets about one item and two of
    them carry the same worker string, so a twelve-item list was thirty-six lines of repetition around the twelve lines
