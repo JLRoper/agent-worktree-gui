@@ -126,6 +126,23 @@ test("the fetched text replaces the preview inside the same remembered box", () 
     "the reader can shut the loaded box and a different burst key does not reopen it");
 });
 
+test("diagnostic-shaped output stays inside the single full-result box", () => {
+  for (const diagnostic of ["… intermediate diagnostic", "↳ intermediate diagnostic"]) {
+    const full = Array.from({ length: 60 }, (_, i) => i === 10 ? diagnostic : `diagnostic result line ${i + 1}`);
+    const note = { kind: "tool-out", text: "… 20 lines hidden — click to read", fold: { tool: "terminal", row: 0 } };
+    const rows = [...out(full.slice(0, 40)), note];
+    const h = CF.bodyHtml(rows, {
+      tool: "terminal", fold: { turn: "t1", tool: "terminal", row: 0 },
+      codeOpen: new Set(["result|t1|terminal|0"]),
+      fullForFold: () => ({ text: full.join(String.fromCharCode(10)), truncated: false }),
+    });
+    assert.equal(boxes(h), 1, `${diagnostic} is output, not a boundary that can fetch the same result twice`);
+    assert.equal(count(h, /data-ltext="diagnostic result line 60"/g), 1);
+    assert.equal(count(h, /data-code-key="result\|t1\|terminal\|0"/g), 1);
+    assert.equal(count(h, /data-lkind="store"/g), full.length);
+  }
+});
+
 test("only a tool's own output is boxed: a sentence, a call and the panel's notes never are", () => {
   const rows = [
     { kind: "text", text: "I will run the tests." },

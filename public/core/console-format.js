@@ -542,6 +542,24 @@ function consoleBodyHtml(rows, opts = {}) {
   const { classes, pair } = consoleClassify(list, { fileOutput: Boolean(file) });
   const open = opts.codeOpen && typeof opts.codeOpen.has === "function" ? opts.codeOpen : null;
   const out = [];
+  // The caller has already identified ONE result. Text inside it may look like another result header or note;
+  // never re-enter the cached full row once per such fragment, or a diagnostic duplicates the complete output.
+  const direct = opts.fold && opts.fold.tool && opts.fold.turn != null && opts.fold.row != null;
+  if (direct) {
+    if (opts.whole) return cfResultBox(list, classes, pair, 0, n, file, opts, open);
+    const note = list.find((row) => consoleFoldNote(cfText(row)));
+    const boxOpts = { ...opts, source: opts.source || list, foldNote: note ? cfText(note) : "" };
+    const cuts = list.filter((row) => consoleCutNote(cfText(row))).map((row) => cfLine(row)).join("");
+    const loaded = typeof opts.fullForFold === "function" ? opts.fullForFold(opts.fold) : null;
+    if (loaded) {
+      const whole = String(loaded.text || "").split(String.fromCharCode(10)).map((text) => ({ kind: "store", text }));
+      return consoleBodyHtml(whole, { ...boxOpts, whole: true, fullForFold: null }) + cuts +
+        (loaded.truncated ? '<div class="jl jl-dim jl-note">… this stored result was cut as well</div>' : "");
+    }
+    const body = list.filter((row) => row !== note && !consoleCutNote(cfText(row)));
+    const shaped = consoleClassify(body, { fileOutput: Boolean(file) });
+    return cfResultBox(body, shaped.classes, shaped.pair, 0, body.length, file, boxOpts, open) + cuts;
+  }
   let i = 0;
   while (i < n) {
     // ONE BOX PER RESULT, even when the result is not one kind of thing. A `git show` hands the console a commit
@@ -611,7 +629,7 @@ function cfBoxable(list, classes, k) {
   if (!cfEligible(list[k])) return false;
   if (classes[k] !== "plain" && classes[k] !== "code") return false;
   const t = cfText(list[k]);
-  return !CF_NOTE_RE.test(t) && !CF_RESULT_HEAD_RE.test(t);
+  return !consoleFoldNote(t) && !consoleCutNote(t) && !CF_RESULT_HEAD_RE.test(t);
 }
 
 // "3 lines", "1 line".
