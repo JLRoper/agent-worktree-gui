@@ -19,6 +19,11 @@
 // pointer; the frame stops on the 8px edge and follows the pointer back out of it immediately; and a frame remembered
 // on a bigger screen is not snapped anywhere until the drag pulls it back in.
 //
+// The last group is where the room a taller panel gains ends up (it used to go to the spacer above the turns — blank
+// panel between the card's head and the first turn). It must land in the console of the LOWEST open turn; with every
+// turn folded, a resize opens the newest turn first so the room has a console to land in. That group seeds six
+// finished turns into the sandbox's own job store before the panel boots.
+//
 // The scrollbar case is emulated rather than measured: headless Chromium always paints OVERLAY scrollbars, so the
 // visual viewport equals the layout viewport there and the bug cannot occur. Case 2 therefore installs a
 // `visualViewport` shim 11px narrower than `innerWidth` — the exact input the old clamp read — and asserts the frame
@@ -31,6 +36,9 @@
 // The browser half needs a Playwright install. Point the script at one with PANEL_PLAYWRIGHT_ROOT (a directory holding
 // node_modules/playwright, or the package itself); without one the script says BROWSER-HALF-NOT-RUN and exits 2
 // rather than passing on a half that never ran.
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { loadPlaywright, notRun, openPage, withBrowser } from "./browser.mjs";
 import { startPanel } from "./panel-testkit.mjs";
 
@@ -107,6 +115,36 @@ function offsets(f, dir, mx, my) {
   return o;
 }
 
+// Six finished turns on the assistant thread, so the float has a transcript to grow into. Written BEFORE the panel
+// boots (a running panel rewrites its store every ~700ms) and with no run id and no action lines, so nothing can be
+// re-attached or re-executed.
+function seedTurns(dir, count = 6) {
+  const now = Date.now();
+  const jobs = Array.from({ length: count }, (_, i) => ({
+    id: (0xa1000000 + i * 17).toString(16),
+    thread: "panel-assistant",
+    turn: i,
+    prompt: `turn ${i + 1} of the fixture conversation`,
+    cwd: path.join(dir, "assistant-cwd"),
+    status: "done",
+    exitCode: 0,
+    startedAt: new Date(now - (count - i) * 600000).toISOString(),
+    endedAt: new Date(now - (count - i) * 600000 + 40000).toISOString(),
+    durationMs: 40000,
+    finalMessage: `turn ${i + 1} finished`,
+    lines: [
+      { kind: "cmd", text: `POST /v1/runs · session panel-assistant · turn ${i + 1}`, lid: i * 100, at: now + i * 100 },
+      ...Array.from({ length: 10 }, (_, k) => ({
+        kind: "out", text: `  line ${k + 1} of turn ${i + 1}: nothing moved on the board since the last read`,
+        lid: i * 100 + k + 1, at: now + i * 100 + k + 1,
+      })),
+      { kind: "out", text: `✔ turn ${i + 1} done`, lid: i * 100 + 90, at: now + i * 100 + 90 },
+    ],
+  }));
+  mkdirSync(path.join(dir, "logs"), { recursive: true });
+  writeFileSync(path.join(dir, "logs", "jobs.json"), JSON.stringify({ savedAt: new Date(now).toISOString(), jobs }, null, 1));
+}
+
 async function main() {
   const playwright = loadPlaywright();
   if (!playwright) {
@@ -114,7 +152,9 @@ async function main() {
     process.exit(2);
   }
 
-  const panel = await startPanel({ config: { assistant: { enabled: false }, fetchSeconds: -1 } });
+  const dir = mkdtempSync(path.join(tmpdir(), "wtgui-resize-"));
+  seedTurns(dir);
+  const panel = await startPanel({ dir, config: { assistant: { enabled: false }, fetchSeconds: -1 } });
   try {
     console.log(`sandbox: ${panel.base}`);
 
@@ -232,7 +272,77 @@ async function main() {
       void MIN_H;
     }, { viewport: VIEW });
 
-    void shareA; void shareB; void shareC; void shareD;
+    // ---- 5. the room a taller panel gains goes INTO the open turn's console, not into blank panel above the turns
+    const shareE = await withBrowser(async ({ page }) => {
+      const read = () => page.evaluate(() => {
+        const body = document.querySelector("#as-chat > .job > .job-body");
+        if (!body) return null;
+        const turns = [...body.querySelectorAll(":scope > .turn")];
+        const open = turns.filter((t) => !t.classList.contains("folded"));
+        const br = body.getBoundingClientRect();
+        const first = turns[0].getBoundingClientRect();
+        const last = open.length ? open[open.length - 1] : null;
+        const pre = last ? last.querySelector("pre.job-out") : null;
+        return {
+          gap: Math.round(first.top - br.top + body.scrollTop),
+          open: open.length,
+          slackOnLast: Boolean(last && last.classList.contains("is-slack")),
+          slackCount: turns.filter((t) => t.classList.contains("is-slack")).length,
+          consoleH: pre ? Math.round(pre.getBoundingClientRect().height) : 0,
+          consoleContent: pre ? pre.scrollHeight : 0,
+        };
+      });
+      const pull = async (dy, steps = 8) => {
+        const b = await gripBox(page, "s");
+        const sx = b.x + b.width / 2, sy = b.y + b.height / 2;
+        await page.mouse.move(sx, sy);
+        await page.mouse.down();
+        for (let i = 1; i <= steps; i += 1) {
+          await page.mouse.move(sx, sy + (dy * i) / steps);
+          await page.waitForTimeout(25);
+        }
+        await page.mouse.up();
+        await page.waitForTimeout(300);
+      };
+
+      // tall enough that the transcript is not already scrolling: the room has somewhere to go
+      await place(page, panel.base, { x: 200, y: 60, w: 700, h: 900 });
+      await page.waitForTimeout(400);
+      const before = await read();
+      check(before.open === 1 && before.slackOnLast && before.slackCount === 1,
+        "the newest turn is open and owns the room", JSON.stringify(before));
+
+      await pull(200);
+      const after = await read();
+      check(after.consoleH - before.consoleH === 200,
+        "growing the float by 200px grows the open console by 200px",
+        `console ${before.consoleH} -> ${after.consoleH}`);
+      check(after.gap === 0, "and no blank panel opens above the turns", `gap ${before.gap} -> ${after.gap}`);
+
+      // everything folded: the spacer owns the room — then a resize brings the newest turn back to take it
+      await page.evaluate(() => {
+        for (const head of document.querySelectorAll("#as-chat .turn:not(.folded) > .turn-head")) head.click();
+      });
+      await page.waitForTimeout(900);
+      const folded = await read();
+      check(folded.open === 0 && folded.gap > 100, "with every turn folded the room is blank panel", JSON.stringify(folded));
+
+      await pull(120);
+      const reopened = await read();
+      check(reopened.open === 1 && reopened.gap === 0 && reopened.consoleH > 100,
+        "a resize with nothing open opens the newest turn and gives it the room", JSON.stringify(reopened));
+
+      // two open: the room belongs to the LOWEST of them, the one at the foot of the transcript
+      await page.evaluate(() => {
+        const foldedHeads = [...document.querySelectorAll("#as-chat .turn.folded > .turn-head")];
+        if (foldedHeads.length) foldedHeads[foldedHeads.length - 1].click();
+      });
+      await page.waitForTimeout(900);
+      const two = await read();
+      check(two.open === 2 && two.slackOnLast && two.slackCount === 1,
+        "with two turns open only the lowest one takes the room", JSON.stringify(two));
+      void shareA; void shareB; void shareC; void shareD;
+    }, { viewport: { width: 1400, height: 1200 } });
   } finally {
     await panel.stop();
   }
