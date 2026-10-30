@@ -197,6 +197,20 @@ button.primary:hover { background: #24466a; }
 .settings-group.folded > :not(.settings-group-head) { display: none; }
 .settings-group.folded { padding-top: 6px; padding-bottom: 2px; }
 .settings-group.folded .settings-group-head { margin-bottom: 0; }
+/* The search box sits in the fixed head, so it is on screen whichever group is open — and with every group folded
+   it is the panel's first control (it takes the focus when the panel opens). */
+.settings-head input[type="search"] { flex: 0 1 240px; min-width: 76px; margin-left: 4px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font: 11.5px var(--mono); }
+.settings-head input[type="search"]::placeholder { color: var(--dimmer); }
+/* One clear control, not two: the panel's own ✕ answers Esc, so the browser's built-in one is hidden. */
+.settings-head input[type="search"]::-webkit-search-cancel-button { display: none; }
+.settings-head input[type="search"]:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
+.settings-head #btn-settings-search-clear[hidden] { display: none; }
+/* A search hides what does not answer it by class alone — the same rule as the fold, so no markup is swapped out
+   from under a click or a keypress while the reader is typing. */
+.settings-group.search-hidden, .settings-group .search-hidden { display: none; }
+/* Matched text is painted by the CSS Custom Highlight API over the row's own text nodes, so a keystroke costs no
+   re-render: every control in a matching row keeps its value, its focus and its half-typed number. */
+::highlight(settings-search-match) { background: #3d5372; color: #f2f6fb; }
 /* The read-now pair: one row, two buttons, pushed right like every other row's control. */
 .settings-act { margin-left: auto; display: flex; gap: 6px; }
 .settings-info { margin-left: 2px; font-size: 10px; color: #46505f; cursor: help; }
