@@ -156,8 +156,8 @@
     requestAnimationFrame(toFoot);
   }
 
-  // Maximize/restore. The reader gets an explicit control instead of the resize grip, which can only grow
-  // the float toward the bottom-right and so cannot make a right-anchored panel fill the window.
+  // Maximize/restore. An explicit control beside a resize gesture that is a pointer drag: a double-click in the head
+  // already does this, and the button is the visible way in for a reader who never discovers the gesture.
   function paintAssistantMax() {
     const btn = as$("btn-as-max");
     const el = as$("assistant");
@@ -1775,41 +1775,113 @@
   (() => {
     const el = as$("assistant");
     const head = as$("as-drag");
-    const grip = as$("as-resize");
-    if (!el || !head || !grip) return;
+    const grips = as$("as-grips");
+    if (!el || !head || !grips) return;
 
-    const onDown = (mode) => (e) => {
+    const MIN_W = 340;
+    const MIN_H = 320;
+    // Air kept between the float and every viewport edge: the reader always has the board's own edge to aim at.
+    const EDGE = 8;
+
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
+
+    // The one authority on how big the float may get. The stylesheet used to hold a second, smaller cap
+    // (`max-width: calc(100vw - 24px)`, `max-height: calc(100vh - 90px)`), so JS kept writing sizes CSS silently
+    // clamped: the frame stopped at 710px tall while the pointer kept travelling, and the corner being held slid away
+    // from it. `visualViewport` is the honest size when the browser is zoomed or a soft keyboard is up.
+    const viewport = () => {
+      const vv = window.visualViewport;
+      const vw = Math.min(window.innerWidth, vv ? vv.width + vv.offsetLeft : Infinity);
+      const vh = Math.min(window.innerHeight, vv ? vv.height + vv.offsetTop : Infinity);
+      return { vw, vh };
+    };
+
+    // Anchor the frame with left/top before any gesture. The stylesheet right-anchors it (`right: 16px`), and a float
+    // anchored by `right` grows its LEFT edge: with no remembered rect the first resize drag could travel 8px before
+    // its own clamp froze it, while the pointer walked on. `getBoundingClientRect` is the state it actually has.
+    const pinFrame = () => {
+      const r = el.getBoundingClientRect();
+      el.style.left = `${r.left}px`;
+      el.style.top = `${r.top}px`;
+      el.style.width = `${r.width}px`;
+      el.style.height = `${r.height}px`;
+      el.style.right = "auto";
+      el.style.bottom = "auto";
+      return r;
+    };
+
+    const onDown = (mode, dir, captureEl) => (e) => {
       if (e.button !== 0) return;
       if (state.assistantFull) return; // maximized, the frame is the viewport: Esc or a double-click restores
       if (mode === "move" && e.target.closest("button,input,select,textarea")) return;
-      const r = el.getBoundingClientRect();
-      dragState = { mode, px: e.clientX, py: e.clientY, x: r.left, y: r.top, w: r.width, h: r.height };
+      const r = pinFrame();
+      dragState = { mode, dir, px: e.clientX, py: e.clientY, x: r.left, y: r.top, w: r.width, h: r.height };
       el.classList.add("is-dragging");
+      // Hold the pointer for the length of the gesture: without capture it leaves the float (and the window) and the
+      // moves stop arriving, so a release out there never ends the drag we started in here.
+      try {
+        (captureEl || el).setPointerCapture(e.pointerId);
+      } catch {
+        /* older pointer stacks: the window listeners below still carry the gesture */
+      }
       e.preventDefault();
     };
 
     const onMove = (e) => {
       if (!dragState) return;
       const d = dragState;
+      const { vw, vh } = viewport();
       const dx = e.clientX - d.px;
       const dy = e.clientY - d.py;
       if (d.mode === "move") {
         // Keep the whole float inside the window. The old clamp allowed `8 - width + 120`, which let the left
         // edge sit ~160px off-screen — the tabs and the first characters of every transcript row went with it.
-        const maxX = Math.max(8, window.innerWidth - Math.min(d.w, window.innerWidth - 16) - 8);
-        const maxY = Math.max(8, window.innerHeight - Math.min(d.h, window.innerHeight - 16) - 8);
-        const x = Math.max(8, Math.min(d.x + dx, maxX));
-        const y = Math.max(8, Math.min(d.y + dy, maxY));
+        const maxX = Math.max(EDGE, vw - Math.min(d.w, vw - 2 * EDGE) - EDGE);
+        const maxY = Math.max(EDGE, vh - Math.min(d.h, vh - 2 * EDGE) - EDGE);
+        const x = clamp(d.x + dx, EDGE, maxX);
+        const y = clamp(d.y + dy, EDGE, maxY);
         el.style.left = `${x}px`;
         el.style.top = `${y}px`;
         el.style.right = "auto";
         el.style.bottom = "auto";
+        // Absorb what the clamp ate into the drag's own origin. Otherwise the pointer has to walk the whole overshoot
+        // back before the frame stirs, which is what "the cursor came off the window" feels like.
+        d.px += d.x + dx - x;
+        d.py += d.y + dy - y;
         return;
       }
-      const w = Math.max(340, Math.min(d.w + dx, window.innerWidth - d.x - 8));
-      const h = Math.max(320, Math.min(d.h + dy, window.innerHeight - d.y - 8));
+
+      const dir = d.dir || "se";
+      let x = d.x, y = d.y, w = d.w, h = d.h;
+
+      if (dir.includes("e")) {
+        const want = d.w + dx;
+        w = clamp(want, MIN_W, Math.max(MIN_W, vw - EDGE - d.x));
+        d.px += want - w;
+      } else if (dir.includes("w")) {
+        const wantX = d.x + dx;
+        x = clamp(wantX, EDGE, d.x + d.w - MIN_W);
+        w = d.x + d.w - x;
+        d.px += wantX - x;
+      }
+
+      if (dir.includes("s")) {
+        const want = d.h + dy;
+        h = clamp(want, MIN_H, Math.max(MIN_H, vh - EDGE - d.y));
+        d.py += want - h;
+      } else if (dir.includes("n")) {
+        const wantY = d.y + dy;
+        y = clamp(wantY, EDGE, d.y + d.h - MIN_H);
+        h = d.y + d.h - y;
+        d.py += wantY - y;
+      }
+
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
       el.style.width = `${w}px`;
       el.style.height = `${h}px`;
+      el.style.right = "auto";
+      el.style.bottom = "auto";
     };
 
     const onUp = () => {
@@ -1823,8 +1895,12 @@
       }
     };
 
-    head.addEventListener("pointerdown", onDown("move"));
-    grip.addEventListener("pointerdown", onDown("size"));
+    head.addEventListener("pointerdown", onDown("move", null, head));
+    grips.addEventListener("pointerdown", (e) => {
+      const grip = e.target.closest("[data-dir]");
+      if (!grip) return;
+      onDown("size", grip.dataset.dir, grip)(e);
+    });
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);

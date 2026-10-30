@@ -59,7 +59,19 @@
       <section class="as-pane hidden" data-pane="charter" id="as-charter"></section>
       <section class="as-pane hidden" data-pane="settings" id="as-settings"></section>
     </div>
-    <div class="as-resize" id="as-resize" title="drag to resize"></div>
+    <!-- Eight grabs, one per edge and corner. The single bottom-right grip could only grow the float toward that
+         corner, and it walked away from the pointer once the frame hit the viewport: a band is where a reader
+         aims without having to hit a 16px square. -->
+    <div class="as-grips" id="as-grips">
+      <div class="as-grip" data-dir="n" title="drag to resize"></div>
+      <div class="as-grip" data-dir="s" title="drag to resize"></div>
+      <div class="as-grip" data-dir="w" title="drag to resize"></div>
+      <div class="as-grip" data-dir="e" title="drag to resize"></div>
+      <div class="as-grip" data-dir="nw" title="drag to resize"></div>
+      <div class="as-grip" data-dir="ne" title="drag to resize"></div>
+      <div class="as-grip" data-dir="sw" title="drag to resize"></div>
+      <div class="as-grip" data-dir="se" title="drag to resize"></div>
+    </div>
   </aside>
 
   <div id="settings" class="settings hidden">
