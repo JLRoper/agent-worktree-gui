@@ -361,8 +361,12 @@ Click a row to expand it. The detail is built not to bury the agents:
   busy directory — so it ends its turn with one `RELEASE <tree> | <why it is finished>` line. The panel records that
   request on the row and decides it AFTER the turn has settled, from its own git and `gh` reads: the tree must be
   clean, the branch's PR must read **MERGED**, nothing on the branch may be missing from that merge commit, and no run
-  may still be holding the tree. Only then does it remove the worktree, delete the branch locally and on the remote,
-  and write `removed` (or `refused: <the gate that said no>`) back onto the row. With the project's
+  may still be holding the tree. A tree that never had a PR — a documentation or review tree that carries nothing main
+  does not already have — is accepted the other way: no pull request is recorded for the branch **and**
+  `git rev-list --count origin/main..HEAD` is 0 (or, when that count cannot be read, `git diff origin/main HEAD` is
+  empty), with the same clean-tree, registered-worktree and no-run-holding gates. A branch that *is* ahead of main with
+  no merged PR is still refused, and says so. Only then does it remove the worktree, delete the branch locally and on
+  the remote, and write `removed` (or `refused: <the gate that said no>`) back onto the row. With the project's
   `releaseWorktrees` off — the default — every request is refused with that reason and nothing is touched.
 - **Merge state** — folded to one line (`ON MAIN · branch main · 2 untracked · last commit 6m ago`). Open it for the
   full list: ancestor of remote main, cherry counts, branch reflog, whether the branch ever carried its own commits,
@@ -783,7 +787,9 @@ Configured in `config.json` (`liveSeconds`, `worktreeSeconds`, `dormantSeconds`,
 `projects[].releaseWorktrees` is the one key that lets a worker's `RELEASE` line be acted on, and it is off unless it
 is literally `true` — a string, a `1` or a missing key all leave it closed. With it on, the panel still refuses
 unless the tree is clean, the branch's PR reads MERGED, nothing on the branch is missing from that PR's merge commit,
-and no run is still holding the tree; the row carries the answer either way (`removed`, or `refused: <gate>`).
+and no run is still holding the tree — or, for a tree that never had a PR, unless the branch is 0 commits ahead of
+`origin/main` (measured, with the tree-equal diff as the fallback) and every other gate still passes. The row carries
+the answer either way (`removed`, or `refused: <gate>`).
 
 The panel's own build is separate from all of that. `index.html` is served `no-store` and every script and stylesheet
 it loads carries a `?v=` hash of the bytes; a restarted panel (or an edit under `public/` while it runs) is a new
