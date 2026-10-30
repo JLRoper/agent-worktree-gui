@@ -52,3 +52,15 @@ test("the float has one size authority: the drag clamp, not a smaller cap in the
     "the growth limit must never be smaller than the size the frame already has, or the grab itself resizes it");
   assert.match(code, /Math\.max\(d\.h, vh - EDGE - d\.y\)/);
 });
+
+test("room the float gains goes into the open turn's console, not into blank panel", () => {
+  const code = assistant.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  assert.match(code, /classList\.toggle\("is-slack"/, "assistant.js must mark the turn that takes the room");
+  assert.match(code, /openNewestTurn\(\)/, "a resize with every turn folded must open the newest");
+  // The two rules have equal specificity with the `flex: 0 0 auto` set, so order is the whole mechanism.
+  const zeroIndex = css.lastIndexOf("> .turn:not(.folded) .job-out { max-height: none; flex: 0 0 auto;");
+  const slackIndex = css.lastIndexOf("> .turn.is-slack { flex: 1 1 auto; }");
+  assert.ok(zeroIndex > 0 && slackIndex > zeroIndex, "the .is-slack flex rules must come AFTER the flex: 0 0 auto set");
+  assert.match(css, /\.job-body:has\(> \.turn\.is-slack\)::before \{ content: none; \}/,
+    "the spacer above the turns must stand down when a turn can take the room");
+});

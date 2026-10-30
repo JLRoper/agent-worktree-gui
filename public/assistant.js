@@ -155,6 +155,54 @@
     return host ? host.querySelector(":scope > .job > .job-body") : null;
   }
 
+  // Which turn takes the room the float gains. A taller panel used to hand the extra height to the spacer above the
+  // turns — blank background between the card's head and the first turn — while the thing the reader is reading, the
+  // open turn's console, stayed at its 230px cap. The room goes to the LOWEST open turn (the newest one they have
+  // open, i.e. the one at the foot of the transcript); with nothing open there is no console on the page to grow, so
+  // nothing is marked and the spacer keeps owning the slack until a turn opens (a resize gesture opens the newest —
+  // see `openNewestTurn`).
+  let slackQueued = false;
+  function paintSlackTurn() {
+    slackQueued = false;
+    const body = chatBody();
+    if (!body) return;
+    const turns = [...body.querySelectorAll(":scope > .turn")];
+    const open = turns.filter((t) => !t.classList.contains("folded"));
+    const target = open.length ? open[open.length - 1] : null;
+    for (const t of turns) t.classList.toggle("is-slack", t === target);
+  }
+  function queueSlackPaint() {
+    if (slackQueued) return;
+    slackQueued = true;
+    requestAnimationFrame(paintSlackTurn);
+  }
+
+  // The newest turn, opened through the board's own toggle, so the room a resize creates has a console to land in.
+  // Guarded: a folded turn's console is not on the page at all, and the reader who folded everything gets one turn
+  // back rather than a blank panel.
+  function openNewestTurn() {
+    const body = chatBody();
+    if (!body) return;
+    const turns = [...body.querySelectorAll(":scope > .turn")];
+    if (!turns.length) return;
+    if (turns.some((t) => !t.classList.contains("folded"))) return;
+    const head = turns[turns.length - 1].querySelector("[data-toggle-turn]");
+    const key = head && head.dataset ? head.dataset.toggleTurn : null;
+    if (key && typeof toggleTurn === "function") toggleTurn(key);
+  }
+
+  // app.js rebuilds the card on every job event and on every fold the reader makes, which drops the class that hands
+  // the room to a console. Watch the pane's children instead of chasing every call site. An attribute-only repaint
+  // cannot loop: only `class` is written, and childList is all that is observed.
+  const slackObserver = typeof MutationObserver === "function" ? new MutationObserver(queueSlackPaint) : null;
+  function watchSlack() {
+    const host = as$("as-chat");
+    if (!slackObserver || !host || watchSlack.started) return;
+    watchSlack.started = true;
+    slackObserver.observe(host, { childList: true, subtree: true });
+    queueSlackPaint();
+  }
+
   // A conversation shorter than the panel belongs at the panel's foot, not at its top with the composer
   // stranded below the fold: the panel opens on the turn the reader just sent, the way the board's maximized
   // card does. A reader who has scrolled up keeps their place — `chatPinned` follows their scroll, and only a
@@ -233,6 +281,7 @@
       renderAssistant();
       paintAssistantBadge();
       pinChatToBottom(true);
+      queueSlackPaint();
     } else if (state.assistantFull) {
       // A closed panel reopens as the float, not as the whole window.
       setAssistantFull(false);
@@ -678,6 +727,10 @@
     // The panel is fixed, so a rebuild can never move the page — but a focus() inside it can, and this keeps
     // that promise local instead of relying on every callee remembering preventScroll.
     if (window.scrollY !== pageY) window.scrollTo({ top: pageY });
+    // A fresh card has none of the classes the last one carried: hand the room to the open turn again, and start
+    // watching for the repaints that come from the board rather than from here.
+    watchSlack();
+    queueSlackPaint();
   }
 
   // ---- alerts ---------------------------------------------------------------------------------
@@ -1821,6 +1874,9 @@
       if (e.button !== 0) return;
       if (state.assistantFull) return; // maximized, the frame is the viewport: Esc or a double-click restores
       if (mode === "move" && e.target.closest("button,input,select,textarea")) return;
+      // Growing the panel hands the room to a turn's console, so a resize with everything folded opens the newest
+      // turn first: a folded turn has no console on the page for the room to land in.
+      if (mode === "size") openNewestTurn();
       const r = pinFrame();
       dragState = { mode, dir, px: e.clientX, py: e.clientY, x: r.left, y: r.top, w: r.width, h: r.height };
       el.classList.add("is-dragging");
@@ -1894,6 +1950,8 @@
       el.style.height = `${h}px`;
       el.style.right = "auto";
       el.style.bottom = "auto";
+      // The console that takes the room has to be told again: a repaint between two moves may have dropped the class.
+      queueSlackPaint();
     };
 
     const onUp = () => {
@@ -1954,6 +2012,8 @@
       state.assistantRect = r;
       writeRect(r);
     }
+    // The panel just changed height: the room goes to the open turn's console, not to the spacer above it.
+    queueSlackPaint();
   });
 
   // ---- keys ------------------------------------------------------------------------------------

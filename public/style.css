@@ -2979,6 +2979,12 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
    when the transcript overflows (shrink 0, basis 0), so a tall conversation still scrolls from its first
    line and nothing above it becomes unreachable. */
 #as-chat > .job > .job-body::before { content: ""; flex: 1 0 auto; }
+/* Room the panel gains belongs to the transcript, not to blank panel. The spacer above the turns exists for a
+   conversation too short to fill the float; the moment a turn can take the room, the spacer stands down and the
+   lowest OPEN turn's console claims it (`.is-slack`, painted from assistant.js — the reader's open turn is the one
+   they are reading, and a folded turn has no console on the page to grow). The `flex` half of that rule lives at the
+   end of this block, beside the other `flex: 0 0 auto` rules it has to beat. */
+#as-chat > .job > .job-body:has(> .turn.is-slack)::before { content: none; }
 /* The composer is the last thing in the scrollport and is pinned there: while the conversation is longer
    than the panel it stays on the scrollport's foot, and the spacer above puts it there when it is shorter.
    Opaque and above the turns it covers — the box you type in must never be scrollable away. */
@@ -2993,6 +2999,12 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 #as-chat > .job > .job-body > .turn.folded { flex: 0 0 auto; }
 #as-chat > .job > .job-body > .turn:not(.folded) .out-wrap { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 34px; }
 #as-chat > .job > .job-body > .turn:not(.folded) .job-out { max-height: none; flex: 0 0 auto; min-height: 0; }
+/* The assistant float is the exception the reader asked for: room the panel gains goes INTO the console they are
+   reading instead of becoming blank panel above it. Same specificity as the `flex: 0 0 auto` rules just above, so
+   this has to come after them — that is why the `.is-slack` set is split across the block. */
+#as-chat > .job > .job-body > .turn.is-slack { flex: 1 1 auto; }
+#as-chat > .job > .job-body > .turn.is-slack > .out-wrap { flex: 1 1 auto; }
+#as-chat > .job > .job-body > .turn.is-slack > .out-wrap > .job-out { flex: 1 1 auto; max-height: none; }
 #as-chat > .job .reply-box { min-height: 79px; }
 
 /* Which rules the assistant wrote for itself. The reader's rules are their own answers; these are proposals,
