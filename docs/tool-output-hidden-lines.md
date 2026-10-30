@@ -1,9 +1,29 @@
 # What “N lines hidden — click to read” means
 
-Investigation of the tool-output notices shown in the supplied screenshot, against source snapshot
-`fdc13c40b413c8ed918f4a309775b939677d0eac`. This change documents existing behavior; it changes no runtime code.
+Original investigation of the supplied screenshot, against source snapshot
+`fdc13c40b413c8ed918f4a309775b939677d0eac`. The original behavior and verification below are historical.
 
-## Answer
+## Replacement: one box, one click
+
+The result header is now the only read/fold control. It starts with the retained preview, labeled `40 of 64 lines`
+when the total is known. Opening it reads the complete stored row into the same box and updates the count to
+`64 lines`; no separate hidden-lines link or second full-result box is rendered. The initial head is not repeated,
+the tool is never rerun, and cached full text is not written into the console ring buffer.
+
+The result's stable turn/tool/row identity preserves its fold state through condensed, one-stream and trimmed
+renders. DOM-backed rebuilds recover the original capped wire rows from `data-code-source`, never the fetched tail.
+Legacy rows advance their cursor even before the initial store read arrives. Missing copies and failed reads stay
+retryable in the existing header. Open results are not evicted while the reader is reading them.
+
+The console disables native scroll anchoring: browser instrumentation showed the first load changing a parked
+`scrollTop` from 987 to 5481 without any JavaScript scroll write. With the scoped CSS rule, the same browser check
+keeps 987, the same reading row and the same header offset; later full-result rebuilds also keep their reading row.
+
+Regression coverage is in `test/console-output-box.test.js`, `test/tool-output-expand.test.js`,
+`tools/verify-output-boxes.mjs`, `tools/verify-fold-note-parity.mjs` and `tools/verify-whole-tool-stream.mjs`.
+The browser harnesses use isolated panels and exercise real clicks; the latter two retain SQLite-backed route reads.
+
+## Original answer
 
 Yes: each notice refers to the same tool result as the preview box immediately above it. However, N is the number
 of additional output lines omitted after the retained preview, not the number hidden by collapsing that box.

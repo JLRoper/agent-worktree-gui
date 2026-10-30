@@ -87,14 +87,43 @@ test("the result's own header line, and the notes under a result, stay OUTSIDE t
   assert.match(h, /<span class="code-n">2 lines<\/span>/, "and neither is counted");
 });
 
-test("the panel's own fold note is still a button, outside the box, naming its result", () => {
-  const note = { kind: "tool-out", text: "… 214 lines hidden — click to read", lid: 9, fold: { tool: "terminal", row: 3 } };
-  const rows = [...out(["one", "two"]), note];
-  // The caller (public/app.js) is the one that knows the TURN a note is filed under, and hands the whole fold in.
+test("a long result has one header that fetches its full text, not a separate hidden-lines button", () => {
+  const note = { kind: "tool-out", text: "… 24 lines hidden — click to read", lid: 99, fold: { tool: "terminal", row: 3 } };
+  const rows = [...out(Array.from({ length: 40 }, (_, i) => `line ${i + 1}`)), note];
   const h = CF.bodyHtml(rows, { tool: "terminal", arg: "ls", codeKey: "t|1", fold: { turn: "t1", tool: "terminal", row: 3 } });
   assert.equal(boxes(h), 1);
-  assert.match(h, /<button type="button" class="fold-read" data-tool-fold="1"[^>]*data-fold-turn="t1"[^>]*data-fold-tool="terminal" data-fold-row="3"/);
-  assert.ok(h.indexOf("fold-read") > h.indexOf("</div></div>"), "the button follows the box rather than sitting in it");
+  assert.match(h, /class="code-head"[^>]*data-code-fold="1"[^>]*data-tool-fold="1"[^>]*data-fold-turn="t1"[^>]*data-fold-tool="terminal"[^>]*data-fold-row="3"/);
+  assert.match(h, /<span class="code-n">40 of 64 lines<\/span>/);
+  assert.match(h, /data-code-key="result\|t1\|terminal\|3"/);
+  assert.equal(folded(h), 1);
+  assert.doesNotMatch(h, /fold-read|jl-fold/);
+  assert.match(h, /data-code-source=/, "the hidden wire note survives DOM read-back without a second visible control");
+});
+
+test("the fetched text replaces the preview inside the same remembered box", () => {
+  const full = Array.from({ length: 64 }, (_, i) => `whole line ${i + 1}`);
+  const note = { kind: "tool-out", text: "… 24 lines hidden — click to read", fold: { tool: "terminal", row: 3 } };
+  const rows = [...out(full.slice(0, 40)), note];
+  const opts = {
+    tool: "terminal", codeKey: "old-burst|1", fold: { turn: "t1", tool: "terminal", row: 3 },
+    codeOpen: new Set(["result|t1|terminal|3"]),
+    fullForFold: (fold) => {
+      assert.equal(fold.turn, "t1");
+      assert.equal(fold.tool, "terminal");
+      assert.equal(fold.row, 3);
+      return { text: full.join(String.fromCharCode(10)), truncated: false };
+    },
+  };
+  const h = CF.bodyHtml(rows, opts);
+  assert.equal(boxes(h), 1, "not a preview box plus a full-result box");
+  assert.equal(opened(h), 1);
+  assert.match(h, /<span class="code-n">64 lines<\/span>/);
+  assert.match(h, /data-code-key="result\|t1\|terminal\|3"/);
+  assert.equal(count(h, /data-ltext="whole line 1"/g), 1, "the head is not rendered twice");
+  assert.equal(count(h, /data-lkind="store"/g), full.length);
+  assert.doesNotMatch(h, /data-tool-fold=|fold-read|data-code-inverted/);
+  assert.equal(folded(CF.bodyHtml(rows, { ...opts, codeKey: "a-rebuilt-burst|9", codeOpen: new Set() })), 1,
+    "the reader can shut the loaded box and a different burst key does not reopen it");
 });
 
 test("only a tool's own output is boxed: a sentence, a call and the panel's notes never are", () => {

@@ -1,4 +1,4 @@
-// The whole tool result: the gateway streams it, the card keeps a head of it, and the click reads the rest.
+// The whole tool result: opening its original box fetches the full row in place, exactly once.
 //
 //   node tools/verify-whole-tool-stream.mjs
 //   PANEL_PLAYWRIGHT_ROOT=C:/ProjectDevelopment/heroes-js node tools/verify-whole-tool-stream.mjs
@@ -19,7 +19,7 @@
 // WHAT IS DRIVEN, AND WHAT IS ONLY INSPECTED
 //
 //   driven     the two caps by their own code: linesForEvent() from the shipped lib/jobs/console-lines.js is handed
-//              a whole 260-line result (no note), a 260-line result with a 900-character line (the panel's note, and
+//              a whole 260-line result (no gateway cut), a result with a 900-character line (the panel's note, and
 //              it says the line was shortened), a result the gateway cut (the gateway's own sentence, and the two
 //              notes are told apart), and a short result (no note at all — nothing was cut)
 //   driven     the store reader the click reads through: lib/tool-results.js against a seeded state.db — `index`
@@ -27,10 +27,11 @@
 //              still cuts with its own marker
 //   driven     the fold in a real browser, on a panel of its own on a spare port (never 7331, apiServer pinned at a
 //              dead port so nothing here can buy a worker): a card whose lines are the SHIPPED server's own output
-//              for a 260-line result, painted by the shipped renderJobs(). The note is a button, no request is made
-//              before the click, the click asks for exactly that row uncapped, the whole text is drawn in place,
-//              the job's own lines are untouched (the ring buffer is not what held it), and a repaint does not fold
-//              it back shut
+//              for a 260-line result, painted by the shipped renderJobs(). Its folded .code-head is the sole
+//              fetch/fold control: one full=1&n=1 SQLite-backed read fills the SAME box, updates its count and
+//              preserves normal open/shut state through renderJobs and DOM-backed burst rebuilds. No separate
+//              footer, duplicate preview, repeated full fetch or mutation of jobLines is allowed. Missing rows,
+//              HTTP refusals/retry, gateway truncation notes and parked console scroll are also driven.
 //   inspected  that the sentence the server pushes is the sentence the browser recognises: the note text is built
 //              once in each world (lib/jobs/console-lines.js, public/core/console-format.js) and this harness hands
 //              the server's own string to the browser's matcher, because a note the browser does not recognise is a
@@ -194,6 +195,9 @@ console.log("── the row the click reads " + "─".repeat(48));
 
 // ---- the fold in a real browser ----------------------------------------------------------------------
 const THREAD = "wtgui-probe-whole-stream-9c31ff";
+const TURN = "probe-turn";
+const BROWSER_STARTED_AT = new Date(Date.now() - 120_000).toISOString();
+const BROWSER_ENDED_AT = new Date(Date.now() - 30_000).toISOString();
 let dir = null;
 let panel = null;
 let base = "";
@@ -205,6 +209,13 @@ async function startSandbox() {
   const home = path.join(dir, "hermes-home");
   const configDir = path.join(dir, "panel");
   for (const d of [scanRoot, home, configDir, path.join(configDir, "logs")]) mkdirSync(d, { recursive: true });
+  // The successful browser click reads this real store through the sandbox's actual HTTP route.
+  const db = new DatabaseSync(path.join(home, "state.db"));
+  db.exec("create table messages (id integer primary key, session_id text, role text, tool_name text, tool_call_id text, content text, timestamp real)");
+  const ins = db.prepare("insert into messages (session_id, role, tool_name, tool_call_id, content, timestamp) values (?, 'tool', 'terminal', ?, ?, ?)");
+  ins.run(THREAD, "call-whole", longResult, Date.parse(BROWSER_STARTED_AT) / 1000 + 1);
+  ins.run(THREAD, "call-gateway-cut", cutResult, Date.parse(BROWSER_STARTED_AT) / 1000 + 2);
+  db.close();
   const port = await freePort();
   const configPath = path.join(configDir, "config.json");
   writeFileSync(
@@ -219,7 +230,7 @@ async function startSandbox() {
         assistantFile: path.join(configDir, "logs", "assistant.json"),
         projectsCacheFile: path.join(configDir, "logs", "projects.json"),
         treeNamesFile: path.join(configDir, "logs", "tree-names.json"),
-        apiServer: { url: "http://127.0.0.1:9", key: "sandbox-key" },
+        apiServer: { url: "http://127.0.0.1:9", key: "" },
         assistant: { enabled: false, seconds: 3600, maxWakesPerHour: 0 },
         refreshSeconds: 3600,
         worktreeSeconds: 3600,
@@ -236,7 +247,7 @@ async function startSandbox() {
   base = `http://127.0.0.1:${port}`;
   panel = spawn(process.execPath, ["server.js"], {
     cwd: ROOT,
-    env: { ...process.env, PANEL_CONFIG: configPath, HERMES_HOME: home, PANEL_TOKEN: "" },
+    env: { ...process.env, PANEL_CONFIG: configPath, HERMES_HOME: home, PANEL_TOKEN: "", API_SERVER_KEY: "" },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });
@@ -244,6 +255,10 @@ async function startSandbox() {
   panel.stderr.on("data", (d) => panelLog.push(...String(d).split(/\r?\n/).filter(Boolean)));
   const up = await waitFor(async () => (await fetch(`${base}/api/state`)).ok, { timeoutMs: 40_000, what: "the sandbox panel to answer /api/state" });
   if (!up) throw new Error(`the sandbox panel never came up on ${base}\n${panelLog.slice(-15).join("\n")}`);
+  const q = new URLSearchParams({ thread: THREAD, tool: "terminal", row: "0", full: "1", n: "1", from: String(Date.parse(BROWSER_STARTED_AT)), to: String(Date.parse(BROWSER_ENDED_AT)) });
+  const response = await fetch(`${base}/api/tool-results?${q}`);
+  const rows = (await response.json()).results || [];
+  ok("browser fixture: the real SQLite route serves the exact full row", response.ok && rows.length === 1 && rows[0].text === longBody, `${response.status}, ${rows[0]?.text.length || 0} chars`);
 }
 
 async function stopSandbox() {
@@ -276,259 +291,278 @@ function loadPlaywright() {
 }
 
 async function browserPhase(pw) {
-  // The card's lines are the shipped server's own output for a 260-line result: one call line, the result header,
-  // 40 lines of head and the fold note the panel pushed. Nothing here is hand-written console markup.
   const LIVE_CALL = "💻 terminal · bash -lc 'cat big.txt'";
-  const startedLines = linesForEvent({ event: "tool.started", tool: "terminal", preview: "bash -lc 'cat big.txt'" });
+  const CUT_CALL = "💻 terminal · bash -lc 'cat huge.txt'";
   const resultLines = complete("terminal", longResult);
+  const cutLines = complete("terminal", cutResult);
   const serverFoldNote = resultLines.at(-1).text;
   const storedText = unwrapToolText(longResult).text;
-  const CUT_CALL = "💻 terminal · bash -lc 'cat huge.txt'";
-  const cutLines = complete("terminal", cutResult);
-  // What the panel said about the result the gateway cut — computed here, not guessed, because a cut payload's
-  // line count is whatever the salvage found.
-  const cutFoldNote = FOLD_NOTE_RE.test(cutLines.at(-2).text) ? cutLines.at(-2).text : null;
-
   const browser = await pw.chromium.launch({ headless: true });
-  const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
-  const realSnapshot = await fetch(`${base}/api/state`).then((r) => r.json());
-  await context.addInitScript(
-    ({ snapshot, startedLines, resultLines, serverFoldNote, storedText, liveCall, cutCall, cutLines }) => {
-      const realFetch = window.fetch.bind(window);
-      const probe = { snapshot, calls: [], store: null, serverFoldNote, storedText };
-      window.__probe = probe;
-      const json = (body) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
-      window.fetch = async (url, opts = {}) => {
-        const u = String(url);
-        if (String((opts && opts.method) || "GET").toUpperCase() !== "POST") {
+  const pageErrors = [];
+  try {
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+    const realSnapshot = await fetch(`${base}/api/state`).then((r) => r.json());
+    await context.addInitScript(
+      ({ snapshot, resultLines, cutLines, serverFoldNote, storedText, liveCall, cutCall, thread, id, startedAt, endedAt }) => {
+        const realFetch = window.fetch.bind(window);
+        const probe = { snapshot, calls: [], replyMode: "real", fullAttempts: 0, serverFoldNote, storedText };
+        window.__probe = probe;
+        const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+        window.fetch = async (url, opts = {}) => {
+          const u = String(url);
+          const method = String(opts.method || "GET").toUpperCase();
+          if (method !== "GET" && method !== "HEAD") return json({ error: "writes disabled in this browser fixture" }, 405);
           if (u.includes("/api/state")) return json({ ...probe.snapshot, jobs: [...state.jobs.values()] });
           if (u.includes("/api/tool-results")) {
             probe.calls.push(u);
-            // What the panel's own server answers for the one row the click asked for: the whole stored text.
-            return json({ thread: "probe", tool: "terminal", results: [{ text: probe.storeText || storedText, truncated: false }] });
+            if (new URL(u, location.href).searchParams.get("full") === "1") {
+              probe.fullAttempts += 1;
+              // Only the explicit refusal/empty-store cases are stubbed. All successful reads use real SQLite.
+              if (probe.replyMode === "empty") return json({ thread, tool: "terminal", results: [] });
+              if (probe.replyMode === "refuse-once" && probe.fullAttempts === 1) return json({ error: "fixture store refusal" }, 503);
+            }
           }
           return realFetch(url, opts);
-        }
-        return json({ ok: true });
-      };
-      const FakeStream = function () {
-        this.readyState = 1;
-      };
-      FakeStream.prototype.addEventListener = function () {};
-      FakeStream.prototype.removeEventListener = function () {};
-      FakeStream.prototype.close = function () {};
-      window.EventSource = FakeStream;
-
-      // The turn as the card would hold it: a call, its result, then a second call whose result the GATEWAY cut
-      // (so both notes are on one card and the harness can tell them apart in the DOM).
-      probe.show = (opts = {}) => {
-        const id = opts.id || "probe-turn";
-        const lines = [
-          { kind: "text", text: "reading the file", lid: "l1" },
-          { kind: "tool", text: liveCall, at: Date.now() - 90_000 },
-          ...resultLines,
-          { kind: "text", text: "and the huge one", lid: "l2" },
-          { kind: "tool", text: cutCall, at: Date.now() - 60_000 },
-          ...cutLines,
-        ];
-        state.jobs.clear();
-        state.jobLines.clear();
-        state.toolStore.clear();
-        state.toolGroupOpen.clear();
-        state.codeBoxOpen.clear();
-        state.callFolded.clear();
-        state.foldRows.clear();
-        state.outPinned = {};
-        state.maximized = id;
-        state.jobLines.set(id, lines);
-        state.jobs.set(id, {
-          id,
-          thread: id,
-          turn: 1,
-          status: "done",
-          prompt: "whole tool stream probe",
-          displayPrompt: "whole tool stream probe",
-          cwd: null,
-          worktree: false,
-          worktreePath: null,
-          projectPath: null,
-          ownerPath: null,
-          branch: null,
-          runId: "run_probe",
-          startedAt: new Date(Date.now() - 120_000).toISOString(),
-          endedAt: new Date(Date.now() - 30_000).toISOString(),
-          model: "probe/model",
-          lines: [],
-          artifacts: [],
-          attachments: [],
-          subagents: [],
+        };
+        window.EventSource = class {
+          constructor() { this.readyState = 1; }
+          addEventListener() {}
+          removeEventListener() {}
+          close() {}
+        };
+        localStorage.setItem("wtgui.autoCollect", "0");
+        const pre = () => document.querySelector(`pre.job-out[data-out="${id}"]`);
+        probe.show = (opts = {}) => {
+          const padding = (side) => opts.padded ? Array.from({ length: 55 }, (_, i) => ({ kind: "text", text: `${side} reading-position line ${i + 1}: keep this place while the result loads`, lid: `${side}-${i}` })) : [];
+          const lines = [
+            ...padding("before"),
+            { kind: "text", text: "reading the file", lid: "l1" },
+            { kind: "tool", text: liveCall, at: Date.parse(startedAt) + 1000, lid: "call-0" },
+            ...resultLines,
+            { kind: "text", text: "and the huge one", lid: "l2" },
+            { kind: "tool", text: cutCall, at: Date.parse(startedAt) + 2000, lid: "call-1" },
+            ...cutLines,
+            ...padding("after"),
+          ];
+          state.jobs.clear();
+          state.jobLines.clear();
+          state.toolStore.clear();
+          state.toolGroupOpen.clear();
+          state.codeBoxOpen.clear();
+          state.codeBoxShut.clear();
+          state.callFolded.clear();
+          state.foldRows.clear();
+          state.foldPending?.clear();
+          state.toolStorePending.clear();
+          state.outPinned = {};
+          state.maximized = id;
+          state.jobLines.set(id, lines);
+          state.jobs.set(id, {
+            id, thread, turn: 1, status: "done", prompt: "single-box whole stream probe", displayPrompt: "single-box whole stream probe",
+            cwd: null, worktree: false, worktreePath: null, projectPath: null, ownerPath: null, branch: null,
+            runId: "run_probe", startedAt, endedAt, model: "probe/model", lines: [], artifacts: [], attachments: [], subagents: [],
+          });
+          probe.calls = [];
+          probe.fullAttempts = 0;
+          probe.replyMode = opts.replyMode || "real";
+          probe.originalLines = JSON.stringify(lines);
+          renderJobs();
+          // The fixture opens the outer bursts, not their output boxes, without triggering a store read.
+          for (const g of pre().querySelectorAll(".tgrp")) {
+            const body = g.querySelector(".tgrp-body");
+            if (body?.hidden) { body.hidden = false; rememberToolGroup(g); }
+          }
+          return probe.read();
+        };
+        probe.headers = () => [...pre().querySelectorAll(".code-head[data-fold-turn][data-fold-tool][data-fold-row]")].map((h) => {
+          const box = h.closest(".code-box");
+          const body = box?.querySelector(".code-body");
+          return {
+            turn: h.dataset.foldTurn, tool: h.dataset.foldTool, row: h.dataset.foldRow,
+            key: h.dataset.codeKey || "", codeFold: h.dataset.codeFold || "", fetch: h.dataset.toolFold === "1", inverted: h.dataset.codeInverted || "",
+            open: Boolean(body && !body.hidden && h.getAttribute("aria-expanded") === "true" && box.classList.contains("is-open")),
+            hidden: body?.hidden, expanded: h.getAttribute("aria-expanded"), disabled: h.disabled,
+            n: h.querySelector(".code-n")?.textContent || "",
+            body: [...(body?.querySelectorAll(".jl[data-ltext]") || [])].map((r) => r.dataset.ltext),
+          };
         });
-        probe.serverFoldNote = serverFoldNote;
-        probe.storedText = storedText;
-        renderJobs();
-        const grp = document.querySelector("pre.job-out .tgrp");
-        const body = grp && grp.querySelector(".tgrp-body");
-        if (body && body.hidden) {
-          body.hidden = false;
-          rememberToolGroup(grp);
-        }
-        return Boolean(grp);
-      };
+        probe.result = (row) => probe.headers().find((h) => h.turn === id && h.tool === "terminal" && h.row === String(row)) || null;
+        probe.read = () => {
+          const o = pre();
+          const source = state.jobLines.get(id) || [];
+          return {
+            headers: probe.headers(), boxes: o.querySelectorAll(".code-box").length,
+            footers: o.querySelectorAll(".fold-read").length,
+            externalNotes: [...o.querySelectorAll(".jl-fold")].filter((d) => !d.closest(".code-box") && !d.hidden).length,
+            calls: probe.calls.slice(), fullCalls: probe.calls.filter((u) => new URL(u, location.href).searchParams.get("full") === "1"),
+            lines: source.length, unchanged: JSON.stringify(source) === probe.originalLines,
+            tailInBuffer: source.some((l) => String(l.text || "").includes("line 41 of a long tool result")),
+            inputNotes: source.filter((l) => WMApp.core.consoleFormat.foldNote(l.text)).map((l) => l.text),
+            held: state.foldRows.size, text: o.textContent,
+            output: [...o.querySelectorAll(".jl[data-ltext]")].filter((d) => d.getClientRects().length > 0).map((d) => d.dataset.ltext),
+            gateway: [...o.querySelectorAll(".jl[data-ltext]")].filter((d) => d.dataset.ltext.includes("truncated by the gateway")).map((d) => ({ text: d.dataset.ltext, interactive: Boolean(d.closest(".code-head, [data-tool-fold], .fold-read")) })),
+          };
+        };
+        probe.rebuild = () => {
+          renderJobs();
+          for (const g of [...pre().querySelectorAll(".tgrp")]) rebuildToolGroup(g, { filter: g.dataset.filter || "", open: !g.querySelector(".tgrp-body")?.hidden });
+          return probe.read();
+        };
+        probe.scroll = () => {
+          const o = pre();
+          const r = o.getBoundingClientRect();
+          const h = [...o.querySelectorAll(".code-head")].find((d) => d.dataset.foldRow === "0");
+          const row = [...o.querySelectorAll(".jl[data-ltext]")].find((d) => {
+            if (!d.getClientRects().length) return false;
+            const a = d.getBoundingClientRect();
+            return a.bottom > r.top + 2 && a.top < r.bottom;
+          });
+          return { top: o.scrollTop, max: o.scrollHeight - o.clientHeight, gap: o.scrollHeight - o.clientHeight - o.scrollTop,
+            header: h ? h.getBoundingClientRect().top - r.top : null,
+            reader: row?.dataset.ltext || "", offset: row ? row.getBoundingClientRect().top - r.top : null,
+            pinned: state.outPinned[id] };
+        };
+        probe.park = (inside = false) => {
+          const o = pre();
+          const target = inside ? [...o.querySelectorAll(".code-body .jl[data-ltext]")].find((d) => d.dataset.ltext === "line 120 of a long tool result")
+            : [...o.querySelectorAll(".code-head")].find((d) => d.dataset.foldRow === "0");
+          if (!target) return null;
+          target.scrollIntoView({ block: "center" });
+          o.scrollTop += target.getBoundingClientRect().top - o.getBoundingClientRect().top - 80;
+          state.outPinned[id] = false;
+          o._selfTop = o.scrollTop;
+          return probe.scroll();
+        };
+      },
+      { snapshot: realSnapshot, resultLines, cutLines, serverFoldNote, storedText, liveCall: LIVE_CALL, cutCall: CUT_CALL,
+        thread: THREAD, id: TURN, startedAt: BROWSER_STARTED_AT, endedAt: BROWSER_ENDED_AT },
+    );
+    const page = await context.newPage();
+    page.on("pageerror", (err) => pageErrors.push(String(err?.message || err)));
+    await page.goto(base, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => Boolean(window.__probe && window.WMApp?.core?.consoleFormat), null, { timeout: 20_000 });
+    const read = () => page.evaluate(() => window.__probe.read());
+    const header = (row = 0) => page.locator(`pre.job-out[data-out="${TURN}"] .code-head[data-fold-turn="${TURN}"][data-fold-tool="terminal"][data-fold-row="${row}"]`);
+    const result = (st, row = 0) => st.headers.find((h) => h.row === String(row) && h.tool === "terminal" && h.turn === TURN);
+    const noFooter = (label, st) => check(`${label}: no separate hidden-lines footer`, [st.footers, st.externalNotes], [0, 0]);
+    const click = async (row = 0) => {
+      if (await header(row).count() !== 1) return false;
+      await header(row).click();
+      return true;
+    };
+    const loaded = () => waitFor(() => page.evaluate(() => {
+      const c = window.__probe.result(0);
+      return Boolean(c?.open && !c.fetch && state.foldRows.size === 1 && !state.foldPending?.size);
+    }), { timeoutMs: 5000, stepMs: 50, what: "the full row to open in the original output box" });
+    const assertWhole = (label, st, key) => {
+      const own = result(st);
+      check(`${label}: the result still occupies exactly one of two output boxes`, [st.boxes, st.headers.length], [2, 2]);
+      check(`${label}: the same header keeps identity and ordinary fold semantics`, own ? [own.turn, own.tool, own.row, own.key, own.codeFold, own.fetch, own.inverted] : null,
+        [TURN, "terminal", "0", key, "1", false, ""]);
+      ok(`${label}: the full result is actually open and its count updated`, Boolean(own?.open && own.n === `${LONG_LINES} lines`));
+      ok(`${label}: every full line appears exactly once, without duplicating the preview`, JSON.stringify(own?.body) === JSON.stringify(longBody.split(RF)) && st.output.filter((s) => /^line \d+ of a long tool result$/.test(s)).length === LONG_LINES, `${own?.body.length || 0}/${LONG_LINES} rows`);
+      ok(`${label}: jobLines still contains the original heads and notes, never the tail`, st.unchanged && !st.tailInBuffer && st.inputNotes.length === 2);
+      noFooter(label, st);
+    };
 
-      // ---- readings ----
-      probe.folds = () =>
-        [...document.querySelectorAll("pre.job-out .jl-fold")].map((d) => ({
-          text: d.dataset.ltext,
-          kind: d.dataset.lkind,
-          isButton: Boolean(d.querySelector("[data-tool-fold]")),
-          row: d.querySelector("[data-tool-fold]") ? d.querySelector("[data-tool-fold]").dataset.foldRow : null,
-          tool: d.querySelector("[data-tool-fold]") ? d.querySelector("[data-tool-fold]").dataset.foldTool : null,
-          turn: d.querySelector("[data-tool-fold]") ? d.querySelector("[data-tool-fold]").dataset.foldTurn : null,
-          title: d.querySelector("[data-tool-fold]") ? d.querySelector("[data-tool-fold]").title : null,
-        }));
-      probe.bodyText = () => document.querySelector("pre.job-out").textContent;
-      probe.storeRows = () => probe.calls.slice();
-      probe.cutRows = () => [...document.querySelectorAll("pre.job-out .df-cut")].map((d) => d.textContent);
-      probe.lineCount = (id) => (state.jobLines.get(id) || []).length;
-      probe.foldRowsSize = () => state.foldRows.size;
-      probe.foldText = (s) => WMApp.core.consoleFormat.foldText(s);
-      probe.foldNoteMatcher = (s) => WMApp.core.consoleFormat.foldNote(s);
-      probe.click = async (sel) => {
-        const el = document.querySelector(sel);
-        if (!el) return false;
-        el.click();
-        await new Promise((r) => setTimeout(r, 600));
-        return true;
-      };
-      probe.repaint = () => renderJobs();
-    },
-    {
-      snapshot: realSnapshot,
-      startedLines,
-      resultLines,
-      serverFoldNote,
-      storedText,
-      liveCall: LIVE_CALL,
-      cutCall: CUT_CALL,
-      cutLines,
-    },
-  );
+    const parity = await page.evaluate(() => ({ note: window.__probe.serverFoldNote,
+      recognised: WMApp.core.consoleFormat.foldNote(window.__probe.serverFoldNote), rebuilt: WMApp.core.consoleFormat.foldText({ hidden: 220 }) }));
+    check("(a) the server's input note is unchanged", parity.note, "… 220 lines hidden — click to read");
+    ok("(a) the browser still recognises that metadata", parity.recognised === true);
+    check("(a) both worlds build the same sentence", parity.rebuilt, parity.note);
 
-  const page = await context.newPage();
-  const pageErrors = [];
-  page.on("pageerror", (err) => pageErrors.push(String(err && err.message ? err.message : err)));
-  await page.goto(base, { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(() => Boolean(window.__probe && window.WMApp && window.WMApp.core && window.WMApp.core.consoleFormat), null, { timeout: 20_000 });
-  // (a) the server's own note is one the browser recognises, and it reads as the reader asked
-  const parity = await page.evaluate(() => ({
-    note: window.__probe.serverFoldNote,
-    recognised: window.__probe.foldNoteMatcher(window.__probe.serverFoldNote),
-    rebuilt: window.__probe.foldText({ hidden: 220 }),
-  }));
-  check("(a) the server's own note text, as the card received it", parity.note, "… 220 lines hidden — click to read");
-  ok("(a) the browser recognises the server's own sentence", parity.recognised === true);
-  check("(a) and builds the same sentence itself", parity.rebuilt, parity.note);
+    const before = await page.evaluate(() => window.__probe.show());
+    check("(b) two results produce two boxes and two identified headers", [before.boxes, before.headers.length], [2, 2]);
+    check("(b) the headers carry their own whole-turn row identities", before.headers.map((h) => [h.turn, h.tool, h.row]), [[TURN, "terminal", "0"], [TURN, "terminal", "1"]]);
+    ok("(b) both headers start folded with normal fold keys and fetch on opening", before.headers.length === 2 && before.headers.every((h) => !h.open && h.hidden && h.expanded === "false" && h.fetch && h.codeFold === "1" && h.key && !h.inverted));
+    const original = result(before);
+    check("(b) the folded header counts the retained lines out of the full result", original?.n, `40 of ${LONG_LINES} lines`);
+    ok("(b) the retained head is exactly the first 40 lines, with no line 41", JSON.stringify(original?.body) === JSON.stringify(longBody.split(RF).slice(0, 40)));
+    check("(b) no full row was fetched just to draw a folded header", before.fullCalls, []);
+    check("(b) the original server notes remain in the input, not in a rendered footer", before.inputNotes.length, 2);
+    ok("(b) the ring buffer holds only the two heads, never the full tail", before.lines < 100 && !before.tailInBuffer, `${before.lines} input lines`);
+    noFooter("(b)", before);
+    if (SHOT_DIR) {
+      mkdirSync(SHOT_DIR, { recursive: true });
+      await page.locator("pre.job-out .code-head").first().scrollIntoViewIfNeeded();
+      await page.screenshot({ path: path.join(SHOT_DIR, "1-folded.png") });
+    }
 
-  const shown = await page.evaluate(() => window.__probe.show());
-  ok("(a) the card painted a tool burst", shown === true);
-  await page.waitForSelector("pre.job-out .tgrp", { timeout: 20_000 });
+    const pressed = await click();
+    ok("(c) the real click is on the original box header", pressed);
+    ok("(c) opening it loads the full row immediately", pressed && await loaded());
+    let st = await read();
+    check("(c) exactly one request asks for exactly one uncapped row of this turn", st.fullCalls.map((u) => {
+      const q = new URL(u, base).searchParams;
+      return [q.get("thread"), q.get("tool"), q.get("row"), q.get("full"), q.get("n"), q.get("from"), q.get("to")];
+    }), [[THREAD, "terminal", "0", "1", "1", String(Date.parse(BROWSER_STARTED_AT)), String(Date.parse(BROWSER_ENDED_AT))]]);
+    assertWhole("(c)", st, original?.key || "missing-original-key");
+    ok("(c) the other result remains folded and keeps its own fetch control", Boolean(result(st, 1)?.fetch && !result(st, 1)?.open && result(st, 1)?.row === "1"));
+    check("(c) full text is held outside the input ring buffer", [st.held, st.lines], [1, before.lines]);
+    if (SHOT_DIR) {
+      await page.evaluate(() => { const o = document.querySelector("pre.job-out"); state.outPinned[o.dataset.out] = false; o.scrollTop = o.scrollHeight; o._selfTop = o.scrollTop; });
+      await page.screenshot({ path: path.join(SHOT_DIR, "2-opened.png") });
+    }
 
-  // (b) the fold is a head plus a counted, clickable note — and nothing was fetched to draw it
-  const folds = await page.evaluate(() => window.__probe.folds());
-  const head = await page.evaluate(() => window.__probe.bodyText());
-  // Two results on this card: the one the gateway streamed whole (row 0) and the one it cut, which the panel also
-  // folded (row 1). Both notes are the panel's, and each belongs to its own result.
-  check("(b) one fold note per folded result", folds.length, 2);
-  check("(b) the whole result's note reads as the count the reader needs", folds[0].text, "… 220 lines hidden — click to read");
-  check("(b) the cut result's note is its own", folds[1].text, cutFoldNote);
-  ok("(b) both are buttons", folds.every((f) => f.isButton === true));
-  check("(b) and each belongs to its own tool and row", folds.map((f) => [f.tool, f.row]), [["terminal", "0"], ["terminal", "1"]]);
-  ok("(b) it says which cap folded it, in the title", /this panel keeps a result's first 40 lines/.test(folds[0].title || ""), folds[0].title);
-  ok("(b) the head is drawn and holds the result's first lines", head.includes("line 1 of a long tool result") && head.includes("line 40 of a long tool result"));
-  ok("(b) and does not hold the 41st", !head.includes("line 41 of a long tool result"));
-  const beforeClick = await page.evaluate(() => ({
-    calls: window.__probe.storeRows(),
-    lines: window.__probe.lineCount("probe-turn"),
-    tailInLines: (state.jobLines.get("probe-turn") || []).some((l) => String(l.text || "").includes("line 41 of a long tool result")),
-  }));
-  check("(b) nothing was fetched before the click", beforeClick.calls, []);
-  ok("(b) the card's own lines hold no folded tail", beforeClick.tailInLines === false);
-  ok("(b) so the ring buffer has room: the card's lines are the two heads", beforeClick.lines < 100, `${beforeClick.lines} console lines for two long results`);
-  if (SHOT_DIR) {
-    mkdirSync(SHOT_DIR, { recursive: true });
-    await page.evaluate(() => document.querySelector("pre.job-out .jl-fold")?.scrollIntoView({ block: "center" }));
-    await page.screenshot({ path: path.join(SHOT_DIR, "1-folded.png") });
+    st = await page.evaluate(() => window.__probe.rebuild());
+    assertWhole("(d) renderJobs plus DOM-backed burst rebuild", st, original?.key || "missing-original-key");
+    if (await click()) {
+      st = await page.evaluate(() => window.__probe.rebuild());
+      const closed = result(st);
+      ok("(d) a second click closes the same full box through both rebuilds", Boolean(closed && closed.hidden && !closed.open && closed.expanded === "false" && !closed.fetch && !closed.inverted && closed.key === original?.key));
+      await click();
+      st = await page.evaluate(() => window.__probe.rebuild());
+      assertWhole("(d) cached reopen", st, original?.key || "missing-original-key");
+    } else ok("(d) the original header remains available to close/reopen", false);
+    check("(d) subsequent close/reopen and all rebuilds do not repeat the full fetch", st.fullCalls.length, 1);
+
+    const cuts = st.gateway;
+    ok("(e) the gateway's honest truncation sentence is still present", st.text.includes(GATEWAY_CUT) && cuts.some((c) => c.text === GATEWAY_CUT));
+    ok("(e) gateway notes are never fetch controls", cuts.length > 0 && cuts.every((c) => !c.interactive));
+    noFooter("(e)", st);
+
+    // Empty and refused reads must leave the same header usable, never cache a fabricated full result.
+    for (const [mode, label, notice] of [["empty", "(f) missing stored row", "no copy of this result"], ["refuse-once", "(g) refused store read", "could not be read"]]) {
+      const first = await page.evaluate((replyMode) => window.__probe.show({ replyMode }), mode);
+      const didClick = await click();
+      const answered = didClick && await waitFor(() => page.evaluate((n) => window.__probe.read().text.includes(n), notice), { timeoutMs: 5000, stepMs: 50, what: `${label}'s honest notice` });
+      st = await read();
+      const own = result(st);
+      ok(`${label}: the failed click reports the real failure, not invented output`, answered);
+      check(`${label}: a failed read leaves the full-row cache empty`, [st.held, st.fullCalls.length], [0, 1]);
+      ok(`${label}: the original identified header stays enabled for retry`, Boolean(own && own.fetch && !own.disabled && own.key === result(first)?.key && own.codeFold === "1"));
+      ok(`${label}: the original preview is still the only output for that call`, st.boxes === 2 && st.unchanged && JSON.stringify(own?.body) === JSON.stringify(longBody.split(RF).slice(0, 40)));
+      noFooter(label, st);
+      await page.evaluate(() => { window.__probe.replyMode = "real"; });
+      const retried = await click();
+      ok(`${label}: a real second header click retries successfully`, retried && await loaded());
+      st = await read();
+      check(`${label}: exactly the failed attempt and the retry went out`, st.fullCalls.length, 2);
+      assertWhole(`${label} retry`, st, result(first)?.key || "missing-original-key");
+    }
+
+    // Keep the reader away from the bottom on both sides of the target; do not confuse browser clamping
+    // after a fold with a repaint losing the reader's place. Padding is input prose, never fake tool output.
+    const padded = await page.evaluate(() => window.__probe.show({ padded: true }));
+    const parked = await page.evaluate(() => window.__probe.park());
+    ok("(h) the scroll proof really starts parked away from both ends", Boolean(parked && parked.top > 0 && parked.gap > 40 && parked.max > 80 && parked.pinned === false), JSON.stringify(parked));
+    const scrollClicked = await click();
+    const scrollLoaded = scrollClicked && await loaded();
+    const afterLoad = await page.evaluate(() => window.__probe.scroll());
+    ok("(h) first full fetch preserves console position and the visible reading row", Boolean(scrollLoaded && parked && Math.abs(afterLoad.top - parked.top) <= 2 && afterLoad.reader === parked.reader && Math.abs(afterLoad.offset - parked.offset) <= 2 && Math.abs(afterLoad.header - parked.header) <= 2 && afterLoad.pinned === false), JSON.stringify({ before: parked, after: afterLoad }));
+    const inside = await page.evaluate(() => window.__probe.park(true));
+    ok("(h) a line inside the full result can be parked away from the tail", Boolean(inside && inside.gap > 40 && inside.reader.includes("of a long tool result")), JSON.stringify(inside));
+    await page.evaluate(() => window.__probe.rebuild());
+    const afterRebuild = await page.evaluate(() => window.__probe.scroll());
+    ok("(h) renderJobs and burst rebuild preserve the parked full-result reading line", Boolean(inside && afterRebuild.reader === inside.reader && Math.abs(afterRebuild.offset - inside.offset) <= 2 && afterRebuild.gap > 40 && afterRebuild.pinned === false), JSON.stringify({ before: inside, after: afterRebuild }));
+    st = await read();
+    assertWhole("(h) scrolled rebuild", st, result(padded)?.key || "missing-original-key");
+    check("(h) the scroll proof also needed only one full-row fetch", st.fullCalls.length, 1);
+    ok("no page errors anywhere, including refusal and retry", pageErrors.length === 0, pageErrors.join(" | ") || "none");
+  } finally {
+    await browser.close();
   }
-
-  // (c) the click reads exactly that row, uncapped, and the whole text appears in its place
-  const clicked = await page.evaluate(() => window.__probe.click("pre.job-out [data-tool-fold]"));
-  ok("(c) the fold note is a real button a click can press", clicked === true);
-  const after = await page.evaluate(() => ({
-    calls: window.__probe.storeRows(),
-    text: window.__probe.bodyText(),
-    folds: window.__probe.folds(),
-    lines: window.__probe.lineCount("probe-turn"),
-    held: window.__probe.foldRowsSize(),
-  }));
-  check("(c) exactly one request went out", after.calls.length, 1);
-  const q = new URLSearchParams(String(after.calls[0]).split("?")[1] || "");
-  check("(c) it asked for the row the note named", q.get("row"), "0");
-  check("(c) it asked for the whole row, not the store's display cut", q.get("full"), "1");
-  check("(c) it asked for that tool in that turn", [q.get("tool"), q.get("thread")], ["terminal", "probe-turn"]);
-  ok("(c) the whole stored text is drawn: its last line is there", after.text.includes("line 260 of a long tool result"));
-  ok("(c) the head's lines are still there, folded open in place", after.text.includes("line 1 of a long tool result") && after.text.includes("line 40 of a long tool result"));
-  // The OTHER result on the card was cut by the gateway AND folded by the panel: its own note is still a button,
-  // and it is the one for row 1 — the two results on one card never share a note.
-  check("(c) the opened result's note is gone, the other result's is not", after.folds.length, 1);
-  check("(c) and the note left on the card belongs to the second result", [after.folds[0].row, after.folds[0].text], ["1", cutFoldNote]);
-  ok("(c) the ring buffer did not take the result", after.lines === beforeClick.lines, `${after.lines} console lines before and after`);
-  check("(c) the opened row is held for the next rebuild", after.held, 1);
-  if (SHOT_DIR) {
-    // The opened end of the result, so the shot shows lines 41+ really are on the card.
-    await page.evaluate(() => {
-      const out = document.querySelector("pre.job-out");
-      if (out) out.scrollTop = out.scrollHeight;
-    });
-    await page.screenshot({ path: path.join(SHOT_DIR, "2-opened.png") });
-  }
-
-  // (d) a repaint does not fold it back shut
-  await page.evaluate(() => window.__probe.repaint());
-  const afterRepaint = await page.evaluate(() => ({ text: window.__probe.bodyText(), folds: window.__probe.folds() }));
-  ok("(d) a repaint keeps the opened result open", afterRepaint.text.includes("line 260 of a long tool result"));
-  check("(d) and does not conjure a second note", afterRepaint.folds.length, 1);
-
-  // (e) the gateway's own cut is untouched: its sentence is still there, and it is not turned into a button
-  const cut = await page.evaluate(() => ({ text: window.__probe.bodyText(), html: [...document.querySelectorAll("pre.job-out [data-tool-fold]")].map((b) => b.textContent) }));
-  ok("(e) the gateway's sentence is still on the card", cut.text.includes("truncated by the gateway"));
-  ok("(e) and the button on the card is the panel's fold, not the gateway's sentence", cut.html.every((t) => /lines hidden/.test(t)), cut.html.join(" | "));
-
-  ok("no page errors", pageErrors.length === 0, pageErrors.join(" | ") || "none");
-
-  // (f) a turn whose store has no row: honest, and the note stays a note
-  const missing = await page.evaluate(async () => {
-    window.__probe.storeText = "";
-    state.foldRows.clear();
-    window.fetch = ((real) => async (url, opts = {}) => {
-      const u = String(url);
-      if (String((opts && opts.method) || "GET").toUpperCase() === "GET" && u.includes("/api/tool-results")) {
-        window.__probe.calls.push(u);
-        return new Response(JSON.stringify({ thread: "probe", tool: "terminal", results: [] }), { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      return real(url, opts);
-    })(window.fetch);
-    renderJobs();
-    const btn = document.querySelector("pre.job-out [data-tool-fold]");
-    if (!btn) return { found: false };
-    btn.click();
-    await new Promise((r) => setTimeout(r, 600));
-    return { found: true, text: document.querySelector("pre.job-out").textContent };
-  });
-  ok("(f) with no stored row the click says so instead of inventing output", missing.found && /the session store has no copy of this result/.test(missing.text));
-
-  await browser.close();
 }
-
 console.log("");
 console.log("── the fold, in a browser " + "─".repeat(47));
 const pw = loadPlaywright();

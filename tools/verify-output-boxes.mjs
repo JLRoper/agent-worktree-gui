@@ -16,7 +16,8 @@
 //   driven     (2) a real click opens a box to its full size and a second one folds it; the choice survives a repaint
 //              and a burst rebuild; a diff's windows live inside the box and the header says what it adds/removes
 //   driven     (3) the one-stream view (🌊) draws the same boxes, folded, and remembers them the same way
-//   driven     (4) the whole stored text a fold note reads is drawn in an OPEN box, and shutting it is remembered
+//   driven     (4) opening a long result's own header fetches the whole row into that SAME box, updates its count,
+//              and keeps ordinary open/shut state through repaints and burst rebuilds without fetching it twice
 //   driven     (5) the live path: `jobline` frames through the page's own EventSource handler. A skill's lines are
 //              typed word by word (sampled part-way), data-ltext carries the whole line all along, the words/s and
 //              lines/s settings both govern them, and every other tool's lines arrive whole
@@ -108,6 +109,8 @@ const BROWSER_FIXTURE = ({ calls, firstText, lastText }) => {
     state.codeBoxShut.clear();
     state.callFolded.clear();
     state.foldRows.clear();
+    state.foldPending?.clear();
+    state.toolStorePending.clear();
     state.outPinned = {};
     state.maximized = id;
     state.jobLines.set(id, opts.lines || probe.lines());
@@ -290,37 +293,98 @@ async function main() {
     check("a stream remembers the box the reader opened", await state1(), [false, true, false, false, false]);
     await page.evaluate(() => localStorage.removeItem("wtgui.stream.probe-turn"));
 
-    // ---- (4) the whole stored text, opened by the reader's click -----------------------------------------
-    console.log("\n== (4) a box the reader asked for is drawn open ==");
-    const whole = await page.evaluate(() => {
-      const big = Array.from({ length: 60 }, (_, i) => `line ${i + 1} of a result the card only kept the head of`);
-      const head = big.slice(0, 40);
-      const fold = "… 20 lines hidden — click to read";
+    // ---- (4) one box, one real header click, and an uncapped row in place -------------------------------
+    console.log("\n== (4) a long result opens completely in its original box ==");
+    const big = Array.from({ length: 60 }, (_, i) => `line ${i + 1} of a result the card only kept the head of`);
+    const fullReads = [];
+    const resultRoute = async (route) => {
+      const q = new URL(route.request().url()).searchParams;
+      if (q.get("thread") !== "probe-turn" || q.get("tool") !== "terminal") return route.continue();
+      if (q.get("full") === "1") fullReads.push(Object.fromEntries(q));
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ thread: "probe-turn", tool: "terminal", results: [{ text: big.join("\n"), truncated: false }] }),
+      });
+    };
+    await page.route("**/api/tool-results?**", resultRoute);
+    await page.evaluate((body) => {
       const lines = [
         { kind: "tool", text: "💻 terminal · cat big.log", at: Date.now() - 5000, lid: 900 },
         { kind: "tool-out", text: "  ↳ terminal · 0.30s", lid: 901 },
-        ...head.map((text, i) => ({ kind: "tool-out", text, lid: 902 + i })),
-        { kind: "tool-out", text: fold, lid: 960, fold: { tool: "terminal", row: 0 } },
+        ...body.slice(0, 40).map((text, i) => ({ kind: "tool-out", text, lid: 902 + i })),
+        { kind: "tool-out", text: "… 20 lines hidden — click to read", lid: 960, fold: { tool: "terminal", row: 0 } },
       ];
       window.__probe.show({ lines });
-      state.foldRows.set(foldKey("probe-turn", "terminal", 0), { text: big.join("\n"), truncated: false });
-      renderJobs();
-      return {
-        boxes: [...document.querySelectorAll("pre.job-out .code-box")].map((b) => ({
-          what: b.querySelector(".code-what").textContent,
-          n: b.querySelector(".code-n").textContent,
-          open: !b.querySelector(".code-body").hidden,
-          inverted: b.querySelector(".code-head").dataset.codeInverted || "",
-        })),
+      window.__probe.longLines = JSON.stringify(state.jobLines.get("probe-turn"));
+      window.__probe.longBox = () => {
+        const pre = document.querySelector('pre.job-out[data-out="probe-turn"]');
+        const boxes = [...pre.querySelectorAll(".code-box")];
+        const b = boxes[0];
+        const h = b?.querySelector(".code-head");
+        return {
+          boxes: boxes.length,
+          what: h?.querySelector(".code-what")?.textContent || "",
+          n: h?.querySelector(".code-n")?.textContent || "",
+          open: b ? !b.querySelector(".code-body").hidden : false,
+          expanded: h?.getAttribute("aria-expanded"),
+          key: h?.dataset.codeKey || "",
+          codeFold: h?.dataset.codeFold || "",
+          fetch: h?.dataset.toolFold || "",
+          identity: [h?.dataset.foldTurn || "", h?.dataset.foldTool || "", h?.dataset.foldRow || ""],
+          inverted: h?.dataset.codeInverted || "",
+          rows: [...(b?.querySelectorAll(".code-body .jl") || [])].map((r) => r.dataset.ltext ?? r.textContent),
+          output: [...pre.querySelectorAll(".jl[data-ltext]")].filter((r) => r.getClientRects().length > 0).map((r) => r.dataset.ltext),
+          footers: pre.querySelectorAll(".fold-read").length,
+          externalNotes: [...pre.querySelectorAll(".jl-fold")].filter((r) => !r.closest(".code-box") && !r.hidden).length,
+          linesUnchanged: JSON.stringify(state.jobLines.get("probe-turn")) === window.__probe.longLines,
+          held: state.foldRows.size,
+        };
       };
+    }, big);
+    const readLong = () => page.evaluate(() => window.__probe.longBox());
+    const longHead = page.locator('pre.job-out[data-out="probe-turn"] .code-head').first();
+    const beforeLong = await readLong();
+    check("a long result starts as one folded box counting retained and total lines", [beforeLong.boxes, beforeLong.open, beforeLong.expanded, beforeLong.n], [1, false, "false", "40 of 60 lines"]);
+    check("its header carries both the fetch identity and the ordinary fold control", [beforeLong.identity, beforeLong.fetch, beforeLong.codeFold], [["probe-turn", "terminal", "0"], "1", "1"]);
+    ok("the original box has an ordinary non-inverted state key", beforeLong.key !== "" && beforeLong.inverted !== "1");
+    check("there is no separate hidden-lines footer or link", [beforeLong.footers, beforeLong.externalNotes], [0, 0]);
+    check("nothing is preloaded in the full-row cache", [beforeLong.held, fullReads.length], [0, 0]);
+    await longHead.click();
+    const loaded = await page.waitForFunction(() => window.__probe.longBox().held === 1, null, { timeout: 4000 }).then(() => true, (e) => {
+      if (e.name !== "TimeoutError") throw e;
+      return false;
     });
-    console.log(`      ${JSON.stringify(whole.boxes)}`);
-    ok("the card's head stays a folded box", whole.boxes[0]?.open === false && whole.boxes[0].n === "40 lines");
-    ok("the whole stored text is drawn open, and says it is the full result", whole.boxes[1]?.open === true && whole.boxes[1].n === "60 lines" && /full result/.test(whole.boxes[1].what), JSON.stringify(whole.boxes[1]));
-    await page.locator("pre.job-out .code-box").nth(1).locator(".code-head").click();
-    await page.evaluate(() => renderJobs());
-    const afterShut = await page.evaluate(() => [...document.querySelectorAll("pre.job-out .code-box")].map((b) => !b.querySelector(".code-body").hidden));
-    check("shutting it is remembered through a repaint", afterShut, [false, false]);
+    ok("the first actual header click loaded the full stored row", loaded);
+    const whole = await readLong();
+    check("one click asks for exactly one uncapped row", fullReads.map((q) => [q.thread, q.tool, q.row, q.full, q.n]), [["probe-turn", "terminal", "0", "1", "1"]]);
+    check("the same logical header now opens one 60-line box", [whole.boxes, whole.key, whole.n, whole.open, whole.expanded], [1, beforeLong.key, "60 lines", true, "true"]);
+    check("the loaded header keeps its identity but no longer fetches", [whole.identity, whole.fetch, whole.codeFold, whole.inverted], [["probe-turn", "terminal", "0"], "", "1", ""]);
+    ok("every full-result line appears exactly once, without a second preview copy", JSON.stringify(whole.rows) === JSON.stringify(big) && big.every((text) => whole.output.filter((t) => t === text).length === 1), `${whole.rows.length} rows for ${big.length} lines`);
+    ok("the input jobLines, including the original fold stamp, are byte-for-byte unchanged", whole.linesUnchanged);
+    check("there is still no separate footer after loading", [whole.footers, whole.externalNotes], [0, 0]);
+    await shot("04b-long-result-open.png");
+    await page.evaluate(() => {
+      renderJobs();
+      const grp = document.querySelector("pre.job-out .tgrp");
+      if (grp) rebuildToolGroup(grp, { filter: "", open: true });
+    });
+    let remembered = await readLong();
+    check("a repaint and a DOM-backed burst rebuild preserve the opened original box", [remembered.boxes, remembered.open, remembered.n, remembered.key], [1, true, "60 lines", beforeLong.key]);
+    await longHead.click();
+    await page.evaluate(() => {
+      renderJobs();
+      const grp = document.querySelector("pre.job-out .tgrp");
+      if (grp) rebuildToolGroup(grp, { filter: "", open: true });
+    });
+    remembered = await readLong();
+    check("shutting that same box is remembered without inverting its state", [remembered.boxes, remembered.open, remembered.expanded, remembered.inverted], [1, false, "false", ""]);
+    await longHead.click();
+    remembered = await readLong();
+    ok("reopening shows the cached full result once", remembered.open && JSON.stringify(remembered.rows) === JSON.stringify(big) && big.every((text) => remembered.output.filter((t) => t === text).length === 1));
+    check("close/reopen and rebuilding never repeat the full-row fetch", fullReads.length, 1);
+    ok("all the original input lines remain untouched", remembered.linesUnchanged);
+    await page.unroute("**/api/tool-results?**", resultRoute);
 
     ok("no page errors so far", pageErrors.length === 0, JSON.stringify(pageErrors));
 
