@@ -612,7 +612,10 @@ the panel sees it on a live turn, so opening an old card or reloading draws hist
 are `0` = off, which is the console filling exactly as the run sent it, and both are saved in this browser. A line
 still held back is not in the console yet, so a repaint in the middle of one (a scan, a pinned turn's second copy)
 shows the transcript as far as it has got — and a turn that settles, or a tab that goes to the background, releases
-everything at once, so nothing is ever left waiting in a buffer.
+everything at once, so nothing is ever left waiting in a buffer. A reasoning block's text never goes **backwards**:
+once it has typed a word the block keeps it, so a settled turn that comes back, or a tab returning to the foreground,
+finishes the block instead of rewinding it to where the clock had got to. See
+[why the reasoning block collapsed and reopened](thinking-block-redraw.md).
 
 **A run of tool calls is condensed.** Consecutive calls between two pieces of prose become one group, one row per
 tool name: `💻 terminal ×11 curl …` with the last input and either a duration or a live clock. Click a row to filter

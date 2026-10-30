@@ -3839,6 +3839,10 @@ function sweepThinking() {
 setInterval(sweepThinking, 1200);
 
 // The block's own open/closed state belongs to the reader; a repaint puts it back.
+// `thinkAutoOpened` is armed two ways, and both are "the panel did it, not the reader": right before a script-fired
+// `el.open = ...` (sweepThinking's fold), and when a `<details open>` is INSERTED — an inserted open details fires a
+// toggle of its own (see armPlacedThink). A swallowed toggle is dropped from the set, so the reader's next press on
+// that node is theirs again.
 document.addEventListener(
   "toggle",
   (e) => {
@@ -6185,15 +6189,26 @@ state.thinkFed = new Set();
 // fed the first time the panel sees it while its turn is live, and every re-read of the store feeds it again so a
 // block that grew keeps flowing. Returns the prefix to draw, or null when this block is drawn whole (history, a
 // hidden tab, rate 0, or the turn has settled and the flush already released it).
+//
+// THE TWO BRANCHES MUST NOT DISAGREE. A block that has been fed always draws the PACER'S prefix — never its whole
+// text — because the two are not the same string: a live turn's reasoning runs to 100 kB and more per turn (measured:
+// 58 blocks / 183 kB on this box), so the prefix the clock has reached is a small fraction of the wire's text. Drawing
+// the whole text in one branch and the prefix in the other makes the block COLLAPSE back to a few words and type them
+// out again the moment the branches swap — a settled turn that is revived, a tab that comes back into view. And the
+// moment there is no flow to show (a settled turn, a hidden tab) the rest is released at once, so the block ends on
+// the wire's whole text instead of on a prefix nobody is left to write.
 function paceThinkBlock(turn, block) {
   const P = state.typePacer;
   if (!P || !block) return null;
   const lid = `think:${block.at}`;
-  const fresh = !state.thinkFed.has(lid);
-  if (fresh && (document.hidden || !turnLive(turn))) return null;
+  const flowing = !document.hidden && turnLive(turn);
+  // A block first seen on a turn that is not live — an old card, a reload, thinking switched on after the fact — is
+  // history and draws whole. One the pacer already holds is not history any more, whatever the status says now.
+  if (!state.thinkFed.has(lid) && !flowing) return null;
   state.thinkFed.add(lid);
-  if (document.hidden || !turnLive(turn)) return null;
-  return P.feed(lid, String(turn.id), String(block.text ?? ""));
+  const shown = P.feed(lid, String(turn.id), String(block.text ?? ""));
+  if (!flowing) return P.flush(lid) ?? shown;
+  return shown;
 }
 
 // A SKILL'S RESULT is written like prose and reasoning are. Its lines are fed to the pacer as they join a console,
@@ -6332,16 +6347,29 @@ async function loadThinking(turn, copy = "") {
   const key = turnKey(turn, copy);
   if (state.thinkLoading.has(turn.id)) return;
   state.thinkLoading.add(turn.id);
-  let blocks = [];
+  const prev = state.thinkCache.get(turn.id)?.blocks || [];
+  // The block keeps what it has unless a read it can TRUST says otherwise. This is the only pane on a card that is
+  // polled; the run's own output is appended and never rebuilt, which is why the recording of a run never flickers and
+  // this did.
+  let blocks = prev;
   try {
     // Bounded by the turn's own clock, which stops where the next turn began (an interrupted turn has no endedAt).
     const { from, to } = turnBounds(turn);
     const r = await apiFetch(
       `/api/thinking?thread=${encodeURIComponent(turn.thread || turn.id)}&from=${from}&to=${to}`,
     );
-    if (r.ok) blocks = (await r.json()).blocks || [];
+    if (r.ok) {
+      const d = await r.json();
+      const fresh = Array.isArray(d.blocks) ? d.blocks : [];
+      // A read that FAILED (`error`) is not a turn that recorded nothing: taking its empty array would blank the block
+      // and refill it on the next poll — a collapse and reopen, every couple of seconds, on every live card.
+      // And a live turn's block list only ever GROWS (the store appends one row per assistant message and takes none
+      // away), so an empty answer while the turn is still running is a bad read too. A shorter non-empty answer is left
+      // alone: past MAX_BLOCKS the oldest block legitimately drops out of the window.
+      if (!d.error && (fresh.length || !prev.length || !turnLive(turn))) blocks = fresh;
+    }
   } catch {
-    /* an unreadable store is not worth a banner: the block just says nothing was recorded */
+    /* an unreadable store is not worth a banner: the block just keeps what it already shows */
   } finally {
     state.thinkLoading.delete(turn.id);
   }
@@ -6486,8 +6514,27 @@ function mountCopyButtons(root) {
 
 // Generic by construction: ANY render path that puts a `[data-copy]` block on the page gets its button -
 // a card rebuilt from scratch, a console line appended by the run's stream, a pinned copy of a turn.
+//
+// The same hook arms the thinking block's OPEN state, and for the same reason: it is a fact about nodes that arrive
+// from a render path, whoever wrote it. A `<details open>` inserted into the document fires a `toggle` of its own,
+// queued as a task — indistinguishable, to the listener below, from the reader pressing it. Every re-read of the store
+// inserts one (`paintThink` → `el.replaceWith`), so without this every live turn's block was remembered as "the reader
+// opened it", `state.thinkOpen` grew a key per turn, and a finished turn's reasoning never folded again. The observer
+// runs as a microtask, before that queued task, so the flag is always in place in time.
+function armPlacedThink(root) {
+  if (!root || root.nodeType !== 1) return;
+  if (root.matches?.("details.think[open]")) thinkAutoOpened.add(root);
+  for (const d of root.querySelectorAll?.("details.think[open]") || []) thinkAutoOpened.add(d);
+}
+
 const copyObserver = new MutationObserver((records) => {
-  for (const r of records) for (const node of r.addedNodes) if (node.nodeType === 1) mountCopyButtons(node);
+  for (const r of records) {
+    for (const node of r.addedNodes) {
+      if (node.nodeType !== 1) continue;
+      mountCopyButtons(node);
+      armPlacedThink(node);
+    }
+  }
 });
 copyObserver.observe(document.documentElement, { childList: true, subtree: true });
 mountCopyButtons(document.documentElement);
