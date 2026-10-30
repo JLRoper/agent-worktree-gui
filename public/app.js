@@ -12752,7 +12752,37 @@ function showNote(msg) {
   }, 4000);
 }
 
-$("btn-refresh").addEventListener("click", () => post("/api/refresh"));
+// The two read-now gestures (Settings → Board → Read now). Both routes answer at once and do their work behind the
+// request — a fast pass re-reads the rows, a fetch spawns git and then re-reads — and neither moves anything on
+// screen until a read comes back. Over rows that already match, that made a click look ignored, so each gesture now
+// says in the banner what it started and how much it covers.
+async function readNow(route, note) {
+  let message = "";
+  try {
+    const r = await apiFetch(route, { method: "POST" });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || `the panel answered ${r.status}`);
+    }
+    message = note();
+  } catch (e) {
+    showBanner(`${route}: ${e.message}`);
+    await resync();
+    return;
+  }
+  // The note goes up AFTER the resync: applySnapshot hides the banner as its last act (a snapshot means the board
+  // is healthy), so a note written before it would be wiped by the same click that asked for it.
+  await resync();
+  showNote(message);
+}
+
+$("btn-refresh").addEventListener("click", () =>
+  readNow("/api/refresh", () => {
+    const inView = state.settings?.scanMode === "visible" ? new Set(visibleProjects()) : null;
+    const rows = [...state.rows.values()].filter((row) => !inView || inView.has(row.project));
+    return `refresh now: re-reading ${rows.length} row${rows.length === 1 ? "" : "s"}${inView ? " in view" : ""} — each one repaints as its read lands`;
+  }),
+);
 $("btn-reset-colors").addEventListener("click", () => {
   const n = state.projectHues.size;
   state.projectHues.clear();
@@ -12782,7 +12812,12 @@ window.addEventListener("keydown", (e) => {
   e.preventDefault();
   setEverythingOpen(open);
 });
-$("btn-fetch").addEventListener("click", () => post("/api/fetch"));
+$("btn-fetch").addEventListener("click", () =>
+  readNow("/api/fetch", () => {
+    const n = [...state.projects.values()].filter((p) => p.remote).length;
+    return `fetch remotes: git fetch --prune in ${n} project${n === 1 ? "" : "s"} — rows update as each fetch lands`;
+  }),
+);
 $("job-project").addEventListener("change", () => {
   const p = selectedProject();
   if (p) $("job-cwd").value = p.path;
@@ -15156,6 +15191,62 @@ function applyGreyFlash(on) {
   }
 }
 
+// ---- settings group folds --------------------------------------------------------------------------------
+// Seven groups of rows is a tall panel, and a reader who is done with Display should not have to scroll past it
+// to reach Board. The heading is the control: clicking it — or Enter/Space on it — folds the rest of that group
+// away, and the shape is remembered per browser, so the panel opens the way it was left. The markup ships
+// unfolded and the panel is static (no repaint rebuilds it), so the class on the group is the whole state.
+const SETTINGS_FOLD_KEY = "wtgui.settingsFolded";
+
+function settingsFolds() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SETTINGS_FOLD_KEY) || "[]");
+    return new Set(Array.isArray(raw) ? raw.filter((n) => typeof n === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function paintSettingsFold(group, folded) {
+  group.classList.toggle("folded", folded);
+  const head = group.querySelector(":scope > .settings-group-head");
+  if (head) head.setAttribute("aria-expanded", folded ? "false" : "true");
+}
+
+function saveSettingsFolds(folded) {
+  try {
+    localStorage.setItem(SETTINGS_FOLD_KEY, JSON.stringify([...folded]));
+  } catch {
+    /* private mode: the fold lasts for this visit */
+  }
+}
+
+function initSettingsGroups() {
+  const folds = settingsFolds();
+  for (const group of document.querySelectorAll("#settings .settings-group")) {
+    const head = group.querySelector(":scope > .settings-group-head");
+    if (!head || !head.dataset.settingsGroup) continue;
+    paintSettingsFold(group, folds.has(head.dataset.settingsGroup));
+    const toggle = () => {
+      const folded = !group.classList.contains("folded");
+      paintSettingsFold(group, folded);
+      const next = settingsFolds();
+      if (folded) next.add(head.dataset.settingsGroup);
+      else next.delete(head.dataset.settingsGroup);
+      saveSettingsFolds(next);
+    };
+    head.addEventListener("click", toggle);
+    // A heading is not a button, so nothing else answers these keys here — and Space would scroll the panel.
+    head.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
+      e.preventDefault();
+      toggle();
+    });
+  }
+}
+
+// ---- end settings group folds
+
 function toggleSettings(open = null) {
   const panel = $("settings");
   if (!panel) return;
@@ -15668,6 +15759,9 @@ $("btn-settings")?.addEventListener("click", (e) => {
   toggleSettings();
 });
 $("btn-settings-close")?.addEventListener("click", () => toggleSettings(false));
+// The groups' folds are painted at load, not when the panel opens: the reader who folded Display away last time
+// should not see it unfold for the instant the panel takes to open.
+initSettingsGroups();
 // A second way in that is always on screen at the top left: the title opens Settings.
 $("title-settings")?.addEventListener("click", (e) => {
   e.stopPropagation();

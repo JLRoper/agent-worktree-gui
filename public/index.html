@@ -20,8 +20,6 @@
       <button id="btn-aggressive" type="button" class="btn-aggressive" aria-pressed="false" title="aggressive assistant — spends more tokens: the assistant wakes on everything, monitors and checks every live card, and keeps pushing until the fleet is waiting on something outside. While it is on it holds the waking, monitoring and acting settings; switching it off puts your own values back (Alt+Shift+A)">⚡ Aggressive<span id="aggressive-state">off</span></button>
       <button id="btn-hot" type="button" title="NOT-RUNNING — step through the agents that are not running and are waiting on you: each one is opened, its reply box focused and flashed amber. Enter sends and moves on; Alt+Right skips; Alt+Left goes back.">NOT-RUNNING</button>
       <button id="btn-collapse-all" type="button" title="collapse every folder and project section">Collapse all</button>
-      <button id="btn-refresh" type="button">Refresh now</button>
-      <button id="btn-fetch" type="button">Fetch remotes</button>
       <button id="btn-pause" type="button">Pause</button>
       <button id="btn-settings" type="button" title="settings — fonts, and the gateway's approval window (Ctrl+,)">⚙ Settings</button>
     </div>
@@ -83,7 +81,7 @@
     <div class="settings-body">
 
       <div class="settings-group">
-        <h3 class="settings-group-head" title="How the board and the agent's output look. Panel font covers the headings, labels, buttons and whatever you type; terminal font, size and weight cover the console and the tool lines inside it. All of it is saved in this browser.">Display</h3>
+        <h3 class="settings-group-head" data-settings-group="display" role="button" tabindex="0" aria-expanded="true" title="How the board and the agent's output look. Panel font covers the headings, labels, buttons and whatever you type; terminal font, size and weight cover the console and the tool lines inside it. All of it is saved in this browser. Click the heading to fold this group away — the fold is remembered in this browser.">Display</h3>
 
         <div class="settings-row" title="page zoom — Ctrl+wheel, Ctrl + / Ctrl − , Ctrl 0 resets. Saved in this browser.">
           <span>Page zoom <span class="settings-info">ⓘ</span></span>
@@ -224,7 +222,7 @@
       </div>
 
       <div class="settings-group">
-        <h3 class="settings-group-head" title="What a card shows and does for you.">Agent cards</h3>
+        <h3 class="settings-group-head" data-settings-group="cards" role="button" tabindex="0" aria-expanded="true" title="What a card shows and does for you. Click the heading to fold this group away — the fold is remembered in this browser.">Agent cards</h3>
 
         <label class="settings-row" for="show-thinking" title="The agent's own reasoning, read from its session store, as a block above each turn's console — folded until you open it. It is 1–2 KB a block, which is why it is off by default. The brain button on a card turns it on for that one session, and that choice wins over this switch.">
           <span>Show thinking <span class="settings-info">ⓘ</span></span>
@@ -239,7 +237,15 @@
       </div>
 
       <div class="settings-group">
-        <h3 class="settings-group-head" title="How the board behaves while you are reading it.">Board</h3>
+        <h3 class="settings-group-head" data-settings-group="board" role="button" tabindex="0" aria-expanded="true" title="How the board behaves while you are reading it, and the two gestures that read it now instead of on the clock. Click the heading to fold this group away — the fold is remembered in this browser.">Board</h3>
+
+        <div class="settings-row" id="board-now-row" title="Read the board now, instead of waiting for the clock. Refresh now re-reads every worktree row of the projects in view — the same cheap pass the board runs every few seconds, so a row that already matches stays exactly as it is. Fetch remotes runs git fetch --prune in every project (the one routine gesture here that touches git refs) and then re-reads the rows; each project's answer arrives on its own as the fetch lands. Both say in the banner what they started, because neither moves anything on screen until a read comes back.">
+          <span>Read now <span class="settings-info">ⓘ</span></span>
+          <span class="settings-act">
+            <button id="btn-refresh" type="button" title="re-read every row of the projects in view now, instead of waiting for the next tick">Refresh now</button>
+            <button id="btn-fetch" type="button" title="git fetch --prune in every project, then re-read the rows — the only routine gesture here that touches git refs">Fetch remotes</button>
+          </span>
+        </div>
 
         <label class="settings-row" for="reorder-every" title="How often the closed folders and projects re-sort themselves. A project you have open — and the folder holding it — keeps its slot whatever this is set to, so this only ever moves what you are not reading. Saved in this browser and applied at once.">
           <span>Board reorder <span class="settings-info">ⓘ</span></span>
@@ -337,7 +343,7 @@
       </div>
 
       <div class="settings-group">
-        <h3 class="settings-group-head" title="Whether a branch may exist on a REMOTE at all. Most of what this panel starts is research or a browser probe, and a remote branch per probe clutters a repository other people share — so local-only is the default, and the exception is a grant you give on purpose in the permission box. It is written into this panel's config.json (remoteBranchPolicy), so it applies to every browser and survives a restart.">Branches on the remote</h3>
+        <h3 class="settings-group-head" data-settings-group="branches" role="button" tabindex="0" aria-expanded="true" title="Whether a branch may exist on a REMOTE at all. Most of what this panel starts is research or a browser probe, and a remote branch per probe clutters a repository other people share — so local-only is the default, and the exception is a grant you give on purpose in the permission box. It is written into this panel's config.json (remoteBranchPolicy), so it applies to every browser and survives a restart. Click the heading to fold this group away — the fold is remembered in this browser.">Branches on the remote</h3>
 
         <label class="settings-row" for="remote-policy" title="local only (the default) — every branch stays on this box; a push from a worktree the panel cut is REFUSED by the pre-push guard the panel installs, and that refusal asks you through the permission box in the dock (Allow once / this session / Always allow / Deny). allow — remote writes go through without asking; this is what &quot;Always allow&quot; in the box writes, so the setting and the box are the same fact. deny — refused outright, and the box is not even offered. Written into config.json, so it survives a restart and applies to every browser.">
           <span>Remote branches <span class="settings-info">ⓘ</span></span>
@@ -354,7 +360,7 @@
       </div>
 
       <div class="settings-group">
-        <h3 class="settings-group-head" title="The two folders this panel keeps things in, both outside the checkout on purpose: a re-clone, a move or a read-only checkout keeps the board's history, and nothing it writes shows up in git status. The data directory is the durable half; the scratch directory is the throwaway half, and the OS is free to clean it. Either can be moved by naming dataDir / scratchDir in config.json, or by setting WAG_HOME / WAG_SCRATCH in the environment — the row below says which of those answered, so an unexpected path is explainable.">Data</h3>
+        <h3 class="settings-group-head" data-settings-group="data" role="button" tabindex="0" aria-expanded="true" title="The two folders this panel keeps things in, both outside the checkout on purpose: a re-clone, a move or a read-only checkout keeps the board's history, and nothing it writes shows up in git status. The data directory is the durable half; the scratch directory is the throwaway half, and the OS is free to clean it. Either can be moved by naming dataDir / scratchDir in config.json, or by setting WAG_HOME / WAG_SCRATCH in the environment — the row below says which of those answered, so an unexpected path is explainable. Click the heading to fold this group away — the fold is remembered in this browser.">Data</h3>
 
         <div class="settings-row" id="data-dir-row" title="Everything the panel must not lose: the job store, the assistant's scratchpad and charter, the worktree TODOs, the naming ledger, the descriptions, the labels, the model prices, the push-guard record, the restart record, the attachments you paste, and the panel's own server log — under state/, attachments/ and logs/ inside this folder. Read once at boot; changing dataDir in config.json moves it, and an existing logs/ beside the checkout is COPIED here once and left where it was.">
           <span>Data directory <span class="settings-info">ⓘ</span></span>
@@ -375,7 +381,7 @@
       </div>
 
       <div class="settings-group">
-        <h3 class="settings-group-head" title="Written to the gateway's config.yaml, not this browser. It re-reads them, so the next prompt or session list uses the new number without a restart.">Gateway</h3>
+        <h3 class="settings-group-head" data-settings-group="gateway" role="button" tabindex="0" aria-expanded="true" title="Written to the gateway's config.yaml, not this browser. It re-reads them, so the next prompt or session list uses the new number without a restart. Click the heading to fold this group away — the fold is remembered in this browser.">Gateway</h3>
 
         <label class="settings-row" for="approval-timeout" id="approval-row" title="How long a permission prompt waits for you before it fails closed — if it expires, nothing runs.">
           <span>Approval window <span class="settings-info">ⓘ</span></span>
@@ -424,7 +430,7 @@
       </div>
 
       <div class="settings-group">
-        <h3 class="settings-group-head" title="A panel that restarted (or whose public/ was edited while it ran) serves a new build. This is what this tab does about it — and what it refuses to do while you are mid-sentence or an agent is mid-turn.">Updates</h3>
+        <h3 class="settings-group-head" data-settings-group="updates" role="button" tabindex="0" aria-expanded="true" title="A panel that restarted (or whose public/ was edited while it ran) serves a new build. This is what this tab does about it — and what it refuses to do while you are mid-sentence or an agent is mid-turn. Click the heading to fold this group away — the fold is remembered in this browser.">Updates</h3>
 
         <label class="settings-row" for="update-mode" title="off — never look; a manual press on Check now still works. prompt (the default) — poll the panel every 30s and, when it is serving a different build, offer a Reload chip. auto — take the reload as soon as the page is idle. Either mode HOLDS the reload while a reply box or a held draft has text, or while a turn is still streaming, so nothing you typed and nothing an agent is writing is thrown away. Saved in this browser.">
           <span>Update check <span class="settings-info">ⓘ</span></span>

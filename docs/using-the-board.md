@@ -7,9 +7,9 @@ worktree of their own), then every project and its worktrees, then the agents wo
 Open the URL the panel was started on — `http://127.0.0.1:7331` by default (`port` in `config.json`). It binds
 loopback only unless you change `host`, and it has no login: keep it on `127.0.0.1`.
 
-The page is read-only towards git except for **Fetch remotes** and the buttons that explicitly write (a spawn
-cuts a worktree, a row's ✕ removes one, the folder **+** clones a repo). Everything else is `rev-parse`,
-`rev-list`, `merge-base`, `cherry`, `diff`, `status` and `log`.
+The page is read-only towards git except for **Settings → Board → Read now → Fetch remotes** and the buttons that
+explicitly write (a spawn cuts a worktree, a row's ✕ removes one, the folder **+** clones a repo). Everything else
+is `rev-parse`, `rev-list`, `merge-base`, `cherry`, `diff`, `status` and `log`.
 
 ---
 
@@ -40,10 +40,8 @@ cuts a worktree, a row's ✕ removes one, the folder **+** clones a repo). Every
 | **✧ Assistant** | Opens the floating assistant panel (`A` or `Ctrl+Shift+A`). Its purple badge counts the open alerts; the `⧗` pill beside it counts the **spawn cards** waiting for a click, amber once the oldest has waited over two minutes. |
 | **Collapse all** | Folds the whole tree — every folder, project, worktree row, card and turn. The button then reads **Expand all**. Same as `Ctrl+[` / `Ctrl+]`. |
 | **⚡ Aggressive** | Switches the assistant's aggressive profile on or off. Its pill reads `on`/`off`, so the state does not depend on colour. |
-| **Refresh now** | Forces a fast scan now instead of waiting for the next tick. With Settings → Board → **Refresh** set to "only on screen", it reads only the projects in view. |
-| **Fetch remotes** | Runs `git fetch <remote> --prune` in every project. The only routine gesture that touches git refs. |
 | **Pause** | Freezes the page: closes the live stream, so nothing updates. The button reads **Resume**, which reconnects and resyncs. |
-| **⚙ Settings** | The Settings panel (`Ctrl+,`). |
+| **⚙ Settings** | The Settings panel (`Ctrl+,`). **Refresh now** and **Fetch remotes** live in it too, under Board → **Read now**. |
 
 ### The NOT-RUNNING rotation
 
@@ -737,7 +735,16 @@ restart.
 ## Settings
 
 `⚙ Settings`, the title, or `Ctrl+,`. `Esc`, the `✕`, or a click outside closes it. The head is fixed and the body
-scrolls; every explanation is the row's own tooltip on the `ⓘ`.
+scrolls; every explanation is the row's own tooltip on the `ⓘ`. Each group folds: click its heading — or press
+`Enter`/`Space` on it — and the rows under it go away, the caret turning from `▾` to `▸`. The folds are remembered
+in this browser, so the panel opens in the shape it was left in.
+
+The **Board** group opens with **Read now**, the two gestures that read the board at once instead of on the clock:
+**Refresh now** re-reads every worktree row of the projects in view (the same cheap pass the board runs every few
+seconds, so a row that already matches stays as it is, and a row whose verdict is stale is read in full), and
+**Fetch remotes** runs `git fetch <remote> --prune` in every project and then re-reads the rows — the only routine
+gesture that touches git refs. Each says in the banner what it started, with the number of rows or projects it
+covers, and the rows repaint as the reads land.
 
 **Stored in this browser** (per browser, not shared; the exceptions are the rows the table marks as this panel's own
 `config.json` — **Refresh**, **Hide stale worktrees** and **Chart columns** — which apply to every browser and survive
@@ -869,8 +876,8 @@ something you typed or an agent is writing. **Check now** asks at once, even wit
 | `api: down`, or a spawn answers 503 | The gateway is down or `API_SERVER_KEY` is missing from `$HERMES_HOME/.env`. Start it with `hermes gateway restart`; the New-agent header says which of the two it is. |
 | The agent works in the gateway's directory instead of its worktree | The gateway is missing the local patch (`docs/hermes-runs-api-knobs.diff`, lost after `hermes update`). The gateway chip's tooltip says `the gateway ignores per-run cwd`. |
 | No usage strip above a reply box | Same missing patch: no `run.usage` events, so the panel shows nothing rather than zeros. |
-| A verdict badge stays empty (grey) | It is computed on the slow pass; **Refresh now** forces one. A dashed grey badge is a verdict being reclassified. |
-| Rows stop moving | The page may be paused, or the stream `reconnecting…`/`offline`. **Resume** or **Refresh now**. |
+| A verdict badge stays empty (grey) | It is computed on the project's slow pass; **Settings → Board → Read now → Refresh now** re-reads the rows at once, and a row whose verdict is stale is read in full. A dashed grey badge is a verdict being reclassified. |
+| Rows stop moving | The page may be paused, or the stream `reconnecting…`/`offline`. **Resume**, or **Settings → Board → Read now → Refresh now**. |
 | A project's numbers look old while it is off screen | With Settings → Board → Refresh: **only on screen**, off-screen projects are not read until you scroll them into view — and nothing is read at all while no page is open. |
 | A worktree will not delete | An agent run is live in it — stop the run first. |
 | The assistant says it started a worker but nothing appeared | Look at the strip above **New agent** and at the `N spawn` pill on ✧ Assistant: in **ask** mode a SPAWN line is a card waiting for a click, not a run. If neither a card nor a worker exists two minutes after the turn, the journal carries a **lost SPAWN line** and the Alerts tab an alert naming the turn. |
