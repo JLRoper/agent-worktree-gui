@@ -7402,12 +7402,25 @@ function drawJobLine(evt) {
     // between ends that burst, so the next call starts a fresh tally where the transcript has got to.
     const isTool = line.kind === "tool" || line.kind === "tool-out";
     const tail = out.lastElementChild;
-    const openGroup = isTool && tail && tail.classList.contains("tgrp") ? tail : null;
+    // Whether this line belongs in the burst already at the tail. A call that follows a result, or one a reasoning
+    // block was written after, starts the next burst — the same cut `segments()` makes on the next repaint, so the
+    // append and the poll cannot disagree about where the row lives (a row that joins and is then cut out again is
+    // one the reader sees leave one box and appear in the next).
+    const tailLines = isTool && tail && tail.classList.contains("tgrp") ? tail._burst || groupLines(tail) : null;
+    const joins = !tailLines || !globalThis.wtStream || typeof globalThis.wtStream.joinsTail !== "function"
+      ? true
+      : globalThis.wtStream.joinsTail(
+          (state.jobLines.get(evt.id) || []).filter((l) => !isBookkeeping(l)),
+          line,
+          state.thinkCache.get(evt.id)?.blocks || [],
+          tailLines,
+        );
+    const openGroup = isTool && tail && tail.classList.contains("tgrp") && joins ? tail : null;
     if (isTool) {
       const key = openGroup ? openGroup.dataset.tgrp : `${evt.id}#${Date.now().toString(36)}`;
       // A group that came from a full render has no `_burst`; read its lines back from the DOM so the new call joins
       // the burst the reader is looking at instead of starting a group that shows this line alone.
-      const lines = [...(openGroup ? openGroup._burst || groupLines(openGroup) : []), line];
+      const lines = [...(openGroup && tailLines ? tailLines : []), line];
       // The lines of a skill's result are written, not dropped in: this is where each one is handed to the pacer, BEFORE
       // the burst is drawn, so its first paint already shows only the words that may be shown.
       paceResultLine(lines, line, evt.id);
