@@ -35,6 +35,7 @@ import { rebaseWorktree } from "./lib/rebase.js";
 import { ownCopyOf } from "./lib/sync-state.js";
 import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
+import { REFRESH_LINES_SHOWN, RefreshJournal, liveRunIn, mergeDelta, normaliseRefreshAgent, parseCommitFiles, todoProposals } from "./lib/refresh-row.js";
 import { ParentBook } from "./lib/parents.js";
 import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees, writePlan } from "./lib/steward.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
@@ -909,6 +910,12 @@ if (assistant) {
   assistant.todosChanged = broadcastTodos;
 }
 
+// ---- what each row's own reconcile found ---------------------------------------------------------------------------
+// The journal the row's ⟳ writes: one line per action ("verdict MERGED -> UNMERGED", "0 -> 3 ahead", "1 item looks
+// closed"), kept per row beside the stores above. The row's detail reads the newest few from the snapshot, so a click
+// leaves a record the reader can come back to instead of a flash that is gone in a second.
+const refreshLog = new RefreshJournal({ file: config.refreshFile, log });
+
 // ---- the release requests a finished worker leaves behind ------------------------------------------------------------
 // A worker can never remove its own tree: its cwd is inside it, and on Windows an open handle keeps the directory
 // busy. So it asks — ONE `RELEASE <tree> | <why it is finished>` line in its FINAL message — and lib/jobs.js records
@@ -1013,6 +1020,20 @@ scheduleReleaseSweep = (delayMs = 2000) => {
   }, Math.max(0, Number(delayMs) || 0));
   if (releaseSweepTimer.unref) releaseSweepTimer.unref();
 };
+
+// What the row's own ⟳ found last time travels with the snapshot too, newest first: a click's record is read from here,
+// so a reload comes back to the same journal instead of losing it with the page.
+function withRefreshJournal(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) {
+      const key = store.rowKey(project.name, row.path);
+      const lines = refreshLog.recent(key, REFRESH_LINES_SHOWN);
+      if (!lines.length) delete row.refreshJournal;
+      else row.refreshJournal = lines;
+    }
+  }
+  return snap;
+}
 
 // The list travels with the snapshot the way a description does: the row carries the counts, the OLDEST incomplete
 // item (the one thing the collapsed strip reads) and the items themselves. A tree with no list carries no `todo`
@@ -1610,39 +1631,42 @@ async function stewardProject(name) {
 }
 
 function snapshot() {
-  return withReleases(
-    withTodos(
-    descriptions.withDescriptions(
-      withLocks(
-        withTreeNames(
-          withLiveAgents({
-          ...store.snapshot({ settings: settingsOut() }),
-          paths: pathsInfo(),
-          jobs: jobs.list(),
-          approvals: approvals.list(),
-          // The panel's own permission requests (a push a worker's guard parked, a merge the panel itself wants to
-          // write to a remote for). They ride with the snapshot the way the CLI-transport approvals do, so a reload
-          // comes back to the same open question instead of losing it.
-          remoteWrites: remoteWrites.state(),        // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
-          // thread id, so a reload comes back to the same conversation and the same watches.
-          assistant: assistant.state(),
-          // Where the board's links go: the host records a reader can choose from, plus what each project resolves to
-          // right now. One object, because the header's chip and the Discover strip must read the same answer.
-          hosts: { ...hosts.state(), projects: Object.fromEntries(registry.projects.map((p) => [p.name, hosts.view(p)])) },
-          skipped: registry.skipped,
-        scanRoots: config.scanRoots || [],
-        spawn: {
-          // Spawning is no longer "is there a hermes.exe on this box": it is "is the gateway's api_server
-          // reachable and keyed". The panel probes and reports, instead of assuming.
-          transport: jobs.transportInfo(),
-          defaultCwd: config.defaultCwd,
-          maxRuntimeSeconds: jobs.maxRuntimeSeconds,
-          projects: registry.projects.map((p) => ({ name: p.name, path: p.path, activityAt: p.activityAt || null, empty: Boolean(p.empty) })),
-        },
-        }),
+  return withRefreshJournal(
+    withReleases(
+      withTodos(
+        descriptions.withDescriptions(
+          withLocks(
+            withTreeNames(
+              withLiveAgents({
+                ...store.snapshot({ settings: settingsOut() }),
+                paths: pathsInfo(),
+                jobs: jobs.list(),
+                approvals: approvals.list(),
+                // The panel's own permission requests (a push a worker's guard parked, a merge the panel itself wants to
+                // write to a remote for). They ride with the snapshot the way the CLI-transport approvals do, so a reload
+                // comes back to the same open question instead of losing it.
+                remoteWrites: remoteWrites.state(),
+                // The assistant's own state travels with the snapshot: its scratchpad, its open alerts and its
+                // thread id, so a reload comes back to the same conversation and the same watches.
+                assistant: assistant.state(),
+                // Where the board's links go: the host records a reader can choose from, plus what each project resolves to
+                // right now. One object, because the header's chip and the Discover strip must read the same answer.
+                hosts: { ...hosts.state(), projects: Object.fromEntries(registry.projects.map((p) => [p.name, hosts.view(p)])) },
+                skipped: registry.skipped,
+                scanRoots: config.scanRoots || [],
+                spawn: {
+                  // Spawning is no longer "is there a hermes.exe on this box": it is "is the gateway's api_server
+                  // reachable and keyed". The panel probes and reports, instead of assuming.
+                  transport: jobs.transportInfo(),
+                  defaultCwd: config.defaultCwd,
+                  maxRuntimeSeconds: jobs.maxRuntimeSeconds,
+                  projects: registry.projects.map((p) => ({ name: p.name, path: p.path, activityAt: p.activityAt || null, empty: Boolean(p.empty) })),
+                },
+              }),
+            ),
+          ),
+        ),
       ),
-    ),
-  ),
     ),
   );
 }
@@ -1697,6 +1721,47 @@ const cleanPath = (s) => String(s || "").replace(/\\/g, "/").replace(/\/+$/, "")
 async function sessionsForRow(target) {
   const roots = await scheduler.sessionRoots();
   return roots.get(cleanPath(target).toLowerCase()) || [];
+}
+
+// ---- the double-check agent a row's ⟳ may offer ----------------------------------------------
+// The cheap pass can see that a verdict moved, that a commit's words match an open TODO item, or that a description no
+// longer names the branch — it cannot READ the tree. This is the one agent that can: it starts IN that worktree, with
+// the panel's own refusal rules (gateway usable, tree is a checkout, nothing live already holding it), and its brief is
+// the three questions the row could not answer by itself. The TODO block and the "Work in …" sentence are appended by
+// lib/jobs.js, so the list it must reconcile is the one with the ids the panel reads back.
+function refreshAgentPrompt(project, row, evidence = []) {
+  const base = row.baseRef || project.mainBranch || "the base branch";
+  return [
+    `Double-check this worktree's row on the board. The panel's ⟳ re-read the tree a moment ago and found: ${evidence.length ? evidence.join(" · ") : "nothing that moved"}.`,
+    "",
+    "Read the tree yourself and answer three questions. Do not take the row's word for any of them.",
+    `1. MERGE STATE — run \`git status --porcelain=v2 --branch\` and \`git log --oneline ${base}..HEAD\` (and \`git cherry ${base} HEAD\` if it helps). Say whether the row's verdict (${row.verdict || "unknown"}) and its ahead/behind counts are right, and whether anything is modified or untracked.`,
+    "2. TODO — the list in your brief is this tree's. Close ONLY the items your own reading of the commits and the files those commits touched actually finishes, and write them as `TODO DONE <id>` on their own line in your final message. Add anything the tree shows is still missing as `TODO ADD <text>`. Never close an item you cannot point at a commit or a file for.",
+    "3. DESCRIPTION — the row says what this branch was started to do. Answer in one line whether that is still true of the work in the tree, and what it should say if it is not. Do not rewrite it in any file; the panel owns that text.",
+    "",
+    "Change nothing else: no commits, no push, no merge, and no edits beyond what a TODO item is about. Finish with the three answers, then your TODO lines.",
+  ].join("\n");
+}
+
+// Start it. Every gate is re-answered here rather than trusted from the click: the row is still a row, nothing live holds
+// the tree, and the gateway is usable.
+async function startRowRefreshAgent(project, row, evidence = []) {
+  const busy = liveRunIn(jobs.list(), row.path, { isLive: isLiveJobStatus });
+  if (busy) return { ok: false, status: 409, error: `an agent is running in that worktree (${busy.id})` };
+  const prompt = refreshAgentPrompt(project, row, evidence);
+  try {
+    const job = await spawnFeature.assistantSpawnRun({
+      prompt,
+      existing: true,
+      target: row.path,
+      project: project.name,
+      origin: { kind: "row-refresh", project: project.name, path: row.path, evidence: evidence.slice(0, 8) },
+    });
+    log(`row refresh: started ${job.thread || job.id} in ${row.path} to double-check its TODO, description and merge state`);
+    return { ok: true, job };
+  } catch (e) {
+    return { ok: false, status: 400, error: String((e && e.message) || e) };
+  }
 }
 
 const server = createServer(async (req, res) => {
@@ -2497,7 +2562,7 @@ const server = createServer(async (req, res) => {
       const key = todos.keyFor({ project: url.searchParams.get("project"), path: url.searchParams.get("path") || url.searchParams.get("tree") });
       if (!key) return sendJson(res, 400, { error: "a worktree is required: pass project and path (the row's own key)" });
       const rec = todos.list(key);
-      return sendJson(res, 200, { key, list: rec ? { project: rec.project, path: rec.path, items: rec.items, journal: rec.journal } : null, summary: todos.summary(key) });
+      return sendJson(res, 200, { key, list: rec ? { project: rec.project, path: rec.path, items: rec.items, proposal: rec.proposal || [], journal: rec.journal } : null, summary: todos.summary(key) });
     }
 
     if (route === "/api/todos" && req.method === "POST") {
@@ -3328,6 +3393,13 @@ const server = createServer(async (req, res) => {
 
     // One worktree, read now — the next-read ring on a row is a button. Refused while that row is
     // already being read: two scans of one worktree at once is exactly what the pool prevents.
+    //
+    // `reconcile: true` is the row's own ⟳, and asks for the same read ONE DEPTH DEEPER: the tree is read with the
+    // network answers (heads, PRs, upstreams), then its TODO list is reconciled against the commits the branch now
+    // carries and the files those commits touched (a PROPOSAL beside the list, never a close), its description is
+    // re-derived only when that is empty or demonstrably stale, and one journal line per action is kept with the row.
+    // One route with two depths, not a second refresh endpoint: the ring's cheap read is untouched, and there is
+    // nothing here for a later change to keep in step.
     if (route === "/api/refresh/row" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
@@ -3338,10 +3410,149 @@ const server = createServer(async (req, res) => {
       const row = scheduler.store.rowsFor(projectName).find((r) => r.path === rowPath);
       if (!row) return sendJson(res, 404, { error: `unknown row: ${rowPath}` });
       if (scheduler.pool.isBusy(rowPath)) return sendJson(res, 409, { error: "that row is already being read" });
+      const reconcile = Boolean(body.reconcile);
+      // The facts BEFORE the read: what moved is the whole point of the reconcile's answer, and `putRow` replaces
+      // the row object, so nothing here can be read afterwards.
+      const before = reconcile
+        ? {
+            verdict: row.verdict,
+            ahead: row.ahead,
+            behind: row.behind,
+            dirty: row.dirty,
+            untracked: row.untracked,
+            cherryPlus: row.cherryPlus,
+            cherryMinus: row.cherryMinus,
+            head: row.head,
+            branch: row.branch,
+            pr: row.pr ? { number: row.pr.number, state: row.pr.state } : null,
+          }
+        : null;
       // Claim the slot, or the timer will scan it again the moment this finishes.
       scheduler.lastFast.set(`${projectName}::${rowPath}`, Date.now());
-      const merged = await scheduler.scanOne(project, rowPath, "full");
-      return sendJson(res, 200, { ok: true, row: merged });
+      if (!reconcile) {
+        const merged = await scheduler.scanOne(project, rowPath, "full");
+        return sendJson(res, 200, { ok: true, row: merged });
+      }
+      const after = await scheduler.fullScan(project, rowPath);
+      if (!after) return sendJson(res, 409, { error: "that row could not be read just now — try again" });
+
+      const lines = [];
+      // (1) MERGE STATE — one line per fact that actually moved.
+      const delta = mergeDelta(before, after);
+      lines.push(...(delta.length ? delta : ["re-read, nothing moved"]));
+
+      // What the tree now holds, read once: the commits off the base and the files they touched. Both halves of the
+      // TODO reconcile want it, and the description's staleness test reads the same subjects.
+      const base = after.baseRef || project.mainBranch || null;
+      let tree = { commits: [], subjects: [], touched: [] };
+      if (base) {
+        const gitlog = await gitIn(after.path, ["log", "--name-only", "--format=%h %s", "-60", `${base}..HEAD`], 20_000);
+        if (gitlog.ok) tree = parseCommitFiles(gitlog.out);
+      }
+
+      // (2) TODO — propose closures from the commits and from the files those commits touched. Nothing is applied:
+      // the proposal rides on the list (`row.todo.proposal`) and the row's badge says how many items look closed.
+      let proposed = { ok: false, changed: false, proposals: [] };
+      const list = todos.forRow(project.name, after.path, { journal: 0 });
+      if (list?.items?.length) {
+        const proposals = todoProposals({ items: list.items, subjects: tree.subjects, touchedFiles: tree.touched });
+        proposed = todos.propose({ project: project.name, path: after.path, proposals, by: "panel" });
+        lines.push(
+          proposals.length
+            ? `TODO ${proposals.length} item${proposals.length === 1 ? "" : "s"} look closed — nothing marked done (${proposals.map((p) => `#${p.id}`).join(" ")})`
+            : "TODO no open item is named by this tree's commits or touched files",
+        );
+      } else {
+        lines.push("TODO nothing written down for this tree — nothing to reconcile");
+      }
+
+      // (3) DESCRIPTION — lib/descriptions.js owns the text and the "never overwrite the reader's" rule; this asks it
+      // to re-derive from the earliest run still in the store, and it writes only if the record is missing or
+      // demonstrably stale against the commits above.
+      const desc = descriptions.refreshTree({ project: project.name, path: after.path, branch: after.branch, commits: tree.subjects });
+      lines.push(`description ${desc.wrote ? `re-derived — ${desc.why}` : desc.why}`);
+
+      // (4) THE AGENT PASS — offered, started or refused. `off|ask|auto`, defaulting to `ask`; a mismatch is what makes
+      // it worth an agent at all, and a live run already holding the tree is a refusal rather than a second worker.
+      const mode = normaliseRefreshAgent(body.refreshAgent);
+      const mismatch = delta.length > 0 || proposed.proposals.length > 0 || Boolean(desc.stale) || desc.wrote;
+      const busy = liveRunIn(jobs.list(), after.path, { isLive: isLiveJobStatus });
+      const agent = { mode, mismatch, offered: false, started: null, refused: null };
+      if (mode === "off") lines.push("agent pass off (setting: off) — the cheap pass is all this refresh does");
+      else if (!mismatch) lines.push("agent pass not needed — the cheap pass found nothing to double-check");
+      else if (busy) {
+        agent.refused = `an agent is running in that worktree (${busy.id})`;
+        lines.push(`agent pass refused — ${agent.refused}`);
+      } else if (mode === "auto") {
+        const started = await startRowRefreshAgent(project, after, delta);
+        if (started.ok) {
+          agent.started = { id: started.job.id, thread: started.job.thread || null };
+          lines.push(`agent started in this worktree — ${started.job.thread || started.job.id} (setting: auto)`);
+        } else {
+          agent.refused = started.error;
+          lines.push(`agent pass could not start — ${started.error}`);
+        }
+      } else {
+        agent.offered = true;
+        lines.push("agent pass offered — one card under the row starts it (setting: ask)");
+      }
+
+      // (5) JOURNAL — one line per action, kept with the row and shipped back with it.
+      const rowKey = store.rowKey(project.name, after.path);
+      refreshLog.append({ key: rowKey, project: project.name, path: after.path, lines });
+
+      // The row as the page should draw it now: the store's own row plus the things that ride with the snapshot.
+      const out = { ...after };
+      const todoNow = todos.forRow(project.name, after.path);
+      if (todoNow) out.todo = todoNow;
+      else delete out.todo;
+      const descRec = descriptions.descriptions.forTree({ project: project.name, path: after.path, branch: after.branch });
+      if (descRec?.text) out.description = { text: descRec.text, from: descRec.from || null, at: descRec.at || null, by: descRec.by || null };
+      else delete out.description;
+      out.refreshJournal = refreshLog.recent(rowKey, REFRESH_LINES_SHOWN);
+      // Every open board agrees with the click, not only the tab that made it.
+      broadcast({ type: "row", project: project.name, row: out, changed: true });
+
+      log(`row reconcile: ${project.name} ${after.path} — ${lines.join(" · ")}`);
+      return sendJson(res, 200, {
+        ok: true,
+        project: project.name,
+        path: after.path,
+        row: out,
+        journal: lines,
+        changed: delta.length > 0,
+        mismatch,
+        todo: { proposals: proposed.proposals || [], changed: Boolean(proposed.changed), ok: Boolean(proposed.ok) },
+        description: { wrote: Boolean(desc.wrote), why: desc.why, stale: Boolean(desc.stale), text: out.description?.text || null },
+        agent,
+      });
+    }
+
+    // The offer card's button: start the double-check agent the ⟳ offered. Not a refresh route — it spawns, which is
+    // why it is its own path under the row it belongs to (the way /api/worktree/verify-landed is). It re-answers every
+    // gate the reconcile did (the row is still there, nothing live holds the tree, the gateway is usable), so a card
+    // that sat on the page for a minute cannot start a run in a tree that no longer needs one.
+    if (route === "/api/refresh/row/agent" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const asked = String(body.path || "").trim();
+      if (!asked) return sendJson(res, 400, { error: "path is required" });
+      const target = path.resolve(asked);
+      const project = body.project ? scheduler.getProjects().find((p) => p.name === String(body.project).trim()) : null;
+      const row =
+        (project ? scheduler.store.rowsFor(project.name) : []).find((r) => path.resolve(r.path) === target) ||
+        scheduler.getProjects().map((p) => scheduler.store.rowsFor(p.name).find((r) => path.resolve(r.path) === target)).find(Boolean);
+      if (!row) return sendJson(res, 404, { error: `not a worktree row: ${target}` });
+      const owner = project || scheduler.getProjects().find((p) => scheduler.store.rowsFor(p.name).includes(row));
+      if (!owner) return sendJson(res, 404, { error: `no project owns ${target}` });
+      const evidence = Array.isArray(body.evidence) ? body.evidence.map(String).slice(0, 8) : [];
+      const started = await startRowRefreshAgent(owner, row, evidence);
+      if (!started.ok) return sendJson(res, started.status || 400, { error: started.error });
+      const rowKey = store.rowKey(owner.name, row.path);
+      const say = `agent started in ${row.name} — ${started.job.thread || started.job.id}`;
+      refreshLog.append({ key: rowKey, project: owner.name, path: row.path, lines: [say] });
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 202, { ok: true, job: started.job, say });
     }
 
     // The UNMERGED chip's button: start the merge agent for one worktree. The board's verdict is a scan behind and
