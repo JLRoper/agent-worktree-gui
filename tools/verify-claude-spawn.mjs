@@ -83,7 +83,7 @@ try {
   check("run id is derived from it", r1.runId, `claude-${r1.sessionId}`);
   check("argv: headless stream-json both ways", ["-p", "--input-format", "--output-format", "--verbose"].every((a) => log1.argv.includes(a)), true);
   check("argv: model, budget default, permission mode", [log1.argv[log1.argv.indexOf("--model") + 1], log1.argv[log1.argv.indexOf("--max-budget-usd") + 1], log1.argv[log1.argv.indexOf("--permission-mode") + 1]], ["haiku", "0.5", "default"]);
-  check("argv: no --permission-prompt-tool in 2c, and the prompt is not in argv", [log1.argv.includes("--permission-prompt-tool"), log1.argv.some((a) => a.includes("PONG"))], [false, false]);
+  check("argv: permission-prompt-tool stdio is always passed now (2e), and the prompt is not in argv", [log1.argv[log1.argv.indexOf("--permission-prompt-tool") + 1], log1.argv.some((a) => a.includes("PONG"))], ["stdio", false]);
   check("stdin: initialize, then the prompt as a user turn", [log1.stdin[0]?.request?.subtype, log1.stdin[1]?.type, log1.stdin[1]?.message?.content], ["initialize", "user", "Reply with exactly: PONG"]);
   check("no process left in the registry", jobs.claude.procs.size, 0);
 
@@ -132,7 +132,7 @@ try {
   process.env.STUB_CLAUDE_MODE = "hang";
   const s6 = await jobs.create({ agent: "claude", prompt: "z", cwd: repo, existing: true, worktree: false });
   await waitFor(() => /sleep 600/.test(text(s6.id)));
-  check("approvals are not wired yet (2e)", (await jobs.transportFor(job(s6.id)).approve(job(s6.id), "once")).code, "not_in_2c");
+  check("approve with nothing pending is refused as expired (2e); not 'not_in_2c' any more", (await jobs.transportFor(job(s6.id)).approve(job(s6.id), "once")).code, "approval_expired");
   let replyErr = null;
   try {
     await jobs.create({ prompt: "again", thread: job(s6.id).thread, reply: true, cwd: repo, existing: true });
