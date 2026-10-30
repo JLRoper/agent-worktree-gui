@@ -455,12 +455,20 @@
         <div class="row">
           <button id="btn-spawn" type="button" class="primary">Spawn agent</button>
           <label class="model">model <select id="job-model" title="which model this run uses — (default) is the gateway's configured model"></select></label>
+          <label>reasoning <select id="job-reasoning" disabled title="Per-agent reasoning effort; replies keep this choice. Default uses Hermes settings. Models may map unsupported levels to their nearest supported level.">
+            <option value="">(Hermes default)</option>
+            <option value="none">Off</option>
+            <option value="minimal">Minimal</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="xhigh">Extra high</option>
+            <option value="max">Maximum</option>
+            <option value="ultra">Ultra</option>
+          </select></label>
           <label>budget s <input id="job-budget" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" value="1800" min="30" /></label>
           <label>max turns <input id="job-maxTurns" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" placeholder="(default)" /></label>
           <label>skills <input id="job-skills" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" placeholder="(not supported by a run yet)" disabled /></label>
-          <label class="chk" title="Not used: approvals come to the agent's card. A run is never blind to a flagged command, so there is nothing to bypass here.">
-            <input id="job-yolo" type="checkbox" disabled /> <code>--yolo</code>
-          </label>
           <label class="chk" title="Create a workspace: a new worktree and branch under .worktrees/, so the agent's edits land there and never in the folder itself. Untick to run in the 'start in' folder as it is — that is how you aim an agent at an existing worktree.">
             <input id="job-create" type="checkbox" checked /> create workspace
           </label>

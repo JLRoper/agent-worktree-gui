@@ -71,7 +71,7 @@ async function stubGateway() {
     const url = new URL(req.url, "http://127.0.0.1");
     if (url.pathname === "/v1/capabilities") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      return res.end(JSON.stringify({ version: "stub", features: { run_submission: true, run_events_sse: true, run_steer: true, run_stop: true } }));
+      return res.end(JSON.stringify({ version: "stub", features: { run_submission: true, run_events_sse: true, run_steer: true, run_stop: true, model_options: true } }));
     }
     if (url.pathname === "/v1/runs" && req.method === "POST") {
       let raw = "";
@@ -261,10 +261,12 @@ test("the reply route briefs a worker with the policy and remote of its tree's p
     sweep(repo);
   });
 
-  const spawned = await post(panel.base, "/api/agents", { body: { prompt: "land a change", cwd: repo, project: "fixture" } });
+  const spawned = await post(panel.base, "/api/agents", { body: { prompt: "land a change", cwd: repo, project: "fixture", reasoningEffort: "medium" } });
   assert.equal(spawned.status, 202, `the spawn is accepted: ${spawned.text}`);
   const job = spawned.json.job;
   const body1 = String(stub.submitted[0]?.input || "");
+  assert.deepEqual(stub.submitted[0]?.model_options, { reasoning: { enabled: true, effort: "medium" } }, "the chosen reasoning level reaches the gateway, not just the card");
+  assert.equal(job.reasoningEffort, "medium", "the setting is returned on the actual job");
   assert.match(body1, /cut from `main` — a landing branch/, `the first turn is told to land by pull request:\n${body1}`);
   assert.doesNotMatch(body1, /\[object Object\]/);
 
@@ -285,6 +287,8 @@ test("the reply route briefs a worker with the policy and remote of its tree's p
   const replied = await post(panel.base, "/api/agents/reply", { body: { thread: job.thread, text: "Keep going" } });
   assert.equal(replied.status, 202, `the reply is accepted: ${replied.text}`);
   const body2 = String(stub.submitted[1]?.input || "");
+  assert.deepEqual(stub.submitted[1]?.model_options, { reasoning: { enabled: true, effort: "medium" } }, "replies keep the reasoning level selected at spawn");
+  assert.equal(replied.json.job.reasoningEffort, "medium");
   assert.equal(stub.submitted[1]?.session_id, stub.submitted[0]?.session_id, "the route continues the same conversation");
   assert.equal(Object.hasOwn(stub.submitted[1], "conversation_history"), false, "the route does not replace the saved history");
   assert.ok(body2.includes("use absolute paths"), "the reply still re-anchors its tools");

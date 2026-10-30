@@ -69,16 +69,17 @@ Everything happens on the **New agent** card.
 | **start in** | The directory. Usually filled in by aiming, but you can type any path. |
 | **project** | Which project the work belongs to. Changing it points **start in** at that project and re-ticks **create workspace** — the picker is not a display field. |
 | **model** | `(default)` uses the gateway's configured model. The list is what the provider advertises, grouped by provider, and each row carries the price per million tokens in and out, the context window, and a 0-10 Artificial Analysis rating where a benchmark has scored it — click the field to open it, type to filter, `Enter` takes the highlighted row. The assistant's own model setting and a card's model readout open the same list, from the same one price table. A model nothing has priced or scored shows no columns, not a zero. |
+| **reasoning** | Per-agent effort: Hermes default, Off, Minimal, Low, Medium, High, Extra high, Maximum or Ultra. Default does not override Hermes settings; Medium is a useful starting point for quicker routine follow-ups. The choice survives panel restarts and is sent again on replies. Models may clamp unsupported levels. Disabled if the gateway does not advertise per-request model options (or the panel needs restarting). |
 | **budget s** | The run's wall-clock budget (`1800` by default). |
 | **max turns** | Optional ceiling on turns; blank means the gateway's own default. |
 | **skills** | Disabled: a run does not carry a skills list yet. |
-| `--yolo` | Disabled on purpose. A run is never blind to a flagged command, so there is nothing to bypass — approvals come to the card. |
 | **create workspace** | Ticked: cut a new worktree and branch under `.worktrees/` and run there. Unticked: run in **start in** as it is. |
 | **Spawn agent** | Starts the run. The card says the run id and the worktree it made. |
 
 The dim line under the card title is the promise: **run · new worktree under `…/.worktrees/` · project X** when a
 workspace will be created, or **runs IN `…` (no new worktree); edits land in that tree** when it will not. That is
-the line to read before clicking.
+the line to read before clicking. The old disabled YOLO option is gone: this gateway exposes no per-run approve-all
+setting, so changing reasoning does not change approval policy or bypass prompts.
 
 ### Aiming the card, and starting in place
 
