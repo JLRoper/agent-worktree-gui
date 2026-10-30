@@ -109,6 +109,14 @@ into `C:/CodeReviews/agent-worktree-gui/console-flicker-playwright.md` with pair
 repaint left it and one live line later. Useful after touching `drawJobLine`, `paintStreamConsole`,
 `conversationSignature` or anything else that repaints a live console.
 
+`node tools/measure-console-live.mjs` is the same question asked of ONE real finished run's own transcript,
+read-only: a sandbox panel of its own draws the card, then a full repaint, a reasoning POLL and one live line, and it
+reports whether the console kept its rows and its place (`docs/console-live-observation.md`). `--stream` does it in the
+🌊 renderer, where the reasoning is rows of the console and the poll redraws the console: there the checks also say
+that the rows that did not change kept their NODES (a selection inside the console is the reader's) and that a body
+which would drop rows from the middle draws nothing. Both modes gate: `--stream` is 10/10 here and 6/10 on an export
+of the commit before the patch.
+
 `node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
 `--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
 ancestry cannot see the merge: the repository ruleset requires linear history, so a PR lands as a squash or a
