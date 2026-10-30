@@ -1,6 +1,9 @@
 ---
 name: restart-app
 description: Pull latest changes from main and restart the agent-worktree-gui app
+user_invocable: true
+allowed_tools:
+  - Bash
 ---
 
 # Restart App with Latest Changes
