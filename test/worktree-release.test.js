@@ -175,7 +175,10 @@ test("refused: git status failing is a no, not an empty answer", async () => {
 
 // ---- the PR ----------------------------------------------------------------------------------------------------------
 test("refused: no pull request means nothing shows the branch landed", async () => {
-  const out = await call({ row: null, run: fakeRun(), runGh: fakeGh({ list: [] }) });
+  // A branch that carries a commit main does not have, with no PR: the second acceptance is measured here and says
+  // no (the refusals way of putting it is the same sentence it always gave).
+  const run = fakeRun([["rev-list --count", { ok: true, out: "1\n" }]]);
+  const out = await call({ row: null, run, runGh: fakeGh({ list: [] }) });
   assert.equal(out.gate, "pr");
   assert.match(out.outcome, /^refused: no pull request is recorded for wtgui\/thing-1a2b3c/);
 });
@@ -424,4 +427,159 @@ test("end to end: a dirty tree is refused, and nothing is deleted", async (t) =>
   assert.equal(existsSync(fixture.tree), true, "the tree is still there");
   assert.equal(hasRef(fixture.proj, "refs/heads/feature"), true, "its branch is still there");
   assert.ok(bare(slash(fixture.remote), ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).split(/\r?\n/).includes("feature"), "its remote branch is still there");
+});
+
+// ---- the second acceptance: nothing to land ---------------------------------------------------------------------------
+// A documentation or review tree: a registered worktree of its own project, a branch of its own, no PR anywhere, and —
+// for the case that is accepted — nothing on the branch that main does not already have. `ahead` is the one thing the
+// acceptance turns on: 0 commits over origin/main is releasable, 1 is a branch that still needs the merged-PR path.
+async function makeNothingToLand(t, { ahead = 0 } = {}) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "wtgui-release-nothing-"));
+  t.after(async () => {
+    await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  });
+  const remote = path.join(root, "remote.git");
+  const proj = path.join(root, "proj");
+  const tree = path.join(root, "tree");
+  execFileSync("git", ["init", "-q", "--bare", remote], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+  await mkdir(proj, { recursive: true });
+  git(proj, ["init", "-q", "-b", "main"]);
+  git(proj, ["config", "user.email", ["tester", "example.invalid"].join(String.fromCharCode(64))]);
+  git(proj, ["config", "user.name", "Test"]);
+  git(proj, ["config", "commit.gpgsign", "false"]);
+  await writeFile(path.join(proj, "README.md"), "# test\n", "utf8");
+  git(proj, ["add", "."]);
+  git(proj, ["commit", "-q", "-m", "init"]);
+  git(proj, ["remote", "add", "origin", slash(remote)]);
+  git(proj, ["push", "-q", "-u", "origin", "main"]);
+  bare(slash(remote), ["symbolic-ref", "HEAD", "refs/heads/main"]);
+  // The tree: a branch cut from main and pushed, so there IS a remote branch for a release to delete (or to leave
+  // alone when the branch is refused).
+  git(proj, ["worktree", "add", "-q", "-b", "doc-tree", slash(tree)]);
+  if (ahead > 0) {
+    await writeFile(path.join(tree, "notes.md"), "a change nobody opened a PR for\n", "utf8");
+    git(tree, ["add", "."]);
+    git(tree, ["commit", "-q", "-m", "a change nobody opened a PR for"]);
+  }
+  git(tree, ["push", "-q", "-u", "origin", "doc-tree"]);
+  return { root, remote, proj, tree, branch: "doc-tree" };
+}
+
+// The request a settled turn leaves behind: one RELEASE line, read out of the final message by the panel's own parser.
+function nothingToLandRequest(fixture, why) {
+  const store = new ReleaseRequests({
+    file: path.join(fixture.root, "releases.json"),
+    trees: () => [{ project: "wtgui", path: slash(fixture.tree), branch: fixture.branch }],
+  });
+  const recorded = store.record({
+    job: { id: "e2e-run", thread: "wtgui-e2e", worktreePath: slash(fixture.tree), branch: fixture.branch },
+    finalText: `Nothing is left to land here.\n\nRELEASE ${slash(fixture.tree)} | ${why}`,
+  });
+  return {
+    store,
+    recorded,
+    request: store.pending()[0],
+    project: { name: "wtgui", path: slash(fixture.proj), mainBranch: "main", remote: "origin", releaseWorktrees: true },
+  };
+}
+
+// gh for a branch that never had a pull request: the index is empty, and a `pr view` is a call the executor must never
+// make, because there is no number to make it with.
+const noPrGh = async (args) => {
+  const line = args.join(" ");
+  if (line.startsWith("pr list")) return { ok: true, out: "[]", err: "" };
+  return { ok: false, out: "", err: `unexpected gh call: ${line}` };
+};
+
+const hasBareRef = (repo, ref) => {
+  try {
+    bare(repo, ["rev-parse", "--verify", "--quiet", ref]);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+test("nothing to land: a clean tree 0 commits ahead of origin/main and no PR is released", async (t) => {
+  const fixture = await makeNothingToLand(t, { ahead: 0 });
+  const { store, recorded, request, project } = nothingToLandRequest(fixture, "a documentation tree with nothing to land");
+  assert.equal(recorded.requests.length, 1, "the marker was read out of the final message");
+  assert.equal(recorded.refused.length, 0);
+  assert.equal(git(fixture.tree, ["rev-list", "--count", "origin/main..HEAD"]), "0", "the fixture is the case the acceptance names");
+
+  const out = await releaseWorktree({ project, request, row: null, jobs: [], runGh: noPrGh });
+  assert.equal(out.ok, true, `expected a removal, got: ${out.outcome} ${JSON.stringify(out.steps)}`);
+  assert.equal(out.outcome, "removed");
+  assert.equal(out.pr, null, "no PR is involved in this acceptance");
+  assert.match(out.steps.find((s) => s.step === "nothing").detail, /^nothing to land — origin\/main\.\.HEAD counts 0 commits$/);
+  store.finish(request.key, { outcome: out.outcome, detail: out.detail, steps: out.steps });
+  assert.equal(store.forRow("wtgui", fixture.tree).state, "removed");
+
+  // Checked against git and the bare remote, not the module's own report.
+  assert.equal(existsSync(fixture.tree), false, "the worktree directory is gone");
+  assert.ok(!git(fixture.proj, ["worktree", "list", "--porcelain"]).includes(slash(fixture.tree)), "git no longer lists it");
+  assert.equal(hasRef(fixture.proj, "refs/heads/doc-tree"), false, "the local branch is gone");
+  assert.equal(hasBareRef(slash(fixture.remote), "refs/heads/doc-tree"), false, "the remote branch is gone");
+  assert.equal(hasRef(fixture.proj, "refs/heads/main"), true, "main is untouched");
+});
+
+test("nothing to land refuses a branch that IS ahead of main, and leaves the tree completely intact", async (t) => {
+  const fixture = await makeNothingToLand(t, { ahead: 1 });
+  const { request, project } = nothingToLandRequest(fixture, "a tree with one commit nobody opened a PR for");
+  assert.equal(git(fixture.tree, ["rev-list", "--count", "origin/main..HEAD"]), "1");
+
+  const out = await releaseWorktree({ project, request, row: null, jobs: [], runGh: noPrGh });
+  assert.equal(out.ok, false);
+  assert.equal(out.gate, "pr", "the gate that said no is named, the way every refusal is");
+  assert.match(out.outcome, /^refused: no pull request is recorded for doc-tree and it is 1 commit ahead of origin\/main, so nothing shows this branch landed$/);
+
+  // The worktree, its work, its local branch and its remote branch are all still there.
+  assert.equal(existsSync(fixture.tree), true, "the tree is still there");
+  assert.equal(existsSync(path.join(fixture.tree, "notes.md")), true, "its work is still in it");
+  assert.ok(git(fixture.proj, ["worktree", "list", "--porcelain"]).includes(slash(fixture.tree)), "git still lists the worktree");
+  assert.equal(hasRef(fixture.proj, "refs/heads/doc-tree"), true, "its local branch is still there");
+  assert.equal(hasBareRef(slash(fixture.remote), "refs/heads/doc-tree"), true, "its remote branch is still there");
+  assert.equal(git(fixture.tree, ["rev-list", "--count", "origin/main..HEAD"]), "1", "the branch still carries its commit");
+});
+
+test("the count is a number or it is nothing: an unreadable rev-list falls back to the tree-equal diff", async () => {
+  const run = fakeRun([
+    ["rev-list --count", { ok: false, out: "", err: "fatal: ambiguous argument 'origin/main..HEAD': unknown revision" }],
+    ["diff origin/main HEAD", { ok: true, out: "" }],
+  ]);
+  const out = await call({ row: null, run, runGh: fakeGh({ list: [] }) });
+  assert.equal(out.ok, true, `expected the fallback to accept it: ${out.outcome}`);
+  assert.match(out.steps.find((s) => s.step === "nothing").detail, /HEAD's tree is identical to origin\/main/);
+  assert.ok(run.calls.includes("fetch --quiet --no-tags origin main"), "the base branch is fetched once before the count is given up on");
+});
+
+test("refused: the count is unreadable and the trees differ — no delete on an unmeasured branch", async () => {
+  const run = fakeRun([
+    ["rev-list --count", { ok: false, out: "", err: "fatal: bad revision 'origin/main..HEAD'" }],
+    ["diff origin/main HEAD", { ok: true, out: "diff --git a/x.txt b/x.txt\n+x\n" }],
+  ]);
+  const out = await call({ row: null, run, runGh: fakeGh({ list: [] }) });
+  assert.equal(out.gate, "pr");
+  assert.match(out.outcome, /^refused: no pull request is recorded .* and its tree differs from origin\/main/);
+  assert.ok(!run.calls.some((c) => c.includes("worktree remove")));
+});
+
+test("an unmeasurable branch refuses rather than passing: no count and no diff is not a 0", async () => {
+  const run = fakeRun([
+    ["rev-list --count", { ok: true, out: "" }],
+    ["diff origin/main HEAD", { ok: false, out: "", err: "fatal: bad revision 'origin/main'" }],
+  ]);
+  const out = await call({ row: null, run, runGh: fakeGh({ list: [] }) });
+  assert.equal(out.gate, "pr");
+  assert.match(out.outcome, /could not measure it against origin\/main/);
+});
+
+test("nothing to land does not skip the jobs gate: a live run still holds the tree", async () => {
+  for (const status of ["running", "starting", "waiting", "queued"]) {
+    const run = fakeRun([["rev-list --count", { ok: true, out: "0\n" }]]);
+    const out = await call({ row: null, run, runGh: fakeGh({ list: [] }), jobs: [{ id: "busy-2", status, cwd: TREE }] });
+    assert.equal(out.gate, "jobs", `${status} must hold the tree`);
+    assert.match(out.outcome, /^refused: an agent is still holding that worktree \(busy-2/);
+    assert.ok(!run.calls.some((c) => c.includes("worktree remove")));
+  }
 });
