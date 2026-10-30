@@ -236,9 +236,17 @@ Drag the edge between two column headers to set those columns by hand: the pair 
 row does not move. The choice is remembered in this browser and applies to every project. **Double-click** any
 column edge to hand the board back to the measurement.
 
-**On a narrow window the chart scrolls sideways.** Ten columns need ~846px before each one is under the width its
-own text needs, and below that there is no smaller readable version of the table — every column at 24px is a row of
-overlapping words. So under that width the table keeps those widths and its box scrolls left and right (one finger,
+**Any column can be turned off.** Settings → Board → **Chart columns** has one switch per column. Hiding one removes
+its header and its cell from every row — the rows are built from the same list, so a table never has a header without
+matching cells — and the width it gave up goes to the columns that remain, which is also how a narrow window stops
+needing the sideways scroll below. The choice is the panel's, not the tab's: it lives in this panel's `config.json`, so
+every browser draws the same chart and a restart keeps it. **show all** puts every column back; the switches never take
+the last column away.
+
+**On a narrow window the chart scrolls sideways.** With every column on, ten of them need ~846px before each one is
+under the width its own text needs (fewer columns lower that floor with them), and below it there is no smaller
+readable version of the table — every column at 24px is a row of overlapping words.
+So under that width the table keeps those widths and its box scrolls left and right (one finger,
 and the swipe does not trigger the browser's back gesture). Two rows do **not** scroll with the columns: an expanded
 worktree and the delete question both stay the width of the visible area, so the transcript is not read through a
 letterbox and **Delete** stays where the thumb is. The one thing given up is the column header's stickiness — inside
@@ -731,8 +739,9 @@ restart.
 `⚙ Settings`, the title, or `Ctrl+,`. `Esc`, the `✕`, or a click outside closes it. The head is fixed and the body
 scrolls; every explanation is the row's own tooltip on the `ⓘ`.
 
-**Stored in this browser** (per browser, not shared; the one exception is **Refresh**, which is the panel's own
-setting):
+**Stored in this browser** (per browser, not shared; the exceptions are the rows the table marks as this panel's own
+`config.json` — **Refresh**, **Hide stale worktrees** and **Chart columns** — which apply to every browser and survive
+a restart):
 
 | Group | Row | Meaning |
 | --- | --- | --- |
@@ -758,6 +767,7 @@ setting):
 | Board | Grey flash | A row that was re-read with nothing changed flashes grey. Green — a sign of life — always flashes. |
 | Board | Flash on events | An event about the worktree (a console line, a job starting or finishing, an approval) counts as life and flashes the row; off, the ring still restarts but the board does not pulse. |
 | Board | Refresh | Which projects the panel re-reads: **everything**, or **only on screen** (the window plus half a screen either side). In "only on screen" it reads nothing while no page is open, and scrolling a stale project into view reads it at once. Saved in this panel's `config.json`, so it applies to every browser and survives a restart. |
+| Board | Chart columns | One switch per column of the worktree table — **Worktree**, **Branch**, **Tip**, **Ahead / Behind**, **Cherry**, **PR**, **Dirty**, **Life / next read**, **Verdict** and **Actions** (the row's ⟳ and ✕). A switch that is off takes that column's header and its cell out of every project's table and gives the width back to the columns that are left, so a narrow window needs no sideways scroll while the columns you do not read are gone. An expanded worktree and the delete question still span the whole chart. At least one column always stays, and the row's own controls are the last thing to go. Saved in this panel's `config.json` (`hiddenColumns`, the columns to hide), so it applies to every browser and survives a restart. **show all** turns every column back on. |
 | Board | Row refresh → agent | What a row's ⟳ does after its cheap pass finds a mismatch: **never** (re-read and journal only), **ask first** (one card under the row, the default), or **start it** (the click starts the agent itself). Refused while a run is already live in that tree. Saved in this browser. |
 | Updates | Update check | What this tab does when the panel is serving a different build than the one it loaded: **off**, **prompt** (the default — a chip offers the reload), or **auto** (reload as soon as the page is idle). Both modes hold the reload while a reply box or a held draft has text, or while a turn is streaming. Saved in this browser. |
 | Updates | Panel build · Check now | The build this tab is running, and what the panel serves now. **Check now** asks `GET /api/build` at once — it works even with the check set to off. |

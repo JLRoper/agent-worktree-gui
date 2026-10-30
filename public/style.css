@@ -222,6 +222,12 @@ button.primary:hover { background: #24466a; }
 .settings-row button:hover { border-color: #3b4757; }
 .settings-row button:disabled { color: var(--dimmer); cursor: default; }
 .settings-row button.dirty { border-color: #6b4d16; background: var(--amber-bg); color: #ffd479; }
+/* The chart's ten column switches: two columns of small labels rather than one row that wraps mid-word, and a
+   checkbox first so the state is read the same way down the list. */
+.settings-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 12px; margin-top: 8px; }
+.settings-cols label { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--dim); cursor: pointer; }
+.settings-cols label:hover { color: var(--text); }
+.settings-cols input { flex: none; accent-color: #4a90d9; }
 .settings-presets { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .settings-presets button { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--dim); font: 10.5px/1.7 var(--mono); cursor: pointer; }
 .settings-presets button:hover { color: var(--text); border-color: #3b4757; }

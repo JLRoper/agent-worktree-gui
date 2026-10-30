@@ -1,7 +1,8 @@
 // Boots the real server.js against a throwaway config, so a test can assert what a route does
 // rather than what its source says. No dependencies: child_process + fetch are both built in.
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -24,11 +25,16 @@ function freePort() {
   });
 }
 
-// A panel with no projects, no gateway key and its own HERMES_HOME: it can answer HTTP but it
-// cannot spawn anything, which is exactly what a route test wants. `dir` lets a test hand in a folder it has
+// A panel with no projects, no gateway key and its own HERMES_HOME: it can answer HTTP but
+// it cannot spawn anything, which is exactly what a route test wants. `dir` lets a test hand in a folder it has
 // already seeded (a legacy store to migrate), and `keep` leaves that folder behind on stop() so the SAME sandbox
 // can be booted a second time — the only way to prove what a restart does.
-export async function startPanel({ token = null, config = {}, env = {}, dir: givenDir = null, keep = false } = {}) {
+//
+// `reuseConfig` is the second half of that: boot the folder's EXISTING config.json instead of writing the defaults
+// over it, keeping every key the last run (or a route it answered) wrote. Only the port and the paths this kit
+// derives are refreshed, because the test needs a free port and the same throwaway store. Without it a restart test
+// silently proves that the kit's defaults survive a restart, not the setting under test.
+export async function startPanel({ token = null, config = {}, env = {}, dir: givenDir = null, keep = false, reuseConfig = false } = {}) {
   const dir = givenDir || (await mkdtemp(path.join(os.tmpdir(), "wtgui-test-")));
   const repos = path.join(dir, "repos");
   await mkdir(repos, { recursive: true });
@@ -55,7 +61,18 @@ export async function startPanel({ token = null, config = {}, env = {}, dir: giv
     projectsCacheFile: path.join(dir, "logs", "projects.json"),
     ...config,
   };
-  await writeFile(cfgPath, JSON.stringify(cfg, null, 2), "utf8");
+  // The existing file wins when a test is re-booting its own sandbox: every key the last process (or a route it
+  // answered) wrote is the thing under test, and only the port and the derived paths are refreshed here.
+  let boot = cfg;
+  if (reuseConfig && existsSync(cfgPath)) {
+    try {
+      const stored = JSON.parse(await readFile(cfgPath, "utf8"));
+      boot = { ...stored, ...{ port, jobsFile: cfg.jobsFile, assistantFile: cfg.assistantFile, projectsCacheFile: cfg.projectsCacheFile }, ...config };
+    } catch {
+      /* an unreadable config is the fresh boot's problem, not this branch's */
+    }
+  }
+  await writeFile(cfgPath, JSON.stringify(boot, null, 2), "utf8");
 
   const out = [];
   const child = spawn(process.execPath, ["server.js"], {
