@@ -554,8 +554,11 @@ Each turn is an accordion inside the card:
   opens it, and the line carries how long it ran.
 - The open turn holds, in order: the thinking block (if on), the console, the subagent strip, and any approval or
   question box for that turn.
-- Sending a reply folds the earlier turns to a **compact** summary — the last tool line, the answer's first lines, and
-  one dim line saying what folded. A turn you opened by hand is compacted the same way, not closed.
+- Sending a reply draws the earlier turns the way **Settings → Agent cards → Previous turn on send** says: a
+  **compact** summary — the last tool line, the answer's first lines, and one dim line saying what folded (the
+  default); the turn **left as is**, its console still open above the new turn; or **minimized** to its one-line
+  peek before the new turn's output is drawn. A turn you opened by hand follows the same answer, not a separate
+  rule.
 - A failed turn that is worth retrying (a timeout, a 5xx, a dropped connection) shows **retry** beside its outcome; it
   sends that turn's prompt again as a new turn, because the failed turn's edits are already on disk.
 
@@ -767,6 +770,7 @@ a restart):
 | Display | Typed answer box | Shows the free-text row under the choices. An open-ended question keeps it whatever this says, or there would be nothing to answer with. |
 | Agent cards | Show thinking | The default for cards' `🧠`; a card's own toggle wins. |
 | Agent cards | Collect subagent results | Hand a parent the results of children that outlived its turn, once per turn. |
+| Agent cards | Previous turn on send | What the turn you were reading becomes when you send a reply: **freeze a snippet** (the default — the last tool line, the answer it ended on, and what folded), **leave as is** (its console stays open above the new turn), or **minimize it** (folded to its one-line peek first). Saved in this browser. |
 | Board | Board reorder | Seconds between re-sorts of closed folders and projects (`off`/5/15/30/60 presets). A project you have open keeps its slot. |
 | Board | Hover anchor | The card the pointer moves over keeps its screen position while others grow; the seconds are how long it lingers after the pointer stops. Off falls through to the next rule. |
 | Board | Touched anchor | The card you last clicked, focused or typed in keeps its position for its own number of seconds. Off clears that signal. |

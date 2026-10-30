@@ -234,6 +234,15 @@
           <span>Collect subagent results <span class="settings-info">ⓘ</span></span>
           <input id="auto-collect" type="checkbox" checked>
         </label>
+
+        <label class="settings-row settings-gap" for="prev-turn-mode" title="What becomes of the turn you were reading when you send a reply. freeze a snippet — it stays as a small frozen piece of itself: the last tool line, the answer it ended on, and a dim line saying what folded. leave as is — it keeps everything it was showing, so its console stays open above the new turn while you work. minimize it — it folds down to its one-line peek before the new turn's output is drawn, so the card shows one turn at a time. Sent while that turn is mid-run? The same answer applies when the turn it went into is folded behind the next one. Saved in this browser.">
+          <span>Previous turn on send <span class="settings-info">ⓘ</span></span>
+          <select id="prev-turn-mode">
+            <option value="snippet">freeze a snippet</option>
+            <option value="keep">leave as is</option>
+            <option value="minimize">minimize it</option>
+          </select>
+        </label>
       </div>
 
       <div class="settings-group">
