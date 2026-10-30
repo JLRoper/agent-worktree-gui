@@ -577,6 +577,10 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
 button.chip { cursor: pointer; font-family: inherit; }
 button.chip:hover { filter: brightness(1.22); }
 button.chip:active { transform: translateY(1px); }
+/* A chip button that filters its project's table: it wears the span chip's look, not the browser's button grey. A pressed
+   one (its filter is on) gets a ring in its own colour. */
+button.chip-filter { background: transparent; line-height: inherit; margin: 0; }
+button.chip-filter.active { outline: 2px solid currentColor; outline-offset: 1px; }
 /* "n hermes": external CLI sessions executing a turn — the same violet as the row's hermes chip, so the two
    read as one kind of evidence rather than as another flavour of the panel's own agents. */
 /* External Hermes sessions: the same grey-to-violet rule as the panel chip, but in the darker violet, so the
