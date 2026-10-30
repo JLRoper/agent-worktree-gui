@@ -1330,7 +1330,27 @@ select.model-native { display: none; }
   cursor: pointer;
 }
 .btn-artifacts:hover { border-color: #3b4757; background: #1b2230; }
-.row-actions { width: 52px; text-align: center; white-space: nowrap; }
+/* Three controls now: the child cut (+), the reconcile (⟳) and the remove (✕). The width is the three buttons plus
+   their gaps and the cell's own 4px insets, so a fourth control (or a wider glyph) has to move this number with it. */
+.row-actions { width: 74px; text-align: center; white-space: nowrap; }
+/* ＋ cut a child worktree off this row's branch: the same quiet-at-rest family as the ⟳ and the ✕, in the panel's
+   "additive" ink rather than the delete's red. It is the only one of the three that MAKES something, so its hover is
+   the blue-green rather than either neighbour's. */
+.btn-child-tree {
+  border: 1px solid var(--line);
+  background: #15181e;
+  color: var(--dim);
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 5px;
+  margin-right: 3px;
+  cursor: pointer;
+  opacity: .55;
+}
+tr.row:hover .btn-child-tree { opacity: 1; }
+.btn-child-tree:hover { background: #16211d; border-color: #2f4a3f; color: #8fe0bd; }
+.btn-child-tree:disabled { cursor: progress; opacity: .5; }
+.btn-child-tree.is-starting { animation: pill-again-spin .9s linear infinite; }
 /* The row's own refresh, to the LEFT of the ✕ and in the same family: quiet at rest, bright under the pointer, and a
    spin while the read is in flight (the panel's own "this is happening" for a glyph control — no label change). */
 .btn-refresh-tree {

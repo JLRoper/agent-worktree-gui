@@ -8582,6 +8582,57 @@ async function renameWorktreePrompt(btn) {
   }
 }
 
+// ---- a child worktree off this row's branch -------------------------------------------------
+// The roll-up's other half, and the only thing this control does: it cuts a tree from the ROW's branch, never from the
+// project checkout. `⇥ → Roll into <parent>` merges a child into the branch it was cut from, INSIDE that branch's own
+// worktree — so the parent has to be a worktree branch, and until this existed the panel could only cut children of
+// main, the one target a roll may never use. Nothing is started in the new tree: it lands on the board as a row.
+//
+// The name is asked for in the page's own prompt (the ✎ uses the same one) and it is OPTIONAL — an empty answer means
+// "name it after the branch it was cut from", which is what the server does with no name. The -<hex6> tag is always
+// the server's: it is the tree's identity through every later rename.
+const childPresses = new Map(); // row key -> when its + was last taken, so a double click is one tree
+
+async function cutChildTree(btn) {
+  const project = btn.dataset.childProject || "";
+  const path = btn.dataset.childPath || "";
+  const parent = btn.dataset.childBranch || "";
+  const key = btn.dataset.childTree || keyOf(project, path);
+  // One press, one tree. A second child of the same branch is a second press — a double click is not.
+  if (Date.now() - (childPresses.get(key) || 0) < 3000) return;
+  const offered = String(parent).split("/").filter(Boolean).pop().replace(/-[0-9a-f]{6}$/i, "");
+  const asked = window.prompt(
+    `cut a child worktree off ${parent}\n\n` +
+      `its branch: wtgui/<name>-<tag>, cut from ${parent}\n` +
+      `nothing is started in it and nothing is pushed — it becomes a row of its own\n\n` +
+      `name${offered ? ` (empty = “${offered}”)` : ""}:`,
+    "",
+  );
+  if (asked === null) return; // cancelled: nothing was cut, and no record says otherwise
+  childPresses.set(key, Date.now());
+  btn.disabled = true;
+  btn.classList.add("is-starting");
+  try {
+    const r = await apiFetch(
+      "/api/worktree/child",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ project, path, name: String(asked).trim() }) },
+      { timeoutMs: 120000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    showBanner(`cut ${d.branch} from ${parent} — ${d.name || d.branch} is a row now, and its UNMERGED chip rolls it back into ${parent}`);
+    await resync();
+  } catch (err) {
+    showBanner(`could not cut a child of ${parent}: ${String((err && err.message) || err)}`);
+  } finally {
+    if (btn.isConnected) {
+      btn.disabled = false;
+      btn.classList.remove("is-starting");
+    }
+  }
+}
+// ---- end a child worktree off this row's branch
+
 // ---- merge control: the UNMERGED chip ------------------------------------------------------
 // A row that carries commits main does not have is the one row with an action worth taking, so that chip is a button:
 // one click starts an agent IN that worktree whose whole job is to land the branch (the script is lib/merge-prompt.js
@@ -9084,6 +9135,14 @@ function rowHtml(row) {
   const nameFromWorkBtn = isProjectRoot
     ? ""
     : `<button class="btn-row-name-work" data-name-tree="${esc(keyOf(row.project, row.path))}" data-name-project="${esc(row.project)}" data-name-path="${esc(row.path)}" title="name this worktree from the work in it — reads its commits and its diff against ${esc(baseBranchOf(row))} and offers a name built from them (asks first; the branch is renamed and the six-hex tag kept) · the panel's own naming stops at the branch's first commit and never moves a published branch, so this is how a tree that already has work gets a name${namedLine ? ` · ${esc(namedLine)}` : ""}">\u2726</button>`;
+  // ＋ cuts a CHILD worktree off this row's own branch (POST /api/worktree/child). It sits to the left of the ⟳
+  // deliberately: the three controls read as one sentence down the row — make another tree from this branch, re-read
+  // this one, remove this one. A row with no branch (a detached HEAD) has nothing to cut from, and the project's own
+  // checkout is not a worktree, so neither draws it. The glyph is the ASCII plus on purpose: the mono stack this cell
+  // is set in has no ⑂/⤷ on Windows, and a control that renders as nothing is worse than a plain one.
+  const childBtn = isProjectRoot || !row.branch
+    ? ""
+    : `<button class="btn-child-tree" data-child-tree="${esc(keyOf(row.project, row.path))}" data-child-project="${esc(row.project)}" data-child-path="${esc(row.path)}" data-child-branch="${esc(row.branch)}" type="button" title="cut a child worktree off ${esc(row.branch)} — a new tree on a new branch cut from this one, on its own row below; nothing is started in it and nothing is pushed, and it is what the child's UNMERGED chip rolls back into ${esc(row.branch)}">+</button>`;
   // One ✕ per row, and whether it needs the question at all: merged + clean deletes straight away.
   const delKey = keyOf(row.project, row.path);
   const delDirect = !isProjectRoot && deletableWithoutAsking(delKey);
@@ -9124,7 +9183,7 @@ function rowHtml(row) {
     <td class="mono nowrap">${dirty}</td>
     ${ageCellHtml(row)}
     <td class="verdict">${badge}</td>
-    <td class="row-actions">${isProjectRoot ? "" : `<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="reconcile this one worktree — re-read its git state (dirty, ahead/behind, cherry, verdict, PR), then check its TODO list against what the tree now contains (a proposal, nothing closed) and its description, re-derived only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>
+    <td class="row-actions">${isProjectRoot ? "" : `${childBtn}<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="reconcile this one worktree — re-read its git state (dirty, ahead/behind, cherry, verdict, PR), then check its TODO list against what the tree now contains (a proposal, nothing closed) and its description, re-derived only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>
   </tr>`;
 }
 
@@ -12801,6 +12860,12 @@ document.addEventListener("click", async (e) => {
   }
   // The row's own ⟳ re-reads this one worktree (git facts, TODO reconcile, description, journal) and may offer the
   // double-check agent as one card under the row.
+  const childTree = e.target.closest("[data-child-tree]");
+  if (childTree) {
+    e.preventDefault();
+    void cutChildTree(childTree);
+    return;
+  }
   const refreshTree = e.target.closest("[data-refresh-tree]");
   if (refreshTree) {
     e.preventDefault();
