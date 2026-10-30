@@ -38,6 +38,8 @@ const MANUAL_ORDER_KEY = "wtgui.manualOrder";
 // its dead zone at that moment. The loader's try/catch swallowed the ReferenceError, so the choice was written to
 // localStorage and then never read back - every reload held the stale rows again and pointed the arrow down.
 const SHOW_OLD_KEY = "wtgui.showOldProjects";
+// The chip predicates: one table for both the count on a project chip and the rows its click shows (core/chip-filters.js).
+const CHIP = globalThis.ChipFilters;
 
 // The chip-bearing drafts this tab already holds (board/paste-chips.js): each chip's own text by id, and
 // the segments of every box that carries one. Read ONCE, above `state`, so a box can be restored from it
@@ -176,6 +178,9 @@ const state = {
   // Per-folder project search ("root" -> query). Not persisted: a filter is a moment's narrowing, and a
   // reload that came back with ninety projects hidden would look like the board had lost them.
   rootFilter: new Map(),
+  // The summary chip a project header's table is filtered by (project name -> a key of ChipFilters.predicates). Not
+  // persisted, like rootFilter: a filter is a moment's narrowing. See toggleChipFilter.
+  chipFilter: new Map(),
   // The card the reader pinned to hold its place, if any (one at a time, remembered between reloads).
   anchorThread: loadAnchorThread(),
   // Ctrl+click a project's title row to give that whole project box a theme colour (a hue, kept in
@@ -10606,36 +10611,31 @@ function detailHtml(row) {
 
 function chipsHtml(name) {
   const rows = [...state.rows.values()].filter((r) => r.project === name);
-  const merged = rows.filter((r) => String(r.verdict || "").startsWith("MERGED")).length;
-  const noCommits = rows.filter((r) => {
-    const v = String(r.verdict || "");
-    return v.startsWith("NO COMMITS") || v.startsWith("EMPTY REPO");
-  }).length;
-  const unmerged = rows.filter((r) => {
-    const v = String(r.verdict || "");
-    return !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN";
-  }).length;
-  const dirty = rows.filter((r) => r.dirty || r.untracked).length;
-  const serving = rows.filter((r) => r.signals?.ports?.on).length;
-  const removable = rows.filter((r) => r.mergeable).length;
+  const count = (key) => rows.filter(CHIP.predicates[key]).length;
+  const merged = count("merged");
+  const noCommits = count("nocommits");
+  const unmerged = count("unmerged");
+  const dirty = count("dirty");
+  const serving = count("serving");
+  const removable = count("removable");
   // Every agent whose home is a row in this project. Violet while any of them is working; amber as
   // soon as they are all idle, because "a live panel" is only true when something is actually running.
   const panelAgents = rows.flatMap((r) => agentsFor(r));
   const panelAgentCount = panelAgents.length;
   const panelRunningCount = panelAgents.filter(convLive).length;
-  const stale = rows.filter((r) => r.verdictStale).length;
+  const stale = count("stale");
   // What the chart is holding back, so a collapsed project cannot silently under-report its trees: the count is of
   // rows this project's chart is not drawing because their last activity is older than the threshold, and it goes
   // away the moment that chart is asked for everything.
   const held = rows.filter(rowAgeHidden).length;
   const ageDays = ageHideDays();
-  const out = [`<span class="chip">${rows.length} worktrees</span>`];
+  const out = [filterChip(name, "", "", `${rows.length} worktrees`, `${rows.length} worktrees in this project`)];
   if (held) out.push(`<span class="chip" title="${esc(`${held} worktree${held === 1 ? "" : "s"} whose last activity is older than ${ageDays} day${ageDays === 1 ? "" : "s"} — the chart is holding ${held === 1 ? "it" : "them"} back; the arrow at the bottom of the chart shows every tree`)}">${held} older hidden</span>`);
-  if (merged) out.push(`<span class="chip good">${merged} merged</span>`);
-  if (noCommits) out.push(`<span class="chip">${noCommits} no commits</span>`);
-  if (unmerged) out.push(`<span class="chip bad">${unmerged} unmerged</span>`);
-  if (dirty) out.push(`<span class="chip warn">${dirty} dirty</span>`);
-  if (serving) out.push(`<span class="chip info">${serving} serving</span>`);
+  if (merged) out.push(filterChip(name, "merged", "good", `${merged} merged`, "worktrees whose verdict is MERGED"));
+  if (noCommits) out.push(filterChip(name, "nocommits", "", `${noCommits} no commits`, "worktrees with no commits of their own"));
+  if (unmerged) out.push(filterChip(name, "unmerged", "bad", `${unmerged} unmerged`, "worktrees with work not merged into main"));
+  if (dirty) out.push(filterChip(name, "dirty", "warn", `${dirty} dirty`, "worktrees with uncommitted or untracked files"));
+  if (serving) out.push(filterChip(name, "serving", "info", `${serving} serving`, "worktrees with a dev server listening"));
   // Violet in both states, like the ⧉ hermes chip: this is a Hermes-agent fact, not a warning. Amber
   // made every project with finished agents look like it wanted attention; the tooltip still says how
   // many are running right now.
@@ -10699,9 +10699,19 @@ function chipsHtml(name) {
       `<span class="chip sig-approval" title="an agent in this project is parked on a permission request — open the row to answer it">\u26a0 ${panelWaiting} awaiting approval</span>`,
     );
   }
-  if (removable) out.push(`<span class="chip info">${removable} safe to remove</span>`);
-  if (stale) out.push(`<span class="chip">${stale} reclassifying</span>`);
+  if (removable) out.push(filterChip(name, "removable", "info", `${removable} safe to remove`, "worktrees safe to remove"));
+  if (stale) out.push(filterChip(name, "stale", "", `${stale} reclassifying`, "worktrees whose verdict is being reclassified"));
   return out.join("");
+}
+
+// A chip that filters its project's table. The count it shows and the rows it shows come from the same predicate
+// (CHIP.predicates). `key` is "" for the worktrees chip, which clears the filter. Clicking the active chip clears it.
+function filterChip(name, key, cls, body, title) {
+  const active = key !== "" && state.chipFilter.get(name) === key;
+  const hint = key === ""
+    ? (state.chipFilter.has(name) ? " — click to show all" : "")
+    : active ? " — click to show all" : " — click to show only these";
+  return `<button type="button" class="chip${cls ? ` ${cls}` : ""} chip-filter${active ? " active" : ""}" data-chip-filter="${esc(key)}" data-chip-project="${esc(name)}" aria-pressed="${active}" title="${esc(title + hint)}">${body}</button>`;
 }
 
 // ---- project ordering + the green "+" ------------------------------------------
@@ -11091,7 +11101,35 @@ function projectSection(name) {
   </section>`;
 }
 
+// Whether a row is drawn in its project's table. An active chip filter replaces the age threshold, so "4 unmerged"
+// draws all four, old or not. A row the reader has open, or is mid-confirm on, is drawn whatever the filter says, so
+// a scan never takes a transcript away from them. Every path that draws or removes a row asks this one question.
+function rowShown(name, row) {
+  const key = state.chipFilter.get(name);
+  if (!key) return !rowAgeHidden(row);
+  const k = keyOf(name, row.path);
+  return CHIP.predicates[key](row) || state.expanded.has(k) || state.confirmEls.has(k);
+}
+
+// Click once to show only the rows a chip counts, again to show all. Single-select: another chip replaces it. A collapsed
+// project opens, so the result is on screen.
+function toggleChipFilter(name, key) {
+  if (!name) return;
+  if (!key || state.chipFilter.get(name) === key) state.chipFilter.delete(name);
+  else state.chipFilter.set(name, key);
+  if (state.chipFilter.has(name) && !state.expandedProjects.has(name)) toggleProject(name);
+  renderProjectRows(name);
+  refreshChips(name);
+}
+
 function refreshChips(name) {
+  // A filter whose chip has counted down to nothing would leave the table empty with no visible way out, so it is
+  // dropped here and the table drawn again.
+  const key = state.chipFilter.get(name);
+  if (key && ![...state.rows.values()].some((r) => r.project === name && CHIP.predicates[key](r))) {
+    state.chipFilter.delete(name);
+    renderProjectRows(name);
+  }
   const el = document.querySelector(`[data-chips="${CSS.escape(name)}"]`);
   if (el) el.innerHTML = chipsHtml(name);
   // The age arrow's presence depends on the same rows, so it is refreshed from the same place.
@@ -11655,7 +11693,7 @@ function placeRow(project, row, { flash = false } = {}) {
   // the agents still know the row (they always did; the row is only held out of the drawing). The threshold can have
   // just crossed this row's activity, or the reader can have just asked this chart to hold the stale ones back, and
   // either way the row has to leave the DOM here rather than wait for the next full rebuild of the project.
-  if (rowAgeHidden(row)) {
+  if (!rowShown(project, row)) {
     const gone = state.rowEls.get(key);
     if (gone) {
       state.detailEls.get(key)?.remove();
@@ -11807,7 +11845,9 @@ function renderProjectRows(name, { typing = null } = {}) {
   // Rows older than the age threshold are not built at all: the chart draws what it is showing, and the arrow in the
   // legend below it is what brings the rest back (see rowAgeHidden). The ranking above still sees them, so a row that
   // comes back to life takes its place in the order the moment it is drawn again.
-  const rowsInOrder = applyManualOrder(applyRowRank([...state.rows.values()].filter((r) => r.project === name && !rowAgeHidden(r))), state.manualOrder.get(name));
+  // An active chip filter replaces the age threshold, so "4 unmerged" draws all four, old or not. A row the reader has
+  // open, or is mid-confirm on, is drawn whatever the filter says, so a scan never takes a transcript away from them.
+  const rowsInOrder = applyManualOrder(applyRowRank([...state.rows.values()].filter((r) => r.project === name && rowShown(name, r))), state.manualOrder.get(name));
   if (stabilizeOn() && projectHasOpenRow(name) && prevRowKeys.length) {
     const pos = new Map(prevRowKeys.map((k, i) => [k, i]));
     rowsInOrder.sort(
@@ -12755,6 +12795,17 @@ document.addEventListener("click", async (e) => {
   }
   // The project's panel chip is a button only while something is running: jump to that agent instead of
   // toggling the project the chip sits in.
+  // A summary chip in a project header filters that project's table (see chipsHtml). It sits inside the header, so it
+  // must stop the header's open/close click from firing too.
+  const chipFilter = e.target.closest("[data-chip-filter]");
+  if (chipFilter) {
+    e.preventDefault();
+    e.stopPropagation();
+    const name = chipFilter.dataset.chipProject;
+    const key = chipFilter.dataset.chipFilter;
+    keepInPlace(() => document.querySelector(`.project-head[data-toggle-project="${CSS.escape(name)}"]`), () => toggleChipFilter(name, key));
+    return;
+  }
   const panelJump = e.target.closest("[data-jump-panel]");
   if (panelJump) {
     e.preventDefault();
