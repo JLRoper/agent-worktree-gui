@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 await import("../public/core/stream-merge.js");
-const { merge, segments, isPreview, unitHasResult, SLACK_MS } = globalThis.wtStream;
+const { merge, segments, isPreview, unitHasResult, joinsTail, SLACK_MS } = globalThis.wtStream;
 
 const T0 = 1_790_000_000_000; // an arbitrary epoch, so every stamp below reads as seconds into the turn
 const at = (s) => T0 + Math.round(s * 1000);
@@ -235,4 +235,65 @@ test("unitHasResult answers the one question a live append asks", () => {
   assert.equal(unitHasResult([line("tool", "t", 1)]), false);
   assert.equal(unitHasResult([line("tool", "t", 1), line("tool-out", "r", 2)]), true);
   assert.equal(unitHasResult(), false);
+});
+
+// The live append asks before it draws. A call the poll would cut out of the burst on screen is one the reader sees
+// leave one box and appear in the next, so `joinsTail` runs the transcript through the same `merge` + `segments` the
+// repaint runs, and joins only when the cutter puts the call in the same unit as the burst's last line.
+test("joinsTail: a call that follows a result opens the next burst", () => {
+  const burst = [line("tool", "💻 terminal · date", 1), line("tool-out", "  ↳ terminal", 2)];
+  const next = line("tool", "💻 terminal · ls", 3);
+  assert.equal(joinsTail([...burst, next], next, [], burst), false);
+});
+
+test("joinsTail: a call the burst has not answered yet joins it", () => {
+  const burst = [line("tool", "💻 terminal · sleep 5", 1)];
+  const next = line("tool", "💻 terminal · date", 2);
+  assert.equal(joinsTail([...burst, next], next, [], burst), true);
+  // a result always joins the burst it answers, even one that already saw a result
+  const answered = [...burst, line("tool-out", "x", 2)];
+  const result = line("tool-out", "y", 3);
+  assert.equal(joinsTail([...answered, result], result, [], answered), true);
+});
+
+test("joinsTail: a reasoning block that merge puts in front of the call ends the burst", () => {
+  const answered = [line("tool", "💻 terminal · date", 1), line("tool-out", "  ↳ terminal", 2)];
+  const next = line("tool", "💻 terminal · ls", 4);
+  // the block belongs after that result and before the next call: the call is the head of a new burst
+  assert.equal(joinsTail([...answered, next], next, [block(3, "I should list the folder")], answered), false);
+  // a block from before the burst is placed above the burst entirely, so the call is still cut off from it by the
+  // result above — the same answer, for a different reason
+  assert.equal(joinsTail([...answered, next], next, [block(0.5, "earlier")], answered), false);
+});
+
+test("joinsTail: nothing on screen, or a burst read back without stamps — the append's old answer", () => {
+  const next = line("tool", "t", 1);
+  assert.equal(joinsTail([next], next, [], []), false);
+  assert.equal(joinsTail([next], next, [], null), false);
+  // a burst read back out of the DOM carries no identity to match on: fall back to \"does it already hold a result\"
+  const domBurst = [{ kind: "tool", text: "💻" }, { kind: "tool-out", text: " ↳" }];
+  assert.equal(joinsTail([...domBurst, next], next, [], domBurst), false);
+  const domOpen = [{ kind: "tool", text: "💻" }];
+  assert.equal(joinsTail([...domOpen, next], next, [], domOpen), true);
+});
+
+// The rule the append follows is the rule the renderer cuts by: whatever it decides, the poll must agree, or the row
+// is drawn in one burst and moved to another on the next repaint.
+test("joinsTail agrees with the grouping a repaint builds", () => {
+  const cases = [
+    [[line("tool", "a", 1)], line("tool", "b", 2), []],
+    [[line("tool", "a", 1), line("tool-out", "ra", 2)], line("tool", "b", 3), []],
+    [[line("tool", "a", 1), line("tool-out", "ra", 2)], line("tool", "b", 4), [block(3, "think")]],
+    [[line("tool", "a", 1)], line("tool", "b", 3), [block(2, "think")]],
+    [[line("text", "said"), line("tool", "a", 1), line("tool-out", "ra", 2)], line("tool", "b", 3), [block(2.5, "think")]],
+  ];
+  for (const [before, next, blocks] of cases) {
+    const all = [...before, next];
+    const joined = joinsTail(all, next, blocks, before);
+    const merged = merge(all, blocks);
+    const units = segments(merged);
+    const unitOf = (l) => units.findIndex((s) => s.unit && s.lines.includes(l));
+    const polled = unitOf(next) === unitOf(before[before.length - 1]);
+    assert.equal(joined, polled, `next=${next.text} blocks=${blocks.length} lines=${shape(all)}`);
+  }
 });

@@ -141,5 +141,40 @@
     return (Array.isArray(lines) ? lines : []).some((l) => l && l.kind === "tool-out");
   }
 
-  root.wtStream = { SLACK_MS, isPreview, merge, segments, unitHasResult };
+  /**
+   * Does the call arriving now join the burst already at the tail?
+   *
+   * The live append draws one line at a time and has to guess what the next repaint will do with the whole transcript:
+   * a call that the poll cuts out of the burst above it is one the reader watches leave one box and appear in the
+   * next, which is the flicker this asks about. So the append runs the transcript through the SAME two functions the
+   * repaint does — `merge` then `segments` — and joins only when the cutter puts this call in the burst tail's unit.
+   *
+   * @param lines  the turn's console lines, oldest first, INCLUDING `next` (bookkeeping already removed)
+   * @param next   the line arriving now
+   * @param blocks the turn's reasoning blocks, as `merge` sees them
+   * @param tailLines the burst on screen, for the fallback when the transcript cannot be matched up
+   */
+  function joinsTail(lines, next, blocks, tailLines) {
+    // A result always joins the unit it answers, and prose is never part of a burst: both draw by their own rules.
+    if (!next || next.kind !== "tool") return true;
+    const src = (Array.isArray(lines) ? lines : []).filter(Boolean);
+    const at = src.lastIndexOf(next);
+    const fallback = () => (Array.isArray(tailLines) && tailLines.length ? !unitHasResult(tailLines) : false);
+    // The arriving line is always the last one recorded; if it is not in the list the append is drawing from a
+    // transcript this decision cannot see, so it answers the older, local question instead of inventing a cut.
+    if (at < 0) return fallback();
+    if (at === 0) return false;
+    const before = src[at - 1];
+    const isBurstLine = (l) => Boolean(l) && (l.kind === "tool" || l.kind === "tool-out");
+    if (!isBurstLine(before)) return false;
+    const list = Array.isArray(blocks) ? blocks : [];
+    const units = segments(merge(src, list, { hidePreviews: list.length > 0 }));
+    const unitOf = (line) => units.findIndex((s) => s.unit && s.lines.some((l) => l === line || (line?.lid != null && l?.lid === line.lid)));
+    const a = unitOf(before);
+    const b = unitOf(next);
+    if (a < 0 || b < 0) return fallback();
+    return a === b;
+  }
+
+  root.wtStream = { SLACK_MS, isPreview, merge, segments, unitHasResult, joinsTail };
 })(globalThis);
