@@ -554,6 +554,13 @@ Each turn is an accordion inside the card:
 
 ### The console
 
+A reply submits a new run with the **same session id**: it continues the saved conversation, not a new agent
+conversation or a gateway restart. The stored startup record says `continuing session` and names the turn and run id;
+protocol bookkeeping is kept in the job data, not drawn in the console. The workspace setup note appears only on the
+first turn. Every run still gets the working directory and explicit `cd`
+instruction, because conversation history persists but a previous run's tool working directory need not. This is a
+safeguard, not a claim that the gateway accepted or applied `cwd`.
+
 Output streams into a `<pre>`. It follows the newest line unless you scroll up; a `↓` button brings you back and
 re-pins it. A tool result is a **preview** of what the tool returned, not the full payload — when it was cut the
 console ends it with `… result truncated by the gateway` (the gateway's `HERMES_RUN_PREVIEW_CHARS` raises the cap;

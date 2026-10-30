@@ -285,6 +285,11 @@ test("the reply route briefs a worker with the policy and remote of its tree's p
   const replied = await post(panel.base, "/api/agents/reply", { body: { thread: job.thread, text: "Keep going" } });
   assert.equal(replied.status, 202, `the reply is accepted: ${replied.text}`);
   const body2 = String(stub.submitted[1]?.input || "");
+  assert.equal(stub.submitted[1]?.session_id, stub.submitted[0]?.session_id, "the route continues the same conversation");
+  assert.equal(Object.hasOwn(stub.submitted[1], "conversation_history"), false, "the route does not replace the saved history");
+  assert.ok(body2.includes("use absolute paths"), "the reply still re-anchors its tools");
+  assert.ok(replied.json.job.lines.some((line) => line.kind === "init" && line.text.includes(`continuing session ${job.thread} · turn 2`)));
+  assert.ok(!replied.json.job.lines.some((line) => /asked to work in|⇢ workspace /.test(line.text)), "no repeated setup note on the route's returned card");
   assert.match(body2, /cut from `main` — a landing branch/, `the reply is briefed like the first turn:\n${body2}`);
   assert.match(body2, /`git push -u origin HEAD`/, "with the project's own remote, not a placeholder");
   assert.match(body2, /Remote writes are allowed for this project, so a push is not asked about/, "and the project's policy, not the global one");
