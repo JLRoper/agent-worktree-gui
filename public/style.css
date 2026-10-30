@@ -185,8 +185,20 @@ button.primary:hover { background: #24466a; }
 .settings-head { display: flex; align-items: center; gap: 8px; flex: none; margin: 0; padding: 12px 14px 9px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .settings-group { padding-top: 10px; }
 .settings-group + .settings-group { margin-top: 10px; border-top: 1px solid var(--line); }
-.settings-group-head { margin: 0 0 8px; font: 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dimmer); cursor: help; }
-.settings-group-head:hover { color: var(--dim); }
+/* A group folds from its heading. The head is the control (role="button" in the markup): the caret says which way
+   it points, the hover lights the whole head rather than only the word so the target is the row, and `.folded` on
+   the group hides every row of it — the head is then the group's only child. */
+.settings-group-head { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; padding: 3px 5px; border-radius: 5px; font: 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dimmer); cursor: pointer; user-select: none; }
+.settings-group-head::before { content: "▾"; flex: none; font-size: 9px; line-height: 1; color: #46505f; }
+.settings-group.folded .settings-group-head::before { content: "▸"; }
+.settings-group-head:hover { color: var(--dim); background: var(--surface); }
+.settings-group-head:hover::before { color: var(--dim); }
+.settings-group-head:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
+.settings-group.folded > :not(.settings-group-head) { display: none; }
+.settings-group.folded { padding-top: 6px; padding-bottom: 2px; }
+.settings-group.folded .settings-group-head { margin-bottom: 0; }
+/* The read-now pair: one row, two buttons, pushed right like every other row's control. */
+.settings-act { margin-left: auto; display: flex; gap: 6px; }
 .settings-info { margin-left: 2px; font-size: 10px; color: #46505f; cursor: help; }
 .settings-row:hover .settings-info { color: var(--dim); }
 .settings-head h2 { margin: 0; font-size: 13px; font-family: var(--mono); }
