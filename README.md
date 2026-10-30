@@ -183,6 +183,14 @@ an export of 0.46.8 it is red: one `fitColumns()` takes the following console fr
 measurements in the window move a console by 604-1139 px. `test/console-column-fit.test.js` is the half that needs no
 browser.
 
+`node tools/measure-stream-jitter.mjs` asks the console question while the tokens are still arriving, per second,
+which is when a reader is actually watching: a sandbox panel and a stub Runs API play a generated reply, a `state.db`
+of its own grows the reasoning under it, and headed Chromium in a profile of its own counts how many console rows were
+REPLACED versus rewritten in place (every row is tagged before a repaint and counted after it), how many of the
+reasoning pane's rows survived its poll, scrollTop jumps with no input behind them, selection survival, rAF pacing,
+long tasks and DOM mutations — then repeats the whole measurement with the stream paused and compares. `--mode
+stream|think` picks the renderer (`docs/jitter-streaming.md`).
+
 `node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
 `--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
 ancestry cannot see the merge: the repository ruleset requires linear history, so a PR lands as a squash or a
