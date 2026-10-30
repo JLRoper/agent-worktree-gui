@@ -2748,7 +2748,9 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
   /* The floor is the height the shell needs: head + tabs + card head + composer. Below that the composer
      could not be on screen at all, and a chat whose box you cannot reach is not a smaller version of this one. */
   width: 480px; height: min(72vh, 780px); min-width: 340px; min-height: 320px;
-  max-width: calc(100vw - 24px); max-height: calc(100vh - 90px);
+  /* No `max-width`/`max-height` here: the drag code clamps against the viewport, and a second, smaller cap in the
+     stylesheet silently swallowed the last ~80px of a downward drag — the frame stopped at 710px while the pointer
+     kept going, so the grip walked away from the corner being held. The running page has the numbers. */
   display: flex; flex-direction: column;
   background: var(--panel); border: 1px solid #33415a; border-radius: 10px;
   box-shadow: 0 18px 48px #000b; overflow: hidden;
@@ -2764,7 +2766,7 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
   border: 0; border-radius: 0; box-shadow: none; z-index: 200;
 }
 .assistant.as-full .as-head { cursor: default; }
-.assistant.as-full .as-resize { display: none; }
+.assistant.as-full .as-grips { display: none; }
 /* The shell rows never share the panel's height with the transcript: they keep their natural height and the
    body takes what is left, at every panel size. */
 .assistant .as-head, .assistant .as-tabs { flex: none; }
@@ -2788,8 +2790,7 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 #btn-as-pin:hover { color: var(--text); filter: none; opacity: 1; }
 #btn-as-pin.is-on { color: #c8a6ff; border-color: #55407a; background: #2a2044; filter: none; opacity: 1; }
 /* Maximize sits between the pin and the ✕, the same size and the same quiet colour: `⤢` to fill the window,
-   `⤡` to put the float back. It is the explicit control the resize grip never was — the grip can only grow the
-   float toward the bottom-right corner, so a right-anchored panel tops out ~480px wide on a 1920 screen. */
+   `⤡` to put the float back. The explicit control beside the eight resize grabs. */
 #btn-as-max { border: 1px solid transparent; background: none; color: var(--dim); font: 13px/1 var(--ui); cursor: pointer; padding: 1px 5px; border-radius: 5px; }
 #btn-as-max:hover { color: var(--text); border-color: var(--line); }
 #btn-as-max.is-on { color: #8fb8ff; border-color: #2b3b52; background: #1b2432; }
@@ -2935,8 +2936,22 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-journal div { padding: 2px 0; border-bottom: 1px solid #1c222b; }
 .as-journal .k { color: #8fb8ff; }
 .as-journal .t { color: var(--dimmer); }
-.as-resize {
-  position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize;
+/* Eight grabs: a 6px band along each edge and a 16px square in each corner, each with the cursor the edge means.
+   `touch-action: none` is what lets a finger drag them instead of scrolling the panel under it. */
+.as-grip { position: absolute; z-index: 5; touch-action: none; }
+.as-grip[data-dir="n"], .as-grip[data-dir="s"] { left: 18px; right: 18px; height: 6px; cursor: ns-resize; }
+.as-grip[data-dir="n"] { top: 0; }
+.as-grip[data-dir="s"] { bottom: 0; }
+.as-grip[data-dir="w"], .as-grip[data-dir="e"] { top: 18px; bottom: 18px; width: 6px; cursor: ew-resize; }
+.as-grip[data-dir="w"] { left: 0; }
+.as-grip[data-dir="e"] { right: 0; }
+.as-grip[data-dir="nw"], .as-grip[data-dir="ne"], .as-grip[data-dir="sw"], .as-grip[data-dir="se"] { width: 16px; height: 16px; }
+.as-grip[data-dir="nw"] { top: 0; left: 0; cursor: nwse-resize; }
+.as-grip[data-dir="se"] { bottom: 0; right: 0; cursor: nwse-resize; }
+.as-grip[data-dir="ne"] { top: 0; right: 0; cursor: nesw-resize; }
+.as-grip[data-dir="sw"] { bottom: 0; left: 0; cursor: nesw-resize; }
+/* The bottom-right corner keeps the hatch the old grip wore, so the familiar spot still reads as "size me". */
+.as-grip[data-dir="se"] {
   background: linear-gradient(135deg, transparent 55%, #33415a 55%, #33415a 62%, transparent 62%, transparent 72%, #33415a 72%, #33415a 79%, transparent 79%);
 }
 
