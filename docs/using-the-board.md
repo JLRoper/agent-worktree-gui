@@ -221,6 +221,7 @@ Rows are the trees this project **owns**: its own checkout and the worktrees ins
 | **Dirty** | Modified files, and `+N?` untracked, or `clean`. |
 | **Life / next read** | Time since anything last said this worktree is alive, the evidence chips, and a ring that fills toward the next scheduled read. Click the ring to read the row **now**. |
 | **Verdict** | See below. |
+| ＋ | Cut a **child worktree** from THIS row's branch: a new tree on a new branch cut from it, on its own row, which the child's `UNMERGED` chip then rolls back into this branch. Asks for an optional name (empty = the branch's last word) and always keeps its own `-<hex6>` tag. Not offered on the project's own checkout (a child of the landing branch has nothing to roll into) or on a detached row. Starts nothing and pushes nothing. See [Cutting a child worktree off this branch](#cutting-a-child-worktree-off-this-branch). |
 | ⟳ | Reconcile this one worktree now: re-read its git state, then its TODO list and its description against what the tree now holds (see **Reconciling one row** below). Not offered on the project's own checkout row. |
 | ✕ | Remove the worktree (not offered on the project's own checkout row). |
 
@@ -292,6 +293,47 @@ else's work. A row that already has a merge agent working it draws a disabled `M
 names the agent. The route (`POST /api/worktree/merge {project, path}`) refuses all of those cases again from git, so
 a board that is a scan behind cannot start one by accident; `{dryRun: true}` returns the prompt without starting
 anything, and the script itself is `lib/merge-prompt.js`.
+
+### Cutting a child worktree off this branch
+
+The **＋** at the right-hand end of a row (left of the ⟳ and the ✕) cuts a new worktree **from that row's branch**, so
+the panel can make the parent a roll-up needs. One press asks for a name — optional, empty means "name it after the
+branch's last word" — and then:
+
+- `git worktree add -b wtgui/<slug>-<tag> .worktrees/<slug>-<tag> <the row's branch>` in the project's checkout, with
+  the start ref **stated**: the cut is from the branch, never from the checkout's HEAD;
+- the cut is written down where the roll-up reads a parent from (`logs/parents.json`: `parentSource: "cut"` and the
+  tip the parent resolved to at that moment), and the name is settled in the naming ledger, so no later run's title
+  renames it;
+- the tree is boarded at once — it is a row with its own ＋ / ⟳ / ✕ in the same breath as the banner — and **nothing
+  is started in it, nothing is pushed, and the parent's tree is not touched**.
+
+It is not offered on the project's own checkout (a child of the landing branch has nothing to roll into — use the
+New-agent card for that), on a detached row, or on a branch the panel calls main. A second press is a second child:
+every cut carries its own six-hex tag. Route: `POST /api/worktree/child {project, path, name?}`.
+
+### Rolling a child into its parent
+
+The `UNMERGED` chooser's first outcome. It merges the child into **the branch it was cut from**, inside that branch's
+own worktree, and it is the one landing in the panel that writes neither main nor the remote:
+
+- `git merge --ff-only <child>` in the parent's worktree — the normal case for a child that stayed current, leaving
+  **no merge commit**; if the parent has moved on, `git merge --no-edit <child>`, a real merge commit;
+- a **conflict is an abort**: the parent's tree is put back exactly as it was and the banner names the merge that
+  conflicted. Nothing is half-merged and nothing is reported as rolled;
+- the parent's tree must be **clean** and **on its own branch**, the parent must be a **recorded cut** (never a guess),
+  never a main branch, and it must be **checked out in a worktree** — otherwise the refusal says which of those failed;
+- two rolls into one parent are serialised, so the second waits for the first.
+
+What it does **not** do: no agent, no push, no PR, no delete, and no rewrite of the child — the child's tree, branch
+and tip stay exactly as they were. Afterwards the parent's row moves to the new tip, but the child's row still reads
+`UNMERGED`: the verdict counts it against `origin/main`, and the roll only put its work on the parent. The steward's
+plan (`POST /api/steward`, which writes a plan and acts on nothing) then reads the rolled child as landed in its
+parent and would offer to delete its tree.
+
+Route: `POST /api/worktree/rollup {project, path, parent?, confirm}` — without `confirm` it answers **428** with the
+parent it would write into and rolls nothing. The worked example, with a fast-forward, a conflicted roll and a merge
+commit from one test instance, is [child-worktrees-and-rollups.md](child-worktrees-and-rollups.md).
 
 ### Rebasing a branch onto its parent
 

@@ -37,6 +37,7 @@ import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { REFRESH_LINES_SHOWN, RefreshJournal, liveRunIn, mergeDelta, normaliseRefreshAgent, parseCommitFiles, todoProposals } from "./lib/refresh-row.js";
 import { ParentBook } from "./lib/parents.js";
+import { cutChildWorktree } from "./lib/child-worktree.js";
 import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees, writePlan } from "./lib/steward.js";
 import { RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
@@ -2346,6 +2347,83 @@ const server = createServer(async (req, res) => {
         broadcast({ type: "snapshot", data: snapshot() });
       }
       return sendJson(res, 200, result);
+    }
+
+    // ---- cutting a child worktree off a row's own branch --------------------------------------------------------
+    // The roll-up's other half, and the reason it exists: `rollUp` merges a child into the branch it was cut from,
+    // inside THAT branch's worktree — so a parent which is a worktree branch has to exist. The only cut the panel
+    // had (`jobs.makeWorktree`) starts from the project checkout's HEAD, i.e. it makes children of main, and main is
+    // the one target a roll-up may never use. This cuts from the ROW's branch instead, and writes the cut down in
+    // both books a parent is read from, so the child is `parentSource: "cut"` — the only source a roll may act on.
+    //
+    // One press, one tree: nothing is started in it, no branch is pushed, and the row's own work is not touched
+    // (`git worktree add` writes a new index and a new branch, never the parent's files). A name is optional; the
+    // panel derives one from the parent's branch and always keeps its own -<hex6> tag, which is every later
+    // rename's identity.
+    if (route === "/api/worktree/child" && req.method === "POST") {
+      if (!authorised(req)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const project = (registry.projects || []).find((p) => p.name === String(body.project || "").trim()) || null;
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${body.project || "(none)"}` });
+      const row = store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(body.path)) || null;
+      if (!row) return sendJson(res, 404, { error: `no row for ${body.path || "(no path)"} in ${project.name}` });
+      // The project's own checkout is a row, but it is not a worktree and its branch is the landing branch a child
+      // would have no roll-up to arrive at. The button is not drawn there either; this is the same answer for a
+      // script.
+      if (normPathKey(row.path) === normPathKey(project.path)) {
+        return sendJson(res, 409, { error: `refused: ${project.path} is the project's own checkout, not a worktree — start that work from the New-agent card` });
+      }
+      if (!row.branch) return sendJson(res, 409, { error: `refused: ${row.path} is on a detached HEAD, so there is no branch to cut from` });
+      const out = await cutChildWorktree({
+        repoDir: project.path,
+        parentBranch: row.branch,
+        mainBranch: project.mainBranch || null,
+        name: body.name ? String(body.name).slice(0, 60) : "",
+      });
+      if (!out.ok) return sendJson(res, 409, { error: out.error, parent: row.branch, path: row.path });
+      // The two records a parent is read from, and the naming ledger's one line. Nothing here may fail the cut: the
+      // tree exists and git's answer is the truth; a book that cannot be read back is a child shown as a guess
+      // rather than a child that was never made, which is the safe direction.
+      try {
+        parents.record({
+          project: project.name,
+          branch: out.branch,
+          path: out.path,
+          startRef: row.branch,
+          startSha: out.parentSha,
+          by: `the reader (＋ a child of ${row.branch} from its row)`,
+        });
+      } catch (e) {
+        log(`child: ${out.branch} was cut but its parent record failed (${String((e && e.message) || e)})`);
+      }
+      try {
+        jobs.rememberParent(out.path, out.branch, row.branch);
+      } catch {
+        /* the landing paragraph falls back to git's upstream for this tree; nothing about the cut depends on it */
+      }
+      try {
+        treeNames.settle(treeKey({ project: project.name, path: out.path, branch: out.branch }), {
+          name: out.name,
+          dir: out.path,
+          branch: out.branch,
+          tag: out.tag,
+          by: `the reader (＋ a child of ${row.branch})`,
+          how: `cut from ${row.branch} by the row's ＋ — this name is the one it was created with`,
+          at: new Date().toISOString(),
+        });
+      } catch {
+        /* the ledger is a guard: an unrecorded name is one a later run's title may replace, never a failed cut */
+      }
+      // Boarded now rather than on the next discovery pass (slowSeconds is minutes away), so the child is a row the
+      // reader can press straight away. Same door a spawn's tree comes through.
+      await scheduler.adoptWorktree(project.name, out.path).catch(() => false);
+      log(`child: cut ${out.branch} from ${row.branch} at ${out.path} (${project.name})`);
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, {
+        ...out,
+        project: project.name,
+        row: store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(out.path)) || null,
+      });
     }
 
     // ---- rolling one child into its parent ---------------------------------------------------------------------
