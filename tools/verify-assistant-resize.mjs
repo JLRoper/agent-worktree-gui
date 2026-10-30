@@ -196,6 +196,65 @@ async function main() {
       }
     }, { viewport: VIEW });
 
+    // ---- 1b. a click on a grab is not a gesture: no movement, no memory, nothing opened
+    const shareClick = await withBrowser(async ({ page }) => {
+      await openPage(page, panel.base, { selector: "#btn-assistant" });
+      await page.evaluate(() => {
+        localStorage.removeItem("wm.assistantRect");
+        localStorage.setItem("wm.assistantOpen", "1");
+      });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await page.waitForSelector("#as-grips", { state: "attached", timeout: 30_000 });
+      await page.waitForTimeout(600);
+      await page.evaluate(() => window.__assistantToggle(true));
+      await page.waitForTimeout(250);
+
+      const before = await frame(page);
+      const storedBefore = await page.evaluate(() => localStorage.getItem("wm.assistantRect"));
+      check(storedBefore === null, "click case: nothing is remembered before the press", String(storedBefore));
+
+      // press on the corner centre, hold, release: zero pointer movement
+      const b = await gripBox(page, "se");
+      const sx = b.x + b.width / 2, sy = b.y + b.height / 2;
+      await page.mouse.move(sx, sy);
+      await page.waitForTimeout(150);
+      await page.mouse.down();
+      await page.waitForTimeout(200);
+      const held = await frame(page);
+      const heldClasses = await page.evaluate(() => document.getElementById("assistant").className);
+      await page.mouse.up();
+      await page.waitForTimeout(500);
+      const after = await frame(page);
+      const storedAfter = await page.evaluate(() => localStorage.getItem("wm.assistantRect"));
+
+      check(still(delta(before, held)) && still(delta(before, after)),
+        "click case: a zero-movement click does not resize or jump the frame",
+        `held ${JSON.stringify(delta(before, held))} after ${JSON.stringify(delta(before, after))}`);
+      check(!/is-dragging/.test(heldClasses),
+        "click case: a zero-movement click does not start a drag", heldClasses);
+      check(storedAfter === null,
+        "click case: a zero-movement click does not persist a rect", String(storedAfter));
+
+      // with every turn folded, a click must not open the newest turn either
+      await page.evaluate(() => {
+        for (const head of document.querySelectorAll("#as-chat .turn:not(.folded) > .turn-head")) head.click();
+      });
+      await page.waitForTimeout(900);
+      const foldedBefore = await page.evaluate(
+        () => document.querySelectorAll("#as-chat > .job > .job-body > .turn.folded").length);
+      const b2 = await gripBox(page, "se");
+      await page.mouse.move(b2.x + b2.width / 2, b2.y + b2.height / 2);
+      await page.mouse.down();
+      await page.waitForTimeout(150);
+      await page.mouse.up();
+      await page.waitForTimeout(600);
+      const foldedAfter = await page.evaluate(
+        () => document.querySelectorAll("#as-chat > .job > .job-body > .turn.folded").length);
+      check(foldedAfter === foldedBefore,
+        "click case: a click with every turn folded opens nothing",
+        `${foldedBefore} folded -> ${foldedAfter}`);
+    }, { viewport: VIEW });
+
     // ---- 2. the scrollbar input: a visual viewport 11px narrower than the layout viewport must not move the frame
     const scrollbarShim = () => {
       Object.defineProperty(window, "visualViewport", {

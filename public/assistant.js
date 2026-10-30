@@ -1849,7 +1849,15 @@
     const MIN_W = 340;
     const MIN_H = 320;
 
+    // A press that never travels this far is a click, not a drag. Clicking a grab is what
+    // readers do to focus or dismiss something, and it must leave the frame exactly as it was.
+    const DRAG_THRESHOLD = 3;
+
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
+
+    // The press that may still become a gesture. It is only recorded, never applied:
+    // no pinned geometry and no console opened until the pointer actually travels.
+    let pressState = null;
 
     // The frame is sized against the LAYOUT viewport (see `viewportBox`), never against `visualViewport`: the visual
     // one excludes the classic scrollbar, so clamping to it snapped a frame parked on the layout viewport's edge
@@ -1874,12 +1882,9 @@
       if (e.button !== 0) return;
       if (state.assistantFull) return; // maximized, the frame is the viewport: Esc or a double-click restores
       if (mode === "move" && e.target.closest("button,input,select,textarea")) return;
-      // Growing the panel hands the room to a turn's console, so a resize with everything folded opens the newest
-      // turn first: a folded turn has no console on the page for the room to land in.
-      if (mode === "size") openNewestTurn();
-      const r = pinFrame();
-      dragState = { mode, dir, px: e.clientX, py: e.clientY, x: r.left, y: r.top, w: r.width, h: r.height };
-      el.classList.add("is-dragging");
+      // Record the press only. The first move that actually travels pins the geometry
+      // and opens the newest turn; a plain click leaves all of that untouched.
+      pressState = { mode, dir, captureEl, px: e.clientX, py: e.clientY };
       // Hold the pointer for the length of the gesture: without capture it leaves the float (and the window) and the
       // moves stop arriving, so a release out there never ends the drag we started in here.
       try {
@@ -1890,8 +1895,31 @@
       e.preventDefault();
     };
 
+    // Promote the pending press into a gesture the first time it travels DRAG_THRESHOLD.
+    // The origin stays the press point, so the edge follows the pointer with no dead band.
+    const beginGesture = () => {
+      const p = pressState;
+      pressState = null;
+      if (!p) return false;
+      const r = pinFrame();
+      dragState = { mode: p.mode, dir: p.dir, px: p.px, py: p.py, x: r.left, y: r.top, w: r.width, h: r.height };
+      el.classList.add("is-dragging");
+      // Growing the panel hands the room to a turn's console, so a resize with everything folded opens the newest
+      // turn first: a folded turn has no console on the page for the room to land in.
+      if (p.mode === "size") openNewestTurn();
+      return true;
+    };
+
     const onMove = (e) => {
-      if (!dragState) return;
+      // Nothing happens until the press travels: the first real move starts the gesture.
+      if (!dragState) {
+        const p = pressState;
+        if (!p) return;
+        const mdx = e.clientX - p.px;
+        const mdy = e.clientY - p.py;
+        if (mdx * mdx + mdy * mdy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
+        if (!beginGesture()) return;
+      }
       const d = dragState;
       const { vw, vh } = viewport();
       const dx = e.clientX - d.px;
@@ -1955,7 +1983,8 @@
     };
 
     const onUp = () => {
-      if (!dragState) return;
+      pressState = null;
+      if (!dragState) return; // a click: no gesture started, so nothing is remembered
       dragState = null;
       el.classList.remove("is-dragging");
       const r = currentRect();
