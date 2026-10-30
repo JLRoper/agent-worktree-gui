@@ -38,6 +38,10 @@
 //       the reader the same line, at the same place, still scrolled away. This is the check the deliverable phase
 //       makes by proxy (the reply box's top); here it names the line itself. A rebuild that lands on another line,
 //       or throws the console back to the bottom, fails it.
+//   (7) 🌊 console (the `stream` scenario): every sweep of the console PATCHES it — the transcript above its newest
+//       rows keeps its own nodes. A sweep that replaces the child list leaves 0 of them, which is what this recorded
+//       before `paintStreamConsole` was changed to patch the console in place (a reader's selection goes with those
+//       rows, and so does the only thing that holds their scroll: the nodes themselves).
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -328,7 +332,7 @@ function pageInit({ storage, thread }) {
   } catch {
     /* storage may be unavailable */
   }
-  const R = { t0: performance.now(), epoch0: performance.timeOrigin + performance.now(), writes: [], rebuilds: [], tools: [], lines: [], draws: [], dups: [], samples: [], attrFlips: 0, attrTargets: [], readings: [] };
+  const R = { t0: performance.now(), epoch0: performance.timeOrigin + performance.now(), writes: [], rebuilds: [], sweeps: [], tools: [], lines: [], draws: [], dups: [], samples: [], attrFlips: 0, attrTargets: [], readings: [] };
   const P = { armed: false, frozen: false, minRows: 6, queue: [] };
   window.__rec = R;
   window.__pair = P;
@@ -533,10 +537,25 @@ function pageInit({ storage, thread }) {
     if (wrap("paintStreamConsole", (o) => function (...a) {
       // The sweep repaints a console from the transcript: it must come out with the tool calls the live path had drawn.
       const toolRows = () => Object.fromEntries([...document.querySelectorAll("pre.job-out")].map((c) => [c.dataset.out, c.querySelectorAll(".jl-tool").length]));
+      // The sweep is a POLL, and a poll must PATCH the console it redraws: every row whose words did not move keeps its
+      // own NODE. Stamping the target's rows and counting the survivors is how that is read off the wire — a rewrite
+      // (one innerHTML assignment) leaves 0, which is what this recorded before the console was patched in place.
+      const target = [...document.querySelectorAll("pre.job-out")].find((el) => el.dataset.out === `${a[0] && a[0].id}${a[1] || ""}`);
+      // The TRANSCRIPT above the last few rows is what a sweep must never touch: the newest rows are legitimately
+      // rewritten (the pacer's prefix grows, a burst's tally moves), so they are not part of the measurement. A
+      // wholesale rewrite leaves 0 of the history rows; a patch leaves all of them.
+      const rows = target ? [...target.children] : [];
+      const history = rows.slice(0, Math.max(0, rows.length - 3));
+      history.forEach((n, i) => (n.__sweepRow = i));
+      const before = rows.length;
       const drawn = toolRows();
       const r = o.apply(this, a);
       const repainted = toolRows();
       for (const id of Object.keys(drawn)) if (id in repainted && repainted[id] !== drawn[id]) R.tools.push({ t: now(), out: id, live: drawn[id], rebuilt: repainted[id], via: "sweep" });
+      if (target && history.length) {
+        const kept = history.filter((n) => n.isConnected && target.contains(n)).length;
+        R.sweeps.push({ t: now(), out: target.dataset.out, kept, stamped: history.length, total: target.children.length, before });
+      }
       if (liveJob()) onRepaint("the thinking sweep");
       return r;
     })) ok.push("paintStreamConsole");
@@ -547,7 +566,7 @@ function pageInit({ storage, thread }) {
 // ---- one scenario ----------------------------------------------------------------------------------------------
 const SCENARIOS = [
   { name: "deliverables", title: "condensed console, deliverables arrive mid-run", storage: {}, files: true, restorer: "a card rebuild: a new deliverable changes conversationSignature, renderConversation replaces the card" },
-  { name: "stream", title: "🌊 one-stream console", storage: { [`wtgui.stream.${THREAD}`]: "1" }, files: false, restorer: "the thinking sweep: sweepThinking → loadThinking → paintThink → paintStreamConsole rewrites the console" },
+  { name: "stream", title: "🌊 one-stream console", storage: { [`wtgui.stream.${THREAD}`]: "1" }, files: false, restorer: "the thinking sweep: sweepThinking → loadThinking → paintThink → paintStreamConsole redraws the console row by row (it patched it in place; it used to replace the whole child list)" },
   // The two repainters the deliverable phase reaches only through the signature: an approval landing mid-turn and
   // the turn flipping running → done, both with the console scrolled away from the bottom, both rebuilt in place.
   { name: "repainters", title: "condensed console, an approval and a status flip land on a parked console", storage: {}, files: false, parked: true, restorer: "a card rebuild: an approval (runApprovals) and a status flip (turns) each change conversationSignature" },
@@ -684,7 +703,12 @@ function readTurn(R, jobId) {
   const wipes = R.writes
     .filter((w) => w.out === jobId && /drawJobLine/.test(w.stack) && w.kidsBefore >= 1 && !/^waiting for output/.test(w.firstText))
     .map((w) => ({ t: r1(w.t), kids: w.kidsBefore, lids: w.lidsBefore, firstClass: w.firstClass, firstText: w.firstText, stack: w.stack.split(" < ").slice(0, 3).join(" < ") }));
-  const sweeps = R.writes.filter((w) => w.out === jobId && /paintStreamConsole/.test(w.stack)).map((w) => ({ t: r1(w.t), kind: "the thinking sweep", kids: w.kidsBefore }));
+  // A sweep is a CALL of paintStreamConsole that actually redrew a console with rows in it — not, since the console is
+  // patched in place, a wholesale write: the innerHTML setter no longer sees one (that is the fix), and counting only
+  // its writes would have quietly turned this scenario's "the repainters fired" guard into a green check on nothing.
+  const sweeps = (R.sweeps || [])
+    .filter((w) => w.out === jobId)
+    .map((w) => ({ t: r1(w.t), kind: "the thinking sweep", kids: w.before, kept: w.kept, stamped: w.stamped, total: w.total }));
   const rebuilds = R.rebuilds.filter((b) => b.job === jobId).map((b) => ({ t: r1(b.t), kind: "a card rebuild" }));
   const bounces = [];
   const shrinks = [];
@@ -798,7 +822,7 @@ async function capture() {
     const measured = await runScenario(pw, sc, { pair: false });
     const paired = argv.includes("--no-pair") ? { paired: null, shots: [], errors: [] } : await runScenario(pw, sc, { pair: true });
     const turns = [readTurn(measured.R, measured.jobs.turn1), readTurn(measured.R, measured.jobs.turn2)];
-    if (argv.includes("--raw")) writeFileSync(path.join(REPORT_DIR, `console-flicker-${LABEL}-${sc.name}-raw.json`), JSON.stringify({ samples: measured.R.samples, writes: measured.R.writes, rebuilds: measured.R.rebuilds, lines: measured.R.lines, draws: measured.R.draws, dups: measured.R.dups, jobs: measured.jobs }));
+    if (argv.includes("--raw")) writeFileSync(path.join(REPORT_DIR, `console-flicker-${LABEL}-${sc.name}-raw.json`), JSON.stringify({ samples: measured.R.samples, writes: measured.R.writes, rebuilds: measured.R.rebuilds, sweeps: measured.R.sweeps, lines: measured.R.lines, draws: measured.R.draws, dups: measured.R.dups, jobs: measured.jobs }));
     result.scenarios.push({
       name: sc.name, title: sc.title, restorer: sc.restorer, turnStates: [measured.turn1, measured.turn2], turns, errors: measured.errors, instrumented: measured.instrumented,
       attrFlips: measured.R.attrFlips, attrTargets: measured.R.attrTargets, toolMismatches: measured.R.tools, appends: measured.R.lines.length, paired: paired.paired, shots: paired.shots, pairedErrors: paired.errors,
@@ -820,6 +844,20 @@ async function capture() {
     // at least three repaints, and that threshold stays as it was.
     if (sc.parked) check(`${sc.name}: both repainters fired`, restores.length >= 2, true);
     else check(`${sc.name}: the repainters fired at least 3 times`, restores.length >= 3, true);
+    // The 🌊 console is the only one a poll redraws: every one of those redraws must PATCH it. A row whose words did
+    // not move has to still be the same node, or the reader's selection (and the scroll that hangs off those nodes)
+    // goes with it.
+    if (sc.name === "stream") {
+      const polls = restores.filter((w) => w.kind === "the thinking sweep" && w.stamped);
+      const replaced = polls.filter((w) => w.kept < w.stamped);
+      check(
+        `${sc.name}: every sweep patches the console (the transcript above its newest rows keeps its nodes)`,
+        replaced.length,
+        0,
+        `${polls.length} sweeps; ${replaced.slice(0, 3).map((w) => `@${w.t}ms kept ${w.kept}/${w.stamped} history rows`).join("; ")}`,
+      );
+      check(`${sc.name}: a sweep really ran with transcript above its tail, so that check measured something`, polls.length >= 2, true, `${polls.length} sweeps with history rows`);
+    }
     check(`${sc.name}: no page errors`, measured.errors.length + paired.errors.length, 0);
     if (sc.parked) {
       const all = measured.R.readings || [];
@@ -908,7 +946,7 @@ function compose() {
     push(`| a line drawn twice (max duplicate line ids) | ${sc} | ${Math.max(...bs.turns.map((t) => t.dupMax))} | ${Math.max(...af.turns.map((t) => t.dupMax))} |`);
     push(`| a repaint disagrees with the live path about how many tool calls the console holds | ${sc} | ${(bs.toolMismatches || []).length} | ${(af.toolMismatches || []).length} |`);
   }
-  push("", `Checks passed: before ${before.checks.filter((c) => c.ok).length}/${before.checks.length}, after ${after.checks.filter((c) => c.ok).length}/${after.checks.length}. The repaints still fire after the fix, which is the point: they now rewrite what is already there instead of arming a wipe.`, "");
+  push("", `Checks passed: before ${before.checks.filter((c) => c.ok).length}/${before.checks.length}, after ${after.checks.filter((c) => c.ok).length}/${after.checks.length}. The repaints still fire after the fix, which is the point: they now draw over what is already there instead of arming a wipe — and in 🌊 mode the sweep PATCHES the console, so the rows it already drew keep their nodes instead of being replaced wholesale.`, "");
   for (const s of before.scenarios) {
     const t = s.turns[1];
     const af = after.scenarios.find((x) => x.name === s.name);

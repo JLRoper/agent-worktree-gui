@@ -6407,12 +6407,100 @@ function stickThinkBody(body) {
 
 // In the single-stream mode there is no block to repaint: the blocks are lines of the console itself, so a read that
 // lands mid-turn redraws that console, keeping the reader where they were (the same rule as the run's own appends).
+//
+// The redraw is a PATCH, not a replacement. Written as one `innerHTML` assignment it threw away every row of a live
+// console — and the reader's text selection with it — on every reasoning re-read (~1.2 s while a turn runs), leaving
+// the scroll to whatever the browser did with a box whose children had just been replaced: the same fault
+// `Let a card pick its model, and keep the console still while it runs` cured one level up for the condensed console
+// (a fresh <pre> at scrollTop 0, several times a second), still open one renderer down. So: a row whose words did not
+// move keeps its NODE, a new row is inserted where it belongs, a row the turn's window has dropped is removed, and
+// the reader's place goes back where it was. A body that would drop rows from the MIDDLE or the tail — a failed store
+// read, a shorter answer mid-turn — draws nothing at all, the same rule `loadThinking` follows for the blocks it has.
+const streamRowKey = (n) => {
+  const lid = n?.dataset?.lid;
+  if (lid) return `l:${lid}`;
+  const grp = n?.dataset?.tgrp;
+  return grp ? `g:${grp}` : "";
+};
+
+function syncStreamConsole(out, body, stick) {
+  const holder = document.createElement("div");
+  holder.innerHTML = body;
+  const next = [...holder.children];
+  const before = [...out.children];
+  // Where the reader is: the first row with any part of itself inside the box, and how far into the box it starts.
+  // A poll that grows a row above it must not slide the reader's line down the box.
+  const keep = (() => {
+    if (stick) return null;
+    const box = out.getBoundingClientRect();
+    for (const n of before) {
+      const r = n.getBoundingClientRect();
+      if (r.bottom > box.top + 1) return { key: streamRowKey(n), off: Math.round(r.top - box.top) };
+    }
+    return null;
+  })();
+  // A shorter body is only ever a WINDOW TRIM: `windowLines`/`slice(-300)` and `MAX_BLOCKS` drop rows off the TOP.
+  // Rows that vanish from the middle or the tail are a read this console should not draw (a failed store read, a
+  // shorter answer mid-turn), and drawing it is what collapses the box and pulls everything under it up the page.
+  // So: every row below the first one the new body still names must still be named by it.
+  const nextKeys = new Set(next.map(streamRowKey).filter(Boolean));
+  if (next.length < before.length) {
+    const firstNext = next.map(streamRowKey).find(Boolean) || "";
+    const keyed = before.map((n) => streamRowKey(n)).filter(Boolean);
+    const from = Math.max(0, keyed.indexOf(firstNext));
+    if (keyed.slice(from).some((k) => !nextKeys.has(k))) return false;
+  }
+  if (!before.length) {
+    out.replaceChildren(...next);
+  } else {
+    const byKey = new Map();
+    for (const n of before) {
+      const k = streamRowKey(n);
+      if (k && !byKey.has(k)) byKey.set(k, n);
+    }
+    let cursor = out.firstElementChild;
+    for (const fresh of next) {
+      const k = streamRowKey(fresh);
+      const have = k ? byKey.get(k) : null;
+      if (k) byKey.delete(k);
+      let place = have;
+      if (have) {
+        // The same row in the same place: only its words can have moved, so it is replaced only when they did.
+        if (have !== cursor) out.insertBefore(have, cursor);
+        if (!have.isEqualNode(fresh)) {
+          have.replaceWith(fresh);
+          place = fresh;
+        }
+      } else {
+        out.insertBefore(fresh, cursor);
+        place = fresh;
+      }
+      cursor = place.nextElementSibling;
+    }
+    // Whatever the new body does not name is out of this turn's window. It is all below the loop's cursor, so
+    // removing it moves nothing the reader is looking at.
+    while (cursor) {
+      const gone = cursor;
+      cursor = cursor.nextElementSibling;
+      gone.remove();
+    }
+  }
+  if (keep?.key) {
+    const again = [...out.children].find((n) => streamRowKey(n) === keep.key);
+    if (again) {
+      const off = Math.round(again.getBoundingClientRect().top - out.getBoundingClientRect().top);
+      if (Math.abs(off - keep.off) >= 2) setScroll(out, out.scrollTop + (off - keep.off));
+    }
+  }
+  return true;
+}
+
 function paintStreamConsole(turn, copy = "") {
   const out = [...document.querySelectorAll("pre.job-out")].find((el) => el.dataset.out === `${turn.id}${copy}`);
   if (!out) return false;
   const all = jobLines(turn.id).filter((l) => !isBookkeeping(l));
   const stick = consolePinned(`${turn.id}${copy}`) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
-  out.innerHTML = streamBodyHtml(turn, all.slice(-300), all.length > 300);
+  syncStreamConsole(out, streamBodyHtml(turn, all.slice(-300), all.length > 300), stick);
   if (stick) setScroll(out, out.scrollHeight);
   paintToBottom(out);
   return true;

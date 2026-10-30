@@ -1,4 +1,5 @@
-// What the NORMAL console does when the card is repainted and ONE more line arrives.
+// What a console does when the card is repainted and ONE more line arrives — in the condensed renderer and in the
+// one-stream (🌊) one.
 //
 // The reasoning block is polled and redrawn; the console is the other half of the same card and it has its own way
 // of looking like it flickers: `drawJobLine` used to clear the console whenever its first child was a `.jl-dim` line,
@@ -8,10 +9,20 @@
 // riding up and down. That is fixed (public/app.js drawJobLine clears only `[data-wait]`), and this measures whether
 // it stays fixed on REAL content rather than on a fixture.
 //
+// `--stream` measures the SAME claims one renderer down: in a 🌊 card the reasoning is not a block above the console,
+// it is lines of the console, and that console is POLLED — `loadThinking` → `paintThink` → `paintStreamConsole` on
+// every reasoning re-read. Written as one `innerHTML` assignment that took the whole console with it, several times a
+// second. The stream scenario adds what the condensed one cannot see: the rows that did not change must keep their
+// NODES (a selection inside the console is the reader's), and a poll that would lose the NEWEST rows must draw nothing.
+//
 //   node tools/measure-console-live.mjs                    # this checkout, newest real run with tool output
+//   node tools/measure-console-live.mjs --stream           # the same, drawn as ONE stream with its real reasoning
 //   node tools/measure-console-live.mjs --root <checkout>  # measure another checkout (e.g. a `git archive` export)
 //   node tools/measure-console-live.mjs --run <id>         # name the run to draw
 //   node tools/measure-console-live.mjs --jobs <file>      # the job store to read (default <WAG_HOME>/state/jobs.json)
+//   node tools/measure-console-live.mjs --blocks <file>    # the reasoning to draw (default: read the run's thread
+//                                                          #   back out of <HERMES_HOME>/state.db, as the route does)
+//   node tools/measure-console-live.mjs --state-db <file>  # another session store (default <HERMES_HOME>/state.db)
 //   node tools/measure-console-live.mjs --report <dir>     # where the JSON + shots go (default C:/CodeReviews/agent-worktree-gui)
 //   node tools/measure-console-live.mjs --shots            # also write the before/after screenshots
 //
@@ -21,10 +32,12 @@
 //     touched;
 //   * ONE card drawn client-side from a REAL finished run's own record and its own `lines`, taken read-only out of the
 //     panel's job store. No turn is started, nothing is posted, and no line is invented: the console is the transcript
-//     that run actually produced;
-//   * then the two things a live card does to it: a FULL REPAINT (`renderConversation`, what the thinking sweep, a new
-//     deliverable or an approval causes) and ONE live line through the panel's own `appendJobLine`/`drawJobLine`.
-//     Both are followed per painted frame by the console's own numbers and by where the reply box under it sits.
+//     that run actually produced. `--stream` also draws the reasoning that run's own thread recorded, read read-only
+//     out of the session store — not a fixture;
+//   * then the things a live card does to it: a FULL REPAINT (`renderConversation`, what the thinking sweep, a new
+//     deliverable or an approval causes), a POLL REPAINT (`paintThink`, the reasoning re-read), and ONE live line
+//     through the panel's own `appendJobLine`/`drawJobLine`. Each is followed per painted frame by the console's own
+//     numbers and by where the reply box under it sits.
 //
 // WHAT THIS IS NOT: the live stream itself. A live console needs a turn to be started, and this tool refuses to start
 // one. tools/verify-console-flicker.mjs is the harness that plays a scripted turn through a stub Runs API and gates the
@@ -36,13 +49,19 @@
 //   (3) one live line after a repaint ADDS a row instead of replacing the console (the wipe bug)
 //   (4) nothing under the console moves up: the reply box may be pushed down, never pulled up
 //   (5) no page errors
+// — and in `--stream`, where the reasoning is drawn as lines of that console:
+//   (6) the console drew the turn's reasoning as its own rows (>= 2 `.jl-think`)
+//   (7) a POLL repaint keeps the nodes of the rows that did not change (the console is patched, not replaced)
+//   (8) a text selection standing in the console survives a poll repaint
+//   (9) a poll whose body would drop rows from the MIDDLE draws nothing (row count and place held)
+//  (10) one live line after a poll adds a row and does not take the console's height away
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -52,7 +71,31 @@ const ROOT = path.resolve(opt("--root", path.join(HERE, "..")));
 const REPORT_DIR = opt("--report", "C:/CodeReviews/agent-worktree-gui");
 const WANT_RUN = opt("--run");
 const SHOTS = argv.includes("--shots");
+const STREAM = argv.includes("--stream");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ---- the reasoning a 🌊 card draws as lines of its console -----------------------------------------------------
+// The same read the route does (`/api/thinking` → lib/thinking.js → thinkingFor), pointed at the panel's own session
+// store, so the console is drawn with what that thread actually thought. `--blocks` takes a dump instead (the route's
+// own answer, saved); a thread with no reasoning is a SKIP in stream mode, not an empty console measured as if it
+// were a stream.
+async function loadReasoning(thread) {
+  const given = opt("--blocks");
+  if (given) {
+    const file = path.resolve(given);
+    if (!existsSync(file)) return { skip: `no reasoning dump at ${file}` };
+    const blocks = JSON.parse(readFileSync(file, "utf8"));
+    const list = Array.isArray(blocks) ? blocks : blocks.blocks || [];
+    return list.length ? { blocks: list, from: file } : { skip: `${file} holds no reasoning blocks` };
+  }
+  const home = process.env.HERMES_HOME || path.join(process.env.LOCALAPPDATA || process.env.HOME || "", "hermes");
+  const dbPath = path.resolve(opt("--state-db", path.join(home, "state.db")));
+  if (!existsSync(dbPath)) return { skip: `no session store at ${dbPath}` };
+  const mod = await import(pathToFileURL(path.join(ROOT, "lib", "thinking.js")).href);
+  const read = mod.thinkingFor(thread, { dbPath });
+  if (read.error) return { skip: `the session store at ${dbPath} could not be read: ${read.error}` };
+  return read.blocks.length ? { blocks: read.blocks, from: dbPath } : { skip: `thread ${thread} recorded no reasoning in ${dbPath}` };
+}
 
 // ---- the run to draw -------------------------------------------------------------------------------------------
 // The newest finished run in the panel's own job store whose console carries real tool output. A store with none is
@@ -178,7 +221,17 @@ async function startSandbox() {
 }
 
 // ---- what the page records -------------------------------------------------------------------------------------
-function pageInit({ thread, id, record }) {
+function pageInit({ thread, id, record, stream, blocks }) {
+  // A 🌊 card is chosen per session in localStorage, and the reasoning joins its console only while 🧠 is on: both
+  // are set before the page's own scripts run, so the card is BUILT in that shape (the control) instead of toggled.
+  try {
+    if (stream) {
+      localStorage.setItem(`wtgui.stream.${thread}`, "1");
+      localStorage.setItem(`wtgui.think.${thread}`, "1");
+    }
+  } catch {
+    /* private mode: the card is drawn condensed and the stream checks say so */
+  }
   const orig = window.EventSource;
   const R = (window.__w = { t0: performance.now(), phase: "drawn", samples: [], appends: [], errors: [] });
   window.addEventListener("error", (e) => R.errors.push(String((e && e.message) || e)));
@@ -272,10 +325,86 @@ function pageInit({ thread, id, record }) {
     // The console draws from the page's own line buffer, and a board render does not seed it from `lines` (only a
     // live frame does), so fill it the way updateJob does — with the run's real lines and nothing else.
     if (!state.jobLines.has(id) && record.lines?.length) state.jobLines.set(id, record.lines.slice());
+    // The reasoning this thread recorded, so a 🌊 console merges it as its own rows exactly as it does live.
+    if (blocks?.length) state.thinkCache.set(id, { blocks, at: Date.now() });
     es.dispatchEvent(new MessageEvent("jobs", { data: JSON.stringify({ jobs: [window.__card] }) }));
     return "dispatched";
   };
   window.__phase = (p) => (R.phase = p);
+  // The POLL's own repaint: what the 1.2 s thinking sweep causes through loadThinking → paintThink → paintStreamConsole.
+  window.__poll = () => {
+    const conv = conversations().find((c) => c.thread === thread);
+    const turn = conv && conv.turns.find((x) => x.id === id);
+    if (!turn) return "no turn";
+    paintThink(turn, "");
+    return "polled";
+  };
+  // Which rows survive a repaint: stamp every row, then count the stamped nodes still in the console.
+  window.__stamp = () => {
+    const o = out();
+    if (!o) return 0;
+    [...o.children].forEach((n, i) => (n.__rowId = i));
+    R.stamped = o.children.length;
+    return R.stamped;
+  };
+  window.__survive = () => {
+    const o = out();
+    if (!o) return null;
+    const now = [...o.children];
+    const kept = now.filter((n) => n.__rowId != null).length;
+    return { total: now.length, stamped: R.stamped || 0, kept, lost: now.length - kept };
+  };
+  // A selection the reader is holding in the console (three rows, mid-transcript), and whether it is still there.
+  window.__select = () => {
+    const o = out();
+    if (!o) return null;
+    const rows = [...o.children].filter((n) => n.querySelectorAll("div, span").length === 0 || n.textContent.trim());
+    const a = rows[Math.min(2, rows.length - 1)];
+    const b = rows[Math.min(4, rows.length - 1)];
+    if (!a || !b) return null;
+    const r = document.createRange();
+    // The whole of two rows mid-transcript: enough that a repaint which replaces ANY of them loses the selection,
+    // and no offsets to guess at (a row's first child may be an element or a text node).
+    r.setStartBefore(a);
+    r.setEndAfter(b);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+    return sel.toString().slice(0, 40);
+  };
+  window.__selection = () => String(window.getSelection()?.toString() || "").slice(0, 40);
+  // A BAD read: the store answers nothing for a live turn (the shape a failed read takes). The card must keep what it
+  // is showing — the console must not shrink and must not lose its newest rows.
+  window.__shortRead = () => {
+    const conv = conversations().find((c) => c.thread === thread);
+    const turn = conv && conv.turns.find((x) => x.id === id);
+    if (!turn) return "no turn";
+    state.thinkCache.set(id, { blocks: [], at: Date.now() });
+    paintThink(turn, "");
+    return "polled empty";
+  };
+  // A reader parked mid-transcript: scrolled away from the end and unpinned, the way its own scroll handler does it.
+  window.__park = (top) => {
+    const o = out();
+    if (!o) return null;
+    state.outPinned[id] = false;
+    o.scrollTop = top;
+    return o.scrollTop;
+  };
+  window.__scroll = () => {
+    const o = out();
+    return o ? { st: Math.round(o.scrollTop), sh: Math.round(o.scrollHeight), top: Math.round(o.getBoundingClientRect().top) } : null;
+  };
+  window.__thinkRows = () => {
+    const o = out();
+    return o ? o.querySelectorAll(".jl-think").length : 0;
+  };
+  window.__restoreBlocks = (b) => {
+    if (!b?.length) return 0;
+    state.thinkCache.set(id, { blocks: b, at: Date.now() });
+    return b.length;
+  };
+  window.__mode = () => ({ streamOn: streamOn(thread), thinkOn: thinkingOn(thread), blocks: (state.thinkCache.get(id)?.blocks || []).length });
   // The panel's own repaint: what a thinking sweep, a deliverable or an approval does to the card.
   window.__repaint = () => {
     renderConversation(thread);
@@ -323,6 +452,20 @@ if (picked.skip) {
 const run = picked.run;
 const lines = Array.isArray(run.lines) ? run.lines : [];
 console.log(`run ${run.id} (${run.thread} turn ${run.turn}): ${lines.length} lines, ${lines.filter((l) => l.kind === "tool" || l.kind === "tool-out").length} tool lines, ${run.status}`);
+// The reasoning is only read in the 🌊 scenario: the condensed card draws it as a block, and this tool measures the
+// console. A thread that recorded none is a skip there (an empty stream measures nothing), never a failure.
+let blockSet = [];
+let blockFrom = "";
+if (STREAM) {
+  const reasoning = await loadReasoning(run.thread);
+  if (reasoning.skip) {
+    console.log(`SKIP  --stream needs the turn's reasoning: ${reasoning.skip}`);
+    process.exit(0);
+  }
+  blockSet = reasoning.blocks;
+  blockFrom = reasoning.from;
+  console.log(`reasoning: ${blockSet.length} blocks / ${blockSet.reduce((n, b) => n + String(b.text || "").length, 0)} chars from ${blockFrom}`);
+}
 
 const pw = loadPlaywright();
 if (!pw) {
@@ -338,7 +481,7 @@ const stamp = (() => {
     return path.basename(ROOT);
   }
 })();
-const out = { root: ROOT, commit: stamp, run: run.id, thread: run.thread, lines: lines.length, at: new Date().toISOString(), checks: [], errors: [] };
+const out = { root: ROOT, commit: stamp, mode: STREAM ? "stream" : "condensed", run: run.id, thread: run.thread, lines: lines.length, reasoning: blockSet.length, blocksFrom: blockFrom, at: new Date().toISOString(), checks: [], errors: [] };
 let failures = 0;
 const check = (name, got, want, extra = "") => {
   const ok = JSON.stringify(got) === JSON.stringify(want);
@@ -349,7 +492,7 @@ const check = (name, got, want, extra = "") => {
 const browser = await pw.chromium.launch({ headless: true });
 try {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  await ctx.addInitScript(pageInit, { thread: run.thread, id: run.id, record: run });
+  await ctx.addInitScript(pageInit, { thread: run.thread, id: run.id, record: run, stream: STREAM, blocks: blockSet });
   const page = await ctx.newPage();
   page.on("pageerror", (e) => out.errors.push(String((e && e.message) || e)));
   page.on("console", (m) => {
@@ -401,6 +544,8 @@ try {
     await page.locator(`pre.job-out[data-out="${run.id}"]`).screenshot({ path: f }).catch(() => {});
   };
   const drawn = await page.evaluate(() => window.__console());
+  out.mode = await page.evaluate(() => window.__mode());
+  out.thinkRows = await page.evaluate(() => window.__thinkRows());
   await shot("1-drawn");
   // A full repaint, exactly as the panel causes one.
   await page.evaluate(() => {
@@ -410,17 +555,44 @@ try {
   await sleep(900);
   const repainted = await page.evaluate(() => window.__console());
   await shot("2-repainted");
-  // ONE live line after that repaint.
+  // THE POLL — the reasoning re-read's own repaint. In a condensed card it redraws the block; in a 🌊 card it redraws
+  // the console, which is where the console's rows used to be thrown away several times a second.
+  const stamped = await page.evaluate(() => window.__stamp());
+  const selected = await page.evaluate(() => window.__select());
+  await page.evaluate(() => {
+    window.__phase("poll");
+    window.__poll();
+  });
+  const survived = await page.evaluate(() => window.__survive());
+  const selectionAfter = await page.evaluate(() => window.__selection());
+  await sleep(900);
+  const polled = await page.evaluate(() => window.__console());
+  await shot("3-polled");
+  // A READ THAT WOULD LOSE THE NEWEST ROWS: the store answers nothing for a live turn. Nothing may be drawn.
+  const beforeShort = await page.evaluate(() => window.__console());
+  await page.evaluate(() => {
+    window.__phase("short");
+    window.__shortRead();
+  });
+  await sleep(200);
+  const afterShort = await page.evaluate(() => window.__console());
+  // Put the reasoning back, so the live line and the last shot are taken on the card as it was.
+  await page.evaluate((b) => window.__restoreBlocks(b), blockSet);
+  await sleep(600);
+  // ONE live line after that.
   await page.evaluate(() => {
     window.__phase("line");
     window.__line("💻 terminal · echo console-probe");
   });
   await sleep(900);
   const appended = await page.evaluate(() => window.__console());
-  await shot("3-appended");
+  await shot("4-appended");
   const R = await page.evaluate(() => window.__w);
   out.drawn = drawn;
   out.repainted = repainted;
+  out.polled = polled;
+  out.poll = { stamped, survived, selected, selectionAfter };
+  out.shortRead = { before: beforeShort, after: afterShort };
   out.appended = appended;
   out.samples = R.samples;
   out.appends = R.appends;
@@ -437,6 +609,32 @@ try {
     true,
     `repaint: ${JSON.stringify(repainted)}`,
   );
+  if (STREAM) {
+    check(
+      "the 🌊 card drew its reasoning as rows of the console (>= 2 .jl-think)",
+      Boolean(out.mode?.streamOn && out.mode?.thinkOn && out.thinkRows >= 2),
+      true,
+      `mode: ${JSON.stringify(out.mode)}, thinking rows: ${out.thinkRows}`,
+    );
+    check(
+      "a POLL repaint keeps the nodes of the rows that did not change (the console is patched, not replaced)",
+      Boolean(survived && survived.kept >= survived.total - 3),
+      true,
+      `stamped ${survived?.stamped} rows, ${survived?.kept} of ${survived?.total} still the same nodes: ${JSON.stringify(out.poll)}`,
+    );
+    check(
+      "a text selection standing in the console survives a poll repaint",
+      Boolean(selected && selectionAfter && selectionAfter === selected),
+      true,
+      `selected ${JSON.stringify(selected)} → ${JSON.stringify(selectionAfter)}`,
+    );
+    check(
+      "a poll whose body would drop rows from the middle draws nothing (row count and place held)",
+      Boolean(beforeShort && afterShort && afterShort.rows === beforeShort.rows && afterShort.sh >= beforeShort.sh - 2 && afterShort.st >= beforeShort.st - 2),
+      true,
+      `before ${JSON.stringify(beforeShort)} → after ${JSON.stringify(afterShort)}`,
+    );
+  }
   check(
     "one live line after a repaint adds a row instead of replacing the console",
     Boolean(appended && repainted && appended.rows >= repainted.rows + 1 && appended.sh >= repainted.sh - 40),
@@ -455,13 +653,17 @@ try {
   console.log(`\nconsole over the run: ${R.samples.length} painted states; ${R.appends.length} live line${R.appends.length === 1 ? "" : "s"}; ${drops.length} fall${drops.length === 1 ? "" : "s"} in row count`);
   for (const d of drops.slice(0, 5)) console.log(`   dropped at ${Math.round(d.t)} ms [${d.phase}] to ${d.rows} rows / ${d.sh}px`);
   console.log(`rows ${drawn?.rows} → ${repainted?.rows} after a repaint → ${appended?.rows} after one line; height ${drawn?.sh} → ${repainted?.sh} → ${appended?.sh}`);
+  if (STREAM) {
+    console.log(`mode ${JSON.stringify(out.mode)}; the poll kept ${out.poll?.survived?.kept}/${out.poll?.survived?.total} row nodes (was ${out.poll?.survived?.stamped} stamped)`);
+    console.log(`selection ${JSON.stringify(out.poll?.selected)} → ${JSON.stringify(out.poll?.selectionAfter)}; a short read left ${out.shortRead?.after?.rows} rows at scrollTop ${out.shortRead?.after?.st} (before ${out.shortRead?.before?.rows} at ${out.shortRead?.before?.st})`);
+  }
   console.log(`console box ${out.shape?.rect?.h}px (client ${out.shape?.clientH}, content ${out.shape?.scrollH}); reply box top ${drawn?.replyTop} → ${repainted?.replyTop} → ${appended?.replyTop}`);
 } finally {
   await browser.close().catch(() => {});
   sb.stop();
 }
 out.failures = failures;
-const file = path.join(REPORT_DIR, `console-live-${stamp}.json`);
+const file = path.join(REPORT_DIR, `console-live-${stamp}${STREAM ? "-stream" : ""}.json`);
 writeFileSync(file, JSON.stringify(out, null, 1));
 console.log(`\n${failures ? "FAIL" : "PASS"}  ${out.checks.length - failures}/${out.checks.length} checks  → ${file}`);
 process.exit(failures ? 1 : 0);
