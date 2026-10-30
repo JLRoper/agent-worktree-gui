@@ -5621,9 +5621,61 @@ function jobHtml(j) {
   return conversationHtml({ thread: j.thread || j.id, turns: [j], first: j, latest: j });
 }
 
-// Make one turn the only open one in its conversation. Explicit per-turn state is dropped for the
-// older turns (their default is "folded" once they are no longer the newest) and the new turn is
-// pinned open, so a reply lands with the previous turn collapsed to its request line.
+// ---- previous turn on send ---------------------------------------------------------------------------
+// Sending a reply puts a new turn on the page, and what becomes of the turn the reader was reading is a
+// choice rather than one fixed rule: a small frozen piece of it, the whole thing left as it was, or folded
+// down to its one-line peek before the new turn's output is drawn. Settings > Agent cards; saved in this
+// browser. The last is the oldest behaviour, and the middle one is why the setting exists at all: the fold
+// was removing a console the reader still wanted above the new turn.
+const PREV_TURN_KEY = "wtgui.prevTurn";
+const PREV_TURN_MODES = ["snippet", "keep", "minimize"];
+function prevTurnMode() {
+  try {
+    const raw = localStorage.getItem(PREV_TURN_KEY);
+    return PREV_TURN_MODES.includes(raw) ? raw : "snippet";
+  } catch {
+    return "snippet";
+  }
+}
+
+// What the send does to each older turn, as explicit flags. `undefined` means "leave that flag alone" -
+// "leave as is" is one of the answers, so a mode must be able to say nothing about a turn at all; writing
+// a flag for it would re-open a turn the reader had folded by hand.
+function previousTurnPlan(mode, turns) {
+  const how = PREV_TURN_MODES.includes(mode) ? mode : "snippet";
+  return turns.map((t) => {
+    if (how === "keep") return { id: t.id, open: t.open ? true : undefined, compact: t.open ? false : undefined };
+    if (how === "minimize") return { id: t.id, open: false, compact: false };
+    // freeze a snippet: a turn that was showing keeps a readable piece of itself; one that was already
+    // folded stays folded, because it was not taking up room.
+    return { id: t.id, open: false, compact: t.open ? true : undefined };
+  });
+}
+
+function applyPreviousTurnPlan(plan) {
+  for (const op of plan) {
+    if (op.open === true) state.turnOpen.set(op.id, true);
+    else if (op.open === false) state.turnOpen.delete(op.id);
+    if (op.compact === true) state.turnCompact.add(op.id);
+    else if (op.compact === false) state.turnCompact.delete(op.id);
+  }
+}
+
+function applyPrevTurnMode(mode) {
+  const value = PREV_TURN_MODES.includes(mode) ? mode : "snippet";
+  const sel = $("prev-turn-mode");
+  if (sel) sel.value = value;
+  try {
+    localStorage.setItem(PREV_TURN_KEY, value);
+  } catch {
+    /* private mode: the choice just will not persist */
+  }
+}
+// ---- end previous turn on send ------------------------------------------------------------------------
+
+// Make the new turn the one that is open in its conversation: a reply lands with the turns before it drawn
+// the way "Previous turn on send" says to draw them (snippet / keep / minimize). The turn the reader is
+// sending into is pinned open either way, so the new turn's output is what is in front of them.
 function focusNewTurn(thread, turnId) {
   // The reply box is where the reader's hands are. Folding a turn shortens the card above it, and the box
   // used to travel up by exactly that much; measure it first, put it back after.
@@ -5634,20 +5686,16 @@ function focusNewTurn(thread, turnId) {
   const previous = conv && at > 0 ? conv.turns[at - 1] : null;
   // A new turn means the reader is back at the newest page.
   state.turnPage.delete(thread);
-  for (const j of state.jobs.values()) {
-    if ((j.thread || j.id) !== thread) continue;
-    if (j.id === turnId) {
-      state.turnOpen.set(j.id, true);
-      state.turnCompact.delete(j.id);
-    } else {
-      // What was on screen keeps a readable summary instead of collapsing to one line: the turn just finished,
-      // and any turn the reader had opened by hand. Turns that were already folded stay folded - they were not
-      // taking up room.
-      const showing = j.id === previous?.id || state.turnOpen.get(j.id) === true;
-      state.turnOpen.delete(j.id);
-      if (showing) state.turnCompact.add(j.id);
-    }
-  }
+  // What each older turn was showing has to be read BEFORE any flag moves: the turn just finished is open
+  // because it was the newest, not because anything is written down about it.
+  const older = conv ? conv.turns.filter((t) => t.id !== turnId) : [];
+  const plan = previousTurnPlan(
+    prevTurnMode(),
+    older.map((t) => ({ id: t.id, open: t.id === previous?.id || state.turnOpen.get(turnKey(t)) === true })),
+  );
+  state.turnOpen.set(turnId, true);
+  state.turnCompact.delete(turnId);
+  applyPreviousTurnPlan(plan);
   renderConversation(thread);
   scrollThreadToBottom(thread);
   // Put the composer back under the reader's hands (the page clamps at its own ends; a clamped correction just
@@ -16388,6 +16436,7 @@ $("auto-collect")?.addEventListener("change", (e) => {
     /* private mode */
   }
 });
+$("prev-turn-mode")?.addEventListener("change", (e) => applyPrevTurnMode(e.target.value));
 $("show-thinking")?.addEventListener("change", (e) => {
   try {
     localStorage.setItem(THINK_KEY, e.target.checked ? "1" : "0");
@@ -16467,6 +16516,7 @@ applyAddBarBrightness(addBarBrightnessSetting(), { save: false });
 applyAddBarTop(addBarAtTop(), { save: false });
 if ($("show-thinking")) $("show-thinking").checked = thinkDefault();
 if ($("auto-collect")) $("auto-collect").checked = autoCollectOn();
+if ($("prev-turn-mode")) $("prev-turn-mode").value = prevTurnMode();
 void refreshSubagentRoster();
 // The model menu is filled once at start-up from the gateway's own provider list; a failure leaves
 // the "(gateway default)" entry, which is what a spawn sends anyway.
