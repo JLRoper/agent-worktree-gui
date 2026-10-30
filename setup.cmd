@@ -6,9 +6,13 @@ cd /d "%~dp0"
 
 where node >nul 2>nul
 if errorlevel 1 goto nonode
-for /f "delims=." %%v in ('node -p "process.versions.node.split('.')[0]"') do set NODEMAJOR=%%v
-if %NODEMAJOR% LSS 18 goto oldnode
-echo [ok]   node %NODEMAJOR%
+for /f "tokens=1,2 delims=." %%a in ('node -p "process.versions.node.split('.').slice(0,2).join('.')"') do (
+  set NODEMAJOR=%%a
+  set NODEMINOR=%%b
+)
+if %NODEMAJOR% LSS 22 goto oldnode
+if %NODEMAJOR% EQU 22 if %NODEMINOR% LSS 5 goto oldnode
+echo [ok]   node %NODEMAJOR%.%NODEMINOR%
 
 where git >nul 2>nul
 if errorlevel 1 goto nogit
@@ -18,9 +22,9 @@ where hermes >nul 2>nul
 if errorlevel 1 (echo [warn] hermes not on PATH -- monitoring works, spawning agents will not) else (echo [ok]   hermes)
 
 if exist config.json (
-  echo [ok]   config.json present -- check "scanRoots" points at where your repos live
+  echo [ok]   config.json present -- if it names no "scanRoots", the board asks where your repos live
 ) else (
-  echo [info] no config.json -- the panel will start on defaults ^(scanRoots = the parent folder^)
+  echo [info] no config.json -- the panel starts on defaults and the board asks where your repos live
 )
 
 echo.
@@ -29,11 +33,11 @@ echo Docs:   README.md  and  SETUP.md
 exit /b 0
 
 :nonode
-echo [x]    node not found on PATH -- install Node 18 or newer (https://nodejs.org)
+echo [x]    node not found on PATH -- install Node 22.5 or newer (https://nodejs.org)
 exit /b 1
 
 :oldnode
-echo [x]    node %NODEMAJOR% is too old -- the panel needs Node 18 or newer
+echo [x]    node %NODEMAJOR%.%NODEMINOR% is too old -- the panel needs Node 22.5 or newer (node:sqlite)
 exit /b 1
 
 :nogit

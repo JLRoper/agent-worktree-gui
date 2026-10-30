@@ -1,0 +1,60 @@
+#!/bin/sh
+# .githooks/pre-push — a push cannot carry a bump-worthy branch with no version bump.
+#
+# WHY: the version lives once, in package.json, and it is the only thing that tells the board's own config
+# line (and a reader) which build is running. Which level it moves by is a judgement the LANDING AGENT makes
+# from the diff and lands in the same PR as the change — see docs/versioning.md — but "remember to bump" is
+# not a pipeline. This hook runs the gate that PR is meant to pass, node tools/version.mjs check, on the
+# branch being pushed, so forgetting it is a refused push rather than a version nobody wanted to move.
+#
+# It is fast and offline: check reads refs and package.json, never the network. It is silent and exit 0 for a
+# branch that already bumped and for a push that carries no new commits; when it refuses it prints the commits
+# it counted and the level it would have suggested, so the refusal says what to do about it.
+# Deliberate bypass: git push --no-verify
+#
+# INSTALL (repo config, so one install covers every worktree of this clone): npm run hooks:install
+# The check reads the branch checked out in this working tree — the panel pushes one branch per worktree.
+
+set -u
+
+# A clone that has not got the tool, or has no node, must push as it always did: a hook that cannot run its
+# own check is not a reason to block somebody's landing.
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+TOOL="$ROOT/tools/version.mjs"
+[ -f "$TOOL" ] || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+
+# git hands this hook one line per ref on stdin: <local ref> <local sha> <remote ref> <remote sha>.
+# Only a push that actually adds commits is worth checking — a deletion and an up-to-date ref are not.
+new_commits=0
+if [ -t 0 ]; then
+    new_commits=1                                            # run by hand with nothing on stdin: check anyway
+else
+    while read -r lref lsha rref rsha; do
+        [ -n "${lref:-}" ] || continue
+        case "$lref" in refs/tags/*) continue ;; esac                                   # a tag moves no branch
+        [ "${lsha:-}" = "0000000000000000000000000000000000000000" ] && continue        # deleting the ref
+        case "${rsha:-}" in
+            ""|0000000000000000000000000000000000000000) new_commits=$((new_commits + 1)) ;;   # a new ref
+            *) n=$(git rev-list --count "$rsha..$lsha" 2>/dev/null) || n=1
+               [ "${n:-0}" -gt 0 ] && new_commits=$((new_commits + 1)) ;;
+        esac
+    done
+fi
+[ "$new_commits" -gt 0 ] || exit 0
+
+out=$(node "$TOOL" check 2>&1)
+status=$?
+[ "$status" -eq 0 ] && exit 0
+
+branch=$(git symbolic-ref --short -q HEAD || echo "this branch")
+{
+    printf '%s\n' "pre-push: refused — $branch would go out with no version bump"
+    printf '%s\n' "$out"
+    printf '%s\n' \
+        "Nothing was pushed. The bump belongs in the same PR as the change — docs/versioning.md has the scale." \
+        "  node tools/version.mjs apply <patch|minor|major>    (then commit it and push again)" \
+        "  git push --no-verify                                (deliberate bypass of this hook)" \
+        ""
+} >&2
+exit 1

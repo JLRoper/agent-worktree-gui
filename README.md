@@ -3,7 +3,7 @@
 A local panel that watches every git worktree across one or more projects, and runs Hermes agents in
 their own worktrees — live output, mid-turn steering and approvals on the agent's card.
 
-Zero dependencies. No `npm install` needed: plain Node (`node >= 18`) + stdlib, plus HTML/CSS/JS
+Zero dependencies. No `npm install` needed: plain Node (`node >= 22.5`) + stdlib, plus HTML/CSS/JS
 served straight from `public/`.
 
     start.cmd              # foreground (Ctrl+C to stop)
@@ -19,13 +19,13 @@ Then open **http://127.0.0.1:7331**. The page itself — every control, chip and
 verification section, and what each failure mode means. The repo is private, so hand an agent on the
 other machine this:
 
-> Clone `JLRoper/agent-worktree-gui` with `gh` (it is private), follow `SETUP.md`, set `scanRoots` to
-> where my repos live, verify it, and give me the URL to open.
+> Clone `JLRoper/agent-worktree-gui` with `gh` (it is private), follow `SETUP.md`, verify it, and give
+> me the URL to open.
 
 Make the repo public and the raw URL works by itself:
 https://raw.githubusercontent.com/JLRoper/agent-worktree-gui/main/SETUP.md
 
-By hand — Node 18+ and nothing else, no dependencies, no build step:
+By hand — Node 22.5+ and nothing else, no dependencies, no build step:
 
     gh repo clone JLRoper/agent-worktree-gui
     cd agent-worktree-gui
@@ -33,13 +33,23 @@ By hand — Node 18+ and nothing else, no dependencies, no build step:
     ./setup.sh           # macOS/Linux: same checks
     start.cmd            # or: node server.js
 
-Edit `config.json` first: `scanRoots` is where your repos live (every git repo under it is
-monitored), plus `host`/`port`. If `config.json` is missing the panel starts on defaults and says so.
+The first time you open the board it asks where your repos live, previews the git repos it finds in each
+folder, and saves your choice to `config.json` as `scanRoots` (every git repo directly under one is
+monitored). It asks whenever `scanRoots` is empty or missing, and never once it is set — Settings › Projects
+& Folders changes it after that. `host`/`port` are still edited in `config.json`; if the file is missing the
+panel starts on defaults and says so.
 
 The two gateway-connected bits are Windows-flavoured and degrade elsewhere:
 `API_SERVER_KEY` is read from the process environment, else `$HERMES_HOME/.env`; the `:port` /
 `● board` liveness signals read `netstat` / `tasklist`, so off Windows those two signals simply stay
 dark — everything else works.
+
+There are 50+ `tools/verify-*.mjs` harnesses, one per claim, and each is still a program: it boots what it
+needs, prints what it measured and exits non-zero when the claim failed. `node tools/verify.mjs --list` says
+what is there, `--only <substr>` runs the ones about a subject, `--all` runs every one with a per-harness
+timeout — so a claim is one command away instead of a remembered file name. A browser harness resolves
+Playwright through `tools/browser.mjs` (`PANEL_PLAYWRIGHT_ROOT` when it lives outside the repo) and
+`withBrowser()` closes the browser even when the harness throws.
 
 `node tools/verify-verdicts.mjs [project]` re-derives every row's merge verdict straight from git and
 diffs it against the panel (exit 1 on any mismatch) — useful after touching the scan logic.
@@ -58,6 +68,21 @@ touching what a SPAWN IN line may name.
 and the `✦` name-from-the-work button against a panel of its own — sandbox `PANEL_CONFIG`, spare port,
 sandbox `$HERMES_HOME`, stub gateway, throwaway repo — useful after touching anything that renames a tree.
 
+`node tools/verify-description.mjs` proves the `DESCRIPTION` strip above MERGE STATE — the record's earliest-run
+choice, the live half through a real spawn against a stub gateway, and the whole client half in headless Chromium
+(bullets matching the merge state's own list, folded on a fresh expand, unfolded by a click and still unfolded
+after a reload, folded again by a second click, a stale legacy key with no say, absent for a tree with no run) —
+useful after touching `lib/descriptions.js`, the harvest in `server.js` or that strip in `public/app.js`.
+
+`node tools/verify-merge-state.mjs` proves the `MERGE STATE` strip's own detail in a sandbox of its own — three
+hand-cut worktrees (five commits off remote main and a dirty tree, fourteen commits and a clean tree, nothing at
+all) over a throwaway repo with a bare `origin`, and headless Chromium over the running panel: every commit on its
+own line at the full width of the row, a fourteen-commit list drawn whole and unclipped, the two file strips one
+line each with their counts and their names hidden, every open/close combination of the three folds, the empty
+strips absent on a clean tree, and the `DESCRIPTION` and `LIVENESS EVIDENCE` strips around it untouched — useful
+after touching that strip in `public/app.js`. Point it at a Playwright install with `PANEL_PLAYWRIGHT_ROOT`;
+without one it reports `BROWSER-HALF-NOT-RUN` and fails rather than passing on a half that never ran.
+
 `node tools/verify-action-harvest.mjs` drives three real assistant turns through a stub gateway whose stream
 carries the reply the way the live one does — one paragraph per text line — and then reads the job store and the
 journal back: one turn carrying SPAWN, SPAWN IN, TO, WATCH, NOTE and RULE must produce one job per run-creating
@@ -65,6 +90,27 @@ action, a turn carrying a project that does not exist and a thread that is not o
 drop with its reason and still start the spawn written after them, and a thread lookup that throws inside the
 injected job store must cost only the line that touched it — useful after touching how a finished turn's lines
 are read.
+
+`node tools/verify-leftover-holder.mjs` proves the `leftover` rule's holder check end to end in a sandbox of its
+own: a real panel from this worktree over two real git worktrees of a throwaway repo — one dirty with nobody in it,
+one dirty with a live run in it — with the panel's own scanner and sentry, and headless Chromium over the served
+board. The unheld tree must raise its leftover and the held tree must raise nothing, across a dozen ticks in which
+the held tree's own counts move (which is how the false alert used to re-fire, once per count). The live holder is
+seeded the way the board really gets one back: an interrupted card with a run id, re-attached by the boot reconcile
+against a stub Runs API. Point it at a Playwright install with `PANEL_PLAYWRIGHT_ROOT`; without one the browser half
+reports `BROWSER-HALF-NOT-RUN` and the rest still runs.
+
+`node tools/verify-console-flicker.mjs` is the browser repro for the dark console's flicker, driven by a real run's
+output: a panel of its own (spare port, own `PANEL_CONFIG`, own `jobs.json`, own `HERMES_HOME`) pointed at a stub Runs
+API that plays a scripted agent turn over real SSE, so every console line the browser draws is the server's own
+`jobline` frame, and a card spawned and replied to through the panel's own routes. The page records what the console
+holds and where the reply box under it sits, and every wholesale write to a console with its stack. It asserts that a
+live line never wipes or shortens a console that holds transcript and that nothing under it jumps, in a condensed
+console with deliverables arriving and in a 🌊 console. `--label before|after` names a capture, `--root <checkout>`
+serves another checkout (run `before` against a checkout without the fix), and `--compose` merges the two captures
+into `C:/CodeReviews/agent-worktree-gui/console-flicker-playwright.md` with paired screenshots of the console as a
+repaint left it and one live line later. Useful after touching `drawJobLine`, `paintStreamConsole`,
+`conversationSignature` or anything else that repaints a live console.
 
 `node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
 `--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
@@ -86,12 +132,38 @@ repo has **no CI**, so nothing refuses a bad subject at PR time either; its own 
 `git commit --no-verify`. The index stores the script executable (mode 100755), so a non-Windows clone runs
 it without a manual `chmod`; if a checkout ever loses the bit, `chmod +x .githooks/commit-msg`.
 
+`.githooks/pre-push` refuses a push that carries commits with no version bump: it runs
+`node tools/version.mjs check` (a branch whose `package.json` version is still its base's, and which carries
+commits of its own, is refused; an already-bumped branch and a branch with nothing on it pass silently). The
+level is a judgement the landing agent makes from the diff and lands in the same PR as the change —
+`node tools/version.mjs suggest` advises, `apply <patch|minor|major>` writes the one place the version lives,
+and `docs/versioning.md` is the scale. The merge prompt tells the landing agent to do it. Same install covers
+both hooks, and the same `--no-verify` bypasses this one.
+
+Those two hooks are the repo's own; the panel adds three more gates on top of them — the project's
+`remoteBranchPolicy`, the pre-push hook it installs into `<git-common-dir>/wtgui-hooks/`, and the permission box
+that hook parks a push on — plus the host's ruleset on the default branch. All of them, in the order a `git push`
+meets them and with what waives each, are enumerated in
+[docs/pushing-to-a-remote.md](docs/pushing-to-a-remote.md).
+
 `node tools/verify-charter.mjs` seeds a charter from a store full of rules and notes, checks the prescribed
 headings and the cap, checks that the whole file is in the per-turn briefing while the polled state carries
 only its path, size and mtime, drives all three writers (the reader's save, a `CHARTER:` line through the
 harvest, a standing rule changing) and both refusals (over the cap, and a save that read an older file) — then
 boots a real instance on a scratch port and exercises `GET` and `PUT /api/assistant/charter` over HTTP,
 including the `413` and the `409`, without touching the live panel — useful after touching the continuity file.
+
+`node tools/verify-age-collapse.mjs` builds a throwaway repo with three worktrees whose activity ages are known
+to the minute (one committed 45 days ago and left alone since, one committed 45 days ago but worked in half an
+hour ago, one committed today) and drives a sandbox panel plus a headless Chromium over it: the default the
+panel applies with no key in `config.json`, the chart at rest holding the stale tree back and saying so in a
+chip, the arrow invisible and unclickable until the chart is hovered — with its computed style compared against
+the console's own tail chip, built on the page by the panel's own renderer — one click drawing every tree, the
+reload that has to come back with that choice, the Settings control writing `config.json` and the chart
+redrawing from it, and `0` putting every tree back with no arrow left behind. Point it at a Playwright install
+with `PANEL_PLAYWRIGHT_ROOT=<dir with node_modules/playwright>` (e.g. the `heroes-js` checkout on this box);
+without one it prints `BROWSER-HALF-NOT-RUN` and **fails** rather than passing on a half that never ran —
+useful after touching the chart or the age threshold.
 
 ## Two halves
 
@@ -106,8 +178,16 @@ repo's last commit and the newest file edit inside any of its worktrees. Non-git
 listed in the footer as skipped rather than silently ignored. An entry in `projects` overrides what
 discovery finds for that name (heroes-js carries a `prRepo`).
 
+**Where the branch and PR links come from.** Not from this code: a host record in
+`logs/hosts.json` (merged over the committed `hosts.seed.json`) says which host a project lives on and
+carries the templates every link is built from, so a GitHub repo and a `git.sefl.com` one link to their
+own pages without either shape being written into the panel. A project with no mapping gets plain text
+and the reason instead of a guessed URL, and its header chip is where you fill one in — press it to read
+the project's remote and confirm the mapping it proposes. The tokens, the precedence, the `api` block
+and the landing doctrine are in [docs/hosts.md](docs/hosts.md).
+
 **Projects are grouped under their folder.** Each scan root is an accordion
-(`C:\ProjectDevelopment\` by default) holding every project that is actually inside it; a project
+(for example `C:\Projects\`) holding every project that is actually inside it; a project
 that lives outside every configured root — an explicit `projects[]` entry can point anywhere —
 gets its own sibling accordion for its parent folder, so nothing is ever filed under a folder it
 is not in. The folder header carries the aggregate chips (projects, worktrees, unmerged, dirty,
@@ -142,6 +222,17 @@ same worktree, so the cheap and expensive passes can never race into the same ro
 consecutive discovery passes, and never when that call itself failed or came back empty — a
 transient git hiccup cannot blank the table. New worktrees appear on the next discovery pass.
 
+**A row is a tree this project OWNS**, and ownership is the folder, not the repository. `git worktree list` answers
+for the whole *repository*, so a tree cut from this repo anywhere on disk is in its answer — a lander's comparison
+trees under `%LOCALAPPDATA%\hermes\cache\scratch\land-check\`, or anything `git worktree add ../…` left beside the
+checkout — and boarding those drew bare basenames with no tag, detached HEADs and duplicated `land/*` branches as if
+they were this project's work. Only a path at or under the project's own folder becomes a row: a tree outside it is
+absent from the header counts, from the UNMERGED arithmetic and from the merge / rename / delete controls rather than
+drawn and explained away, because every one of those controls hangs off a row and none of them would be right for a
+tree the panel cannot name. `outsideTrees` on the project record (`/api/state`) carries how many the last discovery
+left off, the panel log names them, and a row an earlier build already boarded outside the project is dropped on the
+next discovery pass instead of after the usual two — the two-pass grace is for a git hiccup about a tree still owned.
+
 Per-worktree verdict:
 
 | Verdict | Meaning |
@@ -149,7 +240,7 @@ Per-worktree verdict:
 | `MERGED (N commits)` | the branch really did carry commits and they are now in remote main (reflog evidence; N counts only commits the branch itself made, not main commits it merged in) |
 | `NO COMMITS` | the branch never moved off its creation commit — there is nothing to merge, and nothing was merged |
 | `ON MAIN` | this is the primary checkout of the main branch |
-| `UNMERGED (N commits)` | carries commits not on remote main |
+| `UNMERGED (N commits)` | carries commits not on remote main — the badge is a control: roll it into its parent, open a PR, have an agent check whether the change is already on main (deleting the tree when it is), or ask where it goes |
 
 `MERGED` is only claimed when the branch has commits of its own **and** they are in remote main. A
 worktree whose branch has zero commits (a freshly made `wtgui/…` tree, or a branch created and never
@@ -172,15 +263,37 @@ and is counted separately ("open idle" chip). `MERGED` + clean + not live = "saf
 #### What a worktree is called
 
 A tree is cut from the prompt, so its name starts as the reader's first sentence cut at 24 characters —
-usually mid-word. Hermes names the *session* from the work a moment later, and the panel renames the tree
-after that title once, at the end of the turn: the directory (`git worktree move`) and its branch
-(`git branch -m wtgui/<slug>-<tag>`, the six-hex tag kept). That rename happens **once per tree** and the
-"once" is a record, not a hope — `logs/tree-names.json` beside the job store (see `lib/tree-names.js`),
-keyed on the tag every rename keeps, holding who named the tree and when. A second run started into the
-same tree cannot rename it: it would move the directory and the branch out from under the run that already
-lives there, which is how one worktree ended up with a directory named one thing, a branch named another,
-and three live cards each spelling a different branch. The same record is what the board's row reads, so
-the tooltip on `✎` says who named the tree and when.
+usually mid-word. Hermes names the *session* from the work a moment later, and the panel gives the tree that
+name the moment the title exists — the 10-second title sweep emits it, and the rename lands as soon as no run
+is standing in the tree (git will not move a directory a live shell holds, so the first attempt inside a turn
+is deferred, not lost): the directory (`git worktree move`) and its branch (`git branch -m
+wtgui/<slug>-<tag>`, the six-hex tag kept). That name is set **once per tree** and the "once" is a record,
+not a hope — `logs/tree-names.json` beside the job store (`config.treeNamesFile`, see `lib/tree-names.js`),
+keyed on the tag every rename keeps, holding who named the tree and when. Three rules make the once a fact:
+
+- **A tree the panel cut is written down at the cut**, before `git worktree add`, naming the run it was cut
+  for — so a tree is never visible as "unnamed" while the run that owns its name is still starting, and only
+  that run's first title may take it.
+- **A tree the panel did not cut is seeded, never renamed.** Every tree `git worktree list` answers with that
+  has no entry is written down at boot, and on every later listing, under the name it was found with: the
+  fleet that existed before this ledger — every tree in this repository's own `.worktrees/`, every tree another
+  tool cut — reads as named from its first moment. A run started into one of them cannot rename it, whatever
+  `existing` it claims.
+- **A landing settles it.** A rename that lands, a rename that finds its target directory already taken, and a
+  reader's own rename all settle the record, so no later event of that run and no later run can move the tree
+  again. The project's own checkout is never recorded: its name is the folder's.
+
+The record is what the board's row reads, so the tooltip on `✎` says who named the tree and when. A second run
+started into a named tree cannot rename it: it would move the directory and the branch out from under the run
+that already lives there, which is how one worktree ended up with a directory named one thing, a branch named
+another, and three live cards each spelling a different branch.
+
+A tree whose directory carries **no `-<hex6>` tag** is never renamed, automatically or by hand: the tag is the
+ledger key and the one part of the name a rename keeps, so a bare name would have to be given an invented tag (a
+second identity for a tree that already had one) and its record keyed on a path the rename then moves out from under
+itself. `POST /api/worktree/rename` and `POST /api/worktree/suggest-name` both answer `400 … carries no -<hex6> tag`,
+and the automatic half skips the tree entirely (logging the reason once); rename the directory yourself if it needs
+another name. A directory that *is* six hex counts as the tag being named, which is the same answer.
 
 Two buttons sit beside the worktree name, and neither is automatic:
 
@@ -209,6 +322,57 @@ keeps the tag, and records the reader. It prints which parts are driven rather t
 outside the sandbox is touched: the live panel on 7331 and the gateway on 8642 are never used, and no
 branch of this repository is renamed.
 
+#### What a worktree was started to do
+
+The other half of a row's git story sits above MERGE STATE: a `DESCRIPTION` strip quoting the opening of the
+**earliest** run's brief in that tree — what the branch was started to do, in the reader's own words, rather
+than what the branch looks like now. Two sentences of it, verbatim, as a **bullet list — one bullet per
+sentence** — plus a dim line naming the run it came from.
+
+The text is extracted once and written down beside the job store (`logs/descriptions.json`, see
+`lib/descriptions.js`), keyed on the six-hex tag a rename keeps, for the same reason the naming ledger is: the
+job store keeps only the most recent ~80 runs, so a description computed at render time would empty itself the
+moment a tree's earliest brief aged out. The first record for a tree also **wins** — a follow-up run into the
+same tree ("land it and write the report") is not what the branch was for, so it cannot rewrite the goal. The
+record carries the tree's full path and branch alongside the tag, so the file says which tree it describes.
+
+The strip is the same kind of thing as the two under it: `ul.git-list`, one fact per `<li>`, with the head's
+own line repeated as the first bullet and riding on the head line while folded. It starts **folded** — the
+first bullet is what a reader wants without opening anything, and three one-line heads cost a row far less
+height than a block of prose above the agents. Unlike the two strips under it, the rows a reader **unfolded**
+are remembered per row in `localStorage` (`wm.openDescs`, an absent key meaning every row folded). That is a
+new key rather than an inversion of the older `wm.closedDescs`: the old set was written by a build where every
+strip started open, so it describes a layout the board no longer has. Nothing is invented: a brief with no
+sentences is cut at a word boundary, the panel's own "Work in …" wrapper is stripped, and a tree the panel has
+no run for renders **no strip at all**.
+
+`node tools/verify-description.mjs` proves it in a sandbox of its own — a seeded job store (two runs in one
+tree, one in a hand-cut tree with no tag, and a tree with no runs at all), a real `POST /api/agents` against a
+stub gateway for the live half, another into an existing tree to show the goal is not rewritten, and headless
+Chromium (Playwright) over the running panel for the bullets and their measured family, size, colour and column
+against the merge state's own list, the fold on a fresh expand, the click that unfolds it, the reload that
+keeps it open, the click that folds it again, a stale legacy key, and the absent strip. Point it at a Playwright
+install with `PANEL_PLAYWRIGHT_ROOT`; without one it reports `BROWSER-HALF-NOT-RUN` and fails rather than
+passing on a half that never ran.
+
+#### What the merge state strip unfolds to
+
+`MERGE STATE` is the strip between those two — the row's verdict and the git facts behind it, folded to one line
+until it is opened. Unfolded, it reads top to bottom as three things, in the order a reader wants them:
+
+- the merge facts, one per line: the verdict, `cherry +N/−M`, the branch's reflog count, whether the branch ever
+  carried its own commits, the remote branch, the last commit. The head's own summary is the first bullet while
+  the strip is open, and only the head line while it is folded.
+- **every commit the tree carries off remote main**, under a heading naming the remote and the diffstat, one
+  commit per line — short sha, then subject — at the **full width of the row** and never clipped. A tree with
+  fifty commits makes a long list and the panel scrolls; nothing is hidden to keep the row short. These used to
+  be one of three `<div class="col">` blocks in a flex row (`tr.detail .cols`, `min-width: 300px`), where a long
+  commit list was squeezed into a ribbon beside the changed files.
+- `MODIFIED (N)` and `UNTRACKED (N)`: one line each, carrying their count, with the file names folded away until
+  the strip is opened. Each folds **on its own** — opening `MODIFIED` moves neither `MERGE STATE` nor `UNTRACKED`,
+  and folding `MERGE STATE` does not forget which of the two was open (the open set is keyed per row and per kind,
+  `state.gitSubOpen`). A clean tree, or one with nothing unmerged, renders no strip at all rather than an empty one.
+
 ### Agents
 
 The **New agent** card starts one Hermes agent in its own worktree and streams the turn live. An agent
@@ -226,7 +390,14 @@ from the provider list Hermes itself fetched (`provider_models_cache.json`, refr
 `hermes model --refresh`), grouped by provider, with `(default: <the configured model>)` first — that
 entry sends no `model` field at all, so the run uses the gateway's own model. The menu's tooltip says
 how many models and how old the list is; a provider that was never picked falls back to the catalogue
-that ships with Hermes.
+that ships with Hermes. Each entry also carries a 0-10 `★rating` and its price in and out per 1M tokens,
+from ONE table (`providers[].pricing` on `/api/models`) composed in `lib/model-prices.js`: the panel's
+own copy of the gateway's inventory, as rebuilt by Settings → Gateway → Model prices → **Refresh now**,
+with the repo's committed `data/openrouter-model-prices.json` filling what that inventory does not price
+and the 0-10 benchmark rating it does not carry (`python tools/openrouter-prices.py` refreshes the
+snapshot; stdlib only, no key needed for either public source). The spawn form, the assistant's model
+setting and a card's model readout all open the same list from that one table; with no price anywhere the
+rows simply show no prices or ratings, never a zero.
 
 The gateway has to be up and keyed:
 `POST /api/agents` answers **503** with the gateway's own reason rather than creating a card that
@@ -250,6 +421,16 @@ Semantics, all verified against real runs:
 - **Output** is the run's event stream: each tool call with its argument preview, the assistant's text
   as it arrives, approval requests, and a closing line with tokens and exit. Tool results are the
   gateway's redacted, 500-character preview (the full payload stays in the session transcript).
+- **A file is drawn as a file, not as lines.** A unified diff in a tool's output becomes one framed
+  window per `@@` hunk: the `diff --git` / `--- ` / `+++ ` headers and the hunk line ride as labels, and
+  the body is two sides — the before lines on the left (yellow where a line was modified, red where it
+  was purely removed) and the after lines on the right in green, with unchanged context dim across
+  both. Any other file body (`read_file`, `write_file`, a shell `cat` / `head` / `sed -n`) folds into a
+  code box whose header names the file and counts its lines, so a reader can see that a file was
+  printed, and which one, without reading it. Both wrap, so a 300-character line never forces the
+  console sideways. The classification is made at render time from a line's own text and only ever
+  looks at a tool's own output: a call line, the agent's sentences, a shell transcript, an `ls` listing
+  and the gateway's own notes stay plain lines, in the colours they always had.
 - **Cancel** posts `/v1/runs/<id>/stop`; stopping is cooperative, so the card settles as `cancelled`
   when the turn actually ends.
 - **A run can outlive the panel.** Restarting the panel marks in-flight cards `interrupted` and keeps
@@ -338,10 +519,12 @@ run's `session_id`, so a reply continues the same Hermes session:
     run 1   POST /v1/runs {input: <prompt>, session_id: wtgui-...-abc123, cwd: <worktree>}
     run 2+  POST /v1/runs {input: <reply>,  session_id: wtgui-...-abc123, cwd: <same tree>}
 
-While a turn is **still running** the reply box's primary button is **Steer turn** — Enter does the
-same. The text goes into the LIVE run and is read at the agent's next tool boundary, so the turn
-changes course instead of queueing behind it. **Queue reply** is the explicit "send this when the
-current turn finishes" path. A steer that arrives after the last tool boundary comes back as
+While a turn is **still running** the reply box's primary button is **Steer turn** — `Ctrl+Enter`
+(`⌘+Enter` on a Mac) does the same. The text goes into the LIVE run and is read at the agent's next tool
+boundary, so the turn changes course instead of queueing behind it. **Queue reply** is the explicit "send
+this when the current turn finishes" path — and `Enter` is that same press from the box, so a reply can be
+held for the next turn without leaving the keyboard. Where there is nothing to wait for (no turn running,
+no subagent out) `Enter` and `Ctrl+Enter` both send. A steer that arrives after the last tool boundary comes back as
 `pending_steer`, and the panel replays it as the next turn rather than dropping it.
 
 When nothing is running the button is **Send reply**: it starts the next turn on the same session, in
@@ -396,7 +579,7 @@ sent together, and the box under them takes a typed answer of your own (`Enter` 
 collapses to `✓ answered: <what you said>`; a question that was answered elsewhere, withdrawn with the
 turn or timed out leaves `· question closed without an answer here`.
 
-Three pieces have to line up, and each one alone is a silent no-op:
+Four pieces have to line up, and each one alone is a silent no-op:
 
 - `platform_toolsets.api_server` must include `clarify` in `<HERMES_HOME>/config.yaml`. The stock
   `hermes-api-server` toolset deliberately drops interactive UI tools, so without this line a
@@ -407,6 +590,21 @@ Three pieces have to line up, and each one alone is a silent no-op:
   ```
 
   The gateway re-reads that file per run, so the next spawn has the tool; a running turn does not.
+- **The gateway build must carry the Runs API half of the contract** — a clarify callback on an API
+  run's agent and `POST /v1/runs/{run_id}/clarify` to answer the prompt. That is code, not
+  configuration, and the line above cannot supply it. A build with the toolset line and without the
+  route hands the model the tool and then refuses every call with the tool's own
+  `Clarify tool is not available in this execution context.`, which reads like a permission problem
+  and is a missing feature. Check the gateway you are pointed at:
+
+  ```bash
+  node tools/check-gateway-clarify.mjs --probe   # 0 = the route is there, 1 = it is not
+  ```
+
+  Until it is there the panel does not pretend: it records the refusal from the run's own stream,
+  says so once on the card, and tells the agent to ask in prose at the end of its turn — which the
+  `question` rule still escalates to you. See `docs/clarify-over-the-runs-api.md` for the code that
+  decides it in each build.
 - The panel answers through `POST /v1/runs/{run_id}/clarify` with the same fence as an approval —
   `{request_id, execution_generation, answer}` where `answer` is a string (a multi-select answer is a
   JSON array string, which the tool decodes). Both ids come from the run's `pending_controls[]`, not
@@ -452,11 +650,14 @@ for the approval window — agent processes are not spawned from here any more.
 
 **✧ Assistant** in the header opens a floating panel that can be dragged, resized and closed (position and
 size are remembered; `Ctrl+Shift+A` toggles it, `Esc` closes it when the caret is in it). It is a window, not a
-strip of content: drag it larger and the card fills it — the turns take the new room, the open turn's console grows
-with it, and the composer stays at the foot. Only the turns scroll. It is two things:
+strip of content: `⤢` in its header maximizes it to the whole window, `⤡` puts the float back, double-clicking the
+header toggles the two and `Esc` restores the float from fullscreen. Both shapes lay out the same way — header, tabs
+and the card's own head are fixed rows, the transcript is the only scroller, and the composer is pinned at the foot,
+so the box you type in is on screen at any panel height with the last message directly above it. A conversation
+shorter than the panel starts at its foot instead of leaving empty panel under its last turn. It is two things:
 
 - **A sentry** that runs in the panel's own process, on `settings.seconds` (default 5 s), over the same job
-  summaries the cards are drawn from. It costs no tokens and it is always awake. Thirteen rules:
+  summaries the cards are drawn from. It costs no tokens and it is always awake. Fifteen rules:
   `loop` (the same tool with the same input N times, read-only helpers held to a higher bar), `errorloop`
   (identical failing output), `quiet` (a running turn with no new output — a long build looks exactly like
   this, so it only journals by default), `approval` (parked longer than the threshold), `question` (a turn
@@ -467,16 +668,22 @@ with it, and the composer stays at the foot. Only the turns scroll. It is two th
   failure is the call that produced it plus the failing line with its numbers masked, so "npm test, 3 failures" in
   three replies is one alert and a clean turn breaks the streak; a tool the gateway marks only in its result header
   — `↳ terminal · error` — counts too), `leftover` (a worker ended and its tree still holds modified or
-  untracked files — read from the scanner's own row, never a second git pass; commits that are not on main are the
-  normal state of an agent's branch until you merge them, so they are named on the alert as context rather than
-  being a trigger)
+  untracked files, and no live run holds that tree any more — read from the scanner's own row, never a second git
+  pass; a tree a live run's cwd holds is that run's worktree, so a SPAWN IN into a just-finished tree edits files
+  that are work in progress and raises nothing, which is the check standing rule 16 asks a reader to make by hand;
+  commits that are not on main are the normal state of an agent's branch until you merge them, so they are named
+  on the alert as context rather than being a trigger)
   and `child` (a delegated subagent that has written nothing for `childQuietSeconds` — the wording is "no
   activity for 6m", never "hung": a long tool call looks the same; read from the gateway's session store, and
   only for threads this board is showing), plus `interrupted` (a thread whose latest turn ended `interrupted` —
   a turn stopped without finishing, usually a panel restart; an interrupted turn a later turn has taken over is
   history and does not fire. It alerts rather than wakes by default, because one restart rewrites every running
   turn as interrupted at once and would spend the whole hourly wake budget in a single pass; raise it per rule
-  under **Settings → Per-rule escalation** when a cut-off turn is worth the assistant's opinion). Every alert
+  under **Settings → Per-rule escalation** when a cut-off turn is worth the assistant's opinion), plus
+  `spawnidle` (a spawn card has waited two minutes for a click — nothing has started, and the alert names the
+  turn and the prompt) and `spawnlost` (a turn wrote a SPAWN line and neither a worker nor a card exists for it
+  two minutes later — the charter's unexplained failure, now a journal line with the line's own words). Both
+  ship at `alert`; raise either in Settings when a lost line is worth a wake. Every alert
   carries the evidence it was built from — counts,
   the repeated call, the failing line, the command being waited on — because "it looks stuck" is not
   actionable.
@@ -590,6 +797,50 @@ then the run. The worker gets the gateway default model (the assistant's small m
 work), the card is tagged `↳ started by the assistant`, and the new thread is put on the watchlist automatically
 so "spawned" later reads as "and here is how it ended".
 
+**A spawn card nobody starts is the panel's own silence, so the panel checks it.** An `ask` card changes nothing:
+no job, no thread, no row — and until now nothing looked at it again, so one could sit open for hours and the
+assistant only found out when it was asked. Every card now carries a deadline (`SPAWN_WATCH_MS`, two minutes) and
+one timer; when it passes, the panel looks in the job store for a run that belongs to that card — the run recorded
+on it, the thread it names, or a worker standing in its tree (a card that would cut a tree is matched on the same
+ask under that project's `.worktrees/`, never on a job in the project's own checkout) — and there are two answers:
+
+- **a run exists** — the card is closed against it silently. A worker that exists is not news, and a warning about
+  one that was never missing teaches the reader to ignore the badge;
+- **none exists** — the card goes red in place (`NEVER STARTED`, its age, and the worktree path), the count lands
+  on its **own** header badge (`⧗ N`, beside the alert badge and not inside the alert count: a card is the reader's
+  pending act, not a notice), the Alerts pane puts it above everything with a banner, and `spawn-unstarted` is
+  written to the journal — `digest()` carries it into the assistant's preamble the way `spawn-failed` already is,
+  because a model reading an empty board otherwise says the work is queued.
+
+The deadline lives on the card as well as in the timer, so a panel restart re-arms it instead of losing a card that
+was seconds from being reported, and the sentry asks the same question on every pass — including with the sentry
+switched off, because a card on the board is a promise the panel made. `spawnAutoStart` (off by default, in the
+assistant's Settings tab) is the other half: with it on, the deadline starts the pending card through the same
+`startSpawn` the button uses — **one** attempt, recorded before it is made, so a refusal (gateway down, unborn
+HEAD) goes back to the reader as a red card rather than a second try. A card the reader discarded is never started
+by either path.
+
+**An unclicked card is a worker that has not started, and it used to be invisible.** A spawn card exists only as
+an alert: no job, no row, no card, so the board drew nothing for it and the only sign was a number on the header
+badge — inside an 80-deep Alerts list. Four cards created in one evening (19:54, 19:57, 19:58, 20:00) all sat
+`open` while the reader concluded the agents had failed to spawn. So all three surfaces now say it:
+
+- a **spawn strip** at the top of the board (`#spawn-strip`, above **New agent**): `N spawn cards waiting`, one
+  row per card oldest-first, each with the prompt it would run, how long it has waited, a **Create worktree &
+  start** button and **Open card** — the same POST the float's card makes, and nothing starts by itself;
+- the header's badge gains a **separate spawn count** (`4 spawn`, amber and pulsing once the oldest card is past
+  two minutes) beside the total-alert count, and the Alerts tab shows both counts;
+- the float's Alerts tab draws **spawn cards first**, under their own heading, oldest waiting first.
+
+Both halves are watched on a two-minute clock (`SPAWN_WATCH_MS`, `checkSpawns` in `lib/assistant.js`): a card
+still open after it raises `spawnidle` — *"spawn card unclicked for 2m"*, naming the turn and the prompt — and a
+turn's SPAWN line that produced no job and no card raises `spawnlost`. The debt is recorded **before** the line is
+carried out and written to `assistant.json` at once (`spawnIntents`), so a restart mid-harvest cannot lose it; the
+sentry also re-reads the prose of the assistant's own finished turns for a SPAWN line the harvest never saw (the
+stream can deliver the last paragraph after the turn is marked harvested), and a line the debt list already shows
+as settled is never reported twice. The digest handed to the assistant every turn carries the waiting cards and the
+lost lines outright, so it cannot read an empty board as "queued".
+
 The assistant acts by writing plain lines in a reply, and every such line in it is read — wherever it sits among the paragraphs, not only the one the reply ends on:
 
     TO <thread>: the reply to that worker
@@ -600,8 +851,23 @@ The assistant acts by writing plain lines in a reply, and every such line in it 
     SPAWN <project> | what the new worker should do
     SPAWN IN <directory, worktree directory name, or branch> | what the worker should do in that tree  (no new worktree)
 
-**A SPAWN IN name that is out of date is resolved, not refused.** The panel renames a finished run's worktree
-directory and its branch after the thread title once, on the run that got the tree first (`renameWorktree` — the
+**Every command line is reconciled against what the panel actually did with it.** Each kind already journals its own
+refusals — a busy thread, a TODO id that does not exist, a WATCH with no such thread, a RESTART with no key — so the
+audit is not a second vocabulary: it counts. Every turn of the assistant's own gets one ledger
+(`lib/assistant/audit.js`, persisted in `assistant.json`): the lines `parseActions` read per kind, the outcome each
+one got as it was carried out (applied, or refused — with the journal line that says why), and a third count for lines
+that begin with a known prefix and miss its grammar, which used to be dropped with no journal line at all
+(`TO wtgui-x without a colon` is recorded as unparsed instead of vanishing). When parsed exceeds applied plus refused,
+the sentry raises a red card naming the turn, the kind and the missing count, and writes `command-unactioned` to the
+journal, which `digest()` carries beside `spawn-unstarted` — the board cannot show a line that did nothing, and a
+model re-reading its own prose otherwise believes it acted. The parsed side comes from the turn's own lines, which
+outlive the process in the job store, so a turn a restart cut in half is reconciled by the **next** pass instead of
+being carried out by nobody. **Settings → command audit** is `off` (the default: nothing is read), `report` (the red
+card and the journal line), or `enforce` (the same, and the lines nothing accounted for are carried out once on the
+following pass — a line that already ran is never replayed).
+
+**A SPAWN IN name that is out of date is resolved, not refused.** The panel renames a run's worktree
+directory and its branch after the session title once, on the run that got the tree first (`renameWorktree` — the
 slug is rebuilt from the title, the six-hex tag kept; every later run in that tree leaves the name alone, see
 *What a worktree is called*), so a path the assistant wrote down when that worker finished, or one typed from an older
 report, stops existing while the tree is standing one directory over. So an existing-tree spawn no longer
@@ -637,6 +903,15 @@ ended it — so no card is left with neither a done nor an interrupted verdict. 
 is proved with **one real turn through the gateway, never with its port**, and only then is the assistant woken
 once with the completion payload of everything the restart interrupted.
 
+A turn is not proof that anything was restarted: the gateway that was already there answers it perfectly well.
+So a restart is accepted only when `gateway_state.json` reports a **different pid** within 30 s of the command.
+`hermes gateway restart` is a service-manager verb and the board's gateway is a foreground `gateway run`, so
+the command can exit 0 having done nothing; when the pid does not move the panel stops the recorded pid and
+starts the recorded argv itself (`python -m hermes_cli.main gateway run …`, detached, with `HERMES_HOME` set,
+from the checkout the argv came from). If the pid still does not move, the restart is recorded as a **failure**
+with the reason `the gateway process never changed`, in the journal and in `logs/gateway-restart.log` — a false
+success there once had the board reporting a sixteen-hour-old gateway as freshly restarted.
+
 A panel restart hands the port over: the outgoing process writes what was running into `restart.json` beside
 the job store, spawns a detached helper (`lib/panel-restart.cjs`) that waits for the old pid to exit and only
 then starts `server.js` (and writes `logs/server.pid`), and exits through the same path a signal uses. The
@@ -645,6 +920,15 @@ panel did *not* ask for: if runs stop reporting while the panel is still up — 
 longer knows their run ids — each lost run is marked interrupted once and the assistant is told once, with the
 same payload each time. A gateway restart is invisible from the outside (its port answers either way), which is
 why the sweep asks the runs themselves and why the proof is a real turn.
+
+Giving a card the interrupted verdict is not stopping its run. The run lives in the gateway, and one whose
+client is gone keeps executing — holding a concurrency slot and a `session_turn_lease` nobody will release:
+nine of them once filled every slot until the gateway was bounced by hand. So every interrupt path also POSTs
+`/v1/runs/<id>/stop`, taking **404 and 409 as already gone**, journalling each attempt and its answer and never
+letting a failed stop hold up the verdict. The same ask is made once at boot for any run the panel inherited
+that was issued to an **earlier gateway identity** (a run id belongs to one process's memory), after the boot
+reconcile has had its chance to re-attach the runs the current gateway still holds — those are live work and
+are never stopped.
 Each finished turn is harvested exactly once (keyed by turn id, persisted): a turn's title landing or a panel
 restart re-emits the same job, and re-reading its lines would otherwise start a second worker.
 
@@ -659,7 +943,8 @@ with the line and the reason (`spawn-failed`, `send-failed`, `watch-failed`, `ru
 
 **The scratchpad** is one JSON file beside the job store (`assistantFile`, default
 `logs/assistant.json`): `settings`, `notes` (freeform, read every turn), `rules` (standing answers),
-`watches`, persisted `alerts` (so a restart does not shout twice) and a capped `journal`. It is written
+`watches`, persisted `alerts` (so a restart does not shout twice), the spawn debt (`spawnIntents` — every SPAWN
+line and whether it became a card, a job or nothing) and a capped `journal`. It is written
 through a temp file + rename, and a second panel instance with its own `jobsFile` keeps its own.
 The panel's **Scratchpad** tab edits the notes and rules; **Watches** adds and removes watches; **Alerts**
 dismisses one, hands it to the assistant, or opens the agent. A watch with a deadline carries a live countdown
@@ -672,7 +957,7 @@ Watches without a deadline, and finished ones, say so instead.
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `port` | 7331 | HTTP port |
-| `scanRoots` | `["C:/ProjectDevelopment"]` | directories scanned for git repos; every repo found becomes a monitored project |
+| `scanRoots` | none (unset) | directories scanned for git repos; every repo found becomes a monitored project |
 | `host` | `127.0.0.1` | bind address. Loopback keeps the board to this machine. `0.0.0.0` makes it reachable from the LAN or a tailnet — set `PANEL_TOKEN` in the same breath, because this panel spawns processes and can write files |
 | `PANEL_TOKEN` | *(unset)* | **an environment variable, not a config key.** The shared secret for writes from **other** machines; loopback is never challenged, so a local browser needs nothing. With it missing (or empty) every off-machine write is refused — the door closes, it does not open. With one, a remote browser authenticates once by opening `http://<host>:7331/?token=…` (the client remembers it and sends `x-panel-token` from then on). Reads — `/api/state`, `/api/stream`, the static files — stay open to anyone who can reach the port, so keep it on a LAN or a tailnet and never a public network |
 | `token` | — | *ignored.* A leftover `token` key in `config.json` is logged and then disregarded: that file is tracked by git, so a secret in it would be a secret in the repository. Use `PANEL_TOKEN` |
@@ -681,29 +966,37 @@ Watches without a deadline, and finished ones, say so instead.
 | `apiServer` | `{"url":"http://127.0.0.1:8642"}` | `url` of the gateway's api_server, and optionally `key` (else `API_SERVER_KEY` from `$HERMES_HOME/.env`) |
 | `jobMaxRuntimeSeconds` | 3600 | hard cap on a spawned job |
 | `assistantFile` | `logs/assistant.json` | the assistant's scratchpad: settings, notes, standing rules, watches, alerts and journal |
-| `assistant` | `{}` | starting knobs for the assistant: `enabled`, `autonomy` (`draft`/`auto-safe`/`auto`), `spawn` (`off`/`ask`/`auto`), `model`, `cwd` (its own working directory — created if missing; default `assistant-cwd` beside the job store), `seconds`, `repeatLimit`, `quietSeconds`, `approvalSeconds`, `contextPercent`, `maxWakesPerHour`, `rearmSeconds`, `rules:{id: log\|alert\|wake\|act}`. The panel writes changes back to `assistantFile`, so this is the first-run default |
+| `assistant` | `{}` | starting knobs for the assistant: `enabled`, `autonomy` (`draft`/`auto-safe`/`auto`), `spawn` (`off`/`ask`/`auto`), `spawnAutoStart` (boolean, default off — start a spawn card once when its two-minute check finds no run), `model`, `cwd` (its own working directory — created if missing; default `assistant-cwd` beside the job store), `seconds`, `repeatLimit`, `quietSeconds`, `approvalSeconds`, `contextPercent`, `maxWakesPerHour`, `rearmSeconds`, `rules:{id: log\|alert\|wake\|act}`. The panel writes changes back to `assistantFile`, so this is the first-run default |
 | `liveSeconds` | 5 | how often liveness evidence is re-read for every row (no git) |
 | `worktreeSeconds` / `dormantSeconds` | 5 / 30 | active-row / dormant-row git scan cadence |
 | `slowSeconds` | 60 | project meta, discovery, and expensive per-row fields |
 | `fetchSeconds` | 600 | how often remotes are fetched |
 | `refreshSeconds` | 30 | client resync interval |
 | `liveMinutes` | 5 | how recent activity counts as live |
+| `hideOlderThanDays` | 7 | how old a worktree's **last activity** has to be before its chart stops drawing it. Activity, never the age of the directory: the newest of its last commit, its last edited file, the last moment the panel saw it alive and any event received about its agents — so a tree cut months ago that somebody is working in today stays. Nothing is lost: the arrow at the bottom of that project's chart (visible while the pointer is over it) shows every tree again, and each `older hidden` chip says how many are held back. `0` shows everything. Written back by `POST /api/settings/age` (Settings → **Hide stale worktrees**) |
 | `threads` | 4 (capped) | scan worker threads |
 | `discovery.worktreeSource` | `git` | `git` probes each repo (6-7 calls, ~0.8s, the default) or `hermes` runs `hermes worktree list --json` (5.5-7.2s per repo, measured on Windows). `hermes` additionally reports per-tree `locked`/`missing` and a per-branch keep/reap verdict; it is opt-in because discovery sweeps every repo on `slowSeconds`. Either way `/api/cleanup?project=NAME` gives the full audit for one repo on demand |
+| `remoteBranchPolicy` | `local-only` | whether a branch may exist on a **remote** at all, GLOBALLY. `local-only` (the default): every tree the panel cuts stays on this box — the pre-push hook it installs refuses a `git push` out of one and asks you through the permission box instead (Allow once / this session / Always allow / Deny), and the panel's own merge flow asks before it starts. `allow`: remote writes go through without asking (this is what **Always allow** in the box writes, so the box and the setting are one fact). `deny`: refused outright, and the box is not even offered. Written back by `POST /api/settings/remote-branches` (Settings → **Branches on the remote**), so it survives a restart. **A project overrides it** — see `projects[].remoteBranchPolicy` | 
+| `projects[].remoteBranchPolicy` | inherits the global | the policy in force for ONE project, overriding `remoteBranchPolicy` for every tree cut in it: the guard the panel installs there, the guard's answers, and the merge flow all read this value (`lib/remote-writes.js` `policyForProject`). Live report: `settings.remoteBranchPolicies` in `/api/health`, and `policy` on each tree in `logs/push-guard.json`. This panel and heroes-js are `allow` because they land by pushing a branch and opening a PR; every other checkout stays on the global `local-only`, where a child of a local turnover branch merges into its parent instead of landing on a shared remote | 
+| `remoteWriteSeconds` | 300 | how long a parked remote-write question waits before it is denied — the box's countdown and the guard's own poll window |
+| `pushGuardFile` | `logs/push-guard.json` | the panel's record of which worktrees carry the pre-push guard, when it went in, and the policy it was written with (git holds the hooks path itself) |
+| `branchParentsFile` | `logs/branch-parents.json` | which branch each tree was CUT FROM, recorded at the `git worktree add` and keyed on the tree's six-hex tag so a rename does not lose it. It is what lets a run's brief name its real parent branch (`git worktree add -b` records no such thing) |
 | `cloneOwner` | `JLRoper` | GitHub owner used by `/api/clone` (and the folder **+** box) when the typed name has no `owner/` prefix |
-| `projects[]` | — | `name`, `path`, `remote`, `mainBranch`, `prRepo` |
+| `projects[]` | — | `name`, `path`, `remote`, `mainBranch`, and optionally `remoteBranchPolicy` (the branch and PR links are not configured here: they come from the project's host record — `docs/hosts.md`) |
 
 ## Endpoints
 
 | Method | Route | Notes |
 | --- | --- | --- |
 | GET | `/api/health`, `/api/config`, `/api/stats` | settings / scheduler / pool |
+| GET | `/api/build` | the build this process is serving: `{version, bootedAt, computedAt, uptimeSeconds, files}` — a short hash over `index.html`, every script/stylesheet it loads and everything under `public/core`, plus the per-file sha256. The shell's asset URLs carry `version`; the page polls this to learn the panel restarted (or that `public/` was edited under it) |
 | GET | `/api/state` | full snapshot (projects, worktrees, jobs, spawn info) |
 | GET | `/api/cleanup?project=NAME[&fresh=1]` | on-demand `hermes worktree list --json` audit for one repo: trees, external trees (`locked`/`missing`), per-branch keep/reap verdict + reason. ~6s, cached 10 min |
+| GET/POST | `/api/hosts` · `/api/hosts/propose` · `/api/hosts/mapping` | where a project's branches and PRs live. GET: the merged mapping (`hosts` records, the file pair, warnings, and each project's `view`). POST `propose` `{project}`: read that project's own remote and return the mapping it implies — writes nothing. POST `mapping` `{project, host, coordinates}`: write ONE project into `logs/hosts.json`, leaving every other record alone. Tokens, precedence and the landing doctrine: `docs/hosts.md` |
 | GET/POST | `/api/approvals`, `/api/approvals/answer`, `/api/approvals/<id>` | human side of the Hermes approval-transport contract: list pending requests, answer one (`{id, choice}` within the request's `allowed_choices`), poll one request's status. Requests expire to `deny` |
 | POST | `/api/clone` | clone a GitHub repo over ssh into one configured scan root: `{root, name}` where `root` must equal a `scanRoots` entry and `name` is `repo` or `owner/repo`. Refuses anything else (no paths, no URLs), and a destination that already exists. Responds when git finishes; discovery picks the repo up on the next pass |
 | GET | `/api/jobs` | job list plus `transport` (gateway URL, reachability, `capabilities`: runs/events/steer/stop/approval/runCwd/runBudget/maxTurns) |
-| GET | `/api/stream` | SSE: `snapshot`, `row`, `project`, `drop`, `job`, `jobline`, `jobs`, `heartbeat` |
+| GET | `/api/stream` | SSE: `snapshot`, `row`, `project`, `drop`, `job`, `jobline`, `jobs`, `approval`, `approval-answered`, `remote-write`, `remote-write-answered`, `settings`, `heartbeat` |
 | POST | `/api/agents/preview` | returns the exact run request that would be sent (`{transport, request, blocked}`), without sending it |
 | POST | `/api/agents` | start a run (`{prompt, cwd?, project?, model?, budget?, maxTurns?, existing?}`); `{dryRun:true}` returns the request instead. **503** when the gateway's api_server is unreachable or unkeyed |
 | POST | `/api/agents/reply` | `{thread, text}` → another turn on the same `session_id` |
@@ -715,10 +1008,10 @@ Watches without a deadline, and finished ones, say so instead.
 | GET | `/api/sessions?path=` | the Hermes sessions the scheduler attributes to one worktree row: `{id, title, matched, lastActivityAt, onBoard}`. The same answer the row's "idle session" claim comes from |
 | POST | `/api/sessions/revive` | `{sessionId, path}` → a job record for a session the board has no card for (the run itself lives in the gateway; a reply continues it). **404** when the store does not attribute that session to that row, **409** when it already has a card |
 | GET/POST | `/api/settings/sessions` | the CLI's session-list length: GET reports `sessions.list_limit`, the store's real size (sessions, messages, by source) and whether the local CLI patch that reads the key is installed; POST `{listLimit}` rewrites that one line in `config.yaml`. **400** outside 1–500 |
-| GET | `/api/models` | the New-agent model menu: `{defaultModel, provider, count, fetchedAt, staleDays, providers:[{id,label,models}]}` — the provider list Hermes itself fetched, grouped, with the configured default first in its group. Falls back to the shipped catalogue when no provider was ever picked |
+| GET | `/api/models` | the model menu: `{defaultModel, provider, count, fetchedAt, staleDays, providers:[{id,label,models,pricing}], pricingAt, pricingAge, pricingSource, pricingSnapshotAt, pricedCount, ratedCount, ratedFromSnapshot}` — the provider list Hermes itself fetched, grouped, with the configured default first in its group. Falls back to the shipped catalogue when no provider was ever picked. `pricing` is the ONE price table, per provider: model id → `{input, output, average?, coding?, rating?, ratingSource?, variable?}` — in/out USD per 1M tokens (the gateway's own strings) plus a 0-10 rating, absent rather than zero when nothing has priced or scored that model. It is composed by `lib/model-prices.js` from the panel's cache over the committed `data/openrouter-model-prices.json`, so both model fields and a card's readout quote the same numbers |
 | GET | `/api/assistant` | the sentry's whole state: settings, rule definitions, alerts, watches, notes, journal, wake counter and the current board digest |
 | POST | `/api/assistant/say` | `{text}` → one turn on the assistant's own thread (`panel-assistant`), with the scratchpad and board digest attached to the input. **409** while its previous turn is still running |
-| POST | `/api/assistant/settings` | `{autonomy, model, seconds, repeatLimit, quietSeconds, approvalSeconds, contextPercent, maxWakesPerHour, rules:{id: escalation}}` — applied immediately, saved in the scratchpad |
+| POST | `/api/assistant/settings` | `{autonomy, model, seconds, repeatLimit, quietSeconds, approvalSeconds, contextPercent, maxWakesPerHour, spawnAutoStart, rules:{id: escalation}}` — applied immediately, saved in the scratchpad |
 | POST | `/api/assistant/alert` | `{id, action:"dismiss"\|"ask"}` — `ask` wakes the assistant with that alert's digest |
 | POST | `/api/assistant/answer` | `{thread, text, alertId?}` — post a reply into a worker's thread from the panel (the only route that does it on your behalf) |
 | POST | `/api/assistant/answer-question` | `{id, answer}` — settle a question a run is parked on (the `clarify` control), from a choice button or a typed answer; `answer` is a string, or an **array** for a multi-select question. Not a reply: a reply would queue behind the held turn |
@@ -731,6 +1024,13 @@ Watches without a deadline, and finished ones, say so instead.
 | POST | `/api/jobs/clear` | drop finished jobs from the list |
 | GET/POST | `/api/restart` | restart the gateway or this panel. GET reports the queue, the last action, the provider-key preflight (`$HERMES_HOME/.env`, or the `model.api_key` line of `config.yaml`) and where `restart.json` is written; POST `{target:"gateway"\|"panel", reason?, waitFor?}` **queues** the action and answers **202** at once. It runs when `waitFor` (default `panel-assistant`) has no turn running, gives every interrupted run one `interrupted` status, proves the new process with one real turn and wakes the assistant once with the payloads. **400** for another target, **409** when one is already queued/running or when no provider key is present |
 | POST | `/api/refresh` `/api/fetch` `/api/reload` | force a fast pass / fetch remotes / re-read config |
+| POST | `/api/settings/age` | `{days}` → how old a worktree's last activity must be before the worktree chart holds its row back (`config.json`'s `hideOlderThanDays`; `0` shows everything). Rewrites only that key, answers with the settings the page then redraws from, and broadcasts the new snapshot to every open board |
+| GET | `/api/remote-write/state` | the remote-write policy, what is parked on the permission box, which trees have a standing grant, and `guards` (which worktrees carry the pre-push hook, and where) |
+| POST | `/api/remote-write/request` | **the guard asking.** `{worktree, branch, remote, refs, remoteUrl}` → `{allowed:true}` (the setting allows it, the tree was started to land, or a grant stands), `{refused:true}` (`deny` — no question is offered), or `{id, deadline}` — a question parked on the box. Local-only by nature: the hook runs on this machine, so it needs no token |
+| GET | `/api/remote-write/status?id=` | what a parked hook long-polls: `pending`, or `answered` with the choice. A request nobody answered reads `deny` once its window closes |
+| POST | `/api/remote-write/answer` | `{id, choice}` from the panel's permission box — `once` / `session` / `always` (which **writes the setting**) / `deny`. A granted panel-side write (a parked merge) is resumed by the same call |
+| POST | `/api/remote-write/guard` | `{action:"install"\|"remove", path?, project?}` → put the pre-push guard in one worktree, a project's worktrees, or (with neither) every local-only tree on the board. Idempotent; the automatic path is the panel's own worktree creation |
+| POST | `/api/settings/remote-branches` | `{policy:"local-only"\|"allow"\|"deny"}` → write `config.json`'s `remoteBranchPolicy`, push it into every installed guard's own copy, and broadcast `settings`. **400** for anything else |
 
 ## Roadmap
 
@@ -750,9 +1050,14 @@ Watches without a deadline, and finished ones, say so instead.
   (`docs/hermes-runs-api-knobs.diff`) is not applied, or was lost to `hermes update`. The chip says
   `gateway ignores per-run cwd` when this is the case.
 - **A tool result in the console is cut short** — the run stream carries a *preview* of each tool
-  result, not all of it. The gateway caps it at 8000 chars by default (`HERMES_RUN_PREVIEW_CHARS` on
-  the gateway process changes it); the console unwraps the JSON envelope, prints the text, and ends
-  with `… result truncated by the gateway` when it was cut.
+  result, not all of it. The gateway caps it at **500 chars** by default (`preview[:497] + "..."`, cut
+  mid-line); `HERMES_RUN_PREVIEW_CHARS` on the gateway process raises it — `0` = full — and a running
+  gateway needs a restart for that to take effect. The console unwraps the JSON envelope, prints the
+  text, and ends with `… result truncated by the gateway` when it was cut. Nothing is lost: the whole
+  result is stored verbatim in `state.db` (`messages.content`, `role='tool'`) and `lib/tool-results.js`
+  already reads it back. Measured numbers, the exact lines, and the CLI spawn path's own separate
+  5,000-char cap (`HERMES_STREAM_TOOL_CAP`): [docs/tool-output-truncation.md](docs/tool-output-truncation.md),
+  re-measurable with `node tools/measure-tool-output-cap.mjs`.
 - **A flagged command runs without asking** — check `approvals.mode` (`smart` waves many through)
   and `security.approval.transport` (must be `builtin` for runs).
 - **No stats row above a reply box, or an agent writing outside its worktree** — the same cause:

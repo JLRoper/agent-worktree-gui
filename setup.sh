@@ -5,15 +5,18 @@ set -eu
 cd "$(dirname "$0")"
 
 if ! command -v node >/dev/null 2>&1; then
-  echo "[x]    node not found on PATH -- install Node 18 or newer"
+  echo "[x]    node not found on PATH -- install Node 22.5 or newer"
   exit 1
 fi
-major=$(node -p 'process.versions.node.split(".")[0]')
-if [ "$major" -lt 18 ]; then
-  echo "[x]    node $major is too old -- the panel needs Node 18 or newer"
+version=$(node -p 'process.versions.node.split(".").slice(0,2).join(".")')
+major=${version%%.*}
+minor=${version#*.}
+# 22.5 is the floor because node:sqlite landed there, and lib/ imports it statically.
+if [ "$major" -lt 22 ] || { [ "$major" -eq 22 ] && [ "$minor" -lt 5 ]; }; then
+  echo "[x]    node $version is too old -- the panel needs Node 22.5 or newer (node:sqlite)"
   exit 1
 fi
-echo "[ok]   node $major"
+echo "[ok]   node $version"
 
 if ! command -v git >/dev/null 2>&1; then
   echo "[x]    git not found on PATH -- the panel reads every worktree with it"
@@ -28,9 +31,9 @@ else
 fi
 
 if [ -f config.json ]; then
-  echo "[ok]   config.json present -- check \"scanRoots\" points at where your repos live"
+  echo "[ok]   config.json present -- if it names no \"scanRoots\", the board asks where your repos live"
 else
-  echo "[info] no config.json -- the panel will start on defaults (scanRoots = the parent folder)"
+  echo "[info] no config.json -- the panel starts on defaults and the board asks where your repos live"
 fi
 
 echo

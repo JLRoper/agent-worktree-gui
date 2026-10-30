@@ -9,25 +9,31 @@
   "prCacheSeconds": 1800,
   "remoteCacheSeconds": 1800,
   "liveMinutes": 5,
+  "hideOlderThanDays": 7,
   "threads": 5,
-  "scanRoots": [
-    "C:/ProjectDevelopment"
-  ],
   "liveSeconds": 5,
   "discovery": {
     "worktreeSource": "git"
   },
   "host": "0.0.0.0",
-  "defaultCwd": "C:/ProjectDevelopment/heroes-js",
   "jobMaxRuntimeSeconds": 3600,
   "hermesBin": null,
+  "remoteBranchPolicy": "local-only",
   "projects": [
     {
       "name": "heroes-js",
-      "path": "C:/ProjectDevelopment/heroes-js",
       "remote": "github",
       "mainBranch": "main",
       "prRepo": "JLRoper/vigilant-palm-tree",
+      "remoteBranchPolicy": "allow",
+      "worktrees": null
+    },
+    {
+      "name": "agent-worktree-gui",
+      "remote": "github",
+      "mainBranch": "main",
+      "prRepo": "JLRoper/agent-worktree-gui",
+      "remoteBranchPolicy": "allow",
       "worktrees": null
     }
   ]

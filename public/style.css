@@ -151,6 +151,24 @@ button.primary:hover { background: #24466a; }
 
 .banner { margin: 10px 16px 0; padding: 8px 12px; border-radius: 6px; background: var(--red-bg); border: 1px solid #57262a; color: #ffb4ae; font-size: 13px; }
 .banner.ok { background: var(--green-bg); border-color: #1f4a2a; color: #b7f7c1; }
+/* ---- the update chip ----
+   A different build than the one this tab loaded is an interruption the reader can decline, so it
+   is a chip and not a window: bottom-left, clear of the approvals dock (bottom-right) and the
+   assistant (top-right). The Reload button is disabled while a draft or a streaming turn holds it,
+   and its text says which — the panel never reloads over something the reader cannot get back. */
+.update-chip {
+  position: fixed; left: 16px; bottom: 16px; z-index: 60;
+  display: flex; align-items: center; gap: 10px;
+  max-width: min(720px, calc(100vw - 32px));
+  padding: 8px 11px;
+  background: var(--panel-2); border: 1px solid #4a3a17; border-left: 3px solid var(--amber);
+  border-radius: 8px; box-shadow: 0 10px 26px #0008;
+  color: var(--text); font-size: 12px;
+}
+.update-chip .uc-text { color: var(--dim); }
+.update-chip button { padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
+.update-chip button:hover { border-color: #3b4757; }
+.update-chip button:disabled { color: var(--dimmer); cursor: default; }
 /* settings panel: a small popover under the top bar */
 /* A fixed panel with a scrolling body: the head stays put (and the close button with it) however far down the
    reader is. The body owns the scrollbar so the rounded border is never clipped by it. */
@@ -472,6 +490,13 @@ body.addbar-top .agents-block > .add-agent-form { order: -1; margin-top: 0; marg
 .approval-dock.is-folded #approval-list { display: none; }
 .approval-dock.is-folded .ap-dock-head { border-bottom: 0; }
 #approval-list { overflow: auto; }
+/* The permission box for a remote write wears the same chrome as a parked turn's approval (.turn-approval), which
+   is deliberately in-card markup. Inside the dock it needs nothing but a trim: the dock already has the border and
+   the shadow, so the inner box keeps its own colour and loses the outer glow. */
+#approval-list .turn-approval { margin: 0 0 0 0; border-radius: 0; border: 0; border-bottom: 1px solid #4a3a17; box-shadow: none; }
+#approval-list .turn-approval .ta-head { font-size: 11px; }
+#approval-list .turn-approval .ta-note { margin-top: 6px; font-size: 11px; color: #d8c79a; }
+#approval-list .turn-approval-done { border-radius: 0; }
 .approval { padding: 10px 14px; border-bottom: 1px solid var(--line); }
 .approval:last-child { border-bottom: 0; }
 .ap-head { display: flex; align-items: center; gap: 10px; font-size: 11px; }
@@ -521,10 +546,10 @@ button.btn-plus:hover { background: #1f4a2a; color: #d6ffe0; border-color: #3fb9
   font: 12px var(--mono);
   max-width: 240px;
 }
-/* The model picker carries provider-qualified ids ("anthropic/claude-sonnet-5.5"); the shared
-   240px cap cuts them off, and this is the one select in the form whose value is read before
-   spawning. */
-.form select#job-model { min-width: 210px; max-width: 320px; }
+/* The model picker carries provider-qualified ids ("anthropic/claude-sonnet-5.5") and now a price
+   and coding-rating column beside each one; the shared 240px cap cut them off, and this is the one
+   select in the form whose value is read before spawning. */
+.form select#job-model { min-width: 210px; max-width: 460px; }
 .project.armed { box-shadow: 0 0 0 2px #2ea04380; transition: box-shadow .2s; }
 .project-head.meta-line { padding-top: 6px; padding-bottom: 6px; }
 
@@ -561,7 +586,7 @@ button.chip:active { transform: translateY(1px); }
 
 /* ---- new-agent form ---- */
 .form { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 9px; }
-.form textarea {
+.form textarea, .form #job-prompt {
   width: 100%;
   background: var(--surface);
   color: var(--text);
@@ -571,6 +596,9 @@ button.chip:active { transform: translateY(1px); }
   font: 13px/1.45 var(--mono);
   resize: vertical;
 }
+/* Three lines tall, which is what rows="3" was on the textarea this used to be: growBoxToDraft reads the
+   same number off data-rows and takes it from here. */
+.form #job-prompt { min-height: 74px; overflow-y: auto; }
 .form .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .form label { color: var(--dim); font-size: 11.5px; display: flex; gap: 5px; align-items: center; font-family: var(--mono); }
 .form input[type="text"], .form input:not([type]) {
@@ -660,6 +688,11 @@ button.btn-pin.is-on { color: #c8a6ff; border-color: #55407a; background: #2a204
 button.btn-think { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dimmer); font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; }
 button.btn-think:hover { color: var(--text); border-color: var(--line); }
 button.btn-think.is-on { color: #c8a6ff; border-color: #3d3350; background: #241d33; }
+/* The 🌊 beside the 🧠: the same button, saying the card is drawn as ONE stream. Blue rather than violet, because it
+   is a different choice rather than a second level of the same one. */
+button.btn-stream { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--dimmer); font-size: 12px; line-height: 1; padding: 2px 4px; cursor: pointer; }
+button.btn-stream:hover { color: var(--text); border-color: var(--line); }
+button.btn-stream.is-on { color: #9ed4ff; border-color: #2f4a63; background: #14202b; }
 
 
 /* A steer the turn never read: offered back, unsent, rather than sent as a second turn. */
@@ -740,6 +773,67 @@ button.pill-continue:disabled { cursor: progress; }
 /* While the nudge is being sent the glyph turns: "starting" without pretending to a status the panel does not know. */
 button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s linear infinite; }
 @keyframes pill-again-spin { to { transform: rotate(360deg); } }
+/* ---- the running card's pulse -------------------------------------------------------------------
+   The heartbeat on a live run's event stream (app.js livePulse): a looping dot and the last thing the panel
+   actually heard. It is a heartbeat, not a thought bubble - the tooltip says so in the agent's own card - and
+   the two quiet states are drawn differently on purpose: "no events yet" is the gateway not sending (amber,
+   attention), while a silent stream is a live run between events (grey, still pulsing). "polled" is the third
+   kind of not-knowing: a gateway with no event stream, where the card is read every 15s and nothing here can
+   judge the model. The pulse never carries reasoning text and never says what the agent is thinking. */
+.live-pulse {
+  display: inline-flex; align-items: center; gap: 5px;
+  flex: none; align-self: center;
+  font-family: var(--mono); font-size: 11px; line-height: 1.4;
+  padding: 1px 7px 1px 6px; border-radius: 9px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--dim);
+  white-space: nowrap; user-select: none;
+}
+.live-pulse .pulse-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+  animation: livepulse 1.4s ease-in-out infinite;
+}
+.live-pulse .pulse-text { font-variant-numeric: tabular-nums; }
+.live-pulse.is-stream { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
+.live-pulse.is-tool { color: #86c5ff; border-color: #1e3a56; background: var(--blue-bg); }
+.live-pulse.is-silent { color: var(--dim); border-color: var(--line); background: transparent; }
+.live-pulse.is-nosignal { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+.live-pulse.is-poll { color: var(--dimmer); border-style: dashed; background: transparent; }
+.live-pulse.is-poll .pulse-dot { animation: none; opacity: .5; }
+@keyframes livepulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.72); } }
+/* A looping dot is exactly what this asks to turn off. The state word and the age stay: only the motion goes. */
+@media (prefers-reduced-motion: reduce) { .live-pulse .pulse-dot { animation: none; } }
+/* The re-attach pill is the not-running pill: same word, same amber, same refresh glyph, same place on the card.
+   The reader is not asked to learn a second control for a card that is not running, and the state is the same one
+   the word already names. Only the CLICK differs, which is what this hook class carries: it asks the gateway about
+   the run this panel lost before it starts anything (still live -> the card re-attaches; ended -> the result is
+   adopted; forgotten -> the card settles and the thread is continued). */
+button.pill-reattach {
+  flex: none; align-self: center;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--ui); line-height: 1.5; cursor: pointer; vertical-align: middle;
+}
+button.pill-reattach .pill-again { font-size: 12px; line-height: 1; opacity: .8; }
+button.pill-reattach:hover { border-color: #6f5a1e; background: #33290f; }
+button.pill-reattach:hover .pill-again { opacity: 1; }
+button.pill-reattach:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 1px; }
+button.pill-reattach:disabled { cursor: progress; }
+/* While the gateway is being asked the glyph turns, exactly as the continue pill's does. */
+button.pill-reattach.is-starting .pill-again { animation: pill-again-spin .9s linear infinite; }
+/* The COMPLETE chip on a card whose latest turn is done: the same pill in the same place, at the same size — only the
+   colour and the word change, because a finished agent is not a stopped one. Green is the panel's own "finished happily"
+   colour (the RUNNING pill and a worktree row's MERGED use it), so nothing new is taught here. No refresh glyph: this pill
+   resumes nothing. Its press queues one ask for the board assistant instead of nudging the agent that already finished, and
+   `is-asked` is the short state change that says the ask landed. */
+button.pill-complete {
+  flex: none; align-self: center;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--ui); line-height: 1.5; cursor: pointer; vertical-align: middle;
+  color: #7ee787; border-color: #1f4a2a; background: var(--green-bg);
+}
+button.pill-complete:hover { border-color: #2f6b3d; background: #16301f; }
+button.pill-complete:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 1px; }
+button.pill-complete:disabled { cursor: progress; }
+button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); background: #20242c; }
 .pill.done { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
 .pill.failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .pill.cancelled, .pill.interrupted { color: var(--dim); background: #20242c; }
@@ -783,6 +877,61 @@ button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s li
 /* Scrolled to the newest line, or nothing to scroll: the chip fades out and stops taking clicks. */
 .out-wrap.is-at-end > .to-bottom { opacity: 0; pointer-events: none; }
 
+/* ---- the hover copy button -------------------------------------------------------------------------
+   One attribute, one mechanism: anything carrying `data-copy` is a block the reader can lift, and app.js
+   mounts a button into its corner itself - so a block another worker draws opts in by carrying the same
+   attribute, with nothing per-renderer. Hidden it is completely inert: out of the pointer's way, out of
+   the tab order and the accessibility tree, out of a selection dragged across the block, and always out
+   of the text flow - so revealing it reflows the block by nothing, and the gutter the block reserves for
+   it (below) is what keeps it off the block's own text, first line and fold chevron included. */
+.copy-block {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font: 11px/1 var(--mono);
+  color: #c3ccd8;
+  background: #161c24;
+  border: 1px solid #39424f;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity .14s ease, visibility .14s ease, color .14s ease, border-color .14s ease;
+}
+[data-copy] { position: relative; }
+/* The room the button needs, reserved whether or not it is showing so its appearance moves nothing:
+   the console's own text, a burst's call lines, a thinking block's title line. */
+[data-copy] > .job-out,
+[data-copy] > .tgrp-head,
+[data-copy] > summary { padding-right: 24px; }
+/* The reveal - the whole of it. A <details>'s button lives in its summary (the only part a folded one
+   renders), so both placements answer to the block being hovered. */
+[data-copy]:hover > .copy-block,
+[data-copy]:hover > summary > .copy-block { opacity: 1; visibility: visible; pointer-events: auto; }
+/* Nested blocks (a tool burst inside a console): only the block the pointer is actually in shows its
+   button, so hovering a burst never shows the console's as well. */
+[data-copy]:has([data-copy]:hover) > .copy-block:not(.is-copied):not(.is-failed) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.copy-block:hover { color: var(--text); border-color: #3a4353; }
+/* A confirmation stands on its own for a moment - the pointer may already have left the block, and it is
+   never the one a nested block's hover hides. */
+.copy-block.is-copied,
+.copy-block.is-failed { opacity: 1; visibility: visible; pointer-events: auto; }
+.copy-block.is-copied { color: #7ee787; border-color: #2f5f38; }
+.copy-block.is-failed { color: #ff9c94; border-color: #57262a; }
+
 .job-out {
   margin: 0;
   /* Resizable like the reply box. The max-height is the cap the console always had — the drag lifts it
@@ -813,6 +962,13 @@ button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s li
 /* The console is a <pre>: the template's own newlines would render as blank lines, so the block normalises
    whitespace and only its real transcript lines keep it. */
 .tgrp { margin: 3px 0 6px; padding-left: 8px; border-left: 2px solid #2c3542; white-space: normal; }
+/* A piece of ONE stream: the same markup without the rail, the indent or the gap, so a call sits in the flow exactly
+   like the prose and the reasoning around it. Nothing in it is folded, so nothing in it is chrome either. */
+.tgrp.tgrp-flat { margin: 0; padding-left: 0; border-left: 0; }
+.tgrp-flat > .tgrp-body { margin-top: 0; padding-top: 0; border-top: 0; }
+/* The reasoning, drawn as a line of that stream rather than as a block above it. It keeps the block's own voice
+   (italic, dim) so it still reads as thought and not as something the agent said out loud. */
+.jl-think { color: #b3a8cc; font-style: italic; }
 .tgrp .jl { white-space: pre-wrap; }
 .tgrp-head { display: flex; flex-direction: column; gap: 1px; }
 .tgrp-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; cursor: pointer; border-radius: 3px; }
@@ -820,6 +976,9 @@ button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s li
 .tgrp-row.is-active { background: rgba(200, 166, 255, .10); }
 .tgrp-row.is-active .tgrp-name { color: #ecd9ff; }
 .tgrp-row:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+/* A trimmed burst's head row names the block; it is not a filter target like a tool row, so it must not look clickable. */
+.tgrp-row.tgrp-row-trimmed { cursor: default; }
+.tgrp-row.tgrp-row-trimmed:hover { background: none; }
 .tgrp-g { flex: none; width: 15px; }
 .tgrp-name { flex: none; color: #c8a6ff; }
 .tgrp-n { flex: none; color: var(--dim); }
@@ -842,6 +1001,24 @@ button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s li
 .jl-note { font-style: italic; }
 .jl-store { color: var(--dim); white-space: pre-wrap; word-break: break-word; }
 .tgrp-body { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--line); }
+/* One tool call and its output. The call's own row is the handle for the fold: the caret is a real button (so Tab
+   reaches it and Enter/Space press it) and the row around it does the same thing, which is why the caret is small
+   and quiet. Folded, the row is the whole call: its own line plus the line count. The fold covers this call's
+   output and nothing else - the rest of the card is not touched by it. */
+.call { margin: 1px 0; }
+.call-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; border-radius: 3px; cursor: pointer; }
+.call-head:hover { background: rgba(255, 255, 255, .035); }
+.call-head > .jl { flex: 1 1 auto; min-width: 0; }
+.call-fold {
+  flex: none; width: 15px; padding: 0; border: 0; background: none; color: var(--dimmer);
+  font: inherit; line-height: inherit; text-align: left; cursor: pointer;
+}
+.call-fold:hover { color: var(--text); }
+.call-fold:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.call-n { flex: none; color: var(--dimmer); font-size: .92em; }
+.call-hint { flex: none; color: var(--dimmer); font-size: .92em; font-style: italic; }
+.call.is-folded .call-head > .jl { color: #c8a6ff; }
+.call-body { min-width: 0; }
 /* Pasted documents, as chips above the box: [name.txt] ×. The path is what the agent gets, so it
    lives in the tooltip rather than in the sentence being typed. */
 .attach-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 6px; }
@@ -884,13 +1061,123 @@ button.btn-retry:disabled { color: var(--dimmer); border-color: var(--line); cur
 .btn-fix-first:disabled { color: var(--dimmer); border-color: var(--line); cursor: default; }
 
 /* A document is being dragged over the box that will carry its path. */
-textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
+textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 
 /* a tool's own output, shown under its call so the console says what actually happened */
 .jl-tool-out { color: var(--dim); padding-left: 14px; white-space: pre-wrap; }
 .jl-cmd { color: var(--dimmer); }
 .jl-dim { color: var(--dimmer); font-style: italic; }
 .jl-raw { color: var(--dim); }
+
+/* A unified diff, drawn as a window per hunk (core/console-format.js builds it). The head is the frame's own
+   chrome: the identifiers (the file headers, the @@ line, a git/mode line) sit on it as a compact wrapped strip,
+   never as rows of the body — the body is the file's changed lines and nothing else. The body is a two-column
+   grid: the AFTER side on the left, the BEFORE side on the right, so a modification's two halves sit on one row
+   and read as one change with what the file says now first.
+   Both sides WRAP. A diff line is often 200+ characters (a minified line, a long path) and the console is a
+   few hundred pixels wide: with `nowrap` the window would scroll sideways and the reader would lose the
+   alignment that is the whole point of two sides. minmax(0, 1fr) is load-bearing — a bare 1fr refuses to
+   shrink below its content and pushes the grid wider than the console. */
+.df-win {
+  margin: 4px 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #10151c;
+  overflow: hidden;
+  white-space: normal;
+}
+.df-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 4px 8px;
+  background: #161d26;
+  border-bottom: 1px solid var(--line);
+}
+.df-body { padding: 2px 0; white-space: normal; }
+.df-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); white-space: normal; }
+.df-row > .df-c:nth-child(2) { border-left: 1px solid rgba(255, 255, 255, .07); }
+.df-c {
+  min-width: 0;
+  padding: 0 8px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+/* Context is the unchanged surroundings: quiet, and spanning both sides so it reads as a separator between
+   changes rather than as a line of either side. */
+.df-c.is-ctx { grid-column: 1 / -1; padding-left: 8px; color: var(--dimmer); }
+/* A modification: the after half green on the left, the before half yellow on the right. A pure removal is red,
+   drawn full width, and a pure addition green on the left with its right cell left empty. */
+.df-c.is-mod { color: #f0c674; background: rgba(210, 153, 34, .10); padding-left: 8px; }
+.df-c.is-del { color: #ff9c94; background: rgba(229, 83, 75, .10); padding-left: 8px; }
+.df-c.is-add { color: #7ee787; background: rgba(46, 160, 67, .10); padding-left: 8px; }
+.df-c.is-gap { background: transparent; }
+/* The labels: the headers and the hunk line, quiet and monospace, never competing with the body. */
+.df-label { padding: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .96em; }
+.df-label.is-meta { color: var(--dimmer); }
+.df-label.is-minus { color: #ff9c94; }
+.df-label.is-plus { color: #7ee787; }
+.df-label.is-hunk { color: #9ecbff; }
+.df-lab-path { font-style: italic; }
+/* The cut edge of a hunk the gateway's preview stopped in the middle of: the frame's own sentence that this is
+   not the whole change, and where the rest of the result can be read. It spans the window's width, because it is
+   about the hunk above it rather than a line of either side. */
+.df-cut { padding: 2px 8px 3px; color: var(--dim); background: rgba(210, 153, 34, .07); border-top: 1px dashed rgba(210, 153, 34, .35); }
+.df-cut-hint { color: #e0b341; font-style: italic; }
+
+/* A file printed into the console that is NOT a diff: the same window shape, its header naming the file, and
+   folded by default — the reader can see that a file was printed, and which one, without reading it. */
+.code-box { margin: 4px 0; border: 1px solid var(--line); border-radius: 6px; background: #10151c; overflow: hidden; white-space: normal; }
+.code-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  background: #161d26;
+  color: var(--dim);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.code-head:hover { background: #1b232e; color: var(--text); }
+.code-head:focus-visible { outline: 1px solid #4a90d9; outline-offset: -1px; }
+.code-box.is-open .code-head { border-bottom: 1px solid var(--line); }
+.code-caret { flex: none; color: var(--dimmer); }
+.code-what { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c8a6ff; }
+.code-n { flex: none; margin-left: auto; color: var(--dimmer); }
+.code-hint { flex: none; color: var(--dimmer); font-size: .9em; }
+.code-head:hover .code-hint { visibility: hidden; }
+.code-body { padding: 4px 8px; white-space: normal; }
+.code-body .jl { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* The UA's own [hidden] rule is one attribute selector and loses to a class: without this the folded body
+   would render anyway. */
+.code-body[hidden] { display: none; }
+
+/* The panel's own fold, at the foot of a result the card kept only the head of: "… 214 lines hidden — click to
+   read". It is a button because the rest of the result is one click away (the session store has it verbatim), and
+   it reads as the note it has always been until the pointer is over it — a card full of long results should read
+   as a transcript, not as a wall of controls. */
+.jl-fold { margin: 1px 0; }
+.fold-read {
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--dimmer);
+  font: inherit;
+  font-style: italic;
+  text-align: left;
+  cursor: pointer;
+}
+.fold-read:hover { color: var(--text); border-color: var(--line); background: #161d26; }
+.fold-read:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.fold-read[disabled] { cursor: progress; }
 .job-foot { margin-top: 6px; font-size: 11.5px; }
 /* the CLI's prompt readout for a card: context occupancy, cache hit, latency, throughput. It rides
    on the footer line, to the right of the outcome and token count, behind a rule so the two groups
@@ -939,8 +1226,10 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 .model-ctx-n { color: var(--dimmer); font-size: 10.5px; padding-left: 6px; }
 .model-hint { font-size: 10.5px; padding: 4px 7px 6px; }
 .ctx-pop .model-item.is-current { color: #c8a6ff; }
-/* The picker: a search box and the list, floating under the readout. */
-.model-pop { position: fixed; z-index: 40; width: 360px; max-height: 320px; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 10px 26px #0008; overflow: hidden; }
+/* The picker: a search box and the list, floating under the readout. It is portaled onto <body>, so its z-index
+   has to out-rank every panel it can be opened over — the assistant float (90) and Settings (120) included —
+   or the list would open behind the thing the reader is picking for. */
+.model-pop { position: fixed; z-index: 200; width: 360px; max-height: 320px; display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 10px 26px #0008; overflow: hidden; }
 .model-search::selection { background: #4b3a6b; color: #ecd9ff; }
 .model-search { border: 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--text); font-size: 12px; padding: 7px 9px; outline: none; }
 /* Opened upwards (no room below the label): the list goes above the search bar so the box you type in stays
@@ -952,6 +1241,29 @@ textarea.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 .model-item { display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: 5px; color: var(--text); font-size: 12px; padding: 4px 7px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .model-item:hover, .model-item.is-sel { background: #241d33; color: #ecd9ff; }
 .model-item.is-current { color: #c8a6ff; }
+/* The shared picker (core/model-menu.js) is a table of columns, not a line of prose: the id takes the room it
+   needs and the rest sit flush right, in the same order on the board and in the assistant's settings. */
+.model-pop-shared { width: 430px; }
+.model-pop-shared .model-item { display: flex; align-items: baseline; gap: 8px; }
+.model-pop-shared .model-name { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; }
+.model-pop-shared .model-ctx-n { padding-left: 0; }
+/* The rating column: 0-10, gold so it does not read as part of the price. A model the benchmark has not
+   scored shows nothing here, not a zero. */
+.model-rating { flex: none; color: #d9a441; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+/* The price column: in/out USD per million tokens, quiet — it informs the choice, it is not the point of
+   the row. `variable` marks a router whose rate OpenRouter does not quote, which is not "free". */
+.model-price { flex: none; color: var(--dimmer); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.model-price.is-variable { font-style: italic; }
+.model-check { flex: none; color: #c8a6ff; }
+/* The closed state of a model field: the text the native select printed, as the thing you click. The select is
+   still in the DOM (hidden) because it is the value and the control whose `change` the panel listens for. */
+select.model-native { display: none; }
+.model-trigger { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 7px; font: 12px var(--mono); min-width: 210px; max-width: 460px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.model-trigger:hover { border-color: #3a4352; }
+.model-trigger:focus-visible { outline: 1px solid var(--blue); outline-offset: 1px; }
+.model-trigger:disabled { opacity: .55; cursor: default; }
+.model-trigger.is-default { color: var(--dim); }
+.as-group .model-trigger { min-width: 0; max-width: 300px; font-size: 11.5px; padding: 4px 6px; }
 .model-none { padding: 8px; font-size: 12px; }
 /* A turn that answers a subagent delivery: the attribution rides on the turn head, not in the transcript. */
 .turn-origin { flex: none; white-space: nowrap; color: #c8a6ff; border: 1px solid #3d3350; background: #241d33; border-radius: 4px; padding: 0 5px; font-size: 10.5px; }
@@ -1068,6 +1380,36 @@ tr.row.dragging { opacity: .45; }
 tr.row:hover .btn-row-rename,
 tr.row:hover .btn-row-name-work { opacity: .9; }
 
+/* The reader's lock, on the row itself: an emoji rather than a glyph, because it has to be legible to a person
+   scanning a column and to an agent reading the board's own markup. Quiet while unlocked (a board of rows must not
+   look like a board of buttons) and impossible to miss while locked. */
+.btn-row-lock {
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 4px;
+  font: 11px/1.4 var(--term);
+  padding: 0 3px;
+  margin-left: 2px;
+  cursor: pointer;
+  opacity: .38;
+  vertical-align: 1px;
+  filter: grayscale(1);
+}
+.btn-row-lock:hover { background: #232b3a; border-color: var(--line); opacity: 1; filter: none; }
+.btn-row-lock.is-locked { opacity: 1; filter: none; }
+.btn-row-lock:disabled { opacity: .4; cursor: progress; }
+tr.row:hover .btn-row-lock { opacity: .85; }
+/* The branch toggle lives in the branch cell, right after the branch name, so "this branch is locked" is read
+   where the branch is read. */
+.btn-branch-lock { margin-left: 4px; font-size: 10px; }
+/* A locked row says so at rest: the name is drawn in the lock's own amber, so the state survives a glance down the
+   column without any tooltip being opened. */
+tr.row.is-locked td.name .row-name { color: #e8c07a; }
+tr.row.is-locked { box-shadow: inset 2px 0 0 #6b5324; }
+/* The refusal shown in place of the delete question. Same row chrome, in the lock's ink rather than the delete's red,
+   because nothing was deleted and the answer is "unlock it first", not "are you sure". */
+tr.row-confirm.row-locked td { background: #1b170d; border-top-color: #6b5324; border-bottom-color: #6b5324; color: #f0e0b8; }
+tr.row-confirm .rc-lock { color: #e8c07a; font-weight: 600; }
 /* A delete that has been accepted but has not finished scanning: the x stays put, greyed and click-proof,
    so the click is visibly registered and cannot be repeated. */
 .btn-del-tree.pending, .btn-del-tree:disabled {
@@ -1192,8 +1534,35 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
   font: 12.5px/1.45 var(--ui);
   /* It sizes itself from the draft (see growReplyBox): a drag handle would be overruled on the next keystroke. */
   resize: none;
+  /* rows="2" on the textarea this used to be: two lines of text, this box's own padding (which includes the
+     34px the send buttons sit in — see .reply-wrap .reply-box) and its border. Then it grows itself. */
+  min-height: 79px;
 }
 .reply-box:focus { outline: none; border-color: #2b5480; }
+/* ---- a pasted block, collapsed into one inline chip ------------------------------------------------
+   The box is contenteditable — a textarea cannot hold an inline widget — and the chip is a non-editable
+   atom inside it, so the caret steps over it, Backspace deletes it whole, and nothing inside it is ever
+   editable. Inline-BLOCK is the point: that is what lets the reader put quotes around it and keep typing. */
+.chipbox { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; cursor: text; }
+/* A div has no placeholder attribute: an empty box says what it is for through :empty. */
+.chipbox:empty::before { content: attr(data-ph); color: var(--dimmer); pointer-events: none; }
+.paste-chip {
+  display: inline-block; vertical-align: baseline; max-width: 100%;
+  margin: 0 1px; padding: 0 4px; border: 1px solid #5a4a2a; border-radius: 4px;
+  background: #2c2617; color: #ffd479;
+  font: 11.5px/1.5 var(--mono); white-space: nowrap; user-select: none; cursor: pointer;
+}
+.paste-chip:hover { border-color: #8a6f33; background: #38301d; }
+/* Unfolded, the chip takes the line it is on and shows the whole paste: read-only, wrapped, scrollable. */
+.paste-chip.is-open { display: block; white-space: normal; margin: 4px 0; padding: 0 6px 6px; cursor: default; }
+.paste-chip .pc-x { display: inline-block; margin-left: 5px; padding: 0 3px; color: var(--dimmer); cursor: pointer; font-weight: 700; }
+.paste-chip .pc-x:hover { color: #ffb3b3; }
+.paste-chip .pc-body { margin-top: 3px; }
+.paste-chip .pc-text {
+  max-height: 26vh; overflow: auto; padding: 5px 6px; border-radius: 4px;
+  background: #1a1710; border: 1px solid #3b3220; color: var(--text);
+  font: 11.5px/1.45 var(--term); white-space: pre-wrap; user-select: text; cursor: text;
+}
 /* Send sits inside the input, bottom left: the reply is one gesture, so the control lives in the box
    it submits. The box keeps a bottom pad so typed text never runs under it. */
 .reply-wrap { position: relative; display: block; }
@@ -1370,10 +1739,28 @@ button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: defau
 .ghost-head { display: flex; gap: 8px; align-items: baseline; font-size: 10.5px; color: var(--dim); }
 .ghost-badge { color: #ffd479; border: 1px dashed #6b4d16; border-radius: 4px; padding: 0 5px; font-size: 10px; letter-spacing: .04em; }
 .ghost-prompt { font: italic 12.5px/1.45 var(--ui); color: var(--text); margin-top: 4px; white-space: pre-wrap; }
+/* The held text is the handle for editing it in place, so it reads as one: a text caret over it, and a hover/focus
+   edge — nothing about the line moves when it becomes a textarea. */
+.ghost-prompt { cursor: text; border-radius: 5px; }
+.ghost-prompt:hover, .ghost-prompt:focus-visible { background: rgba(255, 212, 121, .07); outline: 1px dashed #4a4353; outline-offset: 2px; }
+/* The in-place editor the held text becomes: the same ghost block, undimmed, holding a box and its two actions. An
+   edit is not a send, so neither control here is drawn like a send. */
+.ghost-turn.editing { opacity: 1; }
+.ghost-edit { margin-top: 4px; }
+.ghost-edit-box { display: block; width: 100%; box-sizing: border-box; padding: 5px 7px; font: 12.5px/1.45 var(--mono); color: var(--text); background: #10141a; border: 1px solid #3a4353; border-radius: 6px; resize: vertical; }
+.ghost-edit-box:focus { outline: none; border-color: #6b4d16; }
+.ghost-edit-actions { display: flex; gap: 6px; margin-top: 5px; }
+.ghost-edit-actions button { padding: 1px 8px; font: 10.5px/1.6 var(--mono); background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; cursor: pointer; }
+.ghost-edit-actions .btn-edit-save { color: #ffd479; border-color: #6b4d16; }
+.ghost-edit-actions button:hover, .ghost-edit-actions button:focus-visible { background: rgba(255, 255, 255, .06); }
 /* what is waiting to go out, with how long it has been waiting */
 .queue-list { margin: 6px 0 0 18px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .queue-item { display: flex; gap: 8px; align-items: baseline; font-size: 11.5px; color: var(--dim); min-width: 0; }
 .queue-ago { color: #ffd479; flex: none; min-width: 44px; }
+/* The × on a queued entry: the small dismiss control the card's own head uses, on the ghost line itself, and
+   drawn no taller than that line so adding it reflows nothing. Never a send: transparent, no fill, no arrow. */
+.ghost-head .ghost-cancel { flex: none; margin-left: auto; padding: 0 4px; font: 10.5px/1 var(--mono); background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 5px; cursor: pointer; }
+.ghost-head .ghost-cancel:hover, .ghost-head .ghost-cancel:focus-visible { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .queue-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 /* display:block, or the inline-block baseline leaves ~5px of the wrap under the textarea and the
    button's bottom offset is measured from there — which is why it sat on the border. */
@@ -1427,14 +1814,123 @@ button.pager-btn:disabled { opacity: .3; cursor: default; }
 .git-block.collapsed .git-body { display: none; }
 .git-body { padding: 4px 0 0 28px; }
 /* The merge-state facts are a bullet list, one fact per line: as a single "·"-joined run the reader had to find
-   "cherry" inside it, and the head's summary (first bullet when open) is just another fact in the same list. */
-.git-body .git-list { margin: 0 0 6px; padding-left: 15px; }
-.git-body .git-list li { font: 11.5px/1.6 var(--mono); color: var(--dim); }
-.git-body .git-list li.git-summary-line { color: #c8d1dc; }
+   "cherry" inside it, and the head's summary (first bullet when open) is just another fact in the same list. The
+   description's bullets are the SAME list — one sentence per line — and are styled from here rather than from a rule
+   of their own, which is what keeps the two strips' bullets identical in family, size and colour. The first bullet of
+   each carries `git-summary-line`: it is the same role in both, the line the head shows while folded, repeated as the
+   list's first item, and it is the brighter of the two colours. */
+.git-body .git-list, .desc-body .git-list { margin: 0 0 6px; padding-left: 15px; }
+.git-body .git-list li, .desc-body .git-list li { font: 11.5px/1.6 var(--mono); color: var(--dim); }
+.git-body .git-list li.git-summary-line, .desc-body .git-list li.git-summary-line { color: #c8d1dc; }
 /* Folded, the summary rides on the head line. Unfolded, it drops into the list as its first bullet and the head
    keeps just its title - done in CSS so the toggle stays a class flip and the detail is not re-rendered to
    rearrange one span. */
 .git-block:not(.collapsed) .git-head .git-summary { display: none; }
+/* The commits this tree carries off remote main: the row's own full-width list, one commit per line. The three-column
+   flex row that used to hold this, Modified and Untracked is gone — a long commit list was clipped there and a long
+   file list was squeezed into 300px beside its neighbours. Nothing here caps the height: a tree with fifty commits
+   extends and the panel scrolls, rather than hiding the tail. */
+.git-body .git-commits { margin: 2px 0 8px; }
+.git-body .git-commits-list { margin: 3px 0 0; padding-left: 15px; }
+.git-body .git-commits-list li { font: 11.5px/1.6 var(--mono); color: #c8d1dc; overflow-wrap: anywhere; }
+/* Modified and Untracked: one-line strips under the commit list, each with its own fold. Folded, a strip is a
+   chevron, its title and its count and nothing else; opened, its names indent under it like the commit list's. */
+.git-sub { margin: 0 0 2px; }
+.git-sub-head { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0; }
+.git-sub-head .chev { color: var(--dimmer); font-size: 13px; line-height: 1; width: 13px; flex: none; }
+.git-sub-head h4 { margin: 0; flex: none; }
+.git-sub-head:hover .chev, .git-sub-head:hover h4 { color: var(--text); }
+.git-sub.collapsed > ul { display: none; }
+.git-sub > ul { margin: 2px 0 6px; padding-left: 15px; }
+.git-sub > ul li { font: 11.5px/1.6 var(--mono); color: var(--dim); overflow-wrap: anywhere; }
+/* WHAT THIS BRANCH WAS STARTED TO DO: the strip ABOVE merge state. Same shape as the two under it — a chevron, a
+   small-caps title, a one-line peek while folded, and, open, a bullet list of its own sentences — because it is the
+   same kind of thing, and the three strips a worktree's detail opens with should read as one column. What differs is
+   the fold: it starts FOLDED (the peek is what a reader wants without opening anything) and the UNFOLD is remembered
+   per row (localStorage), so the rows a reader opened stay open across a reload. */
+.desc-block { margin-bottom: 6px; }
+.desc-head { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0; }
+.desc-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
+.desc-head h4 { margin: 0; flex: none; }
+.desc-head:hover .chev, .desc-head:hover h4, .desc-head:hover .desc-first { color: var(--text); }
+.desc-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.desc-block.collapsed .desc-body { display: none; }
+.desc-block:not(.collapsed) .desc-head .desc-first { display: none; }
+.desc-body { padding: 2px 0 4px 28px; }
+/* Which run the words came from, and when: the description is quoted from that brief, never written for the board. */
+.desc-from { margin-top: 3px; font-size: 11px; color: var(--dimmer); }
+
+/* ---- the worktree's TODO list ------------------------------------------------------------------------------------ */
+/* The third strip in the row's family, with the description above it and MERGE STATE under it. FOLDED it reads the
+   OLDEST item still open (the lowest id whose status is todo or doing — NOT the last one that moved) with a done/total
+   count; UNFOLDED it lists every item with its status glyph, owner and age, and offers the reader the four things they
+   can do to one. The head is a real <button>, so the section is keyboard reachable, and so is every control inside it
+   — the two strips beside it are click-only. */
+.todo-block { margin-bottom: 6px; }
+.todo-head {
+  display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0;
+  width: 100%; background: none; border: 0; color: inherit; font: inherit; text-align: left;
+}
+.todo-head .chev { color: var(--dimmer); font-size: 20px; line-height: 1; width: 18px; flex: none; }
+.todo-head .todo-title { flex: none; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
+.todo-head:hover .chev, .todo-head:hover .todo-title, .todo-head:hover .todo-first { color: var(--text); }
+.todo-head:focus-visible { outline: 1px solid var(--text); outline-offset: 2px; }
+.todo-count { font-size: 11.5px; color: var(--dim); flex: none; }
+.todo-first { font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.todo-block.collapsed .todo-body { display: none; }
+.todo-block:not(.collapsed) .todo-head .todo-first { display: none; }
+.todo-body { padding: 2px 0 4px 28px; }
+.todo-body .todo-list { margin: 0 0 6px; padding-left: 15px; list-style: none; }
+.todo-body .todo-list li { font: 11.5px/1.7 var(--mono); color: var(--dim); }
+/* One item is a LINE — glyph, id, its words, its controls — and, UNDER it, the facts about the item as a nested
+   bullet list: its owner, who touched it, when, and its optional note and files. The facts used to ride the far right
+   of that line (`margin-left:auto` on a full-width flex row), so on a 1,400px row a three-word item and its owner sat
+   a screen apart and the reader had to zoom out to read one row. Nothing about the line itself changed; only where its
+   facts sit. The left rule is what makes the nesting visible at a glance: bullets hang off the item they describe. */
+.todo-item { display: block; padding: 1px 0 3px; }
+.todo-line { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
+/* The disclosure that folds ONE item's facts away, in front of its line so what it opens starts at the same left edge
+   as the words it belongs to. FOLDED is an item's default: the facts are up to three bullets about one item and two of
+   them carry the same worker string, so a twelve-item list was thirty-six lines of repetition around the twelve lines
+   worth reading. Each item opens on its own, and the choice is remembered per worktree + item (localStorage,
+   `wm.openTodoFacts`). The chevron takes the UI font on purpose: `▸`/`▾` in the mono stack render as nothing on
+   Windows, and the item's line is set in mono. */
+.todo-item .todo-facts-btn {
+  flex: none; font: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; color: var(--dimmer);
+  line-height: 1;
+}
+.todo-item .todo-facts-btn .chev { font-family: var(--ui); font-size: 11px; line-height: 1; display: inline-block; width: 11px; }
+.todo-item .todo-facts-btn:hover .chev { color: var(--text); }
+.todo-item .todo-facts-btn:focus-visible { outline: 1px solid var(--text); outline-offset: 2px; }
+.todo-item.collapsed .todo-meta { display: none; }
+.todo-item .todo-glyph { flex: none; color: var(--dimmer); }
+.todo-item.todo-done .todo-text, .todo-item.todo-dropped .todo-text { color: var(--dimmer); text-decoration: line-through; }
+.todo-item.todo-doing .todo-glyph { color: var(--text); }
+.todo-item .todo-id { flex: none; }
+/* The fact list: indented under the item's words, one bullet per fact, and no wider indent than the text it belongs
+   to. `list-style: disc` draws the bullet in the list's own padding, so the markers line up in a column beside the
+   left rule rather than drifting with the length of each fact. */
+.todo-item .todo-meta {
+  margin: 1px 0 1px 22px;
+  padding: 1px 0 1px 14px;
+  list-style: disc;
+  border-left: 1px solid var(--line);
+}
+.todo-body .todo-list .todo-meta li { font: 10.5px/1.55 var(--mono); color: var(--dimmer); overflow-wrap: anywhere; }
+.todo-fact-label { margin-right: 1px; color: var(--dim); }
+.todo-body .todo-list .todo-meta .todo-note { color: var(--dim); }
+.todo-btn { background: none; border: 0; color: var(--dimmer); cursor: pointer; font: inherit; padding: 0 2px; }
+.todo-btn:hover { color: var(--text); }
+.todo-btn.on { color: var(--text); }
+.todo-btn.add { color: var(--dim); }
+.todo-edit, .todo-add-input {
+  flex: 1 1 320px; min-width: 160px; background: #20242c; border: 1px solid var(--line); color: var(--text);
+  font: 11.5px/1.5 var(--mono); padding: 2px 6px; border-radius: 4px;
+}
+.todo-add { margin-top: 2px; display: flex; gap: 6px; align-items: baseline; }
+.todo-journal { margin-top: 4px; font-size: 10.5px; }
+.todo-journal ul { margin: 0; padding-left: 15px; }
+.todo-journal li { font-size: 10.5px; color: var(--dimmer); }
 /* the agent mark at the head of every agent row (parent row only, turns keep their own chevron) */
 .job-head .agent-glyph { flex: 0 0 auto; color: #c8a6ff; font-size: 13px; line-height: 1; }
 /* forget one agent session (two-step: first click arms it) */
@@ -1477,7 +1973,7 @@ body.modal-open { overflow: hidden; }
 .job.maximized .turn { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .job.maximized .turn.folded { display: block; flex: 0 0 auto; }
 .job.maximized .job-out { max-height: none; flex: 1; min-height: 0; }
-.job.maximized .reply-box { min-height: 46px; }
+.job.maximized .reply-box { min-height: 79px; }
 .job-cmd, .job-out, .job-foot { margin-left: 18px; }
 /* The usage readout sits directly under the reply box, not above it and not at the foot of the card: it
    starts where the box starts and ends its line. No left margin of its own; the send/steer buttons are
@@ -1523,6 +2019,9 @@ tr.row td.name button, tr.row td.name .chip, tr.row td.branch button { user-sele
 .pv-status.is-run { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
 .pv-status.is-failed { color: #ff9c94; border-color: #57262a; background: var(--red-bg); }
 .pv-status.is-interrupted { color: #f0c674; border-color: #4d3d12; background: var(--amber-bg); }
+/* A turn held on the gateway's 429 cap: amber like an interrupted turn — it is neither running nor failed —
+   but not the SAME chip, so "waiting for a slot" can never be read as "this turn died". */
+.pv-status.is-waiting { color: #d9b3ff; border-color: #452f5c; background: #241a33; }
 .pv-meta { flex: none; color: var(--dimmer); }
 .pv-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -1748,18 +2247,36 @@ button.btn-row-agent.is-probing { opacity: .55; cursor: progress; }
    the reader keeps reading the row they were on. The prompt goes to the New agent card on Enter - the field is a
    shortcut into that path, not a second spawn form. */
 .add-agent-form { display: flex; width: 100%; margin: 8px 0 2px; }
+/* The field is a chipbox (board/paste-chips.js) rather than an <input>: a pasted block collapses to a chip
+   here too. It keeps its single line — line-height is the box's height, and a short paste arrives with its
+   line breaks stripped, exactly as an <input> did with them. */
 .add-agent-input {
-  width: 100%; height: 47px; padding: 0 14px;
+  width: 100%; min-height: 47px; padding: 0 14px; box-sizing: border-box;
   background: var(--addbar, #215f35); color: #fff;
   border: 1px solid var(--addbar-edge, #2c8148); border-radius: 6px;
   box-shadow: inset 0 1px 0 #ffffff1f;
-  font: 500 13.5px/47px var(--mono);
+  font: 500 13.5px/47px var(--mono); white-space: nowrap; overflow: hidden;
   outline: none;
 }
-.add-agent-input::placeholder { color: #ffffffa6; }
+.add-agent-input:empty::before { color: #ffffffa6; }
+.add-agent-input .paste-chip { line-height: 1.6; vertical-align: middle; }
 .add-agent-input:focus { border-color: var(--addbar-hover-edge, #319051); box-shadow: inset 0 0 0 2px #ffffff2e; }
 .add-agent-input:disabled { opacity: .7; cursor: progress; }
 .branch { color: #c8d1dc; }
+/* A branch the remote actually has: the name itself is the link, so the cell keeps its `mono branch` sizing and
+   only the colour says "this opens something". Hover underlines it rather than moving it — a row is a dense grid
+   and a shifting column under the pointer is worse than no affordance. */
+td.branch a.branch-link { color: #7fb2e8; text-decoration: none; }
+td.branch a.branch-link:hover { text-decoration: underline; }
+td.branch a.branch-link:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; border-radius: 2px; }
+/* No copy on the remote: plain text, and one dim word that answers "which trees have a remote copy" at a glance.
+   Deliberately small and quiet — most rows of a research fleet carry it, and a loud marker on most rows is noise. */
+td.branch .branch-local { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: #55606e; border: 1px solid #2b323c; border-radius: 3px; padding: 0 3px; vertical-align: 1px; }
+/* The remote could not be asked: the same little word, in the amber the panel uses for "not answered" everywhere
+   else. It must not read as `local` — that would be the panel inventing an answer — so it says `unverified` and its
+   tooltip quotes the project's fetch note. Same box, different colour: the shape is familiar, the claim is weaker. */
+td.branch .branch-unverified { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: #8a7448; border: 1px dashed #4a3f28; border-radius: 3px; padding: 0 3px; vertical-align: 1px; }
+td.branch .branch-plain { color: #9aa6b4; }
 .dim { color: var(--dim); }
 .dimmer { color: var(--dimmer); }
 .nowrap { white-space: nowrap; }
@@ -1797,10 +2314,124 @@ button.btn-row-agent.is-probing { opacity: .55; cursor: progress; }
 .badge.merge-start.is-merging,
 .badge.merge-start.is-starting { opacity: .7; background: var(--red-bg); border-color: #57262a; color: #ff9c94; }
 
+/* The chip's chooser: four outcomes, no write until one is clicked. It is a popover on the body (not inside the cell)
+   because the board rebuilds the table on every scan and a re-rank would take a nested popover with it. The buttons
+   are drawn as a stack rather than a row: "Roll into <parent>" and "Open a PR" are different destinations, and a
+   reader picking one should see the others whole. "Check whether it is on <main>" is the fourth: read-only in the
+   branches, and the one that ends in this worktree going to the Recycle Bin. */
+.merge-chooser {
+  position: fixed;
+  z-index: 60;
+  min-width: 260px;
+  max-width: 380px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #14171c;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .55);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mc-head { font-size: 11px; color: var(--dim); padding: 2px 4px 4px; line-height: 1.4; }
+.mc-from { display: block; color: var(--dimmer); font-family: var(--mono); font-size: 10px; margin-top: 2px; }
+.mc-choice {
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #1b1f26;
+  color: var(--fg);
+  cursor: pointer;
+}
+.mc-choice:hover { background: #222833; border-color: #3a4250; }
+.mc-choice:focus-visible { outline: 2px solid #6ea8fe; outline-offset: 1px; }
+.mc-choice:disabled { cursor: default; opacity: .55; }
+.mc-choice.is-roll:not(:disabled) { border-color: #4f6d3a; color: #b8e08a; }
+.mc-choice.is-roll:not(:disabled):hover { background: #1d2419; }
+.mc-choice.is-ask { color: var(--dim); }
+/* The check is the one outcome that can delete the tree, so it is coloured like the ON MAIN badge it is trying to
+   prove: quiet when it is just a question, blue when the answer is one it can act on. */
+.mc-choice.is-check:not(:disabled) { border-color: #1c3a56; color: #9ecbff; }
+.mc-choice.is-check:not(:disabled):hover { background: #16202c; border-color: #2b527a; }
+.mc-note-check { color: #7d93a8; }
+.mc-note { font-size: 10px; color: var(--dimmer); padding: 2px 4px; line-height: 1.45; }
+
 .clean { color: #7ee787; }
 .dirty { color: #f0c674; }
+/* The Ahead / Behind cell (public/app.js, "ahead / behind cell"): ↑ not pushed lights with .dirty, ↓ not pulled lights
+   blue, and a count taken while the last fetch was failing is dotted with a ? beside it. */
+.ab-down { color: var(--blue); }
+.ab-stale { border-bottom: 1px dotted #6b7686; opacity: .75; }
+.ab-q { color: #8a7448; margin-left: 2px; }
+.ab-legacy { cursor: help; }
 .pr-open { color: #f0c674; }
 .pr-merged { color: var(--dim); }
+/* A PR whose page the project's host record can build: the chip is the link, coloured as it already was, so the cell
+   gains an affordance without gaining a second control. Same rule as the branch cell — the row is a dense grid and a
+   shifting column under the pointer is worse than no affordance. */
+a.pr-link { text-decoration: none; }
+a.pr-link:hover { text-decoration: underline; }
+a.pr-link:focus-visible { outline: 1px solid currentColor; outline-offset: 1px; border-radius: 2px; }
+
+/* ---- the host chip in a project's header, and its Discover strip -------------------------------------------- */
+/* The chip is a statement about DATA ("this project's links come from sefl-bitbucket, IT/Menu"), so it is quiet when
+   the mapping exists and louder when it does not: an unmapped project is the one case where the reader has something
+   to do, and it is exactly the case that used to read as a silently missing link. */
+button.btn-host {
+  margin-left: 10px;
+  padding: 1px 7px;
+  font: 10.5px/1.6 var(--mono);
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #20242c;
+  color: var(--dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.btn-host:hover { color: var(--text); border-color: #3a4250; }
+button.btn-host.is-mapped { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
+button.btn-host.is-unmapped { color: #f0c674; border-color: #4a3a1f; background: #2a2318; }
+button.btn-host .host-coords { color: inherit; opacity: .75; }
+button.btn-host:focus-visible { outline: 1px solid #7fb2e8; outline-offset: 1px; }
+.host-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 7px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  font: 11.5px var(--mono);
+}
+.host-form .host-line { color: var(--dim); flex: 1 1 320px; min-width: 200px; }
+.host-form .host-line.clone-err { color: var(--red); }
+.host-form .host-field { display: flex; gap: 5px; align-items: center; color: var(--dimmer); white-space: nowrap; }
+.host-form select,
+.host-form input {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px 6px;
+  font: 11.5px var(--mono);
+}
+.host-form input { min-width: 220px; }
+.host-form select:focus,
+.host-form input:focus { outline: none; border-color: var(--blue); }
+.host-form button {
+  padding: 4px 9px;
+  font: 11.5px var(--mono);
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: #20242c;
+  color: var(--text);
+  cursor: pointer;
+}
+.host-form button:hover:not(:disabled) { border-color: #3a4250; background: #262b34; }
+.host-form button:disabled { opacity: .55; cursor: progress; }
 
 .age-num { color: var(--dimmer); font-family: var(--mono); font-size: 11px; display: inline-block; }
 
@@ -1852,24 +2483,80 @@ button.sig:hover { filter: brightness(1.25); }
   border-top: 1px solid #1d222b;
 }
 
+/* ---- the chart's age arrow: the console's "to newest line" chip, at the foot of a worktree chart --------
+   The same little circular arrow as `.out-wrap > .to-bottom`, so the two read as one idea: it appears while the
+   pointer is over the chart and fades when the pointer leaves. It sits in the legend line, which is the one strip
+   under the chart that neither scrolls sideways nor clips its children, so it stays on the chart's bottom edge at
+   every width. app.js draws no arrow at all for a chart with nothing held back and nothing shown. */
+.wt-age-toggle {
+  width: 21px;
+  height: 21px;
+  display: inline-grid;
+  place-items: center;
+  vertical-align: -5px;
+  margin-right: 8px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+  /* Brighter than the console chip's glyph on purpose: that one floats over its own console, this one sits on
+     the legend's dark strip where #c3ccd8 read as a smudge rather than a control. */
+  color: #dbe2ea;
+  background: #191f28;
+  border: 1px solid #46515f;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(10, 13, 18, .55);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s ease, color .16s ease, border-color .16s ease;
+}
+/* Revealed while the pointer is over the chart, and kept up while it is over the legend so the press lands. */
+section.project > .wt-scroll:hover ~ .legend .wt-age-toggle,
+section.project > .legend:hover .wt-age-toggle,
+.wt-age-toggle:focus-visible { opacity: 1; pointer-events: auto; }
+.wt-age-toggle:hover { color: var(--text); border-color: #3a4353; }
+.wt-age-toggle:active { transform: translateY(1px); }
+/* Showing every tree: the arrow points up (app.js) and says so in colour. */
+.wt-age-toggle.is-on { color: var(--amber); border-color: #6b4d16; }
+/* Nothing hovers on a touch screen, so there the arrow is simply always there. */
+@media (hover: none) {
+  .wt-age-toggle { opacity: 1; pointer-events: auto; }
+}
+
 tr.detail td { background: var(--surface); border-bottom: 1px solid var(--line); padding: 10px 14px; }
 /* MERGE STATE and LIVENESS EVIDENCE lead the worktree block again, but folded to two one-line strips: they are
    reference material, read rarely, and as full blocks above the agents they cost more height than they earned.
-   The pair is closed off by one hairline, and the agents follow under it. */
-tr.detail > td > .detail-inner > .git-block, tr.detail > td > .detail-inner > .live-block { margin: 0; }
+   The pair is closed off by one hairline, and the agents follow under it. WHAT THIS BRANCH WAS STARTED TO DO
+   leads the two of them, at the same size, so the worktree's three strips read as one column. */
+tr.detail > td > .detail-inner > .desc-block, tr.detail > td > .detail-inner > .git-block, tr.detail > td > .detail-inner > .live-block { margin: 0; }
+tr.detail > td > .detail-inner > .desc-block .desc-head,
 tr.detail > td > .detail-inner > .git-block .git-head,
 tr.detail > td > .detail-inner > .live-block .live-head { padding: 0; line-height: 1.5; }
+tr.detail > td > .detail-inner > .desc-block .desc-head .chev,
 tr.detail > td > .detail-inner > .git-block .git-head .chev,
 tr.detail > td > .detail-inner > .live-block .live-head .chev { font-size: 13px; width: 13px; }
+tr.detail > td > .detail-inner > .desc-block h4,
 tr.detail > td > .detail-inner > .git-block h4,
 tr.detail > td > .detail-inner > .live-block h4 { margin: 0; font-size: 10.5px; }
 tr.detail > td > .detail-inner > .git-summary, tr.detail > td > .detail-inner > .live-first { font-size: 11px; }
+/* The TODO strip is the fourth of that column: same head metrics as the three above it, same 28px indent for its list,
+   and the same compact type. Its head is a <button>, so the metrics are set on the button itself. */
+tr.detail > td > .detail-inner > .todo-block { margin: 0; }
+tr.detail > td > .detail-inner > .todo-block .todo-head { padding: 0; line-height: 1.5; }
+tr.detail > td > .detail-inner > .todo-block .todo-head .chev { font-size: 13px; width: 13px; }
+tr.detail > td > .detail-inner > .todo-block .todo-head .todo-title { font-size: 10.5px; }
+tr.detail > td > .detail-inner > .todo-block .todo-count,
+tr.detail > td > .detail-inner > .todo-block .todo-first { font-size: 11px; }
+tr.detail > td > .detail-inner > .todo-block .todo-body { padding: 0 0 6px 28px; }
+/* The description's own text and its folded peek, in the sizes the two strips below it use. Its bullets are the
+   shared fact list (`.desc-body .git-list`, styled with the merge state's), on the same 28px indent the two strips'
+   lists use, so the three strips read as one column under their three headings. */
+tr.detail > td > .detail-inner > .desc-block .desc-first { font-size: 11px; }
+tr.detail > td > .detail-inner > .desc-block .desc-body { padding: 0 0 6px 28px; }
 tr.detail > td > .detail-inner > .live-block { padding-bottom: 6px; border-bottom: 1px solid #262f3c; margin-bottom: 8px; }
 tr.detail h4 { margin: 0 0 6px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer); }
 tr.detail ul { margin: 0 0 12px; padding-left: 18px; }
 tr.detail li { font-family: var(--mono); font-size: 12px; color: #c8d1dc; }
-tr.detail .cols { display: flex; gap: 28px; flex-wrap: wrap; }
-tr.detail .col { min-width: 300px; }
 tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
 
 .foot {
@@ -1895,17 +2582,112 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
   font: 700 10.5px/17px var(--ui); text-align: center;
 }
 #assistant-badge[hidden] { display: none; }
+/* The spawn card badge: its own count, beside the alert count and never folded into it. A spawn card is an act
+   waiting on the reader (one press cuts a worktree), and it is the one thing on this board that is invisible
+   until somebody presses it — so it is counted here, and the watchdog's verdict turns the number red. */
+#assistant-spawn-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 4px; margin-left: 2px;
+  border: 1px solid #56d36455; border-radius: 9px; background: #1f3a2b; color: #b7f7d0;
+  font: 700 10.5px/15px var(--ui); text-align: center;
+}
+#assistant-spawn-badge::before { content: "⧗"; margin-right: 3px; font-weight: 400; }
+#assistant-spawn-badge[hidden] { display: none; }
+#assistant-spawn-badge.is-stuck { border-color: var(--red); background: #3d1618; color: #ffd7d5; }
+
+/* A spawn card is not another alert: it is a worker that has NOT started, waiting on the reader's click. It
+   gets its own count beside the alert count, in the violet every spawn card already wears, and it pulses once
+   the card is past the two-minute mark — the number alone was what the reader read as "the agents failed". */
+.as-spawn-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 5px; margin-left: 3px;
+  border-radius: 9px; background: var(--violet); color: #1a1226;
+  font: 700 10.5px/17px var(--ui); text-align: center; letter-spacing: .02em;
+}
+.as-spawn-badge[hidden] { display: none; }
+.as-spawn-badge.is-late { background: var(--amber); color: #2a1c0c; box-shadow: 0 0 0 1px #ffb36b55; }
 .btn-assistant.is-hot { border-color: #8fb8ff; color: #dbebff; box-shadow: 0 0 0 1px #8fb8ff33; }
+
+/* ---- the spawn strip: the board's top line while a card is waiting ---------------------------------
+   A spawn card exists only as an alert, so the board itself used to show nothing at all for it. This strip is
+   the board's own answer: one row per waiting card, a Start button per row, and the oldest waiting first. It
+   is deliberately not a second Alerts list — the button is here, and "Discard" stays in the float. */
+.spawn-strip {
+  border: 1px solid #4a3a6e; border-left: 3px solid var(--violet);
+  border-radius: 10px; background: linear-gradient(180deg, #1d1729, var(--panel));
+  margin-bottom: 18px; padding: 9px 12px;
+}
+.spawn-strip[hidden] { display: none; }
+.spawn-strip-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.spawn-strip-title { font-size: 12.5px; font-weight: 700; color: #ecd9ff; }
+.spawn-strip-title .as-spawn-badge { margin-left: 4px; vertical-align: 1px; }
+.spawn-strip-rows { display: flex; flex-direction: column; gap: 6px; margin-top: 7px; }
+.spawn-strip-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--card);
+}
+.spawn-strip-row.is-late { border-color: #6b4a1f; background: linear-gradient(180deg, #241d12, var(--card)); }
+.spawn-strip-what { font-size: 12px; color: var(--text); }
+.spawn-strip-prompt {
+  font-family: var(--mono); font-size: 11px; color: var(--dim);
+  flex: 1 1 220px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.spawn-strip-age { font-family: var(--mono); font-size: 10.5px; color: var(--dimmer); }
+.spawn-strip-row.is-late .spawn-strip-age { color: var(--amber); }
+.spawn-strip-note { font-size: 10.5px; color: var(--dimmer); }
+/* A refusal from the Spawn route lands on its own row (a dirty tree, an unknown project, the gateway down):
+   red, on its own line, with the card still there to retry. */
+.spawn-strip-err { flex: 1 1 100%; font-size: 11px; color: var(--red); }
+.spawn-strip .spacer { flex: 1; }
+
+/* Aggressive mode: the header's second assistant button. It reads as a switch, not a link — the pill beside
+   the label says which way it is thrown, so the state is legible without colour alone. */
+.btn-aggressive { display: inline-flex; align-items: center; gap: 6px; }
+.btn-aggressive #aggressive-state {
+  display: inline-block; min-width: 22px; padding: 0 5px;
+  border: 1px solid currentColor; border-radius: 9px; opacity: .65;
+  font: 700 9.5px/13px var(--ui); text-align: center; text-transform: uppercase; letter-spacing: .04em;
+}
+.btn-aggressive.is-on { border-color: #ffb36b; color: #ffe4c7; box-shadow: 0 0 0 1px #ffb36b55; }
+.btn-aggressive.is-on #aggressive-state { opacity: 1; background: #ffb36b; border-color: #ffb36b; color: #2a1c0c; }
+
+/* The settings a running aggressive mode holds. Greyed, with the reason on the label, so the reader can tell a
+   disabled knob from a knob they set themselves — and the note at the top of the tab says where to switch it off. */
+.as-held { border-color: #ffb36b55; }
+.as-held h4 { color: #ffb36b; }
+.as-held-label { opacity: .55; }
+.as-held-label::after { content: " (held)"; font-style: italic; opacity: .8; }
+#aggressive-msg {
+  position: fixed; top: 56px; left: 50%; transform: translateX(-50%);
+  z-index: 120; max-width: min(560px, 90vw); padding: 6px 12px; border-radius: 8px;
+  background: #2a2f3a; border: 1px solid #ffb36b66; color: #ffe4c7;
+  font: 12px/1.4 var(--ui); box-shadow: 0 6px 20px #0006;
+}
+#aggressive-msg[hidden] { display: none; }
 
 .assistant {
   position: fixed; right: 16px; top: 74px; z-index: 90;
-  width: 480px; height: min(72vh, 780px); min-width: 340px; min-height: 260px;
+  /* The floor is the height the shell needs: head + tabs + card head + composer. Below that the composer
+     could not be on screen at all, and a chat whose box you cannot reach is not a smaller version of this one. */
+  width: 480px; height: min(72vh, 780px); min-width: 340px; min-height: 320px;
   max-width: calc(100vw - 24px); max-height: calc(100vh - 90px);
   display: flex; flex-direction: column;
   background: var(--panel); border: 1px solid #33415a; border-radius: 10px;
   box-shadow: 0 18px 48px #000b; overflow: hidden;
 }
 .assistant[hidden] { display: none; }
+/* Maximized: the float IS the window. `inset: 0` with auto width/height overrides the remembered rect (the JS
+   clears its inline size on the way in and puts it back on the way out), the panel covers the board's topbar
+   so nothing of its head or tabs can be shaved by the page chrome, and with no border radius the shell is the
+   viewport edge. Above the topbar (10) and the Settings panel (120), below nothing. */
+.assistant.as-full {
+  inset: 0;
+  width: auto; height: auto; max-width: none; max-height: none;
+  border: 0; border-radius: 0; box-shadow: none; z-index: 200;
+}
+.assistant.as-full .as-head { cursor: default; }
+.assistant.as-full .as-resize { display: none; }
+/* The shell rows never share the panel's height with the transcript: they keep their natural height and the
+   body takes what is left, at every panel size. */
+.assistant .as-head, .assistant .as-tabs { flex: none; }
 .as-head {
   display: flex; align-items: center; gap: 8px; padding: 7px 10px;
   background: linear-gradient(180deg, #1a2230, #141a23);
@@ -1920,6 +2702,18 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-mode.is-safe { color: #e3b341; border-color: #6b4d16; background: var(--amber-bg); }
 #btn-as-close { border: 0; background: none; color: var(--dim); font-size: 14px; line-height: 1; cursor: pointer; padding: 0 2px; }
 #btn-as-close:hover { color: var(--text); }
+/* The pin sits immediately left of the ✕: the same size and the same quiet colour, grey while the float is
+   merely on screen and lit while it is pinned there. */
+#btn-as-pin { border: 1px solid transparent; background: none; color: var(--dim); font-size: 12px; line-height: 1; cursor: pointer; padding: 1px 4px; border-radius: 5px; filter: grayscale(1); opacity: .7; }
+#btn-as-pin:hover { color: var(--text); filter: none; opacity: 1; }
+#btn-as-pin.is-on { color: #c8a6ff; border-color: #55407a; background: #2a2044; filter: none; opacity: 1; }
+/* Maximize sits between the pin and the ✕, the same size and the same quiet colour: `⤢` to fill the window,
+   `⤡` to put the float back. It is the explicit control the resize grip never was — the grip can only grow the
+   float toward the bottom-right corner, so a right-anchored panel tops out ~480px wide on a 1920 screen. */
+#btn-as-max { border: 1px solid transparent; background: none; color: var(--dim); font: 13px/1 var(--ui); cursor: pointer; padding: 1px 5px; border-radius: 5px; }
+#btn-as-max:hover { color: var(--text); border-color: var(--line); }
+#btn-as-max.is-on { color: #8fb8ff; border-color: #2b3b52; background: #1b2432; }
+.assistant.is-pinned { border-color: #55407a; }
 .as-head .chips { display: flex; gap: 5px; }
 
 .as-tabs { display: flex; gap: 2px; padding: 4px 6px 0; background: var(--panel-2); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
@@ -1931,6 +2725,9 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-tabs button.is-on { color: var(--text); background: var(--panel); border-color: var(--line); }
 .as-n { font-family: var(--mono); font-size: 10px; color: var(--dimmer); margin-left: 2px; }
 .as-tabs button.is-on .as-n { color: var(--text); }
+/* The Alerts tab's second count: how many of those are spawn cards waiting for a click. */
+.as-n.is-spawn { color: var(--violet); }
+.as-n.is-spawn[hidden] { display: none; }
 
 .as-body { flex: 1; overflow: auto; min-height: 0; }
 .as-pane { padding: 8px; }
@@ -1951,7 +2748,8 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
   border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px;
   font: 11.5px/1.45 var(--term); resize: vertical;
 }
-.as-first textarea { min-height: 58px; }
+.as-first textarea, .as-first #as-first-text { min-height: 58px; }
+.as-first #as-first-text { display: block; white-space: pre-wrap; word-break: break-word; }
 .as-first-actions { display: flex; gap: 8px; align-items: center; }
 
 .as-empty { padding: 16px 14px; color: var(--dimmer); font-size: 12px; }
@@ -1962,6 +2760,29 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-alert.is-info { border-left-color: var(--blue); }
 /* A spawn card is the only alert whose button changes the repository, so it does not look like a notice. */
 .as-alert.is-spawn { border-left-color: var(--violet); background: linear-gradient(180deg, #1c1828, var(--card)); }
+/* …and the one the watchdog has looked at and found nothing behind: red edge, red chip, and a banner above the
+   list. A card that never became a worker is not another notice in the inbox — it is a worktree that was never
+   cut, which is why it is counted on its own badge and says so in words here too. */
+.as-alert.is-stuck { border-left-color: var(--red); box-shadow: inset 0 0 0 1px #ff7b7233; }
+.as-stuck-chip {
+  font-family: var(--mono); font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em;
+  color: #ffd7d5; background: #4d1a1d; border: 1px solid var(--red); border-radius: 99px; padding: 0 6px;
+}
+.as-stuck-banner {
+  margin: 0 0 8px; padding: 7px 9px; border: 1px solid var(--red); border-radius: 6px;
+  background: var(--red-bg); color: #ffb4ae; font-size: 11.5px; line-height: 1.45;
+}
+
+/* The card a strip press jumped to: a short ring, then back to the card's own colour. */
+.as-alert.is-flash { box-shadow: 0 0 0 2px var(--violet); }
+/* Group headings inside the pane. Spawn cards are drawn first, under their own heading, because an unclicked
+   card is a worker that has not started rather than another finding to read. */
+.as-group-head {
+  display: flex; align-items: baseline; gap: 6px; margin: 2px 0 7px;
+  font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmer);
+}
+.as-group-head.is-spawn { color: #ecd9ff; }
+.as-group-head .as-gap { flex: 1; }
 .as-alert-head { display: flex; align-items: center; gap: 7px; font-size: 10.5px; }
 .as-rule { font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em; color: #8fb8ff; }
 .as-rule.is-warn { color: var(--amber); }
@@ -2050,28 +2871,34 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-qcheck input { margin: 0; accent-color: #a78bfa; }
 .as-qcheck.on { border-color: #a78bfa; background: #241f38; }
 
-/* The float is a window, not a strip of content: when it is resized the card fills it, the open turn takes
-   the new room, the console grows with it, and the composer stays at the foot. Scoped to #as-chat — the board
-   keeps its natural card height, and Alerts/Watches/Pad/Settings keep scrolling as before. */
+/* The float is a window, not a strip of content: head, tabs and the card's own head are fixed rows, the
+   transcript is the only scroller, and the composer sits at the foot of the panel at every size. Scoped to
+   #as-chat — the board keeps its natural card height, and Alerts/Watches/Pad/Settings keep scrolling as before. */
 .as-body:has(#as-chat:not(.hidden)) { display: flex; flex-direction: column; overflow: hidden; }
 #as-chat.as-pane:not(.hidden) { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 #as-chat > .job { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 #as-chat > .job > .job-head { flex: none; }
-/* The usage strip and the composer are INSIDE .job-body (which is the scroller), not siblings of it: pin
-   them to the bottom of the scrollport so the box you type in cannot scroll away with the turns. */
-#as-chat > .job > .job-body > .job-foot,
-#as-chat > .job > .job-body > .reply { position: sticky; bottom: 0; background: var(--panel); }
-#as-chat > .job > .job-body > .job-foot { z-index: 1; }
-#as-chat > .job > .job-body > .reply { z-index: 2; box-shadow: 0 -10px 14px -8px #000c; }
 #as-chat > .job > .job-body { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
-/* Grow into spare room, never shrink: a turn shorter than its content would clip the console, so the body
-   scrolls instead. `flex: 1 0 auto` is the whole difference between "the window got taller" and "the
-   conversation got shorter". */
-#as-chat > .job > .job-body > .turn:not(.folded) { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 0; }
+/* A spacer before the turns, so a conversation shorter than the panel starts at its foot instead of leaving
+   dead panel under the last line. It is a flex item with no content: it takes exactly the free room, and 0
+   when the transcript overflows (shrink 0, basis 0), so a tall conversation still scrolls from its first
+   line and nothing above it becomes unreachable. */
+#as-chat > .job > .job-body::before { content: ""; flex: 1 0 auto; }
+/* The composer is the last thing in the scrollport and is pinned there: while the conversation is longer
+   than the panel it stays on the scrollport's foot, and the spacer above puts it there when it is shorter.
+   Opaque and above the turns it covers — the box you type in must never be scrollable away. */
+#as-chat > .job > .job-body > .reply { position: sticky; bottom: 0; z-index: 2; flex: none; background: var(--panel); box-shadow: 0 -10px 14px -8px #000c; }
+/* The usage strip stays in flow just above the composer: two items both pinned to `bottom: 0` overlay each
+   other, which is how the stats line was drawn underneath the reply box. */
+#as-chat > .job > .job-body > .job-foot { position: static; flex: none; }
+/* Natural height, never grow: a turn that grows into spare room leaves a blank console under the last line
+   (the "empty panel below the transcript" report). It must not shrink either, or a scrolling body squeezes
+   the console below its content — `flex: 0 0 auto` is both halves of that. */
+#as-chat > .job > .job-body > .turn:not(.folded) { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 0; }
 #as-chat > .job > .job-body > .turn.folded { flex: 0 0 auto; }
-#as-chat > .job > .job-body > .turn:not(.folded) .out-wrap { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 34px; }
-#as-chat > .job > .job-body > .turn:not(.folded) .job-out { max-height: none; flex: 1; min-height: 0; }
-#as-chat > .job .reply-box { min-height: 46px; }
+#as-chat > .job > .job-body > .turn:not(.folded) .out-wrap { display: flex; flex-direction: column; flex: 0 0 auto; min-height: 34px; }
+#as-chat > .job > .job-body > .turn:not(.folded) .job-out { max-height: none; flex: 0 0 auto; min-height: 0; }
+#as-chat > .job .reply-box { min-height: 79px; }
 
 /* Which rules the assistant wrote for itself. The reader's rules are their own answers; these are proposals,
    marked so a wrong one is obvious and deletable without wondering where it came from. */
@@ -2080,3 +2907,74 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
   font-style: normal; font-size: 9.5px; letter-spacing: .03em; text-transform: uppercase;
   color: #c4b5fd; border: 1px solid #4b3a75; background: #241f38; border-radius: 99px; padding: 0 5px;
 }
+
+/* ---- the message board (the Messages tab) ---------------------------------------------------------
+   A conversation, so it is laid out as one: a thread per block, oldest at the top of it, and the two
+   directions told apart by a WORD before any colour ("assistant → wtgui-x" vs "wtgui-x → assistant"),
+   because a reader who cannot see the border colour still has to be able to tell which way it went. */
+.as-msg-bar { display: flex; flex-wrap: wrap; gap: 4px 9px; align-items: baseline; padding: 6px 8px; margin-bottom: 7px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); }
+.as-msg-window { font-size: 11.5px; font-weight: 600; color: var(--text); }
+.as-msg-cap { margin: -2px 0 7px; padding: 5px 8px; border: 1px solid #6b4d16; border-radius: 6px; background: var(--amber-bg); color: var(--amber); font-size: 11px; line-height: 1.4; }
+.as-msg-chips { display: flex; gap: 5px; margin-bottom: 8px; flex-wrap: wrap; }
+.as-msg-chips button {
+  border: 1px solid var(--line); background: var(--card); color: var(--dim);
+  font-size: 11px; padding: 3px 9px; border-radius: 999px; cursor: pointer;
+}
+.as-msg-chips button:hover { color: var(--text); }
+.as-msg-chips button.is-on { color: var(--text); border-color: #8fb8ff; background: #1b2432; }
+.as-msg-thread { border: 1px solid var(--line); border-radius: 7px; margin-bottom: 9px; background: var(--card); overflow: hidden; }
+.as-msg-thread.is-assistant { border-color: #3a3450; }
+.as-msg-thread-head { display: flex; align-items: center; gap: 7px; padding: 6px 9px; background: var(--panel-2); border-bottom: 1px solid var(--line); font-size: 11px; }
+.as-msg-thread-head .as-thread { max-width: 42%; font-size: 11px; }
+.as-msg-thread-head .as-ago { margin-left: auto; }
+.as-msg { padding: 7px 9px; border-bottom: 1px solid #1c222b; border-left: 3px solid #4a5568; }
+.as-msg:last-child { border-bottom: 0; }
+.as-msg.is-out { border-left-color: #58a6ff; }
+.as-msg.is-in { border-left-color: #7ee787; }
+.as-msg-head { display: flex; align-items: center; gap: 7px; font-size: 10.5px; flex-wrap: wrap; }
+.as-msg-dir { font-family: var(--mono); color: var(--text); font-size: 10.5px; }
+.as-msg-kind { font-family: var(--mono); text-transform: uppercase; letter-spacing: .04em; font-size: 9.5px; color: #8fb8ff; border: 1px solid #2b3b52; border-radius: 4px; padding: 0 4px; }
+.as-msg.is-in .as-msg-kind { color: #7ee787; border-color: #24452c; }
+.as-msg-src { font-size: 9.5px; letter-spacing: .03em; text-transform: uppercase; color: var(--amber); border: 1px solid #6b4d16; background: var(--amber-bg); border-radius: 4px; padding: 0 4px; }
+.as-msg-head .as-ago { margin-left: auto; }
+.as-msg-text { margin-top: 4px; font: 11.5px/1.5 var(--term); color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.as-msg-text.is-missing { color: var(--dimmer); font-style: italic; }
+.as-msg-cut { color: var(--dimmer); font-style: italic; }
+.as-msg-more { margin-top: 3px; border: 0; background: none; color: #8fb8ff; font-size: 10.5px; cursor: pointer; padding: 0; }
+.as-msg-more:hover { text-decoration: underline; }
+.as-msg-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.as-msg-meta span {
+  font-family: var(--mono); font-size: 10px; color: var(--dimmer);
+  border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px;
+}
+.as-msg-meta b { color: var(--text); font-weight: 400; }
+.as-msg-report { display: flex; align-items: center; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+.as-msg-path {
+  border: 1px solid var(--line); background: var(--console); color: var(--dim);
+  font-family: var(--mono); font-size: 10px; border-radius: 5px; padding: 2px 6px; cursor: pointer;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left;
+}
+.as-msg-path:hover { color: var(--text); border-color: #8fb8ff; }
+.as-msg-copy { border: 1px solid var(--line); background: var(--card); color: var(--dim); font-family: var(--mono); font-size: 10px; border-radius: 5px; padding: 2px 6px; cursor: pointer; }
+.as-msg-copy:hover { color: var(--text); }
+.as-msg-copy.is-copied { color: #7ee787; border-color: #2ea043; }
+
+/* ---- first-run setup: shown in place of the board while config.json names no scan roots ---------------------- */
+.setup { max-width: 720px; margin: 32px auto 48px; padding: 22px 24px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+.setup h2 { margin: 0 0 8px; font-size: 18px; }
+.setup-lede { margin: 0 0 16px; color: var(--dim); line-height: 1.5; }
+.setup-lede code { font: 12px var(--mono); }
+.setup-add { display: flex; flex-wrap: wrap; gap: 8px; }
+.setup-add input { flex: 1 1 260px; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; font: 13px var(--mono); }
+.setup-roots { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.setup-roots:empty { display: none; }
+.setup-root { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.setup-root-path { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; font: 13px var(--mono); }
+.setup-root-count { font-size: 12px; color: var(--dim); }
+.setup-root-count.ok { color: var(--green); }
+.setup-root-count.bad { color: var(--red); }
+.setup-root-count.warn { color: var(--amber); }
+.setup-root button { padding: 1px 7px; font-size: 12px; }
+.setup-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; }
+.setup-status { font-size: 12px; color: var(--dim); }
+.setup-status.bad { color: var(--red); }

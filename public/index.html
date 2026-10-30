@@ -16,7 +16,8 @@
     <div class="controls">
       <span class="meta" id="stream-state">—</span>
       <span class="meta" id="stream-rate"></span>
-      <button id="btn-assistant" type="button" class="btn-assistant" title="assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (Ctrl+Shift+A)">✧ Assistant<span id="assistant-badge" hidden>0</span></button>
+      <button id="btn-assistant" type="button" class="btn-assistant" title="assistant — watches the agents on this board, notices loops and stalls, and drafts answers to a worker's questions (A or Ctrl+Shift+A)">✧ Assistant<span id="assistant-badge" hidden>0</span><span id="assistant-spawn-badge" class="as-spawn-badge" hidden>0</span></button>
+      <button id="btn-aggressive" type="button" class="btn-aggressive" aria-pressed="false" title="aggressive assistant — spends more tokens: the assistant wakes on everything, monitors and checks every live card, and keeps pushing until the fleet is waiting on something outside. While it is on it holds the waking, monitoring and acting settings; switching it off puts your own values back (Alt+Shift+A)">⚡ Aggressive<span id="aggressive-state">off</span></button>
       <button id="btn-hot" type="button" title="NOT-RUNNING — step through the agents that are not running and are waiting on you: each one is opened, its reply box focused and flashed amber. Enter sends and moves on; Alt+Right skips; Alt+Left goes back.">NOT-RUNNING</button>
       <button id="btn-collapse-all" type="button" title="collapse every folder and project section">Collapse all</button>
       <button id="btn-refresh" type="button">Refresh now</button>
@@ -30,18 +31,21 @@
        dragged, resized and closed. It is deliberately not modal — the reader keeps reading the board while
        it is open, and its alerts are a badge and a list, never a window that steals the caret. -->
   <aside id="assistant" class="assistant" hidden aria-label="assistant">
-    <div class="as-head" id="as-drag" title="drag to move">
+    <div class="as-head" id="as-drag" title="drag to move — double-click to maximize, double-click again (or Esc) to restore">
       <span class="as-glyph">✧</span>
       <strong>Assistant</strong>
       <span class="as-mode mono" id="as-mode">draft-only</span>
       <span class="spacer"></span>
       <span class="chips" id="as-chips"></span>
+      <button id="btn-as-pin" type="button" class="as-pin" aria-pressed="false" title="pin the assistant open — while it is pinned a click elsewhere on the board leaves it up; unpinned, that click closes it like the ✕">📌</button>
+      <button id="btn-as-max" type="button" class="as-max" aria-pressed="false" title="maximize the assistant to the whole window (double-click the header; Esc restores)">⤢</button>
       <button id="btn-as-close" type="button" title="close (Esc) — it keeps watching while closed">✕</button>
     </div>
     <div class="as-tabs" id="as-tabs">
       <button type="button" data-as-tab="chat" class="is-on" title="the assistant itself — a normal agent card, with its own thread">Chat</button>
-      <button type="button" data-as-tab="alerts" title="what it noticed and what is waiting on you">Alerts <span class="as-n" id="as-alert-n">0</span></button>
+      <button type="button" data-as-tab="alerts" title="what it noticed and what is waiting on you — spawn cards waiting for a click sit at the top">Alerts <span class="as-n" id="as-alert-n">0</span><span class="as-n is-spawn" id="as-spawn-n" hidden>0</span></button>
       <button type="button" data-as-tab="watches" title="what it is keeping an eye on, and until when">Watches <span class="as-n" id="as-watch-n">0</span></button>
+      <button type="button" data-as-tab="messages" title="the message board between it and the agents — what it sent them and what they sent back, thread by thread, over the last 7 days">Messages</button>
       <button type="button" data-as-tab="pad" title="the server-side scratchpad: notes, standing rules and the journal">Scratchpad</button>
       <button type="button" data-as-tab="charter" title="the continuity file: the long tier of its memory, injected in full on every turn">Charter</button>
       <button type="button" data-as-tab="settings" title="how aggressive it is, per rule">Settings</button>
@@ -50,6 +54,7 @@
       <section class="as-pane" data-pane="chat" id="as-chat"></section>
       <section class="as-pane hidden" data-pane="alerts" id="as-alerts"></section>
       <section class="as-pane hidden" data-pane="watches" id="as-watches"></section>
+      <section class="as-pane hidden" data-pane="messages" id="as-messages"></section>
       <section class="as-pane hidden" data-pane="pad" id="as-pad"></section>
       <section class="as-pane hidden" data-pane="charter" id="as-charter"></section>
       <section class="as-pane hidden" data-pane="settings" id="as-settings"></section>
@@ -98,6 +103,33 @@
           <span>Console weight <span class="settings-info">ⓘ</span></span>
           <select id="term-weight-select"></select>
         </label>
+
+        <label class="settings-row settings-gap" for="stream-words" title="How fast the agent's own words — and its reasoning blocks — are written on the screen. A run's prose reaches the panel in bursts — a phrase or two every frame, more on a fast model — and this holds the tail of each paragraph back so it types out a word or two at a time at this many words a second. A reasoning block only types the first time the panel sees it on a live turn, so history is never re-typed. Nothing is lost or left waiting: the words keep coming on the clock's own schedule, and whatever is still held is released the moment the turn ends (or the tab goes to the background). 0 turns it off, so the console fills exactly as the run sent it. Saved in this browser.">
+          <span>Stream display speed <span class="settings-info">ⓘ</span></span>
+          <input id="stream-words" type="number" inputmode="numeric" step="5" min="0" max="200">
+          <span class="settings-unit mono">words/s</span>
+        </label>
+        <div class="settings-presets">
+          <button type="button" data-stream-words-set="0">off</button>
+          <button type="button" data-stream-words-set="10">10</button>
+          <button type="button" data-stream-words-set="20">20</button>
+          <button type="button" data-stream-words-set="40">40</button>
+          <button type="button" data-stream-words-set="80">80</button>
+        </div>
+
+        <label class="settings-row settings-gap" for="stream-lines" title="How fast whole lines join a console. A run arrives as bursts of lines — a tool call and the output that answered it, a stack of results — and this walks them in one at a time instead of the whole burst landing in one paint. A line held back is not in the console's record yet, so a repaint in the middle of a burst shows the transcript as far as it has got, and a run that settles flushes whatever it was holding. 0 is off: lines appear the moment they arrive. Saved in this browser.">
+          <span>Stream line rate <span class="settings-info">ⓘ</span></span>
+          <input id="stream-lines" type="number" inputmode="numeric" step="1" min="0" max="40">
+          <span class="settings-unit mono">lines/s</span>
+        </label>
+        <div class="settings-presets">
+          <button type="button" data-stream-lines-set="0">off</button>
+          <button type="button" data-stream-lines-set="2">2</button>
+          <button type="button" data-stream-lines-set="4">4</button>
+          <button type="button" data-stream-lines-set="8">8</button>
+          <button type="button" data-stream-lines-set="16">16</button>
+        </div>
+        <div class="settings-preview mono" id="stream-preview">…</div>
 
         <label class="settings-row settings-gap" for="contrast" title="How far apart the layered panels sit: 0% makes every layer one neutral, 100% pushes the page to near-black and lifts the panels.">
           <span>Panel contrast <span class="settings-info">ⓘ</span></span>
@@ -221,6 +253,12 @@
           <input id="autosort-toggle" type="checkbox" checked>
         </label>
 
+        <label class="settings-row" for="rank-window" title="How far back the board looks when it decides what is busiest — one window for every liveness ranking: the worktree rows in a project, the projects in a folder, the folders, and the agent cards in a worktree. A thing's place is its average rate of liveness events over this window (a console line, a job starting or finishing, an approval), so anything being hammered sits at the top, a single line moves nothing, and anything that goes quiet slides down as its events age out. The orders are recomputed on the board-reorder clock, never on each event, and a thing must out-rate the one above it by at least one event a minute before it takes that slot. 300 s (5 minutes) is the default; longer is slower and steadier. Saved in this browser.">
+          <span>Rank window <span class="settings-info">ⓘ</span></span>
+          <input id="rank-window" type="number" inputmode="numeric" step="30" min="30" max="3600">
+          <span class="settings-unit mono">s</span>
+        </label>
+
         <label class="settings-row settings-gap" for="anchor-hover" title="The hover anchor: the card the pointer is moving over keeps its screen position while other cards above it grow. It lingers for the seconds beside it after the pointer stops. Off, hovering chooses nothing and the anchor falls through to the next rule. Saved in this browser.">
           <span>Hover anchor <span class="settings-info">ⓘ</span></span>
           <input id="anchor-hover" type="checkbox" checked>
@@ -258,6 +296,58 @@
             <option value="visible">only on screen</option>
           </select>
         </label>
+
+        <label class="settings-row settings-gap" for="hide-older-days" title="How old a worktree has to be before the chart stops drawing its row. Measured from its LAST ACTIVITY — the newest of its last commit, its last edited file, and the last time the panel saw it alive — never from when the directory was created, so a tree cut months ago that somebody is still working in today stays on the chart. Nothing is lost when a row is held back: the arrow at the bottom of that project's chart shows every tree again, and the project's own chips say how many are being held back. 0 shows everything. Saved in this panel's config.json, so it survives a restart and applies to every browser.">
+          <span>Hide stale worktrees <span class="settings-info">ⓘ</span></span>
+          <input id="hide-older-days" type="number" inputmode="numeric" step="1" min="0" max="3650">
+          <span class="settings-unit mono">days</span>
+        </label>
+        <div class="settings-presets">
+          <button type="button" data-age-set="0">off</button>
+          <button type="button" data-age-set="3">3 d</button>
+          <button type="button" data-age-set="7">7 d</button>
+          <button type="button" data-age-set="14">14 d</button>
+          <button type="button" data-age-set="30">30 d</button>
+        </div>
+        <div class="settings-preview mono" id="hide-older-preview">…</div>
+      </div>
+
+      <div class="settings-group">
+        <h3 class="settings-group-head" title="Whether a branch may exist on a REMOTE at all. Most of what this panel starts is research or a browser probe, and a remote branch per probe clutters a repository other people share — so local-only is the default, and the exception is a grant you give on purpose in the permission box. It is written into this panel's config.json (remoteBranchPolicy), so it applies to every browser and survives a restart.">Branches on the remote</h3>
+
+        <label class="settings-row" for="remote-policy" title="local only (the default) — every branch stays on this box; a push from a worktree the panel cut is REFUSED by the pre-push guard the panel installs, and that refusal asks you through the permission box in the dock (Allow once / this session / Always allow / Deny). allow — remote writes go through without asking; this is what &quot;Always allow&quot; in the box writes, so the setting and the box are the same fact. deny — refused outright, and the box is not even offered. Written into config.json, so it survives a restart and applies to every browser.">
+          <span>Remote branches <span class="settings-info">ⓘ</span></span>
+          <select id="remote-policy">
+            <option value="local-only">local only — ask in the box</option>
+            <option value="allow">allow remote writes</option>
+            <option value="deny">refuse outright</option>
+          </select>
+        </label>
+        <div class="settings-preview mono" id="remote-policy-preview">…</div>
+        <div class="settings-presets">
+          <button type="button" id="btn-guard-install" title="install the pre-push guard into every local-only worktree on this board. The panel does this by itself when it cuts a worktree; this button is for the trees that were cut before it existed. It writes a pre-push hook inside the repository's .git (never a tracked file), enables it for those worktrees only, and runs any hook they already had through a shim. Report comes back here and in the log.">install the push guard now</button>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <h3 class="settings-group-head" title="The two folders this panel keeps things in, both outside the checkout on purpose: a re-clone, a move or a read-only checkout keeps the board's history, and nothing it writes shows up in git status. The data directory is the durable half; the scratch directory is the throwaway half, and the OS is free to clean it. Either can be moved by naming dataDir / scratchDir in config.json, or by setting WAG_HOME / WAG_SCRATCH in the environment — the row below says which of those answered, so an unexpected path is explainable.">Data</h3>
+
+        <div class="settings-row" id="data-dir-row" title="Everything the panel must not lose: the job store, the assistant's scratchpad and charter, the worktree TODOs, the naming ledger, the descriptions, the labels, the model prices, the push-guard record, the restart record, the attachments you paste, and the panel's own server log — under state/, attachments/ and logs/ inside this folder. Read once at boot; changing dataDir in config.json moves it, and an existing logs/ beside the checkout is COPIED here once and left where it was.">
+          <span>Data directory <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono" id="data-dir-size">…</span>
+          <button id="btn-open-data" type="button" title="open this folder in the file manager">open folder</button>
+        </div>
+        <div class="settings-preview mono" id="data-dir-path">…</div>
+
+        <div class="settings-row settings-gap" id="scratch-dir-row" title="Where agents put anything they do not mean to keep: branch comparisons, exported files, a probe's output. Every spawn prompt names its own subfolder here. Nothing the panel needs is stored in it, so emptying it costs nothing — but a run whose working directory is inside it stops the clean, because deleting files under a live agent leaves it working in a folder that no longer adds up.">
+          <span>Scratch directory <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono" id="scratch-dir-size">…</span>
+          <button id="btn-open-scratch" type="button" title="open this folder in the file manager">open folder</button>
+        </div>
+        <div class="settings-preview mono" id="scratch-dir-path">…</div>
+        <div class="settings-presets" id="scratch-actions">
+          <button type="button" id="btn-clean-scratch" title="delete everything in the scratch directory and report how much it freed. Refused with the run named if a live agent is working inside it.">clean scratch</button>
+        </div>
       </div>
 
       <div class="settings-group">
@@ -317,6 +407,32 @@
           <button type="button" id="btn-provider-clear" title="remove model.api_key from config.yaml — the OPENROUTER_API_KEY in .env is used again">clear key</button>
           <button type="button" id="btn-provider-default-url" title="put the OpenRouter default URL back in the box (Save writes it)">default URL</button>
         </div>
+
+        <div class="settings-row settings-gap" id="models-row" title="The model menu's own columns: what each model costs per million tokens in and out, and Artificial Analysis' coding rating out of ten. Both come from the gateway's model inventory — the same numbers the CLI's own model picker shows — and the panel keeps its own copy so opening the menu never waits on a provider. A model Artificial Analysis has not benchmarked carries no rating at all, and a router's 'not priced' sentinel is shown as nothing rather than as a number. Pressing the button makes the gateway re-fetch every provider's live model list, rebuilds that copy from the answer, and refills the model menu in the New agent card.">
+          <span>Model prices <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono" id="models-age">…</span>
+          <button id="btn-models-refresh" type="button" title="regenerate: re-fetch every provider's live model list from the gateway, rebuild the price and rating cache, and refill the model menu">Refresh now</button>
+        </div>
+        <div class="settings-preview mono" id="models-preview">…</div>
+      </div>
+
+      <div class="settings-group">
+        <h3 class="settings-group-head" title="A panel that restarted (or whose public/ was edited while it ran) serves a new build. This is what this tab does about it — and what it refuses to do while you are mid-sentence or an agent is mid-turn.">Updates</h3>
+
+        <label class="settings-row" for="update-mode" title="off — never look; a manual press on Check now still works. prompt (the default) — poll the panel every 30s and, when it is serving a different build, offer a Reload chip. auto — take the reload as soon as the page is idle. Either mode HOLDS the reload while a reply box or a held draft has text, or while a turn is still streaming, so nothing you typed and nothing an agent is writing is thrown away. Saved in this browser.">
+          <span>Update check <span class="settings-info">ⓘ</span></span>
+          <select id="update-mode">
+            <option value="off">off</option>
+            <option value="prompt" selected>prompt — offer a reload</option>
+            <option value="auto">auto — reload when idle</option>
+          </select>
+        </label>
+
+        <div class="settings-row settings-gap" id="update-row" title="The build this tab loaded, and the build the panel is serving now. A panel restart or an edit under public/ moves the second one; the first only moves when this page reloads.">
+          <span>Panel build <span class="settings-info mono" id="build-version">…</span></span>
+          <button id="btn-check-update" type="button" title="ask GET /api/build now and offer the reload if the answer is a different build — works even with Update check set to off">Check now</button>
+        </div>
+        <div class="settings-preview mono" id="update-preview">…</div>
       </div>
 
     </div>
@@ -324,7 +440,30 @@
 
   <div id="banner" class="banner hidden"></div>
 
+  <!-- First-run setup. Shown in place of the board while config.json names no scan roots (settings.needsSetup),
+       and never otherwise: once a folder is saved, Settings > Projects & Folders is where roots change. -->
+  <section id="setup" class="setup hidden" aria-labelledby="setup-title">
+    <h2 id="setup-title">Where do your repos live?</h2>
+    <p class="setup-lede">Pick the folder (or folders) that hold your git repositories. Every repo directly inside one
+      becomes a project on the board. This is saved to <code>config.json</code> as <code>scanRoots</code>, and you can
+      change it later in Settings.</p>
+    <form id="setup-form" class="setup-add" autocomplete="off">
+      <input id="setup-path" type="text" placeholder="full path, e.g. C:\Users\you\Projects or /home/you/code" spellcheck="false" aria-label="folder path" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" />
+      <button id="setup-add" type="submit">Add folder</button>
+    </form>
+    <ul id="setup-roots" class="setup-roots"></ul>
+    <div class="setup-foot">
+      <button id="setup-save" type="button" class="primary" disabled>Start scanning</button>
+      <span id="setup-status" class="setup-status" role="status"></span>
+    </div>
+  </section>
+
   <main>
+    <!-- Spawn cards waiting for a click: a worker the assistant proposed and nothing has started yet. It sits
+         at the top of the board on purpose — an unclicked card used to exist only as a number on the header
+         badge, inside an 80-deep Alerts list, and four of them read as "the agents never spawned". -->
+    <div id="spawn-strip" class="spawn-strip" hidden aria-live="polite"></div>
+
     <section class="project" id="newagent">
       <div class="project-head" data-toggle-fixed="newagent" title="minimize this card">
         <span class="chev">▾</span>
@@ -335,7 +474,10 @@
       </div>
       <div class="form">
         <div class="attach-chips" id="spawn-chips"></div>
-        <textarea id="job-prompt" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" rows="3" placeholder="What should the agent do? (this becomes the first turn)"></textarea>
+        <!-- A chip needs an inline atom, so this is contenteditable like the reply box: a long paste collapses
+             in place, a short one is still plain text, and readBox(box) is how every reader of it gets the
+             text back (the placeholder is drawn from data-ph by :empty). -->
+        <div id="job-prompt" class="chipbox" contenteditable="true" role="textbox" aria-multiline="true" data-single="0" data-chipbox="spawn" data-rows="3" spellcheck="false" data-ph="What should the agent do? (this becomes the first turn)"></div>
         <div class="row">
           <label class="cwd">start in <input id="job-cwd" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" list="project-paths" spellcheck="false" placeholder="(project path — the green + on a project fills this in)" /></label>
           <label class="proj">project <select id="job-project" title="which project the agent starts in"></select></label>
@@ -352,6 +494,9 @@
           </label>
           <label class="chk" title="Create a workspace: a new worktree and branch under .worktrees/, so the agent's edits land there and never in the folder itself. Untick to run in the 'start in' folder as it is — that is how you aim an agent at an existing worktree.">
             <input id="job-create" type="checkbox" checked /> create workspace
+          </label>
+          <label class="chk" title="Unticked (the default): this worktree is LOCAL ONLY. Its brief says so in the first line, and the panel's pre-push guard refuses a `git push` out of it and asks you through the permission box instead — so research and browser-testing trees never add a branch to a shared remote. Ticked: the work is meant to land, so the brief names the landing step (push + open a pull request) and the tree is allowed to push.">
+            <input id="job-landing" type="checkbox" /> may land on the remote
           </label>
           <span class="spacer"></span>
         </div>
@@ -393,15 +538,49 @@
   <footer class="foot">
     <span>Live over SSE: each worktree refreshes on its own cadence — cheap fields every <span id="f-worktree">5</span>s, merge verdict / PR / commit detail every <span id="f-slow">60</span>s. Rows flash when something changed.</span>
     <span>Read-only for git: every scan is an inspect (rev-parse / rev-list / merge-base / cherry / diff / status / log). Only <code>fetch</code> touches refs.</span>
-    <span>Spawning writes: a new worktree + branch under <code>.worktrees/</code> (<code>git worktree add -b wtgui/…</code>), and the agent runs in that tree through the Hermes gateway — no child process, no API key handed to one.</span>
+    <span>Spawning writes: a new worktree + branch under <code>.worktrees/</code> (<code>git worktree add -b wtgui/…</code>), and the agent runs in that tree through the Hermes gateway — no child process, no API key handed to one. Every tree it cuts is <b>local only</b>: a <code>git push</code> out of one is refused by the pre-push hook the panel installs (inside <code>.git</code>, never a tracked file) and asks you through the permission box instead. Settings · Branches on the remote.</span>
     <span>Projects: every git repo under <code>scanRoots</code> in <code>config.json</code>, grouped in a folder accordion per root (a project outside every root gets its own sibling folder), ordered by most recent activity. The green <b>+</b> beside a project name aims the spawn card at that project.</span>
     <span id="skipped-note" class="dimmer"></span>
     <span>Config: <code>config.json</code> — scanRoots, projects, cadences, <code>dormantSeconds</code>, <code>host</code> (loopback by default).</span>
   </footer>
 
+  <!-- The client is a set of classic scripts, not modules: there is no bundler in this repo, and
+       public/assistant.js reads app.js's own globals by name (esc, conversations, conversationHtml), so an
+       ES-module split is not available to us. Order therefore matters and is read bottom-up: each script's
+       top-level declarations have to exist before the next one is evaluated, because app.js both calls these
+       helpers from its own top-level code and runs its boot wiring the moment it loads. The extracted modules
+       are listed in dependency order (see .agentboard/refactor-research/frontend-app-js.md §5). -->
+  <script src="/core/dom-format.js"></script>
+  <!-- The one model picker: the spawn card's model field and the assistant's model setting both open it. It
+       needs dom-format's esc and nothing else, so it sits before app.js; both call it through window.ModelMenu. -->
+  <script src="/core/model-menu.js"></script>
+  <script src="/core/console-format.js"></script>
+  <!-- Where a reasoning block sits among a turn's console lines, and how a stream is cut into pieces. Pure, and
+       published on globalThis as `wtStream`: app.js's single-stream path (the 🌊) calls it by name at render time,
+       and test/single-stream.test.js imports this same file. -->
+  <script src="/core/stream-merge.js"></script>
+  <!-- How fast a run's output reaches the reader's eyes: the word pacer (a paragraph typing out) and the line gate
+       (whole lines walking into a console), both driven from app.js by the two Settings > Display rows. Published
+       on globalThis as `wtType`; test/type-stream.test.js imports this same file. -->
+  <script src="/core/type-stream.js"></script>
+  <script src="/board/attachments.js"></script>
+  <!-- Pasted blocks collapsed into inline chips, for every box the reader writes a prompt in. Loaded after
+       attachments.js on purpose: a paste of a FILE belongs to that module (it registers its listener first
+       and prevents the default), and this one steps aside for it. -->
+  <script src="/board/paste-chips.js"></script>
+  <script src="/board/hot.js"></script>
+  <script src="/core/transport.js"></script>
+  <script src="/core/sse.js"></script>
   <script src="/app.js"></script>
+  <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
+       the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->
+  <script src="/core/update-check.js"></script>
   <!-- The assistant's floating panel. Loaded after app.js on purpose: it reads that file's own state and card
        renderer, so the assistant's card is a real card rather than a second implementation of one. -->
   <script src="/assistant.js"></script>
+
+  <!-- A short-lived note beside the aggressive switch: "on twice" and "off when it was never on" are no-ops and
+       have to say so without opening a panel. Fixed, so it never reflows the header buttons. -->
+  <div id="aggressive-msg" hidden role="status" aria-live="polite"></div>
 </body>
 </html>
