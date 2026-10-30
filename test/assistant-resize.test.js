@@ -39,10 +39,16 @@ test("each grab carries the cursor its edge means, and does not let a finger scr
 });
 
 test("the float has one size authority: the drag clamp, not a smaller cap in the stylesheet", () => {
+  const code = assistant.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   const rule = css.match(/\n\.assistant \{([^}]*)\}/);
   assert.ok(rule, "no .assistant rule");
   assert.doesNotMatch(rule[1], /max-width|max-height/,
     "a CSS cap smaller than the JS clamp makes the frame stop while the pointer keeps moving — the measured bug");
-  assert.match(assistant, /const viewport = \(\) =>/, "the resize clamp must read the viewport itself");
-  assert.match(assistant, /visualViewport/, "the clamp must honour a zoomed or keyboard-shrunk viewport");
+  assert.match(code, /function viewportBox\(\)/, "the resize clamp must read the viewport itself");
+  assert.match(code, /clientWidth[\s\S]{0,80}clientHeight/, "and read the LAYOUT viewport, the box a fixed element is laid out in");
+  assert.doesNotMatch(code, /visualViewport/,
+    "visualViewport excludes the classic scrollbar, so clamping to it snaps a frame on the edge inward at grab time");
+  assert.match(code, /Math\.max\(d\.w, vw - EDGE - d\.x\)/,
+    "the growth limit must never be smaller than the size the frame already has, or the grab itself resizes it");
+  assert.match(code, /Math\.max\(d\.h, vh - EDGE - d\.y\)/);
 });

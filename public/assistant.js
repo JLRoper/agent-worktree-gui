@@ -115,14 +115,13 @@
     if (state.assistantFull) return;
     const r = state.assistantRect || readRect();
     if (!r) return;
-    const maxW = window.innerWidth - 16;
-    const maxH = window.innerHeight - 16;
-    const w = Math.max(320, Math.min(r.w, maxW));
-    const h = Math.max(320, Math.min(r.h, maxH));
+    const { vw, vh } = viewportBox();
+    const w = Math.max(320, Math.min(r.w, vw - 2 * EDGE));
+    const h = Math.max(320, Math.min(r.h, vh - 2 * EDGE));
     el.style.width = `${w}px`;
     el.style.height = `${h}px`;
-    el.style.left = `${Math.max(8, Math.min(r.x, window.innerWidth - w - 8))}px`;
-    el.style.top = `${Math.max(8, Math.min(r.y, window.innerHeight - h - 8))}px`;
+    el.style.left = `${Math.max(EDGE, Math.min(r.x, vw - w - EDGE))}px`;
+    el.style.top = `${Math.max(EDGE, Math.min(r.y, vh - h - EDGE))}px`;
     el.style.right = "auto";
     el.style.bottom = "auto";
   }
@@ -132,6 +131,22 @@
     if (!el) return null;
     const r = el.getBoundingClientRect();
     return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+  }
+
+  // Air kept between the float and every viewport edge, and the box it is kept inside.
+  //
+  // That box is the LAYOUT viewport — `documentElement.clientWidth/Height`, the rectangle a `position: fixed`
+  // element is laid out in, which already excludes the classic scrollbar. It is deliberately not `visualViewport`:
+  // a classic scrollbar shrinks the visual viewport by its own width (11px on this machine), so a float sitting on
+  // the layout viewport's 8px edge is already 3px outside the visual one, and the first pixel of a drag snapped the
+  // whole frame 11px inward — the window jumped the instant it was grabbed instead of just stopping at the edge.
+  const EDGE = 8;
+  function viewportBox() {
+    const doc = document.documentElement;
+    return {
+      vw: doc.clientWidth || window.innerWidth,
+      vh: doc.clientHeight || window.innerHeight,
+    };
   }
 
   // The chat's scroll box: the card's body, and the only thing in the float that scrolls.
@@ -1780,21 +1795,13 @@
 
     const MIN_W = 340;
     const MIN_H = 320;
-    // Air kept between the float and every viewport edge: the reader always has the board's own edge to aim at.
-    const EDGE = 8;
 
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
 
-    // The one authority on how big the float may get. The stylesheet used to hold a second, smaller cap
-    // (`max-width: calc(100vw - 24px)`, `max-height: calc(100vh - 90px)`), so JS kept writing sizes CSS silently
-    // clamped: the frame stopped at 710px tall while the pointer kept travelling, and the corner being held slid away
-    // from it. `visualViewport` is the honest size when the browser is zoomed or a soft keyboard is up.
-    const viewport = () => {
-      const vv = window.visualViewport;
-      const vw = Math.min(window.innerWidth, vv ? vv.width + vv.offsetLeft : Infinity);
-      const vh = Math.min(window.innerHeight, vv ? vv.height + vv.offsetTop : Infinity);
-      return { vw, vh };
-    };
+    // The frame is sized against the LAYOUT viewport (see `viewportBox`), never against `visualViewport`: the visual
+    // one excludes the classic scrollbar, so clamping to it snapped a frame parked on the layout viewport's edge
+    // inward by the scrollbar's width the instant a grab started.
+    const viewport = () => viewportBox();
 
     // Anchor the frame with left/top before any gesture. The stylesheet right-anchors it (`right: 16px`), and a float
     // anchored by `right` grows its LEFT edge: with no remembered rect the first resize drag could travel 8px before
@@ -1838,8 +1845,10 @@
         // edge sit ~160px off-screen — the tabs and the first characters of every transcript row went with it.
         const maxX = Math.max(EDGE, vw - Math.min(d.w, vw - 2 * EDGE) - EDGE);
         const maxY = Math.max(EDGE, vh - Math.min(d.h, vh - 2 * EDGE) - EDGE);
-        const x = clamp(d.x + dx, EDGE, maxX);
-        const y = clamp(d.y + dy, EDGE, maxY);
+        // A frame already outside the box (a rect remembered on a bigger screen) is left where it is until the drag
+        // pulls it back in — clamping it to `EDGE` here would snap it to the top-left corner on the grab itself.
+        const x = clamp(d.x + dx, Math.min(EDGE, d.x), Math.max(maxX, d.x));
+        const y = clamp(d.y + dy, Math.min(EDGE, d.y), Math.max(maxY, d.y));
         el.style.left = `${x}px`;
         el.style.top = `${y}px`;
         el.style.right = "auto";
@@ -1854,9 +1863,12 @@
       const dir = d.dir || "se";
       let x = d.x, y = d.y, w = d.w, h = d.h;
 
+      // The limits below never ask for LESS than the size the frame already has. A frame wider or taller than the
+      // room left — from an older build's clamp, a rotated screen, a narrower window, a zoom change — would otherwise
+      // be snapped down to the limit on the first pixel of the drag, which is the grab that "jumps".
       if (dir.includes("e")) {
         const want = d.w + dx;
-        w = clamp(want, MIN_W, Math.max(MIN_W, vw - EDGE - d.x));
+        w = clamp(want, MIN_W, Math.max(d.w, vw - EDGE - d.x));
         d.px += want - w;
       } else if (dir.includes("w")) {
         const wantX = d.x + dx;
@@ -1867,7 +1879,7 @@
 
       if (dir.includes("s")) {
         const want = d.h + dy;
-        h = clamp(want, MIN_H, Math.max(MIN_H, vh - EDGE - d.y));
+        h = clamp(want, MIN_H, Math.max(d.h, vh - EDGE - d.y));
         d.py += want - h;
       } else if (dir.includes("n")) {
         const wantY = d.y + dy;
