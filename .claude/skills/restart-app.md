@@ -9,8 +9,8 @@ Pulls the latest commits from `origin/main`, kills any running Node processes, a
 
 ## Usage
 
-```
-/restart-app
+```bash
+node tools/restart-app.mjs
 ```
 
 ## What it does
@@ -18,22 +18,6 @@ Pulls the latest commits from `origin/main`, kills any running Node processes, a
 1. **Git Pull**: Fetches and merges latest changes from `origin/main`
 2. **Stop Server**: Kills any running Node.js processes 
 3. **Start Fresh**: Starts the app with the newly pulled code on http://127.0.0.1:7331
-
-## How to use
-
-Run from the Claude Code terminal:
-
-```bash
-node tools/restart-app.mjs
-```
-
-Or invoke the skill:
-
-```
-/restart-app
-```
-
-The app will start in foreground mode. Press **Ctrl+C** to stop it.
 
 ## When to use
 
@@ -48,3 +32,4 @@ The app will start in foreground mode. Press **Ctrl+C** to stop it.
 - Requires Node.js 18+
 - Git must be available in PATH
 - On Windows, uses `taskkill` to stop Node processes
+- The app starts in foreground mode. Press **Ctrl+C** to stop it.
