@@ -105,8 +105,13 @@ test("vsMainLine: singular and plural, and nothing when there is no base to coun
 });
 
 test("the column header explains the arrows, and the verdict carries the count against main", () => {
-  assert.match(src, /<th title="↑ commits this branch has that its own copy on the remote does not[^"]*">Ahead \/ Behind<\/th>/);
-  assert.match(src, /<td class="mono nowrap">\$\{aheadBehindCellHtml\(row\)\}<\/td>/);
+  // The header is built from CHART_COLUMNS now (the reader can hide a column), so the explanation lives on the
+  // column's own entry and reaches the <th> through chartHeaderHtml() — the test reads the entry, not the markup.
+  const cols = src.slice(src.indexOf("const CHART_COLUMNS = ["), src.indexOf("// ---- end chart columns"));
+  assert.match(cols, /label: "Ahead \/ Behind"/);
+  assert.match(cols, /title:\s*\n?\s*"↑ commits this branch has that its own copy on the remote does not[^"]*"/);
+  assert.match(cols, /id: "ahead"/);
+  assert.match(src, /ahead: `<td class="mono nowrap">\$\{aheadBehindCellHtml\(row\)\}<\/td>`/);
   // verdictHtml keeps the sentence inline so tools/verify-merge-chip.mjs can read its region on its own.
   const vh = src.slice(src.indexOf("function verdictHtml"), src.indexOf("// ---- end merge control"));
   assert.match(vh, /Against \$\{row\.baseRef\}: \$\{Number\(row\.ahead\) \|\| 0\} ahead, \$\{Number\(row\.behind\) \|\| 0\} behind\./);

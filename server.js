@@ -33,6 +33,7 @@ import { WorktreeNaming } from "./lib/worktree-naming.js";
 import { Locks, describeLock, rebaseKey, writerLocks } from "./lib/locks.js";
 import { rebaseWorktree } from "./lib/rebase.js";
 import { ownCopyOf } from "./lib/sync-state.js";
+import { chartColumnsFrom } from "./lib/chart-columns.js";
 import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { REFRESH_LINES_SHOWN, RefreshJournal, liveRunIn, mergeDelta, normaliseRefreshAgent, parseCommitFiles, todoProposals } from "./lib/refresh-row.js";
@@ -181,6 +182,11 @@ async function loadConfig() {
   // How old a worktree's last activity has to be before the chart hides its row. Server-side, like scanMode below:
   // it lives in this file so it survives a restart and applies to every browser.
   cfg.hideOlderThanDays = ageDaysFrom(cfg.hideOlderThanDays);
+  // Which of the worktree chart's columns are drawn, also server-side and for the same reason: the reader can hide a
+  // column in any browser and every one of them draws the same chart. The stored value is the columns to HIDE, so a
+  // column the page adds later starts visible for a reader who has already hidden some; lib/chart-columns.js drops
+  // ids it does not know, so a hand-edited typo cannot quietly hide the wrong cell.
+  cfg.hiddenColumns = chartColumnsFrom(cfg.hiddenColumns);
   cfg.projects = Array.isArray(cfg.projects) ? cfg.projects : [];
   if (!cfg.defaultCwd) cfg.defaultCwd = cfg.projects[0]?.path || process.cwd();
   // "all": keep every project fresh, whether or not anyone is looking at it. "visible": the page reports which
@@ -741,6 +747,9 @@ const settingsOut = () => ({
   fetchSeconds: config.fetchSeconds,
   liveMinutes: config.liveMinutes ?? 5,
   hideOlderThanDays: config.hideOlderThanDays,
+  // The chart's hidden columns travel with every snapshot for the same reason the age threshold does: the table's
+  // header and rows are built from this list, and a page that opened before the setting moved has to agree with it.
+  hiddenColumns: config.hiddenColumns,
   threads: config.threads,
   host: config.host,
   defaultCwd: config.defaultCwd,
@@ -3375,6 +3384,27 @@ const server = createServer(async (req, res) => {
       log(`worktrees older than: ${days ? `${days} day${days === 1 ? "" : "s"} held back (the chart's arrow shows them)` : "none held back"}`);
       broadcast({ type: "snapshot", data: snapshot() });
       return sendJson(res, 200, { ok: true, days, settings: settingsOut() });
+    }
+
+    // Which of the worktree chart's columns are drawn. Server-side like the age threshold above: the list goes into
+    // this panel's own config.json, so it survives a restart and applies to whichever browser is open. The body names
+    // the columns to HIDE, not the ones to show, so a column added to the chart later arrives visible for every
+    // reader; lib/chart-columns.js is the one place that decides which ids are real.
+    if (route === "/api/settings/columns" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const hidden = chartColumnsFrom(body.hidden);
+      try {
+        await patchPanelConfig({ hiddenColumns: hidden });
+      } catch (e) {
+        return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
+      }
+      config.hiddenColumns = hidden;
+      log(`chart columns: ${hidden.length ? `${hidden.join(", ")} hidden` : "all drawn"}`);
+      // `settings`, not a snapshot: the page has to rebuild the tables (a hidden column is a missing cell in every
+      // row), and that is what the settings handler does for every open tab.
+      broadcast({ type: "settings", settings: settingsOut() });
+      return sendJson(res, 200, { ok: true, hidden, settings: settingsOut() });
     }
 
     // Open a link from an agent's console in the OS default browser. Only http(s) gets through, and the
