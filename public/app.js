@@ -7654,6 +7654,8 @@ function aimSpawnAtWorktree(path, name, projectName = "") {
 function resetSpawnDefaults() {
   const model = $("job-model");
   if (model) model.value = "";
+  const reasoning = $("job-reasoning");
+  if (reasoning) reasoning.value = "";
   const budget = $("job-budget");
   if (budget) budget.value = "1800";
   const turns = $("job-maxTurns");
@@ -7695,10 +7697,10 @@ function formValues() {
     landing: $("job-landing")?.checked ? true : undefined,
     project: $("job-project").value || undefined,
     model: $("job-model").value.trim() || undefined,
+    reasoningEffort: $("job-reasoning") && !$("job-reasoning").disabled ? $("job-reasoning").value || undefined : undefined,
     budget: Number($("job-budget").value) || undefined,
     maxTurns: Number($("job-maxTurns").value) || undefined,
-    // No skills / yolo here on purpose: a run carries input, cwd, model, max_turns and run_budget.
-    // The form keeps those two controls visible but disabled rather than pretending they work.
+    // Skills have no Runs API field. Reasoning uses model_options; per-run approve-all is unavailable.
   };
 }
 
@@ -12406,6 +12408,13 @@ function applySnapshot(data) {
     state.spawn = data.spawn;
     const t = data.spawn.transport || {};
     const caps = t.capabilities || {};
+    const reasoning = $("job-reasoning");
+    if (reasoning) {
+      reasoning.disabled = !t.reachable || caps.modelOptions !== true;
+      reasoning.title = reasoning.disabled
+        ? "Per-agent reasoning is unavailable: the gateway must advertise model_options and the panel must support it. Restart the panel after updating it."
+        : "Per-agent reasoning effort; replies keep this choice. Default uses Hermes settings. Models may map unsupported levels to their nearest supported level.";
+    }
     $("chip-key").textContent = t.reachable ? `api: up${caps.steer ? " · steer" : ""}` : "api: down";
     $("chip-key").title = t.error || `${t.url || ""}${caps.version ? ` · hermes ${caps.version}` : ""}`;
     $("chip-bin").textContent = String(t.url || "").replace(/^https?:\/\//, "") || "no gateway";
