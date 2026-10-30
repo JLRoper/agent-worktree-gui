@@ -8775,6 +8775,7 @@ function rowHtml(row) {
   const shownTitle = treeTitleOf(row);
   const shownName = shownTitle || row.name;
   const suggestName = shownTitle || "";
+  const namedLine = String(row.named?.line || "").trim();
   const renameBtn = isProjectRoot
     ? ""
     : `<button class="btn-row-rename" data-rename-tree="${esc(keyOf(row.project, row.path))}" data-rename-project="${esc(row.project)}" data-rename-path="${esc(row.path)}" data-rename-name="${esc(row.name)}" data-rename-suggest="${esc(suggestName)}" title="name this worktree by hand — renames its branch, and the directory when nothing is holding it${suggestName ? ` (offered: “${esc(suggestName)}”)` : ""}${namedLine ? ` · ${esc(namedLine)}` : ""}">\u270e</button>`;
