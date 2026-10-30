@@ -206,6 +206,8 @@ const state = {
   // DOM for the same reason callFolded does: a repaint or a burst rebuild replaces the console's markup, and a
   // result the reader just opened folding itself back shut would read as the panel losing the click.
   foldRows: new Map(),
+  // One pending store read per result, shared by repaints and pinned copies of the same turn.
+  foldPending: new Map(),
   // Events are life. A line arriving in an agent's console, a job starting or ending, an approval: each one proves
   // the worktree that owns that agent is being worked in right now, without waiting for the next scan to notice.
   // Key = worktree row key -> ms of the newest event seen for it.
@@ -1314,7 +1316,22 @@ function groupLines(grp) {
     return line;
   };
   const out = [];
-  for (const d of grp.querySelectorAll(".tgrp-body .jl")) {
+  const sources = new Map();
+  for (const d of grp.querySelectorAll(".tgrp-body .jl, .tgrp-body .code-box[data-code-source]")) {
+    const box = d.closest(".code-box[data-code-source]");
+    if (box) {
+      if (!sources.has(box)) {
+        let lines = null;
+        try { lines = JSON.parse(box.dataset.codeSource); } catch { /* a damaged attribute falls back to the DOM */ }
+        sources.set(box, Array.isArray(lines) ? lines : null);
+      }
+      const lines = sources.get(box);
+      if (lines) {
+        if (d === box) out.push(...lines);
+        continue;
+      }
+      if (d === box) continue;
+    }
     if (d.classList.contains("jl-store") || d.classList.contains("jl-note") || d.classList.contains("jl-panel")) continue;
     // A modification is drawn with its AFTER line first (the reader asked for the new side on the left), which is
     // the opposite of the order the diff had it in. A rebuild re-derives the diff from these lines, and a pair
@@ -1454,6 +1471,7 @@ function wholeStoredHtml(got, tool = "", arg = "", boxKey = "", codeOpen = READ_
 // already uses (the i-th result line of this tool in this turn is the store's i-th row for it), so the number the
 // note was drawn with is the number the fetch asks for.
 const foldKey = (turnId, tool, row) => `${turnId}|${tool}|${row}`;
+const fullForFold = (fold) => state.foldRows.get(foldKey(fold.turn, fold.tool, fold.row));
 const FOLD_ROWS_MAX = 12;
 
 // Which row of the store a fold note names. The stronger of two facts wins, and the per-burst cursor is only
@@ -1589,7 +1607,12 @@ async function expandToolFold(btn) {
   const job = state.jobs.get(turnId);
   if (!job) return true;
   const key = foldKey(turnId, tool, row);
+  const rememberOpen = () => {
+    state.codeBoxOpen.add(btn.dataset.codeKey || `result|${turnId}|${tool}|${row}`);
+    while (state.codeBoxOpen.size > 500) state.codeBoxOpen.delete(state.codeBoxOpen.values().next().value);
+  };
   if (state.foldRows.has(key)) {
+    rememberOpen();
     if (grp) repaintToolGroup(grp);
     return true;
   }
@@ -1602,23 +1625,36 @@ async function expandToolFold(btn) {
     from: String(Date.parse(job.startedAt || "") || 0),
     to: String(Date.parse(job.endedAt || "") || 0),
   });
-  const was = btn.textContent;
+  const hint = btn.querySelector(".code-hint");
+  const say = (text) => { if (hint) hint.textContent = text; else btn.textContent = text; };
   btn.disabled = true;
-  btn.textContent = "reading the stored result…";
+  btn.setAttribute("aria-busy", "true");
+  say("reading the stored result…");
+  let pending = null;
   try {
-    const r = await apiFetch(`/api/tool-results?${q}`, {}, { timeoutMs: 15000 });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const d = await r.json();
-    const got = Array.isArray(d.results) ? d.results[0] : null;
-    if (!got) {
-      // Honest answer, and the note stays a note: this turn's store has no row here (a session the panel no
-      // longer shares, a tool whose result was never recorded), so the head above really is all there is.
-      btn.disabled = false;
-      btn.textContent = "… the session store has no copy of this result — the lines above are all of it here";
+    pending = state.foldPending.get(key);
+    if (!pending) {
+      pending = (async () => {
+        const r = await apiFetch(`/api/tool-results?${q}`, {}, { timeoutMs: 15000 });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const d = await r.json();
+        return Array.isArray(d.results) ? d.results[0] : null;
+      })();
+      state.foldPending.set(key, pending);
+    }
+    const got = await pending;
+    if (!got || !String(got.text || "").trim()) {
+      // A missing or empty copy is not a full result. Keep the preview, and leave the header retryable.
+      say(got ? "the stored result has no text — click to retry" : "the session store has no copy of this result — click to retry");
       return true;
     }
     state.foldRows.set(key, got);
-    while (state.foldRows.size > FOLD_ROWS_MAX) state.foldRows.delete(state.foldRows.keys().next().value);
+    rememberOpen();
+    // Retire closed cached results first. Evicting one the reader still has open would shrink it on a repaint.
+    for (const held of state.foldRows.keys()) {
+      if (state.foldRows.size <= FOLD_ROWS_MAX) break;
+      if (!state.codeBoxOpen.has(`result|${held}`)) state.foldRows.delete(held);
+    }
     if (grp) repaintToolGroup(grp);
     else {
       // No burst wrapper to repaint: a burst the window trimmed of its call lines is drawn as bare console lines.
@@ -1630,8 +1666,11 @@ async function expandToolFold(btn) {
       if (rowEl && rowEl.parentElement && holder.firstChild) rowEl.replaceWith(...holder.childNodes);
     }
   } catch {
+    say("the session store could not be read; click to retry");
+  } finally {
+    if (state.foldPending.get(key) === pending) state.foldPending.delete(key);
     btn.disabled = false;
-    btn.textContent = `${was} — the session store could not be read; click to retry`;
+    btn.removeAttribute("aria-busy");
   }
   return true;
 }
@@ -1807,32 +1846,12 @@ function linkBatchTail(text, tool, gkey) {
   return `${esc(m[1])} <button type="button" class="tgrp-batch" data-batch-tool="${esc(tool)}" data-batch-n="${n}" data-batch-key="${esc(gkey)}" data-batch-first="${esc(first)}" title="${esc(title)}">+ ${n} command${n === 1 ? "" : "s"}</button>`;
 }
 
-// A burst the served window trimmed of its call line — and of the `↳ tool` header after it — has no segments to
-// pair: no tool name, no result header, no cursor. Its notes still name their own result (the tool and the row the
-// server stamped on them, and the head above each one, checked against the store's rows), so the burst is drawn in
-// pieces AROUND them: the console lines as they are, each note as the button that opens it, and — once the reader
-// has pressed one — the whole stored text in the note's place, exactly as the grouped path draws it.
+// A trimmed burst still resolves each result from its own stamped identity or its retained head. The shared
+// renderer turns that result's wire note into the box header's fetch metadata and replaces its preview in place.
 function trimmedBurstHtml(lines, turnId, gkey, codeOpen = state.codeBoxOpen) {
-  const folds = noteFolds(turnId, lines);
-  const out = [];
-  let run = [];
-  const flush = () => {
-    if (!run.length) return;
-    out.push(consoleBodyHtml(run, { tool: "", arg: "", codeOpen, codeKey: String(gkey), folds }));
-    run = [];
-  };
-  for (const l of lines) {
-    const fold = folds.get(l);
-    const opened = fold ? state.foldRows.get(foldKey(fold.turn, fold.tool, fold.row)) : null;
-    if (!opened) {
-      run.push(l);
-      continue;
-    }
-    flush();
-    out.push(wholeStoredHtml(opened, fold.tool, "", `${gkey}|${fold.tool}`));
-  }
-  flush();
-  return out.join("");
+  return consoleBodyHtml(lines, {
+    tool: "", arg: "", codeOpen, codeKey: String(gkey), folds: noteFolds(turnId, lines), fullForFold,
+  });
 }
 
 // ---- trimmed group head: a burst that lost its call line is still a group
@@ -1945,11 +1964,10 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
   const cursorsStart = new Map(Object.entries(gofs || {}));
   const cursors = new Map(cursorsStart);
   const takeStored = (tool) => {
-    const rowsOut = state.toolStore.get(`${turnId}|${tool}`)?.results || null;
-    if (!rowsOut || !rowsOut.length) return null;
     const i = cursors.get(tool) || 0;
     cursors.set(tool, i + 1);
-    return rowsOut[i] || null;
+    const rowsOut = state.toolStore.get(`${turnId}|${tool}`)?.results || null;
+    return rowsOut?.[i] || null;
   };
   // The index takeStored is ABOUT to take: a result's fold names which of the turn's rows it is, and the pairing
   // above is where that number comes from (the click then reads exactly that row back out of the store).
@@ -1959,41 +1977,18 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
   const codeOpenSet = state.codeBoxOpen;
   const storedHtml = (got, tool = "", arg = "", boxKey = "", at = null) => {
     const all = String(got.text || "").split(LF);
-    const cut = got.truncated && !/characters not shown/.test(got.text || "");
+    const displayCut = Boolean(got.truncated && /^… [0-9]+ characters not shown$/.test(all.at(-1) || ""));
+    if (displayCut) all.pop();
+    const cut = got.truncated && !displayCut;
     if (!all.some((l) => l.trim())) return cut ? '<div class="jl jl-dim jl-note">  this result was cut before its text</div>' : "";
-    // A row the reader has already opened is drawn whole from then on: the store path's own 40-line fold is a
-    // display cap exactly like the live stream's, and re-folding a result the reader just opened reads as the
-    // panel losing the click.
-    const opened = at == null ? null : state.foldRows.get(foldKey(turnId, tool, at));
-    if (opened) return wholeStoredHtml(opened, tool, arg, `${boxKey}|whole`) + (cut ? `<div class="jl jl-dim jl-note">… this result was cut</div>` : "");
-    const shown = all.slice(0, STORE_LINES);
+    const shown = all.slice(0, STORE_LINES).map((text) => ({ kind: "store", text }));
     const more = all.length - shown.length;
-    // The tail is the same affordance the live stream's fold ends with — one renderer, one click — and it is only
-    // drawn when this fold really dropped lines. With no row to name (a caller that cannot say) it stays the
-    // plain note it has always been.
-    const tail =
-      more > 0 && at != null
-        ? consoleBodyHtml([{ kind: "tool-out", text: foldNoteText({ hidden: more }) }], {
-            tool,
-            arg: "",
-            codeOpen: null,
-            codeKey: "",
-            fold: { turn: turnId, tool, row: at },
-          })
-        : more > 0
-          ? `<div class="jl jl-dim jl-note">… ${more} more line(s) of this result</div>`
-          : "";
-    return (
-      // The stored rows are the tool's output, so they go through the same renderer the live preview does: a
-      // patch's diff is usually ONLY here (the run stream's preview for patch/write_file is empty on this
-      // gateway), and it must not be the one console path that draws a diff as plain lines.
-      consoleBodyHtml(
-        shown.map((l) => ({ kind: "store", text: l })),
-        { tool, arg, codeOpen: codeOpenSet, codeKey: boxKey },
-      ) +
-      tail +
-      (cut ? `<div class="jl jl-dim jl-note">… this result was cut</div>` : "")
-    );
+    const needsFull = more > 0 || displayCut;
+    const fold = needsFull && at != null ? { turn: turnId, tool, row: at } : null;
+    // A character-capped store read cannot know the total line count. Say preview, then read the uncapped row.
+    if (needsFull) shown.push({ kind: "tool-out", text: foldNoteText(displayCut ? { shortened: 1 } : { hidden: more }) });
+    return consoleBodyHtml(shown, { tool, arg, codeOpen: codeOpenSet, codeKey: boxKey, fold, fullForFold, source: [] }) +
+      (cut ? `<div class="jl jl-dim jl-note">… this result was cut</div>` : "");
   };
   // What the call behind a result was given: the burst's own call line carries it ("📖 read_file · docs/map.md"),
   // and that argument is what a code box's header names the file from. Read from the lines the group was built
@@ -2056,7 +2051,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
     const resultLine = resultHead(seg) ? seg.lines.slice(0, 1) : [];
     const preview = resultHead(seg) ? seg.lines.slice(1) : seg.lines;
     const render = (list, extra = {}) =>
-      consoleBodyHtml(list, { tool: seg.tool, arg, codeOpen: codeOpenSet, codeKey: boxKey, ...extra });
+      consoleBodyHtml(list, { tool: seg.tool, arg, codeOpen: codeOpenSet, codeKey: boxKey, fullForFold, ...extra });
     // Where this result's store row is: the pairing below takes rows in order, so the cursor's value BEFORE it
     // advances is this result's own row — the number a fold's click fetches by.
     const rowAt = resultHead(seg) ? storedRowAt(seg.tool) : 0;
@@ -2080,18 +2075,9 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
       // rows once the burst has read them) or from the row the server stamped on the line — and only falls back
       // to this burst's cursor when it has neither.
       const fold = foldAt < 0 ? null : foldForNote({ turnId, tool: seg.tool, note: preview[foldAt], head: preview.slice(0, foldAt), cursor: rowAt });
-      const opened = fold ? state.foldRows.get(foldKey(turnId, fold.tool, fold.row)) : null;
       if (full) out = render(resultLine) + storedHtml(full.row, seg.tool, arg, boxKey, full.at);
-      else if (opened) {
-        out =
-          render(resultLine) +
-          render(preview.filter((_, k) => k !== foldAt)) +
-          wholeStoredHtml(opened, seg.tool, arg, `${boxKey}|whole`);
-      } else if (foldAt >= 0) {
-        out =
-          render(resultLine) +
-          render(preview.filter((_, k) => k !== foldAt)) +
-          render([preview[foldAt]], fold ? { fold } : {});
+      else if (foldAt >= 0) {
+        out = render(resultLine) + render(preview, fold ? { fold } : {});
       } else if (!preview.some((l) => String(l.text || "").trim())) {
         out += got
           ? storedHtml(got, seg.tool, arg, boxKey, rowAt)

@@ -15,13 +15,12 @@
 //     stops only at the next `↳ tool` line, at a note, or at a line that is not the tool's own output. The box's
 //     header names the tool (and the file, when the result is one), says how many lines it holds — and for a diff,
 //     how many it adds and removes — so a folded box already says what it is without being read;
-//   - the result's own header line ("↳ patch · 3.27s") and the notes under a result (the gateway's cut sentence, the
-//     panel's own "… 214 lines hidden — click to read" button) are NOT inside it: the first is the console's record
-//     of the result and the second are controls the reader may need while the box is folded;
-//   - the box is folded by default, in the condensed view and in the one-stream view alike; the reader's open boxes
-//     are remembered by key in the caller's set (opts.codeOpen), so a repaint never snaps one shut under them. A
-//     box the reader ASKED for (the whole stored text a fold note's click reads) is drawn open instead, and the
-//     caller says so by handing in a set that is `openByDefault` — then it is the boxes they SHUT that are kept.
+//   - the result's own header line ("↳ patch · 3.27s") and a genuine gateway-cut warning stay outside the box.
+//     The panel's own fold note remains in the wire source, but becomes fetch metadata on the box's header rather
+//     than a second visible "N hidden lines" control. Opening that header reads the full stored row into the SAME
+//     box, preserving its turn/tool/row key and replacing the preview rather than drawing a second copy;
+//   - the box is folded by default in both views. Its reader-owned open set survives the initial load and every
+//     repaint: an identified result uses one stable key before and after fetching, not an inverted second box.
 //
 // WHY ONE RENDERER
 //
@@ -95,9 +94,10 @@
 // One cap down is the panel's own: with the gateway's preview cap lifted the whole result arrives, and the card
 // keeps its head (40 lines, 400 characters a line — lib/jobs/console-lines.js) so that a 5,000-line read cannot
 // evict every other line of the card through the console's 600-line ring buffer. That fold ends with its own
-// sentence ("… 214 lines hidden — click to read"), which this module draws as a BUTTON: the click fetches the
-// whole stored row (one row, uncapped) and the card re-renders it in place. The two notes are never confused —
-// each says which cap cut it, and each appears only when its cap really cut something.
+// sentence ("… 214 lines hidden — click to read"). For an identified result the renderer consumes it as header
+// metadata: the header's first open fetches one uncapped stored row, and opts.fullForFold supplies that cached text
+// on subsequent renders. The head and full text share one frame and one fold key. A gateway-cut warning remains
+// separate, because it reports missing source data rather than this panel's recoverable display cap.
 //
 // WHAT IT REACHES OUT FOR
 //
@@ -542,6 +542,24 @@ function consoleBodyHtml(rows, opts = {}) {
   const { classes, pair } = consoleClassify(list, { fileOutput: Boolean(file) });
   const open = opts.codeOpen && typeof opts.codeOpen.has === "function" ? opts.codeOpen : null;
   const out = [];
+  // The caller has already identified ONE result. Text inside it may look like another result header or note;
+  // never re-enter the cached full row once per such fragment, or a diagnostic duplicates the complete output.
+  const direct = opts.fold && opts.fold.tool && opts.fold.turn != null && opts.fold.row != null;
+  if (direct) {
+    if (opts.whole) return cfResultBox(list, classes, pair, 0, n, file, opts, open);
+    const note = list.find((row) => consoleFoldNote(cfText(row)));
+    const boxOpts = { ...opts, source: opts.source || list, foldNote: note ? cfText(note) : "" };
+    const cuts = list.filter((row) => consoleCutNote(cfText(row))).map((row) => cfLine(row)).join("");
+    const loaded = typeof opts.fullForFold === "function" ? opts.fullForFold(opts.fold) : null;
+    if (loaded) {
+      const whole = String(loaded.text || "").split(String.fromCharCode(10)).map((text) => ({ kind: "store", text }));
+      return consoleBodyHtml(whole, { ...boxOpts, whole: true, fullForFold: null }) + cuts +
+        (loaded.truncated ? '<div class="jl jl-dim jl-note">… this stored result was cut as well</div>' : "");
+    }
+    const body = list.filter((row) => row !== note && !consoleCutNote(cfText(row)));
+    const shaped = consoleClassify(body, { fileOutput: Boolean(file) });
+    return cfResultBox(body, shaped.classes, shaped.pair, 0, body.length, file, boxOpts, open) + cuts;
+  }
   let i = 0;
   while (i < n) {
     // ONE BOX PER RESULT, even when the result is not one kind of thing. A `git show` hands the console a commit
@@ -560,8 +578,21 @@ function consoleBodyHtml(rows, opts = {}) {
       // A run that is nothing but blanks has nothing to put in a box; it falls through and is drawn as the blank
       // lines it is.
       if (solid > 0) {
-        out.push(cfResultBox(list, classes, pair, i, end, file, opts, open));
-        i = end;
+        // The wire's fold note is protocol, not a second control: let the result's own header read that row.
+        const note = end < n && consoleFoldNote(cfText(list[end])) ? list[end] : null;
+        const resolved = note && opts.folds && typeof opts.folds.get === "function" ? opts.folds.get(note) : null;
+        const candidate = resolved || opts.fold || (note && note.fold);
+        const fold = candidate && candidate.tool && candidate.turn != null && candidate.row != null ? candidate : null;
+        const boxOpts = fold ? { ...opts, fold, foldNote: note ? cfText(note) : "", source: opts.source || list.slice(i, end + (note ? 1 : 0)) } : opts;
+        const loaded = fold && !opts.whole && typeof opts.fullForFold === "function" ? opts.fullForFold(fold) : null;
+        if (loaded) {
+          const whole = String(loaded.text || "").split(String.fromCharCode(10)).map((text) => ({ kind: "store", text }));
+          out.push(consoleBodyHtml(whole, { ...boxOpts, whole: true, fullForFold: null }));
+          if (loaded.truncated) out.push('<div class="jl jl-dim jl-note">… this stored result was cut as well</div>');
+        } else {
+          out.push(cfResultBox(list, classes, pair, i, end, file, boxOpts, open));
+        }
+        i = end + (note && fold ? 1 : 0);
         continue;
       }
     }
@@ -598,7 +629,7 @@ function cfBoxable(list, classes, k) {
   if (!cfEligible(list[k])) return false;
   if (classes[k] !== "plain" && classes[k] !== "code") return false;
   const t = cfText(list[k]);
-  return !CF_NOTE_RE.test(t) && !CF_RESULT_HEAD_RE.test(t);
+  return !consoleFoldNote(t) && !consoleCutNote(t) && !CF_RESULT_HEAD_RE.test(t);
 }
 
 // "3 lines", "1 line".
@@ -609,16 +640,23 @@ const cfCount = (n) => `${n} line${n === 1 ? "" : "s"}`;
 // reader's open state is kept under across a repaint. The key is also why a box grows in place while its result is
 // still arriving: the run starts at the same row every time, only its length changes.
 function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open }) {
-  const key = `${String(opts.codeKey || "")}|${at}`;
+  const fold = opts.fold && opts.fold.tool && opts.fold.turn != null && opts.fold.row != null ? opts.fold : null;
+  const key = fold ? `result|${fold.turn}|${fold.tool}|${fold.row}` : `${String(opts.codeKey || "")}|${at}`;
   const isOpen = Boolean(open && open.has(key));
-  // A set that is open BY DEFAULT keeps the boxes the reader shut; the click handler has to know which of the two
-  // sets to write, and the box is where that is stated.
   const inverted = Boolean(open && open.openByDefault);
+  const pending = Boolean(fold && !opts.whole);
+  const hidden = /([0-9]+) (?:lines? hidden|more line)/.exec(String(opts.foldNote || ""));
+  const count = pending ? hidden ? `${rows} of ${Math.max(rows, Number(fold.head) || 40) + Number(hidden[1])} lines` : `${cfCount(rows)} · preview` : cfCount(rows);
+  const identity = fold
+    ? `${pending ? ' data-tool-fold="1"' : ""} data-fold-turn="${cfEsc(String(fold.turn))}" data-fold-tool="${cfEsc(String(fold.tool))}" data-fold-row="${cfEsc(String(fold.row))}"`
+    : "";
+  // Preserve only the capped wire rows for a DOM read-back. A fetched body must never be reabsorbed into the buffer.
+  const source = fold && opts.source ? ` data-code-source="${cfEsc(JSON.stringify(opts.source))}"` : "";
   return (
-    `<div class="code-box is-${kind}${isOpen ? " is-open" : ""}">` +
-    `<button type="button" class="code-head" data-code-fold="1" data-code-key="${cfEsc(key)}"${inverted ? ' data-code-inverted="1"' : ""} aria-expanded="${isOpen ? "true" : "false"}"${title ? ` title="${cfEsc(title)}"` : ""}>` +
+    `<div class="code-box is-${kind}${isOpen ? " is-open" : ""}"${source}>` +
+    `<button type="button" class="code-head" data-code-fold="1"${identity} data-code-key="${cfEsc(key)}"${inverted ? ' data-code-inverted="1"' : ""} aria-expanded="${isOpen ? "true" : "false"}"${title ? ` title="${cfEsc(title)}"` : ""}>` +
     `<span class="code-caret">${isOpen ? "▾" : "▸"}</span><span class="code-what">${cfEsc(what)}</span>${delta}` +
-    `<span class="code-n">${cfCount(rows)}</span><span class="code-hint">${isOpen ? "click to fold" : "click to read"}</span></button>` +
+    `<span class="code-n">${cfEsc(count)}</span><span class="code-hint">${isOpen ? "click to fold" : "click to read"}</span></button>` +
     `<div class="code-body"${isOpen ? "" : " hidden"}>${body}</div>` +
     `</div>`
   );

@@ -522,28 +522,27 @@ pairs with its own results, so a second run of the same tool later in the turn s
 first run's. A call the store has nothing for says `no output recorded for this call` — or `no output in the session
 store yet` while the turn is still running.
 
-**Every tool result is one box, folded.** Whatever a call returned — a shell transcript, a search, a file, a skill, a
-diff — sits in a single bordered box under its `↳ tool · 3.27s` line, shut until you open it. The header names what is
-inside (`terminal output`, `read_file · package.json`, `skill_view output`), counts its lines and says `click to
-read`; a diff's header also says what it adds and removes (`patch · …/package.json +3 −2`), so a shut box already tells
-you how big the change was. A click opens the box to its **full size** — every line, wrapped, no inner scroll — and
-the same click shuts it again. The box you opened stays open through a repaint, a new line arriving or a rebuilt
-burst; the `… result truncated` / `… N lines hidden — click to read` notes stay outside it, under it, so a shut box
-still says when there is more. A diff's framed windows (one per hunk) are drawn inside the box, so the box is the
-only frame. The one-stream view (🌊) draws the same boxes, shut the same way. What a block's copy button copies is
-what it shows, so the output of a box you have not opened is not in the copy.
+**Every tool result is one folded box with one read control.** Whatever a call returned — a shell transcript, a
+search, a file, a skill, a diff — sits under its `↳ tool · 3.27s` line. The header names the tool or file, counts its
+lines and says `click to read`; a diff also says what it adds and removes (`patch · …/package.json +3 −2`). Clicking
+that header opens the complete recorded output, wrapped with no inner scroll. A second click folds the same box.
+The choice survives a repaint, a burst rebuild and a switch between condensed and one-stream (🌊) views.
 
-A long result is folded by the panel itself: the card keeps its **first 40 lines** (and shortens any line past 400
-characters), because a whole 5,000-line read in the console would push every other line of the card out of its
-600-line ring buffer. The fold ends with a sentence you can click — `… 214 lines hidden — click to read`, or
-`… 12 lines hidden, 3 lines shortened — click to read` when the head wore the line cap too. The click reads **that
-one result** back out of the session store, uncapped, and draws the whole thing in place — in a second box, `… · full
-result`, that is drawn **open** because you asked for it (shutting it is remembered the same way); nothing is added to
-the console's own lines, so the card stays as long as it was. A store with no copy of the result says so instead of
-inventing output: `… the session store has no copy of this result — the lines above are all of it here`. Both
-truncation notes are honest about which cap cut: `… result truncated by the gateway` is the gateway's preview cap,
-the `… N lines hidden — click to read` sentence is this panel's fold, and each only appears when its own cap really
-dropped something.
+For a long result the card's ring buffer still keeps only its **first 40 lines**, shortening preview lines past
+400 characters, so one huge read cannot evict the rest of the turn. The header says `40 of 64 lines` when the total
+is known, or `40 lines · preview` when a character-capped store read cannot tell. On the first open, that same header
+reads **one complete result** from the session store and replaces its preview in the existing box; the count becomes
+`64 lines`. There is no separate hidden-lines link, no second result box and no repeated first 40 lines. The tool
+is not rerun, and the fetched text is not added to the console's own ring buffer. These are logical output lines,
+not wrapped screen rows or a count of calls.
+
+Opening a long result shows `reading the stored result…` in its header. A missing copy, empty stored text or failed
+read leaves the preview intact and offers a retry there. Closing and reopening uses the cached full text while it
+is retained; already-open results are not evicted just because another result is read. A parked console keeps its
+reading position through the initial load and subsequent repaints. The gateway's own `… result truncated` note
+still stays outside the box: it describes data that was cut upstream, not the preview this panel can read back.
+A diff's framed windows (one per hunk) remain inside the one box. Copy copies visible output, so a box that has not
+been opened does not contribute its hidden body. See [the original investigation and its replacement behavior](tool-output-hidden-lines.md).
 
 **How fast it fills in** is yours to set, because the wire's pace is not a reading pace: prose arrives in coalesced
 bursts, and a burst of tool lines lands all at once. Settings → Display → **Stream display speed** types a paragraph —

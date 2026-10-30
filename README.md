@@ -415,19 +415,15 @@ Semantics, all verified against real runs:
 - **Output** is the run's event stream: each tool call with its argument preview, the assistant's text
   as it arrives, approval requests, and a closing line with tokens and exit. Tool results are the
   gateway's redacted, 500-character preview (the full payload stays in the session transcript).
-- **Every tool result is one box, folded until you open it.** Whatever a call returned — a shell
-  transcript, a search, a file, a skill, a diff — sits in a single bordered box under its `↳ tool` line,
-  with a header that names what is inside (`terminal output`, `read_file · package.json`) and counts
-  its lines. A click opens it to its full size and a second click shuts it; the choice survives a
-  repaint. A unified diff is drawn inside its box as one framed window per `@@` hunk: the `diff --git` /
-  `--- ` / `+++ ` headers and the hunk line ride as labels, and the body is two sides — the after lines on
-  the left in green and the before lines on the right (yellow where a line was modified, red where it
-  was purely removed), with unchanged context dim across both — and its header says what it adds and
-  removes (`+3 −2`), so a shut box still says how big the change was. Everything wraps, so a
-  300-character line never forces the console sideways. The result's own `↳ tool · 3.27s` line and the
-  notes under it (`… result truncated by the gateway`, `… 214 lines hidden — click to read`) stay outside
-  the box. The classification is made at render time from a line's own text and only ever looks at a
-  tool's own output: a call line, the agent's sentences and the panel's own notes are never boxed.
+- **Every tool result is one box, folded until you open it.** Its header names the tool or file,
+  counts its lines and is its only read/fold control. A long result starts with a capped preview
+  (`40 of 64 lines`, or `40 lines · preview` when its total is not known); opening the header reads
+  the complete stored result into that same box and updates the count. No separate hidden-lines
+  link, duplicated preview or tool re-run. Closing and reopening uses the retained full result,
+  with fold and parked scroll state preserved through repaints. A diff keeps its hunk windows
+  inside the box: new lines on the left, old on the right, and `+3 −2` in the header. Everything
+  wraps. The result's own `↳ tool · 3.27s` line and any genuine gateway-truncation warning remain
+  outside; the full stored text never enters the console's capped ring buffer.
 - **A skill is written, not dropped in.** The lines of a skill's result (`skill_view`, `skills_list`,
   `skill_manage` — the longest thing a run hands the console at once) type out at Settings → Display →
   **Stream display speed**, like the agent's prose and its reasoning, and walk in at **Stream line rate**.

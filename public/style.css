@@ -931,6 +931,9 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
   min-height: 34px;
   resize: vertical;
   overflow: auto;
+  /* The panel owns this pane's reading position. Native anchoring otherwise follows a row AFTER an expanded
+     result and jumps the reader past the text they just opened, even when this console is not pinned. */
+  overflow-anchor: none;
   background: var(--console);
   border: 1px solid var(--line);
   border-radius: 6px;

@@ -1,4 +1,4 @@
-// A fold note is a real control on EVERY render path, and the row it names is the row its click fetches.
+// One result, one header: every render path fetches the header's own full row into the original output box.
 //
 //   node tools/verify-fold-note-parity.mjs
 //   PANEL_PLAYWRIGHT_ROOT=C:/ProjectDevelopment/heroes-js node tools/verify-fold-note-parity.mjs
@@ -6,20 +6,10 @@
 //
 // WHY THIS EXISTS
 //
-// The whole-tool-stream change made the panel fold a long result and put the rest behind a click. Two things
-// then did not agree:
-//
-//   * the AFFORDANCE. `cfFoldRow` only emits `button.fold-read[data-tool-fold]` when it is handed a fold, and
-//     the console only ever built one from a per-burst cursor on the ONE path whose segment starts with a
-//     `↳ tool · 1.2s` result header. A burst the served window trimmed of its call line (`/api/jobs` serves the
-//     last 120 lines, `jobs.json` keeps 120, `MAX_LINES` is 600) renders through `consoleBodyHtml` with no fold
-//     at all, so a reload showed "… 17 lines hidden — click to read" as a plain `div.jl-fold` with nothing to
-//     click. Measured on the live board: `clickable: 0` with every burst opened and the store route answering
-//     200.
-//   * the ROW. That cursor was seeded by counting the result lines the CONSOLE holds, while
-//     `lib/tool-results.js` indexes a tool's rows over the WHOLE TURN (`LIMIT 1 OFFSET row`). The note in burst
-//     `9658fe9e#2` named `row=0`, and row 0 for `terminal` in that turn is the opening recon command (799
-//     chars, 14 lines) — a different result. A click read back the wrong text.
+// Opening a long result's ordinary box must read the complete row in place, not leave the preview beside a
+// second full-result box. The server's fold-note lines remain in jobLines as result identity metadata; the
+// reader sees no separate hidden-lines link once that identity is known. Pairing is over the WHOLE TURN per
+// tool, not a cursor restarted at each burst or the trimmed console window.
 //
 // WHAT IS DRIVEN HERE
 //
@@ -33,11 +23,10 @@
 //            hands back. The same turn is then served the way a reload serves it: as a window that starts
 //            inside its last result, with the call line and the result header trimmed away.
 //
-// The row check is by CONTENT, because a position is exactly what went wrong: the console lines drawn above a
-// note are the first lines of that result's stored row (one fold, one `unwrapToolText`), so the fetched text's
-// first line is compared against the first head line drawn above the note that was pressed — and the fixture
-// results open with the marker their own command printed, so that same first line is also the command text the
-// burst's header names.
+// Real Playwright header clicks check the exact request, every returned line exactly once, updated counts,
+// normal non-inverted fold keys, cached close/reopen, renderJobs and DOM-backed rebuildToolGroup. Condensed,
+// one-stream, trimmed, legacy cursor and legacy head-match paths share the contract. Content markers tie each
+// box to its own command, while deep equality proves the input buffer and its original fold notes never change.
 //
 // The browser half needs a Playwright install; without one this prints BROWSER-HALF-NOT-RUN and exits non-zero
 // rather than passing on a half that never ran. :7331 and :8642 are never touched.
@@ -276,7 +265,7 @@ async function startSandbox() {
         assistantFile: path.join(configDir, "logs", "assistant.json"),
         projectsCacheFile: path.join(configDir, "logs", "projects.json"),
         treeNamesFile: path.join(configDir, "logs", "tree-names.json"),
-        apiServer: { url: "http://127.0.0.1:9", key: "sandbox-key" },
+        apiServer: { url: "http://127.0.0.1:9", key: "" },
         assistant: { enabled: false, seconds: 3600, maxWakesPerHour: 0 },
         refreshSeconds: 3600,
         worktreeSeconds: 3600,
@@ -293,7 +282,7 @@ async function startSandbox() {
   base = `http://127.0.0.1:${port}`;
   panel = spawn(process.execPath, ["server.js"], {
     cwd: ROOT,
-    env: { ...process.env, PANEL_CONFIG: path.resolve(configPath), HERMES_HOME: path.resolve(home), PANEL_TOKEN: "" },
+    env: { ...process.env, PANEL_CONFIG: path.resolve(configPath), HERMES_HOME: path.resolve(home), PANEL_TOKEN: "", API_SERVER_KEY: "" },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });
@@ -339,299 +328,248 @@ function loadPlaywright() {
 
 async function browserPhase(pw) {
   const browser = await pw.chromium.launch({ headless: true });
-  const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
-  const realSnapshot = await fetch(`${base}/api/state`).then((r) => r.json());
-  await context.addInitScript(
-    ({ snapshot, lines, trimmedLines, oldLines, trimmedOld, startedAt, endedAt, thread, id }) => {
-      const realFetch = window.fetch.bind(window);
-      const probe = { snapshot, calls: [] };
-      window.__probe = probe;
-      const json = (body) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
-      window.fetch = async (url, opts = {}) => {
-        const u = String(url);
-        const method = String((opts && opts.method) || "GET").toUpperCase();
-        // The board's own snapshot: the card under test lives in it. Everything else is the sandbox panel's own
-        // answer — `/api/tool-results` above all, because the store read is half of what is being proved.
-        if (method === "GET" && u.includes("/api/state")) return json({ ...probe.snapshot, jobs: [...state.jobs.values()] });
-        if (method === "GET" && u.includes("/api/tool-results")) probe.calls.push(u);
-        return realFetch(url, opts);
-      };
-      const FakeStream = function () {
-        this.readyState = 1;
-      };
-      FakeStream.prototype.addEventListener = function () {};
-      FakeStream.prototype.removeEventListener = function () {};
-      FakeStream.prototype.close = function () {};
-      window.EventSource = FakeStream;
-
-      const foldRe = /^\s*…\s+\d+ lines?(?: hidden| shortened)(?:, \d+ lines? shortened)? — click to read\s*$/;
-      // Paint the turn as a card: the same call renderJobs() makes on a reload, over the lines handed in.
-      probe.show = (which) => {
-        state.jobs.clear();
-        state.jobLines.clear();
-        state.toolStore.clear();
-        state.toolGroupOpen.clear();
-        state.codeBoxOpen.clear();
-        state.callFolded.clear();
-        state.foldRows.clear();
-        state.outPinned = {};
-        state.maximized = id;
-        const src = which === "trimmed" ? trimmedLines : which === "old" ? oldLines : which === "trimmed-old" ? trimmedOld : lines;
-        state.jobLines.set(id, src.map((l) => ({ ...l })));
-        state.jobs.set(id, {
-          id,
-          thread,
-          turn: 1,
-          status: "done",
-          prompt: "fold note parity probe",
-          displayPrompt: "fold note parity probe",
-          cwd: null,
-          worktree: false,
-          branch: null,
-          runId: "run_probe",
-          startedAt,
-          endedAt,
-          model: "probe/model",
-          lines: [],
-          artifacts: [],
-          attachments: [],
-          subagents: [],
-        });
-        renderJobs();
-        return (state.jobLines.get(id) || []).length;
-      };
-      // Every fold note the console drew, and whether it is a control.
-      probe.notes = () =>
-        [...document.querySelectorAll("pre.job-out .jl-fold")].map((d) => {
-          const btn = d.querySelector("[data-tool-fold]");
-          const grp = d.closest(".tgrp");
+  const pageErrors = [];
+  try {
+    const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+    const realSnapshot = await fetch(`${base}/api/state`).then((r) => r.json());
+    await context.addInitScript(
+      ({ snapshot, lines, trimmedLines, oldLines, trimmedOld, startedAt, endedAt, thread, id }) => {
+        const realFetch = window.fetch.bind(window);
+        const probe = { snapshot, calls: [] };
+        window.__probe = probe;
+        const json = (body) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+        window.fetch = async (url, opts = {}) => {
+          const u = String(url);
+          const method = String(opts.method || "GET").toUpperCase();
+          if (method === "GET" && u.includes("/api/state")) return json({ ...probe.snapshot, jobs: [...state.jobs.values()] });
+          // Both shallow pairing reads and full-row clicks reach the sandbox's real SQLite-backed route.
+          if (method === "GET" && u.includes("/api/tool-results")) probe.calls.push(u);
+          return realFetch(url, opts);
+        };
+        window.EventSource = class {
+          constructor() { this.readyState = 1; }
+          addEventListener() {}
+          removeEventListener() {}
+          close() {}
+        };
+        localStorage.setItem("wtgui.autoCollect", "0");
+        const foldRe = /^\s*…\s+\d+ lines?(?: hidden| shortened)(?:, \d+ lines? shortened)? — click to read\s*$/;
+        const pre = () => document.querySelector(`pre.job-out[data-out="${id}"]`);
+        probe.show = (which = "full", stream = false) => {
+          state.jobs.clear();
+          state.jobLines.clear();
+          state.toolStore.clear();
+          state.toolGroupOpen.clear();
+          state.codeBoxOpen.clear();
+          state.codeBoxShut.clear();
+          state.callFolded.clear();
+          state.foldRows.clear();
+          state.foldPending?.clear();
+          state.toolStorePending.clear();
+          state.outPinned = {};
+          state.maximized = id;
+          localStorage.setItem(`wtgui.stream.${thread}`, stream ? "1" : "0");
+          probe.calls = [];
+          const src = which === "trimmed" ? trimmedLines : which === "old" ? oldLines : which === "trimmed-old" ? trimmedOld : lines;
+          state.jobLines.set(id, src.map((l) => ({ ...l })));
+          state.jobs.set(id, {
+            id, thread, turn: 1, status: "done", prompt: "single-box fold parity probe", displayPrompt: "single-box fold parity probe",
+            cwd: null, worktree: false, branch: null, runId: "run_probe", startedAt, endedAt, model: "probe/model",
+            lines: [], artifacts: [], attachments: [], subagents: [],
+          });
+          probe.originalLines = JSON.stringify(state.jobLines.get(id));
+          renderJobs();
+          return probe.read();
+        };
+        const callFor = (header) => {
+          const rows = [...pre().querySelectorAll("[data-ltext], .code-head")];
+          for (let k = rows.indexOf(header) - 1; k >= 0; k--) {
+            if (rows[k].dataset.lkind === "tool") return rows[k].dataset.ltext || "";
+          }
+          return "";
+        };
+        probe.controls = () => [...pre().querySelectorAll(".code-head[data-fold-turn][data-fold-tool][data-fold-row]")].map((h) => {
+          const box = h.closest(".code-box");
+          const body = box?.querySelector(".code-body");
           return {
-            text: d.dataset.ltext,
-            isButton: Boolean(btn),
-            tool: btn ? btn.dataset.foldTool : null,
-            row: btn ? btn.dataset.foldRow : null,
-            turn: btn ? btn.dataset.foldTurn : null,
-            grp: grp ? grp.dataset.tgrp : null,
+            turn: h.dataset.foldTurn, tool: h.dataset.foldTool, row: h.dataset.foldRow,
+            key: h.dataset.codeKey || "", codeFold: h.dataset.codeFold || "", fetch: h.dataset.toolFold === "1",
+            inverted: h.dataset.codeInverted || "", n: h.querySelector(".code-n")?.textContent || "",
+            open: Boolean(body && !body.hidden && h.getAttribute("aria-expanded") === "true" && box.classList.contains("is-open")),
+            expanded: h.getAttribute("aria-expanded"), call: callFor(h), grp: h.closest(".tgrp")?.dataset.tgrp || "",
+            body: [...(body?.querySelectorAll(".jl[data-ltext]") || [])].map((r) => r.dataset.ltext),
           };
         });
-      // The console lines DRAWN above a note, and the call line the result belongs to: the head the panel kept, in
-      // document order (it may be nested in a diff window) and no further back than the panel's own 40 lines. The
-      // header sits between the head and the call line, so the walk skips it once and keeps going for the call.
-      const headOf = (noteEl) => {
-        const pre = document.querySelector("pre.job-out");
-        const rows = [...pre.querySelectorAll("[data-ltext]")];
-        const at = rows.indexOf(noteEl);
-        const head = [];
-        let call = "";
-        let pastHeader = false;
-        for (let k = at - 1; k >= 0; k--) {
-          const d = rows[k];
-          const t = String(d.dataset.ltext || "");
-          const kind = d.dataset.lkind || "";
-          if (kind === "tool") {
-            call = t;
-            break;
-          }
-          if (kind !== "tool-out") break;
-          if (/^\s*↳\s*\S/.test(t)) {
-            // The result header: the head is under it and the call line is above it.
-            if (pastHeader) break;
-            pastHeader = true;
-            continue;
-          }
-          if (foldRe.test(t)) break;
-          if (!pastHeader && head.length < 40) head.unshift(t);
-        }
-        return { head, call };
-      };
-      const noteFor = (tool, row) =>
-        [...document.querySelectorAll("pre.job-out .jl-fold")].find((d) => {
-          const btn = d.querySelector("[data-tool-fold]");
-          return btn && btn.dataset.foldTool === String(tool) && btn.dataset.foldRow === String(row);
-        }) || null;
-      probe.headFor = (tool, row) => {
-        const noteEl = noteFor(tool, row);
-        return noteEl ? headOf(noteEl) : null;
-      };
-      probe.bodyText = () => document.querySelector("pre.job-out").textContent;
-      // The stored text a press drew, as the panel's own store rows: the ones that appeared after the press
-      // (earlier presses left theirs on the card too).
-      probe.storedRows = () => [...document.querySelectorAll('pre.job-out [data-lkind="store"]')].map((d) => String(d.dataset.ltext || ""));
-      probe.lineCount = () => (state.jobLines.get(id) || []).length;
-      probe.storeCalls = () => probe.calls.slice();
-      probe.grps = () =>
-        [...document.querySelectorAll("pre.job-out .tgrp")].map((g) => ({
-          t: g.dataset.tgrp,
-          jl: g.querySelectorAll(".jl").length,
-          open: !(g.querySelector(".tgrp-body") || {}).hidden,
-        }));
-      probe.openAll = async () => {
-        for (const g of [...document.querySelectorAll("pre.job-out .tgrp")]) {
-          const body = g.querySelector(".tgrp-body");
-          if (body && body.hidden) g.querySelector("[data-tgrp-more]")?.click();
-          await new Promise((r) => setTimeout(r, 250));
-        }
-        return probe.grps();
-      };
-      // Press one note, by the tool and the row it names, and report what went out and what came back.
-      probe.press = async (tool, row) => {
-        const noteEl = noteFor(tool, row);
-        if (!noteEl) return { pressed: false };
-        const btn = noteEl.querySelector("[data-tool-fold]");
-        const before = { calls: probe.calls.length, lines: probe.lineCount(), head: headOf(noteEl), stores: probe.storedRows().length };
-        const named = { tool: btn.dataset.foldTool, row: btn.dataset.foldRow, turn: btn.dataset.foldTurn };
-        btn.click();
-        for (let i = 0; i < 60 && probe.calls.length === before.calls; i++) await new Promise((r) => setTimeout(r, 100));
-        await new Promise((r) => setTimeout(r, 400));
-        return {
-          pressed: true,
-          named,
-          head: before.head,
-          url: probe.calls.slice(before.calls)[0] || "",
-          fetched: (probe.storedRows()[before.stores] || "").replace(/\s+$/, ""),
-          text: probe.bodyText(),
-          lines0: before.lines,
-          lines: probe.lineCount(),
-          foldsHeld: state.foldRows.size,
+        probe.result = (tool, row) => probe.controls().find((c) => c.turn === id && c.tool === tool && c.row === String(row)) || null;
+        probe.read = () => {
+          const o = pre();
+          const notes = [...o.querySelectorAll("[data-ltext]")].filter((d) => foldRe.test(d.dataset.ltext || ""));
+          return {
+            controls: probe.controls(), boxes: o.querySelectorAll(".code-box").length,
+            output: [...o.querySelectorAll(".jl[data-ltext]")].filter((d) => d.getClientRects().length > 0).map((d) => d.dataset.ltext),
+            footerLinks: o.querySelectorAll(".fold-read").length,
+            externalNotes: notes.filter((d) => !d.closest(".code-box") && !d.hidden).map((d) => ({ text: d.dataset.ltext, button: Boolean(d.querySelector("[data-tool-fold]")) })),
+            calls: probe.calls.slice(), fullCalls: probe.calls.filter((u) => new URL(u, location.href).searchParams.get("full") === "1"),
+            lines: (state.jobLines.get(id) || []).length, unchanged: JSON.stringify(state.jobLines.get(id)) === probe.originalLines,
+            groups: [...o.querySelectorAll(".tgrp")].map((g) => ({ key: g.dataset.tgrp, open: !g.querySelector(".tgrp-body")?.hidden, flat: g.dataset.gflat === "1" })),
+          };
         };
-      };
-      probe.repaint = () => renderJobs();
-      // The panel's own store read, driven the way its 3s timer drives it, then the repaint every push performs:
-      // used to prove a note resolves from the store's rows alone, with no stamp and no cursor to help it.
-      probe.readStore = async (tool) => {
-        await ensureToolStore(id, tool, null);
-        renderJobs();
-        return probe.notes();
-      };
-    },
-    {
-      snapshot: realSnapshot,
-      lines: SERVER_LINES,
-      trimmedLines: TRIMMED,
-      oldLines: OLD_LINES,
-      trimmedOld: TRIMMED_OLD,
-      startedAt: job.startedAt,
-      endedAt: job.endedAt,
-      thread: THREAD,
-      id: TURN,
-    },
-  );
+        probe.rebuild = () => {
+          // A full render removes any _burst shortcut: the following rebuild must read the DOM back correctly.
+          renderJobs();
+          for (const g of [...pre().querySelectorAll(".tgrp")]) rebuildToolGroup(g, { filter: g.dataset.filter || "", open: !g.querySelector(".tgrp-body")?.hidden });
+          return probe.read();
+        };
+        probe.readStore = async (tool) => {
+          await ensureToolStore(id, tool, null);
+          renderJobs();
+          return probe.read();
+        };
+      },
+      { snapshot: realSnapshot, lines: SERVER_LINES, trimmedLines: TRIMMED, oldLines: OLD_LINES, trimmedOld: TRIMMED_OLD,
+        startedAt: job.startedAt, endedAt: job.endedAt, thread: THREAD, id: TURN },
+    );
+    const page = await context.newPage();
+    page.on("pageerror", (err) => pageErrors.push(String(err?.message || err)));
+    await page.goto(base, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => Boolean(window.__probe && window.WMApp?.core), null, { timeout: 20_000 });
+    const read = () => page.evaluate(() => window.__probe.read());
+    const header = (tool, row) => page.locator(`pre.job-out[data-out="${TURN}"] .code-head[data-fold-turn="${TURN}"][data-fold-tool="${tool}"][data-fold-row="${row}"]`);
+    const named = (st) => st.controls.map((c) => [c.tool, Number(c.row), c.turn]);
+    const noFooter = (label, st) => check(`${label}: no separate hidden-lines link or external note`, [st.footerLinks, st.externalNotes.length], [0, 0]);
+    const openAll = async () => {
+      const groups = page.locator(`pre.job-out[data-out="${TURN}"] .tgrp`);
+      for (let i = 0; i < await groups.count(); i++) {
+        if (await groups.nth(i).locator(".tgrp-body").evaluate((b) => b.hidden)) await groups.nth(i).locator("[data-tgrp-more]").click();
+      }
+    };
+    const press = async (tool, row) => {
+      const before = await read();
+      const own = before.controls.find((c) => c.tool === tool && c.row === String(row));
+      if (await header(tool, row).count() !== 1) return { pressed: false, before, own, after: before, requests: [] };
+      await header(tool, row).click();
+      const loaded = await waitFor(() => page.evaluate(([id, t, r]) => {
+        const c = window.__probe.result(t, r);
+        return Boolean(c && c.open && !c.fetch && state.foldRows.has(foldKey(id, t, r)) && !state.foldPending?.has(foldKey(id, t, r)));
+      }, [TURN, tool, row]), { timeoutMs: 5000, stepMs: 50, what: `${tool} row ${row} to open in its original box` });
+      const after = await read();
+      return { pressed: true, loaded, before, own, after, requests: after.fullCalls.slice(before.fullCalls.length) };
+    };
+    const assertPress = (label, p, tool, row, result, boxCount, withCall = true) => {
+      const c = p.after.controls.find((v) => v.tool === tool && v.row === String(row));
+      ok(`${label}: a real header click loads the row`, p.pressed && p.loaded);
+      check(`${label}: exactly the named turn/tool/row is requested uncapped`, p.requests.map((u) => {
+        const q = new URL(u, base).searchParams;
+        return [q.get("thread"), q.get("tool"), q.get("row"), q.get("full"), q.get("n"), q.get("from"), q.get("to")];
+      }), [[THREAD, tool, String(row), "1", "1", String(Date.parse(job.startedAt)), String(Date.parse(job.endedAt))]]);
+      check(`${label}: the same logical header retains its identity and normal fold key`, c ? [c.turn, c.tool, c.row, c.key, c.codeFold, c.fetch, c.inverted] : null,
+        p.own ? [TURN, tool, String(row), p.own.key, "1", false, ""] : [TURN, tool, String(row), "nonempty original key", "1", false, ""]);
+      ok(`${label}: the original box is open with the full line count`, Boolean(c?.open && c.n === `${RESULT_LINES} lines`));
+      const want = bodyOfResult(result).split(LF);
+      ok(`${label}: every full line occurs once, with no duplicate first 40 lines`, JSON.stringify(c?.body) === JSON.stringify(want) && want.every((text) => p.after.output.filter((t) => t === text).length === 1), `${c?.body.length || 0}/${want.length} rows`);
+      if (withCall) ok(`${label}: the result matches its burst's own command and preview`, Boolean(p.own?.call.includes(result.cmd) && p.own.body[0] === result.marker && c?.body[0] === p.own.body[0]), p.own?.call || "no call header");
+      check(`${label}: there is still only one box per result`, p.after.boxes, boxCount);
+      ok(`${label}: jobLines and its original fold identities are untouched`, p.before.unchanged && p.after.unchanged && p.after.lines === p.before.lines);
+      noFooter(label, p.after);
+    };
+    const cycle = async (label, tool, row, result, boxes) => {
+      const before = await read();
+      const own = before.controls.find((c) => c.tool === tool && c.row === String(row));
+      if (await header(tool, row).count() !== 1) {
+        ok(`${label}: the loaded result still has one header to close/reopen`, false);
+        return;
+      }
+      await header(tool, row).click();
+      let st = await read();
+      let c = st.controls.find((v) => v.tool === tool && v.row === String(row));
+      ok(`${label}: the second click folds that very box`, Boolean(c && !c.open && c.expanded === "false"));
+      st = await page.evaluate(() => window.__probe.rebuild());
+      c = st.controls.find((v) => v.tool === tool && v.row === String(row));
+      ok(`${label}: shut state and identity survive renderJobs plus a DOM-backed rebuild`, Boolean(c && !c.open && c.expanded === "false" && c.key === own.key && !c.fetch && !c.inverted));
+      await header(tool, row).click();
+      st = await page.evaluate(() => window.__probe.rebuild());
+      c = st.controls.find((v) => v.tool === tool && v.row === String(row));
+      ok(`${label}: reopening survives both rebuilds and shows the full cached text once`, Boolean(c?.open && c.key === own.key && JSON.stringify(c.body) === JSON.stringify(bodyOfResult(result).split(LF))));
+      check(`${label}: close/reopen never fetches the full row twice`, st.fullCalls.length, before.fullCalls.length);
+      check(`${label}: rebuilds never add a second copy`, st.boxes, boxes);
+      ok(`${label}: the input ring buffer is still unchanged`, st.unchanged);
+      noFooter(label, st);
+    };
 
-  const page = await context.newPage();
-  const pageErrors = [];
-  page.on("pageerror", (err) => pageErrors.push(String(err && err.message ? err.message : err)));
-  await page.goto(base, { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(() => Boolean(window.__probe && window.WMApp && window.WMApp.core), null, { timeout: 20_000 });
+    // The SERVER'S notes remain input metadata; the HEADER is the only rendered fetch/fold control.
+    const full = await page.evaluate(() => window.__probe.show("full"));
+    check("(f) the card holds the shipped server's own lines", full.lines, SERVER_LINES.length);
+    check("(f) one original box and one identified header per result", [full.boxes, full.controls.length], [notes.length, notes.length]);
+    check("(f) every header names its own turn, tool and whole-turn row", named(full), EXPECTED_ROWS.map(([t, r]) => [t, r, TURN]));
+    ok("(f) every long-result header starts folded and is the fetch control", full.controls.length === notes.length && full.controls.every((c) => !c.open && c.expanded === "false" && c.fetch && c.codeFold === "1" && c.key && !c.inverted && c.n === "40 of 60 lines"), JSON.stringify(full.controls.map((c) => [c.tool, c.row, c.open, c.n, c.fetch, c.key, c.codeFold, c.inverted])));
+    check("(f) rendering the folded headers needs no request", full.calls.length, 0);
+    ok("(f) the identities span several independent bursts", new Set(full.controls.map((c) => c.grp)).size > 1);
+    noFooter("(f)", full);
 
-  // (f) the whole turn, painted the way a card is painted: every note is a control on the FIRST paint, before any
-  // store read — the parity the incremental path always had and a reload did not.
-  const full = await page.evaluate(() => {
-    const n = window.__probe.show("full");
-    return { lines: n, notes: window.__probe.notes(), calls: window.__probe.storeCalls().length, grps: window.__probe.grps() };
-  });
-  check("(f) the card holds the shipped server's own lines for the turn", full.lines, SERVER_LINES.length);
-  check("(f) one note per folded result, all on the card", full.notes.length, notes.length);
-  ok("(f) EVERY note is a real button on the first paint", full.notes.every((n) => n.isButton), JSON.stringify(full.notes.map((n) => [n.grp, n.isButton])));
-  check("(f) each one names the tool, the row and the turn it needs", full.notes.map((n) => [n.tool, Number(n.row), n.turn]), EXPECTED_ROWS.map(([tool, row]) => [tool, row, TURN]));
-  check("(f) nothing was fetched to draw them", full.calls, 0);
-  ok("(f) and the notes are spread over more than one burst", new Set(full.notes.map((n) => n.grp)).size > 1, JSON.stringify(full.notes.map((n) => n.grp)));
+    const trimmed = await page.evaluate(() => window.__probe.show("trimmed"));
+    check("(g) the served window is the real suffix with no call line", [trimmed.lines, TRIMMED.some((l) => l.kind === "tool")], [TRIMMED.length, false]);
+    check("(g) the trimmed result is one identified folded box, not a footer", [trimmed.boxes, named(trimmed)], [1, [["terminal", 3, TURN]]]);
+    ok("(g) its own header starts folded and requests the missing row", trimmed.controls.length === 1 && !trimmed.controls[0].open && trimmed.controls[0].fetch);
+    noFooter("(g)", trimmed);
+    assertPress("(g) trimmed terminal row 3", await press("terminal", 3), "terminal", 3, terminalResults[3], 1, false);
+    await cycle("(g) trimmed", "terminal", 3, terminalResults[3], 1);
 
-  // (g) the reload shape: the same turn served as a window that starts inside its last result — no call line, no
-  // result header — which is what made the live board's note a plain div.
-  const trimmedCard = await page.evaluate(() => {
-    const n = window.__probe.show("trimmed");
-    return { lines: n, notes: window.__probe.notes() };
-  });
-  check("(g) the served window is a suffix of the turn", trimmedCard.lines, TRIMMED.length);
-  ok("(g) the window's burst has no call line of its own", !TRIMMED.some((l) => l.kind === "tool"), JSON.stringify(TRIMMED.map((l) => l.kind).slice(0, 3)));
-  ok("(g) …and the note in it is STILL a button", trimmedCard.notes.length > 0 && trimmedCard.notes.every((n) => n.isButton), JSON.stringify(trimmedCard.notes.map((n) => [n.isButton, n.tool, n.row])));
-  ok("(g) and it names the row its own result came from", trimmedCard.notes.some((n) => n.tool === "terminal" && n.row === "3"), JSON.stringify(trimmedCard.notes.map((n) => [n.tool, n.row])));
-  // Press it where it was drawn: no burst wrapper, no store read behind it — the click is the only handle.
-  const trimPress = await page.evaluate(() => window.__probe.press("terminal", 3));
-  ok("(g) the window's own note presses and reads its result back", trimPress.pressed && trimPress.url.includes("row=3") && trimPress.url.includes("full=1"), trimPress.url);
-  ok("(g) and the text that comes back is the fourth result", String(trimPress.fetched || "").includes(terminalResults[3].marker), JSON.stringify(trimPress.fetched));
-  ok("(g) the note is replaced by the whole result in its place", String(trimPress.text || "").includes(terminalResults[3].marker) && !String(trimPress.text || "").includes("— click to read"), `${String(trimPress.text || "").length} chars on the console`);
+    await page.evaluate(() => window.__probe.show("full"));
+    await openAll();
+    const storeReady = await waitFor(() => page.evaluate((id) => state.toolStore.has(`${id}|terminal`) && state.toolStore.has(`${id}|patch`), TURN), { timeoutMs: 5000, stepMs: 50, what: "the opened bursts' SQLite route reads" });
+    const opened = await read();
+    ok("(h) opening the bursts reads the real SQLite route", storeReady && opened.calls.some((u) => new URL(u, base).searchParams.get("full") !== "1"));
+    ok("(h) every burst is open, but its result boxes are still folded", opened.groups.every((g) => g.open) && opened.controls.length === notes.length && opened.controls.every((c) => !c.open && c.fetch));
+    check("(h) capped pairing reads do not load any uncapped row", opened.fullCalls.length, 0);
+    noFooter("(h)", opened);
 
-  // (h) the whole turn again, its bursts opened: the store read goes through the real route, and every note is
-  // still a control once the rows are in hand.
-  await page.evaluate(() => window.__probe.show("full"));
-  await page.evaluate(() => window.__probe.openAll());
-  await page.evaluate(() => new Promise((r) => setTimeout(r, 1500)));
-  const opened = await page.evaluate(() => ({ grps: window.__probe.grps(), calls: window.__probe.storeCalls(), notes: window.__probe.notes() }));
-  ok("(h) opening the bursts read the store through the real route", opened.calls.filter((u) => u.includes("/api/tool-results")).length > 0, JSON.stringify(opened.calls.slice(0, 3)));
-  ok("(h) every burst is open", opened.grps.every((g) => g.open), JSON.stringify(opened.grps));
-  ok("(h) every note is still a button once the store has landed", opened.notes.every((n) => n.isButton), JSON.stringify(opened.notes.map((n) => [n.tool, n.row])));
+    for (const [tool, row] of EXPECTED_ROWS) {
+      const result = tool === "terminal" ? terminalResults[row] : patchResults[row];
+      assertPress(`(i) ${tool} row ${row}`, await press(tool, row), tool, row, result, notes.length);
+    }
+    const afterPresses = await read();
+    check("(i) the separate bursts fetched five separate row identities", new Set(afterPresses.fullCalls.map((u) => {
+      const q = new URL(u, base).searchParams;
+      return `${q.get("tool")}#${q.get("row")}`;
+    })).size, EXPECTED_ROWS.length);
+    const rebuilt = await page.evaluate(() => window.__probe.rebuild());
+    check("(j) repainting and rebuilding keep every fetched box open", rebuilt.controls.map((c) => c.open), EXPECTED_ROWS.map(() => true));
+    check("(j) the server's input line count never changes", rebuilt.lines, SERVER_LINES.length);
+    ok("(j) every input line, including the original fold notes, is identical", rebuilt.unchanged);
+    noFooter("(j)", rebuilt);
+    await cycle("(j) multi-burst", "terminal", 1, terminalResults[1], notes.length);
 
-  // (i) THE ACCEPTANCE: press several notes on a card with several bursts, and compare what each click fetches
-  // with the burst's own command text and with the head drawn above the note that was pressed.
-  const pressOrder = [
-    ["terminal", 0],
-    ["terminal", 1],
-    ["patch", 0],
-    ["terminal", 3],
-  ];
-  const pressed = [];
-  for (const [tool, row] of pressOrder) {
-    // eslint-disable-next-line no-await-in-loop
-    pressed.push(await page.evaluate(([t, r]) => window.__probe.press(t, r), [tool, row]));
+    const old = await page.evaluate(() => window.__probe.show("old"));
+    check("(k) the legacy card still holds the same server lines", old.lines, SERVER_LINES.length);
+    check("(k) legacy unstamped lines still identify their boxes from the burst cursor", named(old), EXPECTED_ROWS.map(([t, r]) => [t, r, TURN]));
+    await openAll();
+    await waitFor(() => page.evaluate((id) => state.toolStore.has(`${id}|terminal`) && state.toolStore.has(`${id}|patch`), TURN), { timeoutMs: 5000, stepMs: 50, what: "the legacy card's SQLite rows" });
+    const oldWithStore = await read();
+    check("(k) real store reads keep every legacy box paired to its own row", named(oldWithStore), EXPECTED_ROWS.map(([t, r]) => [t, r, TURN]));
+    assertPress("(k) legacy terminal row 1", await press("terminal", 1), "terminal", 1, terminalResults[1], notes.length);
+
+    const bare = await page.evaluate(() => window.__probe.show("trimmed-old"));
+    check("(l) an unidentifiable legacy window keeps one honest plain note", [bare.lines, bare.externalNotes.length, bare.controls.length], [TRIMMED.length, 1, 0]);
+    ok("(l) with no identity it does not offer a wrong-row fetch", bare.externalNotes.every((n) => !n.button) && bare.footerLinks === 0);
+    const resolved = await page.evaluate(() => window.__probe.readStore("terminal"));
+    check("(l) the real store's head match resolves that window's own row", named(resolved), [["terminal", 3, TURN]]);
+    noFooter("(l) resolved", resolved);
+    assertPress("(l) resolved legacy row 3", await press("terminal", 3), "terminal", 3, terminalResults[3], 1, false);
+
+    for (const [which, label] of [["full", "(m) one-stream"], ["trimmed", "(n) trimmed one-stream"]]) {
+      const st = await page.evaluate((w) => window.__probe.show(w, true), which);
+      const count = which === "full" ? notes.length : 1;
+      check(`${label}: one identified box per result`, [st.boxes, st.controls.length], [count, count]);
+      ok(`${label}: the stream is flat and every result still starts folded`, st.groups.length > 0 && st.groups.every((g) => g.flat && g.open) && st.controls.length === count && st.controls.every((c) => !c.open && c.fetch));
+      noFooter(label, st);
+      assertPress(`${label} row 3`, await press("terminal", 3), "terminal", 3, terminalResults[3], count, which === "full");
+      await cycle(label, "terminal", 3, terminalResults[3], count);
+    }
+    ok("no page errors", pageErrors.length === 0, pageErrors.join(" | ") || "none");
+  } finally {
+    await browser.close();
   }
-  const allResults = [...terminalResults, ...patchResults];
-  for (let i = 0; i < pressed.length; i++) {
-    const [tool, row] = pressOrder[i];
-    const one = pressed[i];
-    const call = String((one.head && one.head.call) || "");
-    const want = allResults.find((r) => call.includes(r.cmd));
-    const firstLine = String(one.fetched || "");
-    const headFirst = String((one.head && one.head.head && one.head.head[0]) || "").replace(/\s+$/, "");
-    check(`(i) ${tool} row ${row}: the request asked for exactly the row the note named`, [one.pressed, one.named.tool, one.named.row, one.url.includes(`row=${row}&full=1`)], [true, tool, String(row), true]);
-    ok(`(i) ${tool} row ${row}: the fetched text opens with the marker the burst's own command printed`, Boolean(want) && firstLine === want.marker, `${JSON.stringify(firstLine)} vs ${JSON.stringify(want && want.marker)} (the burst's call line is ${JSON.stringify(call)})`);
-    ok(`(i) ${tool} row ${row}: and with the head drawn above the note that was pressed`, headFirst !== "" && firstLine.startsWith(headFirst.slice(0, 60)), JSON.stringify(headFirst));
-    ok(`(i) ${tool} row ${row}: the console's ring buffer did not take the result`, one.lines === one.lines0, `${one.lines} lines before and after`);
-  }
-  ok("(i) notes in different bursts fetched different rows", new Set(pressed.map((p) => `${p.named.tool}#${p.named.row}`)).size === pressed.length, JSON.stringify(pressed.map((p) => `${p.named.tool}#${p.named.row}`)));
-
-  // (j) a repaint keeps the opened results open, and the job's own lines never grew or shrank.
-  await page.evaluate(() => window.__probe.repaint());
-  const afterRepaint = await page.evaluate(() => ({ text: window.__probe.bodyText(), notes: window.__probe.notes(), lines: window.__probe.lineCount() }));
-  ok("(j) a repaint does not fold an opened result back shut", afterRepaint.text.includes(terminalResults[3].marker));
-  check("(j) and the job's own lines are untouched by all of it", afterRepaint.lines, SERVER_LINES.length);
-  ok("(j) every note left on the card is still a button", afterRepaint.notes.every((n) => n.isButton), JSON.stringify(afterRepaint.notes.map((n) => [n.tool, n.row])));
-
-  // (k) the incremental path is left exactly as it was: a card from BEFORE the stamp existed has notes carrying no
-  // identity of their own, and they must still open from the burst's own cursor pairing — with the store loaded,
-  // which is the state the live board's own card is in.
-  const oldCard = await page.evaluate(() => {
-    const n = window.__probe.show("old");
-    return { lines: n, notes: window.__probe.notes() };
-  });
-  check("(k) the old card holds the same lines", oldCard.lines, SERVER_LINES.length);
-  ok("(k) a note with no stamp of its own is still a button, from the cursor", oldCard.notes.length === notes.length && oldCard.notes.every((n) => n.isButton), JSON.stringify(oldCard.notes.map((n) => [n.tool, n.row])));
-  await page.evaluate(() => window.__probe.openAll());
-  await page.evaluate(() => new Promise((r) => setTimeout(r, 1500)));
-  const oldWithStore = await page.evaluate(() => window.__probe.notes());
-  check("(k) and it names the same rows the cursor always named", oldWithStore.map((n) => [n.tool, Number(n.row)]), EXPECTED_ROWS);
-  const oldPress = await page.evaluate(() => window.__probe.press("terminal", 1));
-  ok("(k) pressing one still reads its row back", oldPress.pressed && oldPress.url.includes("row=1") && String(oldPress.fetched || "").includes(terminalResults[1].marker), `${oldPress.url} → ${JSON.stringify(oldPress.fetched)}`);
-
-  // (l) the hardest case, and the one the live measurement was taken in: the note names no tool and no row at all
-  // (a card written before the stamp existed, in a burst the window trimmed of its call line). It must stay the
-  // honest plain sentence while nothing can name it — and become a button naming the right row as soon as this
-  // turn's store read for that tool is in hand, resolved from the HEAD alone.
-  const bareCard = await page.evaluate(() => {
-    const n = window.__probe.show("trimmed-old");
-    return { lines: n, notes: window.__probe.notes() };
-  });
-  check("(l) the card is the trimmed window with no identity on the note", [bareCard.lines, bareCard.notes.length], [TRIMMED.length, 1]);
-  ok("(l) with nothing to name the result by, the note promises nothing", bareCard.notes.every((n) => !n.isButton), JSON.stringify(bareCard.notes));
-  const bareResolved = await page.evaluate(() => window.__probe.readStore("terminal"));
-  check("(l) a store read for the turn's tool lets the head name the row on its own", bareResolved.map((n) => [n.tool, Number(n.row)]), [["terminal", 3]]);
-  const barePress = await page.evaluate(() => window.__probe.press("terminal", 3));
-  ok("(l) and the row it names is the row the click fetches", barePress.pressed && String(barePress.fetched || "").includes(terminalResults[3].marker), `${barePress.url} → ${JSON.stringify(barePress.fetched)}`);
-
-  ok("no page errors", pageErrors.length === 0, pageErrors.join(" | ") || "none");
-  await browser.close();
 }
-
 console.log("");
 if (PHASES.has("browser")) {
   console.log("── the affordance and the row, in a browser " + "─".repeat(24));
