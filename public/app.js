@@ -10371,7 +10371,6 @@ let anchorState = null;       // { el, target, top, height, pinned }
 let anchorScrollY = 0;        // page scrollY at the moment the baseline was measured
 let lastAnchorScrollAt = 0;   // our own scrollBy, so it is not read as the reader moving
 let anchorRepickTimer = 0;
-let anchorFrame = 0;
 // Set while a click's own hand-keeps-the-bar-still pass (keepInPlace) is running. Both it and the observer
 // answer the same layout change, and two answers measured a frame apart scroll the page one way and then the
 // other: the page visibly twitches and the clicked bar can end up anywhere. One owner at a time.
@@ -10388,15 +10387,22 @@ function refreshAnchorBaseline() {
   anchorScrollY = Math.round(window.scrollY);
 }
 
-// One correction per frame. Called from the ResizeObserver on the two containers that can change height.
+// The correction lands in the frame the growth did. A ResizeObserver's callback runs after layout and BEFORE that
+// frame is painted, so compensating here means the reader's element is never drawn displaced; deferring the same
+// correction to requestAnimationFrame painted exactly one frame with the anchor moved and then put it back, which
+// reads as a twitch. Measured on a parked card with three turns streaming above it: its top jumped 17-52 px for a
+// single frame 37 times in 45 s and came straight back, while the page scrolled 26 times to undo it. `anchorBusy`
+// keeps compensateAnchor out of itself (a scroll it performs must not start a second correction).
+let anchorBusy = false;
+
 function scheduleAnchorCompensation() {
-  if (anchorFrame) return;
-  const flush = () => {
-    anchorFrame = 0;
+  if (anchorBusy) return;
+  anchorBusy = true;
+  try {
     compensateAnchor();
-  };
-  if (document.hidden) return flush();
-  anchorFrame = requestAnimationFrame(flush);
+  } finally {
+    anchorBusy = false;
+  }
 }
 
 function compensateAnchor() {
