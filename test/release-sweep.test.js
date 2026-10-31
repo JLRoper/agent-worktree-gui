@@ -40,7 +40,7 @@ async function makeBoard(t) {
   return { dir, repos, proj, tree };
 }
 
-const configFor = (board, { releaseWorktrees }) => ({
+const configFor = (board, { releaseWorktrees, agentCleanup }) => ({
   scanRoots: [slash(board.repos)],
   projects: [
     {
@@ -51,6 +51,8 @@ const configFor = (board, { releaseWorktrees }) => ({
       ...(releaseWorktrees === undefined ? {} : { releaseWorktrees }),
     },
   ],
+  // The board's own veto (Settings → Board → Agents clean up), above every project's grant.
+  ...(agentCleanup === undefined ? {} : { agentCleanup }),
   jobsFile: path.join(board.dir, "logs", "jobs.json"),
   assistantFile: path.join(board.dir, "logs", "assistant.json"),
   projectsCacheFile: path.join(board.dir, "logs", "projects.json"),
@@ -157,4 +159,25 @@ test("with the switch on, one uncommitted file refuses the release and the row s
   assert.equal(existsSync(path.join(board.tree, "scratch.txt")), true);
   assert.equal(git(board.proj, ["worktree", "list", "--porcelain"]).includes(slash(board.tree)), true);
   assert.equal(hasRef(board.proj, "refs/heads/feature"), true, "the branch is still there");
+});
+
+test("a project with the grant is still refused while the board's switch is off, and nothing on disk is touched", { timeout: 120_000 }, async (t) => {
+  const board = await makeBoard(t);
+  const { file } = await seedRequest(board, { runId: "run-veto" });
+  const panel = await startPanel({ dir: board.dir, keep: true, config: configFor(board, { releaseWorktrees: true, agentCleanup: false }) });
+  t.after(async () => {
+    await panel.stop();
+  });
+  const r = await post(panel.base, "/api/reload", { body: {} });
+  assert.equal(r.status, 200, `reload must succeed: ${r.text.slice(0, 200)}`);
+
+  const row = await waitForRow(panel.base, board.tree, (w) => Boolean(w.release?.outcome), "the row's release outcome");
+  // The sentence names the row the reader pressed, not the project key they never edited: this refusal is the
+  // switch's, and a reader who goes looking for `releaseWorktrees` in config.json finds it true and is confused.
+  assert.match(row.release.outcome, /^refused: agent cleanup is off in Settings → Board → Agents clean up/);
+  assert.equal(row.release.state, "refused");
+  assert.equal(existsSync(board.tree), true);
+  assert.equal(hasRef(board.proj, "refs/heads/feature"), true, "the branch is still there");
+  const saved = JSON.parse(await readFile(file, "utf8"));
+  assert.equal(Object.values(saved.requests)[0].state, "refused");
 });

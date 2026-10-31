@@ -417,6 +417,10 @@ Click a row to expand it. The detail is built not to bury the agents:
   no merged PR is still refused, and says so. Only then does it remove the worktree, delete the branch locally and on
   the remote, and write `removed` (or `refused: <the gate that said no>`) back onto the row. With the project's
   `releaseWorktrees` off — the default — every request is refused with that reason and nothing is touched.
+  Settings → Board → **Agents clean up** is the switch above all of that: off, no prompt carries the `RELEASE`
+  paragraph, every request is refused with that reason, and a check agent's `LANDED: YES` is only a line in the
+  console. It is the row to press when you want to read the trees and remove them yourself; the ✕ keeps working
+  either way.
 - **Merge state** — folded to one line (`ON MAIN · branch main · 2 untracked · last commit 6m ago`). Open it for the
   full list: ancestor of remote main, cherry counts, branch reflog, whether the branch ever carried its own commits,
   the remote branch, and then **every commit not on remote main** — one per line, short sha and subject, the full
@@ -788,6 +792,7 @@ a restart):
 | Board | Refresh | Which projects the panel re-reads: **everything**, or **only on screen** (the window plus half a screen either side). In "only on screen" it reads nothing while no page is open, and scrolling a stale project into view reads it at once. Saved in this panel's `config.json`, so it applies to every browser and survives a restart. |
 | Board | Chart columns | One switch per column of the worktree table — **Worktree**, **Branch**, **Tip**, **Ahead / Behind**, **Cherry**, **PR**, **Dirty**, **Life / next read**, **Verdict** and **Actions** (the row's ⟳ and ✕). A switch that is off takes that column's header and its cell out of every project's table and gives the width back to the columns that are left, so a narrow window needs no sideways scroll while the columns you do not read are gone. An expanded worktree and the delete question still span the whole chart. At least one column always stays, and the row's own controls are the last thing to go. Saved in this panel's `config.json` (`hiddenColumns`, the columns to hide), so it applies to every browser and survives a restart. **show all** turns every column back on. |
 | Board | Row refresh → agent | What a row's ⟳ does after its cheap pass finds a mismatch: **never** (re-read and journal only), **ask first** (one card under the row, the default), or **start it** (the click starts the agent itself). Refused while a run is already live in that tree. Saved in this browser. |
+| Board | Agents clean up | Whether an agent may take a worktree off this disk once the work has landed — the worker’s `RELEASE` line, and a check agent’s `LANDED: YES`. **on** (the default) leaves each project’s own `releaseWorktrees` grant deciding, and the line under the row names the projects that carry it; **off** closes every project at once — no `RELEASE` paragraph reaches a prompt, a request that arrives is refused on its row, and a `LANDED: YES` is only a line in the console. The row’s **✕** is not affected. Saved in this panel’s `config.json` (`agentCleanup`), so it applies to every browser and survives a restart. |
 | Updates | Update check | What this tab does when the panel is serving a different build than the one it loaded: **off**, **prompt** (the default — a chip offers the reload), or **auto** (reload as soon as the page is idle). Both modes hold the reload while a reply box or a held draft has text, or while a turn is streaming. Saved in this browser. |
 | Updates | Panel build · Check now | The build this tab is running, and what the panel serves now. **Check now** asks `GET /api/build` at once — it works even with the check set to off. |
 
@@ -872,6 +877,11 @@ unless the tree is clean, the branch's PR reads MERGED, nothing on the branch is
 and no run is still holding the tree — or, for a tree that never had a PR, unless the branch is 0 commits ahead of
 `origin/main` (measured, with the tree-equal diff as the fallback) and every other gate still passes. The row carries
 the answer either way (`removed`, or `refused: <gate>`).
+
+That key is a PROJECT grant, and `agentCleanup` (Settings → Board → **Agents clean up**) is the board’s veto
+above it: off, no project’s grant is acted on, no prompt carries the `RELEASE` paragraph, and a check agent’s
+`LANDED: YES` deletes nothing. On, the grant still decides, so the row’s own line names the projects that carry
+it (`settings.releaseProjects`).
 
 The panel's own build is separate from all of that. `index.html` is served `no-store` and every script and stylesheet
 it loads carries a `?v=` hash of the bytes; a restarted panel (or an edit under `public/` while it runs) is a new

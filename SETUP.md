@@ -216,5 +216,8 @@ Then open **http://127.0.0.1:7331**.
 - Each agent runs in its own worktree (the panel creates `wtgui/…` under `.worktrees/`) and gets a
   named Hermes session. **Reply to its card** to continue that session — while a turn is still
   running the button reads **Steer turn** and the text reaches the live turn instead of waiting.
-  Worktrees are yours to keep: nothing removes them automatically.
+  Worktrees are yours to keep: an agent only ever ASKS (one `RELEASE` line), and the panel removes one only
+  when that project carries its own `releaseWorktrees` grant **and** Settings → Board → **Agents clean up** is
+  on — then still only with the PR merged, the tree clean and no run inside it. Turn that row off and every tree
+  stays until you remove it from the ✕ yourself.
 - Projects are ordered most-recently-worked-on first and start minimized.

@@ -15604,6 +15604,9 @@ function toggleSettings(open = null) {
   // over from last time must not be one Enter away from deleting a folder.
   paintPaths();
   paintScratchActions(false);
+  // The agent-cleanup row reads the last snapshot again on every open, so a switch another tab moved is what the
+  // panel shows rather than what this tab last saw.
+  paintAgentCleanup();
   // Read the gateway's window every time the panel opens: it can be changed from a CLI, and the
   // panel is not the owner of that value.
   void loadApprovalSetting();
@@ -16179,6 +16182,68 @@ $("scan-mode")?.addEventListener("change", async (e) => {
     showBanner(`could not change the refresh mode: ${err.message}`);
   }
 });
+
+// ---- whether an agent may clean up after itself ------------------------------------------------
+// The panel's own switch (config.json `agentCleanup`, POST /api/settings/cleanup): a veto ABOVE every project's own
+// `releaseWorktrees` grant, and the reason the row says which projects that grant names — "on" alone would read as
+// "every repository is open", which is not what the server decides. Off is the reader's answer to "I want to read and
+// remove these trees myself", so nothing an agent says removes one; the row's ✕ still does.
+function agentCleanupStored() {
+  return state.settings?.agentCleanup !== false;
+}
+
+function paintAgentCleanup(note = "", bad = false) {
+  const box = $("agent-cleanup");
+  const preview = $("agent-cleanup-preview");
+  const on = agentCleanupStored();
+  // A rejected save leaves the box where the reader put it, saying the save failed: snapping it back reads as
+  // "it saved that", when the save is exactly what failed.
+  if (box && !bad) box.checked = on;
+  if (!preview) return;
+  const granted = Array.isArray(state.settings?.releaseProjects) ? state.settings.releaseProjects : [];
+  const bits = [
+    on
+      ? granted.length
+        ? `on — a project's own releaseWorktrees grant decides, and it names ${granted.join(", ")}`
+        : "on — but no project carries a releaseWorktrees grant, so nothing is removed automatically either"
+      : "off — no prompt carries RELEASE, a request is refused on the row, and a LANDED: YES is only a line in the console; the ✕ still removes a tree",
+    "set in config.json (agentCleanup), so it applies to every browser and survives a restart",
+  ];
+  preview.textContent = bad ? `NOT SAVED — ${note}. config.json still says: ${on ? "on" : "off"}.` : note ? `${note} · ${bits.join(" · ")}` : bits.join(" · ");
+  preview.classList.toggle("bad", bad);
+}
+
+$("agent-cleanup")?.addEventListener("change", async (e) => {
+  const want = Boolean(e.target.checked);
+  const before = agentCleanupStored();
+  const preview = $("agent-cleanup-preview");
+  if (preview) {
+    preview.textContent = "saving…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch(
+      "/api/settings/cleanup",
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentCleanup: want }) },
+      { timeoutMs: 10000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    state.settings = { ...(state.settings || {}), ...(d.settings || {}) };
+    paintAgentCleanup();
+    showBanner(
+      want
+        ? "agent cleanup: on — a tree goes only when its project's own grant allows it, its PR reads MERGED and it is clean"
+        : "agent cleanup: off — nothing an agent says removes a worktree; you remove them from the row's ✕",
+    );
+  } catch (err) {
+    e.target.checked = before;
+    paintAgentCleanup(`could not change it: ${err.message}`, true);
+    showBanner(`could not change agent cleanup: ${err.message}`);
+  }
+});
+
+// ---- end agent cleanup
 
 // ---- how old a worktree may be before the chart holds its row back ---------------------------------
 // The threshold lives in this panel's config.json (POST /api/settings/age), like the refresh mode above: one
@@ -16904,6 +16969,7 @@ startVisibilityReporting();
     paintAgeSetting();
     paintChartColumns();
     paintRemotePolicy();
+    paintAgentCleanup();
     void refreshRemoteGuards();
     // "On screen" mode: say what is visible before the first paint settles, so the rows in front of the reader are
     // the first thing the scheduler reads.

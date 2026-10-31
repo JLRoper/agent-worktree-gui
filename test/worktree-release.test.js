@@ -118,6 +118,17 @@ test("refused: releaseWorktrees is off — and nothing is even asked of git", as
   assert.deepEqual(run.calls, [], "a closed switch must not spawn git at all");
 });
 
+test("refused: the board's own switch closes a project that carries the grant, before any git", async () => {
+  const run = fakeRun();
+  const gh = fakeGh();
+  const out = await call({ cleanup: false, run, runGh: gh });
+  assert.equal(out.ok, false);
+  assert.equal(out.gate, "agentCleanup");
+  assert.match(out.outcome, /^refused: agent cleanup is off in Settings → Board → Agents clean up/);
+  assert.deepEqual(run.calls, [], "the board's veto outranks the project's grant and asks git nothing");
+  assert.deepEqual(gh.calls, []);
+});
+
 // ---- the reader's lock -----------------------------------------------------------------------------------------------
 test("refused: the reader's lock outranks a worker's request", async () => {
   const run = fakeRun();
