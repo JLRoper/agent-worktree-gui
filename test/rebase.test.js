@@ -15,35 +15,17 @@
 //
 // Every fixture is a throwaway repo under the OS temp dir; nothing here touches this checkout or the panel's own state.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { candidateRefs, pickPlan, rebaseInProgress, rebaseOn, rebaseWorktree } from "../lib/rebase.js";
-
-const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never" };
-
-function git(cwd, ...args) {
-  return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", env: GIT_ENV, stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
-    .replace(/\r\n/g, "\n")
-    .trim();
-}
-// For the questions git answers with an exit code (is-ancestor, diff --quiet) rather than with output.
-function ran(cwd, ...args) {
-  try {
-    git(cwd, ...args);
-    return true;
-  } catch {
-    return false;
-  }
-}
+import { configureRepo, git, ran } from "../tools/panel-testkit.mjs";
 
 function commit(repo, file, text, message) {
   writeFileSync(path.join(repo, file), text);
   git(repo, "add", file);
   git(repo, "commit", "-q", "-m", message);
-  return git(repo, "rev-parse", "HEAD");
 }
 
 const tmp = [];
@@ -52,9 +34,7 @@ function makeRepo() {
   const root = mkdtempSync(path.join(os.tmpdir(), "rebase-test-"));
   tmp.push(root);
   git(root, "init", "-q", "-b", "main");
-  git(root, "config", "user.email", "rebase@test.local");
-  git(root, "config", "user.name", "Rebase Test");
-  git(root, "config", "commit.gpgsign", "false");
+  configureRepo(root);
   commit(root, "a.txt", "one\n", "one");
   return root;
 }
@@ -75,14 +55,54 @@ test.after(() => {
   }
 });
 
+let sharedHierarchy = null;
+function getHierarchy() {
+  if (!sharedHierarchy) {
+    const repo = makeRepo();
+    git(repo, "checkout", "-q", "-b", "feature/parent");
+    commit(repo, "p.txt", "parent\n", "parent work");
+    const wt = tree(repo, "feat/child", "feature/parent");
+    commit(wt, "c.txt", "child\n", "child work");
+    sharedHierarchy = { repo, wt };
+  }
+  return sharedHierarchy;
+}
+
+test("the base ref is refused for a feature child: that replay would carry the parent's commits", async () => {
+  const { wt } = getHierarchy();
+
+  // No recorded parent, so the only candidate is the base ref — exactly the shape a tree cut outside the panel has.
+  const out = await rebaseWorktree({ worktree: wt, branch: "feat/child", parent: null, baseRef: "main", mainBranch: "main" });
+  assert.equal(out.ok, false, "a replay that would move somebody else's commits is refused");
+  assert.equal(out.refused, "foreign");
+  assert.match(out.error, /would carry 1 commit/);
+  assert.match(out.error, /feature\/parent/, "the refusal names the branch the commits belong to");
+  // Nothing was written: the tip is where it was.
+  assert.equal(git(wt, "rev-list", "--count", "main..HEAD"), "2");
+});
+
+test("the base ref is refused for a feature child even after the base moves on — the case git would replay", async () => {
+  const { repo, wt } = getHierarchy();
+  // The base moves on, so the merge base falls BELOW the parent's commit: `git rebase main` here would replay the
+  // parent's work as this child's own new commits. This is the shape the ownership proof exists for.
+  git(repo, "checkout", "-q", "main");
+  commit(repo, "m.txt", "main\n", "main moves on");
+  const before = git(wt, "rev-parse", "HEAD");
+
+  const out = await rebaseWorktree({ worktree: wt, branch: "feat/child", parent: null, baseRef: "main", mainBranch: "main" });
+  assert.equal(out.ok, false);
+  assert.equal(out.refused, "foreign");
+  assert.match(out.error, /would carry 1 commit/);
+  assert.match(out.error, /feature\/parent/);
+  assert.equal(git(wt, "rev-parse", "HEAD"), before, "nothing was written");
+  assert.equal(git(wt, "status", "--porcelain"), "");
+});
+
 test("a child cut from a feature branch replays onto that branch's newest commit", async () => {
-  const repo = makeRepo();
-  git(repo, "checkout", "-q", "-b", "feature/parent");
-  commit(repo, "p.txt", "parent\n", "parent work");
-  const wt = tree(repo, "feat/child", "feature/parent");
-  commit(wt, "c.txt", "child\n", "child work");
+  const { repo, wt } = getHierarchy();
   git(repo, "checkout", "-q", "feature/parent");
-  const parentTip = commit(repo, "p2.txt", "parent moved\n", "parent moves on");
+  commit(repo, "p2.txt", "parent moved\n", "parent moves on");
+  const parentTip = git(repo, "rev-parse", "HEAD");
 
   const out = await rebaseWorktree({ worktree: wt, branch: "feat/child", parent: "feature/parent", baseRef: "main", mainBranch: "main" });
   assert.equal(out.ok, true, out.error);
@@ -100,55 +120,18 @@ test("a child cut from a feature branch replays onto that branch's newest commit
   assert.equal(git(wt, "status", "--porcelain"), "");
 });
 
-test("the base ref is refused for a feature child: that replay would carry the parent's commits", async () => {
-  const repo = makeRepo();
-  git(repo, "checkout", "-q", "-b", "feature/parent");
-  commit(repo, "p.txt", "parent\n", "parent work");
-  const wt = tree(repo, "feat/child", "feature/parent");
-  commit(wt, "c.txt", "child\n", "child work");
-
-  // No recorded parent, so the only candidate is the base ref — exactly the shape a tree cut outside the panel has.
-  const out = await rebaseWorktree({ worktree: wt, branch: "feat/child", parent: null, baseRef: "main", mainBranch: "main" });
-  assert.equal(out.ok, false, "a replay that would move somebody else's commits is refused");
-  assert.equal(out.refused, "foreign");
-  assert.match(out.error, /would carry 1 commit/);
-  assert.match(out.error, /feature\/parent/, "the refusal names the branch the commits belong to");
-  // Nothing was written: the tip is where it was.
-  assert.equal(git(wt, "rev-list", "--count", "main..HEAD"), "2");
-});
-
-test("the base ref is refused for a feature child even after the base moves on — the case git would replay", async () => {
-  const repo = makeRepo();
-  git(repo, "checkout", "-q", "-b", "feature/parent");
-  commit(repo, "p.txt", "parent\n", "parent work");
-  const wt = tree(repo, "feat/child", "feature/parent");
-  commit(wt, "c.txt", "child\n", "child work");
-  // The base moves on, so the merge base falls BELOW the parent's commit: `git rebase main` here would replay the
-  // parent's work as this child's own new commits. This is the shape the ownership proof exists for.
-  commit(repo, "m.txt", "main\n", "main moves on");
-  const before = git(wt, "rev-parse", "HEAD");
-
-  const out = await rebaseWorktree({ worktree: wt, branch: "feat/child", parent: null, baseRef: "main", mainBranch: "main" });
-  assert.equal(out.ok, false);
-  assert.equal(out.refused, "foreign");
-  assert.match(out.error, /would carry 1 commit/);
-  assert.match(out.error, /feature\/parent/);
-  assert.equal(git(wt, "rev-parse", "HEAD"), before, "nothing was written");
-  assert.equal(git(wt, "status", "--porcelain"), "");
-});
-
 test("a branch cut from main is replayed onto the base ref with no parent record", async () => {
-  const repo = makeRepo();
-  const wt = tree(repo, "feat/mine", "main");
+  const { repo } = getHierarchy();
+  const wt = tree(repo, "feat/mine", "main~1");
   commit(wt, "mine.txt", "mine\n", "my work");
-  const mainTip = commit(repo, "later.txt", "later\n", "main moves on");
+  const mainTip = git(repo, "rev-parse", "main");
 
   const out = await rebaseWorktree({ worktree: wt, branch: "feat/mine", parent: null, baseRef: "main", mainBranch: "main" });
   assert.equal(out.ok, true, out.error);
   assert.equal(out.target, "main");
   assert.equal(out.replayed, 1);
   assert.equal(ran(wt, "merge-base", "--is-ancestor", mainTip, "HEAD"), true);
-  assert.equal(existsSync(path.join(wt, "later.txt")), true, "main's newer file is in the worktree");
+  assert.equal(existsSync(path.join(wt, "m.txt")), true, "main's newer file is in the worktree");
   assert.equal(git(wt, "rev-list", "--count", "main..HEAD"), "1");
 
   // And a second press has nothing to replay: refused with a sentence, not an empty rebase.
@@ -158,12 +141,11 @@ test("a branch cut from main is replayed onto the base ref with no parent record
 });
 
 test("a conflicting replay is aborted and the worktree is left exactly as it was", async () => {
-  const repo = makeRepo();
-  git(repo, "checkout", "-q", "-b", "feature/parent");
+  const { repo } = getHierarchy();
+  git(repo, "checkout", "-q", "feature/parent");
   commit(repo, "shared.txt", "base\n", "shared base");
   const wt = tree(repo, "feat/clash", "feature/parent");
   commit(wt, "shared.txt", "child side\n", "child edits the same line");
-  git(repo, "checkout", "-q", "feature/parent");
   commit(repo, "shared.txt", "parent side\n", "parent edits the same line");
   const before = git(wt, "rev-parse", "HEAD");
 
@@ -181,14 +163,12 @@ test("a conflicting replay is aborted and the worktree is left exactly as it was
 });
 
 test("a second replay is refused while one is open in the tree", async () => {
-  const repo = makeRepo();
-  const wt = tree(repo, "feat/busy", "main");
-  commit(wt, "b.txt", "b\n", "work");
+  const { wt } = getHierarchy();
   // The marker a stopped rebase leaves behind, in the path git itself reports for it.
   const marker = path.resolve(wt, git(wt, "rev-parse", "--git-path", "rebase-merge"));
   mkdirSync(marker, { recursive: true });
-  const plan = { ok: true, target: "main", targetSha: git(repo, "rev-parse", "main"), mergeBase: git(repo, "rev-parse", "main"), replay: 1 };
-  const out = await rebaseOn({ worktree: wt, branch: "feat/busy", plan });
+  const plan = { ok: true, target: "main", targetSha: "a".repeat(40), mergeBase: "b".repeat(40), replay: 1 };
+  const out = await rebaseOn({ worktree: wt, branch: "feat/child", plan });
   assert.equal(out.ok, false);
   assert.equal(out.refused, "in-progress");
   assert.match(out.error, /already has a rebase open/);
@@ -197,9 +177,7 @@ test("a second replay is refused while one is open in the tree", async () => {
 });
 
 test("a branch carrying its own merge commits is replayed with the topology kept", async () => {
-  const repo = makeRepo();
-  git(repo, "checkout", "-q", "-b", "feature/parent");
-  commit(repo, "p.txt", "parent\n", "parent work");
+  const { repo } = getHierarchy();
   const wt = tree(repo, "feat/merged", "feature/parent");
   git(wt, "checkout", "-q", "-b", "side");
   commit(wt, "s.txt", "side\n", "side work");
@@ -207,7 +185,7 @@ test("a branch carrying its own merge commits is replayed with the topology kept
   git(wt, "merge", "-q", "--no-ff", "-m", "merge side", "side");
   assert.equal(Number(git(wt, "rev-list", "--count", "--merges", "feature/parent..HEAD")), 1, "the fixture has a merge commit");
   git(repo, "checkout", "-q", "feature/parent");
-  commit(repo, "p2.txt", "parent moved\n", "parent moves on");
+  commit(repo, "p3.txt", "parent moved again\n", "parent moves on");
 
   const out = await rebaseWorktree({ worktree: wt, branch: "feat/merged", parent: "feature/parent", baseRef: "main", mainBranch: "main" });
   assert.equal(out.ok, true, out.error);

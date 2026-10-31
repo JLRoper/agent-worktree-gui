@@ -31,16 +31,11 @@
 // whole temp root is deleted at the end.
 
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
+import { loadPlaywright, openSettingsGroup } from "./browser.mjs";
+import { ROOT, pickFreePort as freePort } from "./panel-testkit.mjs";
 
 // Optional unbuffered trace: with RANK_TRACE=<file> every line is appended and flushed as it is printed, so a run
 // killed by a caller's timeout still leaves behind exactly how far it got.
@@ -102,36 +97,6 @@ const git = (dir, args, env = {}) => {
   }
 };
 const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-const freePort = () =>
-  new Promise((resolve, reject) => {
-    const s = createServer();
-    s.on("error", reject);
-    s.listen(0, "127.0.0.1", () => {
-      const { port } = s.address();
-      s.close(() => resolve(port));
-    });
-  });
-
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
 
 // ---- the sandbox ---------------------------------------------------------------------------------
 const dir = mkdtempSync(path.join(tmpdir(), "wtgui-row-rank-"));
@@ -337,7 +302,7 @@ async function browserPhase(pw) {
       tickLivenessRanks();
     });
   const setWindow = async (secs) => {
-    await page.click("#btn-settings");
+    await openSettingsGroup(page, "display");
     await page.fill("#rank-window", String(secs));
     await page.dispatchEvent("#rank-window", "change");
     await page.click("#btn-settings-close");

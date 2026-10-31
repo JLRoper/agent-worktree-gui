@@ -14,10 +14,15 @@ test("a bug is a 500, a refusal the handler chose keeps its status", () => {
   assert.equal(errorStatus(Object.assign(new Error("nope"), { status: 404 })), 500);
 });
 
-test("a malformed body is still the caller's 400, and the server survives it", async (t) => {
-  const panel = await startPanel();
-  t.after(() => panel.stop());
+let panel = null;
+test.before(async () => {
+  panel = await startPanel();
+});
+test.after(async () => {
+  if (panel) await panel.stop();
+});
 
+test("a malformed body is still the caller's 400, and the server survives it", async () => {
   const bad = await post(panel.base, "/api/threads/model", { body: "{" });
   assert.equal(bad.status, 400, "invalid JSON is the caller's mistake, not a 500");
   assert.match(bad.json?.error || "", /invalid JSON body/, "the sentence names the mechanism");
@@ -26,20 +31,16 @@ test("a malformed body is still the caller's 400, and the server survives it", a
   assert.equal(health.status, 200, "a rejected body must not take the process with it");
 });
 
-test("an oversized body answers 413, not 400", async (t) => {
+test("an oversized body answers 413, not 400", async () => {
   // 413 is the proof that the outer catch consults HttpError: no other code path in the server can
   // produce it. Before this fix the request was destroyed mid-upload, so the caller saw a reset
   // socket - the status was unreachable even though the limit was.
-  const panel = await startPanel();
-  t.after(() => panel.stop());
   const big = await post(panel.base, "/api/threads/model", { body: JSON.stringify({ thread: "x".repeat(300 * 1024) }) });
   assert.equal(big.status, 413);
   assert.match(big.json?.error || "", /body too large/);
 });
 
-test("a missing file is a 404, and the page still serves", async (t) => {
-  const panel = await startPanel();
-  t.after(() => panel.stop());
+test("a missing file is a 404, and the page still serves", async () => {
   const missing = await fetch(`${panel.base}/no-such-file.js`);
   assert.equal(missing.status, 404);
   const dir = await fetch(`${panel.base}/lib`);

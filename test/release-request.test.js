@@ -10,8 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { ReleaseRequests, parseReleaseLines, resolveTreeTarget } from "../lib/worktrees.js";
-
-const slash = (p) => String(p || "").replace(/\\/g, "/");
+import { slash } from "../tools/panel-testkit.mjs";
 
 // A tree list shaped the way server.js's `panelTrees()` hands one over: the row's project, its forward-slashed path
 // and its branch.

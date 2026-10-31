@@ -48,16 +48,15 @@
 // directory holding node_modules/playwright, or the package itself); without one the script says
 // BROWSER-HALF-NOT-RUN and exits non-zero rather than passing on a half that never ran.
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadPlaywright, openSettingsGroup } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
 
 let failures = 0;
 let checks = 0;
@@ -173,28 +172,6 @@ async function startGateway(homeDir) {
   gateway.url = `http://127.0.0.1:${gateway.port}`;
 }
 const stopGateway = () => new Promise((resolve) => (gateway.server ? gateway.server.close(resolve) : resolve()));
-
-// ---- the browser half ------------------------------------------------------------------------
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
 
 // ---- the sandbox -----------------------------------------------------------------------------
 const dir = mkdtempSync(path.join(tmpdir(), "wtgui-model-prices-"));
@@ -464,7 +441,7 @@ async function browserPhase(pw) {
     check("no page errors so far", pageErrors, []);
 
     console.log("\n== the Settings control exists, and one press refills the menu ==");
-    await page.click("#btn-settings");
+    await openSettingsGroup(page, "gateway");
     ok("the settings panel opens on the Model prices row", await page.isVisible("#models-row"), "");
     await waitFor(async () => /priced/.test((await page.textContent("#models-preview")) || ""), { what: "the preview to read back the cache" });
     const preview = await page.textContent("#models-preview");

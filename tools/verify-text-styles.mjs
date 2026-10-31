@@ -31,16 +31,15 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
+import { loadPlaywright, openSettingsGroup } from "./browser.mjs";
 import { startPanel } from "./panel-testkit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
-const require = createRequire(import.meta.url);
 const argv = process.argv.slice(2);
 const opt = (n, d = null) => (argv.includes(n) ? argv[argv.indexOf(n) + 1] : d);
 const MODE = opt("--mode", "both");
@@ -165,23 +164,6 @@ function makeGateway(dir) {
   };
 }
 
-function loadPlaywright() {
-  for (const root of [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd(), "C:/Users/roper/AppData/Roaming/npm/node_modules"].filter(Boolean)) {
-    for (const p of [path.join(root, "node_modules", "playwright"), path.join(root, "playwright"), root]) {
-      try {
-        return require(p);
-      } catch {
-        /* not there */
-      }
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
-
 function git(args, cwd) {
   return execFileSync("git", ["-c", "user.name=probe", "-c", "user.email=probe@localhost", ...args], { cwd, stdio: "pipe", encoding: "utf8" });
 }
@@ -237,11 +219,7 @@ function readStyles(thread) {
 }
 
 async function openDisplay(page) {
-  const open = await page.evaluate(() => !document.getElementById("settings")?.classList.contains("hidden") && getComputedStyle(document.getElementById("settings")).display !== "none");
-  if (!open) await page.click("#btn-settings");
-  await page.waitForSelector("#think-color", { state: "attached" });
-  const folded = await page.evaluate(() => document.querySelector('[data-settings-group="display"]').getAttribute("aria-expanded") === "false");
-  if (folded) await page.click('[data-settings-group="display"]');
+  await openSettingsGroup(page, "display");
   await page.waitForSelector("#think-color", { state: "visible" });
 }
 

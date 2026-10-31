@@ -17,28 +17,13 @@
 //
 // Throwaway repos under the OS temp dir; nothing here touches this checkout or the panel's own state.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { childBranchFor, childPathFor, childSlug, cutChildWorktree } from "../lib/child-worktree.js";
+import { configureRepo, git } from "../tools/panel-testkit.mjs";
 
-const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never" };
-
-function git(cwd, ...args) {
-  return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", env: GIT_ENV, stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
-    .replace(/\r\n/g, "\n")
-    .trim();
-}
-function ran(cwd, ...args) {
-  try {
-    git(cwd, ...args);
-    return true;
-  } catch {
-    return false;
-  }
-}
 function commit(repo, file, text, message) {
   writeFileSync(path.join(repo, file), text);
   git(repo, "add", file);
@@ -51,9 +36,7 @@ function fixture(root) {
   const repo = path.join(root, "proj");
   mkdirSync(repo, { recursive: true });
   git(repo, "init", "-q", "-b", "main");
-  git(repo, "config", "user.email", ["child", "local"].join(String.fromCharCode(64)));
-  git(repo, "config", "user.name", "Child Test");
-  git(repo, "config", "commit.gpgsign", "false");
+  configureRepo(repo);
   commit(repo, "base.txt", "base\n", "main: base");
   const parentTree = path.join(repo, ".worktrees", "feat-parent");
   git(repo, "worktree", "add", "-q", "-b", "feat/parent", parentTree);
@@ -63,10 +46,18 @@ function fixture(root) {
   return { repo, parentTree, parentSha: git(parentTree, "rev-parse", "HEAD") };
 }
 
-test("the child is cut from the parent's tip, not from the checkout's HEAD", async (t) => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "wtgui-child-"));
-  t.after(() => rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
-  const { repo, parentSha } = fixture(root);
+let sharedRoot = null;
+let sharedFixture = null;
+test.before(() => {
+  sharedRoot = mkdtempSync(path.join(os.tmpdir(), "wtgui-child-"));
+  sharedFixture = fixture(sharedRoot);
+});
+test.after(() => {
+  if (sharedRoot) rmSync(sharedRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+});
+
+test("the child is cut from the parent's tip, not from the checkout's HEAD", async () => {
+  const { repo, parentSha } = sharedFixture;
   const mainSha = git(repo, "rev-parse", "main");
   assert.notEqual(parentSha, mainSha, "the fixture must make main and the parent different commits");
 
@@ -92,32 +83,8 @@ test("the child is cut from the parent's tip, not from the checkout's HEAD", asy
   assert.equal(git(repo, "rev-parse", "--verify", "--quiet", "refs/heads/wtgui/parent-a1b2c3"), parentSha);
 });
 
-test("the parent and the child move independently after the cut", async (t) => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "wtgui-child-"));
-  t.after(() => rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
-  const { repo, parentTree, parentSha } = fixture(root);
-  const cut = await cutChildWorktree({ repoDir: repo, parentBranch: "feat/parent", tag: "d4e5f6" });
-  assert.equal(cut.ok, true, cut.error);
-
-  // The child commits: the parent must not have moved, and the child's tree must hold only its own file.
-  commit(cut.path, "child.txt", "the child's work\n", "child: its own commit");
-  const childSha = git(cut.path, "rev-parse", "HEAD");
-  assert.notEqual(childSha, parentSha);
-  assert.equal(git(parentTree, "rev-parse", "HEAD"), parentSha, "cutting and committing in the child never writes the parent");
-  assert.equal(existsSync(path.join(parentTree, "child.txt")), false);
-
-  // The roll-up's own mechanism: a merge inside the PARENT's worktree fast-forwards it onto the child. If the cut had
-  // come from main these trees would share no line of history and this would be a real merge, not the ff the chip
-  // promises for a child that stayed current.
-  git(parentTree, "merge", "--ff-only", "--no-edit", cut.branch);
-  assert.equal(git(parentTree, "rev-parse", "HEAD"), childSha, "the parent is fast-forwarded onto the child's tip");
-  assert.equal(readFileSync(path.join(parentTree, "child.txt"), "utf8").trim(), "the child's work", "the parent's tree now holds the child's file");
-});
-
-test("a main branch, a missing branch and a taken name are refused in sentences", async (t) => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "wtgui-child-"));
-  t.after(() => rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
-  const { repo } = fixture(root);
+test("a main branch, a missing branch and a taken name are refused in sentences", async () => {
+  const { repo } = sharedFixture;
 
   const onMain = await cutChildWorktree({ repoDir: repo, parentBranch: "main", mainBranch: "main" });
   assert.equal(onMain.ok, false);
@@ -142,6 +109,26 @@ test("a main branch, a missing branch and a taken name are refused in sentences"
   const again = await cutChildWorktree({ repoDir: repo, parentBranch: "feat/parent", tag: "0f0f0f" });
   assert.equal(again.ok, false);
   assert.match(again.error, /already there — pick another name/);
+});
+
+test("the parent and the child move independently after the cut", async () => {
+  const { repo, parentTree, parentSha } = sharedFixture;
+  const cut = await cutChildWorktree({ repoDir: repo, parentBranch: "feat/parent", tag: "d4e5f6" });
+  assert.equal(cut.ok, true, cut.error);
+
+  // The child commits: the parent must not have moved, and the child's tree must hold only its own file.
+  commit(cut.path, "child.txt", "the child's work\n", "child: its own commit");
+  const childSha = git(cut.path, "rev-parse", "HEAD");
+  assert.notEqual(childSha, parentSha);
+  assert.equal(git(parentTree, "rev-parse", "HEAD"), parentSha, "cutting and committing in the child never writes the parent");
+  assert.equal(existsSync(path.join(parentTree, "child.txt")), false);
+
+  // The roll-up's own mechanism: a merge inside the PARENT's worktree fast-forwards it onto the child. If the cut had
+  // come from main these trees would share no line of history and this would be a real merge, not the ff the chip
+  // promises for a child that stayed current.
+  git(parentTree, "merge", "--ff-only", "--no-edit", cut.branch);
+  assert.equal(git(parentTree, "rev-parse", "HEAD"), childSha, "the parent is fast-forwarded onto the child's tip");
+  assert.equal(readFileSync(path.join(parentTree, "child.txt"), "utf8").trim(), "the child's work", "the parent's tree now holds the child's file");
 });
 
 test("childSlug names a tree from its parent's branch, and a typed name through the same pass", () => {

@@ -6,41 +6,40 @@
 // GitHub: both cases are refused BEFORE the PR is ever asked about, which is also the point — a closed switch or one
 // uncommitted file stops the act without a single remote call.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
-
-const slash = (p) => String(p || "").replace(/\\/g, "/");
-const git = (cwd, args) => execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim();
+import { configureRepo, git, post, ran, slash, startPanel, waitForRow } from "../tools/panel-testkit.mjs";
 
 // A repo with one commit on main and one worktree `<repo>/.worktrees/tree-1a2b3c`, cut from main. The tree lives
 // inside the project on purpose: a row is a tree this project OWNS (`isInsideProject`), and a tree outside it is not
 // on the board at all.
-async function makeBoard(t) {
+async function makeBoard() {
   const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-release-panel-"));
   const repos = path.join(dir, "repos");
   const proj = path.join(repos, "proj");
   const tree = path.join(proj, ".worktrees", "tree-1a2b3c");
   await mkdir(proj, { recursive: true });
   git(proj, ["init", "-q", "-b", "main"]);
-  git(proj, ["config", "user.email", ["tester", "example.invalid"].join(String.fromCharCode(64))]);
-  git(proj, ["config", "user.name", "Test"]);
-  git(proj, ["config", "commit.gpgsign", "false"]);
+  configureRepo(proj);
   await writeFile(path.join(proj, "README.md"), "# test\n", "utf8");
   git(proj, ["add", "."]);
   git(proj, ["commit", "-q", "-m", "init"]);
   git(proj, ["worktree", "add", "-q", "-b", "feature", slash(tree)]);
-  t.after(async () => {
-    await rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
-  });
   return { dir, repos, proj, tree };
 }
 
-const configFor = (board, { releaseWorktrees, agentCleanup }) => ({
+let sharedBoard = null;
+test.before(async () => {
+  sharedBoard = await makeBoard();
+});
+test.after(async () => {
+  if (sharedBoard) await rm(sharedBoard.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+});
+
+const configFor = (board, { releaseWorktrees, agentCleanup, releasesFile }) => ({
   scanRoots: [slash(board.repos)],
   projects: [
     {
@@ -56,13 +55,13 @@ const configFor = (board, { releaseWorktrees, agentCleanup }) => ({
   jobsFile: path.join(board.dir, "logs", "jobs.json"),
   assistantFile: path.join(board.dir, "logs", "assistant.json"),
   projectsCacheFile: path.join(board.dir, "logs", "projects.json"),
-  releasesFile: path.join(board.dir, "logs", "releases.json"),
+  releasesFile: releasesFile || path.join(board.dir, "logs", "releases.json"),
   assistant: { enabled: false },
 });
 
 // A request already in the store, as lib/jobs.js would have written it as a turn ended.
-async function seedRequest(board, { runId = "run-seeded", why = "the PR is merged and the tree is clean" } = {}) {
-  const file = path.join(board.dir, "logs", "releases.json");
+async function seedRequest(board, { runId = "run-seeded", why = "the PR is merged and the tree is clean", fileName = "releases.json" } = {}) {
+  const file = path.join(board.dir, "logs", fileName);
   const key = `proj::${slash(board.tree)}`;
   const rec = {
     key,
@@ -84,48 +83,19 @@ async function seedRequest(board, { runId = "run-seeded", why = "the PR is merge
   return { file, key };
 }
 
-const hasRef = (cwd, ref) => {
-  try {
-    git(cwd, ["rev-parse", "--verify", "--quiet", ref]);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-const rowFor = (snap, tree) => {
-  for (const project of snap.projects || []) {
-    const row = (project.worktrees || []).find((w) => slash(w.path).toLowerCase() === slash(tree).toLowerCase());
-    if (row) return row;
-  }
-  return null;
-};
-
-async function waitForRow(base, tree, predicate, what, { timeout = 60_000 } = {}) {
-  const until = Date.now() + timeout;
-  let last = null;
-  for (;;) {
-    const r = await fetch(`${base}/api/state`);
-    assert.equal(r.status, 200, "/api/state answers the sandbox");
-    last = await r.json();
-    const row = rowFor(last, tree);
-    if (row && predicate(row)) return row;
-    if (Date.now() > until) throw new Error(`timed out waiting for ${what}; row: ${JSON.stringify(row ? { path: row.path, release: row.release } : null)}`);
-    await new Promise((r) => setTimeout(r, 400));
-  }
-}
+const hasRef = (cwd, ref) => ran(cwd, ["rev-parse", "--verify", "--quiet", ref]);
 
 test("a request on a project with the switch off is refused, and nothing on disk is touched", { timeout: 120_000 }, async (t) => {
-  const board = await makeBoard(t);
-  const { file } = await seedRequest(board);
-  const panel = await startPanel({ dir: board.dir, keep: true, config: configFor(board, { releaseWorktrees: undefined }) });
+  const board = sharedBoard;
+  const { file } = await seedRequest(board, { fileName: "releases-off.json" });
+  const panel = await startPanel({ dir: board.dir, keep: true, config: configFor(board, { releaseWorktrees: undefined, releasesFile: file }) });
   t.after(async () => {
     await panel.stop();
   });
   const r = await post(panel.base, "/api/reload", { body: {} });
   assert.equal(r.status, 200, `reload must succeed: ${r.text.slice(0, 200)}`);
 
-  const row = await waitForRow(panel.base, board.tree, (w) => Boolean(w.release?.outcome), "the row's release outcome");
+  const row = await waitForRow(panel.base, "proj", board.tree, { predicate: (w) => Boolean(w.release?.outcome), what: "the row's release outcome", timeout: 60_000 });
   assert.match(row.release.outcome, /^refused: releaseWorktrees is off for project proj/);
   assert.equal(row.release.state, "refused");
   assert.equal(row.release.runId, "run-seeded");
@@ -141,17 +111,17 @@ test("a request on a project with the switch off is refused, and nothing on disk
 });
 
 test("with the switch on, one uncommitted file refuses the release and the row says which gate", { timeout: 120_000 }, async (t) => {
-  const board = await makeBoard(t);
+  const board = sharedBoard;
   await writeFile(path.join(board.tree, "scratch.txt"), "not committed\n", "utf8");
-  await seedRequest(board, { runId: "run-dirty" });
-  const panel = await startPanel({ dir: board.dir, keep: true, config: configFor(board, { releaseWorktrees: true }) });
+  const { file } = await seedRequest(board, { runId: "run-dirty", fileName: "releases-on.json" });
+  const panel = await startPanel({ dir: board.dir, keep: true, config: configFor(board, { releaseWorktrees: true, releasesFile: file }) });
   t.after(async () => {
     await panel.stop();
   });
   const r = await post(panel.base, "/api/reload", { body: {} });
   assert.equal(r.status, 200, `reload must succeed: ${r.text.slice(0, 200)}`);
 
-  const row = await waitForRow(panel.base, board.tree, (w) => Boolean(w.release?.outcome), "the row's release outcome");
+  const row = await waitForRow(panel.base, "proj", board.tree, { predicate: (w) => Boolean(w.release?.outcome), what: "the row's release outcome", timeout: 60_000 });
   assert.match(row.release.outcome, /^refused: the tree is not clean \(1 changed path\)/);
   assert.equal(row.release.state, "refused");
   // Nothing was removed: the tree, its untracked file and its branch are all still there.
@@ -162,16 +132,17 @@ test("with the switch on, one uncommitted file refuses the release and the row s
 });
 
 test("a project with the grant is still refused while the board's switch is off, and nothing on disk is touched", { timeout: 120_000 }, async (t) => {
-  const board = await makeBoard(t);
-  const { file } = await seedRequest(board, { runId: "run-veto" });
-  const panel = await startPanel({ dir: board.dir, keep: true, config: configFor(board, { releaseWorktrees: true, agentCleanup: false }) });
+  const board = sharedBoard;
+  await rm(path.join(board.tree, "scratch.txt"), { force: true });
+  const { file } = await seedRequest(board, { runId: "run-veto", fileName: "releases-veto.json" });
+  const panel = await startPanel({ dir: board.dir, keep: true, config: configFor(board, { releaseWorktrees: true, agentCleanup: false, releasesFile: file }) });
   t.after(async () => {
     await panel.stop();
   });
   const r = await post(panel.base, "/api/reload", { body: {} });
   assert.equal(r.status, 200, `reload must succeed: ${r.text.slice(0, 200)}`);
 
-  const row = await waitForRow(panel.base, board.tree, (w) => Boolean(w.release?.outcome), "the row's release outcome");
+  const row = await waitForRow(panel.base, "proj", board.tree, { predicate: (w) => Boolean(w.release?.outcome), what: "the row's release outcome", timeout: 60_000 });
   // The sentence names the row the reader pressed, not the project key they never edited: this refusal is the
   // switch's, and a reader who goes looking for `releaseWorktrees` in config.json finds it true and is confused.
   assert.match(row.release.outcome, /^refused: agent cleanup is off in Settings → Board → Agents clean up/);

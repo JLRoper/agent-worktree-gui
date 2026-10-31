@@ -20,8 +20,7 @@
 // WHAT IS DRIVEN vs READ: every phase below says in its own output which instance it ran against. The one thing
 // read rather than driven is the URL policy table (phase 2) — that is a pure function over the four URL forms a
 // real remote uses, and it is called directly rather than observed through the panel.
-import { createRequire } from "node:module";
-import { loadPlaywright as sharedLoadPlaywright } from "./browser.mjs";
+import { loadPlaywright } from "./browser.mjs";
 import { createServer } from "node:http";
 import { execFile, execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -32,7 +31,6 @@ import { promisify } from "node:util";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
 const pexec = promisify(execFile);
 const NO_BROWSER = process.argv.includes("--no-browser");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -595,15 +593,6 @@ async function phase8MergeAsksFirst() {
 // ---------------------------------------------------------------------------------------------------------------
 // the browser half: the CELL as it is really rendered, and the click not firing the row's own gesture
 // ---------------------------------------------------------------------------------------------------------------
-// The lookup is shared (tools/browser.mjs): PANEL_PLAYWRIGHT_ROOT, PLAYWRIGHT_ROOT, the repo, the cwd and the
-// Windows global prefix, in one place instead of one copy per harness. Memoised so the phases that ask twice do not
-// resolve twice.
-let loadedPlaywright = null;
-function loadPlaywright() {
-  if (loadedPlaywright === null) loadedPlaywright = sharedLoadPlaywright() || false;
-  return loadedPlaywright || null;
-}
-
 async function phase9Browser() {
   console.log("\n== A. the browser half: the rendered cell, and the link that does not fire the row ==");
   if (NO_BROWSER) {

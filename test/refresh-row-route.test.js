@@ -12,50 +12,28 @@
 // and the proposal sits beside the list for the reader to accept. A refresh that quietly marked work done would be the
 // one failure this feature cannot afford.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
-
-const git = (cwd, args) =>
-  execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim();
-const slash = (p) => String(p || "").replace(/\\/g, "/");
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// The row only exists once the panel has scanned the project, and a scan is asynchronous: poll rather than guess.
-// It returns the row as the SNAPSHOT spells it — the page posts `row.path` back, and the route matches that string
-// exactly, so the store's own spelling (forward slashes, even on Windows) is the one to ask with.
-async function rowAppears(base, name, treePath, tries = 40) {
-  for (let i = 0; i < tries; i++) {
-    const state = await (await fetch(`${base}/api/state`)).json().catch(() => ({}));
-    const proj = (state.projects || []).find((p) => p.name === name);
-    const row = (proj?.worktrees || []).find((w) => slash(w.path) === slash(treePath));
-    if (row) return row;
-    await sleep(250);
-  }
-  return null;
-}
+import { configureRepo, git, post, slash, startPanel, waitForRow } from "../tools/panel-testkit.mjs";
 
 test("the reconcile depth proposes and journals; the cheap read is still a row and nothing else", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "wtgui-refreshrow-"));
   const repo = path.join(root, "proj");
   await mkdir(repo, { recursive: true });
-  git(repo, ["init", "-b", "main"]);
-  git(repo, ["config", "user.email", "refresh@local"]);
-  git(repo, ["config", "user.name", "Refresh"]);
-  git(repo, ["config", "commit.gpgsign", "false"]);
+  git(repo, ["init", "-q", "-b", "main"]);
+  configureRepo(repo);
   await writeFile(path.join(repo, "README.md"), "# test\n", "utf8");
   git(repo, ["add", "."]);
-  git(repo, ["commit", "-m", "init"]);
+  git(repo, ["commit", "-q", "-m", "init"]);
 
   // A tree whose branch has real work off main, in the file the TODO item names.
   const worked = path.join(repo, ".worktrees", "wt-worked");
-  git(repo, ["worktree", "add", "-b", "feat/worked", worked]);
+  git(repo, ["worktree", "add", "-q", "-b", "feat/worked", worked]);
   await writeFile(path.join(worked, "work.txt"), "a change\n", "utf8");
   git(worked, ["add", "."]);
-  git(worked, ["commit", "-m", "add work"]);
+  git(worked, ["commit", "-q", "-m", "add work"]);
 
   const panel = await startPanel({ config: { scanRoots: [root] } });
   t.after(async () => {
@@ -64,7 +42,7 @@ test("the reconcile depth proposes and journals; the cheap read is still a row a
   });
   const reload = await post(panel.base, "/api/reload", { body: {} });
   assert.equal(reload.status, 200, `reload must succeed: ${reload.text.slice(0, 200)}`);
-  const row0 = await rowAppears(panel.base, "proj", worked);
+  const row0 = await waitForRow(panel.base, "proj", worked);
   assert.ok(row0, "the panel scanned the worktree into its rows");
   const rowPath = row0.path;
 

@@ -21,7 +21,7 @@ import test, { after, before } from "node:test";
 
 import { TreeNames, autoNameRefusal, describeNaming, namingState, tagOf, treeKey } from "../lib/tree-names.js";
 import { WorktreeNaming } from "../lib/worktree-naming.js";
-import { startPanel, post } from "../tools/panel-testkit.mjs";
+import { git, post, startPanel } from "../tools/panel-testkit.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
@@ -39,8 +39,6 @@ async function waitFor(fn, { timeoutMs = 30_000, stepMs = 200, what = "condition
     await sleep(stepMs);
   }
 }
-const git = (dir, args) =>
-  execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", windowsHide: true }).trim();
 
 // A ledger of its own per test: a temp directory, no shared file, no state from a previous case.
 function freshLedger() {
@@ -479,7 +477,7 @@ before(async () => {
   );
   panel = await startPanel({
     config: {
-      scanRoots: [sandbox],
+      scanRoots: [],
       jobsFile: path.join(logs, "jobs.json"),
       projectsCacheFile: path.join(logs, "projects.json"),
     },
@@ -538,39 +536,23 @@ test("the boot backfill writes down every tree it finds, under the name it was f
 });
 
 test("the boot backfill seeds the fleet from `git worktree list`, before any row is scanned", async () => {
-  // A panel that cannot discover anything — no scan root — over a discovery cache naming the repo. The only
-  // listing that can answer for these trees is the boot backfill's own, which is what "seeded at boot" means:
-  // the record exists before the board has a row for the tree, so no run can ever find it unrecorded.
-  const dir = mkdtempSync(path.join(tmpdir(), "wtgui-naming-boot-"));
-  const logs = path.join(dir, "logs");
-  mkdirSync(logs, { recursive: true });
-  writeFileSync(
-    path.join(logs, "projects.json"),
-    JSON.stringify({ savedAt: new Date().toISOString(), projects: [{ name: "demo-repo", path: repo() }] }),
-    "utf8",
-  );
-  const boot = await startPanel({
-    config: { scanRoots: [], jobsFile: path.join(logs, "jobs.json"), projectsCacheFile: path.join(logs, "projects.json") },
+  // The panel booted above with `scanRoots: []` over a discovery cache naming the repo. The only listing that
+  // could answer for these trees is `git worktree list`, which is what "seeded at boot" means: the record exists
+  // even when scanRoots is empty.
+  const file = ledgerPath();
+  await waitFor(() => existsSync(file) && Object.keys(ledgerFile().trees || {}).length >= 2, {
+    timeoutMs: 30_000,
+    what: "the boot backfill to write the fleet down",
   });
-  try {
-    const file = path.join(logs, "tree-names.json");
-    await waitFor(() => existsSync(file) && Object.keys(JSON.parse(readFileSync(file, "utf8")).trees || {}).length >= 2, {
-      timeoutMs: 30_000,
-      what: "the boot backfill to write the fleet down",
-    });
-    const trees = JSON.parse(readFileSync(file, "utf8")).trees;
-    for (const [dirName, tag] of [[FIXED, "667552"], [MANUAL, "abcdef"]]) {
-      const rec = trees[`demo-repo::${tag}`];
-      assert.ok(rec, `${dirName} was written down by the boot backfill`);
-      assert.equal(rec.name, dirName);
-      assert.equal(rec.seeded, true);
-      assert.equal(namingState(rec), "named");
-    }
-    assert.match(boot.log(), /tree-names: 2 tree\(s\) had no record/, `the boot backfill reported both\n${boot.log().slice(-1500)}`);
-  } finally {
-    await boot.stop();
-    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  const trees = ledgerFile().trees;
+  for (const [dirName, tag] of [[FIXED, "667552"], [MANUAL, "abcdef"]]) {
+    const rec = trees[`${projectName}::${tag}`];
+    assert.ok(rec, `${dirName} was written down by the boot backfill`);
+    assert.equal(rec.name, dirName);
+    assert.equal(rec.seeded, true);
+    assert.equal(namingState(rec), "named");
   }
+  assert.match(panel.log(), /tree-names: 2 tree\(s\) had no record/, `the boot backfill reported both\n${panel.log().slice(-1500)}`);
 });
 
 test("a manual rename moves the tree once, writes the ledger, and settles it for good", async () => {

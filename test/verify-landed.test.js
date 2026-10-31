@@ -18,10 +18,8 @@ import test from "node:test";
 import { answerDeletes, answerLine, answerTextOf, answeredChecks } from "../lib/verify-landed.js";
 import { VERDICTS, verdictFromText, verifyLabel, verifyPrompt } from "../lib/verify-prompt.js";
 import { deleteWorktreeRow } from "../lib/worktree-remove.js";
+import { configureRepo, git, slash } from "../tools/panel-testkit.mjs";
 
-const git = (cwd, args) =>
-  execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim();
-const slash = (p) => String(p || "").replace(/\\/g, "/");
 const exists = (p) => stat(p).then((s) => s.isDirectory()).catch(() => false);
 
 // ── the label: one job name per base branch, in capitals ────────────────────────────────────────────────────────
@@ -162,39 +160,69 @@ test("only YES authorises a delete, and the card's line says which word it read"
 });
 
 // ── the act, against a real repo ──────────────────────────────────────────────────────────────────────────────
-async function makeRepo(t) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "wtgui-check-"));
-  const repo = path.join(root, "proj");
-  await mkdir(repo, { recursive: true });
-  git(repo, ["init", "-b", "main"]);
-  git(repo, ["config", "user.email", "check@local"]);
-  git(repo, ["config", "user.name", "Check"]);
-  git(repo, ["config", "commit.gpgsign", "false"]);
-  await writeFile(path.join(repo, "README.md"), "# test\n", "utf8");
-  git(repo, ["add", "."]);
-  git(repo, ["commit", "-m", "init"]);
-  t.after(async () => {
-    await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
-  });
-  return { root, repo };
+let sharedAct = null;
+async function getActFixture() {
+  if (!sharedAct) {
+    const root = await mkdtemp(path.join(os.tmpdir(), "wtgui-check-"));
+    const repo = path.join(root, "proj");
+    await mkdir(repo, { recursive: true });
+    git(repo, ["init", "-q", "-b", "main"]);
+    configureRepo(repo);
+    await writeFile(path.join(repo, "README.md"), "# test\n", "utf8");
+    git(repo, ["add", "."]);
+    git(repo, ["commit", "-q", "-m", "init"]);
+    const wt = path.join(repo, ".worktrees", "wt-landed");
+    git(repo, ["worktree", "add", "-q", "-b", "feat/landed", wt]);
+    await writeFile(path.join(wt, "work.txt"), "feat/landed\n", "utf8");
+    git(wt, ["add", "."]);
+    git(wt, ["commit", "-q", "-m", "work on feat/landed"]);
+    sharedAct = { root, repo, wt };
+  }
+  return sharedAct;
 }
 
-async function makeTree(t, repo, name, branch) {
-  const wt = path.join(repo, ".worktrees", name);
-  git(repo, ["worktree", "add", "-b", branch, wt]);
-  await writeFile(path.join(wt, "work.txt"), `${branch}\n`, "utf8");
-  git(wt, ["add", "."]);
-  git(wt, ["commit", "-m", `work on ${branch}`]);
-  return wt;
-}
+test.after(async () => {
+  if (sharedAct) await rm(sharedAct.root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+});
 
 const project = (repo) => ({ name: "proj", path: repo, mainBranch: "main" });
 const rowFor = (wt, branch) => ({ name: path.basename(wt), path: slash(wt), branch });
 const quiet = { list: () => [], check: () => ({ locked: false }) };
 
-test("a LANDED: YES removal takes the folder off disk and the worktree out of git", async (t) => {
-  const { repo } = await makeRepo(t);
-  const wt = await makeTree(t, repo, "wt-landed", "feat/landed");
+test("the reader's lock and a live agent both refuse the removal, and neither touches the folder", async () => {
+  const { repo, wt } = await getActFixture();
+
+  const locked = await deleteWorktreeRow({
+    project: project(repo),
+    row: rowFor(wt, "feat/landed"),
+    target: wt,
+    jobs: quiet,
+    locks: { check: () => ({ locked: true, reason: "this worktree is locked by the reader", by: "tree" }) },
+    platform: "linux",
+  });
+  assert.equal(locked.ok, false);
+  assert.equal(locked.status, 409, "a locked tree is a refusal the page can banner, not a silent no-op");
+  assert.match(locked.error, /locked/);
+  assert.equal(await exists(wt), true, "the refused delete left the tree in place");
+
+  // A CHECKING agent standing in the tree is a live job: the answer arrives after it settles, so the sweep must never
+  // race its own run.
+  const busy = await deleteWorktreeRow({
+    project: project(repo),
+    row: rowFor(wt, "feat/landed"),
+    target: wt,
+    jobs: { list: () => [{ id: "abc12345", status: "running", cwd: slash(wt) }] },
+    locks: quiet,
+    platform: "linux",
+  });
+  assert.equal(busy.ok, false);
+  assert.equal(busy.status, 409);
+  assert.match(busy.error, /abc12345/);
+  assert.equal(await exists(wt), true);
+});
+
+test("a LANDED: YES removal takes the folder off disk and the worktree out of git", async () => {
+  const { repo, wt } = await getActFixture();
 
   const out = await deleteWorktreeRow({
     project: project(repo),
@@ -211,41 +239,8 @@ test("a LANDED: YES removal takes the folder off disk and the worktree out of gi
   assert.equal(out.rowPath, slash(wt), "the answer carries the STORE's key, so the browser drops the right row");
 });
 
-test("the reader's lock and a live agent both refuse the removal, and neither touches the folder", async (t) => {
-  const { repo } = await makeRepo(t);
-  const wt = await makeTree(t, repo, "wt-locked", "feat/locked");
-
-  const locked = await deleteWorktreeRow({
-    project: project(repo),
-    row: rowFor(wt, "feat/locked"),
-    target: wt,
-    jobs: quiet,
-    locks: { check: () => ({ locked: true, reason: "this worktree is locked by the reader", by: "tree" }) },
-    platform: "linux",
-  });
-  assert.equal(locked.ok, false);
-  assert.equal(locked.status, 409, "a locked tree is a refusal the page can banner, not a silent no-op");
-  assert.match(locked.error, /locked/);
-  assert.equal(await exists(wt), true, "the refused delete left the tree in place");
-
-  // A CHECKING agent standing in the tree is a live job: the answer arrives after it settles, so the sweep must never
-  // race its own run.
-  const busy = await deleteWorktreeRow({
-    project: project(repo),
-    row: rowFor(wt, "feat/locked"),
-    target: wt,
-    jobs: { list: () => [{ id: "abc12345", status: "running", cwd: slash(wt) }] },
-    locks: quiet,
-    platform: "linux",
-  });
-  assert.equal(busy.ok, false);
-  assert.equal(busy.status, 409);
-  assert.match(busy.error, /abc12345/);
-  assert.equal(await exists(wt), true);
-});
-
-test("the project's own checkout is never a worktree to remove", async (t) => {
-  const { repo } = await makeRepo(t);
+test("the project's own checkout is never a worktree to remove", async () => {
+  const { repo } = await getActFixture();
   const out = await deleteWorktreeRow({
     project: project(repo),
     row: { name: "proj", path: slash(repo), branch: "main" },

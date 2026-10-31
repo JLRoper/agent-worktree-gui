@@ -39,18 +39,14 @@
 // (the wiring is what the panel presses above drive). That card's press is also driven at the route rather than by a
 // click, because it is owned by a row and the browser half deliberately needs no project section on the page.
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { runGonePointerLines } from "../lib/jobs.js";
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
+import { loadPlaywright } from "./browser.mjs";
+import { ROOT, pickFreePort as freePort } from "./panel-testkit.mjs";
 
 let failures = 0;
 let checks = 0;
@@ -95,37 +91,6 @@ const git = (dir, args) => {
   }
 };
 const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-const freePort = () =>
-  new Promise((resolve, reject) => {
-    const s = createServer();
-    s.on("error", reject);
-    s.listen(0, "127.0.0.1", () => {
-      const { port } = s.address();
-      s.close(() => resolve(port));
-    });
-  });
-
-// ---- the browser half ----------------------------------------------------------------------------
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
 
 // ---- the stub Runs API ---------------------------------------------------------------------------
 // It answers what a real gateway answers: capabilities, one run's status, its event stream, and a steer. Each run is

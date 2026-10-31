@@ -28,16 +28,15 @@
 // The browser half needs a Playwright install; without one this prints BROWSER-HALF-NOT-RUN, counts a failure and
 // exits non-zero rather than passing on a half that never ran.
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { installFakeEventSource, loadPlaywright } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
 const LIVE = String(process.env.PANEL_URL || "").replace(/\/+$/, "");
 
 let failures = 0;
@@ -156,27 +155,6 @@ async function stopSandbox() {
   await sleep(300);
 }
 
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
-
 // ---- the fixture ---------------------------------------------------------------------------------
 // Real rows, copied out of logs/jobs.json (job c9202ee0): the docker-pods worker's patch on AGENTS.md, cut by the
 // gateway's preview after two context lines of a 46-line addition, and its patch on docs/operations.md, whose
@@ -226,6 +204,7 @@ async function browserPhase(pw) {
   browserRef = browser;
   const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
   const realSnapshot = await fetch(`${base}/api/state`).then((r) => r.json());
+  await installFakeEventSource(context);
   await context.addInitScript(
     ({ snapshot, agentsCall, agentsPreview, agentsStored, opsCall, opsPreview, firstText, lastText }) => {
       const realFetch = window.fetch.bind(window);
@@ -241,13 +220,6 @@ async function browserPhase(pw) {
         }
         return json({ ok: true });
       };
-      const FakeStream = function () {
-        this.readyState = 1;
-      };
-      FakeStream.prototype.addEventListener = function () {};
-      FakeStream.prototype.removeEventListener = function () {};
-      FakeStream.prototype.close = function () {};
-      window.EventSource = FakeStream;
 
       // The turn, fabricated in the PAGE's own state and painted by the shipped renderJobs(): two patch calls in
       // one burst, the first with the gateway's cut preview, the second with a change block.

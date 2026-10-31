@@ -28,14 +28,13 @@ import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadPlaywright } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const require = createRequire(import.meta.url);
 const argv = process.argv.slice(2);
 const opt = (name, fallback = null) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
 const ROOT = path.resolve(opt("--root", path.join(HERE, "..")));
@@ -464,23 +463,6 @@ function sh(cmd, args, cwd) {
     return execFileSync(cmd, args, { cwd, stdio: "pipe", encoding: "utf8" }).trim();
   } catch {
     return "";
-  }
-}
-
-function loadPlaywright() {
-  for (const root of [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd(), "C:/Users/roper/AppData/Roaming/npm/node_modules"].filter(Boolean)) {
-    for (const p of [path.join(root, "node_modules", "playwright"), path.join(root, "playwright"), root]) {
-      try {
-        return require(p);
-      } catch {
-        /* not there */
-      }
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
   }
 }
 

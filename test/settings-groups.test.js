@@ -22,6 +22,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { sliceRegion } from "../tools/panel-testkit.mjs";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
@@ -104,14 +105,8 @@ test("the search box is in the panel's fixed head and says what it searches", ()
 });
 
 // ---- the page's own regions, driven -------------------------------------------------------------------
-const beginFolds = src.indexOf("// ---- settings group folds");
-const endFolds = src.indexOf("// ---- end settings group folds");
-const beginSearch = src.indexOf("// ---- settings search");
-const endSearch = src.indexOf("// ---- end settings search");
-assert.ok(beginFolds > 0 && endFolds > beginFolds, "the settings-fold region is in public/app.js");
-assert.ok(beginSearch > endFolds && endSearch > beginSearch, "the settings-search region follows it");
-const foldsRegion = src.slice(beginFolds, endFolds);
-const searchRegion = src.slice(beginSearch, endSearch);
+const foldsRegion = sliceRegion(src, "settings group folds");
+const searchRegion = sliceRegion(src, "settings search");
 const region = `${foldsRegion}\n${searchRegion}`;
 
 const STORE_KEY = "wtgui.settingsUnfolded";

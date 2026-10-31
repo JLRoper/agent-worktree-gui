@@ -37,18 +37,14 @@
 // node_modules/playwright, or the package itself); without one it says BROWSER-HALF-NOT-RUN and fails rather than passing
 // on a half that never ran. The live panel on :7331 and the live gateway on :8642 are never touched.
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { completionPayload, outcomeFrom } from "../lib/completion.js";
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
+import { loadPlaywright } from "./browser.mjs";
+import { ROOT, pickFreePort as freePort } from "./panel-testkit.mjs";
 
 let failures = 0;
 let checks = 0;
@@ -93,36 +89,6 @@ const git = (dir, args) => {
   }
 };
 const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-const freePort = () =>
-  new Promise((resolve, reject) => {
-    const s = createServer();
-    s.on("error", reject);
-    s.listen(0, "127.0.0.1", () => {
-      const { port } = s.address();
-      s.close(() => resolve(port));
-    });
-  });
-
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
 
 // ---- the stub Runs API --------------------------------------------------------------------------
 // A real gateway's shape: capabilities, one run's status, its event stream, a steer, a stop. Every run body the panel
