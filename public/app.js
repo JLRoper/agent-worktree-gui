@@ -7084,6 +7084,65 @@ function applyStoredScrolls(root) {
   }
 }
 
+// ---- moving nodes without losing what is scrolled inside them ------------------------------------------------
+// Appending a node that is already in the page is a remove-then-insert: the subtree leaves the layout tree and comes
+// back as a fresh scroll area at `scrollTop = 0`. That is the one kind of jump no scroll code writes, and it is what
+// reads as two consoles fighting each other while one of them is written to: the move that reset them was about a
+// third thing on the board (a closed section's rank, another row's place), and every console inside the moved
+// subtree went to its first line in the same frame. So a move here only touches the elements that are actually out
+// of place, and whatever does move holds its scroll boxes across the move, in the same task, so no frame is painted
+// at 0 and no reader waits for the 400 ms sweep to hand their place back.
+function placeInOrder(parent, want) {
+  // Backwards, so every element is put down relative to a successor that is already where the order asks it to be.
+  // An element whose next sibling is already the right one is never detached at all - that is the whole point.
+  let moved = 0;
+  for (let i = want.length - 1; i >= 0; i--) {
+    const el = want[i];
+    if (!el) continue;
+    const next = want[i + 1] || null;
+    if (el.parentNode === parent && el.nextElementSibling === next) continue;
+    parent.insertBefore(el, next);
+    moved += 1;
+  }
+  return moved;
+}
+
+// Where every scroll box in this subtree stands, read BEFORE anything is moved: a read taken after the move reads the
+// 0 the move left, and a restore built on that writes the reader back to the top.
+function holdScrolls(root) {
+  const held = [];
+  if (!root) return held;
+  for (const el of root.querySelectorAll("pre.job-out, .think-body, .sub-console")) {
+    const think = el.classList.contains("think-body");
+    const sub = el.classList.contains("sub-console");
+    held.push({
+      el,
+      think,
+      sub,
+      top: el.scrollTop,
+      key: think ? el.closest("details.think")?.dataset.thinkTurn || "" : sub ? el.dataset.subConsoleBox || "" : el.dataset.out || "",
+    });
+  }
+  return held;
+}
+
+// Put them back. A box still pinned follows its newest line (what it holds may have grown with the move); one the
+// reader took over goes back to the line they were on.
+function releaseScrolls(held) {
+  for (const h of held || []) {
+    const el = h.el;
+    if (!el || !el.isConnected) continue;
+    const max = el.scrollHeight - el.clientHeight;
+    if (max <= 0) continue;
+    const pinned = h.think
+      ? state.thinkPinned.get(h.key) !== false
+      : h.sub
+        ? state.subConsolePinned.get(h.key) !== false
+        : consolePinned(h.key);
+    setScroll(el, pinned ? max : Math.min(h.top, max));
+  }
+}
+
 // Rebuilding the unattached list is cheap but not free; anything that makes several rows appear at
 // once (a boot pass, a discovery sweep) should coalesce into one repaint.
 let jobsRefreshQueued = false;
@@ -10879,6 +10938,10 @@ function sweepStaleBoard() {
   // and blurs whatever the reader was typing in. That was the cursor going missing on a green flash: the flash itself
   // touches no input, but the re-rank under it moved the box. Read the caret before any of it and put it back after.
   const typing = $("projects") ? captureTyping($("projects")) : null;
+  // A detail that changes place under its row takes every console inside it out of the layout tree, which puts them
+  // all back at their first line. Read the boxes before the FIRST move of this pass (a read after it would read the
+  // 0 it left) and hand them back before the pass ends.
+  let heldScrolls = null;
   beginDomMove();
   // A detail whose row is gone, or which no longer follows its own row.
   for (const d of [...document.querySelectorAll("tr.detail[data-detail]")]) {
@@ -10902,7 +10965,10 @@ function sweepStaleBoard() {
     // life, so a worktree that gains life is re-ordered). Moving the detail with its row keeps the open
     // cards on the page; removing it instead dropped the agent card the reader was reading out of the DOM
     // until some later render rebuilt it.
-    if (ownRow && d.previousElementSibling !== ownRow) ownRow.after(d);
+    if (ownRow && d.previousElementSibling !== ownRow) {
+      heldScrolls = heldScrolls || holdScrolls($("projects"));
+      ownRow.after(d);
+    }
   }
   // A row the server no longer lists.
   for (const tr of [...document.querySelectorAll("tr.row[data-key]")]) {
@@ -10941,6 +11007,7 @@ function sweepStaleBoard() {
     }
   }
   endDomMove();
+  if (heldScrolls) releaseScrolls(heldScrolls);
   if (typing) restoreTyping($("projects"), typing);
   restoreAddAgent($("projects"));
   restoreCardSelection(heldSelection);
@@ -11643,7 +11710,6 @@ function reorderProjects() {
   // It also drops the caret: re-appending a project section or a folder takes every card and the inline add-agent
   // field inside it out of the page, and a detached field is blurred. Read both before the moves, put them back after.
   const typing = captureTyping(host);
-  beginDomMove();
   const rank = projectRanks();
   const ctx = projectRankCtx(rank, Date.now());
   // An open project keeps its exact slot — opening one is you saying "this is the one I am reading",
@@ -11666,13 +11732,16 @@ function reorderProjects() {
     els.forEach((_, i) => out.push(open.has(i) ? open.get(i) : free[f++]));
     return out;
   };
+  // Worked out BEFORE anything moves: the plan is pure (it only reads elements and the ranking), so it can be known
+  // in advance whether this tick has any work at all - and the console scroll boxes can be read while they are still
+  // laid out, which a read after the move is not.
+  const plans = [];
   for (const body of host.querySelectorAll(".root-body")) {
     const sections = [...body.querySelectorAll("section.project")];
     if (!sections.length) continue;
     const want = order(sections);
     if (want.every((el, i) => el === sections[i])) continue;
-    for (const el of want) body.appendChild(el);
-    flashMoved(sections, want, body);
+    plans.push({ body, sections, want });
   }
   // Then the folders themselves, on the same ranking: a folder holding the project an agent is busy
   // in leads, then the one worked in most recently.
@@ -11698,8 +11767,22 @@ function reorderProjects() {
   const wantGroups = [];
   let gf = 0;
   groups.forEach((_, i) => wantGroups.push(pinnedGroups.has(i) ? pinnedGroups.get(i) : freeGroups[gf++]));
-  if (!wantGroups.every((g, i) => g === groups[i])) for (const g of wantGroups) host.appendChild(g);
+  const moveGroups = !wantGroups.every((g, i) => g === groups[i]);
+  // The common case on the clock: the ranking moved nothing this tick, so the page is left exactly as it is.
+  if (!plans.length && !moveGroups) return;
+  // Read the scroll boxes while they are still laid out, then move ONLY what is out of place. An open project keeps
+  // its slot in `want`, so its section is never one of the moved ones - which is the whole fix: a re-rank that has
+  // nothing to do with a console can no longer reset it. The hold is the belt for the cases where a section really
+  // has to move (sections appeared or went away) and for the consoles inside a folder that moves.
+  const held = holdScrolls(host);
+  beginDomMove();
+  for (const p of plans) {
+    placeInOrder(p.body, p.want);
+    flashMoved(p.sections, p.want, p.body);
+  }
+  if (moveGroups) placeInOrder(host, wantGroups);
   endDomMove();
+  releaseScrolls(held);
   if (typing) restoreTyping(host, typing);
   restoreAddAgent(host);
   restoreCardSelection(heldSelection);
@@ -12421,9 +12504,14 @@ function reorder(name) {
   // identical nodes would fight the scroll position while someone is reading.
   const current = [...tbody.children];
   if (current.length === want.length && current.every((el, i) => el === want[i])) return;
+  // Same discipline as reorderProjects(): a detail that only slid because a NEIGHBOUR was re-ranked must not take its
+  // console out of the layout tree. Only the rows that are out of place move, and what does move is put back in this
+  // same task instead of waiting for the next line or the 400 ms sweep.
+  const heldScrolls = holdScrolls(tbody);
   beginDomMove();
-  for (const el of want) tbody.appendChild(el);
+  placeInOrder(tbody, want);
   endDomMove();
+  releaseScrolls(heldScrolls);
   if (typing) restoreTyping(tbody, typing);
   restoreAddAgent(tbody);
   // Say which rows moved: the order is the panel's judgement about what to look at first, and a
@@ -12838,6 +12926,15 @@ function renderAll() {
   for (const g of $("projects").querySelectorAll("section.root-group")) {
     prevRoots.set(g.dataset.root, [...g.querySelectorAll(".root-body section.project")].map((s) => s.dataset.project));
   }
+  // Every card on the board is about to be replaced with a fresh node, so the consoles inside them go to their first
+  // line. Remember where each one stood, by its own id: the rebuild's own restore (applyStoredScrolls) reads this map,
+  // and it has nothing to read when the console was never scrolled by a reader since the card appeared.
+  for (const o of $("projects").querySelectorAll("pre.job-out")) {
+    state.outScrolls[o.dataset.out] = {
+      top: o.scrollTop,
+      atBottom: o._selfTop == null || o.scrollHeight - o.scrollTop - o.clientHeight < 32,
+    };
+  }
   // Every card and the inline add-agent field leave the page here; bracketed so their blur is not read as the reader
   // walking away. Both are put back below.
   beginDomMove();
@@ -12874,7 +12971,11 @@ function renderAll() {
   }
   state.tbodyEls.clear();
   state.rowEls.clear();
-  state.detailEls.clear();
+  // `state.detailEls` is deliberately NOT cleared. renderProjectRows() asks it for the cards each rebuilt detail has to
+  // reuse, and those cards carry the consoles themselves: handing them over is a MOVE of the node, so the reader's
+  // scroll position comes with it. Clearing the map here rebuilt every card from scratch - the one board-wide path
+  // that could still put a live console back on its first line - while its neighbours kept their place.
+  for (const k of [...state.detailEls.keys()]) if (!state.rows.has(k)) state.detailEls.delete(k);
   for (const p of projects) {
     const tbody = document.querySelector(`[data-tbody="${CSS.escape(p.name)}"]`);
     if (tbody) state.tbodyEls.set(p.name, tbody);
