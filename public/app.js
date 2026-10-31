@@ -7142,6 +7142,7 @@ function releaseScrolls(held) {
     setScroll(el, pinned ? max : Math.min(h.top, max));
   }
 }
+// ---- end moving nodes without losing what is scrolled inside them
 
 // Rebuilding the unattached list is cheap but not free; anything that makes several rows appear at
 // once (a boot pass, a discovery sweep) should coalesce into one repaint.
@@ -10319,10 +10320,17 @@ function reorderAgentCards(project) {
     const pos = new Map(order.map((t, i) => [t, i]));
     const sorted = [...cards].sort((a, b) => (pos.get(a.dataset.thread) ?? order.length) - (pos.get(b.dataset.thread) ?? order.length));
     if (sorted.every((el, i) => el === cards[i])) continue;
-    const anchor = [...block.children].find((el) => !(el.classList.contains("job") && el.dataset.thread)) || null;
+    // Same discipline as reorder() and reorderProjects(): the cards that are already in their slot are never taken
+    // out of the page (re-inserting every card before the anchor detached ALL of them, and a detached console comes
+    // back at its first line), and the consoles of the ones that do move are read before the move and handed back in
+    // this same task. Two live cards in one worktree row are the pair that swap places most, so this is the move a
+    // reader sees as "something is switching between my consoles".
+    const rest = [...block.children].filter((el) => !(el.classList.contains("job") && el.dataset.thread));
+    const held = holdScrolls(block);
     beginDomMove();
-    for (const el of sorted) block.insertBefore(el, anchor);
+    placeInOrder(block, [...sorted, ...rest]);
     endDomMove();
+    releaseScrolls(held);
   }
 }
 

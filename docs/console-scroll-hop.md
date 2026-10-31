@@ -253,7 +253,7 @@ node tools/measure-console-scroll-hop.mjs --seconds 80
 ## 8. The gate across layouts, and what the layouts say about "only with two consoles"
 
 `tools/measure-console-scroll-hop.mjs` draws one layout (two projects). `tools/verify-console-independence.mjs` asks the
-same question in the four layouts a board really has, and refuses to pass a run that measured nothing:
+same question in the five layouts a board really has, and refuses to pass a run that measured nothing:
 
 | layout | what it draws |
 | --- | --- |
@@ -261,6 +261,7 @@ same question in the four layouts a board really has, and refuses to pass a run 
 | `siblings` | two consoles in two sibling worktree rows of ONE project - the reader's board (four sessions, one repo) |
 | `projects` | two consoles in two projects of one folder |
 | `folders` | two consoles in one project while two OTHER folders swap rank (the folder loop of `reorderProjects()`) |
+| `cards` | two live cards in ONE worktree row that swap places, with Stabilize reordering off - the one setting under which the panel may move an OPEN card |
 
 Each plays plain text into the consoles over a stub Runs API, drives the churn (a file touched in a closed project every
 4 s, so the ranking really moves), samples every frame with `requestAnimationFrame` and asserts zero painted hops. It
@@ -268,11 +269,20 @@ also needs every console to overflow, the ranking to move a section or a folder 
 a raw re-append of an open section to reset a console in THIS browser - otherwise it exits 2, because a clean run on a
 browser that cannot show the fault proves nothing. On an export of `e965d65` (before the fix) it is red in all four
 (6, 11, 16 and 10 painted hops in its 40-45 s windows, every one a `reorderProjects | appendChild` on a
-`section.project` or `section.root-group`); on this tree it is green with the ranking moving 9-13 sections and 8
-folders in the window.
+`section.project` or `section.root-group`); on `918b44c` (the fix as it landed) those four are green with the ranking
+moving 9-13 sections and 8 folders in the window.
+
+The fifth layout found what the landed fix had not reached. `cards` forces the swap (the page's stored order of a row's
+cards is flipped every 4 s and its own `reorderAgentCards()` acts on it, because a stub pair never crosses the ranking's
+margin and a real pair does) and was **red on `918b44c`: 6 painted hops in 40 s, 2 of its 4 hop frames with both
+consoles at the top, every one `reorderAgentCards | insertBefore | div.job`** over 10 card swaps. With Stabilize
+reordering off the row's cards are re-ranked on every clock tick, and it re-inserted every card before the first
+non-card child, which detaches ALL of them even when only one swapped - the one mover that was still a raw loop. It now
+orders with `placeInOrder()` and holds and releases the boxes like the others: 0 hops over 9 swaps, same window, same
+sensitivity check (a raw re-append took a console from 785 to 0).
 
 ```
-node tools/verify-console-independence.mjs                              # this checkout: four layouts, ~7 min
+node tools/verify-console-independence.mjs                              # this checkout: five layouts, ~9 min
 node tools/verify-console-independence.mjs --root <export of e965d65>   # the build before the fix: red
 node tools/verify-console-independence.mjs --only siblings --seconds 90 # one layout, a longer window
 ```
@@ -293,6 +303,14 @@ on `e965d65` before the fix:
 All 94 of those hops are the same `reorderProjects | appendChild | section.project`; with the churn off (the ranking never
 moves) neither one console nor two ever hopped, and with the page's own reorder clock stopped the hops continued on the
 row-event path (`queueReorderProjects`), so it is the re-rank, not the clock. The same runs on the fix: 0 in every row.
+
+`test/console-independence.test.js` is the part that needs no browser. It reads `placeInOrder()`, `holdScrolls()` and
+`releaseScrolls()` out of `public/app.js` and runs them over a small model that has the one browser rule behind the
+fault (an attached node that is inserted is removed first, and every scroll box inside it comes back at 0): a list
+already in order detaches nothing, two items that trade places detach one, any permutation ends in the wanted order, a
+moved console comes back on its newest line (or on the reader's line) in the same task and, without the release, at 0.
+It also fails when `reorderProjects()`, `reorder()`, `sweepStaleBoard()` or `reorderAgentCards()` stops holding and
+releasing the boxes it moves, or goes back to a raw `appendChild`/`insertBefore`.
 
 A single console hops as often as each of two does (12 in the one-console run, 12 per console in the sibling-row runs),
 so the cause does not depend on how many consoles are open: it depends on the folder's ranking moving. What a second

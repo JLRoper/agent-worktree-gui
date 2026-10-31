@@ -7,6 +7,13 @@ Read at `e1bdb0e` (0.32.6) without a browser: `public/app.js`, `public/core/*.js
 and the `lib/` clocks that make the page repaint. Every claim below is a line in that tree, not a measurement; §7 is
 the measurement that separates the candidates, and it is the one thing this note does not decide.
 
+> **Status (0.34.0).** The table below is the tree at `e1bdb0e`, as read. The measurement it asked for was taken
+> (`docs/console-scroll-hop.md`): every one of the 94 painted hops in its before-the-fix runs was candidate 1,
+> `reorderProjects`. Candidates 1, 5 (`sweepStaleBoard`) and 6 (`reorder`, `reorderAgentCards`) are now closed the same
+> way - each moves only the elements that are out of place and holds its scroll boxes across the move
+> (`placeInOrder`, `holdScrolls`/`releaseScrolls`) - and `tools/verify-console-independence.mjs` and
+> `test/console-independence.test.js` fail if one of them stops.
+
 ## 0. What the symptom already rules out
 
 **No code writes `0` to a console.** `pre.job-out` is written in exactly one place, `setScroll` (`public/app.js:6907`),

@@ -119,13 +119,17 @@ of the commit before the patch.
 
 `node tools/verify-console-independence.mjs` gates the other half of the same complaint: a console reset by something
 that is NOT about it. A panel of its own streams plain text into one or two consoles (one console; two sibling worktree
-rows of one project; two projects; one project while two other folders swap rank) while a driver touches files in closed
-projects so the ranking really moves, and a `requestAnimationFrame` sampler counts every frame in which an overflowing
-console is painted at `scrollTop <= 2` (`docs/console-scroll-hop.md`). It asserts zero in every layout, and that the run
-measured something: every console overflowed, the ranking moved a section or a folder at least three times, and a raw
+rows of one project; two projects; one project while two other folders swap rank; two cards of one row swapping places
+with Stabilize reordering off) while a driver touches files in closed projects so the ranking really moves, and a
+`requestAnimationFrame` sampler counts every frame in which an overflowing console is painted at `scrollTop <= 2`
+(`docs/console-scroll-hop.md`). It asserts zero in every layout, and that the run measured something: every console
+overflowed, the ranking moved a section or a folder (or two cards swapped places) at least three times, and a raw
 re-append of an open section resets a console in this browser (otherwise it exits 2 rather than pass). On an export of
-the commit before the fix it is red in all four layouts (6 to 16 painted hops per window, every one a
-`reorderProjects | appendChild`). `--only one|siblings|projects|folders`, `--seconds N`, `--root <checkout>`.
+the commit before the fix it is red in the first four layouts (6 to 16 painted hops per window, every one a
+`reorderProjects | appendChild`); `cards` was red until `reorderAgentCards()` moved only what was out of place.
+`--only one|siblings|projects|folders|cards`, `--seconds N`, `--root <checkout>`. `test/console-independence.test.js` is
+the half that needs no browser: the helpers every mover goes through, read out of `public/app.js` and run over a model
+of the one browser rule behind the fault, and a check that each mover still goes through them.
 
 `node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
 `--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
