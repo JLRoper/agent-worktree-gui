@@ -344,3 +344,25 @@ test("a landing with no version bump is refused by the installed hook, from any 
   assert.equal(allowed.status, 0, `a bumped branch in a sibling worktree pushes\n${allowedWhere}`);
   assert.equal(git(origin, "rev-parse", "--verify", "--quiet", "refs/heads/feature-a").status, 0, `the remote has it\n${allowedWhere}`);
 });
+
+test("a re-install puts the gate back into a tree whose record names the samples dir", async (t) => {
+  // The state every worktree of this clone is in: the guard was installed when the record's predecessor was git's own
+  // <git-dir>/hooks (samples only), so the chain file is empty. The fix's first install would never produce that record,
+  // so it is written back by hand to stand in for the trees that already exist — and a re-install has to repair them.
+  const { work, git } = await gateFixture(t);
+  const install = () => installGuard({ projectPath: work, worktree: work, panelUrl: "http://127.0.0.1:7331", policy: "local-only", landing: [] });
+  const first = await install();
+  assert.equal(first.ok, true, `the install works: ${first.error || ""}`);
+  const common = await commonDirOf(work);
+  const paths = guardPaths(common);
+  await writeFile(paths.chain, "\n", "utf8");
+  const record = JSON.parse(await readFile(paths.config, "utf8"));
+  await writeFile(paths.config, JSON.stringify({ ...record, previousHooksPath: path.join(common, "hooks").split(path.sep).join("/") }, null, 2), "utf8");
+
+  const again = await install();
+  assert.equal(again.ok, true, `the repairing install works: ${again.error || ""}`);
+  assert.equal(again.previous, path.join(work, ".githooks").split(path.sep).join("/"), "the tracked gate is preferred over a recorded dir that holds no pre-push");
+  assert.equal((await readFile(paths.chain, "utf8")).trim(), ".githooks/pre-push", "the chain is restored, and still relative");
+  // And the samples dir is still a usable recorded predecessor when the tree ships no gate of its own.
+  assert.ok(git(work, "rev-parse", "--show-toplevel").status === 0, "the fixture is a real repository");
+});
