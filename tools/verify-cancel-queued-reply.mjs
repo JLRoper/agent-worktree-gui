@@ -35,16 +35,15 @@
 // The browser half needs a Playwright install; without one the script prints BROWSER-HALF-NOT-RUN and exits 1
 // rather than passing on a half that never ran.
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { installFakeEventSource, loadPlaywright } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
 const LIVE = String(process.env.PANEL_URL || "").replace(/\/+$/, "");
 
 let failures = 0;
@@ -166,27 +165,6 @@ async function stopSandbox() {
   await sleep(300);
 }
 
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
-
 const cardSel = `.job[data-thread="${THREAD}"]`;
 const boxSel = `${cardSel} .reply-box`;
 const cancelSel = `${cardSel} .ghost-cancel`;
@@ -201,6 +179,7 @@ async function browserPhase(pw) {
   // which CLEARS state.jobs, so a card fabricated here would be wiped mid-check by a broadcast. With no stream and
   // a stubbed fetch, this probe's state.jobs is the only source of cards, and every request is recorded.
   const realSnapshot = await fetch(`${base}/api/state`).then((r) => r.json());
+  await installFakeEventSource(context);
   await context.addInitScript(
     ({ snapshot, thread }) => {
       const realFetch = window.fetch.bind(window);
@@ -250,13 +229,6 @@ async function browserPhase(pw) {
         if (u.includes("/api/agents/reply")) return json(replyJob(body));
         return json({ ok: true });
       };
-      const FakeStream = function () {
-        this.readyState = 1;
-      };
-      FakeStream.prototype.addEventListener = function () {};
-      FakeStream.prototype.removeEventListener = function () {};
-      FakeStream.prototype.close = function () {};
-      window.EventSource = FakeStream;
 
       const job = (o) => ({
         id: o.id,

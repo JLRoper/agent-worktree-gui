@@ -7,7 +7,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { loadPlaywright, playwrightCandidates, withBrowser } from "../tools/browser.mjs";
+import {
+  FAKE_EVENT_SOURCE_SCRIPT,
+  clearPlaywrightCache,
+  installFakeEventSource,
+  loadPlaywright,
+  playwrightCandidates,
+  withBrowser,
+} from "../tools/browser.mjs";
 import { ROOT } from "../tools/panel-testkit.mjs";
 
 test("the roots are tried in the order the harnesses agreed on, explicit first", () => {
@@ -58,15 +65,31 @@ test("withBrowser hands back the harness's own value, and a page that already re
     return;
   }
   const value = await withBrowser(
-    async ({ page, context }) => {
+    async ({ page, context, withPage }) => {
       await page.goto("data:text/html,<title>ok</title>");
       assert.equal(await page.title(), "ok");
       assert.ok(context, "the context is handed over for a harness that needs a second page");
+      const sub = await withPage(async ({ page: secondPage, context: secondCtx }) => {
+        await installFakeEventSource(secondCtx);
+        await secondPage.goto("data:text/html,<title>sub</title>");
+        const fakeReady = await secondPage.evaluate(() => new window.EventSource("/api/stream").readyState);
+        return { title: await secondPage.title(), fakeReady };
+      });
+      assert.deepEqual(sub, { title: "sub", fakeReady: 1 });
       return { measured: 1 };
     },
     { playwright, viewport: { width: 800, height: 600 }, deviceScaleFactor: 2 },
   );
   assert.deepEqual(value, { measured: 1 });
+});
+
+test("default loadPlaywright memoizes its lookup and clearPlaywrightCache resets it", () => {
+  assert.equal(typeof FAKE_EVENT_SOURCE_SCRIPT, "function");
+  const first = loadPlaywright();
+  const second = loadPlaywright();
+  assert.equal(first, second, "default lookup returns the cached module");
+  clearPlaywrightCache();
+  assert.equal(loadPlaywright(), first, "re-resolves cleanly after cache reset");
 });
 
 test("the module resolves playwright from the repo it ships in", () => {

@@ -42,7 +42,6 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -51,10 +50,10 @@ import { fileURLToPath } from "node:url";
 import { linesForEvent, foldNoteText, FOLD_NOTE_RE } from "../lib/jobs/console-lines.js";
 import { unwrapToolText } from "../lib/tool-text.js";
 import { toolResults } from "../lib/tool-results.js";
+import { installFakeEventSource, loadPlaywright } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
 // Optional photographic evidence: `--shots <dir>` writes 1-folded.png and 2-opened.png of the real card.
 const SHOT_DIR = process.argv[process.argv.indexOf("--shots") + 1] && process.argv.includes("--shots") ? process.argv[process.argv.indexOf("--shots") + 1] : "";
 
@@ -270,26 +269,6 @@ async function stopSandbox() {
   await sleep(200);
 }
 
-function loadPlaywright() {
-  for (const root of [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean)) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
-
 async function browserPhase(pw) {
   const LIVE_CALL = "💻 terminal · bash -lc 'cat big.txt'";
   const CUT_CALL = "💻 terminal · bash -lc 'cat huge.txt'";
@@ -302,6 +281,7 @@ async function browserPhase(pw) {
   try {
     const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
     const realSnapshot = await fetch(`${base}/api/state`).then((r) => r.json());
+    await installFakeEventSource(context);
     await context.addInitScript(
       ({ snapshot, resultLines, cutLines, serverFoldNote, storedText, liveCall, cutCall, thread, id, startedAt, endedAt }) => {
         const realFetch = window.fetch.bind(window);
@@ -323,12 +303,6 @@ async function browserPhase(pw) {
             }
           }
           return realFetch(url, opts);
-        };
-        window.EventSource = class {
-          constructor() { this.readyState = 1; }
-          addEventListener() {}
-          removeEventListener() {}
-          close() {}
         };
         localStorage.setItem("wtgui.autoCollect", "0");
         const pre = () => document.querySelector(`pre.job-out[data-out="${id}"]`);

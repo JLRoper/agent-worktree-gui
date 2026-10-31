@@ -35,10 +35,10 @@
 //       prefix must never disagree, or the block collapses to a few words and types them out again
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { installFakeEventSource, loadPlaywright } from "./browser.mjs";
 import { startPanel } from "./panel-testkit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -50,30 +50,8 @@ const ROOT = path.join(HERE, "..");
 const ONLY = opt("--only");
 const BLOCKS_FILE = opt("--blocks");
 const HEADLESS = argv.includes("--headless");
-const require = createRequire(import.meta.url);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const THREAD = "probe-think-thread";
-
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
 
 const checks = [];
 function check(name, pass, detail) {
@@ -142,6 +120,7 @@ async function main() {
   const pageErrors = [];
   page.on("pageerror", (e) => pageErrors.push(String(e && e.message)));
 
+  await installFakeEventSource(context);
   await context.addInitScript(
     ({ thread, atA, atB, a, b, real }) => {
       const realFetch = window.fetch.bind(window);
@@ -190,13 +169,6 @@ async function main() {
         }
         return json({ ok: true });
       };
-      const FakeStream = function () {
-        this.readyState = 1;
-      };
-      FakeStream.prototype.addEventListener = function () {};
-      FakeStream.prototype.removeEventListener = function () {};
-      FakeStream.prototype.close = function () {};
-      window.EventSource = FakeStream;
       try {
         localStorage.setItem("wtgui.think", "1");
         localStorage.setItem(`wtgui.think.${thread}`, "1");

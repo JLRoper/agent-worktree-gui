@@ -24,11 +24,18 @@ function assetUrls(html) {
   return out;
 }
 
-test("the shell is served no-store with every asset URL versioned, and /api/build names the build", async (t) => {
+let sharedPanel = null;
+test.before(async () => {
+  sharedPanel = await startPanel({ token: "build-test-token" });
+});
+test.after(async () => {
+  if (sharedPanel) await sharedPanel.stop();
+});
+
+test("the shell is served no-store with every asset URL versioned, and /api/build names the build", async () => {
   // A token is set on purpose: /api/build is a read, and reads stay open — the page polls it from
   // whichever machine opened the board.
-  const panel = await startPanel({ token: "build-test-token" });
-  t.after(() => panel.stop());
+  const panel = sharedPanel;
 
   const infoResponse = await fetch(`${panel.base}/api/build`);
   assert.equal(infoResponse.status, 200, "/api/build answers without the panel token");
@@ -60,9 +67,8 @@ test("the shell is served no-store with every asset URL versioned, and /api/buil
   assert.equal(index.headers.get("cache-control"), "no-store, must-revalidate", "the explicit shell URL is no-store too");
 });
 
-test("an asset under the current version is cached hard; any other URL is no-store", async (t) => {
-  const panel = await startPanel({ token: "build-test-token" });
-  t.after(() => panel.stop());
+test("an asset under the current version is cached hard; any other URL is no-store", async () => {
+  const panel = sharedPanel;
   const info = await (await fetch(`${panel.base}/api/build`)).json();
 
   const stamped = await fetch(`${panel.base}/app.js?v=${info.version}`);

@@ -43,16 +43,15 @@
 // The browser half needs a Playwright install; without one the script prints BROWSER-HALF-NOT-RUN and
 // exits non-zero rather than passing on a half that never ran.
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { loadPlaywright } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
 
 let checks = 0;
 let failures = 0;
@@ -602,24 +601,6 @@ async function stopSandboxPanel() {
     }
   }
   await sleep(250);
-}
-
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    for (const spec of [path.join(root, "node_modules", "playwright"), root]) {
-      try {
-        return require(spec);
-      } catch {
-        /* not here */
-      }
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
 }
 
 async function phaseCardAndPanel() {

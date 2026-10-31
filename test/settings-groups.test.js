@@ -13,6 +13,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { sliceRegion } from "../tools/panel-testkit.mjs";
 
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
@@ -76,10 +77,7 @@ test("a folded group is hidden by its class, not by a second copy of the rows", 
 });
 
 // ---- the page's own fold region, driven ---------------------------------------------------------------
-const begin = src.indexOf("// ---- settings group folds");
-const end = src.indexOf("// ---- end settings group folds");
-assert.ok(begin > 0 && end > begin, "the settings-fold region is in public/app.js");
-const region = src.slice(begin, end);
+const region = sliceRegion(src, "settings group folds");
 const page = (groups, seed = null) => {
   const store = new Map(seed === null ? [] : [["wtgui.settingsFolded", JSON.stringify(seed)]]);
   const localStorage = {

@@ -11,43 +11,12 @@
 // The fixture carries a bare `origin` with the branch pushed to it on purpose: that is what makes `published: true`
 // reachable, and the page prints the force-push sentence off exactly that field.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
-
-const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never" };
-const git = (cwd, args) =>
-  execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", env: GIT_ENV, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] })
-    .replace(/\r\n/g, "\n")
-    .trim();
-const slash = (p) => String(p || "").replace(/\\/g, "/");
-// For the questions git answers with an exit code (is-ancestor, diff --quiet) rather than with output.
-const ran = (cwd, args) => {
-  try {
-    git(cwd, args);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-// Discovery happens in /api/reload and settles a scan behind the answer, so poll /api/state rather than sleeping and
-// hoping: the route resolves a path against the registry, and a row that is not there yet is a false refusal.
-async function waitForRow(base, name, treePath, ms = 30_000) {
-  const until = Date.now() + ms;
-  let last = null;
-  while (Date.now() < until) {
-    const state = await (await fetch(`${base}/api/state`)).json();
-    last = (state.projects || []).find((p) => p.name === name);
-    if (last && (last.worktrees || []).some((w) => slash(w.path) === slash(treePath))) return last;
-    await new Promise((r) => setTimeout(r, 150));
-  }
-  throw new Error(`the board never held ${treePath}: ${JSON.stringify(last && last.worktrees)}`);
-}
+import { configureRepo, git, post, ran, slash, startPanel, waitForRow } from "../tools/panel-testkit.mjs";
 
 test("the rebase route resolves the tree, refuses what it must, plans on a dry run and rewrites only on the press", async (t) => {
   const base = await mkdtemp(path.join(os.tmpdir(), "wtgui-rebaseroute-"));
@@ -59,9 +28,7 @@ test("the rebase route resolves the tree, refuses what it must, plans on a dry r
   // A real repo with a real remote, so `published` has something to be true about.
   git(base, ["init", "--bare", "-q", origin]);
   git(repo, ["init", "-q", "-b", "main"]);
-  git(repo, ["config", "user.email", "rebase@local"]);
-  git(repo, ["config", "user.name", "Rebase Route"]);
-  git(repo, ["config", "commit.gpgsign", "false"]);
+  configureRepo(repo);
   await writeFile(path.join(repo, "README.md"), "# test\n", "utf8");
   git(repo, ["add", "."]);
   git(repo, ["commit", "-q", "-m", "init"]);

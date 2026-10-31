@@ -35,15 +35,25 @@ export function playwrightCandidates({ root = ROOT, cwd = process.cwd(), env = p
   return [...new Set(out)];
 }
 
+let cachedDefaultPlaywright;
+
+export function clearPlaywrightCache() {
+  cachedDefaultPlaywright = undefined;
+}
+
 // The module, or null when nothing on this machine carries one — a harness prints BROWSER-HALF-NOT-RUN and exits
 // 2 rather than passing a half that never ran, so "absent" has to be a value, not a throw.
 export function loadPlaywright({ root, cwd, env, allowGlobalFallback = true } = {}) {
+  const isDefault = root === undefined && cwd === undefined && env === undefined && allowGlobalFallback === true;
+  if (isDefault && cachedDefaultPlaywright !== undefined) return cachedDefaultPlaywright;
   const options = { root, cwd, env };
   const require_ = createRequire(path.join(path.resolve(root || ROOT), "noop.cjs"));
   for (const dir of playwrightCandidates(options)) {
     for (const candidate of [path.join(dir, "node_modules", "playwright"), dir]) {
       try {
-        return require_(candidate);
+        const mod = require_(candidate);
+        if (isDefault) cachedDefaultPlaywright = mod;
+        return mod;
       } catch {
         /* not there */
       }
@@ -53,8 +63,11 @@ export function loadPlaywright({ root, cwd, env, allowGlobalFallback = true } = 
   // above missed. `allowGlobalFallback: false` is how a test proves the not-installed answer on a machine that has one.
   if (!allowGlobalFallback) return null;
   try {
-    return require_("playwright");
+    const mod = require_("playwright");
+    if (isDefault) cachedDefaultPlaywright = mod;
+    return mod;
   } catch {
+    if (isDefault) cachedDefaultPlaywright = null;
     return null;
   }
 }
@@ -68,10 +81,64 @@ export function requirePlaywright({ root, cwd, env } = {}) {
   throw new Error(`no Playwright install found — set PANEL_PLAYWRIGHT_ROOT to a directory holding node_modules/playwright (looked in ${looked})`);
 }
 
+// Apply init scripts to a BrowserContext. Each entry may be a function/string, `[fn, arg]`, or `{ fn, arg }`.
+async function applyInitScripts(context, { initScript = null, initScripts = [] } = {}) {
+  for (const entry of [...(initScript ? [initScript] : []), ...initScripts]) {
+    if (Array.isArray(entry)) {
+      await context.addInitScript(entry[0], entry[1]);
+    } else if (entry && typeof entry === "object" && typeof entry.fn === "function") {
+      await context.addInitScript(entry.fn, entry.arg);
+    } else if (entry) {
+      await context.addInitScript(entry);
+    }
+  }
+}
+
+// Collect uncaught page errors and console errors (excluding missing-favicon noise) on `page`.
+export function attachPageCollectors(page) {
+  const pageErrors = [];
+  const consoleErrors = [];
+  page?.on?.("pageerror", (e) => pageErrors.push(String((e && e.message) || e)));
+  page?.on?.("console", (m) => {
+    if (m && typeof m.type === "function" && m.type() === "error" && !/favicon/i.test(m.text())) {
+      consoleErrors.push(m.text());
+    }
+  });
+  return { pageErrors, consoleErrors };
+}
+
+// Open an isolated BrowserContext + Page on an already-running `browser` and close the context in `finally`.
+// Lets a multi-scenario harness launch Chromium once via `withBrowser` and still get clean storage/DOM per case.
+export async function withPage(browser, fn, options = {}) {
+  const {
+    viewport = { width: 1440, height: 900 },
+    deviceScaleFactor = 1,
+    permissions = null,
+    initScript = null,
+    initScripts = [],
+    contextOptions = {},
+  } = options;
+  const context = await browser.newContext({
+    viewport,
+    deviceScaleFactor,
+    ...(permissions ? { permissions } : {}),
+    ...contextOptions,
+  });
+  try {
+    await applyInitScripts(context, { initScript, initScripts });
+    const page = await context.newPage();
+    const { pageErrors, consoleErrors } = attachPageCollectors(page);
+    return await fn({ browser, context, page, pageErrors, consoleErrors });
+  } finally {
+    await context.close().catch(() => {});
+  }
+}
+
 // Run `fn` with a browser, a context and a page; close the browser whatever fn does.
 //
-// `initScript` is seeded before the first navigation (the harnesses that need the reader's own fold state use it,
-// because a fresh context has no remembered layout). Extra launch/context options pass through.
+// `initScript` / `initScripts` are seeded before the first navigation (each entry may be `fn` or `[fn, arg]`).
+// `withPage` is also passed to `fn` so a harness with several isolated scenarios can open fresh contexts on the
+// same Chromium instance instead of launching a new browser per scenario.
 export async function withBrowser(fn, options = {}) {
   const {
     playwright = null,
@@ -79,6 +146,7 @@ export async function withBrowser(fn, options = {}) {
     args = [],
     viewport = { width: 1440, height: 900 },
     deviceScaleFactor = 1,
+    permissions = null,
     initScript = null,
     initScripts = [],
     contextOptions = {},
@@ -86,14 +154,53 @@ export async function withBrowser(fn, options = {}) {
   } = options;
   const engine = playwright || requirePlaywright(options);
   const browser = await engine.chromium.launch({ headless, args, ...launchOptions });
+  const boundWithPage = (innerFn, pageOpts = {}) =>
+    withPage(browser, innerFn, { viewport, deviceScaleFactor, ...pageOpts });
   try {
-    const context = await browser.newContext({ viewport, deviceScaleFactor, ...contextOptions });
-    for (const script of [...(initScript ? [initScript] : []), ...initScripts]) await context.addInitScript(script);
+    const context = await browser.newContext({
+      viewport,
+      deviceScaleFactor,
+      ...(permissions ? { permissions } : {}),
+      ...contextOptions,
+    });
+    await applyInitScripts(context, { initScript, initScripts });
     const page = await context.newPage();
-    return await fn({ browser, context, page, playwright: engine });
+    const { pageErrors, consoleErrors } = attachPageCollectors(page);
+    return await fn({
+      browser,
+      context,
+      page,
+      pageErrors,
+      consoleErrors,
+      withPage: boundWithPage,
+      playwright: engine,
+    });
   } finally {
     await browser.close().catch(() => {});
   }
+}
+
+// Init script that replaces `window.EventSource` with an inert stub so a browser card probe's
+// fabricated `state.jobs` is not overwritten by the server's live `/api/stream` broadcast.
+export function stubEventSourceInit() {
+  window.__fakeStreams = [];
+  window.EventSource = function FakeStream(url) {
+    this.url = url;
+    this.readyState = 1;
+    this.addEventListener = () => {};
+    this.removeEventListener = () => {};
+    this.close = () => {
+      this.readyState = 2;
+    };
+    window.__fakeStreams.push(this);
+  };
+}
+
+export const FAKE_EVENT_SOURCE_SCRIPT = stubEventSourceInit;
+
+export async function installFakeEventSource(target) {
+  await target.addInitScript(stubEventSourceInit);
+  return target;
 }
 
 // A harness's first three lines, once: go to the panel, wait for the thing that proves the page rendered.

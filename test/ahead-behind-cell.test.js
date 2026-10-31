@@ -4,12 +4,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { sliceRegion } from "../tools/panel-testkit.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
-const begin = src.indexOf("// ---- ahead / behind cell");
-const end = src.indexOf("// ---- end ahead / behind cell");
-assert.ok(begin > 0 && end > begin, "the ahead / behind cell region is in public/app.js");
-const code = src.slice(src.indexOf("\n", begin) + 1, end);
+const code = sliceRegion(src, "ahead / behind cell");
 const esc = (s) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const { aheadBehindCellHtml, vsMainLine } = new Function("esc", `${code}; return { aheadBehindCellHtml, vsMainLine };`)(esc);

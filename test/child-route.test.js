@@ -7,33 +7,12 @@
 // That is two records and a boarded row, not one git command — a cut child with no ParentBook record reads as a
 // guess, and a guess may not drive a merge — so the last case asks the rollup route itself for its preview.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
-
-const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never" };
-const git = (cwd, args) =>
-  execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", env: GIT_ENV, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] })
-    .replace(/\r\n/g, "\n")
-    .trim();
-const slash = (p) => String(p || "").replace(/\\/g, "/");
-
-async function waitForRow(base, name, treePath, ms = 30_000) {
-  const until = Date.now() + ms;
-  let last = null;
-  while (Date.now() < until) {
-    const state = await (await fetch(`${base}/api/state`)).json();
-    last = (state.projects || []).find((p) => p.name === name);
-    const row = (last?.worktrees || []).find((w) => slash(w.path) === slash(treePath));
-    if (row) return row;
-    await new Promise((r) => setTimeout(r, 150));
-  }
-  throw new Error(`the board never held ${treePath}: ${JSON.stringify(last && last.worktrees)}`);
-}
+import { configureRepo, git, post, slash, startPanel, waitForRow } from "../tools/panel-testkit.mjs";
 
 test("the child route cuts from the row's branch, records the cut, and hands the rollup a rollable child", async (t) => {
   const base = await mkdtemp(path.join(os.tmpdir(), "wtgui-childroute-"));
@@ -42,9 +21,7 @@ test("the child route cuts from the row's branch, records the cut, and hands the
   await mkdir(repo, { recursive: true });
 
   git(repo, ["init", "-q", "-b", "main"]);
-  git(repo, ["config", "user.email", ["child", "local"].join(String.fromCharCode(64))]);
-  git(repo, ["config", "user.name", "Child Route"]);
-  git(repo, ["config", "commit.gpgsign", "false"]);
+  configureRepo(repo);
   await writeFile(path.join(repo, "base.txt"), "base\n", "utf8");
   git(repo, ["add", "."]);
   git(repo, ["commit", "-q", "-m", "main: base"]);

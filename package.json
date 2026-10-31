@@ -13,7 +13,7 @@
     "audit:child-process": "node tools/child-process-audit.mjs",
     "verify": "node tools/verify.mjs --list",
     "verify:all": "node tools/verify.mjs --all",
-    "test": "node --test test/*.test.js"
+    "test": "node --test --test-concurrency=4 test/*.test.js"
   },
   "engines": {
     "node": ">=22.5"

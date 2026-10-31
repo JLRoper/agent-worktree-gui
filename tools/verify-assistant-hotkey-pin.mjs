@@ -44,16 +44,15 @@
 // --piece hotkey runs only the first group (used to commit the hotkey on its own, before the pin exists) and prints a
 // PARTIAL marker instead of the OK one, so a filtered run can never be mistaken for the full proof.
 import { execSync, execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadPlaywright } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
 
 // Both spellings: --piece=hotkey and --piece hotkey.
 const argOf = (name) => {
@@ -220,27 +219,6 @@ const stopPanel = async () => {
 const state = async () => (await fetch(`${base}/api/state`)).json();
 
 // ---- the browser half ----------------------------------------------------------------------------
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
-
 let liveBrowser = null;
 async function browserPhase(pw) {
   const pageErrors = [];

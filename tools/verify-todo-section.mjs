@@ -30,16 +30,15 @@
 // node_modules/playwright, or the package itself); without one the script says BROWSER-HALF-NOT-RUN and exits non-zero
 // rather than passing on a half that never ran.
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadPlaywright } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
 
 const { TodoLists, oldestOpen, parseTodoLines, todoBlock, proposeClosed, todoKey } = await import("../lib/todos.js");
 const { Jobs } = await import("../lib/jobs.js");
@@ -480,27 +479,6 @@ const storedLists = () => {
     return {};
   }
 };
-
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
 
 async function browserPhase(pw) {
   const pageErrors = [];

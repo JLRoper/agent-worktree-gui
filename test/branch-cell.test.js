@@ -12,12 +12,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { sliceRegion } from "../tools/panel-testkit.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
-const begin = src.indexOf("// ---- branch cell: the link, and the local chip");
-const end = src.indexOf("// ---- end branch cell");
-assert.ok(begin >= 0 && end > begin, "public/app.js carries the branch-cell markers this test reads");
-const code = src.slice(src.indexOf("\n", begin) + 1, end);
+const code = sliceRegion(src, "branch cell: the link, and the local chip", "branch cell");
 
 const esc = (s) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

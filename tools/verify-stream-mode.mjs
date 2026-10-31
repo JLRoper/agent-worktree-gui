@@ -33,12 +33,11 @@
 //   `streamOn(...)` fallback — while `conversationSignature()` carries the 🧠 (thinkingOn) and not the 🌊. A card is
 //   rebuilt only when that signature changes (`renderConversation` compares `el.dataset.sig`), so the toggle can write
 //   localStorage and leave the DOM exactly as it was.
-import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { loadPlaywright } from "./browser.mjs";
 
-const require = createRequire(import.meta.url);
 const argv = process.argv.slice(2);
 const opt = (name, fallback = null) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
 const URL_ = opt("--url", "http://127.0.0.1:7331/");
@@ -442,7 +441,12 @@ async function toggle(page, thread, { watchMs, fastMs }) {
   );
 }
 
-const browser = await require("playwright").chromium.launch({ headless: true });
+const pw = loadPlaywright();
+if (!pw) {
+  console.log("BROWSER-NOT-RUN  no Playwright install found; set PANEL_PLAYWRIGHT_ROOT.");
+  process.exit(2);
+}
+const browser = await pw.chromium.launch({ headless: true });
 const ctx = await browser.newContext({ viewport: { width: 1500, height: 1100 } });
 const page = await ctx.newPage();
 page.setDefaultTimeout(15000);

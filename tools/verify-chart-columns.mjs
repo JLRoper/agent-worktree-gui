@@ -28,16 +28,11 @@
 // on 7331 and the live gateway are never touched, and the temp root is deleted at the end. Without a Playwright
 // install the script says BROWSER-NOT-RUN and exits 2 rather than passing on a half that never ran.
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
+import { loadPlaywright } from "./browser.mjs";
+import { ROOT, pickFreePort as freePort } from "./panel-testkit.mjs";
 
 let failures = 0;
 let checks = 0;
@@ -81,35 +76,7 @@ const git = (dir, args) => {
     return { ok: false, out: String((e && e.stdout) || "").trim(), err: String((e && e.message) || e) };
   }
 };
-const freePort = () =>
-  new Promise((resolve, reject) => {
-    const s = createServer();
-    s.on("error", reject);
-    s.listen(0, "127.0.0.1", () => {
-      const { port } = s.address();
-      s.close(() => resolve(port));
-    });
-  });
-
 // ---- the browser half ----------------------------------------------------------------------------
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    for (const attempt of [() => require(path.join(root, "node_modules", "playwright")), () => require(root)]) {
-      try {
-        return attempt();
-      } catch {
-        /* not there */
-      }
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
-
 const pw = loadPlaywright();
 if (!pw) {
   console.log("BROWSER-NOT-RUN  the chart's column switches were not exercised in a browser.");

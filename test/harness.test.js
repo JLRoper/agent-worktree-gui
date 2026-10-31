@@ -3,7 +3,16 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { ROOT, startPanel } from "../tools/panel-testkit.mjs";
+import {
+  ROOT,
+  createVerifier,
+  readSource,
+  sliceBetween,
+  sliceRegion,
+  slash,
+  startPanel,
+  waitFor,
+} from "../tools/panel-testkit.mjs";
 
 const pkg = JSON.parse(await readFile(path.join(ROOT, "package.json"), "utf8"));
 
@@ -29,4 +38,18 @@ test("the harness boots a real server and can stop it", async (t) => {
   assert.equal(health.ok, true);
   assert.deepEqual(health.projects, [], "the sandbox config scans an empty directory, so there are no projects");
   assert.equal(typeof health.settings.version, "string", "the running build reports its own version");
+});
+
+test("shared testkit helpers normalize paths, slice source regions, and track verifier assertions", async () => {
+  assert.equal(slash(["C:", "repo", ".worktrees", "wt"].join("\\")), "C:/repo/.worktrees/wt");
+  const sample = "// prefix\n// ---- alpha\nconst x = 1;\n// ---- end alpha\n// suffix\n";
+  assert.equal(sliceRegion(sample, "alpha").trim(), "const x = 1;");
+  assert.equal(sliceBetween(sample, "// ---- alpha", "// ---- end alpha").trim(), "// ---- alpha\nconst x = 1;");
+  assert.ok(readSource("package.json").includes('"name"'));
+  const v = createVerifier();
+  v.ok("passes", true);
+  v.check("matches", { a: 1 }, { a: 1 });
+  assert.equal(v.checks, 2);
+  assert.equal(v.failures, 0);
+  assert.equal(await waitFor(() => "ready", { timeoutMs: 200, stepMs: 10 }), "ready");
 });

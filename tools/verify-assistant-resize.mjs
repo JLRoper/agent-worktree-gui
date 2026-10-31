@@ -72,36 +72,42 @@ const still = (d) => d.dl === 0 && d.dt === 0 && d.dr === 0 && d.db === 0 && d.d
 
 // Put the float where a case wants it, open it, and hand back the frame it actually has.
 async function place(page, base, rect) {
-  await openPage(page, base, { selector: "#btn-assistant" });
+  if (!page.url().startsWith(base)) {
+    await openPage(page, base, { selector: "#btn-assistant" });
+  }
   await page.evaluate((r) => {
     if (r) localStorage.setItem("wm.assistantRect", JSON.stringify(r));
     else localStorage.removeItem("wm.assistantRect");
+    localStorage.removeItem("wtgui.zoom");
     localStorage.setItem("wm.assistantOpen", "1");
   }, rect);
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForSelector("#as-grips", { state: "attached", timeout: 30_000 });
-  await page.waitForTimeout(600);
+  await page.waitForFunction(() => typeof window.__assistantToggle === "function", null, { timeout: 10_000 });
   await page.evaluate(() => window.__assistantToggle(true));
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(100);
   return frame(page);
 }
 
 // The same, on a page zoomed by the panel's own control (`applyZoom`, persisted in `wtgui.zoom`).
 async function placeZoomed(page, base, rect, zoom) {
-  await openPage(page, base, { selector: "#btn-assistant" });
-  await page.evaluate((r) => {
+  if (!page.url().startsWith(base)) {
+    await openPage(page, base, { selector: "#btn-assistant" });
+  }
+  await page.evaluate(({ r, z }) => {
     if (r) localStorage.setItem("wm.assistantRect", JSON.stringify(r));
     else localStorage.removeItem("wm.assistantRect");
+    localStorage.setItem("wtgui.zoom", String(z));
     localStorage.setItem("wm.assistantOpen", "1");
-  }, rect);
+  }, { r: rect, z: zoom });
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForSelector("#as-grips", { state: "attached", timeout: 30_000 });
-  await page.waitForTimeout(600);
+  await page.waitForFunction(() => typeof window.__assistantToggle === "function" && typeof applyZoom === "function", null, { timeout: 10_000 });
   await page.evaluate((z) => {
     applyZoom(z);
     window.__assistantToggle(true);
   }, zoom);
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(150);
   return frame(page);
 }
 
@@ -178,261 +184,249 @@ async function main() {
   try {
     console.log(`sandbox: ${panel.base}`);
 
-    // ---- 1. nothing moves at grab time, and every grab moves only its own edge, by the drag distance
-    const shareA = await withBrowser(async ({ page }) => {
-      const seeded = await place(page, panel.base, SEED);
-      check(seeded.w === SEED.w && seeded.h === SEED.h, "the seeded frame opens at the remembered size",
-        `${seeded.w}x${seeded.h}`);
+    await withBrowser(async ({ page: mainPage, withPage }) => {
+      // ---- 1. nothing moves at grab time, and every grab moves only its own edge, by the drag distance
+      {
+        const page = mainPage;
+        const seeded = await place(page, panel.base, SEED);
+        check(seeded.w === SEED.w && seeded.h === SEED.h, "the seeded frame opens at the remembered size",
+          `${seeded.w}x${seeded.h}`);
 
-      const cases = [
-        ["se", 80, 60], ["e", 90, 0], ["s", 0, 70], ["nw", -60, -50],
-        ["n", 0, -40], ["w", -70, 0], ["ne", 60, -50], ["sw", -50, 60],
-      ];
-      for (const [dir, dx, dy] of cases) {
-        const before = await place(page, panel.base, SEED);
-        const { down, trail } = await drag(page, dir, dx, dy);
-        check(still(delta(before, down)),
-          `grab ${dir}: nothing moves on pointerdown`, JSON.stringify(delta(before, down)));
+        const cases = [
+          ["se", 80, 60], ["e", 90, 0], ["s", 0, 70], ["nw", -60, -50],
+          ["n", 0, -40], ["w", -70, 0], ["ne", 60, -50], ["sw", -50, 60],
+        ];
+        for (const [dir, dx, dy] of cases) {
+          const before = await place(page, panel.base, SEED);
+          const { down, trail } = await drag(page, dir, dx, dy);
+          check(still(delta(before, down)),
+            `grab ${dir}: nothing moves on pointerdown`, JSON.stringify(delta(before, down)));
 
-        const after = trail[trail.length - 1];
-        const moved = delta(before, after);
-        const want = {
-          dl: dx < 0 && dir.includes("w") ? dx : 0,
-          dt: dy < 0 && dir.includes("n") ? dy : 0,
-          dr: dx > 0 && dir.includes("e") ? dx : 0,
-          db: dy > 0 && dir.includes("s") ? dy : 0,
-        };
-        check(["dl", "dt", "dr", "db"].every((k) => Math.abs(moved[k] - want[k]) <= 1),
-          `grab ${dir}: moves only its own edge, by the drag distance`, `moved ${JSON.stringify(moved)} wanted ${JSON.stringify(want)}`);
+          const after = trail[trail.length - 1];
+          const moved = delta(before, after);
+          const want = {
+            dl: dx < 0 && dir.includes("w") ? dx : 0,
+            dt: dy < 0 && dir.includes("n") ? dy : 0,
+            dr: dx > 0 && dir.includes("e") ? dx : 0,
+            db: dy > 0 && dir.includes("s") ? dy : 0,
+          };
+          check(["dl", "dt", "dr", "db"].every((k) => Math.abs(moved[k] - want[k]) <= 1),
+            `grab ${dir}: moves only its own edge, by the drag distance`, `moved ${JSON.stringify(moved)} wanted ${JSON.stringify(want)}`);
 
-        const gaps = trail.map((f) => offsets(f, dir, f.mx, f.my));
-        const xs = gaps.map((g) => g.x).filter((v) => v !== undefined);
-        const ys = gaps.map((g) => g.y).filter((v) => v !== undefined);
-        const drift = Math.max(
-          xs.length ? Math.max(...xs) - Math.min(...xs) : 0,
-          ys.length ? Math.max(...ys) - Math.min(...ys) : 0,
-        );
-        check(drift <= 1, `grab ${dir}: keeps a constant offset from the pointer`, `drift ${drift.toFixed(1)}px`);
+          const gaps = trail.map((f) => offsets(f, dir, f.mx, f.my));
+          const xs = gaps.map((g) => g.x).filter((v) => v !== undefined);
+          const ys = gaps.map((g) => g.y).filter((v) => v !== undefined);
+          const drift = Math.max(
+            xs.length ? Math.max(...xs) - Math.min(...xs) : 0,
+            ys.length ? Math.max(...ys) - Math.min(...ys) : 0,
+          );
+          check(drift <= 1, `grab ${dir}: keeps a constant offset from the pointer`, `drift ${drift.toFixed(1)}px`);
+        }
       }
-    }, { viewport: VIEW });
 
-    // ---- 1b. a click on a grab is not a gesture: no movement, no memory, nothing opened
-    const shareClick = await withBrowser(async ({ page }) => {
-      await openPage(page, panel.base, { selector: "#btn-assistant" });
-      await page.evaluate(() => {
-        localStorage.removeItem("wm.assistantRect");
-        localStorage.setItem("wm.assistantOpen", "1");
-      });
-      await page.reload({ waitUntil: "domcontentloaded" });
-      await page.waitForSelector("#as-grips", { state: "attached", timeout: 30_000 });
-      await page.waitForTimeout(600);
-      await page.evaluate(() => window.__assistantToggle(true));
-      await page.waitForTimeout(250);
+      // ---- 1b. a click on a grab is not a gesture: no movement, no memory, nothing opened
+      {
+        const page = mainPage;
+        await place(page, panel.base, null);
 
-      const before = await frame(page);
-      const storedBefore = await page.evaluate(() => localStorage.getItem("wm.assistantRect"));
-      check(storedBefore === null, "click case: nothing is remembered before the press", String(storedBefore));
+        const before = await frame(page);
+        const storedBefore = await page.evaluate(() => localStorage.getItem("wm.assistantRect"));
+        check(storedBefore === null, "click case: nothing is remembered before the press", String(storedBefore));
 
-      // press on the corner centre, hold, release: zero pointer movement
-      const b = await gripBox(page, "se");
-      const sx = b.x + b.width / 2, sy = b.y + b.height / 2;
-      await page.mouse.move(sx, sy);
-      await page.waitForTimeout(150);
-      await page.mouse.down();
-      await page.waitForTimeout(200);
-      const held = await frame(page);
-      const heldClasses = await page.evaluate(() => document.getElementById("assistant").className);
-      await page.mouse.up();
-      await page.waitForTimeout(500);
-      const after = await frame(page);
-      const storedAfter = await page.evaluate(() => localStorage.getItem("wm.assistantRect"));
+        // press on the corner centre, hold, release: zero pointer movement
+        const b = await gripBox(page, "se");
+        const sx = b.x + b.width / 2, sy = b.y + b.height / 2;
+        await page.mouse.move(sx, sy);
+        await page.waitForTimeout(80);
+        await page.mouse.down();
+        await page.waitForTimeout(100);
+        const held = await frame(page);
+        const heldClasses = await page.evaluate(() => document.getElementById("assistant").className);
+        await page.mouse.up();
+        await page.waitForTimeout(200);
+        const after = await frame(page);
+        const storedAfter = await page.evaluate(() => localStorage.getItem("wm.assistantRect"));
 
-      check(still(delta(before, held)) && still(delta(before, after)),
-        "click case: a zero-movement click does not resize or jump the frame",
-        `held ${JSON.stringify(delta(before, held))} after ${JSON.stringify(delta(before, after))}`);
-      check(!/is-dragging/.test(heldClasses),
-        "click case: a zero-movement click does not start a drag", heldClasses);
-      check(storedAfter === null,
-        "click case: a zero-movement click does not persist a rect", String(storedAfter));
+        check(still(delta(before, held)) && still(delta(before, after)),
+          "click case: a zero-movement click does not resize or jump the frame",
+          `held ${JSON.stringify(delta(before, held))} after ${JSON.stringify(delta(before, after))}`);
+        check(!/is-dragging/.test(heldClasses),
+          "click case: a zero-movement click does not start a drag", heldClasses);
+        check(storedAfter === null,
+          "click case: a zero-movement click does not persist a rect", String(storedAfter));
 
-      // with every turn folded, a click must not open the newest turn either
-      await page.evaluate(() => {
-        for (const head of document.querySelectorAll("#as-chat .turn:not(.folded) > .turn-head")) head.click();
-      });
-      await page.waitForTimeout(900);
-      const foldedBefore = await page.evaluate(
-        () => document.querySelectorAll("#as-chat > .job > .job-body > .turn.folded").length);
-      const b2 = await gripBox(page, "se");
-      await page.mouse.move(b2.x + b2.width / 2, b2.y + b2.height / 2);
-      await page.mouse.down();
-      await page.waitForTimeout(150);
-      await page.mouse.up();
-      await page.waitForTimeout(600);
-      const foldedAfter = await page.evaluate(
-        () => document.querySelectorAll("#as-chat > .job > .job-body > .turn.folded").length);
-      check(foldedAfter === foldedBefore,
-        "click case: a click with every turn folded opens nothing",
-        `${foldedBefore} folded -> ${foldedAfter}`);
-    }, { viewport: VIEW });
+        // with every turn folded, a click must not open the newest turn either
+        await page.evaluate(() => {
+          for (const head of document.querySelectorAll("#as-chat .turn:not(.folded) > .turn-head")) head.click();
+        });
+        await page.waitForTimeout(300);
+        const foldedBefore = await page.evaluate(
+          () => document.querySelectorAll("#as-chat > .job > .job-body > .turn.folded").length);
+        const b2 = await gripBox(page, "se");
+        await page.mouse.move(b2.x + b2.width / 2, b2.y + b2.height / 2);
+        await page.mouse.down();
+        await page.waitForTimeout(80);
+        await page.mouse.up();
+        await page.waitForTimeout(250);
+        const foldedAfter = await page.evaluate(
+          () => document.querySelectorAll("#as-chat > .job > .job-body > .turn.folded").length);
+        check(foldedAfter === foldedBefore,
+          "click case: a click with every turn folded opens nothing",
+          `${foldedBefore} folded -> ${foldedAfter}`);
+      }
 
-    // ---- 2. the scrollbar input: a visual viewport 11px narrower than the layout viewport must not move the frame
-    const scrollbarShim = () => {
-      Object.defineProperty(window, "visualViewport", {
-        configurable: true,
-        value: { width: window.innerWidth - 11, height: window.innerHeight, offsetLeft: 0, offsetTop: 0, scale: 1 },
-      });
-    };
-    const shareB = await withBrowser(async ({ page }) => {
-      // A frame parked on the LAYOUT viewport's 8px edge is 3px outside the emulated visual viewport.
-      const edge = await page.evaluate(() => ({ vw: document.documentElement.clientWidth, vh: document.documentElement.clientHeight }));
-      const rect = { x: edge.vw - EDGE - SEED.w, y: 120, w: SEED.w, h: SEED.h };
-      const before = await place(page, panel.base, rect);
-      const b = await gripBox(page, "se");
-      const sx = b.x + b.width / 2, sy = b.y + b.height / 2;
-      await page.mouse.move(sx, sy);
-      await page.mouse.down();
-      const down = await frame(page);
-      await page.mouse.move(sx + 1, sy);
-      await page.waitForTimeout(40);
-      const out = await frame(page);
-      await page.mouse.move(sx - 20, sy);
-      await page.waitForTimeout(40);
-      const back = await frame(page);
-      await page.mouse.up();
-
-      check(before.r === edge.vw - EDGE, "frame sits on the layout viewport's 8px edge", `right=${before.r} edge=${edge.vw - EDGE}`);
-      check(still(delta(before, down)), "scrollbar case: nothing moves on pointerdown", JSON.stringify(delta(before, down)));
-      check(out.w >= before.w - 1, "scrollbar case: pushing at the edge does not snap the frame inward",
-        `width ${before.w} -> ${out.w} (old clamp here snapped it by the scrollbar width)`);
-      check(Math.abs((before.w - back.w) - 20) <= 1, "scrollbar case: the frame follows the pointer back in",
-        `width ${out.w} -> ${back.w}`);
-    }, { viewport: VIEW, initScripts: [scrollbarShim] });
-
-    // ---- 3. the clamp: the frame stops on the 8px edge and follows the pointer back immediately
-    const shareC = await withBrowser(async ({ page }) => {
-      const before = await place(page, panel.base, SEED);
-      const b = await gripBox(page, "se");
-      const sx = b.x + 8, sy = b.y + 8;
-      await page.mouse.move(sx, sy);
-      await page.mouse.down();
-      await page.mouse.move(sx + 700, sy + 700, { steps: 20 });
-      await page.waitForTimeout(60);
-      const held = await frame(page);
-      const edge = await page.evaluate(() => ({ vw: document.documentElement.clientWidth, vh: document.documentElement.clientHeight }));
-      check(held.r === edge.vw - EDGE && held.b === edge.vh - EDGE, "the frame stops on the 8px viewport edge",
-        `right=${held.r}/${edge.vw - EDGE} bottom=${held.b}/${edge.vh - EDGE} (from ${before.w}x${before.h})`);
-      await page.mouse.move(sx + 680, sy + 680, { steps: 2 });
-      await page.waitForTimeout(60);
-      const back = await frame(page);
-      check(held.r - back.r === 20 && held.b - back.b === 20, "and follows the pointer back out of the edge at once",
-        `right ${held.r}->${back.r} bottom ${held.b}->${back.b}`);
-      await page.mouse.up();
-      const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("wm.assistantRect") || "null"));
-      check(stored && Math.abs(stored.w - back.w) <= 1 && Math.abs(stored.h - back.h) <= 1,
-        "the released frame is the remembered one", JSON.stringify(stored));
-    }, { viewport: VIEW });
-
-    // ---- 4. a frame bigger than the room left (remembered on another screen) is not snapped by the grab
-    const shareD = await withBrowser(async ({ page }) => {
-      const edge = await page.evaluate(() => ({ vw: document.documentElement.clientWidth, vh: document.documentElement.clientHeight }));
-      const big = { x: EDGE, y: EDGE, w: edge.vw - 2 * EDGE + 120, h: edge.vh - 2 * EDGE + 120 };
-      const before = await place(page, panel.base, big);
-      check(before.w <= edge.vw - 2 * EDGE && before.h <= edge.vh - 2 * EDGE,
-        "a stored rect larger than the window is trimmed to fit on open", `${before.w}x${before.h}`);
-      const { down } = await drag(page, "se", 1, 1, 2);
-      check(delta(before, down).dl === 0 && delta(before, down).dt === 0, "and grabbing it does not move it",
-        JSON.stringify(delta(before, down)));
-      const res = await drag(page, "e", -60, 0, 3);
-      const shrunk = res.trail[res.trail.length - 1];
-      check(Math.abs((before.w - shrunk.w) - 60) <= 1, "pulling the edge in shrinks it by the drag distance",
-        `${before.w} -> ${shrunk.w}`);
-      const floor = await drag(page, "e", -2000, 0, 6);
-      check(floor.trail[floor.trail.length - 1].w === MIN_W, "and the 340px floor holds", `w=${floor.trail[floor.trail.length - 1].w}`);
-      void MIN_H;
-    }, { viewport: VIEW });
-
-    // ---- 5. the room a taller panel gains goes INTO the open turn's console, not into blank panel above the turns
-    const shareE = await withBrowser(async ({ page }) => {
-      const read = () => page.evaluate(() => {
-        const body = document.querySelector("#as-chat > .job > .job-body");
-        if (!body) return null;
-        const turns = [...body.querySelectorAll(":scope > .turn")];
-        const open = turns.filter((t) => !t.classList.contains("folded"));
-        const br = body.getBoundingClientRect();
-        const first = turns[0].getBoundingClientRect();
-        const last = open.length ? open[open.length - 1] : null;
-        const pre = last ? last.querySelector("pre.job-out") : null;
-        return {
-          gap: Math.round(first.top - br.top + body.scrollTop),
-          open: open.length,
-          slackOnLast: Boolean(last && last.classList.contains("is-slack")),
-          slackCount: turns.filter((t) => t.classList.contains("is-slack")).length,
-          consoleH: pre ? Math.round(pre.getBoundingClientRect().height) : 0,
-          consoleContent: pre ? pre.scrollHeight : 0,
-        };
-      });
-      const pull = async (dy, steps = 8) => {
-        const b = await gripBox(page, "s");
+      // ---- 2. the scrollbar input: a visual viewport 11px narrower than the layout viewport must not move the frame
+      const scrollbarShim = () => {
+        Object.defineProperty(window, "visualViewport", {
+          configurable: true,
+          value: { width: window.innerWidth - 11, height: window.innerHeight, offsetLeft: 0, offsetTop: 0, scale: 1 },
+        });
+      };
+      await withPage(async ({ page }) => {
+        // A frame parked on the LAYOUT viewport's 8px edge is 3px outside the emulated visual viewport.
+        const edge = await page.evaluate(() => ({ vw: document.documentElement.clientWidth, vh: document.documentElement.clientHeight }));
+        const rect = { x: edge.vw - EDGE - SEED.w, y: 120, w: SEED.w, h: SEED.h };
+        const before = await place(page, panel.base, rect);
+        const b = await gripBox(page, "se");
         const sx = b.x + b.width / 2, sy = b.y + b.height / 2;
         await page.mouse.move(sx, sy);
         await page.mouse.down();
-        for (let i = 1; i <= steps; i += 1) {
-          await page.mouse.move(sx, sy + (dy * i) / steps);
-          await page.waitForTimeout(25);
-        }
+        const down = await frame(page);
+        await page.mouse.move(sx + 1, sy);
+        await page.waitForTimeout(40);
+        const out = await frame(page);
+        await page.mouse.move(sx - 20, sy);
+        await page.waitForTimeout(40);
+        const back = await frame(page);
         await page.mouse.up();
+
+        check(before.r === edge.vw - EDGE, "frame sits on the layout viewport's 8px edge", `right=${before.r} edge=${edge.vw - EDGE}`);
+        check(still(delta(before, down)), "scrollbar case: nothing moves on pointerdown", JSON.stringify(delta(before, down)));
+        check(out.w >= before.w - 1, "scrollbar case: pushing at the edge does not snap the frame inward",
+          `width ${before.w} -> ${out.w} (old clamp here snapped it by the scrollbar width)`);
+        check(Math.abs((before.w - back.w) - 20) <= 1, "scrollbar case: the frame follows the pointer back in",
+          `width ${out.w} -> ${back.w}`);
+      }, { viewport: VIEW, initScripts: [scrollbarShim] });
+
+      // ---- 3. the clamp: the frame stops on the 8px edge and follows the pointer back immediately
+      {
+        const page = mainPage;
+        const before = await place(page, panel.base, SEED);
+        const b = await gripBox(page, "se");
+        const sx = b.x + 8, sy = b.y + 8;
+        await page.mouse.move(sx, sy);
+        await page.mouse.down();
+        await page.mouse.move(sx + 700, sy + 700, { steps: 20 });
+        await page.waitForTimeout(60);
+        const held = await frame(page);
+        const edge = await page.evaluate(() => ({ vw: document.documentElement.clientWidth, vh: document.documentElement.clientHeight }));
+        check(held.r === edge.vw - EDGE && held.b === edge.vh - EDGE, "the frame stops on the 8px viewport edge",
+          `right=${held.r}/${edge.vw - EDGE} bottom=${held.b}/${edge.vh - EDGE} (from ${before.w}x${before.h})`);
+        await page.mouse.move(sx + 680, sy + 680, { steps: 2 });
+        await page.waitForTimeout(60);
+        const back = await frame(page);
+        check(held.r - back.r === 20 && held.b - back.b === 20, "and follows the pointer back out of the edge at once",
+          `right ${held.r}->${back.r} bottom ${held.b}->${back.b}`);
+        await page.mouse.up();
+        const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("wm.assistantRect") || "null"));
+        check(stored && Math.abs(stored.w - back.w) <= 1 && Math.abs(stored.h - back.h) <= 1,
+          "the released frame is the remembered one", JSON.stringify(stored));
+      }
+
+      // ---- 4. a frame bigger than the room left (remembered on another screen) is not snapped by the grab
+      {
+        const page = mainPage;
+        const edge = await page.evaluate(() => ({ vw: document.documentElement.clientWidth, vh: document.documentElement.clientHeight }));
+        const big = { x: EDGE, y: EDGE, w: edge.vw - 2 * EDGE + 120, h: edge.vh - 2 * EDGE + 120 };
+        const before = await place(page, panel.base, big);
+        check(before.w <= edge.vw - 2 * EDGE && before.h <= edge.vh - 2 * EDGE,
+          "a stored rect larger than the window is trimmed to fit on open", `${before.w}x${before.h}`);
+        const { down } = await drag(page, "se", 1, 1, 2);
+        check(delta(before, down).dl === 0 && delta(before, down).dt === 0, "and grabbing it does not move it",
+          JSON.stringify(delta(before, down)));
+        const res = await drag(page, "e", -60, 0, 3);
+        const shrunk = res.trail[res.trail.length - 1];
+        check(Math.abs((before.w - shrunk.w) - 60) <= 1, "pulling the edge in shrinks it by the drag distance",
+          `${before.w} -> ${shrunk.w}`);
+        const floor = await drag(page, "e", -2000, 0, 6);
+        check(floor.trail[floor.trail.length - 1].w === MIN_W, "and the 340px floor holds", `w=${floor.trail[floor.trail.length - 1].w}`);
+        void MIN_H;
+      }
+
+      // ---- 5. the room a taller panel gains goes INTO the open turn's console, not into blank panel above the turns
+      await withPage(async ({ page }) => {
+        const read = () => page.evaluate(() => {
+          const body = document.querySelector("#as-chat > .job > .job-body");
+          if (!body) return null;
+          const turns = [...body.querySelectorAll(":scope > .turn")];
+          const open = turns.filter((t) => !t.classList.contains("folded"));
+          const br = body.getBoundingClientRect();
+          const first = turns[0].getBoundingClientRect();
+          const last = open.length ? open[open.length - 1] : null;
+          const pre = last ? last.querySelector("pre.job-out") : null;
+          return {
+            gap: Math.round(first.top - br.top + body.scrollTop),
+            open: open.length,
+            slackOnLast: Boolean(last && last.classList.contains("is-slack")),
+            slackCount: turns.filter((t) => t.classList.contains("is-slack")).length,
+            consoleH: pre ? Math.round(pre.getBoundingClientRect().height) : 0,
+            consoleContent: pre ? pre.scrollHeight : 0,
+          };
+        });
+        const pull = async (dy, steps = 8) => {
+          const b = await gripBox(page, "s");
+          const sx = b.x + b.width / 2, sy = b.y + b.height / 2;
+          await page.mouse.move(sx, sy);
+          await page.mouse.down();
+          for (let i = 1; i <= steps; i += 1) {
+            await page.mouse.move(sx, sy + (dy * i) / steps);
+            await page.waitForTimeout(20);
+          }
+          await page.mouse.up();
+          await page.waitForTimeout(150);
+        };
+
+        // tall enough that the transcript is not already scrolling: the room has somewhere to go
+        await place(page, panel.base, { x: 200, y: 60, w: 700, h: 900 });
+        await page.waitForTimeout(150);
+        const before = await read();
+        check(before.open === 1 && before.slackOnLast && before.slackCount === 1,
+          "the newest turn is open and owns the room", JSON.stringify(before));
+
+        await pull(200);
+        const after = await read();
+        check(after.consoleH - before.consoleH === 200,
+          "growing the float by 200px grows the open console by 200px",
+          `console ${before.consoleH} -> ${after.consoleH}`);
+        check(after.gap === 0, "and no blank panel opens above the turns", `gap ${before.gap} -> ${after.gap}`);
+
+        // everything folded: the spacer owns the room — then a resize brings the newest turn back to take it
+        await page.evaluate(() => {
+          for (const head of document.querySelectorAll("#as-chat .turn:not(.folded) > .turn-head")) head.click();
+        });
         await page.waitForTimeout(300);
-      };
+        const folded = await read();
+        check(folded.open === 0 && folded.gap > 100, "with every turn folded the room is blank panel", JSON.stringify(folded));
 
-      // tall enough that the transcript is not already scrolling: the room has somewhere to go
-      await place(page, panel.base, { x: 200, y: 60, w: 700, h: 900 });
-      await page.waitForTimeout(400);
-      const before = await read();
-      check(before.open === 1 && before.slackOnLast && before.slackCount === 1,
-        "the newest turn is open and owns the room", JSON.stringify(before));
+        await pull(120);
+        const reopened = await read();
+        check(reopened.open === 1 && reopened.gap === 0 && reopened.consoleH > 100,
+          "a resize with nothing open opens the newest turn and gives it the room", JSON.stringify(reopened));
 
-      await pull(200);
-      const after = await read();
-      check(after.consoleH - before.consoleH === 200,
-        "growing the float by 200px grows the open console by 200px",
-        `console ${before.consoleH} -> ${after.consoleH}`);
-      check(after.gap === 0, "and no blank panel opens above the turns", `gap ${before.gap} -> ${after.gap}`);
+        // two open: the room belongs to the LOWEST of them, the one at the foot of the transcript
+        await page.evaluate(() => {
+          const foldedHeads = [...document.querySelectorAll("#as-chat .turn.folded > .turn-head")];
+          if (foldedHeads.length) foldedHeads[foldedHeads.length - 1].click();
+        });
+        await page.waitForTimeout(300);
+        const two = await read();
+        check(two.open === 2 && two.slackOnLast && two.slackCount === 1,
+          "with two turns open only the lowest one takes the room", JSON.stringify(two));
+      }, { viewport: { width: 1400, height: 1200 } });
 
-      // everything folded: the spacer owns the room — then a resize brings the newest turn back to take it
-      await page.evaluate(() => {
-        for (const head of document.querySelectorAll("#as-chat .turn:not(.folded) > .turn-head")) head.click();
-      });
-      await page.waitForTimeout(900);
-      const folded = await read();
-      check(folded.open === 0 && folded.gap > 100, "with every turn folded the room is blank panel", JSON.stringify(folded));
-
-      await pull(120);
-      const reopened = await read();
-      check(reopened.open === 1 && reopened.gap === 0 && reopened.consoleH > 100,
-        "a resize with nothing open opens the newest turn and gives it the room", JSON.stringify(reopened));
-
-      // two open: the room belongs to the LOWEST of them, the one at the foot of the transcript
-      await page.evaluate(() => {
-        const foldedHeads = [...document.querySelectorAll("#as-chat .turn.folded > .turn-head")];
-        if (foldedHeads.length) foldedHeads[foldedHeads.length - 1].click();
-      });
-      await page.waitForTimeout(900);
-      const two = await read();
-      check(two.open === 2 && two.slackOnLast && two.slackCount === 1,
-        "with two turns open only the lowest one takes the room", JSON.stringify(two));
-      void shareA; void shareB; void shareC; void shareD;
-    }, { viewport: { width: 1400, height: 1200 } });
-
-    // ---- 6. the same gesture at a page zoom other than 100%
-    //
-    // The panel's own zoom (`applyZoom`, persisted in `wtgui.zoom`) scales LAYOUT but not client coordinates: at
-    // 110% a 380px-wide float measures 418px, `clientX` is a client-pixel number, and a length written to
-    // `style.width` is layout px that renders 10% larger. The gesture used to write measurements straight back
-    // into the style, so a 120px corner drag grew the frame 174px (304px at 130%), its corner sat 66px (210px)
-    // from the pointer and drifted further with every step, and the frame could be carried outside the window.
-    // Every length written is now divided by the zoom, so the corner keeps a constant offset at every zoom.
-    for (const zoom of [110, 130]) {
-      await withBrowser(async ({ page }) => {
+      // ---- 6. the same gesture at a page zoom other than 100%
+      for (const zoom of [110, 130]) {
+        const page = mainPage;
         const before = await placeZoomed(page, panel.base, { x: 120, y: 90, w: 380, h: 330 }, zoom);
         const { down, trail } = await drag(page, "se", 120, 120, 8);
         check(still(delta(before, down)),
@@ -472,20 +466,21 @@ async function main() {
           JSON.stringify(delta(preMove, held)));
         check(Math.abs((preMove.l - movedTo.l) - 48) <= 1 && Math.abs((movedTo.t - preMove.t) - 30) <= 1,
           `zoom ${zoom}%: the header drag moves the frame with the pointer`,
-          `moved ${(preMove.l - movedTo.l).toFixed(1)},${(movedTo.t - preMove.t).toFixed(1)} wanted 48,30`);
-      }, { viewport: VIEW });
-    }
+          `moved ${(preMove.l - movedTo.l).toFixed(1)},${(movedTo.t - movedTo.t).toFixed(1)} wanted 48,30`);
+      }
 
-    // ---- 6b. at 130% the stylesheet's own frame is taller than the window, so the default has to be clamped
-    await withBrowser(async ({ page }) => {
-      const opened = await placeZoomed(page, panel.base, null, 130);
-      check(opened.b <= opened.vh && opened.r <= opened.vw,
-        "zoom 130%: the stylesheet's own frame opens inside the window",
-        `${opened.w}x${opened.h} at ${opened.l},${opened.t}, bottom ${opened.b}/${opened.vh}`);
-      const b = await gripBox(page, "se");
-      check(Boolean(b) && b.y + b.height <= opened.vh,
-        "zoom 130%: and its bottom-right grab is on screen to be grabbed", JSON.stringify(b));
-    }, { viewport: VIEW });
+      // ---- 6b. at 130% the stylesheet's own frame is taller than the window, so the default has to be clamped
+      {
+        const page = mainPage;
+        const opened = await placeZoomed(page, panel.base, null, 130);
+        check(opened.b <= opened.vh && opened.r <= opened.vw,
+          "zoom 130%: the stylesheet's own frame opens inside the window",
+          `${opened.w}x${opened.h} at ${opened.l},${opened.t}, bottom ${opened.b}/${opened.vh}`);
+        const b = await gripBox(page, "se");
+        check(Boolean(b) && b.y + b.height <= opened.vh,
+          "zoom 130%: and its bottom-right grab is on screen to be grabbed", JSON.stringify(b));
+      }
+    }, { viewport: VIEW, playwright });
 
   } finally {
     await panel.stop();

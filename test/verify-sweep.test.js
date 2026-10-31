@@ -6,56 +6,36 @@
 // goes - the folder to the Recycle Bin, git's record pruned, the row off the board - and the card says which word it
 // read. This is the half of the feature a reader actually feels, and the half no module test can see.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
+import { configureRepo, git, post, slash, startPanel, waitForState } from "../tools/panel-testkit.mjs";
 
-const git = (cwd, args) =>
-  execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim();
-const slash = (p) => String(p || "").replace(/\\/g, "/");
 const exists = (p) => stat(p).then((s) => s.isDirectory()).catch(() => false);
-
-async function waitFor(base, predicate, what, { timeout = 40_000, interval = 500 } = {}) {
-  const until = Date.now() + timeout;
-  let last = null;
-  for (;;) {
-    last = await (await fetch(`${base}/api/state`)).json();
-    if (predicate(last)) return last;
-    if (Date.now() > until) {
-      const projects = (last?.projects || []).map((p) => `${p.name} (${(p.worktrees || []).length} rows)`).join(", ");
-      throw new Error(`timed out waiting for ${what}; projects: ${projects || "none"}`);
-    }
-    await new Promise((r) => setTimeout(r, interval));
-  }
-}
 
 test("a settled LANDED: YES card deletes its worktree, and a PARTIAL one does not", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "wtgui-sweep-"));
   const storeDir = await mkdtemp(path.join(os.tmpdir(), "wtgui-sweep-store-"));
   const repo = path.join(root, "proj");
   await mkdir(repo, { recursive: true });
-  git(repo, ["init", "-b", "main"]);
-  git(repo, ["config", "user.email", "check@local"]);
-  git(repo, ["config", "user.name", "Check"]);
-  git(repo, ["config", "commit.gpgsign", "false"]);
+  git(repo, ["init", "-q", "-b", "main"]);
+  configureRepo(repo);
   await writeFile(path.join(repo, "README.md"), "# test\n", "utf8");
   git(repo, ["add", "."]);
-  git(repo, ["commit", "-m", "init"]);
+  git(repo, ["commit", "-q", "-m", "init"]);
 
   // Two trees: one the answer says is landed, one the answer says is only partly there.
   const landedTree = path.join(repo, ".worktrees", "wt-landed");
-  git(repo, ["worktree", "add", "-b", "feat/landed", landedTree]);
+  git(repo, ["worktree", "add", "-q", "-b", "feat/landed", landedTree]);
   await writeFile(path.join(landedTree, "work.txt"), "landed\n", "utf8");
   git(landedTree, ["add", "."]);
-  git(landedTree, ["commit", "-m", "feat: the work"]);
+  git(landedTree, ["commit", "-q", "-m", "feat: the work"]);
   const partialTree = path.join(repo, ".worktrees", "wt-partial");
-  git(repo, ["worktree", "add", "-b", "feat/partial", partialTree]);
+  git(repo, ["worktree", "add", "-q", "-b", "feat/partial", partialTree]);
   await writeFile(path.join(partialTree, "half.txt"), "half\n", "utf8");
   git(partialTree, ["add", "."]);
-  git(partialTree, ["commit", "-m", "feat: half the work"]);
+  git(partialTree, ["commit", "-q", "-m", "feat: half the work"]);
 
   // The job store a previous panel would have written the moment those two runs settled. `labels.json` is the
   // panel's own display name for a thread - that is where CHECKING MAIN lives, not on the job.
@@ -109,10 +89,10 @@ test("a settled LANDED: YES card deletes its worktree, and a PARTIAL one does no
   // Discovery first, and only the tree that must SURVIVE is waited for: the landed row may already be gone by the time
   // this reads the board (the sweep's boot pass is 6 s in, and a loaded box can take longer than that to scan), and
   // waiting for a row that is being deleted is a race this test would lose for the right reason.
-  await waitFor(panel.base, (s) => Boolean(rowOf(s, partialTree)), "the worktrees on the board");
+  await waitForState(panel.base, (s) => Boolean(rowOf(s, partialTree)), "the worktrees on the board", { timeout: 40_000 });
 
-  // The answer is acted on within one sweep tick (10 s), with a boot pass 6 s in.
-  const after = await waitFor(panel.base, (s) => !rowOf(s, landedTree), "the landed row to be swept off the board", { timeout: 60_000 });
+  // The answer is acted on as soon as the scan completes (or within one sweep tick).
+  const after = await waitForState(panel.base, (s) => !rowOf(s, landedTree), "the landed row to be swept off the board", { timeout: 60_000 });
   assert.equal(await exists(landedTree), false, "the landed worktree's folder is gone (Recycle Bin or git's removal)");
   assert.equal(/feat\/landed/.test(git(repo, ["worktree", "list", "--porcelain"])), false, "git no longer lists the removed tree");
   assert.ok(rowOf(after, partialTree), "a LANDED: PARTIAL answer deletes nothing: its tree is still a row");

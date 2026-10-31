@@ -33,16 +33,15 @@
 // holding node_modules/playwright, or the package itself); without one the script says BROWSER-HALF-NOT-RUN and
 // exits 2 rather than passing on a half that never ran.
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { installFakeEventSource, loadPlaywright } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
 const LIVE = String(process.env.PANEL_URL || "").replace(/\/+$/, "");
 
 let failures = 0;
@@ -165,27 +164,6 @@ async function stopSandbox() {
 }
 
 // ---- the browser half ----------------------------------------------------------------------------
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
-
 const cardSel = `.job[data-thread="${THREAD}"]`;
 const boxSel = `${cardSel} .reply-box`;
 const queueBtnSel = `${cardSel} [data-queue-reply]`;
@@ -203,6 +181,7 @@ async function browserPhase(pw) {
   // nothing to do with this test. With no stream and a stubbed fetch, this probe's state.jobs is the only source
   // of cards on the page, and every request the page would otherwise make is recorded instead of sent.
   const realSnapshot = await fetch(`${base}/api/state`).then((r) => r.json());
+  await installFakeEventSource(context);
   await context.addInitScript(
     ({ snapshot, thread }) => {
       const realFetch = window.fetch.bind(window);
@@ -250,13 +229,6 @@ async function browserPhase(pw) {
         }
         return json({ ok: true });
       };
-      const FakeStream = function () {
-        this.readyState = 1;
-      };
-      FakeStream.prototype.addEventListener = function () {};
-      FakeStream.prototype.removeEventListener = function () {};
-      FakeStream.prototype.close = function () {};
-      window.EventSource = FakeStream;
 
       // The three states the brief names. They are the page's own conversation objects, rendered by the shipped
       // renderJobs/conversationHtml — the card is the real thing, not a fixture of the markup.

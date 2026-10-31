@@ -29,16 +29,15 @@
 // The browser half needs a Playwright install; without one this prints BROWSER-HALF-NOT-RUN, counts a
 // failure and exits non-zero rather than passing on a half that never ran.
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { installFakeEventSource, loadPlaywright } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
 const LIVE = String(process.env.PANEL_URL || "").replace(/\/+$/, "");
 
 let failures = 0;
@@ -157,27 +156,6 @@ async function stopSandbox() {
   await sleep(300);
 }
 
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
-
 // ---- the fixture, and what the reader is owed for it ----------------------------------------------
 // A turn's console: a text line, one tool burst (a call, its result header and two result lines), a text
 // line. `⚡` is the glyph the burst row falls back to when the gateway's line carries none.
@@ -200,6 +178,7 @@ async function browserPhase(pw) {
   const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
   await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: base });
   const realSnapshot = await fetch(`${base}/api/state`).then((r) => r.json());
+  await installFakeEventSource(context);
   await context.addInitScript(
     ({ snapshot, consoleText, callText, bashText, lastText, thinkBlocks }) => {
       const realFetch = window.fetch.bind(window);
@@ -215,13 +194,6 @@ async function browserPhase(pw) {
         }
         return json({ ok: true });
       };
-      const FakeStream = function () {
-        this.readyState = 1;
-      };
-      FakeStream.prototype.addEventListener = function () {};
-      FakeStream.prototype.removeEventListener = function () {};
-      FakeStream.prototype.close = function () {};
-      window.EventSource = FakeStream;
       // The Settings toggle the brief names: thinking on for this session.
       try {
         localStorage.setItem("wtgui.think", "1");

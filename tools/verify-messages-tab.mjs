@@ -37,17 +37,16 @@
 // throwaway HERMES_HOME. The browser half needs a Playwright install; without one the script says
 // BROWSER-HALF-NOT-RUN and exits 2 rather than passing on a half that never ran.
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildMessages, MESSAGE_CAP, MESSAGE_WINDOW_DAYS } from "../lib/assistant/messages.js";
+import { loadPlaywright } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
 const LIVE = String(process.env.PANEL_URL || "").replace(/\/+$/, "");
 
 let failures = 0;
@@ -451,27 +450,6 @@ try {
 }
 
 // ---- the browser half ----------------------------------------------------------------------------
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
-
 const tabSel = '#as-tabs [data-as-tab="messages"]';
 const paneSel = "#as-messages";
 

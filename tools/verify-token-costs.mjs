@@ -45,19 +45,14 @@
 // The browser half needs a Playwright install (PANEL_PLAYWRIGHT_ROOT, or the repo's own node_modules); without
 // one the script says BROWSER-HALF-NOT-RUN and exits non-zero rather than passing on a half that never ran.
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 import { sessionCost } from "../lib/session-usage.js";
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
+import { loadPlaywright } from "./browser.mjs";
+import { ROOT, pickFreePort as freePort } from "./panel-testkit.mjs";
 
 let failures = 0;
 let checks = 0;
@@ -102,34 +97,6 @@ const git = (dir, args) => {
     return { ok: false, out: String((e && e.stdout) || "").trim(), err: String((e && e.message) || e) };
   }
 };
-const freePort = () =>
-  new Promise((resolve, reject) => {
-    const s = createServer();
-    s.on("error", reject);
-    s.listen(0, "127.0.0.1", () => {
-      const { port } = s.address();
-      s.close(() => resolve(port));
-    });
-  });
-function loadPlaywright() {
-  for (const root of [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean)) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
 
 // ── 0. the arithmetic, by hand ───────────────────────────────────────────────────────────────────
 // Every rule the brief sets out, on numbers small enough to check in the head, and each one checked against a

@@ -13,31 +13,12 @@
 // folder, and a legacy logs/ beside the config for the first boot to copy. The reader's panel (:7331), ~/.wag and the
 // real scratch directory are never touched. It does NOT press "open folder": that would start a file manager on the host.
 // Without a Playwright install it says BROWSER-NOT-RUN and exits 2 rather than passing on a half that never ran.
-import { createRequire } from "node:module";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { SCRATCH_MARKER } from "../lib/paths.js";
-import { ROOT, startPanel } from "./panel-testkit.mjs";
-
-const require = createRequire(import.meta.url);
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    for (const attempt of [() => require(path.join(root, "node_modules", "playwright")), () => require(root)]) {
-      try {
-        return attempt();
-      } catch {
-        /* not there */
-      }
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
+import { loadPlaywright } from "./browser.mjs";
+import { startPanel } from "./panel-testkit.mjs";
 
 const pw = loadPlaywright();
 if (!pw) {

@@ -10,25 +10,19 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { ReleaseRequests, jobHoldingTree, releaseWorktree, releasesEnabled } from "../lib/worktrees.js";
+import { configureRepo, git, ran, slash } from "../tools/panel-testkit.mjs";
 
-const slash = (p) => String(p || "").replace(/\\/g, "/");
-const git = (cwd, args) =>
-  execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim();
 const bare = (repo, args) =>
-  execFileSync("git", ["--git-dir", repo, ...args], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim();
-const hasRef = (cwd, ref) => {
-  try {
-    git(cwd, ["rev-parse", "--verify", "--quiet", ref]);
-    return true;
-  } catch {
-    return false;
-  }
-};
+  execFileSync("git", ["--git-dir", repo, ...args], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] })
+    .split(String.fromCharCode(13))
+    .join("")
+    .trim();
+const hasRef = (cwd, ref) => ran(cwd, ["rev-parse", "--verify", "--quiet", ref]);
 
 // ---- the fake panel -------------------------------------------------------------------------------------------------
 const PROJECT = { name: "wtgui", path: "C:/proj/agent-worktree-gui", mainBranch: "main", remote: "origin", releaseWorktrees: true };
@@ -318,20 +312,23 @@ test("git refusing the worktree removal stops the sequence there", async () => {
 // ---- end to end, real git --------------------------------------------------------------------------------------------
 // A throwaway repo, a worktree, a bare remote, and the marker read out of a final message — the whole path, with gh
 // standing in at its own boundary (there is no GitHub repository behind a temp fixture) and every git answer real.
-async function makeLanding(t, style) {
+const tempRoots = [];
+test.after(async () => {
+  for (const r of tempRoots) {
+    await rm(r, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  }
+});
+
+async function makeLanding(style) {
   const root = await mkdtemp(path.join(os.tmpdir(), "wtgui-release-e2e-"));
-  t.after(async () => {
-    await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
-  });
+  tempRoots.push(root);
   const remote = path.join(root, "remote.git");
   const proj = path.join(root, "proj");
   const tree = path.join(root, "tree");
   execFileSync("git", ["init", "-q", "--bare", remote], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
   await mkdir(proj, { recursive: true });
   git(proj, ["init", "-q", "-b", "main"]);
-  git(proj, ["config", "user.email", "tester@example.invalid"]);
-  git(proj, ["config", "user.name", "Test"]);
-  git(proj, ["config", "commit.gpgsign", "false"]);
+  configureRepo(proj);
   await writeFile(path.join(proj, "README.md"), "# test\n", "utf8");
   git(proj, ["add", "."]);
   git(proj, ["commit", "-q", "-m", "init"]);
@@ -359,8 +356,14 @@ async function makeLanding(t, style) {
   return { root, remote, proj, tree, branch: "feature", mergeSha };
 }
 
-function e2eFixture(fixture) {
-  const store = new ReleaseRequests({ file: path.join(fixture.root, "releases.json"), trees: () => [{ project: "wtgui", path: slash(fixture.tree), branch: fixture.branch }] });
+let sharedSquashPromise = null;
+function getSquashLanding() {
+  if (!sharedSquashPromise) sharedSquashPromise = makeLanding("squash");
+  return sharedSquashPromise;
+}
+
+function e2eFixture(fixture, fileName = "releases.json") {
+  const store = new ReleaseRequests({ file: path.join(fixture.root, fileName), trees: () => [{ project: "wtgui", path: slash(fixture.tree), branch: fixture.branch }] });
   const job = { id: "e2e-run", thread: "wtgui-e2e", worktreePath: slash(fixture.tree), branch: fixture.branch };
   const recorded = store.record({
     job,
@@ -378,9 +381,28 @@ const ghFor = (mergeSha) => async (args) => {
   return { ok: false, out: "", err: `unexpected gh call: ${line}` };
 };
 
-test("end to end: a RELEASE line removes the worktree, the local branch and the remote branch (squashed landing)", async (t) => {
-  const fixture = await makeLanding(t, "squash");
-  const { store, recorded, project } = e2eFixture(fixture);
+test("end to end: a dirty tree is refused, and nothing is deleted", async () => {
+  const fixture = await getSquashLanding();
+  const scratchPath = path.join(fixture.tree, "scratch.txt");
+  await writeFile(scratchPath, "not committed\n", "utf8");
+  try {
+    const { store, project } = e2eFixture(fixture, "releases-dirty.json");
+    const request = store.pending()[0];
+    const out = await releaseWorktree({ project, request, row: null, jobs: [], runGh: ghFor(fixture.mergeSha) });
+    assert.equal(out.ok, false);
+    assert.equal(out.gate, "clean");
+    assert.match(out.outcome, /^refused: the tree is not clean \(1 changed path\)/);
+    assert.equal(existsSync(fixture.tree), true, "the tree is still there");
+    assert.equal(hasRef(fixture.proj, "refs/heads/feature"), true, "its branch is still there");
+    assert.ok(bare(slash(fixture.remote), ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).split("\n").includes("feature"), "its remote branch is still there");
+  } finally {
+    await unlink(scratchPath).catch(() => {});
+  }
+});
+
+test("end to end: a RELEASE line removes the worktree, the local branch and the remote branch (squashed landing)", async () => {
+  const fixture = await getSquashLanding();
+  const { store, recorded, project } = e2eFixture(fixture, "releases-squash.json");
   assert.equal(recorded.requests.length, 1, "the marker was read out of the final message");
   assert.equal(recorded.refused.length, 0);
   const request = store.pending()[0];
@@ -397,64 +419,47 @@ test("end to end: a RELEASE line removes the worktree, the local branch and the 
   assert.equal(existsSync(fixture.tree), false, "the worktree directory is gone");
   assert.ok(!git(fixture.proj, ["worktree", "list", "--porcelain"]).includes(slash(fixture.tree)), "git no longer lists the worktree");
   assert.equal(hasRef(fixture.proj, "refs/heads/feature"), false, "the local branch is gone");
-  assert.ok(!bare(slash(fixture.remote), ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).split(/\r?\n/).includes("feature"), "the remote branch is gone");
+  assert.ok(!bare(slash(fixture.remote), ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).split("\n").includes("feature"), "the remote branch is gone");
   // …and main is untouched.
   assert.equal(hasRef(fixture.proj, "refs/heads/main"), true);
   assert.ok(bare(slash(fixture.remote), ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).includes("main"));
 });
 
-test("end to end: a true merge commit passes on history, not on identical trees", async (t) => {
-  const fixture = await makeLanding(t, "merge");
-  const { store, project } = e2eFixture(fixture);
+test("end to end: a true merge commit passes on history, not on identical trees", async () => {
+  const base = await getSquashLanding();
+  const { root, remote, proj } = base;
+  const tree = path.join(root, "tree-merge");
+  git(proj, ["worktree", "add", "-q", "-b", "feature", slash(tree)]);
+  await writeFile(path.join(tree, "feature2.txt"), "the second feature\n", "utf8");
+  git(tree, ["add", "."]);
+  git(tree, ["commit", "-q", "-m", "the second feature"]);
+  git(tree, ["push", "-q", "-u", "origin", "feature"]);
+  await writeFile(path.join(proj, "other2.txt"), "more work on main\n", "utf8");
+  git(proj, ["add", "."]);
+  git(proj, ["commit", "-q", "-m", "more work on main"]);
+  git(proj, ["merge", "-q", "--no-ff", "-m", "merge the feature", "feature"]);
+  const mergeSha = git(proj, ["rev-parse", "HEAD"]);
+  git(proj, ["push", "-q", "origin", "main"]);
+  const fixture = { root, remote, proj, tree, branch: "feature", mergeSha };
+
+  const { store, project } = e2eFixture(fixture, "releases-merge.json");
   const request = store.pending()[0];
   const out = await releaseWorktree({ project, request, row: null, jobs: [], runGh: ghFor(fixture.mergeSha) });
   assert.equal(out.ok, true, `expected a removal, got: ${out.outcome} ${JSON.stringify(out.steps)}`);
   assert.match(out.steps.find((s) => s.step === "tree").detail, /brings nothing the merge commit does not have/);
   assert.equal(existsSync(fixture.tree), false);
   assert.equal(hasRef(fixture.proj, "refs/heads/feature"), false);
-  assert.ok(!bare(slash(fixture.remote), ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).split(/\r?\n/).includes("feature"));
-});
-
-test("end to end: a dirty tree is refused, and nothing is deleted", async (t) => {
-  const fixture = await makeLanding(t, "squash");
-  await writeFile(path.join(fixture.tree, "scratch.txt"), "not committed\n", "utf8");
-  const { store, project } = e2eFixture(fixture);
-  const request = store.pending()[0];
-  const out = await releaseWorktree({ project, request, row: null, jobs: [], runGh: ghFor(fixture.mergeSha) });
-  assert.equal(out.ok, false);
-  assert.equal(out.gate, "clean");
-  assert.match(out.outcome, /^refused: the tree is not clean \(1 changed path\)/);
-  assert.equal(existsSync(fixture.tree), true, "the tree is still there");
-  assert.equal(hasRef(fixture.proj, "refs/heads/feature"), true, "its branch is still there");
-  assert.ok(bare(slash(fixture.remote), ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).split(/\r?\n/).includes("feature"), "its remote branch is still there");
+  assert.ok(!bare(slash(fixture.remote), ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).split("\n").includes("feature"));
 });
 
 // ---- the second acceptance: nothing to land ---------------------------------------------------------------------------
 // A documentation or review tree: a registered worktree of its own project, a branch of its own, no PR anywhere, and —
 // for the case that is accepted — nothing on the branch that main does not already have. `ahead` is the one thing the
 // acceptance turns on: 0 commits over origin/main is releasable, 1 is a branch that still needs the merged-PR path.
-async function makeNothingToLand(t, { ahead = 0 } = {}) {
-  const root = await mkdtemp(path.join(os.tmpdir(), "wtgui-release-nothing-"));
-  t.after(async () => {
-    await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
-  });
-  const remote = path.join(root, "remote.git");
-  const proj = path.join(root, "proj");
-  const tree = path.join(root, "tree");
-  execFileSync("git", ["init", "-q", "--bare", remote], { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
-  await mkdir(proj, { recursive: true });
-  git(proj, ["init", "-q", "-b", "main"]);
-  git(proj, ["config", "user.email", ["tester", "example.invalid"].join(String.fromCharCode(64))]);
-  git(proj, ["config", "user.name", "Test"]);
-  git(proj, ["config", "commit.gpgsign", "false"]);
-  await writeFile(path.join(proj, "README.md"), "# test\n", "utf8");
-  git(proj, ["add", "."]);
-  git(proj, ["commit", "-q", "-m", "init"]);
-  git(proj, ["remote", "add", "origin", slash(remote)]);
-  git(proj, ["push", "-q", "-u", "origin", "main"]);
-  bare(slash(remote), ["symbolic-ref", "HEAD", "refs/heads/main"]);
-  // The tree: a branch cut from main and pushed, so there IS a remote branch for a release to delete (or to leave
-  // alone when the branch is refused).
+async function makeNothingToLand({ ahead = 0 } = {}) {
+  const base = await getSquashLanding();
+  const { root, remote, proj } = base;
+  const tree = path.join(root, "doc-tree");
   git(proj, ["worktree", "add", "-q", "-b", "doc-tree", slash(tree)]);
   if (ahead > 0) {
     await writeFile(path.join(tree, "notes.md"), "a change nobody opened a PR for\n", "utf8");
@@ -466,9 +471,9 @@ async function makeNothingToLand(t, { ahead = 0 } = {}) {
 }
 
 // The request a settled turn leaves behind: one RELEASE line, read out of the final message by the panel's own parser.
-function nothingToLandRequest(fixture, why) {
+function nothingToLandRequest(fixture, why, fileName = "releases.json") {
   const store = new ReleaseRequests({
-    file: path.join(fixture.root, "releases.json"),
+    file: path.join(fixture.root, fileName),
     trees: () => [{ project: "wtgui", path: slash(fixture.tree), branch: fixture.branch }],
   });
   const recorded = store.record({
@@ -500,9 +505,9 @@ const hasBareRef = (repo, ref) => {
   }
 };
 
-test("nothing to land: a clean tree 0 commits ahead of origin/main and no PR is released", async (t) => {
-  const fixture = await makeNothingToLand(t, { ahead: 0 });
-  const { store, recorded, request, project } = nothingToLandRequest(fixture, "a documentation tree with nothing to land");
+test("nothing to land: a clean tree 0 commits ahead of origin/main and no PR is released", async () => {
+  const fixture = await makeNothingToLand({ ahead: 0 });
+  const { store, recorded, request, project } = nothingToLandRequest(fixture, "a documentation tree with nothing to land", "releases-nothing-0.json");
   assert.equal(recorded.requests.length, 1, "the marker was read out of the final message");
   assert.equal(recorded.refused.length, 0);
   assert.equal(git(fixture.tree, ["rev-list", "--count", "origin/main..HEAD"]), "0", "the fixture is the case the acceptance names");
@@ -523,9 +528,9 @@ test("nothing to land: a clean tree 0 commits ahead of origin/main and no PR is 
   assert.equal(hasRef(fixture.proj, "refs/heads/main"), true, "main is untouched");
 });
 
-test("nothing to land refuses a branch that IS ahead of main, and leaves the tree completely intact", async (t) => {
-  const fixture = await makeNothingToLand(t, { ahead: 1 });
-  const { request, project } = nothingToLandRequest(fixture, "a tree with one commit nobody opened a PR for");
+test("nothing to land refuses a branch that IS ahead of main, and leaves the tree completely intact", async () => {
+  const fixture = await makeNothingToLand({ ahead: 1 });
+  const { request, project } = nothingToLandRequest(fixture, "a tree with one commit nobody opened a PR for", "releases-nothing-1.json");
   assert.equal(git(fixture.tree, ["rev-list", "--count", "origin/main..HEAD"]), "1");
 
   const out = await releaseWorktree({ project, request, row: null, jobs: [], runGh: noPrGh });
