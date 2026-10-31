@@ -50,17 +50,29 @@ const seededJob = (id, cwd) => ({
   attachments: [],
 });
 
-test("a PANEL_CONFIG instance keeps its own folder: WAG_HOME and WAG_SCRATCH are not consulted, and nothing is made there", async (t) => {
-  const decoy = mkdtempSync(path.join(os.tmpdir(), "wtgui-decoy-"));
-  const decoyHome = path.join(decoy, "readers-board");
-  const decoyScratch = path.join(decoy, "readers-scratch");
+let flatDecoy = null;
+let flatPanel = null;
+let splitRecord = null;
+
+test.before(async () => {
+  flatDecoy = mkdtempSync(path.join(os.tmpdir(), "wtgui-decoy-"));
+  const decoyHome = path.join(flatDecoy, "readers-board");
+  const decoyScratch = path.join(flatDecoy, "readers-scratch");
+  flatPanel = await startPanel({ env: { WAG_HOME: decoyHome, WAG_SCRATCH: decoyScratch } });
+});
+
+test.after(async () => {
+  if (flatPanel) await flatPanel.stop();
+  if (flatDecoy) rmSync(flatDecoy, { recursive: true, force: true });
+  if (splitRecord?.dir) rmSync(splitRecord.dir, { recursive: true, force: true });
+});
+
+test("a PANEL_CONFIG instance keeps its own folder: WAG_HOME and WAG_SCRATCH are not consulted, and nothing is made there", async () => {
+  const decoyHome = path.join(flatDecoy, "readers-board");
+  const decoyScratch = path.join(flatDecoy, "readers-scratch");
   // The environment says "use the reader's board"; the sandbox must not listen. This is exactly the situation of every
   // verify tool and every startPanel() test run from a shell that has WAG_HOME set.
-  const panel = await startPanel({ env: { WAG_HOME: decoyHome, WAG_SCRATCH: decoyScratch } });
-  t.after(async () => {
-    await panel.stop();
-    rmSync(decoy, { recursive: true, force: true });
-  });
+  const panel = flatPanel;
   const { paths } = await getState(panel);
   assert.equal(paths.dataDir, path.join(panel.dir, "logs"), "the sandbox's own folder, where it has always kept its files");
   assert.equal(paths.dataSource, "PANEL_CONFIG");
@@ -89,7 +101,6 @@ test("naming dataDir opts a second instance into the split layout; the first boo
   // The kit names jobsFile / assistantFile / projectsCacheFile for a sandbox; an `undefined` here drops the key from the
   // JSON, so the data directory is what answers.
   const config = { dataDir, jobsFile: undefined, assistantFile: undefined, projectsCacheFile: undefined };
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   const first = await startPanel({ dir, config, keep: true });
   let second = null;
@@ -127,6 +138,7 @@ test("naming dataDir opts a second instance into the split layout; the first boo
   writeFileSync(path.join(legacy, "jobs.json"), `${JSON.stringify({ version: 1, savedAt: "2026-02-02T00:00:00.000Z", jobs: [] })}\n`);
   second = await startPanel({ dir, config, keep: true });
   const s2 = await stateWhen(second, (s) => s.paths?.dataMeasuredAt);
+  splitRecord = { dir, paths: s2.paths };
   assert.equal(s2.paths.migrated?.thisBoot, false, "the journal still answers where the board came from, but nothing was copied this time");
   assert.equal(s2.paths.migrated.files, s1.paths.migrated.files);
   const ids2 = s2.jobs.map((j) => j.id);
@@ -137,9 +149,8 @@ test("naming dataDir opts a second instance into the split layout; the first boo
 
 test("Clean scratch over HTTP: it empties the folder the panel made, and refuses everything else with the reason", async (t) => {
   const fakeHome = mkdtempSync(path.join(os.tmpdir(), "wtgui-fakehome-"));
-  const panel = await startPanel();
-  t.after(async () => {
-    await panel.stop();
+  const panel = flatPanel;
+  t.after(() => {
     rmSync(fakeHome, { recursive: true, force: true });
   });
   const scratch = path.join(panel.dir, "logs", "scratch");
@@ -183,26 +194,20 @@ test("Clean scratch over HTTP: it empties the folder the panel made, and refuses
   assert.match(bad.json.error, /unknown folder/);
 });
 
-test("tools/where.mjs and a booted server agree on every folder - the .cmd scripts depend on it", async (t) => {
-  const decoy = mkdtempSync(path.join(os.tmpdir(), "wtgui-where-"));
-  t.after(() => rmSync(decoy, { recursive: true, force: true }));
-  // Two shapes of config: a plain second instance (flat, beside its config) and one that names a dataDir (split). In both
-  // the environment carries a WAG_HOME that neither of them may follow.
+test("tools/where.mjs and a booted server agree on every folder - the .cmd scripts depend on it", async () => {
+  // Two shapes of config already booted above: a plain second instance (flat, beside its config) and one that names
+  // a dataDir (split). In both the environment carries a WAG_HOME that neither of them may follow.
+  const flatPaths = (await getState(flatPanel)).paths;
   const shapes = [
-    { name: "second instance", config: {} },
-    { name: "named dataDir", config: { dataDir: path.join(decoy, "named"), jobsFile: undefined, assistantFile: undefined, projectsCacheFile: undefined } },
+    { name: "second instance", dir: flatPanel.dir, paths: flatPaths },
+    { name: "named dataDir", dir: splitRecord.dir, paths: splitRecord.paths },
   ];
   for (const shape of shapes) {
-    const panel = await startPanel({ config: shape.config, env: { WAG_HOME: path.join(decoy, "ignored") } });
-    try {
-      const { paths } = await getState(panel);
-      const env = { ...process.env, PANEL_CONFIG: path.join(panel.dir, "config.json"), WAG_HOME: path.join(decoy, "ignored") };
-      const run = (...args) => execFileSync(process.execPath, ["tools/where.mjs", ...args], { cwd: ROOT, env, encoding: "utf8", windowsHide: true }).trim();
-      assert.equal(run("logs"), paths.logsDir, `${shape.name}: the folder start-background.cmd reads the pid file from`);
-      const all = JSON.parse(run("--json"));
-      assert.deepEqual([all.data, all.state, all.scratch], [paths.dataDir, paths.stateDir, paths.scratchDir], shape.name);
-    } finally {
-      await panel.stop();
-    }
+    const { paths } = shape;
+    const env = { ...process.env, PANEL_CONFIG: path.join(shape.dir, "config.json"), WAG_HOME: path.join(flatDecoy, "ignored") };
+    const run = (...args) => execFileSync(process.execPath, ["tools/where.mjs", ...args], { cwd: ROOT, env, encoding: "utf8", windowsHide: true }).trim();
+    assert.equal(run("logs"), paths.logsDir, `${shape.name}: the folder start-background.cmd reads the pid file from`);
+    const all = JSON.parse(run("--json"));
+    assert.deepEqual([all.data, all.state, all.scratch], [paths.dataDir, paths.stateDir, paths.scratchDir], shape.name);
   }
 });

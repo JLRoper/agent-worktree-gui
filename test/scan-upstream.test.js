@@ -4,15 +4,12 @@
 // through lib/sync-state.js to show the answer the board draws for each situation.
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { scanWorktree } from "../lib/scan.js";
 import { syncState } from "../lib/sync-state.js";
-
-const ID = ["-c", "user.name=wag-test", "-c", "user.email=wag-test@example.test", "-c", "commit.gpgsign=false", "-c", "core.autocrlf=false"];
-const git = (cwd, ...args) => execFileSync("git", [...ID, "-C", cwd, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+import { git } from "../tools/panel-testkit.mjs";
 
 const root = mkdtempSync(path.join(tmpdir(), "wag-upstream-"));
 after(() => rmSync(root, { recursive: true, force: true }));

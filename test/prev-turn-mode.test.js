@@ -17,14 +17,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { sliceRegion } from "../tools/panel-testkit.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
 
-const begin = src.indexOf("// ---- previous turn on send");
-const end = src.indexOf("// ---- end previous turn on send");
-assert.ok(begin > 0 && end > begin, "the previous-turn region is in public/app.js");
-const region = src.slice(begin, end);
+const region = sliceRegion(src, "previous turn on send");
 
 function page({ stored = null, select = null } = {}) {
   const store = new Map();

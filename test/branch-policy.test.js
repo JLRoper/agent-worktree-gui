@@ -24,8 +24,7 @@ import { fileURLToPath } from "node:url";
 import { Jobs } from "../lib/jobs.js";
 import { policyForProject, policyFrom } from "../lib/remote-writes.js";
 import { installGuard, guardPaths, commonDirOf } from "../lib/push-guard.js";
-
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+import { ROOT, configureRepo, git as runGit } from "../tools/panel-testkit.mjs";
 
 // Off this box's own Hermes install: a run body is what is under test, and reading the developer's real session
 // store for its counters is both slow and none of this suite's business. Set before any Jobs is constructed.
@@ -34,19 +33,20 @@ process.env.API_SERVER_KEY = "";
 
 const git = (dir, args) => {
   try {
-    return execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", windowsHide: true }).trim();
+    return runGit(dir, args);
   } catch (e) {
     throw new Error(`git ${args.join(" ")} failed in ${dir}: ${String((e && e.message) || e)}`);
   }
 };
 const commit = (dir, message = "work") =>
-  git(dir, ["-c", "user.name=policy-test", "-c", "user.email=policy@localhost", "commit", "-q", "--allow-empty", "-m", message]);
+  git(dir, ["commit", "-q", "--allow-empty", "-m", message]);
 
 // A repo with one commit on `branch`, ready to be cut from. `-b <branch>` is what makes the parent interesting: the
 // panel branches from whatever this checkout has checked out, and the whole point is that it is not always main.
 function makeRepo(branch = "main") {
   const dir = mkdtempSync(path.join(tmpdir(), "wtgui-policy-repo-"));
   git(dir, ["init", "-q", "-b", branch]);
+  configureRepo(dir);
   writeFileSync(path.join(dir, "README.md"), "# policy sandbox\n");
   git(dir, ["add", "."]);
   commit(dir, "first");
@@ -195,11 +195,10 @@ test("a worker's run body names the parent its tree was really cut from", async 
   assert.match(stub.last(), /cut from `feature\/turnover`/, `a second run in the tree reads the recorded parent:\n${stub.last()}`);
 
   // 2. Cut from main: the opposite instruction — do not merge into it, push the branch and open a PR.
-  const onMain = makeRepo("main");
-  repos.push(onMain);
+  git(turnover, ["checkout", "-q", "main"]);
   const jobsB = makeJobs(dirA, stub.url);
   t.after(() => jobsB.dispose());
-  await jobsB.create({ prompt: "land a change", cwd: onMain, existing: false, project: "agent-worktree-gui", branchPolicy: "allow", remote: "github" });
+  await jobsB.create({ prompt: "land a change", cwd: turnover, existing: false, project: "agent-worktree-gui", branchPolicy: "allow", remote: "github" });
   const bodyB = stub.last();
   assert.match(bodyB, /cut from `main`/, `a tree cut from main names main as its parent:\n${bodyB}`);
   assert.match(bodyB, /do not merge into it/, "it is told not to merge into the landing branch");
@@ -207,11 +206,9 @@ test("a worker's run body names the parent its tree was really cut from", async 
   assert.doesNotMatch(bodyB, /merge `[^`]+` into `main` LOCALLY/, "never the turnover-branch instruction for a landing parent");
 
   // 3. A tree nobody can name (cut by hand, no record, no upstream) gets the blanket rule and NO invented parent.
-  const handCut = makeRepo("main");
-  repos.push(handCut);
-  const handTree = path.join(handCut, ".worktrees", "by-hand");
+  const handTree = path.join(turnover, ".worktrees", "by-hand");
   mkdirSync(path.dirname(handTree), { recursive: true });
-  git(handCut, ["worktree", "add", "-q", "-b", "by-hand", handTree]);
+  git(turnover, ["worktree", "add", "-q", "-b", "by-hand", handTree]);
   const jobsC = makeJobs(dirA, stub.url);
   t.after(() => jobsC.dispose());
   await jobsC.create({ prompt: "work in a hand cut tree", cwd: handTree, existing: true });

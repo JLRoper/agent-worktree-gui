@@ -1787,9 +1787,20 @@ async function startRowRefreshAgent(project, row, evidence = []) {
   }
 }
 
+const bootConfigJson = JSON.stringify(config);
+let bootPassCanSatisfyReload = true;
+let bootPassFinishedAt = 0;
+let resolveBootPass;
+const bootPass = new Promise((r) => {
+  resolveBootPass = r;
+});
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   const route = url.pathname;
+  if (req.method === "POST" && route !== "/api/reload") {
+    bootPassCanSatisfyReload = false;
+  }
   try {
     if (route === "/api/health") {
       return sendJson(res, 200, { ok: true, host: config.host, projects: registry.projects.map((p) => p.name), settings: settingsOut(), clients: clients.size });
@@ -4041,6 +4052,7 @@ const server = createServer(async (req, res) => {
 
     if (route === "/api/fetch" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      await readBody(req).catch(() => ({}));
       // Fire and forget: a sweep across every project is minutes of git work, and the button must not
       // hold the request open for it. Rows update over SSE as each fetch lands.
       void scheduler
@@ -4052,13 +4064,24 @@ const server = createServer(async (req, res) => {
 
     if (route === "/api/reload" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      config = await loadConfig();
-      scheduler.stop();
-      pool.close();
-      pool = new Pool(config.threads);
-      scheduler = new Scheduler({ config, store, pool, registry, getProjects: () => registry.projects, panelAgents: () => jobs.agentPaths(), panelThreads: () => jobs.panelRunThreads(), onWorktreeSeen: (project, tree) => seedTreeName(project, tree) });
-      await registry.refresh();
-      await scheduler.start();
+      await readBody(req).catch(() => ({}));
+      const canReuseBoot = bootPassCanSatisfyReload && (!bootPassFinishedAt || Date.now() - bootPassFinishedAt < 1500);
+      bootPassCanSatisfyReload = false;
+      const nextConfig = await loadConfig();
+      if (canReuseBoot && JSON.stringify(nextConfig) === bootConfigJson) {
+        await bootPass;
+      } else {
+        await bootPass;
+        config = nextConfig;
+        scheduler.stop();
+        pool.close();
+        pool = new Pool(config.threads);
+        scheduler = new Scheduler({ config, store, pool, registry, getProjects: () => registry.projects, panelAgents: () => jobs.agentPaths(), panelThreads: () => jobs.panelRunThreads(), onWorktreeSeen: (project, tree) => seedTreeName(project, tree) });
+        await registry.refresh();
+        await scheduler.start();
+      }
+      void sweepCheckedLandings();
+      void sweepReleases("reload").catch(() => {});
       broadcast({ type: "snapshot", data: snapshot() });
       return sendJson(res, 200, { ok: true, projects: config.projects.map((p) => p.name) });
     }
@@ -4230,6 +4253,8 @@ setTimeout(() => void warmParents(), 20_000).unref?.();
 setInterval(() => void sweepReleases("tick").catch(() => {}), 60_000).unref?.();
 setTimeout(() => void sweepReleases("boot").catch(() => {}), 12_000).unref?.();
 
+server.keepAliveTimeout = 60_000;
+server.headersTimeout = 65_000;
 server.listen(config.port, config.host, () => {
   log(`agent-worktree-gui on http://${config.host}:${config.port}`);
   log(`static build ${buildAtBoot.version || "(unversioned)"} — ${Object.keys(buildAtBoot.files).length} file(s) hashed; the shell is no-store, its assets carry ?v= and are cached hard`);
@@ -4273,12 +4298,27 @@ server.listen(config.port, config.host, () => {
 // Seed the store from the last known project list BEFORE anything slow.
 // `/api/state` with zero projects for the ~25s its first sweep takes, which the page renders as
 // "No git repos found under scanRoots" — the board vanished and came back a minute later.
-for (const p of registry.projects) store.ensureProject(p);
-if (!config.defaultCwd) config.defaultCwd = registry.projects[0]?.path || process.cwd();
-await scheduler.start();
-// The sweep that finds repos created since the last run is not a boot dependency: it runs behind the
-// first scan pass, and new projects simply appear when it lands.
-void registry.refresh().catch((e) => log(`project discovery failed: ${String((e && e.message) || e)}`));
+// When no project list is cached yet (first boot or a sandbox pointed at a throwaway scanRoot),
+// discover first so the boot pass scans the repos under scanRoots instead of running an empty pass.
+const hadSeededProjects = registry.projects.length > 0;
+try {
+  if (!hadSeededProjects && (config.scanRoots || []).length) {
+    await registry.refresh().catch((e) => log(`project discovery failed: ${String((e && e.message) || e)}`));
+  }
+  for (const p of registry.projects) store.ensureProject(p);
+  if (!config.defaultCwd) config.defaultCwd = registry.projects[0]?.path || process.cwd();
+  await scheduler.start();
+  void sweepCheckedLandings();
+  void sweepReleases("boot").catch(() => {});
+  // The sweep that finds repos created since the last run is not a boot dependency when a cached project
+  // list was already seeded: it runs behind the first scan pass, and new projects appear when it lands.
+  if (hadSeededProjects) {
+    void registry.refresh().catch((e) => log(`project discovery failed: ${String((e && e.message) || e)}`));
+  }
+} finally {
+  bootPassFinishedAt = Date.now();
+  resolveBootPass();
+}
 
 // The exit path, shared by a signal and a panel restart: the replacement has to be able to bind the
 // port, so nothing waits on the SSE clients beyond the same two seconds this always allowed.
@@ -4301,4 +4341,10 @@ function shutdown(code = 0) {
 
 for (const sig of ["SIGINT", "SIGTERM"]) {
   process.on(sig, () => shutdown(0));
+}
+if (process.env.PANEL_PARENT_WATCH_STDIN === "1") {
+  process.stdin.resume();
+  process.stdin.on("end", () => shutdown(0));
+  process.stdin.on("close", () => shutdown(0));
+  process.stdin.on("error", () => shutdown(0));
 }

@@ -27,16 +27,11 @@
 //                 the shipped function that decides the card order.
 
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
+import { loadPlaywright, openSettingsGroup } from "./browser.mjs";
+import { ROOT, pickFreePort as freePort } from "./panel-testkit.mjs";
 
 let failures = 0;
 let checks = 0;
@@ -80,29 +75,6 @@ const git = (dir, args, env = {}) => {
     return String((e && e.stdout) || "");
   }
 };
-const freePort = () =>
-  new Promise((resolve) => {
-    const s = createServer();
-    s.listen(0, "127.0.0.1", () => {
-      const { port } = s.address();
-      s.close(() => resolve(port));
-    });
-  });
-function loadPlaywright() {
-  for (const root of [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean)) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {}
-    try {
-      return require(root);
-    } catch {}
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
 
 // ---- the sandbox: two scan roots, one repo each, two worktrees each -------------------------------
 const dir = mkdtempSync(path.join(tmpdir(), "wtgui-rank-scopes-"));
@@ -236,7 +208,7 @@ async function browserPhase(pw) {
   const projScore = (name) => page.evaluate((n) => rankScore(lifeProjKey(n), Date.now()), name);
   const agentScore = (thread) => page.evaluate((t) => rankScore(lifeAgentKey(t), Date.now()), thread);
   const setWindow = async (secs) => {
-    await page.click("#btn-settings");
+    await openSettingsGroup(page, "display");
     await page.fill("#rank-window", String(secs));
     await page.dispatchEvent("#rank-window", "change");
     await page.click("#btn-settings-close");

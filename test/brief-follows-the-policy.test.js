@@ -21,7 +21,7 @@ import test from "node:test";
 
 import { Jobs, remoteWriteLine } from "../lib/jobs.js";
 import { ParentBook } from "../lib/parents.js";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
+import { configureRepo, git as runGit, post, startPanel } from "../tools/panel-testkit.mjs";
 
 // Off this box's own Hermes install: a run body is what is under test, and the developer's real session store is none
 // of this suite's business. Set before any Jobs is constructed.
@@ -30,7 +30,7 @@ process.env.API_SERVER_KEY = "";
 
 const git = (dir, args) => {
   try {
-    return execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim();
+    return runGit(dir, args);
   } catch (e) {
     throw new Error(`git ${args.join(" ")} failed in ${dir}: ${String((e && e.message) || e)}`);
   }
@@ -48,11 +48,12 @@ async function gitSettled(dir, args) {
   }
 }
 const commit = (dir, message = "work") =>
-  git(dir, ["-c", "user.name=brief-test", "-c", "user.email=brief@localhost", "commit", "-q", "--allow-empty", "-m", message]);
+  git(dir, ["commit", "-q", "--allow-empty", "-m", message]);
 
 function makeRepo(branch = "main") {
   const dir = mkdtempSync(path.join(tmpdir(), "wtgui-brief-repo-"));
   git(dir, ["init", "-q", "-b", branch]);
+  configureRepo(dir);
   writeFileSync(path.join(dir, "README.md"), "# brief sandbox\n");
   git(dir, ["add", "."]);
   commit(dir, "first");
@@ -60,7 +61,13 @@ function makeRepo(branch = "main") {
 }
 
 const sweep = (...dirs) => {
-  for (const d of dirs) rmSync(d, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  for (const d of dirs) {
+    try {
+      rmSync(d, { recursive: true, force: true, maxRetries: 5, retryDelay: 150 });
+    } catch {
+      /* background measureTree git handle on Windows; OS temp is throwaway */
+    }
+  }
 };
 
 // The smallest gateway that accepts a run and records its body. `/v1/capabilities` is answered too, because the real
@@ -156,17 +163,25 @@ test("the blanket paragraph follows the policy in force instead of always saying
   assert.match(remoteWriteLine({ remoteWrite: "land", remote: "origin", branchPolicy: "local-only" }, tree), /^WILL LAND: /);
 });
 
+let sharedRepo = null;
+test.before(() => {
+  sharedRepo = makeRepo("main");
+});
+test.after(() => {
+  if (sharedRepo) sweep(sharedRepo);
+});
+
 test("a tree cut from main is told to push for a pull request, on its first turn and after its branch is renamed", async (t) => {
   const stub = await stubGateway();
   const dir = mkdtempSync(path.join(tmpdir(), "wtgui-brief-jobs-"));
-  const repo = makeRepo("main");
+  const repo = sharedRepo;
   const jobsA = makeJobs(dir, stub.url);
   let jobsB = null;
   t.after(async () => {
     jobsA.dispose();
     jobsB?.dispose();
     await stub.stop();
-    sweep(dir, repo);
+    sweep(dir);
   });
 
   // ---- the first turn: the panel cuts the tree from main -------------------------------------------------------
@@ -263,14 +278,14 @@ test("a parent that is not a name is never handed over as one", async (t) => {
 test("a tree nobody can name still follows its project's policy", async (t) => {
   const stub = await stubGateway();
   const dir = mkdtempSync(path.join(tmpdir(), "wtgui-brief-hand-"));
-  const repo = makeRepo("main");
+  const repo = sharedRepo;
   const handTree = path.join(repo, ".worktrees", "by-hand");
   git(repo, ["worktree", "add", "-q", "-b", "by-hand", handTree]);
   const jobs = makeJobs(dir, stub.url);
   t.after(async () => {
     jobs.dispose();
     await stub.stop();
-    sweep(dir, repo);
+    sweep(dir);
   });
 
   await jobs.create({ prompt: "work in a hand cut tree", cwd: handTree, existing: true, branchPolicy: "allow" });
@@ -285,7 +300,7 @@ test("a tree nobody can name still follows its project's policy", async (t) => {
 
 test("the reply route briefs a worker with the policy and remote of its tree's project", async (t) => {
   const stub = await stubGateway();
-  const repo = makeRepo("main");
+  const repo = sharedRepo;
   const panel = await startPanel({
     config: {
       apiServer: { url: stub.url, key: "sandbox-key" },
@@ -298,10 +313,9 @@ test("the reply route briefs a worker with the policy and remote of its tree's p
   t.after(async () => {
     await panel.stop();
     await stub.stop();
-    sweep(repo);
   });
 
-  const spawned = await post(panel.base, "/api/agents", { body: { prompt: "land a change", cwd: repo, project: "fixture", reasoningEffort: "medium" } });
+  const spawned = await post(panel.base, "/api/agents", { body: { prompt: "create a second landing tree", cwd: repo, project: "fixture", reasoningEffort: "medium" } });
   assert.equal(spawned.status, 202, `the spawn is accepted: ${spawned.text}`);
   const job = spawned.json.job;
   const body1 = String(stub.submitted[0]?.input || "");

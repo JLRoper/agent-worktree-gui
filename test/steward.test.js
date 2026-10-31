@@ -15,7 +15,6 @@
 //
 // Every fixture is a throwaway repo under the OS temp dir; nothing here touches this checkout or the panel's own state.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -23,20 +22,12 @@ import test from "node:test";
 import { ParentBook, backfillCandidates, pickBackfill, resolveParents, ticketIds } from "../lib/parents.js";
 import { WriterLocks } from "../lib/locks.js";
 import { applyPlan, buildPlan, classify, contentIn, deletable, inspectProject, rollGate, rollUp, worktrees } from "../lib/steward.js";
-
-const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never" };
-
-function git(cwd, ...args) {
-  return execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", env: GIT_ENV, stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
-    .replace(/\r\n/g, "\n")
-    .trim();
-}
+import { configureRepo, git } from "../tools/panel-testkit.mjs";
 
 function commit(repo, file, text, message) {
   writeFileSync(path.join(repo, file), text);
   git(repo, "add", file);
   git(repo, "commit", "-q", "-m", message);
-  return git(repo, "rev-parse", "HEAD");
 }
 
 const tmp = [];
@@ -44,9 +35,7 @@ function makeRepo(name = "repo") {
   const root = mkdtempSync(path.join(os.tmpdir(), `steward-${name}-`));
   tmp.push(root);
   git(root, "init", "-q", "-b", "master");
-  git(root, "config", "user.email", "steward@example.test");
-  git(root, "config", "user.name", "Steward Test");
-  git(root, "config", "commit.gpgsign", "false");
+  configureRepo(root);
   commit(root, "a.txt", "one\n", "one");
   return root;
 }
@@ -69,7 +58,7 @@ function cut(repo, branch, startRef = "master") {
 
 // The rows the scan would hand the steward: branch, path, and the dirty counts it read from `status`.
 function rowsOf(repo) {
-  const listing = execFileSync("git", ["-C", repo, "worktree", "list", "--porcelain"], { encoding: "utf8", env: GIT_ENV, windowsHide: true }).replace(/\r\n/g, "\n");
+  const listing = git(repo, "worktree", "list", "--porcelain");
   const trees = [];
   let cur = null;
   for (const line of listing.split("\n")) {
@@ -79,7 +68,7 @@ function rowsOf(repo) {
     } else if (cur && line.startsWith("branch ")) cur.branch = line.slice(7).trim().replace("refs/heads/", "");
   }
   return trees.map((t) => {
-    const st = execFileSync("git", ["-C", t.path, "status", "--porcelain"], { encoding: "utf8", env: GIT_ENV, windowsHide: true }).replace(/\r\n/g, "\n").trim();
+    const st = git(t.path, "status", "--porcelain");
     const lines = st ? st.split("\n").filter(Boolean) : [];
     return {
       path: t.path.replace(/\\/g, "/"),
@@ -101,22 +90,22 @@ test("ticketIds: a real ticket, never the panel's own hex tag", () => {
 });
 
 test("a cut records the start ref and the sha it resolved to, and the row reads it back", () => {
-  const repo = makeRepo("cut");
-  const startSha = git(repo, "rev-parse", "master");
-  const book = new ParentBook({ file: path.join(repo, "parents.json") });
-  const rec = book.record({ project: "demo", branch: "wtgui/x-abcdef", path: path.join(repo, ".worktrees", "x"), startRef: "master", startSha });
+  const dir = mkdtempSync(path.join(os.tmpdir(), "steward-cut-"));
+  tmp.push(dir);
+  const startSha = "1".repeat(40);
+  const book = new ParentBook({ file: path.join(dir, "parents.json") });
+  const rec = book.record({ project: "demo", branch: "wtgui/x-abcdef", path: path.join(dir, ".worktrees", "x"), startRef: "master", startSha });
   assert.equal(rec.parent, null, "master is never a parent");
   assert.equal(rec.parentSource, "unknown");
 
-  git(repo, "branch", "dmr-7-turnover");
-  const turn = git(repo, "rev-parse", "dmr-7-turnover");
-  const rec2 = book.record({ project: "demo", branch: "wtgui/y-123456", path: path.join(repo, ".worktrees", "y"), startRef: "dmr-7-turnover", startSha: turn });
+  const turn = "2".repeat(40);
+  const rec2 = book.record({ project: "demo", branch: "wtgui/y-123456", path: path.join(dir, ".worktrees", "y"), startRef: "dmr-7-turnover", startSha: turn });
   assert.equal(rec2.parent, "dmr-7-turnover");
   assert.equal(rec2.parentSha, turn);
   assert.equal(rec2.parentSource, "cut");
 
   // A restart sees exactly the same answer: the record is a file, not a memory.
-  const again = new ParentBook({ file: path.join(repo, "parents.json") });
+  const again = new ParentBook({ file: path.join(dir, "parents.json") });
   assert.equal(again.get("demo", "wtgui/y-123456").parent, "dmr-7-turnover");
   assert.equal(again.get("demo", "wtgui/y-123456").parentSource, "cut");
   assert.deepEqual(
@@ -125,13 +114,22 @@ test("a cut records the start ref and the sha it resolved to, and the row reads 
   );
 });
 
+let sharedBackfillRepo = null;
+function getBackfillRepo() {
+  if (!sharedBackfillRepo) {
+    const repo = makeRepo("backfill");
+    git(repo, "checkout", "-q", "-b", "dmr-1234-turnover");
+    commit(repo, "t.txt", "turnover\n", "turnover work");
+    const turnoverSha = git(repo, "rev-parse", "dmr-1234-turnover");
+    git(repo, "checkout", "-q", "-b", "dmr-1234-child");
+    commit(repo, "c.txt", "child\n", "child work");
+    sharedBackfillRepo = { repo, turnoverSha };
+  }
+  return sharedBackfillRepo;
+}
+
 test("backfill: a legacy tree is guessed from a shared ticket id, with a merge-base check, and marked a guess", async () => {
-  const repo = makeRepo("backfill");
-  git(repo, "checkout", "-q", "-b", "dmr-1234-turnover");
-  commit(repo, "t.txt", "turnover\n", "turnover work");
-  const turnoverSha = git(repo, "rev-parse", "dmr-1234-turnover");
-  git(repo, "checkout", "-q", "-b", "dmr-1234-child");
-  commit(repo, "c.txt", "child\n", "child work");
+  const { repo, turnoverSha } = getBackfillRepo();
   // A DIFFERENT project's branch with the same ticket: same name, no shared history at all.
   const other = makeRepo("other");
   git(other, "checkout", "-q", "-b", "dmr-1234-unrelated");
@@ -151,15 +149,15 @@ test("backfill: a legacy tree is guessed from a shared ticket id, with a merge-b
 });
 
 test("a legacy tree is recovered from its own reflog before anything is guessed", async () => {
-  const repo = makeRepo("reflog");
-  git(repo, "checkout", "-q", "-b", "dmr-9-turnover");
-  commit(repo, "t.txt", "t\n", "turnover");
+  const { repo } = getBackfillRepo();
+  git(repo, "checkout", "-q", "-b", "dmr-9-turnover", "master");
+  commit(repo, "t9.txt", "t\n", "turnover");
   // Cut the way a person cuts one: the reflog keeps git's own note of the start ref.
   const child = cut(repo, "dmr-9-child", "dmr-9-turnover");
-  commit(child, "c.txt", "c\n", "child");
+  commit(child, "c9.txt", "c\n", "child");
 
-  const book = new ParentBook({ file: path.join(repo, "parents.json") });
-  await book.refresh({ project: "p", repoDir: repo, mainBranch: "master" });
+  const book = new ParentBook({ file: path.join(repo, "parents-reflog.json") });
+  await book.refresh({ project: "p", repoDir: repo, mainBranch: "master", branches: ["master", "dmr-9-turnover", "dmr-9-child"] });
   const rec = book.get("p", "dmr-9-child");
   assert.equal(rec.parent, "dmr-9-turnover", "the reflog names the cut ref exactly");
   assert.equal(rec.parentSource, "backfilled", "recovered is still not the same thing as watched: no write may follow");
@@ -196,17 +194,12 @@ test("backfill refuses to guess when no ticket is shared, or when two candidates
 });
 
 test("resolveParents keeps a cut record and only fills in what is missing", async () => {
-  const repo = makeRepo("resolve");
-  git(repo, "checkout", "-q", "-b", "dmr-5-turnover");
-  commit(repo, "t.txt", "t\n", "t");
-  git(repo, "checkout", "-q", "master");
-  git(repo, "checkout", "-q", "-b", "dmr-5-child", "dmr-5-turnover");
-  commit(repo, "c.txt", "c\n", "c");
-  const records = new Map([["dmr-5-child", { branch: "dmr-5-child", parent: "somewhere-else", parentSha: "abc", parentSource: "cut" }]]);
-  const out = await resolveParents({ repoDir: repo, branches: ["master", "dmr-5-turnover", "dmr-5-child"], records, mainBranch: "master" });
-  assert.equal(out.get("dmr-5-child").parent, "somewhere-else", "a cut record is never overwritten by a guess");
-  assert.equal(out.get("dmr-5-child").parentSource, "cut");
-  assert.equal(out.get("dmr-5-turnover").parentSource, "unknown", "a turnover branch has no parent of its own");
+  const { repo } = getBackfillRepo();
+  const records = new Map([["dmr-1234-child", { branch: "dmr-1234-child", parent: "somewhere-else", parentSha: "abc", parentSource: "cut" }]]);
+  const out = await resolveParents({ repoDir: repo, branches: ["master", "dmr-1234-turnover", "dmr-1234-child"], records, mainBranch: "master" });
+  assert.equal(out.get("dmr-1234-child").parent, "somewhere-else", "a cut record is never overwritten by a guess");
+  assert.equal(out.get("dmr-1234-child").parentSource, "cut");
+  assert.equal(out.get("dmr-1234-turnover").parentSource, "unknown", "a turnover branch has no parent of its own");
 });
 
 // ---- 2. the five classes --------------------------------------------------------------------------------------
@@ -280,8 +273,16 @@ async function classificationRepo() {
   return { repo, entries, rows, parents, byBranch: new Map(entries.map((e) => [e.branch, e])), parentWt, rollWt };
 }
 
+let sharedClassificationPromise = null;
+function getClassificationRepo() {
+  if (!sharedClassificationPromise) {
+    sharedClassificationPromise = classificationRepo();
+  }
+  return sharedClassificationPromise;
+}
+
 test("the five classes against real git: LANDED by content, ROLLUP, ORPHAN, DIRTY, LOCKED", async () => {
-  const { repo, byBranch } = await classificationRepo();
+  const { repo, byBranch } = await getClassificationRepo();
   const kind = (b) => byBranch.get(b)?.kind;
 
   // The squash case is the one ancestry cannot answer: the branch is NOT an ancestor of master…
@@ -337,7 +338,11 @@ test("refusal 2: a guessed parent never drives a merge, and neither does one wit
 });
 
 test("a roll-up really lands inside the parent's worktree, fast-forwarding it and touching nothing else", async () => {
-  const { repo, parentWt } = await classificationRepo();
+  const { repo } = getBackfillRepo();
+  const parentWt = addTree(repo, "dmr-2-turnover");
+  commit(parentWt, "turn.txt", "turnover\n", "turnover base");
+  const rollWt = cut(repo, "dmr-2-child-roll", "dmr-2-turnover");
+  commit(rollWt, "roll.txt", "to roll\n", "work to roll up");
   const before = git(parentWt, "rev-parse", "HEAD");
   const out = await rollUp({ repoDir: repo, parentBranch: "dmr-2-turnover", parentWorktree: parentWt, childBranch: "dmr-2-child-roll", mainBranch: "master" });
   assert.equal(out.ok, true, out.error || "");
@@ -367,7 +372,7 @@ test("locks serialise two roll-ups into the same parent branch, and the second o
 // ---- 4. the plan and the act ----------------------------------------------------------------------------------
 
 test("the plan is a file, it lists the three answers, and it writes nothing but itself", async () => {
-  const { repo, entries, parents } = await classificationRepo();
+  const { repo, entries } = await getClassificationRepo();
   const plan = buildPlan({ project: "classes", repoDir: repo, entries, mainBranch: "master" });
   assert.equal(plan.delete.length, 2, "the two landed trees");
   assert.equal(plan.roll.length, 1, "the one branch still ahead of its parent");
@@ -379,7 +384,7 @@ test("the plan is a file, it lists the three answers, and it writes nothing but 
 });
 
 test("apply: no confirm writes nothing; a dry run lists and writes nothing; a confirm deletes only landed+clean+unlocked and rolls the rest", async () => {
-  const { repo, entries, parents, rollWt, parentWt } = await classificationRepo();
+  const { repo, entries, rollWt, parentWt } = await getClassificationRepo();
   const fresh = buildPlan({ project: "classes", repoDir: repo, entries, mainBranch: "master" });
   const plan = { ...fresh, at: fresh.at };
   const listing = await worktrees(repo);
@@ -415,8 +420,8 @@ test("apply: no confirm writes nothing; a dry run lists and writes nothing; a co
 });
 
 test("contentIn proves a squash merge by patch-id, not by ancestry", async () => {
-  const repo = makeRepo("content");
-  git(repo, "checkout", "-q", "-b", "dmr-3-branch");
+  const { repo } = getBackfillRepo();
+  git(repo, "checkout", "-q", "-b", "dmr-3-branch", "master");
   commit(repo, "b.txt", "b\n", "b");
   git(repo, "checkout", "-q", "master");
   git(repo, "merge", "-q", "--squash", "dmr-3-branch");

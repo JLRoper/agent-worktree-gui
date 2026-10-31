@@ -16,17 +16,14 @@ import path from "node:path";
 import test from "node:test";
 
 import { CHART_COLUMN_IDS, REQUIRED_COLUMN_ID, chartColumnsFrom, shownChartColumns } from "../lib/chart-columns.js";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
+import { post, sliceRegion, startPanel } from "../tools/panel-testkit.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const esc = (s) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 // The page's own region, run with a stub `state`: the same function the browser calls, with no board under it.
-const begin = src.indexOf("// ---- chart columns");
-const end = src.indexOf("// ---- end chart columns");
-assert.ok(begin > 0 && end > begin, "the chart-columns region is in public/app.js");
-const region = src.slice(begin, end);
+const region = sliceRegion(src, "chart columns");
 const page = (settings = {}) =>
   new Function("state", "esc", `${region}; return { CHART_COLUMNS, shownColumns, wtColspan, chartHeaderHtml };`)({ settings }, esc);
 

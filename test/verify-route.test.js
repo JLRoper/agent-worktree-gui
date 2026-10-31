@@ -8,37 +8,30 @@
 // gateway key, so a start that gets past every gate answers 503 and NAMES the gateway: that is the proof it reached
 // the last step, and it is deliberately not a 400 about the tree.
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { post, startPanel } from "../tools/panel-testkit.mjs";
-
-const git = (cwd, args) =>
-  execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }).trim();
-const slash = (p) => String(p || "").replace(/\\/g, "/");
+import { configureRepo, git, post, slash, startPanel } from "../tools/panel-testkit.mjs";
 
 test("the check route resolves the tree and refuses what it must, without starting a run", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "wtgui-checkroute-"));
   const repo = path.join(root, "proj");
   await mkdir(repo, { recursive: true });
-  git(repo, ["init", "-b", "main"]);
-  git(repo, ["config", "user.email", "check@local"]);
-  git(repo, ["config", "user.name", "Check"]);
-  git(repo, ["config", "commit.gpgsign", "false"]);
+  git(repo, ["init", "-q", "-b", "main"]);
+  configureRepo(repo);
   await writeFile(path.join(repo, "README.md"), "# test\n", "utf8");
   git(repo, ["add", "."]);
-  git(repo, ["commit", "-m", "init"]);
+  git(repo, ["commit", "-q", "-m", "init"]);
 
   // One tree with work of its own, and one that never committed anything: the two shapes the route judges differently.
   const worked = path.join(repo, ".worktrees", "wt-worked");
-  git(repo, ["worktree", "add", "-b", "feat/worked", worked]);
+  git(repo, ["worktree", "add", "-q", "-b", "feat/worked", worked]);
   await writeFile(path.join(worked, "work.txt"), "a change\n", "utf8");
   git(worked, ["add", "."]);
-  git(worked, ["commit", "-m", "add work"]);
+  git(worked, ["commit", "-q", "-m", "add work"]);
   const empty = path.join(repo, ".worktrees", "wt-empty");
-  git(repo, ["worktree", "add", "-b", "feat/empty", empty]);
+  git(repo, ["worktree", "add", "-q", "-b", "feat/empty", empty]);
 
   const panel = await startPanel({ config: { scanRoots: [root] } });
   t.after(async () => {

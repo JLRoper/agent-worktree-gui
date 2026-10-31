@@ -33,7 +33,6 @@
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -41,10 +40,10 @@ import { fileURLToPath } from "node:url";
 
 import { Jobs } from "../lib/jobs.js";
 import { toolResults } from "../lib/tool-results.js";
+import { installFakeEventSource, loadPlaywright } from "./browser.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
 const PHASES = new Set(
   String(process.env.FOLD_NOTE_PHASES || "jobs,browser")
     .split(",")
@@ -306,32 +305,13 @@ async function stopSandbox() {
   await sleep(200);
 }
 
-function loadPlaywright() {
-  for (const root of [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean)) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
-
 async function browserPhase(pw) {
   const browser = await pw.chromium.launch({ headless: true });
   const pageErrors = [];
   try {
     const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
     const realSnapshot = await fetch(`${base}/api/state`).then((r) => r.json());
+    await installFakeEventSource(context);
     await context.addInitScript(
       ({ snapshot, lines, trimmedLines, oldLines, trimmedOld, startedAt, endedAt, thread, id }) => {
         const realFetch = window.fetch.bind(window);
@@ -345,12 +325,6 @@ async function browserPhase(pw) {
           // Both shallow pairing reads and full-row clicks reach the sandbox's real SQLite-backed route.
           if (method === "GET" && u.includes("/api/tool-results")) probe.calls.push(u);
           return realFetch(url, opts);
-        };
-        window.EventSource = class {
-          constructor() { this.readyState = 1; }
-          addEventListener() {}
-          removeEventListener() {}
-          close() {}
         };
         localStorage.setItem("wtgui.autoCollect", "0");
         const foldRe = /^\s*…\s+\d+ lines?(?: hidden| shortened)(?:, \d+ lines? shortened)? — click to read\s*$/;

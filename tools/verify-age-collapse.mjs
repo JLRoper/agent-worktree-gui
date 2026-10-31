@@ -43,16 +43,11 @@
 // holding node_modules/playwright, or the package itself); without one the script says BROWSER-HALF-NOT-RUN and
 // exits 2 rather than passing on a half that never ran.
 import { execFileSync, spawn } from "node:child_process";
-import { createRequire } from "node:module";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(HERE, "..");
-const require = createRequire(import.meta.url);
+import { loadPlaywright, openSettingsGroup } from "./browser.mjs";
+import { ROOT, pickFreePort as freePort } from "./panel-testkit.mjs";
 
 let failures = 0;
 let checks = 0;
@@ -97,38 +92,7 @@ const git = (dir, args, env = {}) => {
   }
 };
 const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-const freePort = () =>
-  new Promise((resolve, reject) => {
-    const s = createServer();
-    s.on("error", reject);
-    s.listen(0, "127.0.0.1", () => {
-      const { port } = s.address();
-      s.close(() => resolve(port));
-    });
-  });
 const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
-
-// ---- the browser half ----------------------------------------------------------------------------
-function loadPlaywright() {
-  const roots = [process.env.PANEL_PLAYWRIGHT_ROOT, process.env.PLAYWRIGHT_ROOT, ROOT, process.cwd()].filter(Boolean);
-  for (const root of roots) {
-    try {
-      return require(path.join(root, "node_modules", "playwright"));
-    } catch {
-      /* not there */
-    }
-    try {
-      return require(root);
-    } catch {
-      /* not there */
-    }
-  }
-  try {
-    return require("playwright");
-  } catch {
-    return null;
-  }
-}
 
 // ---- the sandbox ---------------------------------------------------------------------------------
 const dir = mkdtempSync(path.join(tmpdir(), "wtgui-age-collapse-"));
@@ -360,7 +324,7 @@ async function browserPhase(pw) {
   if (!(await waitFor(async () => (await drawn()).length === 3, { what: "the arrow to hold the stale tree back again" }))) throw new Error("the arrow did not hold the tree back");
   ok("the arrow holds the stale tree back again", !(await drawn()).includes(path.basename(TREE_OLD)), (await drawn()).slice().sort().join(" | "));
 
-  await page.click("#btn-settings");
+  await openSettingsGroup(page, "board");
   check("the Settings tab carries the threshold, reading the panel's value", await page.inputValue("#hide-older-days"), "7");
   const preview = await page.textContent("#hide-older-preview");
   ok("its preview says what the threshold is doing and where it lives", /hold back worktrees whose last activity is older than 7 days · set in config\.json/.test(preview), preview);
@@ -374,7 +338,7 @@ async function browserPhase(pw) {
   ok("a 60-day threshold no longer holds the 45-day-old tree back", (await drawn()).includes(path.basename(TREE_OLD)), (await drawn()).slice().sort().join(" | "));
   ok("and nothing is reported as held back", !(await chips()).some((c) => /older hidden/.test(c)), (await chips()).join(" | "));
 
-  await page.click("#btn-settings");
+  await openSettingsGroup(page, "board");
   await page.fill("#hide-older-days", "7");
   await page.dispatchEvent("#hide-older-days", "change");
   await waitFor(() => readConfigFile().hideOlderThanDays === 7, { what: "config.json back to 7 days" });
@@ -385,7 +349,7 @@ async function browserPhase(pw) {
   ok("and the chip says how many are held back", (await chips()).includes("1 older hidden"), (await chips()).join(" | "));
 
   console.log("\n== 0 shows everything, and the chart stops carrying a control it is not using ==");
-  await page.click("#btn-settings");
+  await openSettingsGroup(page, "board");
   await page.click('[data-age-set="0"]');
   await waitFor(() => readConfigFile().hideOlderThanDays === 0, { what: "config.json to take 0 (off)" });
   check("the 'off' preset writes 0 to config.json", readConfigFile().hideOlderThanDays, 0);
