@@ -1,0 +1,228 @@
+# The console's scroll hop: one re-append of every project section, on the reorder clock
+
+The symptom: every open console's scrollbar snaps to the top of its box and is back within a split second, on every
+open card at the same instant, across projects. The cause is shared, and this note names it from a measurement rather
+than from the source.
+
+**The answer.** `reorderProjects()` re-appends **every** `section.project` of a folder whenever the ranked order of that
+folder has moved:
+
+```js
+for (const el of want) body.appendChild(el);        // public/app.js:11576, inside reorderProjects()
+```
+
+Appending a node that is already in the document is a remove-then-insert. The section — and with it every card, every
+`pre.job-out` and every `.think-body` inside it — leaves the layout tree and comes back as a fresh scroll area at
+`scrollTop = 0`. The loop re-appends the sections the reader has **open** as well as the closed ones, in one synchronous
+task, so every open console is reset in the same frame. Nothing in `reorderProjects()` restores a console's scroll
+position (it restores the caret, the inline add-agent field and the text selection, and nothing else); the box is put
+back by whichever of three existing "stay at the bottom" paths fires first:
+
+- `drawJobLine()` (`public/app.js:7550`, its `setScroll` at `:7642`) — the next line the run appends, 4–138 ms later;
+- `paintTypedLines()` (`public/app.js:6315`, the `setScroll` at `:6334`) — the next paced word, 6–35 ms later;
+- `stickConsole()` (`public/app.js:6951`, called by the 400 ms sweep registered at `public/app.js:14798`) — the only
+  repair for a card that is not writing; measured **184–376 ms** at the top, which is the "split second" the reader
+  sees.
+
+Of the 17 hops in §3, 8 were repaired by `paintTypedLines`, 6 by `drawJobLine`, 2 by `stickConsole`, and 1 (at the end
+of the window) had no repair inside the 600 ms the capture looked ahead.
+
+**What fires on the beat.** `tickLivenessRanks()` (`public/app.js:10126`, the `reorderProjects()` call is `:10136`), on
+the reorder clock:
+
+```js
+state.reorderTimer = every > 0 ? setInterval(() => { … tickLivenessRanks(); }, every * 1000) : null;   // public/app.js:14997
+```
+
+`every` is `wm.reorderSeconds`, default **5** (`REORDER_DEFAULT`, `public/app.js:14981`; the reader can set 0–600 s in
+Settings > Board). The hop therefore lands on the clock tick at which a section actually moves, not on every tick: the
+measured intervals between hops are whole multiples of the clock (5, 10, 15, 20, 27 s), averaging **9.5 s** — the
+"every 7–15 seconds" the reader reported. On their board it is whichever of their `wm.reorderSeconds` ticks the ranking
+crosses on.
+
+Measured 2026-10-31 on `e1bdb0e` (0.32.6), two cards in two different projects streaming at once, sandbox panel of its
+own on a spare port. The panel on 7331 was never restarted, written to, or driven by this run.
+
+## 1. What was instrumented
+
+`tools/measure-console-scroll-hop.mjs` starts its own panel (`tools/panel-testkit.mjs`: spare port, own
+`PANEL_CONFIG`/`HERMES_HOME`/caches, `API_SERVER_KEY` empty), makes six projects, spawns a run in **two** of them
+(`alpha` and `beta`) with `existing: true` so each card is owned by its own project's main row, and opens **both**
+projects and **both** rows. The four other projects stay closed; a 4 s driver touches a file in one of them so their
+liveness — and therefore the folder's ranking — keeps moving, which is the ordinary condition on a board of a hundred
+repos.
+
+Both runs stream one fixed reply over a stub Runs API (two words every 75 ms), so both consoles are growing and
+overflowing their 318 px box for the whole window.
+
+Recorded page-side, all on one `performance.now()` origin:
+
+| what | how |
+| --- | --- |
+| every `scrollTop` write | `setScroll` wrapped: from, asked, landed, `scrollHeight`/`clientHeight` at that instant, caller stack |
+| every scroll event on a console | capture listener: `top`, `max`, `scrollHeight`, `clientHeight`, node id |
+| what a frame can paint | a `requestAnimationFrame` sampler: each `pre.job-out` / `.think-body`'s `top`/`max`, recorded when either changes |
+| every DOM move that carries a console | `insertBefore`/`appendChild`/`after`/`before`/`append`/`replaceWith`/`replaceChildren`/`remove` wrapped, filtered to a subtree containing a `pre.job-out`, with the caller stack; plus a MutationObserver for `innerHTML` rebuilds, which call none of those |
+| the page's own entry points | `placeRow`, `renderProjectRows`, `renderJobs`, `renderConversation`, `applySnapshot`, `renderAll`, `reorder`, `reorderProjects` (with the section order before/after), `tickLivenessRanks`, `sweepStaleBoard`, `settleScrolls`, `restoreScrolls`, `applyStoredScrolls`, `stickConsole`, `updateJob`, `appendJobLine`, `drawJobLine`, `paintTypedLines`, `paintThink`, `loadThinking`, `captureScrolls` (with its result) |
+| every timer | `setInterval`/`setTimeout` shadowed before `app.js` parses: the delay, the scheduling stack, and every firing |
+
+```
+node tools/measure-console-scroll-hop.mjs --seconds 150 --json <path>                     # clock on (the page's default)
+node tools/measure-console-scroll-hop.mjs --seconds 150 --json <path> --reorder-seconds 0 # the control: clock stopped
+```
+
+## 2. One hop, to the millisecond
+
+The quoted run's second hop (the two cards are `5632f8db` and `547f914e`; both consoles are in row details, in `alpha`
+and `beta`):
+
+```
+80241.6  reorderProjects()                       <- tickLivenessRanks (app.js:10136), the 5 s clock
+80242.1  appendChild  <section class="project">  carrying console 5632f8db  (app.js:11576)
+80242.4  appendChild  <section class="project">  carrying console 547f914e  (app.js:11576)
+80249.7  reorderProjects: moved=2, order alpha,beta,zeta,gamma,epsilon,delta, consoles in the moved sections: 2
+80251.8  FRAME  5632f8db  top=0  (max 6909)     <- the hop, painted
+80251.8  FRAME  547f914e  top=0  (max 5718)     <- both cards, the same frame
+80284.2  setScroll(5632f8db)  from 0 -> 6926    <- paintTypedLines (app.js:6334)
+80284.2  setScroll(547f914e)  from 0 -> 5736
+80285.3  FRAME  5632f8db  top=6926  (max 6926)  <- back at the bottom, 33.5 ms after the top
+```
+
+The `appendChild` is the whole cause: the console is the same node before and after (node id 1/2 in the frame record,
+`conn=true` the whole time), but it is detached and re-inserted, so its scroll offset is gone. Nothing writes 0 — the
+browser's re-layout of the re-inserted box does. That is why an audit of `setScroll` alone finds nothing.
+
+The 400 ms sweep is the second half of the pair, and on a card with no stream behind it, it is the only half:
+
+```
+100260  reorderProjects() → 2 sections re-appended (moved=2)
+100269.1  FRAME 5632f8db top=0 (max 11325), 547f914e top=0 (max 10117)
+100644.7  setScroll(5632f8db) 0 -> 11325, setScroll(547f914e) 0 -> 10117   <- stickConsole (app.js:6955, from the 400 ms sweep)
+100650.4  FRAME 5632f8db top=11325, 547f914e top=10117                     <- 381.3 ms at the top
+```
+
+## 3. The beat
+
+The capture runs 205 s; the 17 hops fall between 52.7 s and 205.3 s (152.5 s), once both consoles are overflowing and the
+folder's ranking has started moving. Both cards' consoles are at the top in the **same frame** at every one of them (the
+frame record is one row per changed box, and the two rows carry the identical timestamp):
+
+| instant (ms) | boxes at the top, their `max` | back at (px) | back after |
+| --- | --- | --- | --- |
+| 52762 | 768 | 664 | +5.3 ms |
+| 80252 | 6909 / 5718 | 6926 / 5736 | +33.6 ms |
+| 85252 | 7978 / 6805 | 7978 / 6805 | +200.7 ms |
+| 95251 | 10221 / 8996 | 10221 / 8996 | +17.2 ms |
+| 100269 | 11325 / 10117 | 11325 / 10117 | +381.3 ms |
+| 120259 | 15654 / 14637 | 15672 / 14637 | +25.3 ms |
+| 125251 | 16689 / 15689 | 16707 / 15706 | +17.5 ms |
+| 140252 | 19035 | 19053 | +31.0 ms |
+| 145251 | 20743 / 19708 | 20743 / 19708 | +15.4 ms |
+| 150257 | 21916 / 21192 | 21916 / 21192 | +42.9 ms |
+| 160256 | 24159 / 23434 | 24159 / 23451 | +26.1 ms |
+| 165251 | 25176 / 24452 | 25194 / 24452 | +14.3 ms |
+| 170253 | 26298 / 25573 | 26315 / 25590 | +28.5 ms |
+| 175266 | 27384 / 26643 | 27384 / 26643 | +182.2 ms |
+| 195265 | 31300 | 31300 | +198.2 ms |
+| 200263 | 31300 / 32180 | 31300 / 32197 | +384.1 ms |
+| 205266 | 31300 / 32594 | (window ended) | — |
+
+Gaps between instants: `27490, 5000, 9999, 5018, 19990, 4992, 15001, 4999, 5006, 9999, 4995, 5002, 5013, 19999, 4998,
+5003` ms — every one a multiple of the 5 s clock, **mean 9532 ms**.
+
+Attribution, per hop: a `reorderProjects()` that re-appended a section 6–10 ms before the frame, from `tickLivenessRanks`
+on 24 of the 26 section-moving calls; the other two came from an owner change in `updateJob` and from `applySnapshot`. No
+hop coincides with a `placeRow`, `renderProjectRows`, `renderJobs`, `applySnapshot` or `renderAll`; see §5.
+
+**The control.** The same command with the reorder clock stopped (`--reorder-seconds 0`) leaves 7 instants in 173 s
+(mean gap 25 s, gaps `1.8, 3.6, 8.3, 23, 34, 46 s`), and its 16 section-moving calls all come from
+`queueReorderProjects()`'s flush — the row-event path — instead of the clock. So the *line* is the reset in both runs, and
+the clock is what turns it into a regular beat.
+
+Every interval that fired in the 205 s window, so the beat can be read against the page's own clocks:
+
+| period | fires | source |
+| --- | --- | --- |
+| 250 ms | 820 | `applyPendingFocus`, app.js:7491 |
+| 400 ms | 512 | the sticky sweep, app.js:14798 |
+| 1000 ms | 205 each (5 intervals) | live clocks 1193, approvals 6022, page furniture 14884, question clocks 16784, assistant.js:1857 |
+| 1200 ms | 170 | `sweepThinking`, app.js:3842 |
+| 3000 ms | 68 (2 intervals) | tool-store sweep 1683, visibility 16881 |
+| **5000 ms** | **41** | **the reorder clock, app.js:14997** (and subagent roster 3815, visibility force 16882) |
+| 15000 ms | 13 | the assistant's message board, assistant.js:1864 |
+| 30000 ms | 6 (2 intervals) | the liveness safety net 14963, update check |
+
+There is no timer with a 7–15 s period. The only 5 s timer that touches the DOM's structure is the reorder clock, and the
+hop's gaps are that clock's ticks.
+
+## 4. Why it hits every open card at once, across projects
+
+`reorderProjects()` works on whole sections. Its guard is "did the order change at all":
+
+```js
+if (want.every((el, i) => el === sections[i])) continue;   // public/app.js:11575
+for (const el of want) body.appendChild(el);               // public/app.js:11576
+```
+
+When one *closed* project changes rank — a scan finds an edit in it, an agent finishes in another folder, a worktree
+comes alive — `want` differs from `sections` at that one index, and the loop re-appends **all** of them, open sections
+included. One call therefore detaches every card on the board that is in that folder, in one task: the same frame paints
+every open console at 0. That is the "all open cards at the same time, across different projects" in the report — it is
+one loop, not one per card.
+
+The folder loop two dozen lines below is the same shape one level up (`public/app.js:11603`,
+`for (const g of wantGroups) host.appendChild(g)`), and `pinOpenProjects()` (`public/app.js:11496`, its `appendChild` at `:11514`) has it inside
+`renderAll`. On the sandbox the section loop is the one that fired; on a board with several scan roots both can.
+
+`overflow-anchor: none` on `.job` and `.job-out` (`public/style.css:660`, `:968`) means the browser is explicitly not
+allowed to absorb the move by adjusting the scroll position, so the clamp is the position the next frame paints.
+
+## 5. What was ruled out, with the same capture
+
+- **`setScroll` is not the resetter.** 7498 `setScroll` writes in the window, **0** of them backwards (from > to). The
+  writes near a hop go `0 -> max`, i.e. they are the *repair*. An audit of the writers alone sees a healthy console.
+- **`renderJobs` / `applySnapshot` are not on this beat.** `renderJobs` ran 6 times, `applySnapshot` twice (both from
+  the SSE `snapshot` frame at 43.8 s and 47.5 s, neither coincident with a hop), `renderAll` once (the setup). The hop
+  instants line up with `reorderProjects`, not with these.
+- **`placeRow` / `renderProjectRows` are not it either.** 299 `placeRow` and 21 `renderProjectRows` calls in the same
+  window replace row details and re-place cards (95 `replaceWith` of a card node), and each one restores the console in
+  the same task (`restoreScrolls` -> `applyStoredScrolls` -> `settleScrolls`, 95 of each) — none of them left a box at 0
+  for a frame. They are the *quiet* rebuild: the card leaves and comes back at its own position before the next paint.
+  They are not the repair path for a hop either; the three writers named at the top are.
+- **The browser's own anchoring is off.** `.job`/`.job-out` carry `overflow-anchor: none`, so a move cannot be silently
+  compensated; this is why the clamp is visible rather than absorbed.
+- **CSS is not involved.** No transition or animation on a console surface (the same reading as
+  `docs/jitter-synthesis.md` §1); the frame record shows the position change between two adjacent frames with no
+  intermediate value.
+
+**One observation from the live panel (read-only).** A separate probe of `http://127.0.0.1:7331` with two rows open,
+80 s, recorded `restoreScrolls` writing 0 to the sales-service card's console at 52326 ms, 28 ms after a
+`reorderProjects()` had re-appended that section at 52298 ms, with `applyStoredScrolls` putting it back 1 ms later. The
+live panel produces the same capture-after-move signature; the sandbox is where it can be driven to a painted frame on
+demand.
+
+## 6. What this does not prove
+
+- The sandbox has six projects and one folder; the reader's board has 105 across several scan roots. The mechanism is
+  per-folder, and the *rate* of section moves grows with the number of projects whose liveness crosses, which is why
+  their beat is 7–15 s and the sandbox's mean is 9.5 s.
+- `wm.reorderSeconds` is per browser. The measurement used the page's default (5 s) and the reader's own value was not
+  readable from this run; a reader at 10 s would see the same hop on a 10 s grid.
+- Frames were sampled by `requestAnimationFrame`, which is the paint clock of the tab under test (headless Chromium
+  here). The console was never at 0 and back within one frame in any capture — every hop is a value a frame actually
+  painted, and each one is a full frame at the top, not a transient read inside a rebuild.
+- This is a diagnosis. Nothing in `public/`, `lib/` or `server.js` was changed.
+
+## 7. What the shape of a fix would be (not applied)
+
+The line has two properties that make the hop: it re-appends sections that did **not** move, and it leaves the scroll
+position of the boxes inside them to the next repair. Either one alone would remove the hop: move only the sections whose
+index changed (or restore the consoles' `scrollTop` right after the loop the way `placeRow` does), and no open card would
+be detached for a re-rank it did not take part in.
+
+```
+node tools/measure-console-scroll-hop.mjs --json C:/CodeReviews/agent-worktree-gui/scroll-hop-baseline.json
+```
+
+The capture behind every number above was taken with that command into a scratch path; the tables are the read-back of
+its `frames`, `scrolls`, `moves` and `calls` arrays.
