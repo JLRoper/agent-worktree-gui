@@ -25,7 +25,7 @@ import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { verifyLabel, verifyPrompt } from "./lib/verify-prompt.js";
 import { answerDeletes, answerLine, answeredChecks } from "./lib/verify-landed.js";
 import { deleteWorktreeRow } from "./lib/worktree-remove.js";
-import { ReleaseRequests, releaseWorktree, releasesEnabled } from "./lib/worktrees.js";
+import { ReleaseRequests, agentCleanupFrom, releaseWorktree, releasesEnabled } from "./lib/worktrees.js";
 import { Hosts, proposeMapping } from "./lib/hosts.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
@@ -193,6 +193,10 @@ async function loadConfig() {
   // project sections are on screen and only those are re-read - with ~100 projects that is most of the git work
   // the board does. The setting lives in this file so it survives a restart and applies to every browser.
   cfg.scanMode = String(cfg.scanMode || "all").toLowerCase() === "visible" ? "visible" : "all";
+  // Whether an agent may take a tree off this disk by itself once the work has landed: Settings → Board → Agents
+  // clean up. It is a VETO above every project, so it can only CLOSE the door — a project still needs its own
+  // `releaseWorktrees: true` — and a missing key reads as ON, which is what an install written before this row did.
+  cfg.agentCleanup = agentCleanupFrom(cfg.agentCleanup);
   // ---- where the panel keeps things ----------------------------------------------------------------
   // Two directories, resolved once, here, by lib/paths.js — and every state file derived from the data one.
   // This used to be eleven separate `path.dirname(CONFIG_PATH)` lines, which put the job store, the assistant,
@@ -767,6 +771,12 @@ const settingsOut = () => ({
     (registry?.projects || []).map((p) => [p.name, policyForProject(p, config.remoteBranchPolicy)]),
   ),
   remoteWriteSeconds: config.remoteWriteSeconds,
+  // Whether an agent may take a worktree off the disk by itself once its work has landed, and which projects that
+  // would actually apply to. The switch is the board's veto; the list is the projects that carry their own
+  // `releaseWorktrees` grant. Both travel with the snapshot so the Settings row can say what is really in force
+  // instead of implying that "on" means every repository is open.
+  agentCleanup: agentCleanupFrom(config.agentCleanup),
+  releaseProjects: (registry?.projects || []).filter((p) => releasesEnabled(p)).map((p) => p.name),
   spawnEnabled: true,
 });
 
@@ -939,6 +949,9 @@ jobs.releases = releases;
 // project whose `releaseWorktrees` is on: telling a worker about a marker the panel would refuse at its first gate is
 // a paragraph of noise, and one that reads as an instruction the board will not honour.
 jobs.releaseBrief = (opts) => {
+  // The board's veto first: with it off no prompt carries the paragraph at all, so a worker is never told about
+  // a marker the executor would refuse.
+  if (!agentCleanupFrom(config.agentCleanup)) return "";
   const record = (registry.projects || []).find((p) => p.name === opts?.project) || null;
   return releasesEnabled(record) ? RELEASE_BRIEF : "";
 };
@@ -987,7 +1000,7 @@ async function sweepReleases(reason = "tick") {
       const row = scheduler.store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(request.path)) || null;
       let out = null;
       try {
-        out = await releaseWorktree({ project, request, row, jobs, locks, log });
+        out = await releaseWorktree({ project, request, row, jobs, locks, log, cleanup: config.agentCleanup });
       } catch (e) {
         out = { ok: false, outcome: `refused: the executor failed — ${String((e && e.message) || e)}`, detail: "", steps: [] };
       }
@@ -3367,6 +3380,28 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, mode, settings: settingsOut() });
     }
 
+    // Whether an agent may take its own tree off this disk once the work has landed: Settings → Board → Agents
+    // clean up. Server-side like the two rows above, because this process is what hands out the RELEASE paragraph
+    // and what sweeps the release executor — so the switch has to outlive a tab and apply to every browser.
+    //
+    // It is a VETO: on leaves each project's own `releaseWorktrees` grant deciding, so pressing it on never opens a
+    // delete; off closes every project at once. Only a literal boolean in the body is written — a body that names
+    // no `agentCleanup` writes OFF, because a delete permission that is assumed is not one.
+    if (route === "/api/settings/cleanup" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const allowed = body.agentCleanup === true;
+      try {
+        await patchPanelConfig({ agentCleanup: allowed });
+      } catch (e) {
+        return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
+      }
+      config.agentCleanup = allowed;
+      log(`agent cleanup: ${allowed ? "on — a project's own releaseWorktrees grant decides" : "off — no worktree is removed automatically"}`);
+      broadcast({ type: "settings", settings: settingsOut() });
+      return sendJson(res, 200, { ok: true, agentCleanup: allowed, settings: settingsOut() });
+    }
+
     // How old a worktree has to be before the chart holds its row back, so the board can open on the trees that
     // are still being worked in. Server-side for the same reason the refresh mode is: the number goes into this
     // panel's own config.json, so it survives a restart and applies to whichever browser is open — and it is the
@@ -4138,6 +4173,15 @@ async function sweepCheckedLandings() {
         checkedAnswers.add(job.id);
         say(answerLine(answer, { base }));
         log(`check ${job.id}: answered LANDED: ${answer.verdict} for ${row?.branch || tree || "(no tree)"} - nothing was deleted`);
+        continue;
+      }
+      // The reader's own veto (Settings → Board → Agents clean up) outranks a check agent's YES. It is spent here
+      // rather than held: an answer that said "landed" is not a standing instruction, so turning the switch back on
+      // must never delete a tree the reader has been reading in the meantime.
+      if (!agentCleanupFrom(config.agentCleanup)) {
+        checkedAnswers.add(job.id);
+        say(`panel: LANDED: ${answer.verdict} - nothing was deleted: agent cleanup is off in Settings → Board → Agents clean up, so this tree is yours to remove`);
+        log(`check ${job.id}: LANDED: ${answer.verdict} for ${row?.branch || tree || "(no tree)"} - agent cleanup is off, so nothing was deleted`);
         continue;
       }
       // A YES is only spent when it is ACTED on. Until then the answer is still good and the next tick may find the

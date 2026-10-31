@@ -137,3 +137,88 @@ test("a settled LANDED: YES card deletes its worktree, and a PARTIAL one does no
   assert.match(text(landedCard), /panel: LANDED: YES .*Recycle Bin/, "the landed card says the tree went to the Recycle Bin");
   assert.match(text(partialCard), /panel: LANDED: PARTIAL .*nothing was deleted/, "the partial card says nothing was deleted");
 });
+
+test("with agent cleanup off, a LANDED: YES deletes nothing and the card says why", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "wtgui-sweep-veto-"));
+  const storeDir = await mkdtemp(path.join(os.tmpdir(), "wtgui-sweep-veto-store-"));
+  const repo = path.join(root, "proj");
+  await mkdir(repo, { recursive: true });
+  git(repo, ["init", "-b", "main"]);
+  git(repo, ["config", "user.email", "check@local"]);
+  git(repo, ["config", "user.name", "Check"]);
+  git(repo, ["config", "commit.gpgsign", "false"]);
+  await writeFile(path.join(repo, "README.md"), "# test\n", "utf8");
+  git(repo, ["add", "."]);
+  git(repo, ["commit", "-m", "init"]);
+
+  // One tree, and an answer that would delete it on any other day.
+  const landedTree = path.join(repo, ".worktrees", "wt-landed");
+  git(repo, ["worktree", "add", "-b", "feat/landed", landedTree]);
+  await writeFile(path.join(landedTree, "work.txt"), "landed\n", "utf8");
+  git(landedTree, ["add", "."]);
+  git(landedTree, ["commit", "-m", "feat: the work"]);
+
+  const now = new Date().toISOString();
+  const jobsFile = path.join(storeDir, "logs", "jobs.json");
+  await mkdir(path.dirname(jobsFile), { recursive: true });
+  await writeFile(
+    jobsFile,
+    JSON.stringify({
+      savedAt: now,
+      jobs: [
+        {
+          id: "seedveto",
+          thread: "wtgui-check-veto",
+          turn: 1,
+          existing: true,
+          prompt: "CHECKING MAIN - proj: is feat/landed's own change already on main?",
+          cwd: slash(landedTree),
+          ownerPath: slash(landedTree),
+          projectPath: slash(repo),
+          sessionId: "wtgui-check-veto",
+          status: "done",
+          startedAt: now,
+          endedAt: now,
+          finalMessage: "CHECKING MAIN: feat/landed -> main\n  reverse-apply: PRESENT\n\nLANDED: YES",
+          lines: [],
+          artifacts: [],
+          attachments: [],
+        },
+      ],
+    }),
+    "utf8",
+  );
+  await writeFile(path.join(storeDir, "logs", "labels.json"), JSON.stringify({ "wtgui-check-veto": "CHECKING MAIN" }), "utf8");
+
+  // Settings -> Board -> Agents clean up is OFF in this panel's config.json.
+  const panel = await startPanel({ config: { scanRoots: [root], jobsFile, agentCleanup: false } });
+  t.after(async () => {
+    await panel.stop();
+    await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    await rm(storeDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  });
+  const reload = await post(panel.base, "/api/reload", { body: {} });
+  assert.equal(reload.status, 200, `reload must succeed: ${reload.text.slice(0, 200)}`);
+
+  const rowOf = (snap, p) => {
+    const proj = (snap.projects || []).find((x) => x.name === "proj");
+    return proj ? (proj.worktrees || []).find((w) => slash(w.path) === slash(p)) || null : null;
+  };
+  // The boot pass is 6 s in and the tick is 10 s, so waiting for the ROW proves the scan ran; the answer is then
+  // given one more tick to be spent, which is what the card's line is read for.
+  await waitFor(panel.base, (s) => Boolean(rowOf(s, landedTree)), "the landed tree on the board");
+  const until = Date.now() + 60_000;
+  let said = "";
+  while (Date.now() < until) {
+    const jobs = await (await fetch(`${panel.base}/api/jobs`)).json();
+    const card = (jobs.jobs || []).find((j) => j.thread === "wtgui-check-veto");
+    said = (card?.lines || []).map((l) => String(l.text || "")).join("\n");
+    if (/agent cleanup is off/.test(said)) break;
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  assert.match(said, /panel: LANDED: YES - nothing was deleted: agent cleanup is off/, `the card says why it survived:\n${said}`);
+  assert.equal(await exists(landedTree), true, "the tree is exactly where it was");
+  assert.equal(/feat\/landed/.test(git(repo, ["worktree", "list", "--porcelain"])), true, "git still lists it");
+  const after = await (await fetch(`${panel.base}/api/state`)).json();
+  assert.ok(rowOf(after, landedTree), "and its row is still on the board");
+});

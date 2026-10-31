@@ -351,6 +351,12 @@
             <option value="auto">start it</option>
           </select>
         </label>
+
+        <label class="settings-row settings-gap" for="agent-cleanup" title="Whether an agent may take its own worktree off this disk once the work has landed. on (the default) — a worker is told it may end its turn with one `RELEASE &lt;tree&gt; | &lt;why it is finished&gt;` line, and a check agent's LANDED: YES recycles the tree; the panel still refuses unless that project carries its own releaseWorktrees grant in config.json, the tree is clean, the branch's PR reads MERGED and no run is still holding it. off — no RELEASE paragraph reaches any prompt, every request that arrives is refused on the row, and a LANDED: YES is only a line in the console. Switch it off when you want to read and remove the trees yourself as you go. Written into this panel's config.json (agentCleanup), so it applies to every browser and survives a restart.">
+          <span>Agents clean up <span class="settings-info">ⓘ</span></span>
+          <input id="agent-cleanup" type="checkbox" checked>
+        </label>
+        <div class="settings-preview mono" id="agent-cleanup-preview">…</div>
       </div>
 
       <div class="settings-group folded">

@@ -204,6 +204,46 @@ test("a tree cut from main is told to push for a pull request, on its first turn
   assert.equal(asked, null, "an untagged branch in the recorded directory does not inherit the record");
 });
 
+// The RELEASE paragraph is handed over only while the board's switch is on (Settings -> Board -> Agents clean up):
+// telling a worker about a marker the executor would refuse at its first gate is a paragraph of noise, and one that
+// reads as an instruction the board will not honour. The paragraph rides the SPAWN prompt (a reply continues the same
+// session, which already carries it), so the second half of this proof is a second spawn on the same live panel.
+test("the RELEASE paragraph reaches a prompt only while agent cleanup is on", async (t) => {
+  const stub = await stubGateway();
+  const repo = makeRepo("main");
+  const panel = await startPanel({
+    config: {
+      apiServer: { url: stub.url, key: "sandbox-key" },
+      agentCleanup: false,
+      // The PROJECT carries its own grant; the board's switch is the only thing standing in the way.
+      projects: [{ name: "fixture", path: repo, remote: null, mainBranch: "main", releaseWorktrees: true }],
+    },
+  });
+  t.after(async () => {
+    await panel.stop();
+    await stub.stop();
+    sweep(repo);
+  });
+
+  // The panel's own board assistant also posts to this stub at boot, so a body is found by its own words rather
+  // than by index.
+  // A worker's body is the one that names its own worktree ("Work in …"); the assistant's digest can quote the
+  // same words off the card, so the phrase alone does not identify a submission.
+  const bodyWith = (needle) => stub.submitted.map((x) => String(x.input || "")).find((x) => x.includes(needle) && x.includes("Work in ")) || "";
+  const spawned = await post(panel.base, "/api/agents", { body: { prompt: "the first spawn", cwd: repo, project: "fixture" } });
+  assert.equal(spawned.status, 202, `the spawn is accepted: ${spawned.text}`);
+  const body1 = bodyWith("the first spawn");
+  assert.doesNotMatch(body1, /RELEASE — this worktree can ask the panel/, `with the switch off no prompt carries it:\n${body1}`);
+
+  // Press the row's switch through the route the page posts to, and the very next spawn is told.
+  const on = await post(panel.base, "/api/settings/cleanup", { body: { agentCleanup: true } });
+  assert.equal(on.status, 200, on.text);
+  const second = await post(panel.base, "/api/agents", { body: { prompt: "the second spawn", cwd: repo, project: "fixture" } });
+  assert.equal(second.status, 202, `the second spawn is accepted: ${second.text}`);
+  const body2 = bodyWith("the second spawn");
+  assert.match(body2, /RELEASE — this worktree can ask the panel/, `the next spawn is told while the switch is on:\n${body2}`);
+});
+
 test("a parent that is not a name is never handed over as one", async (t) => {
   const stub = await stubGateway();
   const dir = mkdtempSync(path.join(tmpdir(), "wtgui-brief-name-"));
