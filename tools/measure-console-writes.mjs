@@ -61,6 +61,10 @@ const CONTROL = argv.includes("--control");
 // one condition in public/app.js's own scroll handler that matters - `lastInputAt` is what lets a clamp be read as the
 // reader scrolling away, and it is only set by a real wheel/mousedown/keydown/touchstart.
 const TYPE_INTO = argv.includes("--type");
+// `--stream` draws a card as ONE console (🌊) and answers /api/thinking with blocks that keep growing, then parks the
+// reader with a real wheel. That combination is the only way to run syncStreamConsole's relative correction
+// (public/app.js:6638): it fires only for a box that is NOT sticky, and only when a row above the reader's line moved.
+const STREAM = argv.includes("--stream");
 const MAX_WAIT_MS = 150_000;
 const OFF_BOTTOM = 8; // px; "pinned at the tail" for this tool, the same threshold the reader's report used
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -346,7 +350,7 @@ function pageInit(opts) {
     const id = `${k}:${key}`;
     let box = R.boxes[id];
     if (!box) {
-      box = R.boxes[id] = { id, kind: k, key, reads: new Array(READ_CAP), ri: 0, rn: 0, series: { ts: [], top: [], sh: [], ch: [] }, lastWrite: null, writes: 0 };
+      box = R.boxes[id] = { id, kind: k, key, reads: new Array(READ_CAP), ri: 0, rn: 0, series: { ts: [], top: [], sh: [], ch: [], pin: [] }, lastWrite: null, writes: 0 };
       R.boxOrder.push(id);
     }
     return box;
@@ -381,6 +385,22 @@ function pageInit(opts) {
       return { what, ageMs: Math.round((t - r.t) * 10) / 10, domAge: domSeq - r.seq, shThen: Math.round(r.sh), chThen: Math.round(r.ch), topThen: Math.round(r.top) };
     }
     return null;
+  };
+
+  // The panel's own pin state for a box: `state.outPinned[id] !== false` for a console, the think/sub maps for the
+  // other two. It is what decides whether a write that leaves the box above its bottom is a DEFECT (a pinned box the
+  // panel was supposed to keep on its newest line) or the FEATURE (a reader who scrolled up, put back where they
+  // were). Without it a parked reader's every correct restore reads as a bad write.
+  const pinnedNow = (el, k, key) => {
+    try {
+      if (typeof state === "undefined") return true;
+      if (k === "think") return state.thinkPinned.get(el.closest("details.think")?.dataset.thinkTurn || "") !== false;
+      if (k === "sub") return state.subConsolePinned.get(el.dataset.subConsoleBox || "") !== false;
+      if (k === "body") return true;
+      return typeof window.consolePinned === "function" ? window.consolePinned(key) : state.outPinned[key] !== false;
+    } catch {
+      return true;
+    }
   };
 
   // ---- the getters ----
@@ -448,7 +468,8 @@ function pageInit(opts) {
       const before = geom(this);
       const conn = this.isConnected;
       const asked = Number(v);
-      const box = ringOf(k, keyOf(this, k));
+      const boxKey = keyOf(this, k);
+      const box = ringOf(k, boxKey);
       const src = findSrc(box, Math.round(asked) || 0, t);
       const rec = {
         t,
@@ -460,6 +481,8 @@ function pageInit(opts) {
         sh: Math.round(before.sh),
         ch: Math.round(before.ch),
         max: Math.round(before.sh - before.ch),
+        // Whether the panel believed this box was following its newest line when it wrote.
+        pin: pinnedNow(this, k, boxKey),
         conn,
         // A box with no layout box (detached, or inside a display:none subtree) ignores a scrollTop write: the value
         // is stored nowhere and the element stays where it was. `dead` is that write.
@@ -560,6 +583,7 @@ function pageInit(opts) {
       const box = ringOf(k, keyOf(el, k));
       const g = geom(el);
       box.series.ts.push(Math.round(t));
+      box.series.pin.push(pinnedNow(el, k, box.key) ? 1 : 0);
       box.series.top.push(Math.round(g.top));
       box.series.sh.push(Math.round(g.sh));
       box.series.ch.push(Math.round(g.ch));
@@ -697,7 +721,7 @@ function rank(writes, boxes) {
     const name = callerOf(w.by);
     let r = rows.get(name);
     if (!r) {
-      r = { name, sites: new Map(), n: 0, off: 0, asked: 0, grew: 0, stale: 0, dead: 0, up: 0, shortSum: 0, shortMax: 0, staleAges: [], domAges: [], maxOff: 0 };
+      r = { name, sites: new Map(), n: 0, off: 0, asked: 0, grew: 0, stale: 0, dead: 0, up: 0, parked: 0, shortSum: 0, shortMax: 0, staleAges: [], domAges: [], maxOff: 0 };
       rows.set(name, r);
     }
     r.n += 1;
@@ -709,6 +733,12 @@ function rank(writes, boxes) {
       continue;
     }
     if (w.landedShort > 2) {
+      // A box the reader took over is SUPPOSED to sit above its bottom - that is the restore working. Only a PINNED
+      // box left behind its newest line is the defect this ranking is about.
+      if (!w.pin) {
+        r.parked += 1;
+        continue;
+      }
       r.off += 1;
       if (w.landedShort > r.maxOff) r.maxOff = w.landedShort;
       if (w.short > 2) {
@@ -774,12 +804,13 @@ function silentMoves(writes, ops, focus) {
 // An excursion is a maximal run of frames off the bottom, entered from a frame that was on it. Its cause is the last
 // write (or DOM move) in the gap before the first off-bottom frame; its repair is the first write that puts it back.
 function excursions(box, writes) {
-  const { ts, top, sh, ch } = box.series;
+  const { ts, top, sh, ch, pin } = box.series;
   const out = [];
   let run = null;
   for (let i = 0; i < ts.length; i += 1) {
     const dist = sh[i] - top[i] - ch[i];
-    const off = dist > OFF_BOTTOM && sh[i] - ch[i] > OFF_BOTTOM;
+    // A parked box sits above its bottom by design; only a PINNED box behind its newest line is an excursion.
+    const off = pin[i] === 1 && dist > OFF_BOTTOM && sh[i] - ch[i] > OFF_BOTTOM;
     if (off && !run) run = { startT: ts[i], startTop: top[i], max: sh[i] - ch[i], frames: 0, peak: dist, prevT: i ? ts[i - 1] : ts[i], prevTop: i ? top[i - 1] : top[i], prevMax: i ? sh[i - 1] - ch[i - 1] : 0, growth: sh[i] - (i ? sh[i - 1] : sh[i]) };
     if (off && run) {
       run.frames += 1;
@@ -890,6 +921,36 @@ async function runLayout(name, spec, pw, startPanel) {
     }, wantRows);
     for (const s of spawned) await page.waitForSelector(`.job[data-thread="${s.thread}"] pre.job-out`, { timeout: 45_000 });
     out.consoles = spawned.length;
+    // ---- the 🌊 console --------------------------------------------------------------------------------------------
+    // paintStreamConsole is only reached through the 1.2 s thinking poll (paintThink -> :6782), so a stream card with
+    // no blocks is never patched and the correction never runs. The blocks here are answered by the tool, not by a
+    // model: the page's own poll, its own merge and its own patch are what is being measured. Growth is deliberate
+    // on both sides of the reader — the last block keeps extending (a row ABOVE the parked reader changing height is
+    // the case the correction exists for) and a new one appears every fourth poll (the tail grows).
+    if (STREAM) {
+      await page.evaluate((threads) => {
+        for (const t of threads) window.setStreamMode(t, true);
+        window.renderAll();
+      }, spawned.map((s) => s.thread));
+      const blocks = new Map();
+      let polls = 0;
+      await page.route("**/api/thinking*", async (route) => {
+        const url = new URL(route.request().url());
+        const thread = url.searchParams.get("thread") || "";
+        polls += 1;
+        let list = blocks.get(thread);
+        if (!list) {
+          list = [{ at: Math.floor(Date.now() / 1000), text: "the console is a fixed height box" }];
+          blocks.set(thread, list);
+        }
+        // The row the correction watches is the FIRST one inside the box, so the growth that can move it has to be
+        // ABOVE it: the first block grows, not the last.
+        list[0].text = `${list[0].text} and the rows above the reader keep moving`;
+        if (polls % 4 === 0) list.push({ at: Math.floor(Date.now() / 1000) + polls, text: "a new thought arrives at the tail" });
+        await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ thread, blocks: list }) });
+      });
+      out.stream = true;
+    }
     // The window starts when every console overflows its box: before that there is nothing to be off the bottom OF.
     const overflowed = await page
       .waitForFunction(
@@ -906,15 +967,48 @@ async function runLayout(name, spec, pw, startPanel) {
       out.notMeasured.push(`the consoles did not all overflow within ${Math.round(MAX_WAIT_MS / 1000)} s`);
       return out;
     }
+    // A real wheel up over the first console: the page's own handler unpins it (lastInputAt is fresh, atBottom false),
+    // and that is the only state in which syncStreamConsole computes `keep` and writes the relative correction. Done
+    // BEFORE the window is armed, so the gesture's own writes are not counted against the page.
+    if (STREAM) {
+      await sleep(1200);
+      const box = (await page.$$("pre.job-out"))[0];
+      const r = box ? await box.boundingBox().catch(() => null) : null;
+      if (r) {
+        await page.mouse.move(r.x + r.width / 2, r.y + r.height / 2);
+        await page.mouse.wheel(0, -420);
+        out.parked = true;
+      }
+      // Whether it took: a wheel that landed on the page instead leaves the console pinned, and then the correction
+      // can never run and a clean window would prove nothing about it.
+      out.parkState = await page.evaluate(() => {
+        const el = document.querySelector("pre.job-out");
+        if (!el) return null;
+        const id = el.dataset.out || "";
+        return { id, pinned: state.outPinned[id] !== false, dist: Math.round(el.scrollHeight - el.scrollTop - el.clientHeight), max: Math.round(el.scrollHeight - el.clientHeight) };
+      });
+      if (!out.parkState || out.parkState.pinned || out.parkState.dist < 40) {
+        // The wheel missed the box (it can be off the viewport). Dispatch the same event the page listens for, on the
+        // element itself, and let the app's own handler decide what that means — no state is set by hand.
+        out.parkState = await page.evaluate(() => {
+          const el = document.querySelector("pre.job-out");
+          if (!el) return null;
+          el.dispatchEvent(new WheelEvent("wheel", { deltaY: -420, bubbles: true, cancelable: true }));
+          el.scrollTop = Math.max(0, el.scrollTop - Math.round(el.clientHeight * 0.8));
+          const id = el.dataset.out || "";
+          return { id, pinned: state.outPinned[id] !== false, dist: Math.round(el.scrollHeight - el.scrollTop - el.clientHeight), max: Math.round(el.scrollHeight - el.clientHeight), via: "dispatched" };
+        });
+      }
+    }
     // Start the measured window: the painted series and the write log both begin here.
     await page.evaluate(() => {
       const R = window.__rec;
-      for (const id of Object.keys(R.boxes)) R.boxes[id].series = { ts: [], top: [], sh: [], ch: [] };
+      for (const id of Object.keys(R.boxes)) R.boxes[id].series = { ts: [], top: [], sh: [], ch: [], pin: [] };
       R.writes.length = 0;
       R.ops.length = 0;
       window.__arm();
     });
-    log(name, `${spawned.length} console(s) overflowing; recording ${SECONDS} s of writes${CONTROL ? " (control: read log off)" : ""}${TYPE_INTO ? " (the reader is typing in a reply box)" : ""}`);
+    log(name, `${spawned.length} console(s) overflowing; recording ${SECONDS} s of writes${CONTROL ? " (control: read log off)" : ""}${TYPE_INTO ? " (the reader is typing in a reply box)" : ""}${STREAM ? ` (a 🌊 console; parked ${JSON.stringify(out.parkState)})` : ""}`);
     // The reader's gesture, if asked for: a real click into one card's reply box and a real keypress every 400 ms, so
     // `lastInputAt` stays inside its 1200 ms window for the whole measurement. Nothing synthetic is dispatched.
     let typing = null;
@@ -948,6 +1042,17 @@ async function runLayout(name, spec, pw, startPanel) {
       window.__stop();
       return window.__dump();
     });
+    // What the correction at :6638 needs to be reachable at all: a row inside the box, and that row KEYED — its key is
+    // how the patch finds it again after the body is rebuilt. A stream built from rows with no key never writes.
+    out.streamRows = STREAM
+      ? await page.evaluate(() => {
+          const el = document.querySelector("pre.job-out");
+          if (!el) return null;
+          const rows = [...el.children];
+          const keyed = rows.filter((n) => n.dataset && (n.dataset.lid || n.dataset.tgrp));
+          return { rows: rows.length, keyed: keyed.length, firstKey: keyed[0]?.dataset?.lid || keyed[0]?.dataset?.tgrp || "", dist: Math.round(el.scrollHeight - el.scrollTop - el.clientHeight) };
+        })
+      : null;
     out.selftest = selftest;
     out.windowEnd = rec.windowEnd;
     // Everything after the window's end belongs to the self-test.
@@ -959,11 +1064,11 @@ async function runLayout(name, spec, pw, startPanel) {
     out.boxes = {};
     for (const [id, b] of Object.entries(rec.boxes)) {
       const keep = b.series.ts.map((t, i) => (t <= rec.windowEnd ? i : -1)).filter((i) => i >= 0);
-      out.boxes[id] = { ...b, series: { ts: keep.map((i) => b.series.ts[i]), top: keep.map((i) => b.series.top[i]), sh: keep.map((i) => b.series.sh[i]), ch: keep.map((i) => b.series.ch[i]) } };
+      out.boxes[id] = { ...b, series: { ts: keep.map((i) => b.series.ts[i]), top: keep.map((i) => b.series.top[i]), sh: keep.map((i) => b.series.sh[i]), ch: keep.map((i) => b.series.ch[i]), pin: keep.map((i) => b.series.pin[i]) } };
       // The frames the self-test painted, kept whole so its own episode can be read back.
       out.selftestFrames = out.selftestFrames || {};
       const after = b.series.ts.map((t, i) => (t > rec.windowEnd ? i : -1)).filter((i) => i >= 0);
-      if (after.length) out.selftestFrames[id] = { ts: after.map((i) => b.series.ts[i]), top: after.map((i) => b.series.top[i]), sh: after.map((i) => b.series.sh[i]), ch: after.map((i) => b.series.ch[i]) };
+      if (after.length) out.selftestFrames[id] = { ts: after.map((i) => b.series.ts[i]), top: after.map((i) => b.series.top[i]), sh: after.map((i) => b.series.sh[i]), ch: after.map((i) => b.series.ch[i]), pin: after.map((i) => b.series.pin[i]) };
     }
     out.frames = rec.frames;
     out.reads = rec.reads;
@@ -1027,11 +1132,12 @@ for (const r of results) {
 
   const ups = r.writes.filter((w) => w.asked != null && w.from - w.asked > 2);
   const dead = r.writes.filter((w) => w.dead);
-  const off = r.writes.filter((w) => w.asked != null && !w.dead && w.landedShort > 2);
+  const off = r.writes.filter((w) => w.asked != null && !w.dead && w.pin && w.landedShort > 2);
   const grew = off.filter((w) => w.short <= 2);
   const viaScroll = r.writes.filter((w) => w.via);
+  const parked = r.writes.filter((w) => w.asked != null && !w.dead && w.landedShort > 2 && !w.pin);
   console.log(
-    `             writes: ${r.writes.length} total, ${ups.length} moved a box up, ${off.length} left it off the bottom (${grew.length} of those asked for the bottom as it then was and the box grew inside the write), ${dead.length} into a box with no layout${viaScroll.length ? `, ${viaScroll.length} via scrollTo/scrollBy` : ""}`,
+    `             writes: ${r.writes.length} total, ${ups.length} moved a box up, ${off.length} left a PINNED box off the bottom (${grew.length} of those asked for the bottom as it then was and the box grew inside the write), ${parked.length} left a box the reader had taken over off the bottom (expected), ${dead.length} into a box with no layout${viaScroll.length ? `, ${viaScroll.length} via scrollTo/scrollBy` : ""}`,
   );
 
   console.log("             caller                                n     up    off  asked   grew  stale  dead  maxOff");

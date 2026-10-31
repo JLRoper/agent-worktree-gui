@@ -337,3 +337,45 @@ Each run stands up its own panel (`tools/panel-testkit.mjs`: spare port, own `PA
 `jobs.json` / projects cache, `API_SERVER_KEY` empty), its own stub Runs API, its own scratch tree under `os.tmpdir()`,
 and tears all of it down. The reader's panel on 7331 is never touched. Exit 0 = measured; exit 2 = the run measured
 nothing (no console overflowed, or no write was logged) and a pass would be a pass on an empty log.
+
+---
+
+## 9. The one writer the campaign had not measured: `syncStreamConsole`, app.js:6638
+
+Item 4 of this tree's list. Measured 2026-10-31 on `31bda32` with `tools/measure-console-writes.mjs --stream`, one
+🌊 card, 45 s and 60 s windows, the reader parked mid-transcript by a wheel (the page's own handler: `pinned: false`,
+`dist: 78 px`). The tool grew `/api/thinking`'s first block on every 1.2 s poll, which is the only path that reaches
+`paintStreamConsole` (`app.js:6782`), and it counts a write as a defect only when the box was PINNED at the time — a
+box the reader took over is *supposed* to sit above its bottom.
+
+| what | number |
+| --- | --- |
+| `paintStreamConsole` runs | 18-25 per window |
+| **writes from `syncStreamConsole` (`:6638`)** | **0, in every window** |
+| writes that left a PINNED box off its bottom | 0 |
+| writes that left a parked box off its bottom | 1-4 (the restore doing its job) |
+| `paintTypedLines` / `drawJobLine` / `paintStreamConsole` / `restoreScrolls` / `applyStoredScrolls` / `releaseScrolls` | 573 / 288 / 18 / 21 / 21 / 7 (45 s, one console) |
+
+**The correction cannot touch a pinned console, and that is structural, not a measurement accident.** Its guard is
+
+```js
+const stick = consolePinned(`${turn.id}${copy}`) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
+syncStreamConsole(out, streamBodyHtml(...), stick);
+if (stick) setScroll(out, out.scrollHeight);
+```
+
+and `syncStreamConsole` returns `keep = null` the moment `stick` is true (`app.js:6610`). So for a box the panel
+believes is pinned, the only write that function can make is `setScroll(out, out.scrollHeight)` — the "follow the
+newest line" repair — and the relative correction is unreachable. A pinned console therefore cannot be left behind by
+this path, which is exactly what the 0 in the table says.
+
+**In the one state where it CAN run, I could not make it write.** With the reader parked and 18 patch cycles, the
+correction wrote nothing: the row it watches is the first one inside the box, and the synthetic body this drive
+produces has two rows, so growing the first block moves no row above it (the tool reports `streamRows: { rows: 2,
+keyed: 2 }`). A drive that exercises it needs a real multi-row stream — reasoning rows and tool groups above the
+reader's line — which means a run that really reasons, not a stubbed `/api/thinking`.
+
+**No fix, therefore, and none is warranted on this evidence.** What would change that: a 🌊 card with enough rows
+above the reader for the kept row to move, where the correction's `setScroll(out, out.scrollTop + (off - keep.off))`
+lands somewhere other than the reader's own line. Until that is seen, `syncStreamConsole` stays a writer with no
+measured defect — and with one measured impossibilty: it cannot be the cause of a pinned console's fall.
