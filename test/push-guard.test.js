@@ -73,7 +73,13 @@ async function installOneGuardInto(dir, { panelUrl, timeoutSeconds = 3, chain = 
 }
 
 // git hands a pre-push hook one line per ref on stdin: <local ref> <local sha> <remote ref> <remote sha>.
-function runHook({ dir, env = {}, cwd, timeoutMs = 30_000 }) {
+//
+// The kill budget is a guard against a hook that never returns, not a timing assertion: the control run below parks
+// on purpose for the fixture's 3 s window, and every git/sh spawn the hook makes costs about a second on this host.
+// Measured: 61 s for this file solo, and the full suite (60 files in parallel, each driving real git) blew straight
+// through the old 30 s and reported `exit=null` — the hook was still working, not stuck. The assertions that matter
+// are on what the hook PRINTED and whether it asked the panel; the ceiling only has to be longer than a loaded box.
+function runHook({ dir, env = {}, cwd, timeoutMs = 120_000 }) {
   const started = Date.now();
   return new Promise((resolve) => {
     const child = spawn(SH, [path.join(dir, "pre-push")], {

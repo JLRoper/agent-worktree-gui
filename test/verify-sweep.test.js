@@ -111,8 +111,18 @@ test("a settled LANDED: YES card deletes its worktree, and a PARTIAL one does no
   // waiting for a row that is being deleted is a race this test would lose for the right reason.
   await waitFor(panel.base, (s) => Boolean(rowOf(s, partialTree)), "the worktrees on the board");
 
-  // The answer is acted on within one sweep tick (10 s), with a boot pass 6 s in.
-  const after = await waitFor(panel.base, (s) => !rowOf(s, landedTree), "the landed row to be swept off the board", { timeout: 60_000 });
+  // The answer is acted on within one sweep tick (10 s), with a boot pass 6 s in. The budget is for a LOADED box, not
+  // for the tick: this file takes ~24 s solo, and in the full suite (60 files in parallel, each driving real git and a
+  // real panel) the scan workers are starved past the old 60 s — measured 122 s and still three rows. The assertion is
+  // unchanged: the row must go, however long the sweep needs to get round to it.
+  // The panel's own log is attached to a timeout, because "the sweep never ran" and "it ran and could not act" read
+  // the same from /api/state and are two different bugs.
+  let after;
+  try {
+    after = await waitFor(panel.base, (s) => !rowOf(s, landedTree), "the landed row to be swept off the board", { timeout: 180_000 });
+  } catch (e) {
+    throw new Error(`${e.message}\n--- panel log (tail) ---\n${panel.log().slice(-4000)}`);
+  }
   assert.equal(await exists(landedTree), false, "the landed worktree's folder is gone (Recycle Bin or git's removal)");
   assert.equal(/feat\/landed/.test(git(repo, ["worktree", "list", "--porcelain"])), false, "git no longer lists the removed tree");
   assert.ok(rowOf(after, partialTree), "a LANDED: PARTIAL answer deletes nothing: its tree is still a row");

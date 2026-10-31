@@ -215,8 +215,8 @@ the line. The tolerance is argued from the three reports, not from taste.
 - **The reader's own input.** None is sent, on purpose, and the tool counts input events to prove it. A scroll the
   reader causes is out of scope.
 - **Anything past 30 s.** The default windows end before the panel's first safety-net tick so a scheduled rebuild
-  cannot pollute a per-second floor. `--resync-check` is the mode that goes looking for it, and it fails on this tree
-  by design until `jobline` stamps `state.lastEventAt`.
+  cannot pollute a per-second floor. `--resync-check` is the mode that goes looking for it, and it failed on the tree
+  this note measured by design, until `jobline` stamped `state.lastEventAt` — see §7.
 - It is not wired into `test/*.test.js` and changes nothing the page does: every recorder is a wrapper, a
   MutationObserver, a rAF loop or a property read.
 
@@ -226,3 +226,27 @@ node tools/verify-console-jitter.mjs --json C:/CodeReviews/agent-worktree-gui/ji
 
 The capture behind the table above was taken with the same command into a scratch path; the printed table is the
 read-back, and every number in it is recomputable from the capture's `buckets`, `polls` and `scrolls` arrays.
+
+## 7. #2 and #3 are fixed (0.32.6)
+
+Everything above is the record of one tree (`b64642d`) and stays as it was read. Two of its three mechanisms have
+since been patched rather than rebuilt, and the commands that failed here now pass on the same tool:
+
+- **#2, `paintThink`.** A poll patches the `<details>` it already has: the summary's count is rewritten, every
+  `.think-block` keeps its node (keyed by `data-lid`), and only the text that moved is written — so the reader's
+  selection, the block's `open` and its copy button survive the read, and the "nothing yet" row becomes the first
+  thought instead of being swapped for it. `--mode think` reads **`block kept 100% (18/18)`** with `details repl 0`,
+  where this file measured `0% (0/16)` and one replacement per poll. What churn is left in the block is the pacer's
+  own in-place rewrite (~11 rewritten/s), which is mechanism #1 and untouched.
+- **#3, the 30 s rebuild.** `jobline` now stamps `state.lastEventAt` — it was the only frame kind that did not — and
+  the safety net's rule lives in `public/core/liveness.js`, so both halves are one testable function: a frame
+  arriving is liveness, silence past 20 s **or** a socket that is not open still resyncs. `--resync-check` reads
+  **`0 rebuilds while 6.9 lines/s arrived`**, where this file measured 1 rebuild at 7.1 lines/s. `renderJobs` also
+  refuses to rewrite `#jobs` when neither the set of cards nor any card's signature has moved, so a snapshot that
+  changes nothing a card draws cannot replace the node the run's own stream is writing into either.
+- **#1, the pacer**, is deliberately unchanged: 77% of the flowing churn is a growing row rewritten in place, and
+  that is the panel doing what a pinned reader asked for, one node the whole time.
+
+`node --test test/liveness.test.js` pins the two halves of #3 (a frame is liveness; silence and a closed socket are
+the resync), and `node tools/verify-console-jitter.mjs` measures the rest — `--mode stream` stays green, so the
+console's own path did not regress while the block was patched.

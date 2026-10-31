@@ -4125,7 +4125,6 @@ async function sweepCheckedLandings() {
     // truncated from the start.
     const rows = jobs.list().map((s) => ({ ...s, finalMessage: jobs.get(s.id)?.finalMessage || s.completion?.final?.text || "" }));
     for (const { job, answer } of answeredChecks(rows, { acted: checkedAnswers })) {
-      checkedAnswers.add(job.id);
       const live = jobs.get(job.id);
       const tree = job.ownerPath || job.cwd || "";
       const project = (tree && spawnFeature.projectForPath(tree)) || null;
@@ -4135,24 +4134,25 @@ async function sweepCheckedLandings() {
         if (live) jobs.push(live, { kind: "raw", text });
       };
       if (!answerDeletes(answer)) {
+        // PARTIAL, NO, SUPERSEDED: the answer has done its whole job (nothing was deleted) and is spent.
+        checkedAnswers.add(job.id);
         say(answerLine(answer, { base }));
         log(`check ${job.id}: answered LANDED: ${answer.verdict} for ${row?.branch || tree || "(no tree)"} - nothing was deleted`);
         continue;
       }
-      if (!project) {
-        say(answerLine(answer, { base, error: "it is no longer a worktree row of this project, so there was nothing to remove" }));
-        continue;
-      }
-      if (!row) {
-        // The project is known but its row is not in the store YET - the answer arrived before a discovery pass put
-        // the tree back on the board (a restart between the answer and the delete is exactly that). Do not spend the
-        // answer: leave it for the next tick, inside lib/verify-landed.js's age window, and say so once.
+      // A YES is only spent when it is ACTED on. Until then the answer is still good and the next tick may find the
+      // tree: the boot pass runs 6 s in, and a discovery pass over a loaded box takes longer than that, so `project`
+      // (and then `row`) can both be null for a tree that is about to appear. Marking it acted first is what lost a
+      // LANDED: YES for good — the sweep that was supposed to wait for the scan never looked at it again. The age
+      // window in lib/verify-landed.js retires an answer whose tree never comes back, and the one log line says so.
+      if (!project || !row) {
         if (!pendingChecked.has(job.id)) {
           pendingChecked.add(job.id);
           log(`check ${job.id}: LANDED: YES, but ${tree} is not on the board yet - waiting for the scan`);
         }
         continue;
       }
+      checkedAnswers.add(job.id);
       const out = await deleteWorktreeRow({ project, row, target: row.path, jobs, locks, onLog: log });
       if (!out.ok) {
         say(answerLine(answer, { base, error: out.error }));
