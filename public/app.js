@@ -95,6 +95,9 @@ const state = {
   pool: null,
   jobs: new Map(),
   jobLines: new Map(),
+  // The signature of the unattached list as it was last WRITTEN (`renderJobs`). A snapshot that changes nothing a
+  // card draws must not replace the card node the run's own stream is writing into.
+  jobsListSig: "",
   replyDrafts: {},
   // Pasted blocks collapsed into inline chips (board/paste-chips.js): id -> { text, lines }. The DOM holds
   // the id only, so the text lives HERE, where a card rebuild and a reload can find it again — and
@@ -6554,26 +6557,128 @@ function paintStreamConsole(turn, copy = "") {
   return true;
 }
 
+// A poll of the store used to be drawn by replacing the whole `<details>`: one fresh node per read, every block
+// inside it new. That is what made the block churn 5.6 rows a second on a card whose model had stopped, and it took
+// the reader's selection, the block's open state and the copy button with every read. What a poll's answer actually
+// changes is the WORDS: the last thought grows as the pacer types it, one more thought appears at the end, and the
+// count in the summary moves. So the node stays — its `open` belongs to the reader (sweepThinking folds it when the
+// turn ends, and the card repaint on a status change re-renders it) — the summary's copy button is never touched, and
+// only the text that moved is written, in place, so a selection standing in an untouched block survives the read.
+const thinkRowKey = (n) => n?.dataset?.lid || (n?.classList?.contains("think-empty") ? "@empty" : "");
+
+// Same element skeleton, different words: the one case that can be patched without replacing anything.
+function sameThinkShape(a, b) {
+  if (!a || !b || a.nodeType !== b.nodeType) return false;
+  if (a.nodeType === 3) return true;
+  if (a.nodeType !== 1) return false;
+  if (a.tagName !== b.tagName) return false;
+  if ((a.getAttribute("class") || "") !== (b.getAttribute("class") || "")) return false;
+  // A link's identity is its target: linkifyText can turn a half-typed URL into an anchor mid-read, and that changes
+  // the tree's shape rather than its words.
+  if (a.tagName === "A" && (a.getAttribute("href") || "") !== (b.getAttribute("href") || "")) return false;
+  if (a.childNodes.length !== b.childNodes.length) return false;
+  for (let i = 0; i < a.childNodes.length; i++) if (!sameThinkShape(a.childNodes[i], b.childNodes[i])) return false;
+  return true;
+}
+
+function writeThinkText(live, fresh) {
+  for (let i = 0; i < live.childNodes.length; i++) {
+    const l = live.childNodes[i];
+    const f = fresh.childNodes[i];
+    if (!f) return;
+    if (l.nodeType === 3) {
+      if (l.nodeValue !== f.nodeValue) l.nodeValue = f.nodeValue;
+    } else if (l.nodeType === 1) {
+      writeThinkText(l, f);
+    }
+  }
+}
+
+// One row of the block, patched against the one it replaced in the cache: same lid keeps its node (and whatever the
+// reader has selected in it), a row the window has dropped is removed, a new thought is inserted where it belongs.
+function syncThinkBody(body, freshBody) {
+  const next = [...freshBody.children];
+  const byKey = new Map();
+  for (const n of body.children) {
+    const k = thinkRowKey(n);
+    if (k && !byKey.has(k)) byKey.set(k, n);
+  }
+  // The "nothing yet — it will appear here as the agent thinks" row BECOMES the first thought instead of being
+  // replaced by it. It is the one line the reader is watching before there is anything to read, and the first block
+  // arriving is that row's content, not a new row under it: adopt it, so the block's first paint keeps its node
+  // (and the harness's "every row it drew" count is the reader's count, not a placeholder swapped for a paragraph).
+  const empty = byKey.get("@empty");
+  const first = next[0];
+  if (empty && first && first.dataset.lid && !empty.dataset.lid) {
+    empty.dataset.lid = first.dataset.lid;
+    empty.className = first.className;
+    empty.innerHTML = first.innerHTML;
+    byKey.delete("@empty");
+    byKey.set(first.dataset.lid, empty);
+  }
+  let cursor = body.firstElementChild;
+  for (const want of next) {
+    const k = thinkRowKey(want);
+    const have = k ? byKey.get(k) : null;
+    if (k) byKey.delete(k);
+    let place = have;
+    if (have) {
+      if (have !== cursor) body.insertBefore(have, cursor);
+      if (have.innerHTML !== want.innerHTML) {
+        if (sameThinkShape(have, want)) writeThinkText(have, want);
+        else have.innerHTML = want.innerHTML;
+      }
+    } else {
+      body.insertBefore(want, cursor);
+      place = want;
+    }
+    cursor = place.nextElementSibling;
+  }
+  while (cursor) {
+    const gone = cursor;
+    cursor = cursor.nextElementSibling;
+    gone.remove();
+  }
+}
+
+function syncThinkBlock(el, fresh) {
+  const meta = el.querySelector(":scope > summary .think-meta");
+  const wantMeta = fresh.querySelector(":scope > summary .think-meta");
+  if (meta && wantMeta && meta.textContent !== wantMeta.textContent) meta.textContent = wantMeta.textContent;
+  const body = el.querySelector(".think-body");
+  const freshBody = fresh.querySelector(".think-body");
+  if (!body || !freshBody) return false;
+  syncThinkBody(body, freshBody);
+  return true;
+}
+
 function paintThink(turn, copy = "") {
   const key = turnKey(turn, copy);
   // The 🌊 draws the reasoning inside the console, so that is the thing to repaint — there is no block on the page.
   if (streamOn(turn.thread || turn.id) && paintStreamConsole(turn, copy)) return;
   const el = document.querySelector(`details.think[data-think-turn="${CSS.escape(key)}"]`);
   if (!el) return;
-  const was = el.querySelector(".think-body");
-  // A re-read replaces the node, and a new node starts at its first line. Remember where the reader was (and what
-  // the panel last put there, so the scroll event the move causes is not read as the reader scrolling).
-  const keep = was ? { top: was.scrollTop, selfTop: was._selfTop } : null;
   const holder = document.createElement("div");
   holder.innerHTML = thinkHtml(turn, copy);
   const fresh = holder.firstElementChild;
   if (!fresh) return;
-  el.replaceWith(fresh);
-  const body = fresh.querySelector(".think-body");
-  if (!body) return;
-  if (keep && state.thinkPinned.get(key) === false) setScroll(body, Math.min(keep.top, Math.max(0, body.scrollHeight - body.clientHeight)));
+  const body = el.querySelector(".think-body");
+  // A block that lost its body (a shape this renderer no longer draws) is healed once by the old wholesale path.
+  if (!body) {
+    el.replaceWith(fresh);
+    const made = fresh.querySelector(".think-body");
+    if (made) stickThinkBody(made);
+    return;
+  }
+  // Where the reader was. A patched body keeps its scroll by itself; this is for the row that grew past the box.
+  const keep = { top: body.scrollTop };
+  if (!syncThinkBlock(el, fresh)) return;
+  // The body is the same node, and a new thought appended under it must not push the reader's line out of view
+  // unless they were reading at the bottom (or the panel pinned it there).
+  if (state.thinkPinned.get(key) === false) setScroll(body, Math.min(keep.top, Math.max(0, body.scrollHeight - body.clientHeight)));
   else stickThinkBody(body);
 }
+
 
 // While a turn is running its block is open and re-read, which is what the separate live reasoning line used to do; once
 // the turn ends it folds unless the reader left it open. One control, one mental model.
@@ -6940,31 +7045,59 @@ function renderJobs() {
   // board below follows it like it does for every other render path.
   const pageY = window.scrollY;
   const anchor = captureBoardAnchor();
-  const prevScrolls = captureScrolls($("jobs"));
-  // These cards are rebuilt from scratch, so a selection standing in one is recorded and put back on the new nodes.
-  const heldSelection = captureCardSelection();
-  // And so is the caret: without this, typing in an unattached card's reply box ended the moment anything about the
-  // job list changed - the box was replaced under the reader and focus fell to the page.
-  const typing = captureTyping($("jobs"));
-  $("jobs").innerHTML = convs.length
-    ? convs.map(conversationHtml).join("")
-    : `<p class="empty">No unattached agents${nested ? ` — ${nested} agent${nested === 1 ? "" : "s"} listed under their worktree rows` : ""}.</p>`;
-  restoreTyping($("jobs"), typing);
-  // The panel above the board just changed height. This rebuild is one synchronous step, so a moved scroll is the
-  // browser clamping the page (a shorter document pulls a reader parked at the bottom upward), never the reader
-  // scrolling: put it back, then let the sweep hold the board's own anchor.
-  if (window.scrollY !== pageY) {
-    const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
-    window.scrollTo({ top: Math.min(pageY, maxY) });
+  // A snapshot merges every job in and asks for this list again even when nothing a card DRAWS has moved — and `#jobs`
+  // is appended to by each run's own stream, so a card that is streaming holds lines no snapshot carries. Rebuilding
+  // the list from that content replaces the card node for nothing: the console, the thinking block and the reader's
+  // place in both come back as new nodes. So the markup is only written when the set of cards, or any card's own
+  // signature, has moved. A card whose run is alive therefore keeps its node through a resync, and a card that is
+  // genuinely dead changes signature (its status, its run, its ownership) and is rebuilt exactly as before.
+  const listSig = `${convs.map((c) => `${c.thread}:${conversationSignature(c)}`).join("|")}#${convs.length}`;
+  const sameList = listSig === state.jobsListSig && $("jobs").querySelectorAll(":scope > .job[data-thread]").length === convs.length;
+  state.jobsListSig = listSig;
+  if (!sameList) {
+    // The list is rebuilt wholesale, so remember where every open transcript was and put it back:
+    // a `jobs` event must not cost the reader their place in an agent they are reading.
+    //
+    // This panel sits ABOVE the board, so its height is in front of everything the reader is looking at: a wholesale
+    // rebuild that changes it (or a page that shrinks under a reader parked at the bottom) clamps their scroll and the
+    // content above is gone for good. Hold the page position across the rebuild, and hand the sweep an anchor so the
+    // board below follows it like it does for every other render path.
+    const prevScrolls = captureScrolls($("jobs"));
+    // These cards are rebuilt from scratch, so a selection standing in one is recorded and put back on the new nodes.
+    const heldSelection = captureCardSelection();
+    // And so is the caret: without this, typing in an unattached card's reply box ended the moment anything about the
+    // job list changed - the box was replaced under the reader and focus fell to the page.
+    const typing = captureTyping($("jobs"));
+    $("jobs").innerHTML = convs.length
+      ? convs.map(conversationHtml).join("")
+      : `<p class="empty">No unattached agents${nested ? ` — ${nested} agent${nested === 1 ? "" : "s"} listed under their worktree rows` : ""}.</p>`;
+    restoreTyping($("jobs"), typing);
+    // The panel above the board just changed height. This rebuild is one synchronous step, so a moved scroll is the
+    // browser clamping the page (a shorter document pulls a reader parked at the bottom upward), never the reader
+    // scrolling: put it back, then let the sweep hold the board's own anchor.
+    if (window.scrollY !== pageY) {
+      const maxY = Math.max(0, document.scrollingElement.scrollHeight - window.innerHeight);
+      window.scrollTo({ top: Math.min(pageY, maxY) });
+    }
+    restoreScrolls($("jobs"), prevScrolls);
+    applyStoredScrolls($("jobs"));
+    restoreThinkBodies($("jobs"));
+    for (const c of convs) restoreReplyDraft(c.thread);
+    // After the drafts are back in their boxes, put the caret back in the one the reader was typing in - with
+    // preventScroll, so a restore never drags the page to the box.
+    restoreTyping($("jobs"), typing);
+    restoreCardSelection(heldSelection);
+    // Readers at the bottom stay at the bottom, readers scrolled up keep their line, and only genuinely new cards
+    // jump to the newest output.
+    restoreScrolls($("jobs"), prevScrolls);
+    for (const c of convs) {
+      if (state.collapsedJobs.has(c.thread)) continue;
+      if (!prevScrolls.has(c.latest.id)) scrollThreadToBottom(c.thread);
+    }
+    // Their thinking blocks and any open picker have to be put back the way the row path does it: the blocks where the
+    // reader had them, the picker under its control.
+    settleScrolls($("jobs"));
   }
-  restoreScrolls($("jobs"), prevScrolls);
-  applyStoredScrolls($("jobs"));
-  restoreThinkBodies($("jobs"));
-  for (const c of convs) restoreReplyDraft(c.thread);
-  // After the drafts are back in their boxes, put the caret back in the one the reader was typing in - with
-  // preventScroll, so a restore never drags the page to the box.
-  restoreTyping($("jobs"), typing);
-  restoreCardSelection(heldSelection);
   scheduleBoardSweep(anchor);
   const running = convs.filter((c) => c.turns.some((t) => turnLive(t))).length;
   const folded = convs.filter((c) => state.collapsedJobs.has(c.thread)).length;
@@ -6977,19 +7110,9 @@ function renderJobs() {
     (folded ? `<span class="chip">${folded} minimized</span>` : "");
   const fold = $("btn-fold-jobs");
   if (fold) fold.textContent = convs.length && folded === convs.length ? "Expand all" : "Minimize all";
-  // The cards were just rebuilt. Readers at the bottom stay at the bottom, readers scrolled up keep
-  // their line, and only genuinely new cards jump to the newest output.
-  restoreScrolls($("jobs"), prevScrolls);
-  for (const c of convs) {
-    if (state.collapsedJobs.has(c.thread)) continue;
-    if (!prevScrolls.has(c.latest.id)) scrollThreadToBottom(c.thread);
-  }
   paintAgentBadges();
-  // The cards here are rebuilt from nothing, so their thinking blocks and any open picker have to be put back the
-  // way the row path does it: the blocks where the reader had them, the picker under its control.
-  settleScrolls($("jobs"));
-  // The cards were just rebuilt from nothing, so a pending spawn target has to be re-applied here
-  // too — renderConversation bails out to renderJobs() whenever the card did not exist yet.
+  // A pending spawn target has to be re-applied here too — renderConversation bails out to renderJobs() whenever the
+  // card did not exist yet.
   applyPendingFocus();
 }
 
@@ -14839,8 +14962,14 @@ setInterval(() => {
 
 setInterval(() => {
   if (state.paused) return;
-  // SSE is the live path; this is only a safety net for a stream that has gone quiet or died.
-  const quiet = !state.lastEventAt || Date.now() - state.lastEventAt > 20000 || state.es?.readyState !== 1;
+  // SSE is the live path; this is only a safety net for a stream that has gone quiet or died. The clock it reads is
+  // stamped by EVERY frame we accept, `jobline` included (core/sse.js) — a line of output is the freshest proof a run
+  // is working — so a board that is still being written to is not resynced, and one that has gone silent (or whose
+  // socket is not open) still is. That second half is the point: the rebuild stays for a card that is genuinely dead.
+  // The rule itself is core/liveness.js, where test/liveness.test.js can drive both halves without a browser.
+  const quiet = globalThis.wtLive
+    ? globalThis.wtLive.quiet({ lastEventAt: state.lastEventAt, streamOpen: state.es?.readyState === 1, paused: state.paused })
+    : !state.lastEventAt || Date.now() - state.lastEventAt > 20000 || state.es?.readyState !== 1;
   if (quiet) void resync();
 }, 30000);
 

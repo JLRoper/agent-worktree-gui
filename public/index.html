@@ -573,6 +573,10 @@
        published on globalThis as `wtStream`: app.js's single-stream path (the 🌊) calls it by name at render time,
        and test/single-stream.test.js imports this same file. -->
   <script src="/core/stream-merge.js"></script>
+  <!-- Is the board's live path still delivering? One pure answer (`wtLive`) for the 30 s safety net: a frame arriving
+       is liveness, silence past the window (or a closed stream) is the only reason to resync. test/liveness.test.js
+       imports this same file. -->
+  <script src="/core/liveness.js"></script>
   <!-- How fast a run's output reaches the reader's eyes: the word pacer (a paragraph typing out) and the line gate
        (whole lines walking into a console), both driven from app.js by the two Settings > Display rows. Published
        on globalThis as `wtType`; test/type-stream.test.js imports this same file. -->

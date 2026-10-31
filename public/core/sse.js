@@ -128,6 +128,11 @@ function connect() {
   });
   es.addEventListener("jobline", (e) => {
     const evt = JSON.parse(e.data);
+    // A line on a run's own stream is the freshest proof the panel's live path is working, so it stamps the board's
+    // liveness clock exactly like a `job` or `row` frame does. Without this stamp, a card writing seven lines a
+    // second read 33 s stale to the 30 s safety net (app.js), which then rebuilt the whole board — every card, every
+    // row — mid-stream, on a card that was demonstrably alive. That is mechanism #3 in docs/jitter-synthesis.md.
+    state.lastEventAt = Date.now();
     appendJobLine(evt);
     // Every line an agent writes is proof that its worktree is being worked in right now - the freshest sign of
     // life there is, and one the scanner only finds out about on its next pass.
