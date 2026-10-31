@@ -240,6 +240,60 @@ test("a card that settled before this process started is history, not a notice",
   assert.equal(said.length, 0);
 });
 
+// The budget is for noise, not for the board's news.
+//
+// A settle used to go through `wake(reason, alertId, rule)` with no `force`, so it shared `maxWakesPerHour` with the
+// quiet, loop and watch alerts — and once that hour was spent the settle was refused with
+// `wake-suppressed: rate limit reached` and the notice never left the panel. A failed worker was then invisible until
+// the reader happened to look. This is the case that was missed: the budget spent, a quiet wake still refused, and a
+// settle still queued anyway.
+test("a spent wake budget still refuses a quiet wake, but a settle goes out", async (t) => {
+  const { assistant, said, rows } = await board(t);
+  // Spent exactly the way `flushWake` spends it: one timestamp per wake that actually went out.
+  const limit = assistant.settings.maxWakesPerHour;
+  for (let i = 0; i < limit; i += 1) assistant.wakes.push(Date.now());
+  assert.equal(assistant.wakes.length, limit, "the hour's budget is spent, to the last wake");
+
+  // A quiet rule at `wake` is exactly the noise the budget exists for, and it is still refused.
+  assistant.settings.rules.quiet = "wake";
+  assistant.settings.quietSeconds = 240;
+  rows.push({
+    id: "job-quiet",
+    thread: "wtgui-quiet-555555",
+    runId: "run_quiet_1",
+    status: "running",
+    startedAt: new Date(Date.now() - 20 * 60_000).toISOString(),
+    lines: [{ kind: "text", text: "still working", at: Date.now() - 10 * 60_000 }],
+  });
+  assistant.evaluate(rows, Date.now());
+
+  const suppressed = assistant.journal.filter((j) => j.kind === "wake-suppressed");
+  assert.equal(suppressed.length, 1, "the quiet wake hit the limit and said so in the journal");
+  assert.match(suppressed[0].text, /rate limit reached/, "the line the settle used to be dropped with");
+  assert.match(suppressed[0].text, /no new output/, "and it was the quiet rule's wake that was refused");
+  assert.equal(assistant.pendingWake.length, 0, "nothing from the quiet rule was queued");
+
+  // The settle — a FAILED run, the case the budget silently ate — is exempt and goes out anyway.
+  const job = settled({ id: "job-budget", thread: "wtgui-failed-worker-666666", status: "failed", finalMessage: "blocked: the suite failed 2 of 41" });
+  rows.push(job);
+  assistant.observe({ type: "job", job });
+  await wait();
+
+  assert.equal(assistant.pendingWake.length, 0, "the settle's wake was taken off the queue and sent");
+  assert.equal(said.length, 1, "one wake left the panel: the settle's");
+  assert.match(said[0].text, /\[settle\] wtgui-failed-worker-666666 ended failed/);
+  assert.match(said[0].text, /blocked: the suite failed 2 of 41/, "with the worker's own last words");
+  assert.equal(
+    assistant.journal.filter((j) => j.kind === "wake-suppressed").length,
+    1,
+    "the settle added no second suppression — the budget did not touch it",
+  );
+  // The exemption is the settle's alone: the next quiet sweep of the same silence is one key and re-arms later, so
+  // prove the general case directly, with a rule that is not the settle.
+  const refused = assistant.wake("a quiet thing", null, "quiet");
+  assert.equal(refused?.refused, "budget", "every other rule is still budgeted");
+});
+
 // The unit cases above prove the judgement. This one proves the WIRING, with the real store: `jobs.settle` is where
 // a run ends, and it must reach the assistant without anything else standing in — server.js wires
 // `onEvent -> assistant.observe`, which is the only join between the two.
