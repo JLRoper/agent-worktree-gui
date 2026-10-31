@@ -1353,6 +1353,60 @@
     return known ? [] : [{ id, name: `${id} (not in the catalogue)` }];
   }
 
+  // Which threshold feeds which rule, and the words the disclosure uses for it: the RULE id is the row that
+  // consumes the knob, so a bar cannot be drawn under a rule that does not read it. A rule with no entry has
+  // nothing to tune — question, noevidence, collision, interrupted, settle, watch, spawnidle, spawnlost and
+  // errorloop are judgement calls, and errorloop shares the loop's "same call" bar rather than owning one.
+  // The bounds are the config module's (`pickSettings`), repeated here because the input has to carry them.
+  const RULE_THRESHOLDS = {
+    loop: [{ key: "repeatLimit", min: 2, max: 12, before: "same call ×", after: "" }],
+    quiet: [{ key: "quietSeconds", min: 30, max: 3600, before: "silent for", after: "s" }],
+    approval: [{ key: "approvalSeconds", min: 15, max: 3600, before: "approval waiting", after: "s" }],
+    context: [{ key: "contextPercent", min: 50, max: 100, before: "context over", after: "%" }],
+    repeat: [{ key: "repeatTurns", min: 2, max: 10, before: "same failure ×", after: "", title: "consecutive turns of one thread ending on the same failure before it is reported" }],
+    leftover: [{ key: "leftoverMinutes", min: 1, max: 240, before: "leftover work", after: "min", title: "how recently a worker must have finished for work left in its tree to be worth a word" }],
+    child: [{ key: "childQuietSeconds", min: 60, max: 3600, before: "child silent", after: "s", title: "a delegated subagent that writes nothing for this long is worth flagging" }],
+  };
+
+  // Which disclosures the reader left open, per browser: ONE key holding the rule ids that are open, the way
+  // the main panel remembers its settings groups. Closed is the default and an absent id is what says so — a
+  // second list of closed ones would make "never touched" and "closed by hand" two different states.
+  const THRESHOLDS_OPEN_KEY = "wtgui.assistantThresholdsOpen";
+
+  function thresholdsOpen() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(THRESHOLDS_OPEN_KEY) || "[]");
+      return new Set(Array.isArray(raw) ? raw.filter((id) => typeof id === "string") : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function saveThresholdsOpen(open) {
+    try {
+      localStorage.setItem(THRESHOLDS_OPEN_KEY, JSON.stringify([...open]));
+    } catch {
+      /* private mode: the fold lasts for this visit */
+    }
+  }
+
+  // `toggle` does not bubble, so the listener is per disclosure and re-attached with the markup it belongs to.
+  function rememberThresholdOpen(details) {
+    const id = details?.dataset?.asRuleThresholds;
+    if (!id) return;
+    const open = thresholdsOpen();
+    if (details.open) open.add(id);
+    else open.delete(id);
+    saveThresholdsOpen(open);
+  }
+
+  // "1 threshold · silent for 240 s": the count and the value in force, both in plain text, so a closed
+  // disclosure still says what its rule fires on without being opened.
+  function thresholdSummary(list, s) {
+    const values = list.map((t) => `${t.before} ${s[t.key]}${t.after ? ` ${t.after}` : ""}`).join(" · ");
+    return `${list.length} threshold${list.length === 1 ? "" : "s"} · ${values}`;
+  }
+
   function renderAssistantSettings(force = false) {
     const host = as$("as-settings");
     if (!host || !state.assistant) return;
@@ -1381,6 +1435,9 @@
     const savedLine = agg.restore
       ? `${agg.restore.present} of your own value${agg.restore.present === 1 ? "" : "s"} come back when it is switched off; ${agg.restore.absent} key${agg.restore.absent === 1 ? "" : "s"} that were absent will be deleted again so they follow their default.`
       : "";
+    // Read once per paint: a repaint recreates every disclosure, so the remembered ones are reopened from here
+    // rather than from a class left behind on an element that no longer exists.
+    const openThresholds = thresholdsOpen();
     host.innerHTML = `
       ${agg.on
         ? `<div class="as-group as-held">
@@ -1404,29 +1461,38 @@
         <div class="as-help">sentry: ${hs ? `<b>${esc(hs)}</b> — the server watchdog restarts the clock and runs a missed pass` : "clock running"} · last pass ${esc(lastPass)} · every ${esc(String(health.everySeconds || s.seconds))}s${health.resumed ? " · resumed after a restart" : ""}</div>
       </div>
       <div class="as-group">
-        <h4>Thresholds</h4>
-        <div class="as-line"><label>pass every <input type="number" min="2" max="120" data-as-set="seconds" value="${s.seconds}"${dis("seconds")}> s</label>
-          <label>same call × <input type="number" min="2" max="12" data-as-set="repeatLimit" value="${s.repeatLimit}"${dis("repeatLimit")}></label>
-          <label title="consecutive turns of one thread ending on the same failure before it is reported">same failure × <input type="number" min="2" max="10" data-as-set="repeatTurns" value="${s.repeatTurns}"${dis("repeatTurns")}></label></div>
-        <div class="as-line"><label>silent for <input type="number" min="30" max="3600" data-as-set="quietSeconds" value="${s.quietSeconds}"${dis("quietSeconds")}> s</label>
-          <label>approval waiting <input type="number" min="15" max="3600" data-as-set="approvalSeconds" value="${s.approvalSeconds}"${dis("approvalSeconds")}> s</label></div>
-        <div class="as-line"><label>context over <input type="number" min="50" max="100" data-as-set="contextPercent" value="${s.contextPercent}"${dis("contextPercent")}> %</label>
-          <label>wakes / hour <input type="number" min="0" max="60" data-as-set="maxWakesPerHour" value="${s.maxWakesPerHour}"${dis("maxWakesPerHour")}></label></div>
-        <div class="as-line"><label title="how recently a worker must have finished for work left in its tree to be worth a word">leftover work <input type="number" min="1" max="240" data-as-set="leftoverMinutes" value="${s.leftoverMinutes}"${dis("leftoverMinutes")}> min</label>
-          <label title="a delegated subagent that writes nothing for this long is worth flagging">child silent <input type="number" min="60" max="3600" data-as-set="childQuietSeconds" value="${s.childQuietSeconds}"${dis("childQuietSeconds")}> s</label></div>
-        <div class="as-help">A long build is silent too, which is why “no new output” only journals by default. Raise the repeat bar if “same call” is noisy on your agents. Leftover work and a silent child are both judged from what the board and the gateway already know — no extra git or sqlite pass.</div>
+        <h4>Global</h4>
+        <div class="as-line"><label title="how often the sentry looks at the board">pass every <input type="number" min="2" max="120" data-as-set="seconds" value="${s.seconds}"${dis("seconds")}> s</label>
+          <label title="the ceiling on how many times an hour a rule at wake or act may ask the assistant">wakes / hour <input type="number" min="0" max="60" data-as-set="maxWakesPerHour" value="${s.maxWakesPerHour}"${dis("maxWakesPerHour")}></label></div>
+        <div class="as-help">The two knobs no single rule owns: how often the sentry looks at the board, and how many wakes an hour it may spend. Every other bar lives under the rule that reads it.</div>
       </div>
       <div class="as-group">
         <h4>Per-rule escalation</h4>
         ${Object.entries(defs)
-          .map(
-            ([id, def]) => `<div class="as-rule-row">
+          .map(([id, def]) => {
+            const thresholds = RULE_THRESHOLDS[id] || [];
+            // The disclosure sits directly under the row it feeds, closed unless the reader left it open. Its
+            // summary names the value in force, so a rule row and its bar read as one thing even folded.
+            const disclosure = thresholds.length
+              ? `<details class="as-rule-thresholds" data-as-rule-thresholds="${esc(id)}"${openThresholds.has(id) ? " open" : ""}>
+              <summary title="the bar this rule fires on — open to change it">${esc(thresholdSummary(thresholds, s))}</summary>
+              <div class="as-line">${thresholds
+                .map(
+                  (t) => `<label${t.title ? ` title="${esc(t.title)}"` : ""}>${esc(t.before)} <input type="number" min="${t.min}" max="${t.max}" data-as-set="${t.key}" value="${s[t.key]}"${dis(t.key)}>${t.after ? ` ${esc(t.after)}` : ""}</label>`,
+                )
+                .join("")}</div>
+              ${id === "quiet" ? `<div class="as-help">A long build is silent too, which is why “no new output” only journals by default.</div>` : ""}
+              ${id === "loop" ? `<div class="as-help">Raise this if “same call” is noisy on your agents — an identical error repeating is judged on the same bar.</div>` : ""}
+            </details>`
+              : "";
+            return `<div class="as-rule-row">
               <span class="as-rule-name"><b>${esc(def.label)}</b><i>${esc(def.hint)}</i></span>
               <select data-as-rule="${esc(id)}"${disRule(id)}>${levels.map((v) => `<option value="${v}"${s.rules[id] === v ? " selected" : ""}>${v}</option>`).join("")}</select>
-            </div>`,
-          )
+            </div>${disclosure}`;
+          })
           .join("")}
         <div class="as-help">log keeps it in the journal · alert shows it under Alerts · wake asks the assistant about it (rate limited) · act wakes it and lets it send a reply when autonomy allows.</div>
+        <div class="as-help">Leftover work and a silent child are judged from what the board and the gateway already know — no extra git or sqlite pass.</div>
       </div>
       <div class="as-group">
         <h4>Now</h4>
@@ -1445,6 +1511,11 @@
       models: () => (typeof modelsState === "undefined" ? null : modelsState),
       extra: assistantModelExtra,
     });
+    // Each threshold disclosure remembers itself. `toggle` does not bubble, and this repaint replaces the
+    // elements rather than mutating them, so the listener goes on the new element every time.
+    for (const d of host.querySelectorAll?.("details.as-rule-thresholds") || []) {
+      d.addEventListener("toggle", () => rememberThresholdOpen(d));
+    }
   }
 
   // ---- talking to the server -------------------------------------------------------------------
