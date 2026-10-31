@@ -1,7 +1,7 @@
 // Is a live console independent of everything else on the board?
 //
-//   node tools/verify-console-independence.mjs                  # every layout, 45 s window each (~9 min)
-//   node tools/verify-console-independence.mjs --only siblings  # one layout: one | siblings | projects | folders | cards
+//   node tools/verify-console-independence.mjs                  # every layout, 45 s window each (~11 min)
+//   node tools/verify-console-independence.mjs --only siblings  # one layout: one | siblings | projects | folders | cards | subs
 //   node tools/verify-console-independence.mjs --seconds 90     # a longer window per layout
 //   node tools/verify-console-independence.mjs --root <dir>     # serve another checkout (an export of an older build)
 //   node tools/verify-console-independence.mjs --headed         # a window instead of headless Chromium
@@ -34,6 +34,9 @@
 //   folders   TWO consoles in one project of one folder, while two OTHER folders swap rank
 //   cards     TWO live cards in ONE worktree row that swap places, with Stabilize reordering off - the one setting under
 //             which the panel is ALLOWED to move an open card: literally "something switching between them"
+//   subs      TWO sessions in sibling rows, each with a running SUBAGENT whose own console the reader has opened under
+//             its card: the roster poll re-reads both children, and one child's read must not rebuild, or put back at its
+//             first line, the other session's console. The poll is the page's own; only its two endpoints are answered here
 //
 // WHAT IT ASSERTS, per layout
 //   (1) hops: no console that overflows is painted at scrollTop <= 2 in any frame of the window (a reader who never
@@ -76,6 +79,10 @@ const LAYOUTS = {
   // forced here (the page's stored order is flipped every 4 s and its own reorderAgentCards() acts on it), because the
   // ranking only flips a pair when their rates cross by its margin - which a real pair does and a stub pair does not.
   cards: { desc: "TWO live cards in ONE worktree row swapping places (Stabilize reordering off)", cards: [{ project: "alpha" }, { project: "alpha" }], folders: 1, swap: true },
+  // A session that delegates shows its children under its console, and the reader can open a child's own console
+  // there. The roster poll re-reads every open child that is still running and repaints the strips: one child's read
+  // is the other session's business only if the page makes it so.
+  subs: { desc: "TWO sessions, each with a running subagent whose console is open", cards: [{ project: "alpha" }, { project: "alpha", branch: "feature-b" }], folders: 1, subs: true },
 };
 
 // ---- the stub Hermes gateway: plain text, one word per 75 ms, over real SSE ---------------------------------------------
@@ -182,7 +189,7 @@ function pageInit(opts) {
   }
   const T0 = performance.now();
   const now = () => Math.round((performance.now() - T0) * 10) / 10;
-  const R = { hops: [], moves: [], reorder: { calls: 0, sectionMoves: 0, folderMoves: 0, cardCalls: 0, cardMoves: 0 }, errors: [], frames: 0, overflowAt: null, armN: 0, stopped: false };
+  const R = { hops: [], moves: [], reorder: { calls: 0, sectionMoves: 0, folderMoves: 0, cardCalls: 0, cardMoves: 0, stripPaints: 0, stripRebuilds: 0 }, errors: [], frames: 0, overflowAt: null, armN: 0, stopped: false };
   window.__rec = R;
   window.__now = now;
   window.addEventListener("error", (e) => R.errors.push(String((e && e.message) || e)));
@@ -218,10 +225,10 @@ function pageInit(opts) {
     if (R.stopped) return;
     R.frames += 1;
     const t = now();
-    for (const el of document.querySelectorAll("pre.job-out")) {
+    for (const el of document.querySelectorAll("pre.job-out, .sub-console")) {
       const top = Math.round(el.scrollTop);
       const max = Math.round(el.scrollHeight - el.clientHeight);
-      const out = el.dataset.out || "";
+      const out = el.dataset.out || el.dataset.subConsoleBox || "";
       if (max > 20) {
         seen.add(out);
         if (R.armN && R.overflowAt == null && seen.size >= R.armN) R.overflowAt = t;
@@ -251,8 +258,8 @@ function pageInit(opts) {
   const carries = (nodes) => {
     for (const n of nodes) {
       if (!n || (n.nodeType !== 1 && n.nodeType !== 11)) continue;
-      if (n.nodeType === 1 && n.matches && n.matches("pre.job-out")) return true;
-      if (n.querySelector && n.querySelector("pre.job-out")) return true;
+      if (n.nodeType === 1 && n.matches && n.matches("pre.job-out, .sub-console")) return true;
+      if (n.querySelector && n.querySelector("pre.job-out, .sub-console")) return true;
     }
     return false;
   };
@@ -292,6 +299,29 @@ function pageInit(opts) {
   wrap(Element.prototype, "replaceWith", (s, a) => [s.parentNode, [s, ...a]]);
   wrap(Element.prototype, "replaceChildren", (s, a) => [s, [...s.children, ...a]]);
   wrap(Element.prototype, "remove", (s) => [s.parentNode, [s]]);
+  // The subagent strips are rebuilt with `outerHTML =`, which is none of the primitives above.
+  const outer = Object.getOwnPropertyDescriptor(Element.prototype, "outerHTML");
+  if (outer && outer.set && !outer.set.__m) {
+    const set = function (v) {
+      let carry = false;
+      let host = null;
+      try {
+        carry = Boolean(this.querySelector && this.querySelector(".sub-console")) || Boolean(this.matches && this.matches(".sub-console"));
+        host = this.parentNode;
+      } catch {
+        /* never break the page */
+      }
+      const node = desc(this);
+      outer.set.call(this, v);
+      try {
+        if (carry && R.moves.length < 3000) R.moves.push({ t: now(), op: "outerHTML", attached: true, host: desc(host), node, by: pageStack(4) });
+      } catch {
+        /* ignore */
+      }
+    };
+    set.__m = true;
+    Object.defineProperty(Element.prototype, "outerHTML", { ...outer, set });
+  }
 
   // After app.js has defined its functions: count how often the ranking really moved a section or a folder.
   window.__instrument = () => {
@@ -309,6 +339,23 @@ function pageInit(opts) {
     };
     c.__c = true;
     window.reorderProjects = c;
+    const origSubs = window.paintSubagents;
+    if (typeof origSubs === "function" && !origSubs.__c) {
+      const cs = function () {
+        const before = new Set(document.querySelectorAll(".sub-console"));
+        const r = origSubs.apply(this, arguments);
+        R.reorder.stripPaints += 1;
+        for (const el of document.querySelectorAll(".sub-console")) {
+          if (!before.has(el)) {
+            R.reorder.stripRebuilds += 1;
+            break;
+          }
+        }
+        return r;
+      };
+      cs.__c = true;
+      window.paintSubagents = cs;
+    }
     // The cards of every row, in the order they are on screen.
     const cardsOf = () =>
       [...document.querySelectorAll(".agents-block")]
@@ -452,8 +499,37 @@ async function runLayout(name, spec, pw, startPanel) {
       renderAll();
     }, wantRows);
     for (const s of spawned) await page.waitForSelector(`.job[data-thread="${s.thread}"] pre.job-out`, { timeout: 45_000 });
-    out.consoles = spawned.length;
-    await page.evaluate((n) => window.__arm(n), spawned.length);
+    if (spec.subs) {
+      // The panel reads children from the agent's own store, which a sandbox does not have: answer the poll's two
+      // endpoints (the roster, and one child's console) and let the page's own code do everything else - the 5 s poll,
+      // the re-read of every open child that is still out, the strip repaint.
+      const born = Date.now();
+      const childOf = (thread) => `child-of-${thread}`;
+      await page.route("**/api/subagents**", (route) => {
+        const url = new URL(route.request().url());
+        if (url.pathname.endsWith("/api/subagents/console")) {
+          const id = url.searchParams.get("session") || "";
+          const n = 60 + Math.floor((Date.now() - born) / 2500) * 4; // a child that is still writing
+          return route.fulfill({ json: { running: true, lines: Array.from({ length: n }, (_, i) => ({ kind: "raw", text: `${id} line ${i}`, lid: `${id}:${i}` })) } });
+        }
+        if (url.pathname.endsWith("/api/subagents")) {
+          const roster = {};
+          for (const s of spawned) {
+            roster[s.thread] = [{ id: childOf(s.thread), title: `review for ${s.thread}`, running: true, startedAt: born + 500, endedAt: null, lastSeen: Date.now(), hung: false, msgs: 3, preview: null }];
+          }
+          return route.fulfill({ json: { roster } });
+        }
+        return route.continue();
+      });
+      for (const s of spawned) {
+        const row = `.sub-row[data-sub-console="${childOf(s.thread)}"]`;
+        await page.waitForSelector(row, { timeout: 30_000 });
+        await page.click(row);
+      }
+      for (const s of spawned) await page.waitForSelector(`.sub-console[data-sub-console-box="${childOf(s.thread)}"]`, { timeout: 30_000 });
+    }
+    out.consoles = spawned.length * (spec.subs ? 2 : 1);
+    await page.evaluate((n) => window.__arm(n), out.consoles);
     const t0 = Date.now();
     await page.waitForFunction(() => window.__rec.overflowAt != null, null, { timeout: MAX_WAIT_MS, polling: 250 }).catch(() => {});
     const overflowAt = await page.evaluate(() => window.__rec.overflowAt);
@@ -461,7 +537,7 @@ async function runLayout(name, spec, pw, startPanel) {
       out.notMeasured.push(`the consoles did not all overflow within ${Math.round(MAX_WAIT_MS / 1000)} s`);
       return out;
     }
-    log(name, `${spawned.length} console(s) overflowing after ${Math.round((Date.now() - t0) / 1000)} s; measuring ${SECONDS} s`);
+    log(name, `${out.consoles} console(s) overflowing after ${Math.round((Date.now() - t0) / 1000)} s; measuring ${SECONDS} s`);
     if (spec.swap) await page.evaluate(() => window.__startSwaps(4000));
     for (;;) {
       const t = await page.evaluate(() => window.__now());
@@ -476,7 +552,7 @@ async function runLayout(name, spec, pw, startPanel) {
     out.errors.push(...rec.errors.map((e) => String(e).slice(0, 200)));
     out.hops = rec.hops.map((h) => {
       // the console-carrying DOM move that landed just before the frame that painted it
-      const mv = rec.moves.filter((m) => m.t <= h.t && h.t - m.t < 120 && /reorder|sweep|placeRow|renderProjectRows|renderJobs|applySnapshot|renderAll|pinOpen/i.test(m.by)).slice(-1)[0];
+      const mv = rec.moves.filter((m) => m.t <= h.t && h.t - m.t < 120 && /reorder|sweep|placeRow|renderProjectRows|renderJobs|applySnapshot|renderAll|pinOpen|paintSubagents/i.test(m.by)).slice(-1)[0];
       return { ...h, cause: mv ? `${mv.by.split(" < ")[0] || "?"} | ${mv.op} | ${mv.node}` : "no DOM move within 120 ms" };
     });
     // (3) can the recorder see the fault in this browser? A raw re-append of an open section, in one task.
@@ -493,9 +569,11 @@ async function runLayout(name, spec, pw, startPanel) {
     });
     out.premise = premise;
     if (!premise.ok) out.notMeasured.push(`a raw re-append of an open section did not reset a console here (${JSON.stringify(premise)}), so this browser cannot show the fault`);
-    const moved = spec.swap ? rec.reorder.cardMoves : rec.reorder.sectionMoves + rec.reorder.folderMoves;
+    const moved = spec.swap ? rec.reorder.cardMoves : spec.subs ? rec.reorder.stripPaints : rec.reorder.sectionMoves + rec.reorder.folderMoves;
     if (moved < MIN_RANK_MOVES) {
-      out.notMeasured.push(`${spec.swap ? "the cards swapped places" : "the ranking moved a section/folder"} only ${moved}x (< ${MIN_RANK_MOVES}); nothing was there to survive`);
+      out.notMeasured.push(
+        `${spec.swap ? "the cards swapped places" : spec.subs ? "the subagent strips were repainted" : "the ranking moved a section/folder"} only ${moved}x (< ${MIN_RANK_MOVES}); nothing was there to survive`,
+      );
     }
     if (out.hops.length) out.failures.push(`${out.hops.length} painted hop(s)`);
     if (out.errors.length) out.failures.push(`${out.errors.length} page error(s): ${out.errors[0]}`);
@@ -536,7 +614,7 @@ let blind = 0;
 console.log("");
 for (const r of results) {
   const rank = r.rank
-    ? `${r.rank.sectionMoves} section move(s), ${r.rank.folderMoves} folder move(s) in ${r.rank.calls} reorderProjects call(s); ${r.rank.cardMoves} card swap(s) in ${r.rank.cardCalls} reorderAgentCards call(s)`
+    ? `${r.rank.sectionMoves} section move(s), ${r.rank.folderMoves} folder move(s) in ${r.rank.calls} reorderProjects call(s); ${r.rank.cardMoves} card swap(s) in ${r.rank.cardCalls} reorderAgentCards call(s); ${r.rank.stripRebuilds} of ${r.rank.stripPaints} strip repaint(s) replaced a sub-console`
     : "no ranking data";
   const verdict = r.notMeasured.length ? "NOT MEASURED" : r.failures.length ? "FAIL" : "PASS";
   if (verdict === "FAIL") red += 1;
@@ -551,6 +629,9 @@ for (const r of results) {
   for (const h of r.hops) causes[h.cause] = (causes[h.cause] || 0) + 1;
   if (r.hops.length) {
     console.log(`             ${frames.size} distinct frame(s), ${[...frames.values()].filter((n) => n > 1).length} with more than one console at the top`);
+    const per = {};
+    for (const h of r.hops) per[h.out] = (per[h.out] || 0) + 1;
+    console.log(`             per console: ${Object.entries(per).map(([k, n]) => `${k} ${n}`).join(", ")}`);
     for (const [c, n] of Object.entries(causes).sort((a, b) => b[1] - a[1])) console.log(`             ${String(n).padStart(3)}x  ${c}`);
     for (const h of r.hops.slice(0, 5)) console.log(`             t=${Math.round(h.t)}ms console ${h.out} at ${h.top} (max ${h.max}), ${h.frames} frame(s)`);
   }
