@@ -17,7 +17,8 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { guardScript, installGuard } from "../lib/push-guard.js";
+import { fileURLToPath } from "node:url";
+import { commonDirOf, guardPaths, guardScript, installGuard, previousHooksDir } from "../lib/push-guard.js";
 
 const CR = String.fromCharCode(13);
 const LF = String.fromCharCode(10);
@@ -176,9 +177,19 @@ test("installing the guard again leaves the same shims, never one that execs its
   const third = await install();
   assert.equal(third.ok, true, `the repairing install works: ${third.error || ""}`);
   assert.notEqual(third.previous, guardDir, "the guard's own dir is never recorded as its own predecessor");
+  assert.equal(third.previous, realHooks, "the repair recovers the worktree's real .githooks, not git's sample dir");
   const after = JSON.parse(await readFile(recordFile, "utf8"));
   assert.notEqual(after.previousHooksPath, guardDir, "the poisoned record is replaced by the real predecessor");
-  await assert.rejects(() => readFile(path.join(guardDir, "commit-msg"), "utf8"), "the self-exec shim is taken away");
+  // The self-exec shim is the thing that has to go. What replaces it is the shim this fixture always deserved — the
+  // worktree's own commit-msg — because a tracked .githooks is now a predecessor the repair can find. Before that
+  // fallback the only honest answer to a poisoned record was "no hooks at all", which is why this used to assert
+  // that the file was gone.
+  assert.doesNotMatch(await shim(), new RegExp(guardDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "no shim execs the guard's own dir");
+  assert.match(
+    await shim(),
+    new RegExp(`exec "${realHooks.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/commit-msg"`),
+    "the repaired shim runs the worktree's own hook",
+  );
   assert.ok((await readFile(path.join(guardDir, "pre-push"), "utf8")).startsWith("#!/bin/sh"), "the guard's own hook is still there");
 });
 
@@ -230,4 +241,106 @@ test("an env-granted push neither asks the panel nor parks", { skip: NO_SH }, as
   // else's hook.
   const ran = await readFile(marker, "utf8").catch(() => null);
   assert.match(String(ran), /ran/, `the chained pre-push ran\n${where}`);
+});
+
+// ---- the repository's own gate, inside the guard --------------------------------------------------------------
+//
+// This repository ships a version gate at .githooks/pre-push (`node tools/version.mjs check`) and installs it by
+// pointing core.hooksPath at that dir. The guard TAKES a worktree's hooks path, so the gate is only still in a push's
+// path because the guard CHAINS the pre-push the tree had. A clone that never ran that install has no configured hooks
+// path at all, which used to read as "this tree had no pre-push": the chain file was empty, and every worktree the
+// panel cut pushed with no gate. Four landings reached main with package.json still on the version before them, which
+// is the defect these two tests pin.
+//
+// The second half is the shape of the fix: one guard dir (and one chain file) covers every worktree of the clone, so
+// the chained hook is named RELATIVE to the tree doing the pushing. An absolute path recorded by whichever tree
+// installed last would make a push from another tree run THAT tree's copy of the gate, which reads the other tree's
+// package.json — refusing a bumped branch or blessing an unbumped one.
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// A clone of the shape that matters: a bare origin, a main branch already on it, and the real .githooks/pre-push and
+// tools/version.mjs copied in — the gate under test is the shipped one, not a stub of it.
+async function gateFixture(t) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "wtgui-gate-"));
+  t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
+  const origin = path.join(root, "origin.git");
+  const work = path.join(root, "work");
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", windowsHide: true });
+  git(root, "init", "-q", "--bare", "-b", "main", origin);
+  git(root, "init", "-q", "-b", "main", work);
+  git(work, "config", "user.name", "probe");
+  git(work, "config", "user.email", "probe@localhost");
+  await mkdir(path.join(work, ".githooks"), { recursive: true });
+  await mkdir(path.join(work, "tools"), { recursive: true });
+  await writeFile(path.join(work, ".githooks", "pre-push"), await readFile(path.join(REPO_ROOT, ".githooks", "pre-push")));
+  await writeFile(path.join(work, "tools", "version.mjs"), await readFile(path.join(REPO_ROOT, "tools", "version.mjs")));
+  await writeFile(path.join(work, "package.json"), `${JSON.stringify({ name: "gate-fixture", version: "0.34.0" }, null, 2)}\n`, "utf8");
+  await writeFile(path.join(work, "README.md"), "fixture\n", "utf8");
+  git(work, "add", "-A");
+  git(work, "commit", "-q", "-m", "first");
+  git(work, "remote", "add", "origin", origin.split(path.sep).join("/"));
+  git(work, "push", "-q", "-u", "origin", "main");
+  return { root, origin, work, git };
+}
+
+test("a repo that ships .githooks is chained even when nothing set core.hooksPath", async (t) => {
+  const { work, git } = await gateFixture(t);
+  assert.equal(git(work, "config", "--get", "core.hooksPath").stdout.trim(), "", "the fixture starts with no hooks path, like this clone");
+  const tracked = path.join(work, ".githooks").split(path.sep).join("/");
+  assert.equal(await previousHooksDir({ projectPath: work, worktree: work }), tracked, "the tracked .githooks dir IS the hooks this tree already had");
+
+  const out = await installGuard({ projectPath: work, worktree: work, panelUrl: "http://127.0.0.1:7331", policy: "local-only", landing: [] });
+  assert.equal(out.ok, true, `the install works: ${out.error || ""}`);
+  const chain = (await readFile(guardPaths(await commonDirOf(work)).chain, "utf8")).trim();
+  assert.equal(chain, ".githooks/pre-push", `the gate is chained by a path relative to the pushing tree, got ${JSON.stringify(chain)}`);
+  assert.doesNotMatch(chain, /^[A-Za-z]:|^\//, "not an absolute path: one chain file covers every worktree of the clone");
+});
+
+test("a landing with no version bump is refused by the installed hook, from any worktree", { skip: NO_SH }, async (t) => {
+  const { work, origin, git } = await gateFixture(t);
+  const install = (worktree) => installGuard({ projectPath: work, worktree, panelUrl: "http://127.0.0.1:7331", policy: "local-only", landing: [] });
+  assert.equal((await install(work)).ok, true, "the guard installs for the main tree");
+
+  // A linked worktree — the shape the panel cuts — installed after the first one, which is what rewrites the shared
+  // chain file and is where an absolute path would start pointing at the wrong tree.
+  const linked = path.join(path.dirname(work), "feature-a");
+  assert.equal(git(work, "worktree", "add", "-q", "-b", "feature-a", linked).status, 0, "a linked worktree is created");
+  assert.equal((await install(linked)).ok, true, "the guard installs for the linked tree too");
+  const chain = (await readFile(guardPaths(await commonDirOf(work)).chain, "utf8")).trim();
+  assert.equal(chain, ".githooks/pre-push", `the second install leaves the chain relative, got ${JSON.stringify(chain)}`);
+
+  // (1) A branch that adds a commit and no bump: the push must be refused, and the remote must not learn the ref.
+  git(work, "checkout", "-q", "-b", "landing-a");
+  await writeFile(path.join(work, "change.txt"), "a change\n", "utf8");
+  git(work, "add", "-A");
+  git(work, "commit", "-q", "-m", "feat: a change with no bump");
+  const refused = spawnSync("git", ["push", "origin", "landing-a"], {
+    cwd: work,
+    encoding: "utf8",
+    windowsHide: true,
+    env: { ...process.env, WTGUI_PUSH_GRANT: "1" },
+  });
+  const where = `status=${refused.status}\n--- stdout ---\n${refused.stdout}\n--- stderr ---\n${refused.stderr}`;
+  assert.notEqual(refused.status, 0, `the unbumped push is refused\n${where}`);
+  assert.match(refused.stderr, /would go out with no version bump/, `the refusal names the reason\n${where}`);
+  assert.equal(
+    git(origin, "rev-parse", "--verify", "--quiet", "refs/heads/landing-a").status === 0,
+    false,
+    `the remote never received the ref\n${where}`,
+  );
+
+  // (2) The control, in the OTHER tree: the same hook file, resolved against that tree, where the bump IS there.
+  // If the chain were an absolute path to the first tree this push would be refused for the first tree's version.
+  await writeFile(path.join(linked, "package.json"), `${JSON.stringify({ name: "gate-fixture", version: "0.34.1" }, null, 2)}\n`, "utf8");
+  git(linked, "add", "-A");
+  git(linked, "commit", "-q", "-m", "chore: 0.34.1 - the change, with its bump");
+  const allowed = spawnSync("git", ["push", "origin", "feature-a"], {
+    cwd: linked,
+    encoding: "utf8",
+    windowsHide: true,
+    env: { ...process.env, WTGUI_PUSH_GRANT: "1" },
+  });
+  const allowedWhere = `status=${allowed.status}\n--- stdout ---\n${allowed.stdout}\n--- stderr ---\n${allowed.stderr}`;
+  assert.equal(allowed.status, 0, `a bumped branch in a sibling worktree pushes\n${allowedWhere}`);
+  assert.equal(git(origin, "rev-parse", "--verify", "--quiet", "refs/heads/feature-a").status, 0, `the remote has it\n${allowedWhere}`);
 });
