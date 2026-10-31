@@ -1,7 +1,7 @@
 // Is a live console independent of everything else on the board?
 //
-//   node tools/verify-console-independence.mjs                  # every layout, 45 s window each (~7 min)
-//   node tools/verify-console-independence.mjs --only siblings  # one layout: one | siblings | projects | folders
+//   node tools/verify-console-independence.mjs                  # every layout, 45 s window each (~9 min)
+//   node tools/verify-console-independence.mjs --only siblings  # one layout: one | siblings | projects | folders | cards
 //   node tools/verify-console-independence.mjs --seconds 90     # a longer window per layout
 //   node tools/verify-console-independence.mjs --root <dir>     # serve another checkout (an export of an older build)
 //   node tools/verify-console-independence.mjs --headed         # a window instead of headless Chromium
@@ -32,12 +32,14 @@
 //   siblings  TWO consoles, two sibling worktree rows of ONE project       (the reader's board: four sessions, one repo)
 //   projects  TWO consoles in TWO projects of one folder
 //   folders   TWO consoles in one project of one folder, while two OTHER folders swap rank
+//   cards     TWO live cards in ONE worktree row that swap places, with Stabilize reordering off - the one setting under
+//             which the panel is ALLOWED to move an open card: literally "something switching between them"
 //
 // WHAT IT ASSERTS, per layout
 //   (1) hops: no console that overflows is painted at scrollTop <= 2 in any frame of the window (a reader who never
 //       scrolled it). Zero, not "few": the repair arrives 4-400 ms later, and that gap IS the flicker.
 //   (2) the run measured something: every console overflowed, the ranking really moved a section (or a folder) at least
-//       3 times, and the page raised no error.
+//       3 times - in `cards`, two cards really swapped places at least 3 times - and the page raised no error.
 //   (3) the recorder can see the fault: after the window, a RAW re-append of an open section (what the old code did)
 //       resets a console to 0 in this browser and the recorder's own test calls it a hop. A clean run on a browser
 //       that cannot reproduce the fault proves nothing, so that is exit 2, not a pass.
@@ -69,6 +71,11 @@ const LAYOUTS = {
   siblings: { desc: "TWO consoles in sibling worktree rows of ONE project", cards: [{ project: "alpha" }, { project: "alpha", branch: "feature-b" }], folders: 1 },
   projects: { desc: "TWO consoles in TWO projects of one folder", cards: [{ project: "alpha" }, { project: "beta" }], folders: 1 },
   folders: { desc: "TWO consoles in one project while two OTHER folders swap rank", cards: [{ project: "alpha" }, { project: "alpha", branch: "feature-b" }], folders: 3 },
+  // The one setting under which the panel may move an OPEN card: with Stabilize reordering off a row's cards are
+  // re-ranked on every clock tick, and two live cards in one worktree row are the pair that swap places. The swap is
+  // forced here (the page's stored order is flipped every 4 s and its own reorderAgentCards() acts on it), because the
+  // ranking only flips a pair when their rates cross by its margin - which a real pair does and a stub pair does not.
+  cards: { desc: "TWO live cards in ONE worktree row swapping places (Stabilize reordering off)", cards: [{ project: "alpha" }, { project: "alpha" }], folders: 1, swap: true },
 };
 
 // ---- the stub Hermes gateway: plain text, one word per 75 ms, over real SSE ---------------------------------------------
@@ -166,10 +173,16 @@ function makeGateway(lenMs) {
 }
 
 // ---- the page-side recorder -------------------------------------------------------------------------------------------
-function pageInit() {
+function pageInit(opts) {
+  try {
+    // Stabilize reordering is the reader's own setting; off means a list may re-sort under an open card.
+    if (opts && opts.stabilizeOff) localStorage.setItem("wtgui.stabilize", "0");
+  } catch {
+    /* storage may be unavailable */
+  }
   const T0 = performance.now();
   const now = () => Math.round((performance.now() - T0) * 10) / 10;
-  const R = { hops: [], moves: [], reorder: { calls: 0, sectionMoves: 0, folderMoves: 0 }, errors: [], frames: 0, overflowAt: null, armN: 0, stopped: false };
+  const R = { hops: [], moves: [], reorder: { calls: 0, sectionMoves: 0, folderMoves: 0, cardCalls: 0, cardMoves: 0 }, errors: [], frames: 0, overflowAt: null, armN: 0, stopped: false };
   window.__rec = R;
   window.__now = now;
   window.addEventListener("error", (e) => R.errors.push(String((e && e.message) || e)));
@@ -296,7 +309,40 @@ function pageInit() {
     };
     c.__c = true;
     window.reorderProjects = c;
+    // The cards of every row, in the order they are on screen.
+    const cardsOf = () =>
+      [...document.querySelectorAll(".agents-block")]
+        .map((b) => [...b.children].filter((el) => el.classList && el.classList.contains("job") && el.dataset.thread).map((el) => el.dataset.thread).join(","))
+        .join("|");
+    const origCards = window.reorderAgentCards;
+    if (typeof origCards === "function" && !origCards.__c) {
+      const cc = function () {
+        const before = cardsOf();
+        const r = origCards.apply(this, arguments);
+        R.reorder.cardCalls += 1;
+        if (cardsOf() !== before) R.reorder.cardMoves += 1;
+        return r;
+      };
+      cc.__c = true;
+      window.reorderAgentCards = cc;
+    }
     return true;
+  };
+  // Flip the stored order of every row's cards and let the page's own reorderAgentCards() act on it.
+  window.__startSwaps = (everyMs) => {
+    let flip = false;
+    return setInterval(() => {
+      if (R.stopped) return;
+      flip = !flip;
+      for (const [key, dEl] of state.detailEls) {
+        const block = dEl.querySelector(".agents-block");
+        if (!block) continue;
+        const threads = [...block.children].filter((el) => el.classList.contains("job") && el.dataset.thread).map((el) => el.dataset.thread).sort();
+        if (threads.length < 2) continue;
+        state.rankOrder.set(`agents:${key}`, flip ? threads : threads.slice().reverse());
+        reorderAgentCards(state.rows.get(key).project);
+      }
+    }, everyMs);
   };
   window.__stop = () => {
     R.stopped = true;
@@ -362,7 +408,7 @@ async function runLayout(name, spec, pw, startPanel) {
   try {
     const page = await (await browser.newContext({ viewport: { width: 1400, height: 1000 } })).newPage();
     page.on("pageerror", (e) => out.errors.push(String((e && e.message) || e).slice(0, 200)));
-    await page.addInitScript(pageInit);
+    await page.addInitScript(pageInit, { stabilizeOff: Boolean(spec.swap) });
     await page.goto(sandbox.base, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => typeof state !== "undefined" && state.rows && state.jobs, null, { timeout: 30_000 });
     await page.waitForFunction((names) => names.every((n) => [...state.projects.keys()].includes(n)), [...new Set(spec.cards.map((c) => c.project))], { timeout: 60_000 });
@@ -416,6 +462,7 @@ async function runLayout(name, spec, pw, startPanel) {
       return out;
     }
     log(name, `${spawned.length} console(s) overflowing after ${Math.round((Date.now() - t0) / 1000)} s; measuring ${SECONDS} s`);
+    if (spec.swap) await page.evaluate(() => window.__startSwaps(4000));
     for (;;) {
       const t = await page.evaluate(() => window.__now());
       if (t >= overflowAt + SECONDS * 1000) break;
@@ -446,8 +493,9 @@ async function runLayout(name, spec, pw, startPanel) {
     });
     out.premise = premise;
     if (!premise.ok) out.notMeasured.push(`a raw re-append of an open section did not reset a console here (${JSON.stringify(premise)}), so this browser cannot show the fault`);
-    if (rec.reorder.sectionMoves + rec.reorder.folderMoves < MIN_RANK_MOVES) {
-      out.notMeasured.push(`the ranking moved a section/folder only ${rec.reorder.sectionMoves + rec.reorder.folderMoves}x (< ${MIN_RANK_MOVES}); nothing was there to survive`);
+    const moved = spec.swap ? rec.reorder.cardMoves : rec.reorder.sectionMoves + rec.reorder.folderMoves;
+    if (moved < MIN_RANK_MOVES) {
+      out.notMeasured.push(`${spec.swap ? "the cards swapped places" : "the ranking moved a section/folder"} only ${moved}x (< ${MIN_RANK_MOVES}); nothing was there to survive`);
     }
     if (out.hops.length) out.failures.push(`${out.hops.length} painted hop(s)`);
     if (out.errors.length) out.failures.push(`${out.errors.length} page error(s): ${out.errors[0]}`);
@@ -487,7 +535,9 @@ let red = 0;
 let blind = 0;
 console.log("");
 for (const r of results) {
-  const rank = r.rank ? `${r.rank.sectionMoves} section move(s), ${r.rank.folderMoves} folder move(s) in ${r.rank.calls} reorderProjects call(s)` : "no ranking data";
+  const rank = r.rank
+    ? `${r.rank.sectionMoves} section move(s), ${r.rank.folderMoves} folder move(s) in ${r.rank.calls} reorderProjects call(s); ${r.rank.cardMoves} card swap(s) in ${r.rank.cardCalls} reorderAgentCards call(s)`
+    : "no ranking data";
   const verdict = r.notMeasured.length ? "NOT MEASURED" : r.failures.length ? "FAIL" : "PASS";
   if (verdict === "FAIL") red += 1;
   if (verdict === "NOT MEASURED") blind += 1;
