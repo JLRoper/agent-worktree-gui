@@ -6236,6 +6236,89 @@ state.typeGate = globalThis.wtType
 // the only one that types out, so opening an old card (or reloading the page) draws history whole.
 state.thinkFed = new Set();
 
+// ---- reasoning first: a tool's lines wait for the thought in front of them -----------------------------------
+// A reply's reasoning is typed at the reader's words-a-second, and the tool call that reply made (and its output) are
+// whole lines on the wire, so left alone they land while the thought above them is still being written — the answer
+// before the question. This holds those frames (core/type-stream.js createReasoningHold: in order, a whole job's
+// queue at once) until two things are true: the store has been read again since the call arrived — the reasoning is
+// written to the store a moment AFTER its tool call is on the stream, and only a read finds it — and the pacer has
+// written every word of the thoughts that belong in front of the call. "In front of" is every thought newer than
+// the last tool result already in the console: a reader who opens a card mid-turn gets the whole backlog typing in
+// parallel, and none of that is a reason to hold a call it does not precede.
+//
+// Only while there is something to wait for AND a reader watching it: the words/s setting is on (0 keeps the console
+// exactly as the run sent it), the turn is live, the tab is visible, and the reasoning is on screen — the 🌊 stream
+// always draws it, the 🧠 block only while it is open (typing into a folded block is a wait for nothing).
+const REASONING_READ_WAIT_MS = 2000; // a store read that has not answered by now is not worth holding a console for
+const REASONING_READ_COOLDOWN_MS = 250; // one read serves a whole burst of calls
+state.reasoningReads = new Map(); // job -> { at, done }: the latest read begun for a call
+
+function reasoningShown(turn) {
+  const thread = turn.thread || turn.id;
+  if (!thinkingOn(thread)) return false;
+  if (streamOn(thread) && globalThis.wtStream) return true;
+  return thinkOpenFor(turn, turnKey(turn, ""));
+}
+
+function reasoningWants(evt) {
+  const kind = evt?.line?.kind;
+  if (kind !== "tool" && kind !== "tool-out") return false;
+  if (!state.typePacer || !state.typePacer.rate()) return false;
+  const turn = state.jobs.get(String(evt.id));
+  return Boolean(turn) && turnLive(turn) && reasoningShown(turn);
+}
+
+// The moment of the last tool result already in the console: the thoughts newer than it are the ones a call is about
+// to follow. 0 (a turn with no result yet) counts every thought of the turn.
+function reasoningFloor(job) {
+  const lines = state.jobLines.get(String(job)) || [];
+  for (let k = lines.length - 1; k >= 0; k--) if (lines[k]?.kind === "tool-out") return Number(lines[k].at) || 0;
+  return 0;
+}
+
+// A call, or the header of a result, is the cue to look at the store again. A read already in flight may have been
+// answered before the store held this reply, so a cue waits for it and asks once more (loadThinkingAfter).
+function reasoningStart(job, evt) {
+  const line = evt?.line || {};
+  const cue = line.kind === "tool" || (line.kind === "tool-out" && TOOL_DONE_RE.test(String(line.text || "")));
+  if (!cue) return;
+  const prev = state.reasoningReads.get(job);
+  if (prev && Date.now() - prev.at < REASONING_READ_COOLDOWN_MS) return;
+  const turn = state.jobs.get(job);
+  if (!turn) return;
+  const rec = { at: Date.now(), done: false };
+  state.reasoningReads.set(job, rec);
+  loadThinkingAfter(turn)
+    .catch(() => {})
+    .finally(() => {
+      rec.done = true;
+    });
+}
+
+function reasoningBusy(job) {
+  const rec = state.reasoningReads.get(job);
+  if (rec && !rec.done && Date.now() - rec.at < REASONING_READ_WAIT_MS) return true;
+  const floor = reasoningFloor(job);
+  return Boolean(
+    state.typePacer?.pendingFor(job, (lid) => lid.startsWith("think:") && (Number(lid.slice(6)) || 0) > floor),
+  );
+}
+
+state.typeHold = globalThis.wtType?.createReasoningHold
+  ? globalThis.wtType.createReasoningHold({
+      wants: reasoningWants,
+      busy: reasoningBusy,
+      start: reasoningStart,
+      // Out of the hold, a frame still has the line-by-line setting to get past, exactly as if it had just arrived.
+      release: (evt) => {
+        if (!state.typeGate?.push(evt)) {
+          recordJobLine(evt);
+          drawJobLine(evt);
+        }
+      },
+    })
+  : null;
+
 // Reasoning types out on the same pacer, at the same words/s the prose uses — it is the same reading. A block is
 // fed the first time the panel sees it while its turn is live, and every re-read of the store feeds it again so a
 // block that grew keeps flowing. Returns the prefix to draw, or null when this block is drawn whole (history, a
@@ -6337,6 +6420,7 @@ function paintTypedLines(lids) {
 // The turn is over: nothing may be left waiting in either buffer, and the last of a paragraph's words are released
 // rather than left to a clock that has nothing more to say.
 function flushTypeStream(job) {
+  state.typeHold?.drain(String(job ?? ""));
   state.typeGate?.drain(String(job ?? ""));
   state.typePacer?.flushJob(String(job ?? ""));
 }
@@ -6345,6 +6429,7 @@ function flushTypeStream(job) {
 // of to a transcript that is still typing out a paragraph nobody was watching.
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) return;
+  state.typeHold?.drain();
   state.typeGate?.drain();
   state.typePacer?.releaseAll();
 });
@@ -6391,6 +6476,16 @@ function saveTypeLines(value) {
     /* private mode: the choice just will not persist */
   }
   paintStreamSpeed();
+}
+
+// A read that BEGINS after this call. loadThinking drops a request while one is in flight (the poll must not stack up),
+// but an answer already on its way may have been asked for before the store held the reply the caller is waiting on,
+// so this waits that one out and then asks again. Resolves once the answer is painted — which is also when the pacer
+// has been handed any new thought, so a caller that looks at the pacer afterwards sees it.
+async function loadThinkingAfter(turn) {
+  const until = Date.now() + REASONING_READ_WAIT_MS;
+  while (state.thinkLoading.has(turn.id) && Date.now() < until) await new Promise((r) => setTimeout(r, 20));
+  await loadThinking(turn, "");
 }
 
 // One turn's thoughts, from the store, bounded by the turn's own clock.
@@ -7524,7 +7619,10 @@ function appendJobLine(evt) {
   // The line-by-line setting holds a burst of whole lines and lets them in one at a time. Bookkeeping never waits:
   // the `result` line is what says the turn ended, and it is also the frame that flushes both buffers. A hidden tab
   // is not reading anything, so it never holds a line either — the answer is there in full when the reader returns.
+  if (!document.hidden && !isBookkeeping(line) && state.typeHold?.push(evt)) return;
   if (!document.hidden && !isBookkeeping(line) && state.typeGate?.push(evt)) return;
+  // The turn is over: what the reasoning hold is keeping goes into the console BEFORE the line that says so.
+  if (line.kind === "result") state.typeHold?.drain(evt.id);
   recordJobLine(evt);
   drawJobLine(evt);
   if (line.kind === "result") flushTypeStream(evt.id);
@@ -15234,6 +15332,88 @@ function applyTermStyle({ save = false, size = null, weight = null } = {}) {
   }
 }
 
+// ---- text styles: thinking, skill output, console -------------------------------------------------
+// Three kinds of console text, each with its own colour and size (Settings > Display): the agent's REASONING, what a
+// SKILL prints (the result of skill_view / skills_list / skill_manage, inside its output box), and the rest of the
+// console's own words and tool output. They are set apart on purpose: reasoning is how the agent got there, a skill is
+// a document the reader reads rather than scans, and neither should have to share a size with a one-line `ls`.
+//
+// Each style is a CSS variable on :root that the stylesheet reads WITH a fallback to today's look, so an unset style
+// costs nothing and "use defaults" is removing the property, not writing the old value back (reasoning has two defaults
+// — dim in the 🧠 block, lavender in the 🌊 stream — and a stored copy of either would flatten the other). The console's
+// size is not here: it is the existing Console size (--term-size, applyTermStyle), which this row now owns.
+const TEXT_STYLES = {
+  think: { colorKey: "wtgui.thinkColor", sizeKey: "wtgui.thinkSize", colorVar: "--think-color", sizeVar: "--think-font-size", color: "think-color", state: "think-color-state", size: "think-size-select", fallback: "#b3a8cc" },
+  skill: { colorKey: "wtgui.skillColor", sizeKey: "wtgui.skillSize", colorVar: "--skill-color", sizeVar: "--skill-font-size", color: "skill-color", state: "skill-color-state", size: "skill-size-select", fallback: "#9aa4b2" },
+  console: { colorKey: "wtgui.consoleColor", colorVar: "--con-color", color: "console-color", state: "console-color-state", fallback: "#e6e9ef" },
+};
+const TEXT_COLOR_RE = /^#[0-9a-f]{6}$/;
+
+function textStyleColor(kind) {
+  const set = TEXT_STYLES[kind];
+  try {
+    const c = String(localStorage.getItem(set.colorKey) || "").toLowerCase();
+    return TEXT_COLOR_RE.test(c) ? c : "";
+  } catch {
+    return ""; // private mode: the default holds
+  }
+}
+
+function textStyleSize(kind) {
+  const set = TEXT_STYLES[kind];
+  if (!set.sizeKey) return 0;
+  try {
+    const n = Number(localStorage.getItem(set.sizeKey));
+    return TERM_SIZES.includes(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// `color` / `size` left out read the stored value; "" / 0 mean the default. Only a value this panel offers is applied
+// or kept, so a hand-edited key cannot write nonsense into a stylesheet.
+function applyTextStyle(kind, { save = false, color, size } = {}) {
+  const set = TEXT_STYLES[kind];
+  if (!set) return;
+  const root = document.documentElement.style;
+  const c = color === undefined ? textStyleColor(kind) : TEXT_COLOR_RE.test(String(color).toLowerCase()) ? String(color).toLowerCase() : "";
+  if (c) root.setProperty(set.colorVar, c);
+  else root.removeProperty(set.colorVar);
+  const input = $(set.color);
+  if (input && input.value !== (c || set.fallback)) input.value = c || set.fallback;
+  const state = $(set.state);
+  if (state) state.textContent = c || "default";
+  let n = 0;
+  if (set.sizeKey) {
+    n = size === undefined ? textStyleSize(kind) : TERM_SIZES.includes(Number(size)) ? Number(size) : 0;
+    if (n) root.setProperty(set.sizeVar, `${n}px`);
+    else root.removeProperty(set.sizeVar);
+    const sel = $(set.size);
+    const want = n ? String(n) : "";
+    if (sel && sel.value !== want) sel.value = want;
+  }
+  if (save) {
+    try {
+      if (c) localStorage.setItem(set.colorKey, c);
+      else localStorage.removeItem(set.colorKey);
+      if (set.sizeKey) {
+        if (n) localStorage.setItem(set.sizeKey, String(n));
+        else localStorage.removeItem(set.sizeKey);
+      }
+    } catch {
+      /* private mode: the choice just will not persist */
+    }
+  }
+}
+
+// "use defaults": the colour goes back to unset, and so does the size — the console's own size has no unset (it is
+// the 11.5px the box always had), so for that one the size goes back to that number.
+function resetTextStyle(kind) {
+  applyTextStyle(kind, { save: true, color: "", size: 0 });
+  if (kind === "console") applyTermStyle({ save: true, size: 11.5 });
+}
+// ---- end text styles
+
 // ---- panel contrast -----------------------------------------------------------------------
 // The board is a stack of greys - page, detail row, card, card header, hovered row - and each layer is a CSS
 // variable. One slider places the whole stack on a scale: at 0% every layer is the same neutral (a flat board),
@@ -16085,6 +16265,15 @@ function initFonts() {
     weightSel.innerHTML = TERM_WEIGHTS.map((w) => `<option value="${w.id}">${esc(w.label)}</option>`).join("");
   }
   applyTermStyle({ save: false });
+  // The reasoning and skill pickers carry a "Default" first: unset is a real choice for them (the console's has none).
+  for (const kind of Object.keys(TEXT_STYLES)) {
+    const set = TEXT_STYLES[kind];
+    const sel = set.size ? $(set.size) : null;
+    if (sel && !sel.options.length) {
+      sel.innerHTML = `<option value="">Default</option>${TERM_SIZES.map((n) => `<option value="${n}">${n}px</option>`).join("")}`;
+    }
+    applyTextStyle(kind);
+  }
 }
 
 // Paint the saved question-box look before the first card is drawn.
@@ -16110,6 +16299,13 @@ $("title-settings")?.addEventListener("click", (e) => {
 $("font-select")?.addEventListener("change", (e) => applyFont("ui", e.target.value));
 $("term-select")?.addEventListener("change", (e) => applyFont("term", e.target.value));
 $("term-size-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, size: e.target.value }));
+// The colour follows the picker while it is dragged and is saved when it settles; a size is saved as it is chosen.
+for (const [kind, set] of Object.entries(TEXT_STYLES)) {
+  $(set.color)?.addEventListener("input", (e) => applyTextStyle(kind, { color: e.target.value }));
+  $(set.color)?.addEventListener("change", (e) => applyTextStyle(kind, { save: true, color: e.target.value }));
+  if (set.size) $(set.size)?.addEventListener("change", (e) => applyTextStyle(kind, { save: true, size: e.target.value }));
+}
+for (const b of document.querySelectorAll("[data-text-reset]")) b.addEventListener("click", () => resetTextStyle(b.dataset.textReset));
 
 // ---- the question box's look: tint, size, density, and whether the typed answer is offered --------
 for (const btn of document.querySelectorAll("[data-q-tint]")) {

@@ -639,7 +639,7 @@ const cfCount = (n) => `${n} line${n === 1 ? "" : "s"}`;
 // row in the rows the caller handed over — with the caller's `codeKey` that is the box's key, the handle the
 // reader's open state is kept under across a repaint. The key is also why a box grows in place while its result is
 // still arriving: the run starts at the same row every time, only its length changes.
-function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open }) {
+function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open, skill = false }) {
   const fold = opts.fold && opts.fold.tool && opts.fold.turn != null && opts.fold.row != null ? opts.fold : null;
   const key = fold ? `result|${fold.turn}|${fold.tool}|${fold.row}` : `${String(opts.codeKey || "")}|${at}`;
   const isOpen = Boolean(open && open.has(key));
@@ -653,13 +653,23 @@ function cfBox({ kind, at, rows, what, title = "", delta = "", body, opts, open 
   // Preserve only the capped wire rows for a DOM read-back. A fetched body must never be reabsorbed into the buffer.
   const source = fold && opts.source ? ` data-code-source="${cfEsc(JSON.stringify(opts.source))}"` : "";
   return (
-    `<div class="code-box is-${kind}${isOpen ? " is-open" : ""}"${source}>` +
+    `<div class="code-box is-${kind}${skill ? " is-skill" : ""}${isOpen ? " is-open" : ""}"${source}>` +
     `<button type="button" class="code-head" data-code-fold="1"${identity} data-code-key="${cfEsc(key)}"${inverted ? ' data-code-inverted="1"' : ""} aria-expanded="${isOpen ? "true" : "false"}"${title ? ` title="${cfEsc(title)}"` : ""}>` +
     `<span class="code-caret">${isOpen ? "▾" : "▸"}</span><span class="code-what">${cfEsc(what)}</span>${delta}` +
     `<span class="code-n">${cfEsc(count)}</span><span class="code-hint">${isOpen ? "click to fold" : "click to read"}</span></button>` +
     `<div class="code-body"${isOpen ? "" : " hidden"}>${body}</div>` +
     `</div>`
   );
+}
+
+// Is this a SKILL's result? The same tools the word pacer writes out (core/type-stream.js isPacedTool), so the box that
+// types out like prose is also the box Settings > Display lets the reader colour and size apart from the console.
+// Asked of the pacer at render time rather than copied here, so the two cannot disagree about which tools those are;
+// a page without the pacer (a harness) falls back to the same name rule.
+function cfIsSkill(tool) {
+  const t = String(tool || "").trim();
+  const pacer = globalThis.wtType;
+  return pacer && typeof pacer.isPacedTool === "function" ? pacer.isPacedTool(t) : /^skill/i.test(t);
 }
 
 // A result's box. Whatever the result is made of — a shell transcript, a file's body, a search, a skill's lines, a
@@ -718,7 +728,7 @@ function cfResultBox(list, classes, pair, from, to, file, opts, open) {
     ? `<span class="code-delta" title="${adds} added, ${dels} removed">` +
       `<span class="is-add">+${adds}</span><span class="is-del">\u2212${dels}</span></span>`
     : "";
-  return cfBox({ kind: diff ? "diff" : name ? "file" : "out", at: from, rows: to - from, what, title: name, delta, body: parts.join(""), opts, open });
+  return cfBox({ kind: diff ? "diff" : name ? "file" : "out", at: from, rows: to - from, what, title: name, delta, body: parts.join(""), opts, open, skill: cfIsSkill(tool) });
 }
 
 window.WMApp = window.WMApp || {};

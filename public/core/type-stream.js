@@ -20,7 +20,16 @@
 //     line is not in the console's record yet — a repaint mid-burst shows the transcript as far as it has got,
 //     which is the truth.
 //
-// Both are flushed by the caller when the turn settles, so nothing is ever left sitting in a buffer: the clock
+//   * the REASONING HOLD keeps a tool's lines out of the console until the reasoning in front of them has finished
+//     being written. The pacer types a thought at the reader's words-a-second, and a tool call (and its output) that
+//     follows it is whole lines on the wire: left alone it lands while the thought above it is still being typed,
+//     and the reader watches the answer arrive before the question. The hold queues those frames, in order, behind
+//     the thought and lets them go the moment the pacer has nothing left to say for it. It knows nothing about the
+//     page: the caller says which frames wait (`wants`), what they wait for (`busy`) and what to do when a hold
+//     begins (`start` — the page uses it to read the store again, because a reply's reasoning lands there a moment
+//     after the tool call it made is already on the wire).
+//
+// All three are flushed by the caller when the turn settles, so nothing is ever left sitting in a buffer: the clock
 // here outlives the wire, not the run.
 //
 // This is a classic script in the page and a plain module to node (it publishes itself on globalThis), so
@@ -36,6 +45,10 @@
   const MIN_TICK_MS = 40; // ~25 fps: finer than the eye needs and cheap on a board of cards
   const MAX_ENTRIES = 4000; // a line per entry, and the console keeps 1000 per job
   const MAX_QUEUE = 600;
+  // No hold outlasts this. A hold ends because the thought has been written, which the pacer always gets to; this is
+  // the fence for the day it does not (a clock that stopped, a read that never answers), and it is far past any
+  // reasoning a reader would sit through at a rate they chose.
+  const MAX_HOLD_MS = 120_000;
 
   const clampWords = (v) => {
     const n = Math.round(Number(v));
@@ -261,9 +274,21 @@
       return rate;
     }
 
+    // Is any line of this job still being written? `test(lid)` narrows it to the lines the asker cares about (the
+    // reasoning hold asks about thoughts only, and only the ones that belong in front of the call it is holding).
+    function pendingFor(job, test) {
+      const id = String(job ?? "");
+      for (const [lid, e] of lines) {
+        if (e.job !== id || restOf(e) <= 0) continue;
+        if (!test || test(lid)) return true;
+      }
+      return false;
+    }
+
     return {
       feed,
       shownFor,
+      pendingFor,
       tick,
       flush,
       flushJob,
@@ -390,5 +415,103 @@
     };
   }
 
-  root.wtType = { DEFAULT_WORDS, MAX_WORDS, MAX_LINES, MIN_TICK_MS, wordsIn, advance, createPacer, createLineGate, clampWords, clampLines, isPacedTool };
+  /**
+   * The reasoning hold: whole frames that must wait for a thought to be finished before they join a console.
+   *
+   * A frame is held when `wants(evt)` says it belongs behind the reasoning AND `busy(job, head)` says that reasoning
+   * is not finished. From then on EVERY later frame of that job queues behind it — a console is a transcript, so a
+   * line may not overtake the one in front of it — except the growth of a line that is already drawn (`mode: "set"`),
+   * which is not a new line. The queue leaves together, in order, the first time `busy` is false (checked on the
+   * hold's own clock), or when `drain` is called, or when it has waited `maxWaitMs`.
+   *
+   * @param opts.wants    (evt) => whether this frame starts a hold when the job is busy
+   * @param opts.busy     (job, head) => whether the reasoning in front of `head` is still being read or written
+   * @param opts.start    (job, evt) => called once per frame that could start a hold, BEFORE `busy` is asked, so the
+   *                      caller can begin the work `busy` then reports (a fresh read of the store)
+   * @param opts.release  called with each frame that may be drawn now
+   * @param opts.maxWaitMs  a hold's ceiling (default MAX_HOLD_MS)
+   */
+  function createReasoningHold(opts = {}) {
+    const { now, schedule, cancel } = defaults(opts);
+    const release = opts.release || (() => {});
+    const wants = opts.wants || (() => false);
+    const busy = opts.busy || (() => false);
+    const start = opts.start || (() => {});
+    const maxWait = Number.isFinite(opts.maxWaitMs) ? Math.max(0, opts.maxWaitMs) : MAX_HOLD_MS;
+    const queues = new Map(); // job -> { frames, since }
+    let timer = null;
+
+    const arm = () => {
+      if (timer != null || !queues.size) return;
+      timer = schedule(sweep, MIN_TICK_MS);
+    };
+    const disarm = () => {
+      if (timer == null) return;
+      cancel(timer);
+      timer = null;
+    };
+    function sweep() {
+      timer = null;
+      const t = now();
+      for (const [job, q] of [...queues]) {
+        if (t - q.since < maxWait && busy(job, q.frames[0])) continue;
+        // Out of the map first: a frame released into a console may cause another push for this job.
+        queues.delete(job);
+        for (const evt of q.frames) release(evt);
+      }
+      arm();
+    }
+
+    const sameLine = (evt, line) => line.lid != null && String(evt.line?.lid ?? "") === String(line.lid);
+
+    return {
+      /** Hold this frame, or return false when it may be drawn at once. */
+      push(evt) {
+        const job = String(evt?.id ?? "");
+        const line = evt?.line || {};
+        const q = queues.get(job);
+        if (q) {
+          const held = q.frames.find((f) => sameLine(f, line));
+          if (held) {
+            held.line = line;
+            if (evt.live) held.live = evt.live;
+            return true;
+          }
+          // An already-drawn line growing is not a new line: it must not wait behind the hold.
+          if (line.mode === "set") return false;
+          q.frames.push(evt);
+          if (q.frames.length > MAX_QUEUE) release(q.frames.shift());
+          return true;
+        }
+        if (line.mode === "set" || !wants(evt)) return false;
+        start(job, evt);
+        if (!busy(job, evt)) return false;
+        queues.set(job, { frames: [evt], since: now() });
+        arm();
+        return true;
+      },
+      /** Let everything waiting go, in order (for one job when `job` is given). Returns how many frames left. */
+      drain(job) {
+        let n = 0;
+        for (const [id, q] of [...queues]) {
+          if (job != null && id !== String(job)) continue;
+          queues.delete(id);
+          for (const evt of q.frames) release(evt);
+          n += q.frames.length;
+        }
+        if (!queues.size) disarm();
+        return n;
+      },
+      queued: (job) => {
+        let n = 0;
+        for (const [id, q] of queues) if (job == null || id === String(job)) n += q.frames.length;
+        return n;
+      },
+      /** Frames waiting for this job, oldest first (read-only). */
+      held: (job) => (queues.get(String(job ?? ""))?.frames || []).slice(),
+      isHolding: (job) => queues.has(String(job ?? "")),
+    };
+  }
+
+  root.wtType = { DEFAULT_WORDS, MAX_WORDS, MAX_LINES, MAX_HOLD_MS, MIN_TICK_MS, wordsIn, advance, createPacer, createLineGate, createReasoningHold, clampWords, clampLines, isPacedTool };
 })(globalThis);

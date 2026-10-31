@@ -239,6 +239,12 @@ button.primary:hover { background: #24466a; }
    gateway's own approvals.timeout, written to its config.yaml, so it is styled as a form field with
    an explicit Save rather than a picker that applies on change. */
 .settings-sep { height: 1px; margin: 14px 0 12px; background: var(--line); }
+.settings-row input[type="color"] { flex: none; width: 34px; height: 26px; padding: 1px 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.settings-row select.settings-size { flex: 0 0 96px; }
+/* The three text styles' previews are drawn FROM the variables the console reads, so each one IS the setting. */
+.settings-preview.sample-think { font: italic var(--think-font-size, 12px)/1.5 var(--term); font-weight: var(--term-weight); color: var(--think-color, #b3a8cc); }
+.settings-preview.sample-skill { font: var(--skill-font-size, var(--term-size))/1.5 var(--term); font-weight: var(--term-weight); color: var(--skill-color, var(--con-color, var(--dim))); }
+.settings-preview.sample-console { font: var(--term-size)/1.5 var(--term); font-weight: var(--term-weight); color: var(--con-color, #e6e9ef); }
 .settings-row input[type="number"] { width: 74px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
 .settings-row input[type="url"], .settings-row input[type="password"] { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
 .settings-row input[type="url"]::placeholder, .settings-row input[type="password"]::placeholder { color: var(--dimmer); }
@@ -688,7 +694,7 @@ button.chip:active { transform: translateY(1px); }
 .subagents { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 8px 0; font-size: 11px; color: var(--dim); }
 /* Thinking: a block above the turn's console, folded until opened, deliberately quieter than the output - it is
    how the agent got there, not what it produced. */
-.think { margin: 6px 0 8px; padding-left: 10px; border-left: 2px solid #3a4152; }
+.think { margin: 18px 0 8px; padding-left: 10px; border-left: 2px solid #3a4152; }
 .think > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 8px; user-select: none; }
 .think > summary::-webkit-details-marker { display: none; }
 .think > summary::before { content: "\25b8"; color: var(--dimmer); font-family: var(--ui); font-size: 9px; }
@@ -696,10 +702,13 @@ button.chip:active { transform: translateY(1px); }
 .think-title { font-size: 10.5px; letter-spacing: .03em; color: #9db4d0; }
 .think-meta { font-size: 10.5px; color: var(--dimmer); }
 .think-body { margin: 6px 0 2px; max-height: 260px; overflow: auto; }
-.think-block { white-space: pre-wrap; word-break: break-word; font-size: var(--think-size, 12px); line-height: 1.5; font-style: italic; color: var(--dim); margin: 0 0 8px; }
+.think-block { white-space: pre-wrap; word-break: break-word; font-size: var(--think-size, var(--think-font-size, 12px)); line-height: 1.5; font-style: italic; color: var(--think-color, var(--dim)); margin: 0 0 8px; }
 /* The blocks also carry .mono, which sets a 12px size and would otherwise win on the var: this rule is two classes
-   deep so Ctrl+wheel can actually size the reasoning text. */
-.think-block.mono { font-size: var(--think-size, 12px); }
+   deep so Ctrl+wheel can actually size the reasoning text. A card's own zoom (--think-size) is a gesture on that card
+   and beats the Settings size (--think-font-size), which is the reader's standing choice for every card. */
+.think-block.mono { font-size: var(--think-size, var(--think-font-size, 12px)); }
+/* An empty line before every reasoning section: a thought is not glued to the tool output or the thought above it. */
+.think-block + .think-block { margin-top: 1.5em; }
 .think-block:last-child { margin-bottom: 0; }
 .think-empty { color: var(--dimmer); font-style: normal; }
 /* The card's own switch. Off is a quiet glyph; on is visibly live, because the block it controls is easy to miss. */
@@ -979,7 +988,7 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
   word-break: break-word;
 }
 .jl { color: #b9c2ce; }
-.jl-text { color: #e6e9ef; }
+.jl-text { color: var(--con-color, #e6e9ef); }
 .jl-init { color: #9ecbff; }
 .jl-result { color: #7ee787; }
 .jl-tool { color: #c8a6ff; }
@@ -994,7 +1003,9 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
 .tgrp-flat > .tgrp-body { margin-top: 0; padding-top: 0; border-top: 0; }
 /* The reasoning, drawn as a line of that stream rather than as a block above it. It keeps the block's own voice
    (italic, dim) so it still reads as thought and not as something the agent said out loud. */
-.jl-think { color: #b3a8cc; font-style: italic; }
+.jl-think { color: var(--think-color, #b3a8cc); font-style: italic; font-size: var(--think-font-size, inherit); margin-top: 1.5em; }
+/* ...except at the very top of a console, where there is nothing above it to be set apart from. */
+.job-out > .jl-think:first-child { margin-top: 0; }
 .tgrp .jl { white-space: pre-wrap; }
 .tgrp-head { display: flex; flex-direction: column; gap: 1px; }
 .tgrp-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; cursor: pointer; border-radius: 3px; }
@@ -1025,7 +1036,7 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
 /* Output that came from the session store rather than the live stream: same size as the rest of the console,
    dimmed so a live preview above it stays the headline. A note under it (cut, or nothing recorded) is italic. */
 .jl-note { font-style: italic; }
-.jl-store { color: var(--dim); white-space: pre-wrap; word-break: break-word; }
+.jl-store { color: var(--con-color, var(--dim)); white-space: pre-wrap; word-break: break-word; }
 .tgrp-body { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--line); }
 /* One tool call and its output. The call's own row is the handle for the fold: the caret is a real button (so Tab
    reaches it and Enter/Space press it) and the row around it does the same thing, which is why the caret is small
@@ -1090,7 +1101,7 @@ button.btn-retry:disabled { color: var(--dimmer); border-color: var(--line); cur
 textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 
 /* a tool's own output, shown under its call so the console says what actually happened */
-.jl-tool-out { color: var(--dim); padding-left: 14px; white-space: pre-wrap; }
+.jl-tool-out { color: var(--con-color, var(--dim)); padding-left: 14px; white-space: pre-wrap; }
 .jl-cmd { color: var(--dimmer); }
 .jl-dim { color: var(--dimmer); font-style: italic; }
 .jl-raw { color: var(--dim); }
@@ -1182,6 +1193,12 @@ textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); 
 /* The UA's own [hidden] rule is one attribute selector and loses to a class: without this the folded body
    would render anyway. */
 .code-body[hidden] { display: none; }
+/* A SKILL's result (skill_view, skills_list, skill_manage) is the longest thing a run hands the console, and the one a
+   reader reads rather than scans, so it has its own colour and size (Settings > Display). Unset, a skill reads exactly
+   like the rest of the console: the colour falls back to the console's, then to the line's own. Only the box's own
+   plain rows are recoloured, never a diff window inside it: a +/- row keeps its green and red. */
+.code-box.is-skill > .code-body { font-size: var(--skill-font-size, inherit); }
+.code-box.is-skill > .code-body > .jl { color: var(--skill-color, var(--con-color, var(--dim))); }
 /* Every tool result is one of these boxes (core/console-format.js): its lines, a file's body, or a diff. A diff's
    framed windows are drawn INSIDE it, so the box is the only frame — the windows give up their own border and the
    next window is told from the one above by a rule — and what the change adds and removes sits in the header, so a
