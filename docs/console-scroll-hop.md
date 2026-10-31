@@ -211,18 +211,42 @@ demand.
 - Frames were sampled by `requestAnimationFrame`, which is the paint clock of the tab under test (headless Chromium
   here). The console was never at 0 and back within one frame in any capture — every hop is a value a frame actually
   painted, and each one is a full frame at the top, not a transient read inside a rebuild.
-- This is a diagnosis. Nothing in `public/`, `lib/` or `server.js` was changed.
+- The diagnosis in §1–§6 was made without changing any file; the fix in §7 changed `public/app.js` only.
 
-## 7. What the shape of a fix would be (not applied)
+## 7. The fix, and what it measures
 
-The line has two properties that make the hop: it re-appends sections that did **not** move, and it leaves the scroll
-position of the boxes inside them to the next repair. Either one alone would remove the hop: move only the sections whose
-index changed (or restore the consoles' `scrollTop` right after the loop the way `placeRow` does), and no open card would
-be detached for a re-rank it did not take part in.
+The line had two properties that made the hop: it re-appended sections that did **not** move, and it left the scroll
+position of the boxes inside them to the next repair. Both are gone:
+
+1. **`placeInOrder(parent, want)`** (`public/app.js`) walks the ranked list backwards and only calls `insertBefore` for
+   an element whose next sibling is not already the one the order asks for. An element that is in its slot is never
+   touched, so the whole remove-then-insert disappears for the common case. `reorderProjects()` uses it for the sections
+   *and* the folders (a folder move was the same fault one level up), and `reorder()` uses it for a project's rows.
+   Because `order()` pins an open project into its own index, an open section is never out of place — the console inside
+   it is no longer detached by a re-rank it did not take part in, which is exactly the "two consoles that are being
+   written to at the same time" report: the move was about a closed third project's rank.
+2. **`holdScrolls(root)` / `releaseScrolls(held)`** read every `pre.job-out`, `.think-body` and `.sub-console` in the
+   subtree *before* the first move and put each one back in the same task, so the cases where something genuinely has to
+   move (a section appearing or going away, a detail following its re-ranked row in `sweepStaleBoard()`, a project whose
+   `wm.stabilize` is off) no longer wait 4–376 ms for the next line or the 400 ms sweep. Reading after the move was the
+   other half of the bug: a capture taken after a move reads 0 and becomes a real write to 0.
+3. **`renderAll()` no longer clears `state.detailEls`** before it rebuilds the board. That map is what `renderProjectRows()`
+   hands to `fillAgentSlots()` so a rebuild reuses the cards (a *move* of the node, scroll included) instead of building
+   new ones; clearing it made a snapshot that changed the project set rebuild every card from scratch, which was the one
+   remaining painted hop.
+
+Measured on this tree with `tools/measure-console-scroll-hop.mjs --seconds 80` (two cards in two projects streaming at
+once, six projects, four of them moving on the file-touch clock):
+
+| build | painted hop instants | consoles at 0 on an instant | reorderProjects calls that changed an order |
+| --- | --- | --- | --- |
+| before (`72c3b93^`) | **9** in 80 s | 2 (both) on 8 of them | 12 (10 `tickLivenessRanks`, 2 `applySnapshot`) |
+| after | **0** | — | 15–16 (the ranking still moves; the sections it moves are the closed ones) |
+| after (second run) | **0** | — | 15 |
+
+The tool now exits non-zero when it sees a painted hop, so a regression is a red run rather than a number in a report:
 
 ```
-node tools/measure-console-scroll-hop.mjs --json C:/CodeReviews/agent-worktree-gui/scroll-hop-baseline.json
+node tools/measure-console-scroll-hop.mjs --seconds 80
 ```
 
-The capture behind every number above was taken with that command into a scratch path; the tables are the read-back of
-its `frames`, `scrolls`, `moves` and `calls` arrays.

@@ -4,8 +4,12 @@
 //   node tools/measure-console-scroll-hop.mjs --seconds 150        # a longer window (more beats)
 //   node tools/measure-console-scroll-hop.mjs --reorder-seconds 0  # control: the page's reorder clock stopped
 //   node tools/measure-console-scroll-hop.mjs --json <path>        # keep the raw capture
+//   node tools/measure-console-scroll-hop.mjs --allow-hops         # report only, even when a hop was seen
 //   node tools/measure-console-scroll-hop.mjs --keep               # leave the sandbox behind
 //   node tools/measure-console-scroll-hop.mjs --headed             # a window instead of headless Chromium
+//
+// EXIT CODE: 0 when no console was painted off its newest line, 1 when one was (that is the defect this tool exists to
+// measure, so a regression is a red run and not a number somebody has to remember to read).
 //
 // It boots its own panel (tools/panel-testkit.mjs, spare port, own config/HERMES_HOME, API_SERVER_KEY empty), plays
 // one fixed reply per card over a stub Runs API, and opens BOTH projects and BOTH worktree rows so the two cards are
@@ -434,6 +438,8 @@ function report(cap) {
     seen.add(key);
     console.log(`   ${String(t.delay).padStart(6)}ms  fires=${String(n).padStart(3)}  scheduled at line ${at}`);
   }
+  // The count is the verdict: the caller exits non-zero on it, so a hop this tool can see is a red run.
+  return instants.length;
 }
 
 const pw = loadPlaywright();
@@ -565,7 +571,15 @@ try {
   }
   console.log(`start: ${JSON.stringify(start)}`);
   console.log(`calls=${capture.calls.length} scrolls=${capture.scrolls.length} scrollEvents=${capture.scrollEvents.length} moves=${capture.moves.length} fires=${capture.fires.length} frames=${capture.frames.length} errors=${capture.pageErrors.length}`);
-  report(capture);
+  const hops = report(capture);
+  // A painted hop is the defect this tool exists to measure: a regression is a red run, not a number in a report
+  // somebody has to remember to read. `--allow-hops` keeps the old report-only use for a baseline capture.
+  if (hops && !argv.includes("--allow-hops")) {
+    console.log(`\nFAIL  ${hops} painted hop instants — a console was painted at the top of its box and pulled back`);
+    process.exitCode = 1;
+  } else if (!hops) {
+    console.log("\nOK  no console was painted off its newest line");
+  }
 } finally {
   await ctx.close().catch(() => {});
   await gw.close().catch(() => {});
