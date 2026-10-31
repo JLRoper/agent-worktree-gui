@@ -22,7 +22,10 @@
 //      reader took over on the line they left it on, for all three kinds of box a card has; without the release the same
 //      move leaves the box at 0 (the control: that is the frame a reader saw);
 //   4. every function that re-orders a list holding consoles goes through them: reorderProjects, reorder,
-//      sweepStaleBoard and reorderAgentCards hold the boxes, release them, and put nothing down with a raw append.
+//      sweepStaleBoard and reorderAgentCards hold the boxes, release them, and put nothing down with a raw append;
+//   5. a subagent strip's signature is its OWN: one child's read, or the reader opening a child in another session's
+//      strip, changes only the strip that draws that child - so a repaint cannot throw another session's open child
+//      console back to its first line. The page-global counter this replaced is gone.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -332,3 +335,96 @@ for (const name of ["reorderProjects", "reorder", "sweepStaleBoard", "reorderAge
     if (name !== "sweepStaleBoard") assert.match(body, /\bplaceInOrder\(/, `${name}() orders its list with placeInOrder`);
   });
 }
+
+// ---- 5. a subagent strip's signature ---------------------------------------------------------------------------
+// The subagent strip under a turn's console is rebuilt in place from its signature. The signature it used to build
+// carried `[...state.openSubConsole]` and a PAGE-GLOBAL counter bumped by every child's read, so a poll of one
+// session's child changed every session's strip: with two sessions each showing an open child console, each 5 s poll
+// rebuilt BOTH strips and put BOTH child consoles back at their first line. The strip's own rows and its own
+// children's read counts are what it draws; nothing else may be in it.
+const sigCode = ["subagentsSig", "subagentsOpenSig", "subagentsStripSig", "bumpSubRead"].map(fn).join("\n");
+const stripSig = new Function("state", `${sigCode}\nreturn { subagentsSig, subagentsOpenSig, subagentsStripSig, bumpSubRead };`);
+const stripState = () => {
+  const s = { openSubConsole: new Set(), subConsoleReads: new Map(), collapsedSubs: new Set() };
+  const { subagentsSig, subagentsOpenSig, subagentsStripSig, bumpSubRead } = stripSig(s);
+  return { s, subagentsSig, subagentsOpenSig, subagentsStripSig, bumpSubRead };
+};
+const child = (id, goal = `review ${id}`, running = true) => ({ id, goal, running });
+
+test("a read of one child changes only the strip that draws that child", () => {
+  const { s, subagentsStripSig, bumpSubRead } = stripState();
+  const alpha = [child("c-alpha", "check the build")];
+  const beta = [child("c-beta", "read the diff")];
+  s.openSubConsole.add("c-alpha");
+  s.openSubConsole.add("c-beta");
+  const alphaBefore = subagentsStripSig(alpha, "turn-alpha");
+  const betaBefore = subagentsStripSig(beta, "turn-beta");
+  // A poll of the alpha child's console lands.
+  bumpSubRead("c-alpha");
+  assert.notEqual(subagentsStripSig(alpha, "turn-alpha"), alphaBefore, "the strip that draws it repaints");
+  assert.equal(
+    subagentsStripSig(beta, "turn-beta"),
+    betaBefore,
+    "the other session's strip is not rebuilt by a read that has nothing to do with it - a rebuild is a new scroll box",
+  );
+});
+
+test("the reader opening a child in another session's strip leaves this strip's signature alone", () => {
+  const { s, subagentsStripSig } = stripState();
+  const alpha = [child("c-alpha")];
+  const beta = [child("c-beta")];
+  s.openSubConsole.add("c-alpha");
+  const alphaBefore = subagentsStripSig(alpha, "turn-alpha");
+  s.openSubConsole.add("c-beta");
+  assert.equal(subagentsStripSig(alpha, "turn-alpha"), alphaBefore, "one strip's open set is not another's");
+  assert.notEqual(subagentsStripSig(beta, "turn-beta"), subagentsStripSig(alpha, "turn-alpha"));
+});
+
+test("a read of a child that is not open changes no strip: nothing draws it", () => {
+  const { s, subagentsStripSig, bumpSubRead } = stripState();
+  const alpha = [child("c-alpha")];
+  const before = subagentsStripSig(alpha, "turn-alpha");
+  bumpSubRead("c-alpha"); // the roster poll read a closed child
+  assert.equal(subagentsStripSig(alpha, "turn-alpha"), before);
+});
+
+test("a strip's own rows, its own read counts and its own fold are in its signature", () => {
+  const { s, subagentsStripSig } = stripState();
+  const alpha = [child("c-alpha")];
+  s.openSubConsole.add("c-alpha");
+  const base = subagentsStripSig(alpha, "turn-alpha");
+  assert.equal(subagentsStripSig(alpha, "turn-alpha"), base, "the same strip twice is the same signature");
+  s.collapsedSubs.add("turn-alpha");
+  const folded = subagentsStripSig(alpha, "turn-alpha");
+  assert.notEqual(folded, base, "folding this strip repaints it");
+  assert.equal(subagentsStripSig(alpha, "turn-beta"), base, "another strip's fold is not this one's");
+  const done = subagentsStripSig([child("c-alpha", "review c-alpha", false)], "turn-alpha");
+  assert.notEqual(done, folded, "a child finishing repaints its own strip");
+  const renamed = subagentsStripSig([child("c-alpha", "a different goal")], "turn-alpha");
+  assert.notEqual(renamed, done, "a child's goal is what the strip draws");
+});
+
+test("one counter per child: two children keep their own read counts", () => {
+  const { s, subagentsStripSig, bumpSubRead } = stripState();
+  s.openSubConsole.add("c-alpha");
+  s.openSubConsole.add("c-beta");
+  bumpSubRead("c-alpha");
+  bumpSubRead("c-alpha");
+  bumpSubRead("c-beta");
+  assert.deepEqual([s.subConsoleReads.get("c-alpha"), s.subConsoleReads.get("c-beta")], [2, 1]);
+  assert.match(subagentsStripSig([child("c-alpha")], "t1"), /c-alpha@2/);
+  assert.match(subagentsStripSig([child("c-beta")], "t2"), /c-beta@1/);
+});
+
+test("the strip repaint compares a per-strip signature, and puts the open child consoles back in the same task", () => {
+  const body = fn("paintSubagents");
+  assert.match(body, /subagentsStripSig\(rows, key\)/, "the strip compares its own signature");
+  assert.doesNotMatch(body, /subConsoleVersion/, "the page-global counter that rebuilt every strip is gone");
+  assert.doesNotMatch(
+    body,
+    /\[\.\.\.state\.openSubConsole\]/,
+    "the whole board's open set is not part of one strip's signature",
+  );
+  assert.match(body, /applySubConsoleScrolls\(fresh\)/, "the repaint puts each open child console back before the frame");
+});
+assert.doesNotMatch(src, /subConsoleVersion/, "public/app.js has no page-global subagent strip counter left");
