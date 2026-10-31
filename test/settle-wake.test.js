@@ -294,6 +294,43 @@ test("a spent wake budget still refuses a quiet wake, but a settle goes out", as
   assert.equal(refused?.refused, "budget", "every other rule is still budgeted");
 });
 
+// The other arm of the spent budget: a run that ended `done`. The failed-run case above is the one that was
+// invisible; this one proves the same exemption covers a completion, and — the part worth pinning — that a settle
+// spends what it is allowed to ignore without refilling the hour for the quiet rule behind it.
+test("a completion still wakes with the hour's budget spent, and the budget stays spent", async (t) => {
+  const { assistant, said } = await board(t);
+  const limit = assistant.settings.maxWakesPerHour;
+  // Spent exactly the way `flushWake` spends it: one timestamp per wake that actually went out.
+  for (let i = 0; i < limit; i += 1) assistant.wakes.push(Date.now());
+
+  const quiet = assistant.wake("quiet: nothing said for a while", null, "quiet");
+  assert.equal(quiet.refused, "budget", "the budget binds every rule but the settle");
+  assert.equal(assistant.pendingWake.length, 0, "and nothing from the quiet rule was queued");
+  assert.match(
+    assistant.journal.find((j) => j.kind === "wake-suppressed")?.text || "",
+    /rate limit reached/,
+    "the refusal is journalled, with the line the settle used to be dropped on",
+  );
+
+  // A completion, `done` and not `failed`, is the case the brief's own default path produces all day.
+  assistant.observe({ type: "job", job: settled({ id: "job-budget-done" }) });
+  await wait();
+
+  assert.equal(assistant.pendingWake.length, 0, "the settle's wake was taken off the queue and sent");
+  assert.equal(said.length, 1, "one wake left the panel: the completion's");
+  assert.match(said[0].text, /\[settle\] wtgui-wake-the-panel-aaa111 ended normal/);
+  assert.equal(assistant.wakes.length, limit + 1, "and the settle spent what it was allowed to ignore");
+  assert.equal(
+    assistant.journal.filter((j) => j.kind === "wake-suppressed").length,
+    1,
+    "no second suppression — the budget did not touch the settle",
+  );
+
+  // The exemption is the settle's alone: with the list now one past the limit, the next quiet wake is still refused.
+  const again = assistant.wake("quiet: still nothing", null, "quiet");
+  assert.equal(again.refused, "budget", "every other rule is still budgeted");
+});
+
 // The unit cases above prove the judgement. This one proves the WIRING, with the real store: `jobs.settle` is where
 // a run ends, and it must reach the assistant without anything else standing in — server.js wires
 // `onEvent -> assistant.observe`, which is the only join between the two.
