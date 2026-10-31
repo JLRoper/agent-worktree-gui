@@ -250,3 +250,53 @@ The tool now exits non-zero when it sees a painted hop, so a regression is a red
 node tools/measure-console-scroll-hop.mjs --seconds 80
 ```
 
+## 8. The gate across layouts, and what the layouts say about "only with two consoles"
+
+`tools/measure-console-scroll-hop.mjs` draws one layout (two projects). `tools/verify-console-independence.mjs` asks the
+same question in the four layouts a board really has, and refuses to pass a run that measured nothing:
+
+| layout | what it draws |
+| --- | --- |
+| `one` | a single streaming console |
+| `siblings` | two consoles in two sibling worktree rows of ONE project - the reader's board (four sessions, one repo) |
+| `projects` | two consoles in two projects of one folder |
+| `folders` | two consoles in one project while two OTHER folders swap rank (the folder loop of `reorderProjects()`) |
+
+Each plays plain text into the consoles over a stub Runs API, drives the churn (a file touched in a closed project every
+4 s, so the ranking really moves), samples every frame with `requestAnimationFrame` and asserts zero painted hops. It
+also needs every console to overflow, the ranking to move a section or a folder at least three times in the window, and
+a raw re-append of an open section to reset a console in THIS browser - otherwise it exits 2, because a clean run on a
+browser that cannot show the fault proves nothing. On an export of `e965d65` (before the fix) it is red in all four
+(6, 11, 16 and 10 painted hops in its 40-45 s windows, every one a `reorderProjects | appendChild` on a
+`section.project` or `section.root-group`); on this tree it is green with the ranking moving 9-13 sections and 8
+folders in the window.
+
+```
+node tools/verify-console-independence.mjs                              # this checkout: four layouts, ~7 min
+node tools/verify-console-independence.mjs --root <export of e965d65>   # the build before the fix: red
+node tools/verify-console-independence.mjs --only siblings --seconds 90 # one layout, a longer window
+```
+
+**One console against two.** The same recorder, 75 s windows from the moment every console overflowed, the same churn,
+on `e965d65` before the fix:
+
+| layout | churn | painted hops | hop frames carrying both consoles |
+| --- | --- | --- | --- |
+| one console | on | 12 | - |
+| two consoles, two projects | on | 19 | 9 of 10 |
+| two consoles, two sibling worktree rows of one project | on | 24 | 11 of 13 |
+| two cards in one worktree row | on | 24 | 11 of 13 |
+| two sibling rows, the page's reorder clock stopped (`wm.reorderSeconds` 0) | on | 15 | 6 of 9 |
+| one console | off | 0 | - |
+| two sibling rows | off | 0 | - |
+
+All 94 of those hops are the same `reorderProjects | appendChild | section.project`; with the churn off (the ranking never
+moves) neither one console nor two ever hopped, and with the page's own reorder clock stopped the hops continued on the
+row-event path (`queueReorderProjects`), so it is the re-rank, not the clock. The same runs on the fix: 0 in every row.
+
+A single console hops as often as each of two does (12 in the one-console run, 12 per console in the sibling-row runs),
+so the cause does not depend on how many consoles are open: it depends on the folder's ranking moving. What a second
+console changes is what the reader SEES. One `appendChild` of the sections resets every open console in the same frame
+(11 of the 13 hop frames carried both), so the two boxes jump together and come back together, which reads as something
+switching between them, not as one box blinking. The cause was never two consoles competing for a writer: it was one
+shared write that did not look at the consoles at all.
