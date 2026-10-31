@@ -83,7 +83,7 @@
     <div class="settings-body">
 
       <div class="settings-group folded">
-        <h3 class="settings-group-head" data-settings-group="display" role="button" tabindex="0" aria-expanded="false" title="How the board and the agent's output look. Panel font covers the headings, labels, buttons and whatever you type; terminal font, size and weight cover the console and the tool lines inside it. All of it is saved in this browser. It starts folded — click the heading to open it, and the open group is remembered in this browser.">Display</h3>
+        <h3 class="settings-group-head" data-settings-group="display" role="button" tabindex="0" aria-expanded="false" title="How the board and the agent's output look. Panel font covers the headings, labels, buttons and whatever you type; terminal font and weight cover the console and the tool lines inside it; Thinking text, Skill output and Console text each set a colour and a size for their own part of it. All of it is saved in this browser. It starts folded — click the heading to open it, and the open group is remembered in this browser.">Display</h3>
 
         <div class="settings-row" title="page zoom — Ctrl+wheel, Ctrl + / Ctrl − , Ctrl 0 resets. Saved in this browser.">
           <span>Page zoom <span class="settings-info">ⓘ</span></span>
@@ -106,17 +106,39 @@
         </label>
         <div class="settings-preview" id="term-preview">tool · read_file · exit 0 · +169 −265</div>
 
-        <label class="settings-row settings-gap" title="Type size inside the console and the tool lines. Saved in this browser.">
-          <span>Console size <span class="settings-info">ⓘ</span></span>
-          <select id="term-size-select"></select>
-        </label>
-
-        <label class="settings-row" title="Console type weight — a little heavier reads better on a projector, a little lighter quiets a long transcript. Saved in this browser.">
+        <label class="settings-row settings-gap" title="Console type weight — a little heavier reads better on a projector, a little lighter quiets a long transcript. Saved in this browser.">
           <span>Console weight <span class="settings-info">ⓘ</span></span>
           <select id="term-weight-select"></select>
         </label>
 
-        <label class="settings-row settings-gap" for="stream-words" title="How fast the agent's own words — its reasoning blocks, and the skills it loads — are written on the screen. A run's prose reaches the panel in bursts — a phrase or two every frame, more on a fast model — and this holds the tail of each paragraph back so it types out a word or two at a time at this many words a second. A reasoning block only types the first time the panel sees it on a live turn, so history is never re-typed; the result of a skill (skill_view, skills_list, skill_manage — the longest thing a run hands the console at once) types out the same way inside its output box, and every other tool's result is drawn whole. Nothing is lost or left waiting: the words keep coming on the clock's own schedule, and whatever is still held is released the moment the turn ends (or the tab goes to the background). 0 turns it off, so the console fills exactly as the run sent it. Saved in this browser.">
+        <div class="settings-row settings-gap" title="Thinking text — the colour and size of the agent's reasoning, set apart from what a skill prints and from the rest of the console. It applies wherever reasoning is drawn: the 🧠 block above a console and the reasoning lines of the 🌊 single stream. Default keeps today's look (a quiet italic lavender). A card's own Ctrl+wheel zoom on its 🧠 block still wins for that card. Saved in this browser.">
+          <span>Thinking text <span class="settings-info">ⓘ</span></span>
+          <input id="think-color" type="color" value="#b3a8cc" aria-label="Thinking text colour">
+          <span class="settings-unit mono" id="think-color-state">default</span>
+          <select id="think-size-select" class="settings-size" aria-label="Thinking text size"></select>
+        </div>
+        <div class="settings-preview sample-think" id="think-preview">I'll read the file first, then patch the guard.</div>
+        <div class="settings-presets"><button type="button" data-text-reset="think" title="back to the default thinking colour and size">use defaults</button></div>
+
+        <div class="settings-row settings-gap" title="Skill output — the colour and size of what a skill prints into the console (the result of skill_view, skills_list and skill_manage, inside its output box). Default reads like the rest of the console. A diff inside the box keeps its green and red. Saved in this browser.">
+          <span>Skill output <span class="settings-info">ⓘ</span></span>
+          <input id="skill-color" type="color" value="#9aa4b2" aria-label="Skill output colour">
+          <span class="settings-unit mono" id="skill-color-state">default</span>
+          <select id="skill-size-select" class="settings-size" aria-label="Skill output size"></select>
+        </div>
+        <div class="settings-preview sample-skill" id="skill-preview"># pdf — create, read, merge, fill and OCR PDF files</div>
+        <div class="settings-presets"><button type="button" data-text-reset="skill" title="back to the default skill output colour and size">use defaults</button></div>
+
+        <div class="settings-row settings-gap" title="Console text — the colour and size (Console size) of the agent's own words and of a tool's output in the console. Tool-call lines, notes, errors and the results of skills keep their own colours, and Skill output above overrides this for a skill's box. Saved in this browser.">
+          <span>Console text <span class="settings-info">ⓘ</span></span>
+          <input id="console-color" type="color" value="#e6e9ef" aria-label="Console text colour">
+          <span class="settings-unit mono" id="console-color-state">default</span>
+          <select id="term-size-select" class="settings-size" aria-label="Console size"></select>
+        </div>
+        <div class="settings-preview sample-console" id="console-preview">Patched lib/jobs.js and ran the tests — 24 passed.</div>
+        <div class="settings-presets"><button type="button" data-text-reset="console" title="back to the default console colour and size (11.5px)">use defaults</button></div>
+
+        <label class="settings-row settings-gap" for="stream-words" title="How fast the agent's own words — its reasoning blocks, and the skills it loads — are written on the screen. A run's prose reaches the panel in bursts — a phrase or two every frame, more on a fast model — and this holds the tail of each paragraph back so it types out a word or two at a time at this many words a second. A reasoning block only types the first time the panel sees it on a live turn, so history is never re-typed; the result of a skill (skill_view, skills_list, skill_manage — the longest thing a run hands the console at once) types out the same way inside its output box, and every other tool's result is drawn whole. Nothing is lost or left waiting: the words keep coming on the clock's own schedule, and whatever is still held is released the moment the turn ends (or the tab goes to the background). While it is on, a tool call (and the output that answers it) is not written into the console until the reasoning in front of it has finished typing — the panel reads the store again the moment the call arrives, holds it and everything behind it, in order, and lets them go together; it holds nothing when reasoning is off or its block is folded. 0 turns it off, so the console fills exactly as the run sent it and nothing waits. Saved in this browser.">
           <span>Stream display speed <span class="settings-info">ⓘ</span></span>
           <input id="stream-words" type="number" inputmode="numeric" step="5" min="0" max="200">
           <span class="settings-unit mono">words/s</span>
