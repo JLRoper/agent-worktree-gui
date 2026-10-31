@@ -3667,6 +3667,23 @@ function subagentsSig(rows) {
   return rows.map((r) => `${r.goal}:${r.running ? 1 : 0}`).join("|");
 }
 
+// What THIS strip draws from the board's state: which of its OWN children are open, and how many reads of each have
+// landed. The signature used to carry `[...state.openSubConsole]` and a page-global version counter, so one child's
+// poll changed every session's strip and rebuilt strips that had not changed at all - and a rebuilt strip is a new
+// scroll box at its first line under a console somebody is reading. A read is this strip's business only when the
+// child it belongs to is in this strip.
+function subagentsOpenSig(rows) {
+  return rows
+    .filter((r) => r.id && state.openSubConsole.has(r.id))
+    .map((r) => `${r.id}@${state.subConsoleReads.get(r.id) || 0}`)
+    .join(",");
+}
+
+// The whole signature one strip is compared against: its rows, its own open children's read counts, its own fold.
+function subagentsStripSig(rows, key) {
+  return `${subagentsSig(rows)}|${subagentsOpenSig(rows)}|${state.collapsedSubs.has(key) ? "c" : "e"}`;
+}
+
 // Repaint every strip already on the page, in place: a roster poll must not re-render cards (that would move the
 // reader's scroll) and must not need a card to be re-rendered before it can show a child.
 function paintSubagents() {
@@ -3695,11 +3712,16 @@ function paintSubagents() {
       }
       continue;
     }
-    const sig = `${subagentsSig(rows)}|${[...state.openSubConsole].join(",")}|${state.subConsoleVersion || 0}|${state.collapsedSubs.has(key) ? "c" : "e"}`;
+    const sig = subagentsStripSig(rows, key);
     if (!box.hidden && box.dataset.sig === sig) continue;
     box.outerHTML = subagentsHtml(rows, key, Boolean(job.collected));
     const fresh = document.querySelector(`[data-subs-turn="${CSS.escape(key)}"]`);
-    if (fresh) fresh.dataset.sig = sig;
+    if (fresh) {
+      fresh.dataset.sig = sig;
+      // The repaint replaced this strip's nodes, so an open child console inside it is a fresh box at its first line.
+      // Put it back where the reader had it in this same task, before a frame can paint it at the top.
+      applySubConsoleScrolls(fresh);
+    }
   }
 }
 
@@ -3766,7 +3788,16 @@ async function refreshSubagentRoster() {
 state.openSubConsole = state.openSubConsole || new Set();
 state.collapsedSubs = state.collapsedSubs || new Set();
 state.subConsoles = state.subConsoles || new Map();
-state.subConsoleVersion = state.subConsoleVersion || 0;
+// How many reads of each child's console have landed, by child id: a strip's signature carries only its own
+// children's counts, so a poll of one child cannot rebuild another session's strip.
+state.subConsoleReads = state.subConsoleReads || new Map();
+// The line the reader left each child console on, by child id. A strip repaint or a card rebuild replaces the node,
+// so the position cannot ride on the element the way holdScrolls() carries it.
+state.subConsoleTop = state.subConsoleTop || new Map();
+
+function bumpSubRead(id) {
+  state.subConsoleReads.set(id, (state.subConsoleReads.get(id) || 0) + 1);
+}
 
 async function loadSubConsole(id) {
   let entry = { lines: [], running: true, loading: false };
@@ -3782,7 +3813,7 @@ async function loadSubConsole(id) {
     entry.lines = [{ kind: "dim", text: "could not read this subagent's session" }];
   }
   state.subConsoles.set(id, entry);
-  state.subConsoleVersion += 1;
+  bumpSubRead(id);
   paintSubagents();
 }
 
@@ -3790,7 +3821,6 @@ function toggleSubs(key) {
   if (!key) return;
   if (state.collapsedSubs.has(key)) state.collapsedSubs.delete(key);
   else state.collapsedSubs.add(key);
-  state.subConsoleVersion += 1;
   paintSubagents();
 }
 
@@ -3802,12 +3832,11 @@ async function toggleSubConsole(id) {
   } else {
     state.openSubConsole.add(id);
     state.subConsoles.set(id, { lines: [], running: true, loading: true });
-    state.subConsoleVersion += 1;
+    bumpSubRead(id);
     paintSubagents();
     await loadSubConsole(id);
     return;
   }
-  state.subConsoleVersion += 1;
   paintSubagents();
 }
 
@@ -7082,6 +7111,27 @@ function applyStoredScrolls(root) {
     if (!was) continue;
     setScroll(o, consolePinned(o.dataset.out) || was.atBottom ? o.scrollHeight : Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight)));
   }
+  applySubConsoleScrolls(root);
+}
+
+// A repainted strip and a rebuilt card both REPLACE the node a child's console lives in, so its position cannot ride
+// on the element the way holdScrolls() carries a moved one: it is remembered by child id and written back onto the
+// fresh node in the same task. A box still following its newest line goes to the bottom; one the reader took over
+// goes back to the line they left it on. A box that fits its content has nowhere to go and is left alone.
+function applySubConsoleScrolls(root, { follow = false } = {}) {
+  if (!root) return;
+  for (const box of root.querySelectorAll(".sub-console[data-sub-console-box]")) {
+    const id = box.dataset.subConsoleBox || "";
+    if (!id) continue;
+    const max = box.scrollHeight - box.clientHeight;
+    if (max <= 0) continue;
+    if (follow || state.subConsolePinned.get(id) !== false) {
+      setScroll(box, max);
+      continue;
+    }
+    const top = state.subConsoleTop.get(id);
+    if (top != null) setScroll(box, Math.min(top, max));
+  }
 }
 
 // ---- moving nodes without losing what is scrolled inside them ------------------------------------------------
@@ -7141,6 +7191,17 @@ function releaseScrolls(held) {
         : consolePinned(h.key);
     setScroll(el, pinned ? max : Math.min(h.top, max));
   }
+}
+// A card that is taken out of the document and put back (fillAgentSlots) is a fresh scroll area at its first line,
+// so the child consoles inside it are held by the element, exactly as holdScrolls() holds a moved section's boxes.
+// Only the child consoles: pre.job-out and the thinking bodies are restored by their own ids in the paths below.
+function holdSubConsoles(root) {
+  const held = [];
+  if (!root) return held;
+  for (const el of root.querySelectorAll(".sub-console[data-sub-console-box]")) {
+    held.push({ el, think: false, sub: true, top: el.scrollTop, key: el.dataset.subConsoleBox || "" });
+  }
+  return held;
 }
 // ---- end moving nodes without losing what is scrolled inside them
 
@@ -7598,6 +7659,9 @@ function renderConversation(thread, { scroll = false } = {}) {
     if (follow) setScroll(o, o.scrollHeight);
     else if (was) setScroll(o, Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight)));
   }
+  // The card node was replaced, so an open child console in its subagent strip is a fresh box at its first line: put
+  // it back in this same task instead of leaving it to the 400 ms sweep.
+  applySubConsoleScrolls(fresh, { follow: scroll });
   const body = fresh.querySelector(".job-body");
   if (body) {
     setScroll(body, bodyAtBottom ? body.scrollHeight : Math.min(bodyTop, Math.max(0, body.scrollHeight - body.clientHeight)));
@@ -12683,6 +12747,10 @@ function placeRow(project, row, { flash = false } = {}) {
         atBottom: o._selfTop == null || o.scrollHeight - o.scrollTop - o.clientHeight < 32,
       }))
     : [];
+  // The cards are carried into the new detail below, and a card taken out of the document and put back comes back at
+  // its first line: hold every open child console in the old detail before it leaves, and hand each one its place
+  // back in this same task, once its card is in the new detail.
+  const heldSubs = oldDetail ? holdSubConsoles(oldDetail) : [];
   beginDomMove();
   if (oldDetail) oldDetail.remove();
   // Any other copy for this key is a stray from an earlier render: one row, one detail.
@@ -12709,6 +12777,7 @@ function placeRow(project, row, { flash = false } = {}) {
     const scrollMap = new Map(outs.map((o) => [o.id, { top: o.top, atBottom: o.atBottom }]));
     restoreScrolls(dEl, scrollMap);
     applyStoredScrolls(dEl);
+    releaseScrolls(heldSubs);
     settleScrolls(dEl);
   }
   // The move is over for both shapes of row (a bare row rebuilds no detail but still replaces its <tr>).
@@ -12773,6 +12842,9 @@ function renderProjectRows(name, { typing = null } = {}) {
   const pageY = window.scrollY;
   // Open rows carry agent transcripts; a rebuild must not throw the reader to the top of one.
   const prevScrolls = captureScrolls(tbody);
+  // The cards are carried into the rebuilt details below, so the child consoles inside them leave the document with
+  // the old tbody and come back at their first line: read them here, before the swap, and release them after.
+  const heldSubs = holdSubConsoles(tbody);
   const heldSelection = captureCardSelection();
   const anchor = captureBoardAnchor();
   const prevRowKeys = [...tbody.children].filter((el) => el.classList.contains("row")).map((el) => el.dataset.key);
@@ -12863,6 +12935,9 @@ function renderProjectRows(name, { typing = null } = {}) {
     restoreAddAgent(dEl);
   }
   endDomMove();
+  // The cards have been carried into the rebuilt details; put each open child console back on its line in this same
+  // task, so the swap is never painted with one of them at the top.
+  releaseScrolls(heldSubs);
   // A row that no longer exists must not leave a dead detail element remembered.
   for (const k of [...state.detailEls.keys()]) {
     if (state.rows.get(k)?.project !== name) state.detailEls.delete(k);
@@ -14981,6 +15056,9 @@ document.addEventListener(
       }
       if (Date.now() - lastInputAt < 1200) {
         state.subConsolePinned.set(id, pre.scrollHeight - pre.scrollTop - pre.clientHeight < 24);
+        // Kept for the next rebuild: a strip repaint or a card rebuild replaces this box, and this is the line the
+        // reader took it over on.
+        state.subConsoleTop.set(id, pre.scrollTop);
       }
       return;
     }
