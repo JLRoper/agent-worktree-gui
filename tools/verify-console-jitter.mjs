@@ -7,6 +7,7 @@
 //   node tools/verify-console-jitter.mjs --resync-check   # +34 s of flow, to catch the panel's 30 s rebuild
 //   node tools/verify-console-jitter.mjs --json <path>    # keep the raw capture beside the printed table
 //   node tools/verify-console-jitter.mjs --keep           # leave the sandbox behind for inspection
+//   node tools/verify-console-jitter.mjs --late-stick 60  # self-test: the page sticks 60 ms late, the painted gap must FAIL
 //
 // WHAT THIS ANSWERS
 //   docs/jitter-synthesis.md reconciles three investigations: the code-level map (`jitter-sources.md`), the seconds
@@ -22,6 +23,8 @@
 //        Plus a once-a-second identity walk, which is the same question asked by an observer instead of a wrapper.
 //     3. scrollTop movement with no input — every frame, both scroll boxes: direction, whether the growth explains
 //        it, whether the panel's own `setScroll` asked for it, and how far the box ever sat from its bottom.
+//        That last one is read where the frame PAINTS it (a ResizeObserver delivery, after the page's own
+//        same-frame stick); the start-of-frame read is printed beside it as `gap rAF` and judges nothing.
 //     4. thinking-block replacement rate — how many `details.think` nodes `paintThink` throws away per second, and
 //        how many of its blocks survive each poll.
 //
@@ -61,6 +64,9 @@ const MODE = opt("--mode", "both");
 const HEADLESS = argv.includes("--headless");
 const KEEP = argv.includes("--keep");
 const RESYNC_CHECK = argv.includes("--resync-check");
+// A self-test of the painted-gap read, not a mode a landing runs: the page's own stickSoon fires this many ms late, so
+// a console that grows is left off its bottom for a few painted frames, and the painted read must catch it.
+const LATE_STICK_MS = Number(opt("--late-stick", "0")) || 0;
 const JSON_OUT = opt("--json");
 if (!["stream", "think", "both"].includes(MODE)) {
   console.log(`--mode must be stream, think or both, not ${MODE}`);
@@ -261,7 +267,15 @@ function makeGateway(script, phases) {
 // ---- the page-side instrument -------------------------------------------------------------------------------------
 // Before app.js. Storage only: which renderer this run measures (thinking on in both; the one-stream console only
 // for the stream pass), and the reader's own type speeds left at their defaults.
-function pageInit({ thread, mode }) {
+function pageInit({ thread, mode, lateStickMs = 0 }) {
+  if (lateStickMs > 0) {
+    // --late-stick: app.js is a classic script, so its stickSoon is a global the page calls by name; wrap it once the
+    // document has parsed.
+    document.addEventListener("DOMContentLoaded", () => {
+      const onTime = window.stickSoon;
+      if (typeof onTime === "function") window.stickSoon = (el) => setTimeout(() => onTime(el), lateStickMs);
+    });
+  }
   try {
     localStorage.setItem("wtgui.autoCollect", "0");
     localStorage.setItem("wtgui.think", "1");
@@ -289,6 +303,7 @@ function pageInit({ thread, mode }) {
         thinkPolls: 0, blockStamped: 0, blockKept: 0, detailsReplaced: 0,
         appends: 0, liveNew: 0, liveInPlace: 0, pacerPaints: 0,
         scrollChanges: 0, scrollUp: 0, scrollFollow: 0, scrollOther: 0, setScrollWrites: 0, gapMax: 0, gapSamples: 0,
+        gapPainted: 0, gapPaintedSamples: 0,
         board: 0, card: 0, snap: 0, staleSec: 0, conRows: 0, conTop: 0, conScrollH: 0, conClientH: 0,
         frames: 0, longtasks: 0, longtaskMs: 0, idKeptCon: 0, idSwappedCon: 0, idKeptBlock: 0, idSwappedBlock: 0, idAdded: 0,
         input: 0, selLosses: 0,
@@ -496,8 +511,42 @@ function pageInit({ thread, mode }) {
     b.conRows = document.querySelectorAll(`${cardSel} pre.job-out [data-lid]`).length;
   };
 
+  // -- the gap a frame PAINTS. frameFn runs at the start of a frame: before layout, and before the page's own
+  // requestAnimationFrame callbacks (stickSoon queues one after every growth, and it was queued after frameFn's). So
+  // frameFn's gap is the box before the page has followed it in that same frame. A ResizeObserver delivery comes
+  // after every rAF callback and after layout, just before paint. A 1 px probe whose width frameFn flips every frame
+  // makes one arrive every frame, and its reading is the one that reaches the screen.
+  const paintedGap = (el) => {
+    if (!el || !el.isConnected) return;
+    const max = Math.round(el.scrollHeight - el.clientHeight);
+    if (max <= 0) return;
+    const gap = Math.max(0, max - Math.round(el.scrollTop));
+    const b = bucket();
+    b.gapPaintedSamples += 1;
+    b.gapPainted = Math.max(b.gapPainted, gap);
+    if (gap > 4) (R.painted ||= []).push({ t: now(), gap, top: Math.round(el.scrollTop), max });
+  };
+  const paintProbe = document.createElement("div");
+  paintProbe.style.cssText = "position:fixed;left:-20px;top:0;width:1px;height:1px;visibility:hidden;pointer-events:none";
+  let probeFlip = false;
+  const probeRO = new ResizeObserver(() => {
+    const job = typeof state !== "undefined" && state.jobs ? [...state.jobs.values()].find((j) => j.thread === thread) : null;
+    if (!job) return;
+    paintedGap(consoleFor(job.id));
+    paintedGap(document.querySelector(`${cardSel} details.think .think-body`));
+  });
+  const attachProbe = () => {
+    if (!document.body) return false;
+    document.body.appendChild(paintProbe);
+    probeRO.observe(paintProbe);
+    return true;
+  };
+  if (!attachProbe()) document.addEventListener("DOMContentLoaded", attachProbe, { once: true });
+
   let lastFrame = performance.now();
   const frameFn = () => {
+    probeFlip = !probeFlip;
+    paintProbe.style.width = probeFlip ? "2px" : "1px";
     const t = performance.now();
     const dt = t - lastFrame;
     lastFrame = t;
@@ -735,7 +784,7 @@ async function runMode(pw, ctx, work, mode) {
     const page = await ctx.newPage();
     pageRef = page;
     page.on("pageerror", (e) => errors.push(String((e && e.message) || e)));
-    await page.addInitScript(pageInit, { thread, mode });
+    await page.addInitScript(pageInit, { thread, mode, lateStickMs: LATE_STICK_MS });
     await page.goto(sandbox.base, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => typeof state !== "undefined" && state.jobs, null, { timeout: 30000 });
     const instrumented = await page.evaluate(() => window.__instrument());
@@ -843,6 +892,8 @@ function summarise(cap) {
       scrollOther: per("scrollOther"),
       setScrollWrites: per("setScrollWrites"),
       gapMax: Math.max(0, ...bs.map((b) => b.gapMax || 0)),
+      gapPainted: Math.max(0, ...bs.map((b) => b.gapPainted || 0)),
+      gapPaintedSamples: per("gapPaintedSamples"),
       consoleScrollable: (med(bs.map((b) => b.conClientH || 0)) || 0) > 0 && Math.max(0, ...bs.map((b) => b.conScrollH || 0)) > (med(bs.map((b) => b.conClientH || 0)) || 0) + 20,
       inputEvents: per("input"),
       // 4. the thinking block
@@ -921,7 +972,18 @@ function judge(mode, rows) {
   const up = flow.consoleScrollUp + paused.consoleScrollUp + flow.blockScrollUp + paused.blockScrollUp;
   add(`${mode}: no scrollTop moves up`, { console: flow.consoleScrollUp + paused.consoleScrollUp, block: flow.blockScrollUp + paused.blockScrollUp }, T.scrollUp, up === 0);
   add(`${mode}: a paused box does not move`, paused.scrollChanges, T.pausedScrollChanges, paused.scrollChanges <= T.pausedScrollChanges);
-  add(`${mode}: the console is never painted off its bottom`, Math.max(flow.gapMax, paused.gapMax), `<= ${T.gapMaxPx}px`, Math.max(flow.gapMax, paused.gapMax) <= T.gapMaxPx);
+  // Judged on the PAINTED gap (the ResizeObserver read, after the page's own same-frame stick), never on frameFn's
+  // start-of-frame read: that one runs before stickSoon's callback and reported 52-69 px on a page that painted 0 px,
+  // while --late-stick 60 (a stick that really is late) paints 34 px and is caught. A painted read that never ran is
+  // a failure, not a pass.
+  const paintedRan = flow.gapPaintedSamples > 0;
+  const painted = Math.max(flow.gapPainted, paused.gapPainted);
+  add(
+    `${mode}: the console is never painted off its bottom (painted read; ${Math.max(flow.gapMax, paused.gapMax)} px before the page's own stick in the frame)`,
+    paintedRan ? painted : "painted read never ran",
+    `<= ${T.gapMaxPx}px`,
+    paintedRan && painted <= T.gapMaxPx,
+  );
   add(`${mode}: no input was sent, so every scroll counted is the page's`, flow.inputEvents + paused.inputEvents, 0, flow.inputEvents + paused.inputEvents === 0);
 
   // The control: the paused seconds rewrite nothing in the console. This is what separates the tokens from the poll.
@@ -938,12 +1000,12 @@ function judge(mode, rows) {
 
 // ---- printing -----------------------------------------------------------------------------------------------------
 function printTable(mode, rows) {
-  const head = ["window", "s", "rows repl/s", "rows repl", "board rows", "prose rw/s", "reason rw/s", "appends/s", "polls", "kept/stamped", "kept %", "id swaps/s", "scroll chg", "up", "follow", "setScroll", "gap max", "block polls", "details repl", "block kept %", "fps", "p95", "stale s"];
+  const head = ["window", "s", "rows repl/s", "rows repl", "board rows", "prose rw/s", "reason rw/s", "appends/s", "polls", "kept/stamped", "kept %", "id swaps/s", "scroll chg", "up", "follow", "setScroll", "gap rAF", "gap painted", "block polls", "details repl", "block kept %", "fps", "p95", "stale s"];
   const key = (r) => [
     r.window, r.seconds, r.consoleRowsReplacedPerSec, r.consoleRowsReplacedTotal, r.boardRowsReplaced, r.proseRewrittenPerSec, r.reasonRewrittenPerSec,
     r.appendsPerSec, r.consolePolls ? r.consolePolls : r.thinkPolls, r.consolePolls ? `${r.rowsKept}/${r.rowsStamped}` : `${r.blockKept}/${r.blockStamped}`,
     r.consolePolls ? (r.survivorsPct ?? "—") : (r.blockSurvivorsPct ?? "—"), r.identitySwapsPerSec,
-    r.scrollChanges, r.scrollUp, r.scrollFollow, r.setScrollWrites, r.gapMax,
+    r.scrollChanges, r.scrollUp, r.scrollFollow, r.setScrollWrites, r.gapMax, r.gapPainted,
     r.thinkPolls, r.detailsReplaced, r.blockSurvivorsPct ?? "—", r.fps, r.frameP95, r.staleMax,
   ];
   console.log(`\n== ${mode}: ${rows.map((r) => `${r.window} ${r.seconds}s`).join(" / ")}${rows.some((r) => r.boardRebuilds) ? ` (${rows.reduce((a, r) => a + r.boardRebuilds, 0)} board rebuilds)` : ""}`);
