@@ -150,6 +150,11 @@ const state = {
   // Transcript scroll per console (pre[data-out]). Folding a project throws the console markup away,
   // so the position has to live outside the DOM or it comes back at the top.
   outScrolls: {},
+  // The height the reader DRAGGED a console to, per console (pre[data-out]), in px. Same reason as the scroll above and
+  // easier to see going wrong: a rebuild that replaces the box, or builds it from nothing, throws the inline height away
+  // with the node, and the console comes back on its cap (a long transcript) or at its content height (a short one).
+  // Persisted, like the card fold state: the number is the reader's own, and a reload is not a reason to forget it.
+  outHeights: loadOutHeights(),
   collapsedJobs: loadCollapsedJobs(),
   openDescs: loadOpenDescs(),
   // Which worktrees' TODO sections the reader unfolded (localStorage, `wm.openTodos`), and the reader's in-flight
@@ -326,6 +331,65 @@ function saveCollapsedJobs() {
   } catch {
     /* no storage available: folding just won't survive a reload */
   }
+}
+
+// ---- the height a console was dragged to ------------------------------------------------
+// A console is a browser-resized box (`resize: vertical` under a max-height), so the size the reader gave it lives in
+// one place: the inline style of the <pre> they dragged. Every path that BUILDS a card from conversationHtml - a status
+// change, a new turn, a fold, a project collapse, the unattached list - and every path that REPLACES one throws that
+// node away and with it the number, so the box comes back at whatever a fresh box measures: its cap when the transcript
+// is long, its content height when it is short. The height therefore has to live outside the DOM, the way the scroll
+// position does (state.outScrolls), and it is persisted the way the card fold state is, because a reload rebuilds every
+// card on the board and case 7 of the measurement (C:/CodeReviews/agent-worktree-gui/resize/rebuild.md) was exactly
+// that loss: 420 px dragged, 320 px after the reload.
+//
+// What is stored is the number itself, keyed by the id the console carries (`pre.dataset.out`, the turn id, with `@pin`
+// on a pinned copy). Whether it is above the cap is NOT stored: the cap belongs to where the box is drawn (320 px in a
+// worktree row's agents block, 230 px in the unattached workspace, public/style.css), so it is read off the page when
+// the height is put back rather than remembered against it.
+function loadOutHeights() {
+  try {
+    const raw = JSON.parse(localStorage.getItem("wm.outHeights") || "{}");
+    const out = {};
+    for (const [id, px] of Object.entries(raw && typeof raw === "object" ? raw : {})) {
+      const n = Number(px);
+      if (id && Number.isFinite(n) && n > 0) out[id] = n;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function saveOutHeights() {
+  try {
+    localStorage.setItem("wm.outHeights", JSON.stringify(state.outHeights));
+  } catch {
+    /* no storage available: a dragged height just won't survive a reload */
+  }
+}
+
+// The reader let go of a console at a height they chose. Called from the pointerup of a drag that MOVED — a press on
+// the corner that moved nothing is not a resize and records nothing.
+function rememberOutHeight(id, px) {
+  const n = Number(px);
+  if (!id || !Number.isFinite(n) || n <= 0) return;
+  state.outHeights[id] = n;
+  saveOutHeights();
+}
+
+// A stored height belongs to a turn: once the turn is gone from the board the entry is dead weight, the same way a
+// cleared job's turn state is (renderJobs prunes state.turnOpen and state.collapsedJobs on the same set). `@pin` marks
+// a copy OF a turn, so it is pruned on the turn it copies. Returns how many went, so the caller can say so.
+function pruneOutHeights(live) {
+  let gone = 0;
+  for (const id of Object.keys(state.outHeights)) {
+    if (live.has(String(id).replace(/@pin$/, ""))) continue;
+    delete state.outHeights[id];
+    gone += 1;
+  }
+  if (gone) saveOutHeights();
+  return gone;
 }
 
 // Which descriptions the reader has UNFOLDED, by row key. The block leads the worktree's detail and starts folded,
@@ -7637,10 +7701,40 @@ function restoreScrolls(root, map) {
   }
 }
 
+// Put a console's remembered height back on a node that is NOT the one the reader dragged. `o` either came out of
+// conversationHtml (a card built from nothing: a collapsed project expanded again, a row that had no card to carry) or
+// replaced the box a rebuild threw away - and an inline style belongs to the element, so the number was gone with it.
+// Without this the box returns on its cap or at its content height, which reads as the panel throwing the reader's
+// resize away every time anything about the turn changes.
+//
+// The cap is the other half of the promise. A height bigger than the box's max-height is clipped by it, so a stored
+// height above the cap lifts the cap exactly as the drag did; the cap is read off the page rather than assumed, because
+// one board draws the same console under 320 px in a worktree row and 230 px in the unattached list. A height at or
+// under the cap is left to the sheet: the inline height alone reproduces it, and the cap keeps doing its job.
+//
+// Returns whether a height was applied, so a caller can tell "the reader chose this" from "a fresh box".
+function applyStoredHeight(o) {
+  if (!o || !o.dataset) return false;
+  const h = Number(state.outHeights[o.dataset.out || ""]);
+  if (!Number.isFinite(h) || h <= 0) return false;
+  o.style.height = `${h}px`;
+  const cap = parseFloat(getComputedStyle(o).maxHeight);
+  if (Number.isFinite(cap) && h > cap) o.style.maxHeight = "none";
+  return true;
+}
+
+// Every console under a subtree that was rebuilt: the height FIRST, so whatever scroll is placed after it is clamped in
+// the box the reader left rather than in the 230px one it is about to stop being.
+function applyStoredHeights(root) {
+  if (!root) return;
+  for (const o of root.querySelectorAll("pre.job-out")) applyStoredHeight(o);
+}
+
 // Put every console in this subtree back where the reader left it, from the remembered positions.
 // Used after a subtree was rebuilt from scratch, where there is no old node to measure.
 function applyStoredScrolls(root) {
   if (!root) return;
+  applyStoredHeights(root);
   for (const o of root.querySelectorAll("pre.job-out")) {
     const was = state.outScrolls[o.dataset.out];
     if (!was) continue;
@@ -7659,6 +7753,9 @@ function applyStoredScrolls(root) {
 function placeBuiltConsoles(root) {
   if (!root) return;
   for (const o of root.querySelectorAll("pre.job-out")) {
+    // The height the reader dragged this console to, before anything is measured or scrolled inside it: a box that
+    // comes back at its cap and then grows puts the reader's line somewhere else than where they left it.
+    applyStoredHeight(o);
     if (o._selfTop != null) continue; // someone already placed it in this task; their answer is the one to keep
     const id = o.dataset.out || "";
     const was = state.outScrolls[id];
@@ -7810,6 +7907,9 @@ function renderJobs() {
   // Same for a cleared thread's remembered page.
   const threads = new Set([...state.jobs.values()].map((j) => j.thread || j.id));
   for (const t of [...state.turnPage.keys()]) if (!threads.has(t)) state.turnPage.delete(t);
+  // ...and for a height the reader dragged on a console whose turn has left the board. A turn's thread going away is
+  // the same event (the thread's turns go with it), so the turn id is the key that decides.
+  pruneOutHeights(live);
   // The list is rebuilt wholesale, so remember where every open transcript was and put it back:
   // a `jobs` event must not cost the reader their place in an agent they are reading.
   //
@@ -8216,6 +8316,10 @@ function renderConversation(thread, { scroll = false } = {}) {
     window.scrollTo({ top: Math.min(pageY, maxY) });
   }
   for (const o of fresh.querySelectorAll("pre.job-out")) {
+    // The box is new (the card was rebuilt), so the height the reader dragged it to goes back on before the follow /
+    // restore below decides where its line is: both read clientHeight, and a 420 px box clamped as a 320 px one puts
+    // the reader's line somewhere they never left it.
+    applyStoredHeight(o);
     const was = prev.find((p) => p.id === o.dataset.out);
     const follow = scroll || consolePinned(o.dataset.out) || (was ? was.atBottom : conv.latest.status === "running");
     if (follow) setScroll(o, o.scrollHeight);
@@ -14177,16 +14281,22 @@ document.addEventListener(
 );
 // A grab that moved nothing is a press on the corner, not a resize: put back what was there, so a click near
 // the handle does not leave the transcript pinned open at its full 1053px (or a short console pinned short).
+// A grab that DID move is a height the reader chose, and it is recorded against the turn here — the one place that
+// knows a press from a drag. Every rebuild that replaces or builds this box puts it back (applyStoredHeight), and it is
+// persisted, so the reload that rebuilds every card on the board does not lose it either.
 window.addEventListener(
   "pointerup",
   () => {
     if (!consoleDrag) return;
     const { out, height, styleHeight, cap } = consoleDrag;
     consoleDrag = null;
-    if (Math.abs(out.getBoundingClientRect().height - height) < 1) {
+    const now = out.getBoundingClientRect().height;
+    if (Math.abs(now - height) < 1) {
       out.style.height = styleHeight;
       out.style.maxHeight = cap;
+      return;
     }
+    rememberOutHeight(out.dataset.out, now);
   },
   true,
 );
