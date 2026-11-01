@@ -259,6 +259,11 @@
           <input id="group-tools" type="checkbox">
         </label>
 
+        <label class="settings-row" for="follow-opened" title="What a console does when you open a folded tool output. Off (the default) — the console holds still: the result unfolds under the header you pressed, and the line you were reading stays where it was. On — the console follows it, sliding down to the end of what you just opened (that line is the newest one now), which is what it always did before this switch existed. Either way the ↓ button, or scrolling back to the end, follows the run's new output again. Saved in this browser.">
+          <span>Jump to an opened result <span class="settings-info">ⓘ</span></span>
+          <input id="follow-opened" type="checkbox">
+        </label>
+
         <label class="settings-row" for="auto-collect" title="A delegation joins its children and re-enters the parent — but only while that parent is still live. When a run's turn ends first the children finish into nothing. With this on, the panel waits for them and hands the parent their results as one more turn, once per turn, only when the parent left early.">
           <span>Collect subagent results <span class="settings-info">ⓘ</span></span>
           <input id="auto-collect" type="checkbox" checked>

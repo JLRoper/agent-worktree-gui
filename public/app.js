@@ -1630,6 +1630,9 @@ async function expandToolFold(btn) {
   const job = state.jobs.get(turnId);
   if (!job) return true;
   const key = foldKey(turnId, tool, row);
+  // The press is the reader asking for this result, so the console holds still while it arrives (Settings > Agent
+  // cards, off by default): the answer lands under the note that was pressed, not at the bottom of the console.
+  holdConsoleFor(btn);
   const rememberOpen = () => {
     state.codeBoxOpen.add(btn.dataset.codeKey || `result|${turnId}|${tool}|${row}`);
     while (state.codeBoxOpen.size > 500) state.codeBoxOpen.delete(state.codeBoxOpen.values().next().value);
@@ -1717,6 +1720,9 @@ setInterval(() => {
 async function loadBatchCalls(btn) {
   const grp = btn.closest(".tgrp");
   if (!grp) return;
+  // The batch is about to be drawn open under this button, so the console holds its place rather than sliding down
+  // to the end of the list that arrives (Settings > Agent cards, off by default).
+  holdConsoleFor(btn);
   const gkey = btn.dataset.batchKey || grp.dataset.gstate || "";
   const tool = btn.dataset.batchTool || "";
   const want = Number(btn.dataset.batchN) || 4;
@@ -6365,6 +6371,34 @@ function setToolGroups(on) {
   for (const c of conversations()) renderConversation(c.thread);
 }
 
+// ---- what a fold the reader opens does to the console (Settings > Agent cards) ------------------
+// A console follows its newest line unless the reader scrolls it away (see pinConsole). That rule cannot tell new
+// OUTPUT from a box the reader just opened: a folded result's body is folded out of the layout, so opening it grows
+// the console's content by its own height — and the 400 ms stick, and the next live line, both find a console off its
+// end and carry the view down by exactly that height. The result the reader opened to read is then above them and
+// its LAST line is what fills the view, which reads as the panel jumping to the bottom of what was just opened.
+//
+// The press is the reader's, not the run's, so it hands the console over: the view stays where it is and the box opens
+// under the header that was pressed. This is the old behaviour when turned on — the console follows the growth to its
+// end. Saved in this browser; off by default.
+const FOLD_FOLLOW_KEY = "wtgui.foldFollow";
+
+function foldFollowsConsole() {
+  try {
+    return localStorage.getItem(FOLD_FOLLOW_KEY) === "1";
+  } catch {
+    return false; // private mode: the console holds still, which is the default anyway
+  }
+}
+
+function setFoldFollow(on) {
+  try {
+    localStorage.setItem(FOLD_FOLLOW_KEY, on ? "1" : "0");
+  } catch {
+    /* the choice just will not persist */
+  }
+}
+
 // ---- how a run's output arrives (Settings > Display) ------------------------------------------
 // The wire is not the reader's pace. A paragraph reaches the console in coalesced frames (120 ms on the server, and
 // several words in a fast model) and tool calls and results arrive as whole lines, so a live card used to jump a
@@ -7193,6 +7227,25 @@ function consolePinned(id) {
 
 function pinConsole(id) {
   if (id) state.outPinned[id] = true;
+}
+
+// A fold the reader opens inside a console hands that console over. The growth is the reader's, not the run's: a
+// console still following its newest line carries the view down by the height of what was just folded out (the 400 ms
+// stick and the next live line both answer "this console is off its end"), so the box's LAST line fills the view and
+// the line the reader was on is gone above it. Unpinned, the view does not move and the box opens under the header
+// that was pressed; ↓ (or scrolling back to the end) follows the run again. `atBottom: false` is written with the
+// position because a rebuilt card and a re-rendered table restore from that record (applyStoredScrolls,
+// restoreScrolls), and a stale "atBottom" would follow the growth on the next repaint.
+//
+// Called only when a press OPENS something: folding a box back away shrinks the console, and the browser's own clamp
+// is the right answer there. Settings > Agent cards > "Jump to an opened result" restores the old follow-the-growth
+// behaviour, and off is the default (foldFollowsConsole).
+function holdConsoleFor(control) {
+  const pre = control && control.closest ? control.closest("pre.job-out") : null;
+  if (!pre || !pre.dataset.out || foldFollowsConsole()) return null;
+  state.outPinned[pre.dataset.out] = false;
+  state.outScrolls[pre.dataset.out] = { top: pre.scrollTop, atBottom: false };
+  return pre;
 }
 
 // Every scroll the panel performs goes through here. Its scroll event arrives after this task, and without a
@@ -14656,6 +14709,7 @@ document.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
       const open = boxEl.hidden;
+      if (open) holdConsoleFor(usageRow);
       boxEl.hidden = !open;
       block.classList.toggle("is-open", open);
       usageRow.setAttribute("aria-expanded", open ? "true" : "false");
@@ -14709,6 +14763,7 @@ document.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
       const folded = !body.hidden;
+      if (!folded) holdConsoleFor(callRow);
       body.hidden = folded;
       call.classList.toggle("is-folded", folded);
       const btn = call.querySelector("[data-call-fold]");
@@ -14741,6 +14796,9 @@ document.addEventListener("click", async (e) => {
     const body = box && box.querySelector(".code-body");
     if (body) {
       const open = body.hidden;
+      // Opening this result hands the console over: the view stays on the line the reader was reading, instead of
+      // sliding to the bottom of the output that just unfolded (Settings > Agent cards, off by default).
+      if (open) holdConsoleFor(codeFold);
       body.hidden = !open;
       box.classList.toggle("is-open", open);
       codeFold.setAttribute("aria-expanded", open ? "true" : "false");
@@ -14780,6 +14838,7 @@ document.addEventListener("click", async (e) => {
       // pinned card and its paged copy) shares every key — the lookup has to stay in the console the reader clicked.
       const gstate = grp.dataset.gstate || "";
       const scope = grp.closest("pre.job-out") || document;
+      if (!active) holdConsoleFor(tgrpRow);
       rebuildToolGroup(grp, { filter: active ? "" : tool, open: !active });
       if (!active) {
         // Opening a call asks for its stored output: the live stream's preview for this tool is routinely empty,
@@ -14803,6 +14862,7 @@ document.addEventListener("click", async (e) => {
       const gstate = grp.dataset.gstate || "";
       const turnId = String(grp.dataset.tgrp || "").split("#")[0];
       const scope = grp.closest("pre.job-out") || document;
+      if (open) holdConsoleFor(tgrpMore);
       rebuildToolGroup(grp, { filter: "", open });
       // Opening the whole run asks every tool's store, not only the one that was filtered: the reader opened this
       // to read what the calls returned.
@@ -15001,6 +15061,7 @@ document.addEventListener("keydown", async (e) => {
       // pinned card and its paged copy) shares every key — the lookup has to stay in the console the reader clicked.
       const gstate = grp.dataset.gstate || "";
       const scope = grp.closest("pre.job-out") || document;
+      if (!active) holdConsoleFor(tgrpRow);
       rebuildToolGroup(grp, { filter: active ? "" : tool, open: !active });
       if (!active) {
         // Opening a call asks for its stored output: the live stream's preview for this tool is routinely empty,
@@ -17443,6 +17504,9 @@ $("prev-turn-mode")?.addEventListener("change", (e) => applyPrevTurnMode(e.targe
 // How a run of tool calls is drawn: the tallied group, or one expandable line per call. The shape is a render-time
 // decision in every console, so the handler repaints them (setToolGroups does).
 $("group-tools")?.addEventListener("change", (e) => setToolGroups(Boolean(e.target.checked)));
+// Nothing on screen changes shape with this one: it is read at the moment a fold is pressed, so the answer is
+// already in place for the next press.
+$("follow-opened")?.addEventListener("change", (e) => setFoldFollow(Boolean(e.target.checked)));
 $("show-thinking")?.addEventListener("change", (e) => {
   try {
     localStorage.setItem(THINK_KEY, e.target.checked ? "1" : "0");
@@ -17522,6 +17586,7 @@ applyAddBarBrightness(addBarBrightnessSetting(), { save: false });
 applyAddBarTop(addBarAtTop(), { save: false });
 if ($("show-thinking")) $("show-thinking").checked = thinkDefault();
 if ($("group-tools")) $("group-tools").checked = toolGroupsOn();
+if ($("follow-opened")) $("follow-opened").checked = foldFollowsConsole();
 if ($("auto-collect")) $("auto-collect").checked = autoCollectOn();
 if ($("prev-turn-mode")) $("prev-turn-mode").value = prevTurnMode();
 void refreshSubagentRoster();
