@@ -1207,14 +1207,14 @@ function isBookkeeping(l) {
 // One console line. data-ltext/data-lkind carry the line itself rather than what it renders to, because a
 // burst rebuild reads the lines back out of the DOM (groupLines): a link, a running clock or a diff window's
 // markup must not change what the next render believes the line said.
-function lineHtml(l, live = "") {
+function lineHtml(l, live = "", cls = "") {
   const kind = l.kind || "raw";
   // A line the stream is still revealing is drawn up to what may be shown NOW, not up to the wire's whole text:
   // a repaint mid-paragraph (a scan, a pinned copy, the 3s result sweep) must not jump the console ahead of the
   // words the reader is watching arrive. Every other line — history, a tool line, reasoning — is drawn whole.
   const shown = typedShown(l);
   const text = shown == null ? l.text : shown;
-  return `<div class="jl jl-${esc(kind)}" data-lid="${esc(l.lid ?? "")}" data-ltext="${esc(l.text ?? "")}" data-lkind="${esc(kind)}">${linkifyText(text)}${live}</div>`;
+  return `<div class="jl jl-${esc(kind)}${cls ? ` ${cls}` : ""}" data-lid="${esc(l.lid ?? "")}" data-ltext="${esc(l.text ?? "")}" data-lkind="${esc(kind)}">${linkifyText(text)}${live}</div>`;
 }
 
 function burstGroups(lines) {
@@ -1754,7 +1754,9 @@ function rebuildToolGroup(grp, { filter = "", open = false } = {}) {
   const holder = document.createElement("div");
   // A piece of a stream stays a piece of a stream: rebuilding it condensed (a store read landing, a batch opened,
   // the rollup refreshed) would put the folded group back under a card whose whole point is that nothing is folded.
-  holder.innerHTML = toolGroupHtml(lines, key, filter, open, anchor, gofs, grp.dataset.gflat === "1" ? { flat: true } : {});
+  // The blank line it was drawn with is part of the piece too, so the rebuild keeps it rather than losing it until
+  // the next full repaint.
+  holder.innerHTML = toolGroupHtml(lines, key, filter, open, anchor, gofs, grp.dataset.gflat === "1" ? { flat: true, sep: grp.classList.contains("jl-sep") } : {});
   const fresh = holder.firstElementChild;
   if (!fresh) return;
   fresh._burst = lines;
@@ -1863,13 +1865,15 @@ function trimmedBurstHtml(lines, turnId, gkey, codeOpen = state.codeBoxOpen) {
 // nowhere for the open state to land: a repaint could neither keep them open nor remember them shut, and the 3s sweep
 // that refreshes a block's stored output could not find them at all. The head row says what the block is - the call
 // above these results is outside the window - and the node carries the same data-gstate/data-gat as any other group.
-function trimmedGroupHtml(lines, key, anchor = "", flat = false, codeOpen = state.codeBoxOpen) {
+// `sep` is the stream's own blank line (`jl-sep`): a trimmed piece is a piece like any other, so it is set apart from
+// the piece above it the same way.
+function trimmedGroupHtml(lines, key, anchor = "", flat = false, codeOpen = state.codeBoxOpen, sep = false) {
   const gkey = toolGroupStateKey(key, lines, anchor);
   const body = trimmedBurstHtml(lines, String(key).split("#")[0], key, codeOpen);
   // A piece of a stream has no fold at all: it is open, and the reader's open state is not consulted for it.
   if (flat) {
     return (
-      `<div class="tgrp tgrp-flat" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gflat="1">` +
+      `<div class="tgrp tgrp-flat${sep ? " jl-sep" : ""}" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gflat="1">` +
       `<div class="tgrp-body">${body}</div></div>`
     );
   }
@@ -1928,7 +1932,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
   // What it must not lose is BEING A GROUP: a head row that says what the block is, the data-gstate/data-gat the
   // reader's open state is remembered under, and the fold that state opens. Drawn as bare lines it dropped out of
   // the panel's own map of its groups - nothing to click, nothing to remember, nothing for the sweep to find.
-  if (!rows.length) return trimmedGroupHtml(lines, key, anchor, flat, state.codeBoxOpen);
+  if (!rows.length) return trimmedGroupHtml(lines, key, anchor, flat, state.codeBoxOpen, Boolean(opts && opts.sep));
   // The reader's own choice wins over the caller's default: a rebuild is not the reader closing the block.
   const gkey = toolGroupStateKey(key, lines, anchor);
   const saved = flat ? null : state.toolGroupOpen.get(gkey);
@@ -2151,7 +2155,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
     // <pre>). `data-gflat` is what keeps it flat: the 3s sweep that keeps an open group's stored results current
     // aims at this node by its state key, and a rebuild must not put the folded group back under the reader.
     return (
-      `<div class="tgrp tgrp-flat" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}"` +
+      `<div class="tgrp tgrp-flat${opts.sep ? " jl-sep" : ""}" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}"` +
       ` data-gofs="${esc(JSON.stringify(Object.fromEntries(cursorsStart)))}" data-gflat="1">` +
       `<div class="tgrp-body">${body}</div></div>`
     );
@@ -2187,7 +2191,7 @@ function paintToBottom(box) {
 // belongs to, so a reader's selection in an earlier diff survives the turn growing under it.
 function streamBodyHtml(turn, lines, windowFull = false) {
   const W = globalThis.wtStream;
-  if (!W || typeof W.merge !== "function" || typeof W.segments !== "function") return "";
+  if (!W || typeof W.merge !== "function" || typeof W.pieces !== "function") return "";
   const thread = turn.thread || turn.id;
   // Reasoning joins the stream only while the 🧠 is on: with it off, the console's own one-line preview is the only
   // trace of what the agent thought, exactly as in the condensed view.
@@ -2199,17 +2203,21 @@ function streamBodyHtml(turn, lines, windowFull = false) {
   const storeSeen = new Map();
   const parts = [];
   let n = 0;
-  for (const seg of W.segments(merged)) {
+  // Every piece here is set apart from the piece above it by the one blank line a reasoning block has always had —
+  // `pieces()` says which, and `jl-sep` is the class that rule hangs on. Nothing above the first piece: there is
+  // nothing up there to be set apart from.
+  for (const seg of W.pieces(merged)) {
     if (!seg) continue;
+    const sep = seg.sep ? "jl-sep" : "";
     if (!seg.unit) {
       // A reasoning block is a line of the stream like any other: same markup, its own kind, so a reader can copy or
       // select across it and the console's own links still work inside it.
-      parts.push(lineHtml(seg.line));
+      parts.push(lineHtml(seg.line, "", sep));
       continue;
     }
     // The stored rows this piece pairs from: what the earlier pieces of THIS turn already consumed for that tool.
     const gofs = Object.fromEntries(storeSeen);
-    parts.push(toolGroupHtml(seg.lines, `${turn.id}#f${n++}`, "", false, "", gofs, { flat: true }));
+    parts.push(toolGroupHtml(seg.lines, `${turn.id}#f${n++}`, "", false, "", gofs, { flat: true, sep: seg.sep }));
     for (const l of seg.lines) {
       if (l.kind !== "tool-out") continue;
       const m = TOOL_DONE_RE.exec(String(l.text || ""));
@@ -7782,6 +7790,9 @@ function drawJobLine(evt) {
   // The words of a growing paragraph that may be drawn now: the pacer holds the tail and releases it on its own
   // clock, so the console fills in a word or two at a time instead of a coalesced phrase at a time.
   const shownText = line.kind === "text" ? typedText(line, evt.id) : line.text;
+  // Whether this turn is drawn as ONE stream. Only that console sets a piece apart from the piece above it: the
+  // condensed layout keeps its own margins, which is the layout it already had.
+  const streaming = streamOn(state.jobs.get(evt.id)?.thread || evt.id);
   for (const out of outs) {
     // Streamed lines follow the newest output only for a reader who is already at the bottom; someone
     // scrolled up to read stays where they are.
@@ -7834,9 +7845,13 @@ function drawJobLine(evt) {
       }
       // The group already on screen says whether this console is drawn as a stream; a new one asks its card. A flat
       // piece has no head row and no "N lines" button, so a call appended to it must not grow one back.
-      const flat = openGroup ? openGroup.dataset.gflat === "1" : streamOn(state.jobs.get(evt.id)?.thread || evt.id);
+      const flat = openGroup ? openGroup.dataset.gflat === "1" : streaming;
+      // The blank line a reasoning block has always had, before every piece of a stream: a group that opens where
+      // another piece already stands is set apart from it, and a group growing in place keeps the separation it was
+      // drawn with (the same piece, not a new one).
+      const sep = flat && (openGroup ? openGroup.classList.contains("jl-sep") : Boolean(out.lastElementChild));
       const holder = document.createElement("div");
-      holder.innerHTML = toolGroupHtml(lines, key, filter, bodyEl ? !bodyEl.hidden : false, openGroup ? openGroup.dataset.gat || "" : "", gofs, flat ? { flat: true } : {});
+      holder.innerHTML = toolGroupHtml(lines, key, filter, bodyEl ? !bodyEl.hidden : false, openGroup ? openGroup.dataset.gat || "" : "", gofs, flat ? { flat: true, sep } : {});
       const fresh = holder.firstElementChild;
       if (fresh) {
         fresh._burst = lines;
@@ -7852,6 +7867,9 @@ function drawJobLine(evt) {
       } else {
         const div = document.createElement("div");
         div.className = `jl jl-${line.kind || "raw"}`;
+        // A chunk of normal output is a piece of the stream too: the same blank line above it, unless it is the
+        // console's first piece. Only the 🌊 console draws that — this is the layout the condensed one already had.
+        if (streaming && out.lastElementChild) div.classList.add("jl-sep");
         if (line.lid) div.dataset.lid = line.lid;
         // The line's own text travels with it, the same way a rendered line carries it: a rebuild reads lines
         // back out of the DOM, and this one must read as what was said rather than as what was drawn.

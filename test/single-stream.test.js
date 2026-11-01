@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 await import("../public/core/stream-merge.js");
-const { merge, segments, isPreview, unitHasResult, joinsTail, SLACK_MS } = globalThis.wtStream;
+const { merge, segments, pieces, isPreview, unitHasResult, joinsTail, SLACK_MS } = globalThis.wtStream;
 
 const T0 = 1_790_000_000_000; // an arbitrary epoch, so every stamp below reads as seconds into the turn
 const at = (s) => T0 + Math.round(s * 1000);
@@ -229,6 +229,37 @@ test("segments: nothing in, nothing out; every line is in exactly one piece", ()
   const items = [line("text", "a", 1), line("tool", "t", 2), line("tool-out", "r", 3), line("tool", "t2", 4), line("dim", "d", 5)];
   const flat = segments(items).flatMap((s) => (s.unit ? s.lines : [s.line]));
   assert.deepEqual(flat, items);
+});
+
+// The blank line the reasoning block has always had, before every other piece of a stream: one answer, decided where
+// the stream's order and its cuts are already decided, so the painter cannot disagree with itself about it.
+test("pieces: every piece but the console's first is set apart from the piece above it", () => {
+  const items = [
+    line("text", "I'll read the file", 1),
+    line("tool", "📖 read_file · a.js", 2),
+    line("tool-out", "  ↳ read_file", 3),
+    { kind: "think", text: "what it said back", at: 4, lid: "think:4" },
+    line("tool", "💻 terminal · ls", 5),
+    line("tool-out", "  ↳ terminal", 6),
+    line("text", "done", 7),
+  ];
+  const out = pieces(items);
+  assert.deepEqual(
+    out.map((p) => (p.unit ? `unit:${p.lines.map((l) => l.kind).join("+")}` : `line:${p.line.kind}`)),
+    ["line:text", "unit:tool+tool-out", "line:think", "unit:tool+tool-out", "line:text"],
+    "the same cut segments() makes",
+  );
+  assert.deepEqual(out.map((p) => p.sep), [false, true, true, true, true], "nothing is set apart at the very top");
+  assert.equal(out.filter((p) => p.unit).every((p) => p.sep), true, "and every group of tool output is");
+  assert.deepEqual(pieces([]), [], "nothing in, nothing out");
+});
+
+test("pieces: a reasoning block is a piece like any other — it is not double-spaced", () => {
+  // The reasoning row keeps the block's own class for its voice; the separation is the same `sep` a group gets, so
+  // there is one gap and not a reasoning-specific one on top of it.
+  const out = pieces([line("text", "said", 1), { kind: "think", text: "thought", at: 2, lid: "think:2" }]);
+  assert.deepEqual(out.map((p) => [p.line.kind, p.sep]), [["text", false], ["think", true]]);
+  assert.equal("sep" in out[0], true, "the first piece carries the answer too, rather than the painter assuming it");
 });
 
 test("unitHasResult answers the one question a live append asks", () => {

@@ -135,6 +135,22 @@
     return out;
   }
 
+  /**
+   * The pieces of a stream AS IT IS DRAWN, each saying whether it is set apart from the piece above it.
+   *
+   * A reasoning block has always stood apart from the line above it — one blank line, a `margin-top` of 1.5em, which
+   * is one line of this console at its own line-height. The reader asked for that same blank line before every other
+   * piece: every group of tool output, and every chunk of normal output. So the answer is attached HERE, where the
+   * stream's order and its cuts are already decided, and the painter puts the one class the reasoning block already
+   * wears on every piece — `sep` is false only for the piece at the very top of a console, where there is nothing
+   * above it to be set apart from.
+   *
+   * @returns [{ line, sep } | { unit: true, lines, sep }]
+   */
+  function pieces(items) {
+    return segments(items).map((seg, i) => ({ ...seg, sep: i > 0 }));
+  }
+
   // Has this unit's call been answered? The one question a live append asks to decide between growing the last unit
   // and starting the next.
   function unitHasResult(lines) {
@@ -176,5 +192,5 @@
     return a === b;
   }
 
-  root.wtStream = { SLACK_MS, isPreview, merge, segments, unitHasResult, joinsTail };
+  root.wtStream = { SLACK_MS, isPreview, merge, segments, pieces, unitHasResult, joinsTail };
 })(globalThis);
