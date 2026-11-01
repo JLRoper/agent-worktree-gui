@@ -607,8 +607,13 @@ function pageInit(opts) {
     R.armAt = now();
   };
   // The measured window closes here; the self-test below runs AFTER it, so nothing it writes can reach the ranking.
-  window.__endWindow = () => {
-    R.windowEnd = now();
+  // A --type run cannot close the window the instant the clock says so: the typing loop sleeps between keypresses, so
+  // the node side answers the deadline a few hundred ms late, and it used to keep typing and AWAIT that loop before
+  // closing - which stretched the window by up to 4 s. A typed window then held more seconds than its control and the
+  // extra writes read as an effect of the gesture. So the window is the ARM deadline whenever one is passed: the
+  // deadline is what `--seconds` means, and anything the gesture does after it is dropped by timestamp below.
+  window.__endWindow = (ms) => {
+    R.windowEnd = typeof ms === "number" && ms > 0 && R.armAt ? Math.min(now(), R.armAt + ms) : now();
     return R.windowEnd;
   };
   // The self-test is the tool's own sensitivity check, and it is the reason the report can claim the instrument cannot
@@ -1043,20 +1048,51 @@ async function runLayout(name, spec, pw, startPanel) {
     // The reader's gesture, if asked for: a real click into one card's reply box and a real keypress every 400 ms, so
     // `lastInputAt` stays inside its 1200 ms window for the whole measurement. Nothing synthetic is dispatched.
     let typing = null;
+    // A --type window is only attributable if the run can SAY its keystrokes reached the box: page.keyboard.type()
+    // reports nothing when a click missed and the keys fall on the document, so a typed window whose gesture missed
+    // looks exactly like a typed window whose gesture landed. So the run reads the reply box before and after, plus the
+    // page's own per-card lastInputAt map - the three records a keystroke leaves. A run whose gesture did NOT land is
+    // reported as such instead of being credited with an effect.
+    let gesture = null;
     if (TYPE_INTO) {
-      const sel = `.job[data-thread="${spawned[0].thread}"] .reply-box`;
+      const thread = spawned[0].thread;
+      const sel = `.job[data-thread="${thread}"] .reply-box`;
+      const readBox = () =>
+        page
+          .evaluate(
+            ([s, t]) => {
+              const el = document.querySelector(s);
+              const active = document.activeElement;
+              const map = typeof lastInputAt !== "undefined" ? lastInputAt : null;
+              return {
+                present: !!el,
+                len: el ? String(el.value ?? el.textContent ?? "").length : null,
+                focused: !!el && active === el,
+                activeInsideCard: !!(active && active.closest && active.closest(".job")),
+                lastInputAgoMs: map && map.get(t) ? Math.round(Date.now() - map.get(t)) : null,
+              };
+            },
+            [sel, thread],
+          )
+          .catch((e) => ({ present: false, error: String(e).slice(0, 120) }));
+      const before = await readBox();
+      gesture = { thread, sel, clicked: false, keys: 0, keyErrors: 0, before, after: null };
       typing = (async () => {
         try {
           await page.click(sel, { timeout: 8000 });
+          gesture.clicked = true;
         } catch {
           /* the box may not be on screen yet; the keypresses still land on the document */
         }
-        const until = Date.now() + SECONDS * 1000 + 4000;
+        // The gesture lasts exactly as long as the measured window: a longer one would type into the self-test and add
+        // time the control does not have.
+        const until = Date.now() + SECONDS * 1000;
         while (Date.now() < until) {
           try {
             await page.keyboard.type("k", { delay: 0 });
+            gesture.keys += 1;
           } catch {
-            /* the page may be mid-repaint */
+            gesture.keyErrors += 1;
           }
           await sleep(400);
         }
@@ -1064,10 +1100,13 @@ async function runLayout(name, spec, pw, startPanel) {
     }
     const t0 = Date.now();
     await page.waitForFunction((ms) => window.__now() >= (window.__rec.armAt || 0) + ms, SECONDS * 1000, { timeout: SECONDS * 1000 + 60_000, polling: 500 });
+    // The gesture is over when the window is: awaited here so no keypress can still be in flight during the self-test,
+    // but it no longer decides WHEN the window shuts (the deadline passed to __endWindow does, so the window is the
+    // --seconds it was asked for whether or not the typing loop is still sleeping).
     if (typing) await typing;
     // Close the measured window FIRST: the self-test writes to a console, and a write from the tool must never be
     // counted against the page.
-    await page.evaluate(() => window.__endWindow());
+    await page.evaluate((ms) => window.__endWindow(ms), SECONDS * 1000);
     const selftest = await page.evaluate(() => window.__selftest());
     const rec = await page.evaluate(() => {
       window.__stop();
@@ -1084,8 +1123,36 @@ async function runLayout(name, spec, pw, startPanel) {
           return { rows: rows.length, keyed: keyed.length, firstKey: keyed[0]?.dataset?.lid || keyed[0]?.dataset?.tgrp || "", dist: Math.round(el.scrollHeight - el.scrollTop - el.clientHeight) };
         })
       : null;
+    // Read the gesture back AFTER the window closed and typing finished: this is the only record that says the keys
+    // reached the box, and it costs no scrollTop write (it reads textContent/value and activeElement).
+    if (gesture) {
+      gesture.after = await page
+        .evaluate(
+          ([s, t]) => {
+            const el = document.querySelector(s);
+            const active = document.activeElement;
+            const map = typeof lastInputAt !== "undefined" ? lastInputAt : null;
+            return {
+              present: !!el,
+              len: el ? String(el.value ?? el.textContent ?? "").length : null,
+              focused: !!el && active === el,
+              activeInsideCard: !!(active && active.closest && active.closest(".job")),
+              lastInputAgoMs: map && map.get(t) ? Math.round(Date.now() - map.get(t)) : null,
+            };
+          },
+          [gesture.sel, gesture.thread],
+        )
+        .catch((e) => ({ present: false, error: String(e).slice(0, 120) }));
+      gesture.landed = !!(gesture.after?.present && gesture.after.len > (gesture.before?.len ?? 0) && gesture.after.lastInputAgoMs != null && gesture.after.lastInputAgoMs < 2000);
+      gesture.windowSeconds = Math.round(rec.windowEnd - rec.armAt) / 1000;
+      out.typeGesture = gesture;
+    }
     out.selftest = selftest;
     out.windowEnd = rec.windowEnd;
+    out.armAt = rec.armAt;
+    // The window the counts below cover, in seconds, on the page's own clock: a reader comparing a flagged run with a
+    // control divides by THIS, never by --seconds, so a window that overran cannot look like an effect of the flag.
+    out.windowSeconds = Math.round(rec.windowEnd - rec.armAt) / 1000;
     // Everything after the window's end belongs to the self-test.
     out.writes = rec.writes.filter((w) => w.t <= rec.windowEnd);
     out.selftestWrites = rec.writes.filter((w) => w.t > rec.windowEnd);
@@ -1156,7 +1223,7 @@ for (const r of results) {
   const verdict = r.notMeasured.length ? "NOT MEASURED" : "MEASURED";
   if (verdict === "NOT MEASURED") blind += 1;
   console.log(`${verdict.padEnd(12)} ${r.name.padEnd(9)} ${r.desc}`);
-  console.log(`             ${r.consoles} console(s), ${r.writes.length} write(s), ${r.reads} read(s), ${r.frames} frame(s)${r.control ? " [CONTROL: read log off]" : ""}`);
+  console.log(`             ${r.consoles} console(s), ${r.writes.length} write(s), ${r.reads} read(s), ${r.frames} frame(s)${typeof r.windowSeconds === "number" ? `, measured window ${r.windowSeconds} s` : ""}${r.control ? " [CONTROL: read log off]" : ""}`);
   for (const f of r.notMeasured) console.log(`             ? ${f}`);
   for (const f of r.failures) console.log(`             - ${f}`);
   if (!r.writes.length) continue;
@@ -1180,6 +1247,16 @@ for (const r of results) {
   console.log(
     `             landed-at-0: ${land0.length} write(s) put a box on scrollTop 0 (${land0Asked} asked for 0, ${land0.length - land0Asked} asked for more and the browser landed 0); zero-reaches: ${land0.length + silent0.length} arrival(s) at 0 in the window, ${silent0.length} of them with no write at all`,
   );
+  // The gesture's own record: a typed window that cannot show its keys reached the box cannot claim an effect, so this
+  // line is printed with the numbers it qualifies rather than left to the JSON.
+  if (r.typeGesture) {
+    const g = r.typeGesture;
+    const b = g.before || {};
+    const a = g.after || {};
+    console.log(
+      `             gesture: click ${g.clicked ? "landed" : "MISSED"} on ${g.sel}, ${g.keys} keystroke(s) in ${g.windowSeconds} s (${g.keyErrors} failed), box text ${b.len} -> ${a.len} char(s), focused ${a.focused}, caret in card ${a.activeInsideCard}, lastInputAt ${a.lastInputAgoMs == null ? "not set" : `${a.lastInputAgoMs} ms ago`} -> ${g.landed ? "GESTURE LANDED" : "GESTURE DID NOT LAND"}`,
+    );
+  }
 
   console.log("             caller                                n     up  land0    off  asked   grew  stale  dead  maxOff");
   for (const row of r.rank.slice(0, 14)) {
