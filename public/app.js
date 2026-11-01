@@ -7272,17 +7272,53 @@ function armPlacedThink(root) {
   for (const d of root.querySelectorAll?.("details.think[open]") || []) thinkAutoOpened.add(d);
 }
 
+// ---- motion nobody can see -------------------------------------------------------------------------------------
+// A card's pulse dot is a looping opacity + transform animation, which the compositor runs for free while the dot is
+// painted. Scrolled out of view it is not painted, and Chrome then runs the animation on the MAIN thread instead -
+// its own trace logs "compositor property animations have no effect" (failure 1 << 17) - every frame, for a dot
+// nobody can see. Measured on the reader's board in a GPU-composited client, three alternating pairs of 8 s with the
+// rows open: one dot off screen held 4.5 points of a core (9.3% animated against 4.8% still), and the same dot on
+// screen 0.1. A board scrolled past its running cards pays that once per dot. So a dot off screen is paused
+// (`.is-offscreen`, style.css) and plays again as it scrolls back in. Watched from the node observer below, which sees
+// every node any render path places; the dots are long-lived (the pulse is rewritten in place every second), and a
+// detached one is let go the next time a dot arrives.
+const motionDots = new Set();
+const offscreenMotion =
+  typeof IntersectionObserver === "function"
+    ? new IntersectionObserver((entries) => {
+        for (const e of entries) e.target.classList.toggle("is-offscreen", !e.isIntersecting);
+      })
+    : null;
+
+function watchMotion(root) {
+  if (!offscreenMotion || !root || root.nodeType !== 1) return;
+  const found = root.matches?.(".pulse-dot") ? [root] : [...(root.querySelectorAll?.(".pulse-dot") || [])];
+  if (!found.length) return;
+  for (const d of motionDots) {
+    if (d.isConnected) continue;
+    offscreenMotion.unobserve(d);
+    motionDots.delete(d);
+  }
+  for (const d of found) {
+    if (motionDots.has(d)) continue;
+    motionDots.add(d);
+    offscreenMotion.observe(d);
+  }
+}
+
 const copyObserver = new MutationObserver((records) => {
   for (const r of records) {
     for (const node of r.addedNodes) {
       if (node.nodeType !== 1) continue;
       mountCopyButtons(node);
       armPlacedThink(node);
+      watchMotion(node);
     }
   }
 });
 copyObserver.observe(document.documentElement, { childList: true, subtree: true });
 mountCopyButtons(document.documentElement);
+watchMotion(document.documentElement);
 
 // What a block copies: its own text, as the reader sees it. innerText alone will not do - a flex row (a
 // tool burst's call: glyph, name, tally, arguments, timer) has its items blockified, so innerText breaks

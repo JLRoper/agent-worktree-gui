@@ -824,6 +824,9 @@ button.pill-continue.is-starting .pill-again { animation: pill-again-spin .9s li
   width: 6px; height: 6px; border-radius: 50%; background: currentColor;
   animation: livepulse 1.4s ease-in-out infinite;
 }
+/* Scrolled out of view the compositor stops painting the dot and the animation falls back to the main thread, every
+   frame, for nothing anyone can see (4.5 points of a core per dot, measured; app.js "motion nobody can see"). */
+.live-pulse .pulse-dot.is-offscreen { animation-play-state: paused; }
 .live-pulse .pulse-text { font-variant-numeric: tabular-nums; }
 .live-pulse.is-stream { color: #7ee787; border-color: #1f4a2a; background: var(--green-bg); }
 .live-pulse.is-tool { color: #86c5ff; border-color: #1e3a56; background: var(--blue-bg); }
