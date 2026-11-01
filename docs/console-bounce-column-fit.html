@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The console that bounces and loses your place: cause and fix</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a21; --panel2: #1b212a; --line: #2a3340; --text: #e6e9ef; --dim: #9aa5b4;
+    --dimmer: #6f7a89; --green: #7ee787; --red: #ff9c94; --amber: #f0c674; --blue: #9ecbff; --purple: #c8a6ff;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 15px/1.6 var(--ui); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 24px 64px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; }
+  h2 { font-size: 19px; margin: 40px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+  h3 { font-size: 15.5px; margin: 24px 0 6px; color: var(--blue); }
+  p { margin: 8px 0; }
+  a { color: var(--blue); }
+  code, .mono { font-family: var(--mono); font-size: 13px; }
+  code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .meta { color: var(--dim); font-size: 13px; }
+  .meta code { font-size: 12px; }
+  .verdict { background: #13261a; border: 1px solid #2f5f38; border-left: 4px solid var(--green); border-radius: 8px; padding: 14px 18px; margin: 20px 0; }
+  .verdict h2 { border: 0; margin: 0 0 6px; padding: 0; font-size: 17px; color: var(--green); }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+  .warn { background: #2a2414; border: 1px solid #5c4d22; border-left: 4px solid var(--amber); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+  .not { background: #1f1a26; border: 1px solid #44395a; border-left: 4px solid var(--purple); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+  .tw { overflow-x: auto; margin: 10px 0 14px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--panel2); color: var(--dim); font-weight: 600; font-size: 12.5px; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bad { color: var(--red); font-weight: 600; }
+  .good { color: var(--green); font-weight: 600; }
+  .same { color: var(--amber); }
+  pre { background: #0b0e13; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font: 12.5px/1.5 var(--mono); margin: 10px 0; }
+  .del { color: var(--red); }
+  .add { color: var(--green); }
+  .cm { color: var(--dimmer); }
+  figure { margin: 18px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+  figcaption { color: var(--dim); font-size: 13px; margin-top: 8px; }
+  svg text { font-family: var(--ui); }
+  ol.steps li, ul li { margin: 4px 0; }
+  .toc { columns: 2; font-size: 14px; }
+  .toc a { text-decoration: none; }
+  @media (max-width: 720px) { .toc { columns: 1; } }
+  @media print {
+    html, body { background: #fff; color: #000; }
+    .verdict, .box, .warn, .not, figure, pre, th, code { background: #fff !important; color: #000; }
+    a { color: #000; }
+    h2 { break-before: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>The console that bounces up and back down, and loses your place</h1>
+<p class="meta">Measured against <code>main</code> at <code>c4a0093</code> (0.46.8). That is the build the board on
+<code>127.0.0.1:7331</code> serves: <code>/app.js</code> sha256 <code>cd5df6626e4c…c179a</code>, build id <code>c6d5de5f4ce0</code>.
+The fix is on branch <code>wtgui/i-m-constently-trying-an-8a3c3c</code>, and every number below was read on one of those two builds.
+Written 2026-11-01.</p>
+
+<div class="verdict" id="verdict">
+  <h2>Answer</h2>
+  <p><b>The bounce comes from the worktree table measuring its own columns.</b> After every row repaint the panel
+  asks what each column would be "with nothing constraining it" (<code>naturalColumnWidths()</code>). It answered by
+  laying the <i>live</i> table out at <code>table-layout: auto; width: max-content</code> for one synchronous layout.
+  That table's detail rows hold the agent cards. A console is a <code>white-space: pre-wrap</code> box, and at
+  max-content it has no line breaks, so a paragraph that wraps over five lines becomes one line. For that one layout,
+  every console in the table shrank to a fraction of its height. The browser clamped each scroll offset to the shorter
+  box. When the styles went back the transcript was tall again, but the offset stayed clamped.</p>
+  <ul>
+    <li><b>A console that was following its run</b> was painted near its first lines. The next streamed line, or the
+      400 ms sweep, put it back. That is the <b>"bounces up and quickly back down in a split second"</b>.</li>
+    <li><b>A console you had scrolled back in</b> has nothing that puts it back, so it stayed wherever the clamp left it.
+      That is the <b>"loses my place and jumps somewhere else in the scrollbar"</b>.</li>
+  </ul>
+  <p>A second, smaller defect made losing your place worse. <code>setScroll()</code> flagged every write as "the
+  panel's own scroll", including writes that moved nothing. A write that moves nothing fires no scroll event, so the
+  flag stayed set and swallowed <i>your</i> next scroll. The place you scrolled to was never recorded.</p>
+  <p><b>Both are fixed on the branch and measured.</b> The real-browser gate went from 18 of 18 measurements moving a
+  console (by 604–1139 px) to 0 of 18. On your own board, read-only, one measurement dropped two real consoles by
+  69 px and 86 px on the served build, and by 0 px with the fix in the same page.</p>
+</div>
+
+<div class="toc">
+  <a href="#symptoms">1. What you saw, and what was happening</a><br>
+  <a href="#mechanism">2. The mechanism, step by step</a><br>
+  <a href="#missed">3. Why it survived so many attempts</a><br>
+  <a href="#evidence">4. Evidence</a><br>
+  <a href="#fix">5. The fix</a><br>
+  <a href="#side">6. A side effect: the columns stop moving</a><br>
+  <a href="#notfix">7. What this does not fix</a><br>
+  <a href="#check">8. Check it yourself</a><br>
+  <a href="#appendix">Appendix: where things are</a>
+</div>
+
+<h2 id="symptoms">1. What you saw, and what was happening</h2>
+<div class="tw"><table>
+  <thead><tr><th>What you saw</th><th>What the page did</th><th>Who wrote it</th><th>Fixed by</th></tr></thead>
+  <tbody>
+    <tr><td>While an agent writes, its console jumps up and comes straight back down, "in a split second", every few seconds.</td>
+      <td>A row repaint schedules a column measurement. The measurement lays the whole table out at max-content, the
+      console's content shrinks, and the browser clamps its <code>scrollTop</code> (716 → 147 in the gate). The frame
+      paints that. The next <code>stickSoon</code> line, or the 400 ms <code>stickConsole</code> sweep, writes it back to the bottom.</td>
+      <td>Nobody: the browser's layout clamp. No <code>scrollTop</code> assignment, no DOM move of the console, and no
+      mutation inside it.</td>
+      <td><a href="#fix1">Fix 1</a></td></tr>
+    <tr><td>You scroll back to read older output, and it loses your place and jumps somewhere else in the scrollbar.</td>
+      <td>The same clamp moves a parked console to the max-content floor (367 → 112 in the gate). Nothing puts it
+      back, because a parked console is not followed. The clamp's own scroll event then <i>records</i> 112 as your place,
+      so later restores keep you there.</td>
+      <td>The browser clamp, then the page's own scroll handler recording it.</td>
+      <td><a href="#fix1">Fix 1</a></td></tr>
+    <tr><td>Sometimes your place is thrown back to the newest line a moment after you scroll.</td>
+      <td>Your one scroll event was taken for the panel's own (a leftover <code>selfScrolled</code> flag). Your place
+      was never written to <code>state.outScrolls</code>, and the next rebuild restored from the stale record.</td>
+      <td><code>setScroll()</code> flagging a write that moved nothing.</td>
+      <td><a href="#fix2">Fix 2</a></td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="mechanism">2. The mechanism, step by step</h2>
+<ol class="steps">
+  <li>A worktree row is repainted (<code>placeRow</code>). That happens on every <code>row</code> event from the
+    scanner (live rows every <code>liveSeconds</code>, 5 s here), on a file appearing in a worktree, on a removal. It
+    ends in <code>scheduleColumnFit(table)</code>, which runs <code>fitColumns(table)</code> in the next animation frame.
+    <code>fitAllColumns()</code> does the same on a window resize, a zoom change and a column-grip double-click.</li>
+  <li><code>fitColumns</code> skips the work only when <code>columnSignature(tbody)</code> is unchanged. That signature
+    includes <code>tbody.textContent.length</code>, and the tbody holds the detail rows, so it holds every console's
+    text. While any agent in that table writes, the signature changes and the measurement runs.</li>
+  <li><code>naturalColumnWidths(table)</code> set <code>table.style.tableLayout = "auto"</code> and
+    <code>table.style.width = "max-content"</code>, cleared each header's width, and read
+    <code>th.getBoundingClientRect()</code>. That read forces a synchronous layout of the <b>whole live table, consoles
+    included</b>.</li>
+  <li>In that layout the detail cell spans every column, and its max-content width is the longest unwrapped line of its
+    transcript (thousands of px for an agent's paragraph). Every console in the table is laid out that wide, so its
+    content height collapses. Chromium clamps any scroll offset that now exceeds the new
+    <code>scrollHeight − clientHeight</code>.</li>
+  <li>The styles are put back. The transcripts re-wrap and are tall again, but nothing restores the clamped offsets.
+    This runs inside a <code>requestAnimationFrame</code> callback, so the frame that follows paints them.</li>
+  <li>A following console is written back by the next <code>stickSoon</code> (the next streamed line or pacer tick,
+    one or more frames later) or by the 400 ms <code>stickConsole</code> sweep. A finished turn's console streams
+    nothing, so it waits for the sweep, up to ~24 frames. A console the reader parked is never written back.</li>
+</ol>
+
+<figure id="fig-clamp">
+<svg viewBox="0 0 960 400" width="100%" role="img" aria-label="Three states of one console: at the card's width, during the max-content measurement, and the frame after">
+  <rect x="0" y="0" width="960" height="400" fill="#151a21"/>
+  <!-- panel A -->
+  <text x="20" y="26" fill="#9ecbff" font-size="14" font-weight="600">A. At the card's width</text>
+  <text x="20" y="44" fill="#9aa5b4" font-size="12">paragraphs wrap; content ≈ 1,034 px</text>
+  <rect x="40" y="60" width="200" height="250" fill="#0b0e13" stroke="#2a3340"/>
+  <g fill="#3a4556">
+    <rect x="48" y="68" width="184" height="6"/><rect x="48" y="80" width="184" height="6"/><rect x="48" y="92" width="184" height="6"/><rect x="48" y="104" width="120" height="6"/>
+    <rect x="48" y="122" width="184" height="6"/><rect x="48" y="134" width="184" height="6"/><rect x="48" y="146" width="184" height="6"/><rect x="48" y="158" width="184" height="6"/><rect x="48" y="170" width="90" height="6"/>
+    <rect x="48" y="188" width="184" height="6"/><rect x="48" y="200" width="184" height="6"/><rect x="48" y="212" width="150" height="6"/>
+    <rect x="48" y="230" width="184" height="6"/><rect x="48" y="242" width="184" height="6"/><rect x="48" y="254" width="184" height="6"/><rect x="48" y="266" width="184" height="6"/>
+    <rect x="48" y="278" width="184" height="6"/><rect x="48" y="290" width="110" height="6"/>
+  </g>
+  <rect x="44" y="214" width="192" height="92" fill="none" stroke="#7ee787" stroke-width="2"/>
+  <text x="250" y="224" fill="#7ee787" font-size="12">view: on its</text>
+  <text x="250" y="240" fill="#7ee787" font-size="12">newest line</text>
+  <text x="250" y="256" fill="#7ee787" font-size="12">716 / 716</text>
+  <!-- arrow -->
+  <path d="M 335 180 L 368 180" stroke="#9aa5b4" stroke-width="2" marker-end="url(#ar)"/>
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#9aa5b4"/></marker></defs>
+  <!-- panel B -->
+  <text x="380" y="26" fill="#f0c674" font-size="14" font-weight="600">B. During the measurement</text>
+  <text x="380" y="44" fill="#9aa5b4" font-size="12">table at max-content: no line breaks; content ≈ 465 px</text>
+  <rect x="380" y="60" width="250" height="120" fill="#0b0e13" stroke="#2a3340"/>
+  <g fill="#3a4556">
+    <rect x="388" y="68" width="234" height="6"/><rect x="388" y="86" width="234" height="6"/><rect x="388" y="104" width="234" height="6"/>
+    <rect x="388" y="122" width="234" height="6"/><rect x="388" y="140" width="234" height="6"/><rect x="388" y="158" width="200" height="6"/>
+  </g>
+  <rect x="384" y="84" width="242" height="92" fill="none" stroke="#f0c674" stroke-width="2"/>
+  <text x="380" y="204" fill="#f0c674" font-size="12">the box is now only 147 px deep, so the</text>
+  <text x="380" y="220" fill="#f0c674" font-size="12">browser clamps scrollTop 716 → 147</text>
+  <text x="380" y="244" fill="#9aa5b4" font-size="12">one synchronous layout, inside fitColumns(),</text>
+  <text x="380" y="260" fill="#9aa5b4" font-size="12">from th.getBoundingClientRect()</text>
+  <!-- arrow -->
+  <path d="M 645 180 L 678 180" stroke="#9aa5b4" stroke-width="2" marker-end="url(#ar)"/>
+  <!-- panel C -->
+  <text x="690" y="26" fill="#ff9c94" font-size="14" font-weight="600">C. The frame after</text>
+  <text x="690" y="44" fill="#9aa5b4" font-size="12">styles back; content ≈ 1,034 px again</text>
+  <rect x="700" y="60" width="200" height="250" fill="#0b0e13" stroke="#2a3340"/>
+  <g fill="#3a4556">
+    <rect x="708" y="68" width="184" height="6"/><rect x="708" y="80" width="184" height="6"/><rect x="708" y="92" width="184" height="6"/><rect x="708" y="104" width="120" height="6"/>
+    <rect x="708" y="122" width="184" height="6"/><rect x="708" y="134" width="184" height="6"/><rect x="708" y="146" width="184" height="6"/><rect x="708" y="158" width="184" height="6"/><rect x="708" y="170" width="90" height="6"/>
+    <rect x="708" y="188" width="184" height="6"/><rect x="708" y="200" width="184" height="6"/><rect x="708" y="212" width="150" height="6"/>
+    <rect x="708" y="230" width="184" height="6"/><rect x="708" y="242" width="184" height="6"/><rect x="708" y="254" width="184" height="6"/><rect x="708" y="266" width="184" height="6"/>
+    <rect x="708" y="278" width="184" height="6"/><rect x="708" y="290" width="110" height="6"/>
+  </g>
+  <rect x="704" y="96" width="192" height="92" fill="none" stroke="#ff9c94" stroke-width="2"/>
+  <text x="690" y="332" fill="#ff9c94" font-size="12">painted at 147 / 716: 569 px above the newest line</text>
+  <text x="690" y="352" fill="#9aa5b4" font-size="11.5">following: put back by the next line,</text>
+  <text x="690" y="368" fill="#9aa5b4" font-size="11.5">or by the 400 ms sweep</text>
+  <text x="690" y="388" fill="#9aa5b4" font-size="11.5">parked: nothing puts it back</text>
+</svg>
+<figcaption>One console through one measurement. The scroll positions are the gate's own (<code>direct #1</code> on 0.46.8:
+716/716 → 147/716). The content heights are derived from them and the box's 318 px client height
+(716 + 318, 147 + 318). The line drawing is schematic.</figcaption>
+</figure>
+
+<h2 id="missed">3. Why it survived so many attempts</h2>
+<ul>
+  <li><b>There was no writer to find.</b> Every instrument in <code>tools/</code> wraps the <code>scrollTop</code>
+    setter, the scroll APIs and the DOM primitives that move a console. A layout clamp calls none of them. The repo
+    already recorded the symptom as an unexplained "no-writer class": a pinned console falling 77 → 0 with "no
+    <code>scrollTop</code> write, no scroll API call, no DOM primitive that carries the console, and no mutation of the
+    console's own subtree" (<code>docs/console-frames-7393-0461.md</code>).</li>
+  <li><b>The thing that changed was an ancestor's style.</b> The writes are <code>style</code> changes on the
+    <code>&lt;table&gt;</code> and its <code>&lt;th&gt;</code>s, outside the subtree every MutationObserver was
+    watching.</li>
+  <li><b>The fixtures could not show it.</b> The stub gateways stream short lines. <code>verify-console-independence.mjs</code>
+    breaks a line every 11–15 words, and a short line is already its own max-content width, so laying it out wider
+    changes nothing. A real agent writes paragraphs. The new gate streams 70–130-word paragraphs, which is what makes
+    the clamp visible.</li>
+  <li><b>It repairs itself.</b> A following console is written back within 1–24 frames, so a slow sampler sees
+    nothing. A fast one saw falls it filed under other names: "one painted frame, 3–6 rows (51–121 px) short of the
+    newest line, every 2–4 s", and "87 px off their newest line 15–18 times per 100 s". On your board this measurement
+    drops real consoles by 69 px and 86 px, the same envelope (<a href="#ev-board">4.2</a>).</li>
+</ul>
+
+<h2 id="evidence">4. Evidence</h2>
+
+<h3 id="ev-gate">4.1 The real-browser gate: <code>tools/verify-console-column-fit.mjs</code></h3>
+<p>A panel of its own (spare port, its own <code>PANEL_CONFIG</code>, <code>HERMES_HOME</code> and <code>jobs.json</code>,
+no gateway key), a stub Runs API that streams long paragraphs over real SSE, and two cards spawned into one worktree
+row through the panel's own <code>POST /api/agents</code>. The window is 1500×1000, so the chart is in desktop mode
+(table 1385 px). One console follows its run. The reader parks the other with a real wheel, 40% of the way up its
+scrollback. <i>Direct</i> calls <code>fitColumns()</code> on the open table three times between frames. The
+<i>window</i> is 30 s of the board's own clocks plus a file written into the worktree every 3 s, with every frame's
+painted value sampled.</p>
+<div class="tw"><table>
+  <thead><tr><th>Reading</th><th>0.46.8 (base, three runs)</th><th>Fix 1 only</th><th>Fix 1 + fix 2 (the branch)</th></tr></thead>
+  <tbody>
+    <tr><td>Direct: the following console, before → after one <code>fitColumns()</code></td>
+      <td class="bad">716/716 → 147/716, 733 → 147, 750 → 147 (3 of 3 calls, falls 569–603 px)</td>
+      <td class="good">716 → 716, 733 → 733, 750 → 750</td><td class="good">699 → 699, 716 → 716, 733 → 733</td></tr>
+    <tr><td>Window: column measurements that moved a console</td>
+      <td class="bad">18 of 18, falls 604–1139 px</td><td class="good">0 of 18</td><td class="good">0 of 18</td></tr>
+    <tr><td>Window: frames painting the following console more than 40 px above its newest line</td>
+      <td class="bad">12 / 11 / 14 (max 1139 / 1121 / 1139 px)</td><td class="good">0</td><td class="good">0</td></tr>
+    <tr><td>Window: one-line lag, 3–40 px (a row growing before its stick)</td>
+      <td class="same">17 frames (11 + 6)</td><td class="same">—</td><td class="same">16 frames (10 + 6): unchanged, not this defect</td></tr>
+    <tr><td>The reader's park, wheeled 40% up its scrollback</td>
+      <td class="bad">the first step left it at 367, but the page recorded <code>{top: 0}</code>, a line the reader never
+      was on. On the second step a measurement clamped it to 112, and the page recorded 112 as the reader's place</td>
+      <td class="bad">held at 367, but the page recorded nothing (<code>record null</code>): the swallowed event</td>
+      <td class="good">367, recorded on the first step: <code>{top: 367, atBottom: false}</code></td></tr>
+    <tr><td>Window: the parked console leaving the reader's line with no input</td>
+      <td>0, but only because the park had already been thrown to 112 (below the clamp floor)</td><td class="good">0 at 361</td><td class="good">0 at 367</td></tr>
+    <tr><td>Sensitivity: planted falls the recorder saw (3 planted)</td><td>1 / 5 / 3 (the window's own falls count too)</td><td>2</td><td>3</td></tr>
+    <tr><td>Verdict (exit code)</td><td class="bad">FAIL (1)</td><td>PASS (0), park retried once</td><td class="good">PASS (0)</td></tr>
+  </tbody>
+</table></div>
+<p>A re-run on the committed branch, then on a fresh export of <code>c4a0093</code>, one after the other: the branch
+PASSES with 21 measurements, 0 of which moved a console, and the park is recorded on the first wheel step at 367. The
+base FAILS with 716/716 → 147/716 on every direct call and 18 of 18 measurements moving a console, by 621–1139 px.</p>
+
+<h3 id="ev-board">4.2 Your own board, read-only (<code>127.0.0.1:7331</code>, the served 0.46.8)</h3>
+<p>A second, headless client on your panel with <b>every non-GET request aborted</b> (0 were attempted). It opened
+the four rows of the most recent cards in its own page only and put each console on its newest line. It then called
+the served <code>naturalColumnWidths()</code> once on each open table, then the fixed function, on the same tables
+and the same real transcripts.</p>
+<div class="tw"><table>
+  <thead><tr><th>Console (job)</th><th>What it holds</th><th class="num">Served build</th><th class="num">Fixed function</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">efd3bb82</td><td>a scroll-stability measurement run: prose and tool rows</td><td class="num bad">711 → 642 (fell 69 px)</td><td class="num good">711 → 711</td></tr>
+    <tr><td class="mono">3eb4224e</td><td>a finished turn: two rows of long text</td><td class="num bad">541 → 455 (fell 86 px)</td><td class="num good">541 → 541</td></tr>
+    <tr><td class="mono">f3ecab93</td><td>this investigation's own card: almost all one-line tool rows</td><td class="num">388 → 388</td><td class="num">388 → 388</td></tr>
+  </tbody>
+</table></div>
+<p>The same client then ran the board's own clocks for a window, counting each measurement and the painted frames
+of following consoles:</p>
+<div class="tw"><table>
+  <thead><tr><th>Window</th><th class="num">Measurements</th><th class="num">That moved a console</th><th class="num">Frames &gt; 40 px off the newest line</th></tr></thead>
+  <tbody>
+    <tr><td>served, 30 s</td><td class="num">5</td><td class="num bad">3 (6 drops of 69–86 px)</td><td class="num bad">88 (max 86 px)</td></tr>
+    <tr><td>served, 30 s</td><td class="num">1</td><td class="num bad">1 (2 drops of 69–86 px)</td><td class="num bad">32 (max 86 px)</td></tr>
+    <tr><td>served, 60 s</td><td class="num">0</td><td class="num">—</td><td class="num">0 (a null window: nothing was measured)</td></tr>
+    <tr><td>fixed function swapped in, 60 s</td><td class="num">2</td><td class="num good">0</td><td class="num good">0</td></tr>
+  </tbody>
+</table></div>
+<p>How far a console falls depends on how much its transcript unwraps. Wide windows and one-line tool rows fall less,
+long paragraphs and narrower windows fall more. A short console can fall to 0, as the 6-line console in
+<code>docs/console-frames-7393-0461.md</code> did, 12 times in 35 s.</p>
+
+<h3 id="ev-unit">4.3 The same two rules without a browser: <code>test/console-column-fit.test.js</code></h3>
+<p>It reads <code>headerCells</code>, <code>naturalColumnWidths</code> and <code>setScroll</code> out of
+<code>public/app.js</code> and drives them over a small DOM model. In that model, inline style writes are logged per
+element, and a spanning cell's width is shared out over its columns the way an auto table layout does.</p>
+<div class="tw"><table>
+  <thead><tr><th>Check</th><th>0.46.8</th><th>The branch</th></tr></thead>
+  <tbody>
+    <tr><td>Measuring the columns never restyles or lays out the live table</td><td class="bad">fails</td><td class="good">passes</td></tr>
+    <tr><td>A spanning row is not a column's content: 10 vs 20,000 characters in the open card give the same split</td><td class="bad">fails</td><td class="good">passes</td></tr>
+    <tr><td>The copy is measured in the table's own wrapper, with its own inline style, holding only worktree rows</td><td class="bad">fails</td><td class="good">passes</td></tr>
+    <tr><td>A scroll write that moved nothing leaves no claim on the reader's next scroll</td><td class="bad">fails</td><td class="good">passes</td></tr>
+    <tr><td>A write that moved the box still claims its own event (control)</td><td>passes</td><td class="good">passes</td></tr>
+    <tr><td>The scroll handler still spends the flag and records everything else (control)</td><td>passes</td><td class="good">passes</td></tr>
+  </tbody>
+</table></div>
+
+<h3 id="ev-suite">4.4 Everything else that could break</h3>
+<div class="tw"><table>
+  <thead><tr><th>Gate</th><th>0.46.8 (base export)</th><th>The branch</th><th>Reading</th></tr></thead>
+  <tbody>
+    <tr><td><code>npm test</code></td><td>— (not run on the export)</td><td class="good">667 / 667</td><td>661 before the new file, plus its 6 checks</td></tr>
+    <tr><td><code>verify-console-independence --only one</code>, <code>rebuild</code>, <code>siblings</code></td><td>—</td><td class="good">PASS, 0 painted hops in each</td><td>cards moved by 8–12 detail rebuilds each, 1–2 cards built</td></tr>
+    <tr><td><code>verify-console-fold-hold</code></td><td>—</td><td class="good">45 checks, 0 failed</td><td></td></tr>
+    <tr><td><code>verify-console-boxes</code>, <code>verify-row-reconcile</code></td><td>—</td><td class="good">PASS</td><td></td></tr>
+    <tr><td><code>verify-console-jitter</code></td><td class="same">18/20: painted off its bottom 68 px (stream), 18 px (think)</td><td class="same">18/20, the same 68 px / 18 px</td><td>red on main before this change; the card is not in a table</td></tr>
+    <tr><td><code>verify-stream-separation</code></td><td class="same">2 fail: 142 frames off the bottom (max 46 px); tool-group margins 0 px</td><td class="same">2 fail: 139 frames (max 46 px); margins 0 px</td><td>red on main before this change</td></tr>
+    <tr><td><code>verify-tool-usage-group</code></td><td class="same">1 fail: "never settled at its newest line"</td><td class="same">the same</td><td>red on main before this change</td></tr>
+    <tr><td><code>verify-console-flicker</code></td><td class="same">the "repainters" scenario times out (30 s)</td><td class="same">the same timeout</td><td>red on main before this change</td></tr>
+    <tr><td><code>verify-chart-columns</code>, <code>verify-age-collapse</code></td><td class="same">cannot start: they import <code>pickFreePort</code>, which <code>panel-testkit.mjs</code> no longer exports</td><td class="same">the same</td><td>broken on main; the column-split change is covered by 4.1's open/shut reading and 4.3 instead</td></tr>
+  </tbody>
+</table></div>
+<p>The four red browser gates were each run one at a time on the base export and then on the branch, with nothing
+else running. They fail with the same messages and the same magnitudes on both, so none of them is this change.</p>
+
+<h2 id="fix">5. The fix</h2>
+<h3 id="fix1">Fix 1: measure a copy, never the live table (<code>naturalColumnWidths</code>, <code>public/app.js</code>)</h3>
+<pre><span class="del">-  table.style.tableLayout = "auto";
+-  table.style.width = "max-content";
+-  for (const th of ths) th.style.width = "";
+-  const natural = ths.map((th) =&gt; Math.ceil(th.getBoundingClientRect().width));
+-  table.style.tableLayout = layout;
+-  table.style.width = width;
+-  ths.forEach((th, i) =&gt; { th.style.width = kept[i]; });</span>
+<span class="add">+  const probe = table.cloneNode(false);              <span class="cm">// the table's own classes and inline style</span>
++  if (table.tHead) probe.appendChild(table.tHead.cloneNode(true));
++  const body = document.createElement("tbody");
++  for (const tb of table.tBodies)
++    for (const tr of tb.rows) if (tr.classList.contains("row")) body.appendChild(tr.cloneNode(true));
++  probe.appendChild(body);                           <span class="cm">// worktree rows only: no detail, no confirmation</span>
++  probe.style.position = "absolute"; probe.style.visibility = "hidden"; <span class="cm">/* … left/top 0, no pointer events */</span>
++  probe.style.tableLayout = "auto";
++  probe.style.width = "max-content";
++  for (const th of headerCells(probe)) th.style.width = "";
++  table.parentNode.insertBefore(probe, table.nextSibling);   <span class="cm">// same wrapper, so the same selectors size it</span>
++  const natural = headerCells(probe).map((th) =&gt; Math.ceil(th.getBoundingClientRect().width));
++  probe.remove();</span></pre>
+<p>The copy is out of flow and hidden, and it leaves the page in the same task, so it is never painted. The live
+table's layout is never invalidated, so no console is laid out at another width and there is nothing to clamp. It is
+also cheaper. The old path re-laid out every open transcript twice per measurement, once unwrapped and once
+re-wrapped. The copy lays out only the header and the worktree rows.</p>
+
+<h3 id="fix2">Fix 2: only a write that moved the box claims a scroll event (<code>setScroll</code>, <code>public/app.js</code>)</h3>
+<pre><span class="del">-  selfScrolled.add(el);
+-  el.scrollTop = v;</span>
+<span class="add">+  const from = el.scrollTop;
++  el.scrollTop = v;
++  if (el.scrollTop !== from) selfScrolled.add(el);</span></pre>
+<p>Most panel writes move nothing: the follow path re-sticks a console that is already on its newest line every
+frame. A write that moves nothing sends no scroll event, so the flag it set was left for your next real scroll, which
+the handler then discarded as "the panel's own". Reading <code>scrollTop</code> there costs no extra layout, because
+assigning it already lays the box out to clamp the value. Everything else in the handler is unchanged: the pin still
+follows your own gesture onto the newest line (2 px), and the record keeps its 32 px "was at the bottom" tolerance.</p>
+
+<h2 id="side">6. A side effect: the columns stop moving</h2>
+<p>A detail row spans every column. In an auto table layout its max-content width (the longest unwrapped line of the
+open transcript) used to be shared out over the columns, so the column split changed when a row opened and kept
+changing while agents wrote. The gate reads the split with the row open and then shut:</p>
+<div class="tw"><table>
+  <thead><tr><th>Build</th><th>Row open (px per column)</th><th>Row shut</th></tr></thead>
+  <tbody>
+    <tr><td>0.46.8</td><td class="mono bad">449, 235, 70, 58, 35, 47, 64, 146, 151, 129</td><td class="mono">481, 256, 70, 61, 62, 62, 64, 120, 125, 84</td></tr>
+    <tr><td>The branch</td><td class="mono good">480, 257, 70, 61, 62, 62, 64, 120, 125, 84</td><td class="mono good">480, 257, 70, 61, 62, 62, 64, 120, 125, 84</td></tr>
+  </tbody>
+</table></div>
+<p>With a row open, the branch gives the split the chart already had with every row shut. That is what the function's
+own comment always promised: "the header text and every cell below it".</p>
+
+<h2 id="notfix">7. What this does not fix</h2>
+<div class="not">
+  <ul>
+    <li><b>One-line lag stays.</b> A pinned console can sit 3–40 px (one or two lines) behind a row that grew, for a
+      frame, until its stick lands. The count is the same before and after (17 and 16 frames in 30 s). It reads as the
+      console catching up, not as a jump up.</li>
+    <li><b>The red gates in 4.4 stay red.</b> They fail the same way on 0.46.8 and need their own work. Two of them
+      cannot even start on main (<code>pickFreePort</code>). The 68 px "painted off its bottom" in
+      <code>verify-console-jitter</code>'s 🌊 run is a card outside any table, so the column measurement does not
+      reach it. It is a separate, smaller lag and it is not explained here.</li>
+    <li><b>Cards outside a table were never affected.</b> The unattached agents list and the assistant float do not
+      live in a worktree table, so a bounce seen <i>there</i> would be a different mechanism.</li>
+    <li><b>Sideways-scroll mode was safe already.</b> Below the columns' floor width (846 px), <code>.detail-inner</code>
+      is pinned to the visible width, so the transcript could not widen during the measurement. The bug was desktop-only.</li>
+  </ul>
+</div>
+<div class="warn">After the PR lands, your board on 7331 serves the new <code>public/app.js</code> as soon as the
+primary checkout is on the new <code>main</code> (<code>git pull --ff-only</code> there). Static files are re-read on
+every request, so no restart is needed. Refresh the page (F5). Until then 7331 keeps serving 0.46.8. The board's
+config line keeps reading <code>v0.46.8</code> until the panel next restarts, because <code>server.js</code> reads
+<code>package.json</code> once, at boot. That number is not what tells you the fix is live: compare
+<code>curl -s http://127.0.0.1:7331/app.js | sha256sum</code> with <code>sha256sum public/app.js</code> in the
+primary checkout.</div>
+
+<h2 id="check">8. Check it yourself</h2>
+<pre>node tools/verify-console-column-fit.mjs                               <span class="cm"># this tree: PASS, exit 0</span>
+git archive c4a0093 | tar -x -C &lt;scratch&gt;/base
+node tools/verify-console-column-fit.mjs --root &lt;scratch&gt;/base         <span class="cm"># 0.46.8: FAIL, exit 1</span>
+node --test test/console-column-fit.test.js                            <span class="cm"># 6 / 6</span>
+npm test                                                               <span class="cm"># 667 / 667</span></pre>
+<p>By eye, on your own board after the refresh: open a worktree row whose agent writes long paragraphs, leave its
+console on its newest line, and watch it through a few row repaints (the row flashes green or grey). It should stay
+on its newest line. Then scroll a finished card's console halfway back and wait a minute. It should stay on that line.</p>
+
+<h2 id="appendix">Appendix: where things are</h2>
+<div class="tw"><table>
+  <thead><tr><th>What</th><th>Where</th></tr></thead>
+  <tbody>
+    <tr><td>The measurement</td><td><code>naturalColumnWidths</code>, called by <code>fitColumns</code> → <code>scheduleColumnFit</code> (from <code>placeRow</code>, <code>removeRow</code>) and <code>fitAllColumns</code> (resize, zoom, column grips); <code>renderProjectRows</code> calls <code>fitColumns</code> directly and restores the consoles after it</td></tr>
+    <tr><td>The memo it skips on</td><td><code>columnSignature(tbody)</code>: row count, <code>tbody.textContent.length</code>, chip count</td></tr>
+    <tr><td>The repair that hid it</td><td><code>stickSoon</code> (next streamed line or pacer tick), <code>stickConsole</code> (the 400 ms sweep)</td></tr>
+    <tr><td>The scroll flag</td><td><code>setScroll</code>, <code>selfScrolled</code>, and the document <code>scroll</code> listener that consumes it and writes <code>state.outScrolls</code></td></tr>
+    <tr><td>The gate</td><td><code>tools/verify-console-column-fit.mjs</code> (listed by <code>node tools/verify.mjs --list</code>)</td></tr>
+    <tr><td>The unit test</td><td><code>test/console-column-fit.test.js</code></td></tr>
+    <tr><td>Earlier reports of the same symptom</td><td><code>docs/console-frames-7393-0461.md</code> (the "no-writer class", the 87 px falls); <code>docs/console-bounce-manual-7391.md</code> (the swallowed park)</td></tr>
+    <tr><td>Raw runs</td><td><code>C:/Users/roper/AppData/Local/Temp/wag/f3ecab93/</code>: <code>colfit-base-*.json</code>, <code>colfit-fix1-*.json</code>, <code>colfit-fix2-1.json</code>, <code>live-7331*.json</code>, <code>gates/</code>, <code>gates-ab/</code>. The re-runs on the committed branch are in <code>C:/Users/roper/AppData/Local/Temp/wag/95efcc0a/</code>: <code>colfit-branch.json</code>, <code>colfit-base.json</code>. These are scratch folders, and the panel prunes them after a day.</td></tr>
+  </tbody>
+</table></div>
+
+</div>
+</body>
+</html>
