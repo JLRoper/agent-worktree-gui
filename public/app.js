@@ -3838,11 +3838,31 @@ function subagentsStripSig(rows, key) {
 
 // Repaint every strip already on the page, in place: a roster poll must not re-render cards (that would move the
 // reader's scroll) and must not need a card to be re-rendered before it can show a child.
+//
+// The strips are found in two passes over the page for the whole roster, then looked up by key. The loop runs over
+// every job the panel knows (97 on the reader's board), and it used to ask `document.querySelector` for each one by
+// attribute value - one or two walks of the whole 55k-node document per job, per roster poll: 250 ms a minute of
+// querySelector under this function in a read-only profile of that board, the largest DOM cost on it. A job with no
+// strip on the page is skipped before its rows are worked out (subagentsForTurn filters every job again). The FIRST
+// node per key is kept, which is the one the per-key query found, so a turn drawn twice is painted where it was.
 function paintSubagents() {
+  const firstByKey = (attr) => {
+    const map = new Map();
+    for (const el of document.querySelectorAll(`[${attr}]`)) {
+      const k = el.getAttribute(attr);
+      if (!map.has(k)) map.set(k, el);
+    }
+    return map;
+  };
+  const compacts = firstByKey("data-subs-compact");
+  const boxes = firstByKey("data-subs-turn");
+  if (!compacts.size && !boxes.size) return;
   for (const job of state.jobs.values()) {
     const key = job.id;
+    const compact = compacts.get(key) || null;
+    const box = compact ? null : boxes.get(key) || null;
+    if (!compact && !box) continue;
     const rows = subagentsForTurn(job);
-    const compact = document.querySelector(`[data-subs-compact="${CSS.escape(key)}"]`);
     // A folded turn carries the tally only; it has no rows to paint, but the count still has to move.
     if (compact) {
       if (!rows.length) {
@@ -3854,8 +3874,6 @@ function paintSubagents() {
       compact.classList.toggle("is-done", live === 0);
       continue;
     }
-    const box = document.querySelector(`[data-subs-turn="${CSS.escape(key)}"]`);
-    if (!box) continue;
     if (!rows.length) {
       if (!box.hidden) {
         box.hidden = true;
