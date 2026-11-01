@@ -6679,33 +6679,94 @@ function drawRowText(el, text) {
 }
 // ---- end console row text
 
+// ---- console writers
+// How a write reaches a console, and what a console owns.
+//
+//   * A row is addressed through the console of the JOB that owns the line — never by a document-wide
+//     `[data-lid]` query. Line ids are one server sequence, not a page-wide key: a card the board adopted from
+//     another panel process can carry the same numbers, and a global lookup then writes one agent's line into
+//     another agent's console. Three agents at once is where that stops being theoretical.
+//   * Following the newest line never measures the page inside a write. A console remembers whether the reader is at
+//     its bottom (set once when it is first seen, then updated only by its own scroll events), and a stick is one
+//     scrollTop write, batched to at most one per console per animation frame. Reading scrollHeight per row per tick
+//     lays the whole board out again for every line of every agent, which is what made one agent's output stutter
+//     the others.
+function wireConsole(el) {
+  if (!el || el._wired) return el;
+  el._wired = true;
+  el._atBottom = el._selfTop == null ? true : el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  el.addEventListener(
+    "scroll",
+    () => {
+      // The panel's own writes arrive here too, and a box that is still where the panel put it is following.
+      if (justPlaced(el)) {
+        el._atBottom = true;
+        return;
+      }
+      el._atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    },
+    { passive: true },
+  );
+  return el;
+}
+
+// One scan per paint: every console on the board, grouped by the job it draws (a pinned copy is its job's too).
+function consoleOuts() {
+  const byJob = new Map();
+  for (const el of document.querySelectorAll("pre.job-out")) {
+    const id = el.dataset.out || "";
+    const job = id.endsWith("@pin") ? id.slice(0, -4) : id;
+    let list = byJob.get(job);
+    if (!list) byJob.set(job, (list = []));
+    list.push(wireConsole(el));
+  }
+  return byJob;
+}
+
+const stickPending = new Set();
+let stickFrame = 0;
+
+// Ask for this console to follow its newest line, at most once per frame, and only while the reader is following it.
+function stickSoon(el) {
+  if (!el || !el.dataset) return;
+  if (!consolePinned(el.dataset.out) && el._atBottom !== true) return;
+  stickPending.add(el);
+  if (stickFrame) return;
+  stickFrame = requestAnimationFrame(() => {
+    stickFrame = 0;
+    const batch = [...stickPending];
+    stickPending.clear();
+    for (const out of batch) {
+      if (!out.isConnected) continue;
+      if (!consolePinned(out.dataset.out) && out._atBottom !== true) continue;
+      setScroll(out, out.scrollHeight); // one read per console per frame, not one per row
+    }
+  });
+}
+// ---- end console writers
+
 // The pacer says which lines grew; every pane carrying one gets the new prefix (a pinned turn draws its own copy,
 // so the same line can be in two consoles at once).
 function paintTypedLines(lids) {
   const P = state.typePacer;
   if (!P) return;
-  // A skill types forty lines at once, so a console is asked where its bottom is ONCE per paint — before anything in
-  // it grows — and scrolled once after, instead of once per line (each ask forces a layout of everything above it).
-  const stuck = new Map();
+  const byJob = consoleOuts();
   for (const lid of lids) {
     const shown = P.shownFor(lid);
     if (shown == null) continue;
-    for (const el of document.querySelectorAll(`[data-lid="${CSS.escape(String(lid))}"]`)) {
-      if (!el.isConnected) continue;
-      // A row that already says this is not re-parsed. The pacer and the live append both paint the same prefix
-      // (the append asks the pacer how much of the line may be drawn), so without this the first wire frame after
-      // a tick rewrote the row with the text the tick had just put there — an innerHTML assignment that changes no
-      // character and still replaces every text node under the reader's selection.
-      if (el._drawn === shown) continue;
-      // A reasoning block types inside its thinking block, which follows its own stickiness, not the console's.
-      const body = el.closest(".think-body");
-      const out = body ? null : el.closest("pre.job-out");
-      if (out && !stuck.has(out)) stuck.set(out, consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40);
-      drawRowText(el, shown);
-      if (body) stickThinkBody(body);
+    const outs = byJob.get(String(P.jobFor(lid) ?? ""));
+    if (!outs || !outs.length) continue;
+    for (const out of outs) {
+      // A reasoning row types inside its thinking block, which follows its own stickiness, not the console's.
+      for (const el of out.querySelectorAll(`[data-lid="${CSS.escape(String(lid))}"]`)) {
+        if (!el.isConnected) continue;
+        if (!drawRowText(el, shown)) continue;
+        const body = el.closest(".think-body");
+        if (body) stickThinkBody(body);
+        else stickSoon(out);
+      }
     }
   }
-  for (const [out, stick] of stuck) if (stick) setScroll(out, out.scrollHeight);
 }
 
 // The turn is over: nothing may be left waiting in either buffer, and the last of a paragraph's words are released
@@ -6936,9 +6997,9 @@ function paintStreamConsole(turn, copy = "") {
   const out = [...document.querySelectorAll("pre.job-out")].find((el) => el.dataset.out === `${turn.id}${copy}`);
   if (!out) return false;
   const all = jobLines(turn.id).filter((l) => !isBookkeeping(l));
-  const stick = consolePinned(`${turn.id}${copy}`) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
+  const stick = consolePinned(`${turn.id}${copy}`) || wireConsole(out)._atBottom !== false;
   syncStreamConsole(out, streamBodyHtml(turn, all.slice(-300), all.length > 300), stick);
-  if (stick) setScroll(out, out.scrollHeight);
+  if (stick) stickSoon(out);
   paintToBottom(out);
   return true;
 }
@@ -8079,9 +8140,9 @@ function drawJobLine(evt) {
   if (isBookkeeping(line)) return;
   // A pinned turn renders twice — in its page and in the pinned block above — so every pane carrying
   // this id (or its "@pin" copy) gets the line.
-  const outs = [...document.querySelectorAll("pre.job-out")].filter(
-    (el) => el.dataset.out === evt.id || el.dataset.out === `${evt.id}@pin`,
-  );
+  const outs = [...document.querySelectorAll("pre.job-out")]
+    .filter((el) => el.dataset.out === evt.id || el.dataset.out === `${evt.id}@pin`)
+    .map(wireConsole);
   if (!outs.length) return;
   // The words of a growing paragraph that may be drawn now: the pacer holds the tail and releases it on its own
   // clock, so the console fills in a word or two at a time instead of a coalesced phrase at a time.
@@ -8091,8 +8152,9 @@ function drawJobLine(evt) {
   const streaming = streamOn(state.jobs.get(evt.id)?.thread || evt.id);
   for (const out of outs) {
     // Streamed lines follow the newest output only for a reader who is already at the bottom; someone
-    // scrolled up to read stays where they are.
-    const stick = consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40;
+    // scrolled up to read stays where they are. The answer comes from the console's own remembered state (set by its
+    // scroll events), not from a layout read per line.
+    const stick = consolePinned(out.dataset.out) || out._atBottom !== false;
     // Only the placeholder an empty console shows gives way to the first line. This used to ask whether the first CHILD
     // was dim, but a dim line is transcript too ("⇢ asked to work in …", "cut from …", "push guard: …") and every
     // repaint — the thinking sweep, a new deliverable, an approval — puts one back on top, so the next live line wiped
@@ -8186,7 +8248,7 @@ function drawJobLine(evt) {
         out.appendChild(div);
       }
     }
-    if (stick) setScroll(out, out.scrollHeight);
+    if (stick) stickSoon(out);
   }
   refreshJobPreview(evt.id);
 }
@@ -11415,11 +11477,18 @@ function sweepStaleBoard() {
 
 function fillAgentSlots(root, reuse) {
   if (!root) return;
+  // Moving a card that is already in the page is a remove-then-insert: every scroll box inside it comes back at its
+  // first line, and a selection standing in it is dropped. Both belong to the reader, so a reused card carries them
+  // across the move. A project repaint re-places every card in the row, and with three live agents that was every
+  // console hopping to the top on each repaint — one agent's event, every other agent's console.
+  const heldSelection = reuse && reuse.size ? captureCardSelection() : null;
   for (const slot of [...root.querySelectorAll("[data-agent-slot]")]) {
     const thread = slot.dataset.agentSlot;
     const card = reuse?.get(thread);
     if (card) {
+      const held = holdScrolls(card);
       slot.replaceWith(card);
+      releaseScrolls(held);
       continue;
     }
     const conv = conversations().find((c) => c.thread === thread);
@@ -11435,6 +11504,7 @@ function fillAgentSlots(root, reuse) {
       slot.replaceWith(fresh);
     } else slot.remove();
   }
+  if (heldSelection && heldSelection.length) restoreCardSelection(heldSelection);
 }
 
 // One file-list strip inside merge state: a one-line head carrying its count, its names folded away until the
@@ -12969,6 +13039,26 @@ function flashMoved(before, after, reflowHost) {
 const pendingRows = new Map();
 let rowFrame = 0;
 
+// The fields a row's detail draws, minus the ones that move on their own clock (liveness, the next-read ring, the
+// scan stamp). Two rows with the same signature want the same detail, so the one on screen can be kept — cards and
+// all — instead of being rebuilt under the agents that live in it.
+const DETAIL_VOLATILE = new Set([
+  "live", "liveWhy", "signals", "lastAliveAt", "ageMs", "nextReadAt", "pollSeconds", "scannedAt", "tookMs", "activityAt",
+]);
+function stableStringify(v) {
+  if (v == null || typeof v !== "object") return JSON.stringify(v);
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`;
+  return `{${Object.keys(v)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${stableStringify(v[k])}`)
+    .join(",")}}`;
+}
+function rowDetailSig(row) {
+  const keep = {};
+  for (const k of Object.keys(row || {})) if (!DETAIL_VOLATILE.has(k)) keep[k] = row[k];
+  return stableStringify(keep);
+}
+
 function queueRow(project, row, opts) {
   pendingRows.set(keyOf(project, row.path), { project, row, opts });
   if (rowFrame) return;
@@ -13078,19 +13168,39 @@ function placeRow(project, row, { flash = false } = {}) {
   // The cards are carried into the new detail below, and a card taken out of the document and put back comes back at
   // its first line: hold every open child console in the old detail before it leaves, and hand each one its place
   // back in this same task, once its card is in the new detail.
-  const heldSubs = oldDetail ? holdSubConsoles(oldDetail) : [];
+  // A row repaint is not news about the CARDS filed under it. Rebuilding the detail moves every card into a fresh
+  // slot, and a move is a remove-then-insert: each scroll box inside the card comes back at its first line and a
+  // selection is dropped. With several agents in one row every scanner pass disturbed all of them. So the detail is
+  // kept — its cards left exactly where they are — unless something it draws actually changed.
+  const detailSig = rowDetailSig(row);
+  const keepDetail = Boolean(oldDetail && oldDetail.isConnected && oldDetail.dataset.dsig === detailSig);
+  // Only when the detail is really leaving: this detaches its child consoles into a holder to be re-attached below.
+  const heldSubs = oldDetail && !keepDetail ? holdSubConsoles(oldDetail) : [];
   beginDomMove();
-  if (oldDetail) oldDetail.remove();
+  if (oldDetail && !keepDetail) oldDetail.remove();
   // Any other copy for this key is a stray from an earlier render: one row, one detail.
-  for (const stray of document.querySelectorAll(`tr.detail[data-detail="${CSS.escape(key)}"]`)) stray.remove();
+  for (const stray of document.querySelectorAll(`tr.detail[data-detail="${CSS.escape(key)}"]`)) {
+    if (!keepDetail || stray !== oldDetail) stray.remove();
+  }
   state.detailEls.delete(key);
   if (old) old.replaceWith(newTr);
   else tbody.appendChild(newTr);
   state.rowEls.set(key, newTr);
-  if (state.expanded.has(key)) {
+  if (state.expanded.has(key) && keepDetail) {
+    // Nothing the detail draws changed: keep the element — and every console inside it — exactly where it is.
+    state.detailEls.set(key, oldDetail);
+    // `old.replaceWith(newTr)` already leaves the detail as the new row's next sibling. Only move it if some other
+    // repaint put something in between: a move is a detach, and a detached console comes back at its first line.
+    if (newTr.nextElementSibling !== oldDetail) {
+      const held = holdScrolls(oldDetail);
+      newTr.after(oldDetail);
+      releaseScrolls(held);
+    }
+  } else if (state.expanded.has(key)) {
     const h2 = document.createElement("tbody");
     h2.innerHTML = detailHtml(row);
     const dEl = h2.firstElementChild;
+    if (dEl) dEl.dataset.dsig = detailSig;
     newTr.after(dEl);
     state.detailEls.set(key, dEl);
     // The cards move across before anything is measured, so "where was this console" is answered by the node
