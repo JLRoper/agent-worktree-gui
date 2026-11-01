@@ -1060,7 +1060,7 @@ Watches without a deadline, and finished ones, say so instead.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `port` | 7331 | HTTP port |
+| `port` | 7331 | HTTP port. A panel refuses to start on a port something already answers on, checked on loopback (and on `host` when that is an address of its own) before it reads or writes anything: on Windows a second server bound to `127.0.0.1` beside one bound to `0.0.0.0` gets no `EADDRINUSE` and silently takes the board's loopback traffic. The refusal names the address and exits 1; a predecessor still letting go of the port (a restart) is waited for first — `PANEL_PORT_WAIT_MS`, an environment variable, default 5000 (`lib/port-guard.js`) |
 | `scanRoots` | `["C:/ProjectDevelopment"]` | directories scanned for git repos; every repo found becomes a monitored project |
 | `host` | `127.0.0.1` | bind address. Loopback keeps the board to this machine. `0.0.0.0` makes it reachable from the LAN or a tailnet — set `PANEL_TOKEN` in the same breath, because this panel spawns processes and can write files |
 | `PANEL_TOKEN` | *(unset)* | **an environment variable, not a config key.** The shared secret for writes from **other** machines; loopback is never challenged, so a local browser needs nothing. With it missing (or empty) every off-machine write is refused — the door closes, it does not open. With one, a remote browser authenticates once by opening `http://<host>:7331/?token=…` (the client remembers it and sends `x-panel-token` from then on). Reads — `/api/state`, `/api/stream`, the static files — stay open to anyone who can reach the port, so keep it on a LAN or a tailnet and never a public network |

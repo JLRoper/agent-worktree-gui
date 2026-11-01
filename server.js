@@ -7,11 +7,12 @@ import { promisify } from "node:util";
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 // The push-guard record is a few hundred bytes read at boot and written on an install: sync is the honest shape
 // for it, and it is the same file the Settings row reports from.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, writeSync } from "node:fs";
 import { cpus, homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "./lib/pool.js";
+import { portHolder, refusalLine } from "./lib/port-guard.js";
 import { worktreeList } from "./lib/project.js";
 import { Store } from "./lib/store.js";
 import { Scheduler } from "./lib/scheduler.js";
@@ -262,6 +263,18 @@ async function patchPanelConfig(patch) {
 }
 
 let config = await loadConfig();
+// ---- one panel per port, asked before this one touches anything ----------------------------------
+// Before the data directory is created, the store migrated or a single job read: a second copy of this panel (or a
+// sandbox started on the reader's port) has to stop HERE, not after it has loaded the reader's jobs.json. On Windows
+// a 127.0.0.1 bind and a 0.0.0.0 bind share a port without an error, so the listen() below cannot be the guard
+// (lib/port-guard.js has the measured case). A predecessor that is still letting go of the port is waited for.
+{
+  const holder = await portHolder({ port: config.port, host: config.host, waitMs: Number(process.env.PANEL_PORT_WAIT_MS ?? 5000) });
+  if (holder) {
+    writeSync(1, `${new Date().toISOString().slice(11, 19)} ${refusalLine(holder, config.port)}\n`);
+    process.exit(1);
+  }
+}
 // ---- both directories exist before anything writes into them --------------------------------------
 // Nothing is created lazily any more: a boot that dies between "store opened" and "attachment saved" used to leave
 // a half-made `logs/`, and the next boot could not tell that from a fresh install. `ensureDirs` is `mkdir -p`, so
@@ -4389,7 +4402,18 @@ setTimeout(() => void sweepReleases("boot").catch(() => {}), 12_000).unref?.();
 
 server.keepAliveTimeout = 60_000;
 server.headersTimeout = 65_000;
+// The same address and port held by anything else (the case the boot probe cannot see: a listener that came up in
+// the moment since) is a refusal in words, not an unhandled 'error' event and a stack trace.
+const onListenError = (e) => {
+  if (e && e.code === "EADDRINUSE") {
+    writeSync(1, `${new Date().toISOString().slice(11, 19)} ${refusalLine(config.host, config.port)} (EADDRINUSE)\n`);
+    process.exit(1);
+  }
+  throw e;
+};
+server.once("error", onListenError);
 server.listen(config.port, config.host, () => {
+  server.off("error", onListenError);
   log(`agent-worktree-gui on http://${config.host}:${config.port}`);
   log(`static build ${buildAtBoot.version || "(unversioned)"} — ${Object.keys(buildAtBoot.files).length} file(s) hashed; the shell is no-store, its assets carry ?v= and are cached hard`);
   // Binding off loopback is a deliberate act, so say out loud what it opens and whether the token that
