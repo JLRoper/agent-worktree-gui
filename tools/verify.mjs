@@ -8,12 +8,16 @@
 // keeps its own output, its own sandbox and its own exit code.
 //
 //   node tools/verify.mjs --list                 what there is, with the first line of each file
-//   node tools/verify.mjs --all                  every harness, one child at a time
+//   node tools/verify.mjs --all                  every harness, one child at a time (--jobs <n> for n at once)
 //   node tools/verify.mjs --only branch          the harnesses whose name contains "branch"
 //   node tools/verify.mjs --only pr --all        (--all is implied by a selector; both is harmless)
 //
 //   --dir <path>        scan another directory (the test for this runner uses it)
 //   --timeout <ms>      per harness, default 15 minutes — a browser harness on a loaded machine is slow
+//   --jobs, -j <n>      run up to <n> harnesses at once (default 1, capped at 16). Each harness already owns its
+//                       own sandbox and port, so the wall clock is the only thing they share; two that pin the SAME
+//                       fixed port still collide, which is why this is opt-in rather than the default. Progress
+//                       lines interleave once n > 1 — a `PASS` still names its own harness.
 //   --json              one JSON object on stdout instead of the table
 //   --quiet             do not echo a failing harness's last lines
 //
@@ -29,7 +33,7 @@ const DEFAULT_TIMEOUT = 15 * 60 * 1000;
 const TAIL_LINES = 12;
 
 function parseArgs(argv) {
-  const opt = { dirs: [HERE, path.join(REPO, "harness")], explicitDirs: false, timeout: DEFAULT_TIMEOUT, json: false, quiet: false, list: false, all: false, only: null };
+  const opt = { dirs: [HERE, path.join(REPO, "harness")], explicitDirs: false, timeout: DEFAULT_TIMEOUT, jobs: 1, json: false, quiet: false, list: false, all: false, only: null };
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--list") opt.list = true;
@@ -47,6 +51,7 @@ function parseArgs(argv) {
       opt.dirs.push(path.resolve(String(argv[(i += 1)] || ".")));
     }
     else if (a === "--timeout") opt.timeout = Math.max(1000, Number(argv[(i += 1)]) || DEFAULT_TIMEOUT);
+    else if (a === "--jobs" || a === "-j") opt.jobs = Math.max(1, Math.min(16, Number(argv[(i += 1)]) || 1));
     else if (a === "--help" || a === "-h") opt.help = true;
     else throw new Error(`unknown argument: ${a}`);
   }
@@ -132,7 +137,7 @@ async function main() {
     return 2;
   }
   if (opt.help) {
-    console.log("node tools/verify.mjs --list | --all | --only <substr> [--dir <path>] [--timeout <ms>] [--json] [--quiet]");
+    console.log("node tools/verify.mjs --list | --all | --only <substr> [--dir <path>] [--timeout <ms>] [--jobs <n>] [--json] [--quiet]");
     return 0;
   }
   const files = [...new Set(opt.dirs.flatMap((d) => {
@@ -163,19 +168,28 @@ async function main() {
     return 2;
   }
 
-  const results = [];
-  for (const file of selected) {
-    const name = path.relative(REPO, file).replace(/\\/g, "/");
-    if (!opt.json) process.stdout.write(`… ${name}\n`);
-    const result = await runOne(file, opt);
-    results.push({ ...result, name });
-    if (!opt.json) {
-      const verdict = result.timedOut ? "TIMEOUT" : result.ok ? "PASS" : "FAIL";
-      const secs = (result.ms / 1000).toFixed(1);
-      console.log(`  ${verdict}  ${name}  ${secs}s${result.ok ? "" : `  (exit ${result.code ?? result.signal})`}`);
-      if (!result.ok) for (const line of result.tail) console.log(`    | ${line}`);
+  // One lane per job, each taking the next unclaimed harness. `results` is indexed, so the table, the summary and
+  // the --json payload stay in discovery order however the children finish.
+  const results = new Array(selected.length);
+  let nextIdx = 0;
+  const lane = async () => {
+    for (;;) {
+      const idx = nextIdx++;
+      if (idx >= selected.length) return;
+      const file = selected[idx];
+      const name = path.relative(REPO, file).replace(/\\/g, "/");
+      if (!opt.json) process.stdout.write(`… ${name}\n`);
+      const result = await runOne(file, opt);
+      results[idx] = { ...result, name };
+      if (!opt.json) {
+        const verdict = result.timedOut ? "TIMEOUT" : result.ok ? "PASS" : "FAIL";
+        const secs = (result.ms / 1000).toFixed(1);
+        console.log(`  ${verdict}  ${name}  ${secs}s${result.ok ? "" : `  (exit ${result.code ?? result.signal})`}`);
+        if (!result.ok) for (const line of result.tail) console.log(`    | ${line}`);
+      }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(opt.jobs, selected.length)) }, lane));
 
   const failed = results.filter((r) => !r.ok);
   if (opt.json) {
