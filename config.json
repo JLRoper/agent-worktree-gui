@@ -22,7 +22,7 @@
   "defaultCwd": "C:/ProjectDevelopment/heroes-js",
   "jobMaxRuntimeSeconds": 3600,
   "hermesBin": null,
-  "remoteBranchPolicy": "local-only",
+  "remoteBranchPolicy": "allow",
   "projects": [
     {
       "name": "heroes-js",
@@ -43,5 +43,9 @@
       "releaseWorktrees": true,
       "worktrees": null
     }
+  ],
+  "scanRoots": [
+    "C:\\Users\\james\\Documents\\Projects",
+    "C:\\Users\\james\\Documents\\Projects\\agent-worktree-gui_fork"
   ]
 }

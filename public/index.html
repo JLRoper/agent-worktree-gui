@@ -444,15 +444,20 @@
         </label>
         <div class="settings-preview mono" id="session-preview">…</div>
 
-        <label class="settings-row settings-gap" for="provider-url" title="The endpoint every run talks to — model.base_url in config.yaml. OpenRouter's own default is https://openrouter.ai/api/v1; point it at a gateway or proxy and the next run uses that instead. A run already in flight keeps the endpoint it started with.">
-          <span>OpenRouter URL <span class="settings-info">ⓘ</span></span>
+        <label class="settings-row settings-gap" for="provider-select" title="The model provider — model.provider in config.yaml. Determines which API endpoint and credentials a run uses. The next run picks it up; a run already in flight keeps the provider it started with.">
+          <span>Provider <span class="settings-info">ⓘ</span></span>
+          <select id="provider-select"><option value="">(not set)</option></select>
+        </label>
+
+        <label class="settings-row settings-gap" for="provider-url" title="The endpoint every run talks to — model.base_url in config.yaml. Point it at a gateway or proxy and the next run uses that instead. A run already in flight keeps the endpoint it started with.">
+          <span><span id="provider-url-label">Provider</span> URL <span class="settings-info">ⓘ</span></span>
           <input id="provider-url" type="url" placeholder="https://openrouter.ai/api/v1" spellcheck="false" autocomplete="off" data-1p-ignore>
         </label>
 
-        <label class="settings-row" for="provider-key" title="The key runs authenticate with — model.api_key in config.yaml, falling back to OPENROUTER_API_KEY (or OPENAI_API_KEY) in .env when the file carries none. A stored key is never shown back: the field says only whether one is set and its last four characters. Type a new one to replace it; clear it and the .env value is used again.">
-          <span>OpenRouter key <span class="settings-info">ⓘ</span></span>
+        <label class="settings-row" for="provider-key" title="The key runs authenticate with — model.api_key in config.yaml, falling back to the provider's env var in .env when the file carries none. A stored key is never shown back: the field says only whether one is set and its last four characters. Type a new one to replace it; clear it and the .env value is used again.">
+          <span><span id="provider-key-label">Provider</span> key <span class="settings-info">ⓘ</span></span>
           <input id="provider-key" type="password" placeholder="(not set)" autocomplete="off" spellcheck="false" data-1p-ignore>
-          <button id="btn-provider-save" type="button" title="write model.base_url and model.api_key into the gateway's config.yaml">Save</button>
+          <button id="btn-provider-save" type="button" title="write provider settings into the gateway's config.yaml">Save</button>
         </label>
         <div class="settings-preview mono" id="provider-preview">…</div>
         <div class="settings-presets">
@@ -491,6 +496,29 @@
   </div>
 
   <div id="banner" class="banner hidden"></div>
+
+  <!-- First-run setup. Shown in place of the board while config.json names no scan roots (settings.needsSetup),
+       and never otherwise: once a folder is saved, Settings > Projects & Folders is where roots change. -->
+  <section id="setup" class="setup hidden" aria-labelledby="setup-title">
+    <h2 id="setup-title">Where do your repos live?</h2>
+    <p class="setup-lede">Pick the folder (or folders) that hold your git repositories. Every repo directly inside one
+      becomes a project on the board. This is saved to <code>config.json</code> as <code>scanRoots</code>, and you can
+      change it later in Settings.</p>
+    <form id="setup-form" class="setup-add" autocomplete="off">
+      <input id="setup-path" type="text" placeholder="full path, e.g. C:\Users\you\Projects or /home/you/code" spellcheck="false" aria-label="folder path" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" />
+      <button id="setup-add" type="submit">Add folder</button>
+    </form>
+    <ul id="setup-roots" class="setup-roots"></ul>
+    <div class="setup-provider">
+      <label for="setup-provider-select">Default provider</label>
+      <select id="setup-provider-select"><option value="">(not set — detect automatically)</option></select>
+      <p class="setup-provider-hint">Which API provider should runs use? You can change this later in Settings.</p>
+    </div>
+    <div class="setup-foot">
+      <button id="setup-save" type="button" class="primary" disabled>Start scanning</button>
+      <span id="setup-status" class="setup-status" role="status"></span>
+    </div>
+  </section>
 
   <main>
     <!-- Spawn cards waiting for a click: a worker the assistant proposed and nothing has started yet. It sits
