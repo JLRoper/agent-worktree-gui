@@ -430,7 +430,9 @@ entry sends no `model` field at all, so the run uses the gateway's own model. Th
 how many models and how old the list is; a provider that was never picked falls back to the catalogue
 that ships with Hermes. Each entry also carries a 0-10 `★rating` and its price in and out per 1M tokens,
 from ONE table (`providers[].pricing` on `/api/models`) composed in `lib/model-prices.js`: the panel's
-own copy of the gateway's inventory, as rebuilt by Settings → Gateway → Model prices → **Refresh now**,
+own copy of the gateway's inventory, as rebuilt by Settings → Gateway → **Models & prices** → **Refresh
+models & prices** (one gateway call re-fetches the provider list and rebuilds the price table from the
+same answer),
 with the repo's committed `data/openrouter-model-prices.json` filling what that inventory does not price
 and the 0-10 benchmark rating it does not carry (`python tools/openrouter-prices.py` refreshes the
 snapshot; stdlib only, no key needed for either public source). The spawn form, the assistant's model
