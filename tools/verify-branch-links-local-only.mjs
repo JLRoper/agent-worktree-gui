@@ -664,6 +664,21 @@ async function phase9Browser() {
     }, LOCAL_BRANCH);
     check("with a one-word marker on the row", marker, "local");
 
+    // The PR cell on that same row. The branch column has just said, in the reader's own words, that this copy is
+    // not on the remote — so the PR cell answers only "which PR" and says one word. It used to read
+    // `none · branch gone` here, which repeated the cell beside it and widened this measured column to hold the echo.
+    const prCellOf = async (b) =>
+      page.evaluate((branch) => {
+        const tr = [...document.querySelectorAll("tr.row")].find((t) => (t.querySelector("td.branch")?.textContent || "").includes(branch));
+        const td = tr ? tr.querySelectorAll("td")[5] : null;
+        return td ? { text: (td.textContent || "").replace(/\s+/g, " ").trim(), html: td.innerHTML } : null;
+      }, b);
+    const localPr = await prCellOf(LOCAL_BRANCH);
+    say(`the PR cell on the local-only row: ${JSON.stringify(localPr?.text)}`);
+    check("the PR cell says exactly `none` — the branch column already answered `gone`", localPr?.text, "none");
+    ok("and carries no `branch gone` second half", !/branch gone/.test(String(localPr?.html)), localPr?.html);
+    ok("and is not a link, because there is no page to open", !/<a\b/.test(String(localPr?.html)), localPr?.html);
+
     // The click: it must open the remote page and NOT toggle the row (the row's own gesture).
     const key = await page.evaluate((b) => {
       const a = [...document.querySelectorAll("tr.row td.branch a.branch-link")].find((x) => x.textContent.includes(b));
