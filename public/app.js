@@ -2125,7 +2125,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
       } else if (!preview.some((l) => String(l.text || "").trim())) {
         out += got
           ? storedHtml(got, seg.tool, arg, boxKey, rowAt)
-          : `<div class="jl jl-dim jl-note">  ${liveTurn ? "no output in the session store yet" : "no output recorded for this call"}</div>`;
+          : `<div class="jl jl-dim jl-note">  ${state.toolStore.has(`${turnId}|${seg.tool}`) ? (liveTurn ? "no output in the session store yet" : "no output recorded for this call") : "stored, one click away"}</div>`;
       }
     }
     return out;
