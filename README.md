@@ -280,12 +280,16 @@ and is counted separately ("open idle" chip). `MERGED` + clean + not live = "saf
 
 A tree is cut from the prompt, so its name starts as the reader's first sentence cut at 24 characters —
 usually mid-word. Hermes names the *session* from the work a moment later, and the panel gives the tree that
-name the moment the title exists — the 10-second title sweep emits it, and the rename lands as soon as no run
-is standing in the tree (git will not move a directory a live shell holds, so the first attempt inside a turn
-is deferred, not lost): the directory (`git worktree move`) and its branch (`git branch -m
-wtgui/<slug>-<tag>`, the six-hex tag kept). That name is set **once per tree** and the "once" is a record,
-not a hope — `logs/tree-names.json` beside the job store (`config.treeNamesFile`, see `lib/tree-names.js`),
-keyed on the tag every rename keeps, holding who named the tree and when. Three rules make the once a fact:
+name **when the run that cut it has settled** — `done`, `failed` or `cancelled`, with no live run still standing
+in the tree (git will not move a directory a live shell holds, so an attempt on an earlier event is deferred,
+not lost): the directory (`git worktree move`) and its branch (`git branch -m wtgui/<slug>-<tag>`, the six-hex
+tag kept). It waits for the settle, and never names the tree mid-turn: a title can exist while the turn is still
+going, and a tree moved under a live turn takes the reader's path and the turn's own record with it — measured
+on this panel's own dogfood run, which renamed a tree to *"Commit notes.txt and open PR"* **inside the first
+turn**, for a run whose conclusion was that there was nothing to commit and no PR to open. That name is set
+**once per tree** and the "once" is a record, not a hope — `logs/tree-names.json` beside the job store
+(`config.treeNamesFile`, see `lib/tree-names.js`), keyed on the tag every rename keeps, holding who named the
+tree and when. Four rules make the once a fact:
 
 - **A tree the panel cut is written down at the cut**, before `git worktree add`, naming the run it was cut
   for — so a tree is never visible as "unnamed" while the run that owns its name is still starting, and only
@@ -298,11 +302,29 @@ keyed on the tag every rename keeps, holding who named the tree and when. Three 
 - **A landing settles it.** A rename that lands, a rename that finds its target directory already taken, and a
   reader's own rename all settle the record, so no later event of that run and no later run can move the tree
   again. The project's own checkout is never recorded: its name is the folder's.
+- **A title that promises work is declined, and written down.** A session title is sometimes the request rather
+  than a summary of what was done — *"Commit notes.txt and open PR"*, *"Land unmerged work onto main"* — and a
+  tree must not be named after a deliverable the panel has not verified (a commit on the branch, a branch on the
+  remote, a PR on the branch). `titlePromise` in `lib/worktree-naming.js` reads each clause's own verb: an
+  action that promises a commit, a push, a PR, a merge, a landing, a deploy or a release is refused, while a
+  title that merely mentions one (*"Read-only review of Bitbucket PR #1"*) is left alone. The refusal is
+  recorded as an `offered` entry beside the cut record — the `✎` tooltip says the title was offered and
+  declined — and it does **not** spend the tree's one name: a later settled title that describes the work can
+  still take it.
 
 The record is what the board's row reads, so the tooltip on `✎` says who named the tree and when. A second run
 started into a named tree cannot rename it: it would move the directory and the branch out from under the run
 that already lives there, which is how one worktree ended up with a directory named one thing, a branch named
 another, and three live cards each spelling a different branch.
+
+A rename moves the panel's **records** of the tree, not only the directory: `lib/jobs.js` `repointPath` follows
+the move in every card that ever ran there — `cwd`, `ownerPath`, `worktreePath`, the job's `branch`, the measured
+`tree.{path,branch}` and the `completion.{worktree,branch}` payload — and stamps `renamedFrom` on the two that
+quote where the work is, so an earlier turn's notice says *renamed from …* rather than quoting a dead path. A card
+that was **already** stale when the panel booted (a restored record over a tree an earlier process renamed, or one
+another tool moved) is reconciled once the boot seeding has written the fleet down: `reconcileTreeRecords` resolves
+it through the naming ledger by the six-hex tag a rename keeps, and a record nothing can place says plainly that
+its path is gone and the tree was renamed or removed — it never keeps quoting the old name as if it were live.
 
 A tree whose directory carries **no `-<hex6>` tag** is never renamed, automatically or by hand: the tag is the
 ledger key and the one part of the name a rename keeps, so a bare name would have to be given an invented tag (a

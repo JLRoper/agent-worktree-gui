@@ -36,6 +36,9 @@
 //                 own keeps its directory AND its branch through a real title sweep (the refusal is written into the
 //                 ledger, and the row does not claim to have been named), with a no-commits control tree renamed by
 //                 the same sweeper in the same window so "untouched" cannot mean "asleep"
+//   driven        a LIVE run's title moves nothing, and the dogfood title itself ("Commit notes.txt and open PR") is
+//                 declined once that run settles, written down beside the cut record, and the tree is left exactly
+//                 where it was cut — the dogfood bug, driven against a held stub run on the panel's own clock
 //   driven        a published branch is never renamed: the harness pushes a worktree's branch to a bare remote of its
 //                 own before the panel starts, and the deliberate rename answers 409 naming origin/<branch>
 //   driven        the record: who and when, in the panel's own tree-names.json, and the same on the board's row
@@ -531,7 +534,9 @@ try {
   ok("the control run got a tree of its own", Boolean(cut3) && existsSync(cut3), cut3 || "");
   const row3 = await rowExists(cut3);
   ok("the control tree is on the board before its title is offered", row3);
-  seedSession(THREAD3, "Land the retention sweep on main");
+  // A title that DESCRIBES work — "Land the retention sweep on main" would be refused by the promise gate, which
+  // is right (a landing is a deliverable nobody has verified) but makes it useless as a control that must rename.
+  seedSession(THREAD3, "Retention sweep across a panel restart");
   const controlRenamed = await awaitAutoName(cut3, tag3, [cut3]);
   ok("the control tree WAS renamed by the same sweeper in the same window", controlRenamed);
   const tree1Again = treeByTag(tag1, [cut3]) || null;
@@ -643,7 +648,10 @@ try {
   check("the project's own checkout is never nameable", ownCheckout.status, 400);
   const unknownProject = await api("/api/worktree/suggest-name", { project: "no-such-project", path: repo });
   check("an unknown project is refused", unknownProject.status, 404);
-  check("the ledger has one record per tree it has named", Object.keys(ledger().trees || {}).length, 2);
+  // Three: the tree cut and pushed by hand before the panel started (seeded), the tree run one cut and the reader
+  // then named, and the phase 2b control tree run three named. The published tree joined this list after the
+  // assertion was first written; the count is the number of trees this harness has put on the board.
+  check("the ledger has one record per tree it has named", Object.keys(ledger().trees || {}).length, 3);
   ok("each of them names who and when", Object.values(ledger().trees || {}).every((r) => r.by && r.at && r.tag), JSON.stringify(Object.values(ledger().trees || {}).map((r) => r.by)));
   // =============================================================================================
   phase = "phase 6 — the name stops moving once the branch has work";
@@ -703,6 +711,53 @@ try {
   check("renaming a published branch is refused", pubRename.status, 409);
   ok("…naming the remote ref it is already on", /already on the remote \(origin\/wtgui\/published-before-the-panel-beef01\)/.test(String(pubRename.body.error || "")), String(pubRename.body.error || ""));
   check("…and the directory and the branch are untouched", [existsSync(PUBLISHED_TREE), branchOf(PUBLISHED_TREE)], [true, PUBLISHED_BRANCH]);
+
+  // =============================================================================================
+  phase = "phase 7 — a live run's title moves nothing, and a title that promises work is declined";
+  console.log(`\n== ${phase}`);
+  // The dogfood bug itself. The panel's own dogfood run had its tree moved and its branch renamed INSIDE the first
+  // turn, to "Commit notes.txt and open PR" — a title written while the run was still going, for a run whose
+  // conclusion was that nothing had changed and there was nothing to commit, push or open a PR for.
+  const THREAD6 = "wtgui-sandbox-live-title";
+  stub.state.hold = true;
+  const spawn6 = await api("/api/agents", { project: PROJECT, cwd: repo, prompt: "Work only inside the tree", thread: THREAD6 });
+  check("a sixth run was accepted", spawn6.status, 202);
+  const cut6 = spawn6.body.job?.worktreePath || null;
+  ok("it got a tree of its own", Boolean(cut6) && existsSync(cut6), cut6 || "");
+  if (!cut6) throw new Error("the live-title run got no worktree");
+  const tag6 = tagOf(cut6);
+  await rowExists(cut6);
+  seedSession(THREAD6, "Commit notes.txt and open PR");
+  // Two 10-second title sweeps while the run is held live: the title exists, and the tree must not move for it.
+  await sleep(13_000);
+  check("a live run's title moved nothing — the directory is where it was cut", [existsSync(cut6), baseOf(cut6)], [true, `work-only-inside-the-tre-${tag6}`]);
+  check("…and the branch is the one it was cut with", branchOf(cut6), `wtgui/${baseOf(cut6)}`);
+  const liveRec = recordFor(cut6);
+  ok("…and the record is still a CUT record, not a name", liveRec?.cut === true && !liveRec?.renamedAt, JSON.stringify(liveRec && { cut: liveRec.cut, renamedAt: liveRec.renamedAt, name: liveRec.name }));
+  ok(
+    "…no rename was even attempted for it",
+    !panelLog.some((l) => /auto-naming/.test(l) && l.includes(baseOf(cut6))),
+    panelLog.filter((l) => /auto-naming/.test(l) && l.includes(baseOf(cut6))).slice(-3).join(" | "),
+  );
+  // The run settles and the SAME title is considered again. It names a commit and a PR, and this branch has neither:
+  // the promise is exactly what the panel refuses to name a tree after — and the refusal is written down without
+  // spending the tree's one name.
+  stub.state.hold = false;
+  stub.finishAll();
+  await waitFor(async () => (await api("/api/jobs")).body.jobs?.some((j) => j.thread === THREAD6 && j.status === "done"), { timeoutMs: 30_000, what: "the live-title run to settle" });
+  const declined = await waitFor(() => Boolean(recordFor(cut6)?.offered?.title), { timeoutMs: 30_000, what: "the declined title to be written down" });
+  const offRec = recordFor(cut6);
+  ok("the settled title was declined, and written down beside the cut record", declined && offRec?.offered?.title === "Commit notes.txt and open PR", JSON.stringify(offRec?.offered || null));
+  ok("…naming the clause that promised it", /promises work that has not been done/.test(String(offRec?.offered?.why || "")), String(offRec?.offered?.why || ""));
+  ok("…and not spending the tree's one name", offRec?.cut === true && !offRec?.renamedAt, JSON.stringify({ cut: offRec?.cut, renamedAt: offRec?.renamedAt }));
+  check("the directory is STILL where it was cut", [existsSync(cut6), baseOf(cut6)], [true, `work-only-inside-the-tre-${tag6}`]);
+  check("…on the branch it was cut with", branchOf(cut6), `wtgui/${baseOf(cut6)}`);
+  const offRow = await rowFor(cut6);
+  ok(
+    "the board's row carries the declined title separately and claims no name",
+    Boolean(offRow?.nameOffer?.title) && !offRow?.named,
+    JSON.stringify({ offer: offRow?.nameOffer?.title || null, named: offRow?.named || null }),
+  );
 } catch (err) {
   failures += 1;
   console.log(`FAIL  ${phase}: ${String((err && err.stack) || err)}`);

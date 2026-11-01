@@ -9687,9 +9687,12 @@ function rowHtml(row) {
   // Who gave this tree the name it has, and when — the panel's own record (lib/tree-names.js), the one fact about
   // naming that git does not hold. It is what makes "the panel will not rename this again by itself" visible.
   const namedLine = String(row.named?.line || "").trim();
+  // A title the panel's own naming looked at and DECLINED (it promised a PR, a commit, a merge). The tree keeps
+  // the name it was cut with, and the row says why rather than looking like a naming that never arrived.
+  const offerLine = String(row.nameOffer?.line || "").trim();
   const renameBtn = isProjectRoot
     ? ""
-    : `<button class="btn-row-rename" data-rename-tree="${esc(keyOf(row.project, row.path))}" data-rename-project="${esc(row.project)}" data-rename-path="${esc(row.path)}" data-rename-name="${esc(row.name)}" data-rename-suggest="${esc(suggestName)}" title="name this worktree by hand — renames its branch, and the directory when nothing is holding it${suggestName ? ` (offered: “${esc(suggestName)}”)` : ""}${namedLine ? ` · ${esc(namedLine)}` : ""}">\u270e</button>`;
+    : `<button class="btn-row-rename" data-rename-tree="${esc(keyOf(row.project, row.path))}" data-rename-project="${esc(row.project)}" data-rename-path="${esc(row.path)}" data-rename-name="${esc(row.name)}" data-rename-suggest="${esc(suggestName)}" title="name this worktree by hand — renames its branch, and the directory when nothing is holding it${suggestName ? ` (offered: “${esc(suggestName)}”)` : ""}${namedLine ? ` · ${esc(namedLine)}` : ""}${offerLine ? ` · ${esc(offerLine)}` : ""}">\u270e</button>`;
   // ✦ offers a name read from the work itself: the branch's commits and its diff against the base branch, via
   // /api/worktree/suggest-name. It renames nothing on its own — it puts a question under the row, with the commits
   // the name came from, and the rename is the reader's second click.
