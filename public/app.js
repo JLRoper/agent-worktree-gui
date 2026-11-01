@@ -2301,7 +2301,9 @@ function paintToBottom(box) {
   const wrap = box?.closest?.(".out-wrap");
   if (!wrap) return;
   const overflowing = box.scrollHeight > box.clientHeight + 4;
-  const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight <= 24;
+  // The chip is the reader's way back, so it appears exactly when the console is NOT following: the same 2 px the
+  // pin uses. A 24 px band hid it for a reader parked a few px up, who was then neither following nor offered the ↓.
+  const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight <= 2;
   wrap.classList.toggle("is-at-end", !overflowing || atEnd);
 }
 
@@ -6711,7 +6713,11 @@ function drawRowText(el, text) {
 function wireConsole(el) {
   if (!el || el._wired) return el;
   el._wired = true;
-  el._atBottom = el._selfTop == null ? true : el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  // "Following" is the last line itself, not a band around it. Forty px of tolerance read as generous, but one row of
+  // a long turn is taller than that: a reader who nudged up to read the newest line was still "at the bottom" to the
+  // page and every paint path re-anchored them on the next line (measured on 0.46.0: 42 moves / +850 px in 30 s on a
+  // console parked 24 px up, against 0 px at 296 px). Two px is a scroll landing on the end, not a reader in the band.
+  el._atBottom = el._selfTop == null ? true : el.scrollHeight - el.scrollTop - el.clientHeight <= 2;
   el.addEventListener(
     "scroll",
     () => {
@@ -6720,7 +6726,7 @@ function wireConsole(el) {
       // console the reader had been handed back to the middle of (applyStoredScrolls writes atBottom:false). One
       // scroll event is a gesture or a rebuild, not a row, so the layout read this costs is the one the per-row
       // paints were paying for.
-      el._atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      el._atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 2;
     },
     { passive: true },
   );
@@ -15629,10 +15635,16 @@ document.addEventListener(
       selfScrolled.delete(pre);
       return;
     }
-    const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 32;
+    // Two answers from one read, because they are different questions. The PIN is the reader's own gesture landing on
+    // the newest line itself (2 px): a 32 px tolerance re-pinned a console parked one tall row up, and the next
+    // arriving line carried it to the bottom - the "bouncing" a reader gets while reading the last lines. The RECORD
+    // kept for a rebuild asks "was the reader at the bottom?", keeps its own tolerance, and is what the restores read.
+    const gap = pre.scrollHeight - pre.scrollTop - pre.clientHeight;
+    const onTail = gap <= 2;
+    const atBottom = gap < 32;
     // Only a reader's own input decides the pin. Without this, a clamp that happens while a card is rebuilt looks
     // exactly like someone scrolling up, and the console sticks at the top until they notice.
-    if (readerInputHere(pre)) state.outPinned[pre.dataset.out] = atBottom;
+    if (readerInputHere(pre)) state.outPinned[pre.dataset.out] = onTail;
     state.outScrolls[pre.dataset.out] = { top: pre.scrollTop, atBottom };
   },
   true,
