@@ -11,11 +11,91 @@
   "use strict";
 
   const OPEN_KEY = "wm.assistantOpen";
-  const TAB_KEY = "wm.assistantTab";
   const RECT_KEY = "wm.assistantRect";
   const SEEN_KEY = "wm.assistantSeenAt";
   const PIN_KEY = "wm.assistantPinned";
-  const TABS = ["chat", "alerts", "watches", "messages", "pad", "charter", "settings"];
+  // ---- the float's two rows: what it remembers, and how it is painted -----------------------------
+  const VIEW_KEY = "wm.assistantView";
+  // The one-tab record this replaced: a reader who left the float on "chat" or "settings" is moved onto the new
+  // shape once, and this key is never written again.
+  const TAB_KEY = "wm.assistantTab";
+  // The float's own row: the assistant sessions first — each is a real agent thread of its own — then the lists
+  // that are the assistant's. A second assistant is one more id here and its own pane in the page: every loop below
+  // is keyed by the id, so no branch has to learn a name.
+  const ASSISTANTS = ["assistant-1"];
+  // What a session holds: the card you talk to, and how it behaves.
+  const SUBTABS = ["chat", "settings"];
+  const TABS = [...ASSISTANTS, "alerts", "watches", "messages", "pad", "charter"];
+  const DEFAULT_VIEW = { assistant: ASSISTANTS[0], subTab: SUBTABS[0] };
+  const isAssistant = (id) => ASSISTANTS.includes(id);
+
+  // The old record was one tab name, where "chat" was the assistant's card and "settings" was a tab of the float's.
+  // Both are the session's own row now, so a reader who left the float on either lands where they were.
+  function legacyView(tab) {
+    if (tab === "settings") return { assistant: DEFAULT_VIEW.assistant, subTab: "settings" };
+    if (TABS.includes(tab)) return { assistant: tab, subTab: DEFAULT_VIEW.subTab };
+    return null;
+  }
+  // {assistant, subTab} is the whole record of where the float is: which session (or list) is the tab on screen, and
+  // which of that session's two rows is showing. A name this build no longer carries reads as the default rather
+  // than as nothing on screen.
+  function readView() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(VIEW_KEY) || "null");
+      if (raw && typeof raw === "object") {
+        return {
+          assistant: TABS.includes(raw.assistant) ? raw.assistant : DEFAULT_VIEW.assistant,
+          subTab: SUBTABS.includes(raw.subTab) ? raw.subTab : DEFAULT_VIEW.subTab,
+        };
+      }
+      return legacyView(localStorage.getItem(TAB_KEY)) || { ...DEFAULT_VIEW };
+    } catch {
+      return { ...DEFAULT_VIEW };
+    }
+  }
+  function writeView(view) {
+    try {
+      localStorage.setItem(VIEW_KEY, JSON.stringify(view));
+    } catch {
+      /* a browser with storage off still gets the float; it just forgets where it was */
+    }
+  }
+
+  // Every move through the float goes through here: one record, written where a reload reads it, then the float
+  // repainted from it. Nothing else assigns the view — a press on either row, a jump from the board and the card's
+  // own send all land on the same one, so "where the reader was" has a single author.
+  function setView(patch, { render = true } = {}) {
+    const next = { ...state.assistantView, ...patch };
+    state.assistantView = {
+      assistant: TABS.includes(next.assistant) ? next.assistant : DEFAULT_VIEW.assistant,
+      subTab: SUBTABS.includes(next.subTab) ? next.subTab : DEFAULT_VIEW.subTab,
+    };
+    writeView(state.assistantView);
+    if (render) renderAssistant();
+    return state.assistantView;
+  }
+
+  // Both rows, and the panes under them, painted from that one record. The second row exists only while a session is
+  // the tab on screen — it is that session's Chat and Settings, not a row of the float's — and both of a session's
+  // panes follow the one subTab, so a second assistant needs no second row either.
+  function paintAssistantTabs() {
+    const view = state.assistantView;
+    for (const b of document.querySelectorAll("#as-tabs [data-as-tab]")) {
+      b.classList.toggle("is-on", b.dataset.asTab === view.assistant);
+    }
+    const subs = as$("as-subtabs");
+    if (subs) subs.hidden = !isAssistant(view.assistant);
+    for (const b of document.querySelectorAll("#as-subtabs [data-as-subtab]")) {
+      b.classList.toggle("is-on", b.dataset.asSubtab === view.subTab);
+    }
+    for (const p of document.querySelectorAll("#assistant .as-pane")) {
+      p.classList.toggle("hidden", p.dataset.pane !== view.assistant);
+    }
+    for (const p of document.querySelectorAll("#assistant .as-subpane")) {
+      p.classList.toggle("hidden", p.dataset.subpane !== view.subTab);
+    }
+  }
+  // ---- end the float's two rows ------------------------------------------------------------------
   // Mirrors lib/assistant/config.js's SPAWN_WATCH_MS: the server escalates a card at two minutes, so the strip
   // and the badges turn amber on the same clock the alert is raised on rather than on a second opinion.
   const SPAWN_WATCH_MS = 120_000;
@@ -50,14 +130,6 @@
       localStorage.setItem(key, on ? "1" : "0");
     } catch {
       /* a browser with storage off still gets the panel; it just forgets where it was */
-    }
-  }
-  function readTab() {
-    try {
-      const v = localStorage.getItem(TAB_KEY);
-      return TABS.includes(v) ? v : "chat";
-    } catch {
-      return "chat";
     }
   }
   function readRect() {
@@ -96,7 +168,7 @@
   state.assistant = state.assistant || null;
   state.assistantThread = state.assistantThread || "panel-assistant";
   state.assistantOpen = state.assistantOpen ?? readFlag(OPEN_KEY, false);
-  state.assistantTab = state.assistantTab || readTab();
+  state.assistantView = state.assistantView || readView();
   state.assistantSeenAt = state.assistantSeenAt ?? seenAt();
   state.assistantPinned = state.assistantPinned ?? readFlag(PIN_KEY, false);
   // Maximized is a mode of the float, not a saved position: a reload puts the panel back to the window it
@@ -511,12 +583,7 @@
   // Open the float on Alerts with one card (or the top of the list) in view. The pane is inside the float's
   // own scroller, so this is a scrollIntoView, not a page jump.
   function openAlertsAt(id = null) {
-    state.assistantTab = "alerts";
-    try {
-      localStorage.setItem(TAB_KEY, "alerts");
-    } catch {
-      /* not fatal */
-    }
+    setView({ assistant: "alerts" }, { render: false });
     toggleAssistant(true);
     requestAnimationFrame(() => {
       const sel = id ? `#as-alerts [data-alert="${CSS.escape(id)}"]` : "#as-alerts";
@@ -664,22 +731,19 @@
         a ? `<span class="chip" title="self-wakes in the last hour (a rule set to wake, or an alert handed to it)">${a.wakes?.lastHour ?? 0}/${a.wakes?.limit ?? 0} wakes</span>` : "",
       ].join("");
     }
-    for (const b of document.querySelectorAll("#as-tabs [data-as-tab]")) {
-      b.classList.toggle("is-on", b.dataset.asTab === state.assistantTab);
-    }
-    for (const p of document.querySelectorAll("#assistant .as-pane")) {
-      p.classList.toggle("hidden", p.dataset.pane !== state.assistantTab);
-    }
+    paintAssistantTabs();
     renderAssistantChat();
-    // Coming back to Chat lands on the foot, where the composer is — the turns only scroll while the reader
-    // scrolls them.
-    if (state.assistantTab === "chat") pinChatToBottom();
-    if (state.assistantTab === "alerts") renderAssistantAlerts();
-    else if (state.assistantTab === "watches") renderAssistantWatches();
-    else if (state.assistantTab === "messages") renderAssistantMessages();
-    else if (state.assistantTab === "pad") renderAssistantPad();
-    else if (state.assistantTab === "charter") renderAssistantCharter();
-    else if (state.assistantTab === "settings") renderAssistantSettings();
+    // A session's own row decides what is showing inside it: the thread (pinned to its foot, where the composer is —
+    // the turns only scroll while the reader scrolls them) or the rules it follows. Everything else is a list.
+    const view = state.assistantView;
+    if (isAssistant(view.assistant)) {
+      if (view.subTab === "settings") renderAssistantSettings();
+      else pinChatToBottom();
+    } else if (view.assistant === "alerts") renderAssistantAlerts();
+    else if (view.assistant === "watches") renderAssistantWatches();
+    else if (view.assistant === "messages") renderAssistantMessages();
+    else if (view.assistant === "pad") renderAssistantPad();
+    else if (view.assistant === "charter") renderAssistantCharter();
   }
 
   // ---- chat: the assistant as one of the agents -------------------------------------------------
@@ -777,8 +841,7 @@
   function openAgentThread(thread) {
     if (!thread) return;
     if (thread === state.assistantThread) {
-      state.assistantTab = "chat";
-      renderAssistant();
+      setView({ assistant: ASSISTANTS[0], subTab: SUBTABS[0] });
       return;
     }
     const conv = conversations().find((c) => c.thread === thread);
@@ -986,7 +1049,7 @@
   // holds a form the reader may be typing into, and rebuilding it on every tick would take the caret, the scroll
   // and the selection with it. The bar is the fraction of the deadline still to run, so it empties as time goes.
   function paintWatchClocks() {
-    if (!state.assistantOpen || state.assistantTab !== "watches") return;
+    if (!state.assistantOpen || state.assistantView.assistant !== "watches") return;
     const host = as$("as-watches");
     if (!host) return;
     const now = Date.now();
@@ -1570,13 +1633,8 @@
       // The intro box is gone once the card exists; clear it in case a repaint has not landed yet.
       const box = as$("as-first-text");
       if (box) writeBox(box, "");
-      state.assistantTab = "chat";
-      try {
-        localStorage.setItem(TAB_KEY, "chat");
-      } catch {
-        /* not fatal */
-      }
-      renderAssistant();
+      // Sending from the intro lands on the thread it just started: the session's Chat, whichever list was open.
+      setView({ assistant: ASSISTANTS[0], subTab: SUBTABS[0] });
     } catch (e) {
       showBanner(`assistant: ${e.message}`);
     } finally {
@@ -1613,23 +1671,27 @@
   as$("as-tabs")?.addEventListener("click", (e) => {
     const b = e.target.closest("[data-as-tab]");
     if (!b) return;
-    state.assistantTab = b.dataset.asTab;
-    // Coming back to Chat is a jump to the newest turn: the reader left the transcript to look at an alert,
-    // and returning them to a scroll position that is no longer where the conversation is helps nobody.
-    if (state.assistantTab === "chat") chatPinned = true;
-    try {
-      localStorage.setItem(TAB_KEY, state.assistantTab);
-    } catch {
-      /* not fatal */
-    }
-    renderAssistant();
+    const id = b.dataset.asTab;
+    // A session tab keeps the sub-tab the reader left on it: Chat and Settings are the same assistant, and stepping
+    // out to Alerts and back must not move them.
+    if (isAssistant(id) && state.assistantView.subTab === "chat") chatPinned = true;
+    setView({ assistant: id });
+  });
+
+  // The session's own row. Chat is a jump to the newest turn: the reader stepped out to look at a rule, and coming
+  // back to a scroll position that is no longer where the conversation is helps nobody.
+  as$("as-subtabs")?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-as-subtab]");
+    if (!b) return;
+    if (b.dataset.asSubtab === "chat") chatPinned = true;
+    setView({ subTab: b.dataset.asSubtab });
   });
 
   as$("assistant")?.addEventListener("click", async (e) => {
     const t = e.target.closest("button");
     if (!t) return;
-    // Tabs are buttons too and are handled above; ignore a second pass here.
-    if (t.dataset.asTab) return;
+    // Tabs are buttons too and are handled above, in their own rows; ignore a second pass here.
+    if (t.dataset.asTab || t.dataset.asSubtab) return;
 
     // The message board's own two controls: the direction chips, and an entry's expander. Neither is a
     // round trip — the board is already on the page — so both are a repaint of this pane alone.
@@ -1656,7 +1718,8 @@
       try {
         await asPost("/api/assistant/alert", { id: t.dataset.id, action: t.dataset.asAction });
         renderAssistantAlerts(true);
-        if (t.dataset.asAction === "ask") state.assistantTab = "chat";
+        // "Ask" hands the question to the thread: land on the session's Chat so the reply box is what they see.
+        if (t.dataset.asAction === "ask") setView({ assistant: ASSISTANTS[0], subTab: SUBTABS[0] }, { render: false });
         renderAssistant();
       } catch (err) {
         const slot = document.querySelector(`[data-as-err="${CSS.escape(t.dataset.id || "")}"]`);
@@ -1936,7 +1999,7 @@
   // copy out of, and yanking a selection out from under them every fifteen seconds is worse than a stale
   // relative time.
   setInterval(() => {
-    if (!state.assistantOpen || state.assistantTab !== "messages" || document.hidden) return;
+    if (!state.assistantOpen || state.assistantView.assistant !== "messages" || document.hidden) return;
     const host = as$("as-messages");
     const sel = window.getSelection?.();
     if (host && sel && !sel.isCollapsed && sel.anchorNode && host.contains(sel.anchorNode)) return;

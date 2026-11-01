@@ -494,7 +494,9 @@ async function browserPhase(pw) {
       els.map((el) => ({ tab: el.dataset.asTab, text: el.textContent.trim(), title: el.getAttribute("title") || "" })),
     );
     const mine = tabs.find((t) => t.tab === "messages");
-    ok("(a) the tab is in the float's strip, in the same idiom as the others", Boolean(mine) && tabs.length === 7, JSON.stringify(tabs.map((t) => t.tab)));
+    // Six, not seven: the float's own row now starts with the assistant session it belongs to ("Assistant #1",
+    // where "Chat" was) and Settings is a sub-tab of that session, on the row under this one.
+    ok("(a) the tab is in the float's strip, in the same idiom as the others", Boolean(mine) && tabs.length === 6, JSON.stringify(tabs.map((t) => t.tab)));
     ok("(a) …labelled Messages, with a title that says what it is", mine && mine.text === "Messages" && /message board/i.test(mine.title), mine && mine.title);
     const classes = await page.$$eval("#as-tabs button", (els) => els.map((el) => el.className));
     eq("(a) …and no class of its own (only the open tab is marked)", [...new Set(classes)].sort(), ["", "is-on"]);
