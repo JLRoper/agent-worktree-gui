@@ -12653,22 +12653,45 @@ function headerCells(table) {
 }
 
 // What each column would be with nothing constraining it: the header text and every cell below it, chips and
-// buttons included. Measured on the real table by letting it lay out at max-content for one synchronous step and
-// putting the fixed split back before the frame paints - no clone, no flicker.
+// buttons included. Measured on a COPY of the header and the worktree rows, laid out at max-content beside the real
+// table for one synchronous step and taken out again before the frame paints.
+//
+// Never on the real table. Its detail rows hold the agent cards, and a `white-space: pre-wrap` transcript laid out at
+// max-content has no line breaks at all: a paragraph that wraps over five lines is one line, so for that one layout
+// every console in the table was a fraction of its height. The browser clamps a scroll offset that no longer fits; the
+// styles went back, the transcript was tall again, and the offset was not. A console following its run was painted
+// near its first lines until the next streamed line or the 400 ms sweep put it back - the console that "bounces up and
+// quickly back down in a split second" - and a console the reader had parked stayed wherever the clamp left it, the
+// place they lost "somewhere else in the scrollbar". Every row repaint ends in a measurement (scheduleColumnFit) and a
+// streaming transcript changes the table's text, so it was every few seconds (tools/verify-console-column-fit.mjs: 18
+// of 18 measurements in 30 s moved a console, by 604-1139 px). A spanning row is not a column's content either: its
+// unwrapped transcript used to be shared out over the columns it spans, so the split moved with what agents wrote.
 function naturalColumnWidths(table) {
   const ths = headerCells(table);
-  const kept = ths.map((th) => th.style.width);
-  const layout = table.style.tableLayout;
-  const width = table.style.width;
-  table.style.tableLayout = "auto";
-  table.style.width = "max-content";
-  for (const th of ths) th.style.width = "";
-  const natural = ths.map((th) => Math.ceil(th.getBoundingClientRect().width));
-  table.style.tableLayout = layout;
-  table.style.width = width;
-  ths.forEach((th, i) => {
-    th.style.width = kept[i];
-  });
+  if (!ths.length || !table.parentNode) return ths.map(() => 0);
+  // The copy keeps the table's own classes and inline style (its min-width in sideways-scroll mode), and sits in the
+  // same wrapper, so every selector that sizes a header or a cell sizes it the same way. Only the worktree rows go in:
+  // the detail and confirmation rows span every column and stand for none of them.
+  const probe = table.cloneNode(false);
+  if (table.tHead) probe.appendChild(table.tHead.cloneNode(true));
+  const body = document.createElement("tbody");
+  for (const tb of table.tBodies) {
+    for (const tr of tb.rows) if (tr.classList.contains("row")) body.appendChild(tr.cloneNode(true));
+  }
+  probe.appendChild(body);
+  probe.setAttribute("aria-hidden", "true");
+  probe.style.position = "absolute";
+  probe.style.left = "0";
+  probe.style.top = "0";
+  probe.style.visibility = "hidden";
+  probe.style.pointerEvents = "none";
+  probe.style.tableLayout = "auto";
+  probe.style.width = "max-content";
+  const cells = headerCells(probe);
+  for (const th of cells) th.style.width = "";
+  table.parentNode.insertBefore(probe, table.nextSibling);
+  const natural = cells.map((th) => Math.ceil(th.getBoundingClientRect().width));
+  probe.remove();
   return natural;
 }
 
