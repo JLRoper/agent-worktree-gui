@@ -203,6 +203,12 @@ const state = {
   // burst rebuild replaces the markup, and a call that sprang back open under the reader's cursor would read as
   // the panel losing the click.
   callFolded: new Set(),
+  // The stream's tool-usage rows are the other way round: a row is SHUT until the reader opens it (the row is the
+  // handle for the output a call returned, and a burst of five calls drawn open is a wall of output, not five
+  // lines). So this book holds the ones they OPENED, keyed "<burst id>|c<segment>" — the same reasoning as
+  // callFolded, only inverted, and it is read back on every rebuild so a store read landing mid-turn cannot shut
+  // the box the reader just opened.
+  callOpen: new Set(),
   // The whole stored text of a result the reader asked to see past the panel's fold: "<turnId>|<tool>|<row>" ->
   // the row /api/tool-results answered with. Only rows the reader actually opened are here (a result can be 100
   // kB, so caching them all would trade the ring buffer for a worse one), and it lives here rather than in the
@@ -1336,6 +1342,20 @@ function groupLines(grp) {
       if (d === box) continue;
     }
     if (d.classList.contains("jl-store") || d.classList.contains("jl-note") || d.classList.contains("jl-panel")) continue;
+    // A stream row is the record of BOTH the call and the result that answered it: neither is drawn as a line of
+    // its own (the row says the tool, the target and the time), so both halves travel on the row — data-ltext for
+    // the call, data-lresult for the result header the console used to draw under it. Read them back as the two
+    // lines they are: without the header a rebuild loses the call's time, and `storeOffsetsBefore` (which counts
+    // result headers) hands the NEXT burst the wrong starting row for its stored output.
+    if (d.dataset && d.dataset.lresult) {
+      out.push(read(d), {
+        kind: "tool-out",
+        text: d.dataset.lresult,
+        at: Number(d.dataset.lrat) || undefined,
+        lid: d.dataset.lrld || undefined,
+      });
+      continue;
+    }
     // A modification is drawn with its AFTER line first (the reader asked for the new side on the left), which is
     // the opposite of the order the diff had it in. A rebuild re-derives the diff from these lines, and a pair
     // read back the other way round re-classifies as a lone addition plus a lone removal - every modification
@@ -1900,22 +1920,13 @@ function trimmedGroupHtml(lines, key, anchor = "", flat = false, codeOpen = stat
 }
 // ---- end trimmed group head
 
-// ---- one stream: a tool call, drawn as a line of it -------------------------------------------------------------------
-// A card drawn as ONE stream (the 🌊 beside the 🧠) has no tool groups to condense a run of calls into, so a call is
-// simply its line — purple, led by the tool's emoji, exactly the line the group's "N lines" button opens onto in the
-// condensed view. Two things the group's head row carried have to live on the line instead: the clock of the call
-// still in flight, and the "+ N commands" tail the gateway puts on a parallel batch. What the call returned is still
-// the result box under it, folded like everywhere else: the stream is one flow of what happened, not a wall of output.
-
-function flatCallHtml(l, gkey, live = "") {
-  const text = String(l.text ?? "");
-  const m = TOOL_START_RE.exec(text);
-  const tool = m ? m[1] : "";
-  const sep = text.indexOf(" · ");
-  const arg = sep >= 0 ? text.slice(sep + 3) : "";
-  const inner = tool && arg && BATCH_TAIL_RE.test(arg) ? `${linkifyText(text.slice(0, sep + 3))}${linkBatchTail(arg, tool, gkey)}` : linkifyText(text);
-  return `<div class="jl jl-tool" data-lid="${esc(l.lid ?? "")}" data-ltext="${esc(text)}" data-lkind="tool">${inner}${live}</div>`;
-}
+// ---- one stream: a tool call, drawn as a row of it --------------------------------------------------------------------
+// A card drawn as ONE stream (the 🌊 beside the 🧠) does not condense a run of calls into a head row with a tally; it
+// draws the run as the reader asked for it — one row per call, bracketed by two rules, with what the call returned a
+// click away under it. `flatRowHtml` in toolGroupHtml is where a row is built: the glyph and tool name, the target the
+// call was given (the file and its range, or the command), and the time it took. Two things the condensed group's head
+// row carried live on the row here: the clock of the call still in flight, and the "+ N commands" tail the gateway
+// puts on a parallel batch.
 
 // A stream piece's stored results are not asked for by the markup: an always-visible .tgrp is swept by the same 3s
 // interval that keeps the condensed view's open groups current (see the setInterval beside ensureToolStore), so a
@@ -2048,14 +2059,17 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
       `</div>`
     );
   };
-  const bodyOf = (seg, si) => {
+  // `dropHead` is for the stream's tool-usage rows: the row above the box says the tool and the time the result
+  // header would repeat, so the box starts at what the call returned.
+  const bodyOf = (seg, si, { dropHead = false } = {}) => {
     const arg = callArgFor(seg);
     // One key per segment, so the reader's fold survives a rebuild of the burst and a burst holding two files
     // keeps two independent boxes.
     const boxKey = `${gkey}|${si}`;
     // The result line ("  ↳ patch · 79.51s") is the console's own record of the result and stays whatever else
-    // is drawn under it.
+    // is drawn under it — unless the caller is drawing a stream row, which carries that record itself.
     const resultLine = resultHead(seg) ? seg.lines.slice(0, 1) : [];
+    const headHtml = () => (dropHead ? "" : render(resultLine));
     const preview = resultHead(seg) ? seg.lines.slice(1) : seg.lines;
     const render = (list, extra = {}) =>
       consoleBodyHtml(list, { tool: seg.tool, arg, codeOpen: codeOpenSet, codeKey: boxKey, fullForFold, ...extra });
@@ -2066,7 +2080,7 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
     // return before consuming its row, so its rows piled up and were re-printed as "more stored result" at the end
     // while the next result line paired with the wrong row.
     const got = resultHead(seg) ? takeStored(seg.tool) : null;
-    let out = render(resultLine) + render(preview);
+    let out = headHtml() + render(preview);
     if (resultHead(seg)) {
       // The gateway's live stream carries a PREVIEW of a result. When it was cut, these lines are not the whole
       // answer, and the session store is where the rest of it is - it is where a patch's diff comes from in the
@@ -2082,9 +2096,9 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
       // rows once the burst has read them) or from the row the server stamped on the line — and only falls back
       // to this burst's cursor when it has neither.
       const fold = foldAt < 0 ? null : foldForNote({ turnId, tool: seg.tool, note: preview[foldAt], head: preview.slice(0, foldAt), cursor: rowAt });
-      if (full) out = render(resultLine) + storedHtml(full.row, seg.tool, arg, boxKey, full.at);
+      if (full) out = headHtml() + storedHtml(full.row, seg.tool, arg, boxKey, full.at);
       else if (foldAt >= 0) {
-        out = render(resultLine) + render(preview, fold ? { fold } : {});
+        out = headHtml() + render(preview, fold ? { fold } : {});
       } else if (!preview.some((l) => String(l.text || "").trim())) {
         out += got
           ? storedHtml(got, seg.tool, arg, boxKey, rowAt)
@@ -2099,34 +2113,120 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
   // top, that call's output under it, and nothing else on the card moving when it folds. A call whose result has
   // not arrived yet has nothing to fold and is drawn as the plain line it always was.
   const bodyParts = [];
-  // One stream: the call still in flight carries its clock on its own line (the condensed view keeps it on the head row),
-  // and a call is its line — there is no fold around it, and its result is the next piece in the order it happened.
+  // One stream: the call still in flight carries its clock on its own row (the condensed view keeps it there too),
+  // and a call IS its row — there is no separate "↳ tool" line and no output in the flow until the reader asks.
   const busyAt = flat && live ? inflightToolIndex(lines) : -1;
   const busyLine = busyAt >= 0 ? lines[busyAt] : null;
-  const flatSegHtml = (seg, si) => {
-    const first = seg.lines[0];
-    if (!first || first.kind !== "tool") return bodyOf(seg, si);
-    const from = Number(first.at) || Date.now();
-    const clock = first === busyLine ? `<span class="jl-live" data-live-from="${from}">${liveSuffix(from)}</span>` : "";
-    const rest = seg.lines.slice(1);
+  // ---- the reader's tool-usage group: ONE row per call ------------------------------------------------------------
+  // A run of calls drawn the way the reader asked for it: one rule above the rows and one below them, and inside it
+  // ONE row per call — the tool, the target it was given (the file and its range, or the command) and how long it
+  // took. There is no "↳ tool" line of its own: the row IS that record, and the time the result line carried is
+  // drawn on the row that produced it. What the call returned is one click under its row, in the same box the
+  // condensed view opens (a result's head, the stored text behind a fold note, the honest note when there is
+  // nothing). A row starts shut — that is what keeps a burst of five calls five lines instead of a wall of output —
+  // and the rules are the group's own edges: the blank line the stream puts above a piece (`jl-sep`, from
+  // wtStream.pieces) still sits outside them, so nothing new decides where a group begins or ends.
+  //
+  // Rows pair by TOOL, in order, not by adjacency: a parallel batch interleaves its calls (call, call, result,
+  // result), so the k-th call of a tool is answered by that tool's k-th result. A result whose call the console no
+  // longer holds keeps a row of its own — one shape for the group — with no target to name.
+  const flatRows = [];
+  if (flat) {
+    const waiting = new Map();
+    for (const seg of segments) {
+      const first = seg.lines[0] || {};
+      if (seg.lines[0] && resultHead(seg)) {
+        const queue = waiting.get(seg.tool) || [];
+        const row = queue.shift();
+        if (row) row.result = seg;
+        else flatRows.push({ call: null, result: seg, extra: [] });
+        continue;
+      }
+      if (first.kind === "tool") {
+        const row = { call: seg, result: null, extra: [] };
+        flatRows.push(row);
+        const queue = waiting.get(seg.tool) || [];
+        queue.push(row);
+        waiting.set(seg.tool, queue);
+        continue;
+      }
+      // A line of a burst whose call line is outside the window: it is output, so it belongs in the box of the row
+      // above it. With no row above it there is nothing to open, and it is drawn as the lines it is.
+      const prev = flatRows[flatRows.length - 1];
+      if (prev) prev.extra.push(...seg.lines);
+      else flatRows.push({ call: null, result: null, extra: [...seg.lines] });
+    }
+  }
+  const flatRowHtml = (row, si) => {
+    const call = row.call;
+    const line = call ? call.lines[0] : null;
+    const text = line ? String(line.text || "") : "";
+    const m = line ? TOOL_START_RE.exec(text) : null;
+    const res = row.result ? row.result.lines[0] : null;
+    const resText = res ? String(res.text || "") : "";
+    const done = res ? TOOL_DONE_RE.exec(resText) : null;
+    const tool = (call && call.tool) || (row.result && row.result.tool) || (m ? m[1] : "") || "";
+    const g = line ? /^(\p{Extended_Pictographic}[\uFE0F\u200D]*)\s*/u.exec(text) : null;
+    const glyph = (g && g[1]) || (call ? "⚡" : "\u21b3");
+    const arg = call ? toolCallArg(text) : "";
+    // The gateway's own duration lives on the result header; a stream that carries none still knows when the call
+    // started and when its result came back, which is the same measurement taken from the panel's side.
+    const said = done ? /·\s*([\d.]+)s/.exec(resText) : null;
+    const from = line ? Number(line.at) || 0 : 0;
+    const to = res ? Number(res.at) || 0 : 0;
+    const secs = said ? Number(said[1]) : from && to && to >= from ? (to - from) / 1000 : null;
+    const failed = done ? /·\s*error\b/.test(resText) : false;
+    const running = !row.result && live && line && line === busyLine;
+    const stateHtml = failed
+      ? `<span class="tgrp-state">error</span>`
+      : secs != null
+        ? `<span class="tgrp-state">${secs.toFixed(2)}s</span>`
+        : running
+          ? `<span class="jl-live tgrp-state" data-live-from="${from || Date.now()}">${liveSuffix(from || Date.now())}</span>`
+          : "";
+    const key = `${gkey}|c${si}`;
+    const open = state.callOpen.has(key);
+    const target = arg ? `<span class="tgrp-last mono" title="${esc(arg)}">${linkBatchTail(arg, tool, gkey)}</span>` : `<span class="tgrp-last"></span>`;
+    const loose = [...(call ? call.lines.slice(1) : []), ...row.extra];
+    const box =
+      (loose.length ? consoleBodyHtml(loose, { tool, arg, codeOpen: codeOpenSet, codeKey: `${gkey}|c${si}` }) : "") +
+      (row.result ? bodyOf(row.result, si, { dropHead: true }) : "");
+    // Both halves of the record travel on the row: the call's own line (data-ltext — the reader's console line) and
+    // the result header the panel drew under it until now (data-lresult). groupLines reads them back as the two
+    // lines they are, so a rebuild keeps the pairing, the time, and the starting row the NEXT burst pairs from.
+    const label = `${open ? "hide" : "show"} what ${tool || "this call"} returned${secs != null ? ` (${secs.toFixed(2)}s)` : ""}`;
     return (
-      flatCallHtml(first, gkey, clock) +
-      (rest.length ? consoleBodyHtml(rest, { tool: seg.tool, arg: callArgFor(seg), codeOpen: codeOpenSet, codeKey: `${gkey}|${si}` }) : "")
+      `<div class="tgrp-call${open ? " is-open" : ""}" data-call-key="${esc(key)}">` +
+      `<div class="jl jl-tool tgrp-row" role="button" tabindex="0" data-tgrp-call="${esc(key)}" data-call-tool="${esc(tool)}"` +
+      ` aria-expanded="${open ? "true" : "false"}" title="${esc(label)}"` +
+      (call ? ` data-lid="${esc(line.lid ?? "")}" data-ltext="${esc(text)}" data-lkind="tool"` : ` data-lkind="tool-out"`) +
+      (res ? ` data-lresult="${esc(resText)}" data-lrat="${esc(Number(res.at) || "")}" data-lrld="${esc(res.lid ?? "")}"` : "") +
+      `><span class="tgrp-g">${esc(glyph)}</span><span class="tgrp-name">${esc(tool)}</span>${target}${stateHtml}</div>` +
+      `<div class="tgrp-out"${open ? "" : " hidden"}>${box}</div>` +
+      `</div>`
     );
   };
-  for (let si = 0; si < segments.length; si++) {
-    const seg = segments[si];
-    if (flat) {
-      bodyParts.push(flatSegHtml(seg, si));
-      continue;
+  if (flat) {
+    for (let si = 0; si < flatRows.length; si++) {
+      const row = flatRows[si];
+      // Loose lines with no call and no result are output with nothing to fold: drawn where they are, as they were.
+      if (!row.call && !row.result) {
+        bodyParts.push(consoleBodyHtml(row.extra, { tool: "", arg: "", codeOpen: codeOpenSet, codeKey: `${gkey}|c${si}` }));
+        continue;
+      }
+      bodyParts.push(flatRowHtml(row, si));
     }
-    const next = segments[si + 1];
-    if (seg.lines[0] && seg.lines[0].kind === "tool" && next && resultHead(next) && next.tool === seg.tool) {
-      bodyParts.push(callBlockHtml(seg.lines[0], bodyOf(next, si + 1), `${gkey}|${si}`));
-      si++;
-      continue;
+  } else {
+    for (let si = 0; si < segments.length; si++) {
+      const seg = segments[si];
+      const next = segments[si + 1];
+      if (seg.lines[0] && seg.lines[0].kind === "tool" && next && resultHead(next) && next.tool === seg.tool) {
+        bodyParts.push(callBlockHtml(seg.lines[0], bodyOf(next, si + 1), `${gkey}|${si}`));
+        si++;
+        continue;
+      }
+      bodyParts.push(bodyOf(seg, si));
     }
-    bodyParts.push(bodyOf(seg, si));
   }
   // No leftover list: the store's rows are paired per burst, so a group cannot know which rows belong to a burst
   // further down the turn — printing the rest of the array re-printed the NEXT burst's output under this one's last
@@ -2154,10 +2254,11 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
     // One piece of a stream: no head row and no "N lines" button, and no template whitespace either (the console is a
     // <pre>). `data-gflat` is what keeps it flat: the 3s sweep that keeps an open group's stored results current
     // aims at this node by its state key, and a rebuild must not put the folded group back under the reader.
+    // `tgrp-calls` is the row list inside the group's two rules — the rows, and nothing else, at rest.
     return (
       `<div class="tgrp tgrp-flat${opts.sep ? " jl-sep" : ""}" data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}"` +
       ` data-gofs="${esc(JSON.stringify(Object.fromEntries(cursorsStart)))}" data-gflat="1">` +
-      `<div class="tgrp-body">${body}</div></div>`
+      `<div class="tgrp-body tgrp-calls">${body}</div></div>`
     );
   }
   return `<div class="tgrp" data-copy data-tgrp="${esc(key)}" data-gstate="${esc(gkey)}" data-gat="${esc(anchor || toolGroupAnchor(lines))}" data-gofs="${esc(JSON.stringify(Object.fromEntries(cursorsStart)))}"${filter ? ` data-filter="${esc(filter)}"` : ""}>
@@ -2183,12 +2284,13 @@ function paintToBottom(box) {
 
 // ---- one stream: the turn's own body, drawn in its order ---------------------------------------------------------
 // Everything a card keeps apart, in one flow: the panel's console lines, the reasoning blocks (placed by
-// core/stream-merge.js — see why its comment is the authority on where a block goes), and each tool call with the
-// result it produced, drawn open. Nothing is folded, so there is no head row and no "N lines" button: a call is its
-// own line and its output is the next piece, which is exactly what the condensed view's button opens onto.
+// core/stream-merge.js — see why its comment is the authority on where a block goes), and each RUN of tool calls drawn
+// as the reader asked for it — one row per call inside two rules, with what each call returned one click under its row.
 //
-// The pieces are drawn separately on purpose (wtStream.segments): a live line then only ever redraws the call it
-// belongs to, so a reader's selection in an earlier diff survives the turn growing under it.
+// The drift is drawn piece by piece on purpose (wtStream.pieces): a live line then only ever redraws the piece it
+// belongs to, so a reader's selection in an earlier paragraph survives the turn growing under it. A run of call pieces
+// is the exception the group IS: those pieces are collected into one group node, which is what "a rule above and a
+// rule below the group" means.
 function streamBodyHtml(turn, lines, windowFull = false) {
   const W = globalThis.wtStream;
   if (!W || typeof W.merge !== "function" || typeof W.pieces !== "function") return "";
@@ -2203,6 +2305,23 @@ function streamBodyHtml(turn, lines, windowFull = false) {
   const storeSeen = new Map();
   const parts = [];
   let n = 0;
+  // A RUN of call pieces is ONE group. `pieces()` cuts a unit per call (so a live line only ever redraws the call it
+  // belongs to), but the reader's tool-usage group is the run: one rule above its rows, one below, however many calls
+  // the burst made. So consecutive call pieces are collected here and handed to the one renderer that draws a group.
+  // Its separation is the run's FIRST piece's — `pieces()` decides that, nothing here — and the piece after the run
+  // carries its own, which is the blank line under the group.
+  let run = null;
+  const flushRun = () => {
+    if (!run) return;
+    parts.push(toolGroupHtml(run.lines, `${turn.id}#f${n++}`, "", false, "", run.gofs, { flat: true, sep: run.sep }));
+    // The stored rows this group paired from are claimed for the whole TURN: the next group starts after them.
+    for (const l of run.lines) {
+      if (l.kind !== "tool-out") continue;
+      const m = TOOL_DONE_RE.exec(String(l.text || ""));
+      if (m) storeSeen.set(m[1], (storeSeen.get(m[1]) || 0) + 1);
+    }
+    run = null;
+  };
   // Every piece here is set apart from the piece above it by the one blank line a reasoning block has always had —
   // `pieces()` says which, and `jl-sep` is the class that rule hangs on. Nothing above the first piece: there is
   // nothing up there to be set apart from.
@@ -2212,18 +2331,15 @@ function streamBodyHtml(turn, lines, windowFull = false) {
     if (!seg.unit) {
       // A reasoning block is a line of the stream like any other: same markup, its own kind, so a reader can copy or
       // select across it and the console's own links still work inside it.
+      flushRun();
       parts.push(lineHtml(seg.line, "", sep));
       continue;
     }
-    // The stored rows this piece pairs from: what the earlier pieces of THIS turn already consumed for that tool.
-    const gofs = Object.fromEntries(storeSeen);
-    parts.push(toolGroupHtml(seg.lines, `${turn.id}#f${n++}`, "", false, "", gofs, { flat: true, sep: seg.sep }));
-    for (const l of seg.lines) {
-      if (l.kind !== "tool-out") continue;
-      const m = TOOL_DONE_RE.exec(String(l.text || ""));
-      if (m) storeSeen.set(m[1], (storeSeen.get(m[1]) || 0) + 1);
-    }
+    // The stored rows this group pairs from: what the earlier groups of THIS turn already consumed for that tool.
+    if (!run) run = { lines: [], sep: seg.sep, gofs: Object.fromEntries(storeSeen) };
+    run.lines.push(...seg.lines);
   }
+  flushRun();
   return parts.join("");
 }
 
@@ -7811,14 +7927,21 @@ function drawJobLine(evt) {
     // append and the poll cannot disagree about where the row lives (a row that joins and is then cut out again is
     // one the reader sees leave one box and appear in the next).
     const tailLines = isTool && tail && tail.classList.contains("tgrp") ? tail._burst || groupLines(tail) : null;
-    const joins = !tailLines || !globalThis.wtStream || typeof globalThis.wtStream.joinsTail !== "function"
+    // A tool-usage group is a RUN of calls: a call that arrives after the result above it still belongs in the same
+    // group, because the group is what the two rules bracket and the run is what they bracket. Prose ends it (the
+    // tail stops being a `.tgrp`), and the condensed view keeps its own cut — there a group is the burst the head
+    // row tallies, and `joinsTail` is what keeps the append and that repaint honest.
+    const tailFlat = Boolean(tail && tail.classList.contains("tgrp") && tail.dataset.gflat === "1");
+    const joins = tailFlat
       ? true
-      : globalThis.wtStream.joinsTail(
-          (state.jobLines.get(evt.id) || []).filter((l) => !isBookkeeping(l)),
-          line,
-          state.thinkCache.get(evt.id)?.blocks || [],
-          tailLines,
-        );
+      : !tailLines || !globalThis.wtStream || typeof globalThis.wtStream.joinsTail !== "function"
+        ? true
+        : globalThis.wtStream.joinsTail(
+            (state.jobLines.get(evt.id) || []).filter((l) => !isBookkeeping(l)),
+            line,
+            state.thinkCache.get(evt.id)?.blocks || [],
+            tailLines,
+          );
     const openGroup = isTool && tail && tail.classList.contains("tgrp") && joins ? tail : null;
     if (isTool) {
       const key = openGroup ? openGroup.dataset.tgrp : `${evt.id}#${Date.now().toString(36)}`;
@@ -14459,6 +14582,56 @@ document.addEventListener("click", async (e) => {
     void expandToolFold(foldRead);
     return;
   }
+  // A row of the stream's tool-usage group: the call's own line, and the handle for the box that call returned. The
+  // box starts shut (a burst of five calls reads as five rows), so a press opens it in place — no rebuild, nothing
+  // else on the card moving — and opening it also asks the session store for the result, because the live preview
+  // for a call is routinely empty and the row would otherwise open onto "no output in the session store yet".
+  const usageRow = e.target.closest("[data-tgrp-call]");
+  if (usageRow) {
+    const block = usageRow.closest(".tgrp-call");
+    const boxEl = block && block.querySelector(":scope > .tgrp-out");
+    const key = usageRow.dataset.tgrpCall || "";
+    // A press that was the end of a drag-select is a selection, not a fold (the rule a call block's caret follows).
+    const picked = document.getSelection ? document.getSelection() : null;
+    if (picked && !picked.isCollapsed && block && picked.containsNode && picked.containsNode(block, true)) return;
+    if (boxEl && key) {
+      e.preventDefault();
+      e.stopPropagation();
+      const open = boxEl.hidden;
+      boxEl.hidden = !open;
+      block.classList.toggle("is-open", open);
+      usageRow.setAttribute("aria-expanded", open ? "true" : "false");
+      usageRow.title = `${open ? "hide" : "show"} what ${usageRow.dataset.callTool || "this call"} returned`;
+      if (open) state.callOpen.add(key);
+      else state.callOpen.delete(key);
+      // One entry per row the reader ever opened; a long-lived tab should not keep every one of them forever.
+      while (state.callOpen.size > 500) state.callOpen.delete(state.callOpen.values().next().value);
+      if (open) {
+        // The row IS its box's opener. What sits behind a row is a console box like any other — folded, with its own
+        // "click to read" — because the box is the same one the condensed view draws, and a reader who opened the row
+        // asked to see what the call returned, not for a second thing to click. So the box's own book is written here
+        // as if its header had been pressed: one action, one box, and the box's header still folds it on its own.
+        for (const head of boxEl.querySelectorAll("[data-code-fold][data-code-key]")) {
+          const book = head.dataset.codeInverted === "1" ? state.codeBoxShut : state.codeBoxOpen;
+          if (head.dataset.codeInverted === "1") book.delete(head.dataset.codeKey);
+          else book.add(head.dataset.codeKey);
+          const inner = head.parentElement && head.parentElement.querySelector(":scope > .code-body");
+          if (inner) inner.hidden = false;
+          if (head.parentElement) head.parentElement.classList.add("is-open");
+          head.setAttribute("aria-expanded", "true");
+          const caret = head.querySelector(".code-caret");
+          if (caret) caret.textContent = "\u25be";
+          const hint = head.querySelector(".code-hint");
+          if (hint) hint.textContent = "click to fold";
+        }
+        const grp = block.closest(".tgrp");
+        const turnId = String(grp?.dataset.tgrp || "").split("#")[0];
+        const tool = usageRow.dataset.callTool || "";
+        if (grp && turnId && tool) void ensureToolStore(turnId, tool, grp);
+      }
+    }
+    return;
+  }
   // A tool call's own row: fold or unfold THAT call's output, and nothing else on the card. The caret is a real
   // button (Tab reaches it, Enter and Space press it, and it carries aria-expanded) and the row around it is the
   // same handle, so a press anywhere on the call line works. The press is stopped here so the burst's own row
@@ -14749,6 +14922,13 @@ document.addEventListener("keydown", async (e) => {
   if (batchKey) {
     e.preventDefault();
     void loadBatchCalls(batchKey);
+    return;
+  }
+  // A row of the stream's tool-usage group is focusable, so Enter or Space opens its box exactly as a click does.
+  const usageKey = e.target.closest?.("[data-tgrp-call]");
+  if (usageKey) {
+    e.preventDefault();
+    usageKey.click();
     return;
   }
   const tgrpRow = e.target.closest?.("[data-tgrp-tool]");

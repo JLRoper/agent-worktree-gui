@@ -27,7 +27,7 @@ function fixture({ flat = false, trimmed = false, response = null } = {}) {
     projects: new Map(),
     jobs: new Map([["turn", { id: "turn", thread: "fixture-thread", status: "done", startedAt: "2026-01-01T00:00:00Z", endedAt: "2026-01-01T00:01:00Z" }]]),
     toolStore: new Map(), toolGroupOpen: new Map(), codeBoxOpen: new Set(), codeBoxShut: new Set(),
-    callFolded: new Set(), foldRows: new Map(), foldPending: new Map(), batchCalls: new Map(),
+    callFolded: new Set(), callOpen: new Set(), foldRows: new Map(), foldPending: new Map(), batchCalls: new Map(),
   };
   const requests = [];
   let repaints = 0;

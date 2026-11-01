@@ -516,7 +516,7 @@ releases it.
 | Thread name | The Hermes session id (or your label for it) — the thing a reply continues. |
 | `📌` | Pin this card: it keeps its screen position while cards above it grow. One pin at a time; clicking again releases it, and clearing the thread releases it too. |
 | `🧠` | Show this session's reasoning (see below). |
-| `🌊` | Draw this session as **one stream**: what the agent thought (while `🧠` is on), said, called and got back, in the order it happened, with no burst to open — each result is still the shut box it is everywhere else. Per session, remembered in this browser; off, the card is the separate thinking block and the condensed tool bursts it always was. |
+| `🌊` | Draw this session as **one stream**: what the agent thought (while `🧠` is on), said, called and got back, in the order it happened, with no burst to open — each run of calls is one **tool-usage group** (a rule above its rows and a rule below them, one row per call: the tool, the file and range or the command it was given, and how long it took), and each row opens the shut box that call returned. Per session, remembered in this browser; off, the card is the separate thinking block and the condensed tool bursts it always was. |
 | `✎` | Rename the session **in the panel only**. The Hermes thread id never changes. |
 | `⤢` | Maximize the card to the window (`Esc` closes). |
 | `✕` | Forget this session: the first click arms it (`✕ sure?`), the second removes its turns and transcript from the panel. The worktree it made stays on disk. |
@@ -590,6 +590,16 @@ search, a file, a skill, a diff — sits under its `↳ tool · 3.27s` line. The
 lines and says `click to read`; a diff also says what it adds and removes (`patch · …/package.json +3 −2`). Clicking
 that header opens the complete recorded output, wrapped with no inner scroll. A second click folds the same box.
 The choice survives a repaint, a burst rebuild and a switch between condensed and one-stream (🌊) views.
+
+**In the 🌊 view a run of calls is one tool-usage group.** Nothing is condensed there, so the run is drawn as a
+**rule above its rows and a rule below them**, and inside it **one row per call**: the tool's glyph and name, the
+target the call was given — the file and its line range (`docs/a.md L1-40`) or the command (`wc -l docs/a.md`) — and
+how long it took. The `↳ tool` line the condensed view draws is not repeated: the row *is* that record, and the time
+it used to carry is on the row. A call still running keeps its live clock on that row instead of a time. Pressing a
+row opens **that call's box** under it, whole — one press, one box, the same box the condensed view opens — and a
+press again shuts it; the open rows are remembered across repaints like every other fold. A parallel batch
+interleaves its calls, and each row still opens the output of *its* call. Bursts are cut by what the agent said in
+between: prose or a reasoning row ends a run, so the next one starts its own group with its own two rules.
 
 For a long result the card's ring buffer still keeps only its **first 40 lines**, shortening preview lines past
 400 characters, so one huge read cannot evict the rest of the turn. The header says `40 of 64 lines` when the total
