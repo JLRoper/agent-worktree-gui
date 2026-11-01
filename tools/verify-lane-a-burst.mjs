@@ -325,6 +325,9 @@ async function startSandbox(gwPort) {
 function pageInit() {
   try {
     localStorage.setItem("wtgui.autoCollect", "0"); // a probe must never post a turn into a reader's thread
+    // This probe measures the TALLIED group (head rows, the fold of its body, the rebuild in place): the shipped
+    // default is one expandable line per call, which has no head and no body to fold.
+    localStorage.setItem("wtgui.toolGroups", "1");
   } catch {
     /* storage may be unavailable */
   }
