@@ -10077,14 +10077,19 @@ function aheadBehindCellHtml(row) {
 }
 // ---- end ahead / behind cell
 
+// ---- pr cell: the number and the state, or the one word `none` ----------------------------------------------
 // The PR cell: the number and state are the server's (row.pr), and the PAGE is the project's host record — `row.prUrl`
 // is built by the same template as the branch cell, so `.../pull-requests/12` and `.../pull/12` both come out right
 // without this file knowing which host it is looking at. No URL (an unmapped project, or a host whose pull template
 // cannot be filled): the same chip, plain, with the reason in its title. Never an `<a>` around a guessed page.
+//
+// No PR is one word: `none`. A row whose branch had been deleted from the remote used to read `none · branch gone`
+// here, but the branch column one cell to the left already answers that — plain text instead of the blue link, with
+// the `local` chip and the reason in its tooltip — so the second half only widened this column with a word the reader
+// had read in the cell beside it. This cell answers one question, "which PR is this row's", and `none` is the whole
+// answer. `test/pr-cell-none.test.js` holds it to the one word on every `remoteBranch` state.
 function prCellHtml(row) {
-  if (!row.pr) {
-    return row.remoteBranch === "gone" ? `<span class="dimmer">none · branch gone</span>` : `<span class="dimmer">none</span>`;
-  }
+  if (!row.pr) return `<span class="dimmer">none</span>`;
   const cls = row.pr.state === "OPEN" ? "pr-open" : "pr-merged";
   const text = `#${row.pr.number} ${row.pr.state}`;
   const why = row.prUrl ? "" : row.prWhy ? ` · no PR page: ${row.prWhy}` : "";
@@ -10094,6 +10099,7 @@ function prCellHtml(row) {
   }
   return `<span class="${cls}" title="${esc(title)}">${esc(text)}</span>`;
 }
+// ---- end pr cell
 
 function rowHtml(row) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
