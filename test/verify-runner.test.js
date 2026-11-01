@@ -96,3 +96,52 @@ test("--json is one object a caller can read, with no child output in it", async
   assert.equal(payload.results[0].timedOut, false);
   assert.equal(typeof payload.results[0].ms, "number");
 });
+
+// Two harnesses that each write a marker and then wait for the OTHER's marker. One at a time the first gives up before
+// the second ever starts; only a runner that has both children live at once lets them meet. That makes "runs them in
+// parallel" a fact the fixtures prove, not a measurement of how fast the machine happens to be.
+function rendezvous(dir, own, peer) {
+  return `import { existsSync, writeFileSync } from "node:fs";
+import path from "node:path";
+const here = ${JSON.stringify(dir)};
+writeFileSync(path.join(here, ${JSON.stringify(own)}), "");
+const until = Date.now() + 5000;
+while (!existsSync(path.join(here, ${JSON.stringify(peer)}))) {
+  if (Date.now() > until) {
+    console.log("the peer never started: these two never ran at the same time");
+    process.exit(1);
+  }
+  await new Promise((r) => setTimeout(r, 25));
+}
+console.log("the peer was running too");
+`;
+}
+
+test("--jobs starts more than one harness at a time, and keeps the table in discovery order", async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), "wtgui-runner-jobs-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await writeFile(path.join(dir, "verify-left.mjs"), rendezvous(dir, "left.marker", "right.marker"), "utf8");
+  await writeFile(path.join(dir, "verify-right.mjs"), rendezvous(dir, "right.marker", "left.marker"), "utf8");
+
+  // One at a time: the first lane waits for a marker the second only writes after the first has finished, so it
+  // gives up — and that gives-up line is echoed as the failure, never folded into a pass.
+  const serial = await run(["--all", "--dir", dir, "--timeout", "20000"]);
+  assert.equal(serial.code, 1, "neither fixture can meet its peer one at a time");
+  assert.match(serial.stdout, /1\/2 passed/);
+  assert.match(serial.stdout, /\| the peer never started/);
+
+  // Both at once: each is live before either looks, so both meet and pass.
+  for (const name of ["left.marker", "right.marker"]) await rm(path.join(dir, name), { force: true });
+  const parallel = await run(["--all", "--dir", dir, "--jobs", "2", "--timeout", "20000"]);
+  assert.equal(parallel.code, 0, parallel.stdout);
+  assert.match(parallel.stdout, /2\/2 passed/);
+
+  const json = await run(["--all", "--dir", dir, "--jobs", "2", "--json"]);
+  assert.equal(json.code, 0, json.stdout);
+  const payload = JSON.parse(json.stdout);
+  assert.deepEqual(
+    payload.results.map((r) => path.basename(r.name)),
+    ["verify-left.mjs", "verify-right.mjs"],
+    "the payload is in discovery order however the children finished",
+  );
+});
