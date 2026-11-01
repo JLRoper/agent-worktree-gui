@@ -6612,6 +6612,45 @@ function typedShown(line) {
 // The console's own row renderer asks the same question for every row it draws (see consoleSetShownFor).
 window.WMApp?.core?.consoleFormat?.setShownFor?.(typedShown);
 
+// ---- console row text
+// One row's visible text, written the cheapest way that is still correct.
+//
+// A growing line only ever gains characters at its end, and assigning innerHTML for them re-parses the whole row and
+// replaces every text node in it — which is what took a selection out of the line every 40 ms while it typed. The tail
+// is appended to the row's own text node instead, so the nodes the reader is selecting in stay where they are and a
+// tick costs the delta rather than the line.
+//
+// The innerHTML path remains the correct one in three cases, and each is checked rather than assumed:
+//   * the row no longer starts with what is drawn (the wire rewrote the line, or a trim moved it);
+//   * the line carries a URL: linkifyText has to turn it into an anchor, and a URL appended as text would stay
+//     unclickable for the rest of the turn;
+//   * the row already has an element child (an anchor, a live-clock span): appending would put the tail after it.
+const ROW_URL_RE = /https?:\/\//i;
+
+function rowTakesTail(el, next) {
+  if (typeof el._drawn !== "string" || !next.startsWith(el._drawn)) return false;
+  if (el.childElementCount) return false;
+  if (ROW_URL_RE.test(next)) return false;
+  return !el.lastChild || el.lastChild.nodeType === 3;
+}
+
+// True when the row changed, so a caller knows the pane did not move for nothing.
+function drawRowText(el, text) {
+  const next = String(text ?? "");
+  if (el._drawn === next) return false;
+  if (rowTakesTail(el, next)) {
+    // Grow the text node that is already at the end of the row: a new node per tick would leave a hundred siblings
+    // behind for one line, and the reader's selection can sit inside this one and survive.
+    const last = el.lastChild;
+    const tail = next.slice(el._drawn.length);
+    if (last && last.nodeType === 3 && typeof last.appendData === "function") last.appendData(tail);
+    else el.appendChild(document.createTextNode(tail));
+  } else el.innerHTML = linkifyText(next);
+  el._drawn = next;
+  return true;
+}
+// ---- end console row text
+
 // The pacer says which lines grew; every pane carrying one gets the new prefix (a pinned turn draws its own copy,
 // so the same line can be in two consoles at once).
 function paintTypedLines(lids) {
@@ -6634,8 +6673,7 @@ function paintTypedLines(lids) {
       const body = el.closest(".think-body");
       const out = body ? null : el.closest("pre.job-out");
       if (out && !stuck.has(out)) stuck.set(out, consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40);
-      el.innerHTML = linkifyText(shown);
-      el._drawn = shown;
+      drawRowText(el, shown);
       if (body) stickThinkBody(body);
     }
   }
@@ -8102,12 +8140,8 @@ function drawJobLine(evt) {
     } else {
       const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
       if (line.mode === "set" && existing) {
-        // Same rule as the pacer's paint: write only what the row does not already say. The append's prefix comes
-        // from the pacer (typedText), so after a tick this text is usually the one already in the row.
-        if (existing._drawn !== shownText) {
-          existing.innerHTML = linkifyText(shownText);
-          existing._drawn = shownText;
-        }
+        // One rule for both writers: append what the row is missing when it can, reparse it only when it must.
+        drawRowText(existing, shownText);
         existing.dataset.ltext = String(line.text ?? "");
       } else {
         const div = document.createElement("div");
@@ -8120,8 +8154,7 @@ function drawJobLine(evt) {
         // back out of the DOM, and this one must read as what was said rather than as what was drawn.
         div.dataset.ltext = String(line.text ?? "");
         div.dataset.lkind = String(line.kind || "raw");
-        div.innerHTML = linkifyText(shownText);
-        div._drawn = shownText;
+        drawRowText(div, shownText);
         out.appendChild(div);
       }
     }
