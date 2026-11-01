@@ -13949,15 +13949,37 @@ for (const type of ["gesturestart", "gesturechange"]) {
 }
 
 // The console resizes like the reply box, but its max-height is what stops it eating the card — and a
-// max-height also stops the drag dead. The handle lives in the bottom-right 16px corner, so grabbing
-// there lifts the cap first; the height the drag then writes is an inline style and wins over both.
+// max-height also stops the drag dead. The handle lives in the bottom-right 16px corner, so grabbing there
+// pins the height the console has NOW and lifts the cap in the same breath. Lifting the cap on its own grew
+// the box to its whole transcript on pointerdown — measured 230px -> 1053px on a 120-line job — so the handle
+// jumped 827px below the cursor before the drag started, and the drag then moved nothing the reader could see.
+// Pinning the current height keeps the corner under the pointer, and the drag's inline height wins over the cap.
+let consoleDrag = null;
 document.addEventListener(
   "pointerdown",
   (e) => {
     const out = e.target && e.target.closest ? e.target.closest(".job-out") : null;
     if (!out) return;
     const r = out.getBoundingClientRect();
-    if (e.clientX >= r.right - 16 && e.clientY >= r.bottom - 16) out.style.maxHeight = "none";
+    if (!(e.clientX >= r.right - 16 && e.clientY >= r.bottom - 16)) return;
+    consoleDrag = { out, height: r.height, styleHeight: out.style.height, cap: out.style.maxHeight };
+    out.style.height = `${r.height}px`;
+    out.style.maxHeight = "none";
+  },
+  true,
+);
+// A grab that moved nothing is a press on the corner, not a resize: put back what was there, so a click near
+// the handle does not leave the transcript pinned open at its full 1053px (or a short console pinned short).
+window.addEventListener(
+  "pointerup",
+  () => {
+    if (!consoleDrag) return;
+    const { out, height, styleHeight, cap } = consoleDrag;
+    consoleDrag = null;
+    if (Math.abs(out.getBoundingClientRect().height - height) < 1) {
+      out.style.height = styleHeight;
+      out.style.maxHeight = cap;
+    }
   },
   true,
 );
