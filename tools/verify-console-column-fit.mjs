@@ -27,7 +27,10 @@
 // plays long paragraphs over real SSE; two cards spawned through the panel's own POST /api/agents into one worktree
 // row; the row opened the way the reader opens it. One console is left following its run, the other is parked by the
 // reader with a real wheel. The window runs the board's own clocks, plus a file written into the worktree every 3 s so
-// the row really is repainted (that is the reader's own board: an agent writing files).
+// the row really is repainted (that is the reader's own board: an agent writing files). A repaint measures only when a
+// worktree row's cells changed (columnSignature), which in this fixture is a few times a window, so the window also
+// clears that memo every 1.5 s: the board's own repaints then measure as often as they did when every streamed line
+// asked for a measurement, and the window keeps its numbers. `memoClears` in the ledger says how often.
 //
 // WHAT IT ASSERTS
 //   (1) direct: fitColumns() on the open table, called three times between frames, moves no console - the following
@@ -424,6 +427,15 @@ try {
     const el = document.querySelector(`pre.job-out[data-out="${id}"]`);
     window.__rec.park = { id, top: Math.round(el.scrollTop) };
     window.__rec.armed = true;
+    // The memo the board measures behind (see the header): cleared on a clock, so the board's OWN next repaint
+    // measures. Nothing is measured from here.
+    window.__rec.memoClears = 0;
+    window.__memoTimer = setInterval(() => {
+      const t = document.querySelector('section.project[data-project="alpha"] > .wt-scroll > table');
+      if (!t) return;
+      columnSigs.delete(t);
+      window.__rec.memoClears += 1;
+    }, 1500);
   }, { id: ids.park });
   touch = setInterval(() => {
     try {
@@ -440,7 +452,8 @@ try {
   const rec = await page.evaluate(() => {
     const R = window.__rec;
     R.armed = false;
-    return { frames: R.frames, reads: R.reads, offTail: R.offTail, gaps: R.gaps, parkMoves: R.parkMoves, fits: R.fits, writes: R.writes, errors: R.errors, park: R.park };
+    clearInterval(window.__memoTimer);
+    return { frames: R.frames, reads: R.reads, offTail: R.offTail, gaps: R.gaps, parkMoves: R.parkMoves, fits: R.fits, writes: R.writes, errors: R.errors, park: R.park, memoClears: R.memoClears };
   });
   out.window = rec;
   out.errors.push(...rec.errors.map((e) => String(e).slice(0, 200)));
@@ -509,7 +522,7 @@ for (const [i, s] of (out.parkLog || []).entries()) console.log(`    wheel #${i 
 for (const [i, r] of out.direct.entries()) {
   if (r) console.log(`  direct #${i + 1}: following ${r.before.follow.top}/${r.before.follow.max} -> ${r.after.follow.top}/${r.after.follow.max} · parked ${r.before.park.top}/${r.before.park.max} -> ${r.after.park.top}/${r.after.park.max}`);
 }
-console.log(`  window: ${w.frames} frames, ${w.fits.length} column measurement(s), ${movedFits.length} of them moved a console${fallByFit.length ? ` (falls ${Math.min(...fallByFit)}-${Math.max(...fallByFit)} px)` : ""}`);
+console.log(`  window: ${w.frames} frames, ${w.fits.length} column measurement(s), ${movedFits.length} of them moved a console${fallByFit.length ? ` (falls ${Math.min(...fallByFit)}-${Math.max(...fallByFit)} px)` : ""}${w.memoClears != null ? ` · memo cleared ${w.memoClears}x` : ""}`);
 console.log(`  following console: ${w.offTail.length} frame(s) more than ${OFF_PX} px above its newest line; gap p50 ${pct(w.gaps, 0.5)} / p99 ${pct(w.gaps, 0.99)} / max ${w.gaps.length ? Math.max(...w.gaps) : 0} px over ${w.gaps.length} frame(s)`);
 console.log(`  parked console: ${w.parkMoves.length} move(s) off the reader's line${w.parkMoves.length ? ` (${w.parkMoves.slice(0, 4).map((m) => `${m.from}->${m.top}`).join(", ")})` : ""}; ${w.writes.length} panel write(s) moved it${w.writes.length ? ` (${w.writes.slice(0, 3).map((x) => `${x.from}->${x.landed} by ${x.by}`).join("; ")})` : ""}`);
 if (out.sensitivity) console.log(`  sensitivity: ${out.sensitivity.seen} of ${out.sensitivity.planted} planted falls seen`);
