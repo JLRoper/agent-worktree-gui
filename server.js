@@ -2066,6 +2066,75 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // ---- roles and assistants --------------------------------------------------------------------------
+    // A role is {id, name, description, charter}: the job title, one line of remit, and the long tier that used
+    // to belong to the panel's one assistant. `assistantId` says WHICH assistant's role and charter this is —
+    // #1 by default, so every old caller keeps meaning the assistant the panel has always had.
+    //
+    // This is the one assistant route that carries charter TEXT, and it is fetched when the Role tab opens:
+    // the polled state above carries sizes and paths only. The cap (413) and the stale save (409) are the same
+    // two refusals the charter route raises, because a role's charter and an assistant's copy are written by the
+    // same hand.
+    if (route === "/api/assistant/role" && req.method === "GET") {
+      const q = new URL(req.url, "http://127.0.0.1").searchParams;
+      try {
+        return sendJson(res, 200, { ...assistant.rolePayload(q.get("assistantId") || undefined), assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, 404, { error: String((e && e.message) || e) });
+      }
+    }
+    if (route === "/api/assistant/role" && req.method === "PUT") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      let body;
+      try {
+        body = await readBody(req);
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
+      try {
+        const charter = assistant.setCharterFor(body.assistantId, body.text, "reader", { expectMtime: body.expectMtime });
+        return sendJson(res, 200, { charter, ...assistant.rolePayload(body.assistantId), assistant: assistant.state() });
+      } catch (e) {
+        const code = (e && e.code) === "charter-too-long" ? 413 : (e && e.code) === "charter-stale" ? 409 : 400;
+        return sendJson(res, code, { error: String((e && e.message) || e) });
+      }
+    }
+    // Picking a role changes the job title; `adopt` also replaces that assistant's copy of the charter with the
+    // role's text. Two presses in the tab, one route: the server never decides to overwrite a reader's edit.
+    if (route === "/api/assistant/role/pick" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const out = assistant.pickRole(body.assistantId, body.roleId, { adopt: Boolean(body.adopt) });
+        return sendJson(res, 200, { ...out, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, (e && e.code) === "role-unknown" ? 404 : 400, { error: String((e && e.message) || e) });
+      }
+    }
+    if (route === "/api/assistant/roles" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const out = assistant.createRole({ name: body.name, description: body.description, from: body.from, charter: body.charter });
+        return sendJson(res, 201, { ...out, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
+    }
+    // "New assistant from this role": the next number, its own thread, its own rules and its own copy of the
+    // role's charter. It starts no turn — the reader talks to it in its own tab, and the first message starts one.
+    if (route === "/api/assistant/assistants" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const out = assistant.createAssistant({ roleId: body.roleId, name: body.name });
+        return sendJson(res, 201, { ...out, assistant: assistant.state() });
+      } catch (e) {
+        const code = (e && e.code) === "assistant-full" ? 409 : (e && e.code) === "role-unknown" ? 404 : 400;
+        return sendJson(res, code, { error: String((e && e.message) || e) });
+      }
+    }
+
     // A message from the reader. The board digest and the scratchpad are attached to the run's input by
     // the module, so the card shows the sentence the reader typed.
     if (route === "/api/assistant/say" && req.method === "POST") {
@@ -2074,7 +2143,7 @@ const server = createServer(async (req, res) => {
       const text = String(body.text || "").trim();
       if (!text) return sendJson(res, 400, { error: "text is required" });
       try {
-        const job = await assistant.say(text);
+        const job = await assistant.say(text, { assistantId: body.assistantId });
         return sendJson(res, 202, { job, assistant: assistant.state() });
       } catch (e) {
         return sendJson(res, 409, { error: String((e && e.message) || e) });
@@ -2180,7 +2249,7 @@ const server = createServer(async (req, res) => {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
       try {
-        const rules = assistant.addRule(body.text);
+        const rules = assistant.addRuleFor(body.assistantId, body.text);
         return sendJson(res, 201, { rules, assistant: assistant.state() });
       } catch (e) {
         return sendJson(res, 400, { error: String((e && e.message) || e) });
@@ -2189,7 +2258,7 @@ const server = createServer(async (req, res) => {
     if (route === "/api/assistant/rule/remove" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
-      return sendJson(res, 200, { rules: assistant.removeRule(String(body.id || "")), assistant: assistant.state() });
+      return sendJson(res, 200, { rules: assistant.removeRuleFor(body.assistantId, String(body.id || "")), assistant: assistant.state() });
     }
 
     if (route === "/api/assistant/notes" && req.method === "POST") {
@@ -3058,8 +3127,11 @@ const server = createServer(async (req, res) => {
       const text = String(body.text || "").trim();
       if (!text) return sendJson(res, 400, { error: "reply text is required" });
       // The assistant's thread is answered through its own route: the scratchpad and the board digest ride
-      // with the turn, and a plain reply here would start a turn that has neither.
-      if (String(body.thread || "") === ASSISTANT_THREAD) {
+      // with the turn, and a plain reply here would start a turn that has neither. Every assistant's thread is
+      // named here, not just the first one's — a second assistant answered through this route would run with no
+      // preamble and no role at all.
+      const assistantThread = assistant ? assistant.isAssistantThread(String(body.thread || "")) : String(body.thread || "") === ASSISTANT_THREAD;
+      if (assistantThread) {
         return sendJson(res, 400, { error: "the assistant's thread is answered through /api/assistant/say" });
       }
       const first = jobs.firstOfThread(String(body.thread || ""));
