@@ -138,6 +138,14 @@ layout's own rule - one box per card, a row repaint that moves nothing, and the 
 the only thing measured putting a combined console's `scrollTop` at 0 with no write behind it
 (`docs/console-combined-first-line.md`).
 
+`node tools/measure-console-expand-frames.mjs --base http://127.0.0.1:7393 --row <a row> --seconds 100 --cycles 5`
+runs the same per-frame sampler against a panel that is already open, on one row the reader names: a console parked
+mid-scrollback with a real wheel, a second agent created through the panel while it is read, and the project collapsed
+and expanded N times. It prints, for every console an expand rebuilt, the first frame it painted (top / max / ms) and
+how many frames it sat at 0, so #165's `placeBuiltConsoles` is proved on the expand case with the frames rather than
+with a source read; exit 1 names any frame that painted an unparked console at 0, with the DOM op and SSE frame in
+front of it (`docs/console-frames-7393-0461.md`).
+
 `node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
 `--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
 ancestry cannot see the merge: the repository ruleset requires linear history, so a PR lands as a squash or a
