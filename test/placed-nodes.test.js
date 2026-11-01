@@ -49,7 +49,7 @@ new MutationObserver((rs) => { for (const r of rs) window.__copySaw += r.addedNo
 ${code}`,
     });
     const out = await page.evaluate(async () => {
-      const SELS = ["pre.job-out", ".think-body", ".sub-console"];
+      const SELS = ["pre.job-out", ".think-body", ".sub-console", "tr.detail", ".tgrp", ".queue-ago", "[data-q-clock]"];
       const mismatches = [];
       let checks = 0;
       let docWalks = 0;
@@ -74,7 +74,10 @@ ${code}`,
       const card = (k, n = 2) =>
         `<section class="card" data-k="card-${k}">` +
         Array.from({ length: n }, (_, i) => `<pre class="job-out" data-k="${k}-${i}"><div>x</div><details class="think" open><div class="think-body" data-k="${k}-${i}-think"></div></details></pre>`).join("") +
-        `<div class="sub-console" data-k="${k}-sub"></div></section>`;
+        `<div class="sub-console" data-k="${k}-sub"></div>` +
+        `<table><tbody><tr class="detail" data-detail="${k}" data-k="${k}-detail"><td><div class="tgrp" data-k="${k}-tgrp">` +
+        `<span class="queue-ago" data-queued-at="1" data-k="${k}-ago">1s</span><i data-q-clock="${k}" data-k="${k}-clock"></i>` +
+        `</div></td></tr></tbody></table></section>`;
       const board = document.getElementById("board");
       const pins = document.getElementById("pins");
 
@@ -142,7 +145,7 @@ ${code}`,
       return { mismatches, checks, docWalks, copyGotIt, found: placedNodes("pre.job-out").length };
     });
     assert.deepEqual(out.mismatches, [], "every lookup returned the walk's nodes, in the walk's order");
-    assert.ok(out.checks >= 48, `${out.checks} comparisons`);
+    assert.ok(out.checks >= 16 * 7, `${out.checks} comparisons (16 steps x 7 kinds)`);
     assert.equal(out.docWalks, 0, "and not one lookup walked the document");
     assert.equal(out.copyGotIt, 1, "the copy observer still saw the card the registry's lookup had already taken");
     assert.equal(out.found, 2, "the rebuilt card's console, and the one still in the pinned block");
