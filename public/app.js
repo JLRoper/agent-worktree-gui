@@ -7160,12 +7160,31 @@ document.addEventListener(
 // row rebuild (every few seconds) and the browser clamping the position while the node is replaced. Anything the panel
 // moves itself must not count as the reader scrolling away, hence `selfScrolled`.
 state.outPinned = state.outPinned || {}; // out id -> false only after a deliberate scroll upwards
-let lastInputAt = 0; // last wheel / key / click anywhere: the only window in which a scroll is the reader's
+// ---- the reader's own input, per card
+// Which card the reader is working in is the question a scroll event has to answer, so the clock is keyed by the CARD
+// and not by the page. With one document-wide `lastInputAt`, a wheel over card B licensed the next scroll event on
+// card A to be read as A's reader scrolling: A's pin was rewritten from a silent 35 px clamp 790 ms after the wheel,
+// and it then stayed 1,277 px off its tail for the rest of the window (tools/measure-console-pin.mjs, 2,587 frames).
+// Input outside every card (the board's own chrome, the assistant panel) is not a console scroll and decides nothing.
+const INPUT_WINDOW_MS = 1200; // a scroll this soon after a wheel / key / click in the SAME card is the reader's
+const lastInputAt = new Map(); // card thread -> when the reader last wheeled / keyed / clicked inside that card
 for (const ev of ["wheel", "mousedown", "keydown", "touchstart"]) {
-  document.addEventListener(ev, () => {
-    lastInputAt = Date.now();
+  document.addEventListener(ev, (e) => {
+    const card = e.target && e.target.closest ? e.target.closest(".job[data-thread]") : null;
+    if (!card) return;
+    lastInputAt.set(card.dataset.thread, Date.now());
   }, { capture: true, passive: true });
 }
+
+// Did the reader touch the card this box belongs to, inside the window? A box with no card above it answers `false`:
+// nothing the reader did elsewhere on the page is evidence about it, and a scroll the panel cannot attribute stays the
+// panel's own.
+function readerInputHere(el) {
+  const card = el && el.closest ? el.closest(".job[data-thread]") : null;
+  const at = card ? lastInputAt.get(card.dataset.thread) : 0;
+  return Boolean(at) && Date.now() - at < INPUT_WINDOW_MS;
+}
+// ---- end the reader's own input, per card
 const selfScrolled = new WeakSet();
 
 function consolePinned(id) {
@@ -15280,7 +15299,7 @@ document.addEventListener(
         selfScrolled.delete(pre);
         return;
       }
-      if (Date.now() - lastInputAt < 1200) {
+      if (readerInputHere(pre)) {
         state.thinkPinned.set(key, pre.scrollHeight - pre.scrollTop - pre.clientHeight < 24);
         // Kept for the next repaint: the block is replaced whenever its text is re-read, and this is where the
         // reader was when they took it over.
@@ -15294,7 +15313,7 @@ document.addEventListener(
         selfScrolled.delete(pre);
         return;
       }
-      if (Date.now() - lastInputAt < 1200) {
+      if (readerInputHere(pre)) {
         state.subConsolePinned.set(id, pre.scrollHeight - pre.scrollTop - pre.clientHeight < 24);
         // Kept for the next rebuild: a strip repaint or a card rebuild replaces this box, and this is the line the
         // reader took it over on.
@@ -15312,7 +15331,7 @@ document.addEventListener(
     const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 32;
     // Only a reader's own input decides the pin. Without this, a clamp that happens while a card is rebuilt looks
     // exactly like someone scrolling up, and the console sticks at the top until they notice.
-    if (Date.now() - lastInputAt < 1200) state.outPinned[pre.dataset.out] = atBottom;
+    if (readerInputHere(pre)) state.outPinned[pre.dataset.out] = atBottom;
     state.outScrolls[pre.dataset.out] = { top: pre.scrollTop, atBottom };
   },
   true,
