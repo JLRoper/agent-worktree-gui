@@ -35,7 +35,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadPlaywright, openSettingsGroup } from "./browser.mjs";
-import { ROOT, pickFreePort as freePort } from "./panel-testkit.mjs";
+import { ROOT, freePort } from "./panel-testkit.mjs";
 
 // Optional unbuffered trace: with RANK_TRACE=<file> every line is appended and flushed as it is printed, so a run
 // killed by a caller's timeout still leaves behind exactly how far it got.
