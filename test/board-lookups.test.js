@@ -356,3 +356,52 @@ test("the stylesheet pauses an off-screen dot, and only that", () => {
   const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
   assert.match(css, /\.live-pulse \.pulse-dot\.is-offscreen \{ animation-play-state: paused; \}/);
 });
+
+// ---- the ranking passes: the board's children, not its subtree ---------------------------------------------------
+// reorderProjects ran 393 times a minute on the reader's board (it is queued after every batch of placed rows), and its
+// four searches below #projects - every node under it, consoles included - were 160 ms a minute of native search.
+function boardModel() {
+  const el = (tag, cls, kids = []) => ({
+    tag,
+    cls,
+    children: kids,
+    matches(sel) {
+      const [t, c] = sel.startsWith(".") ? ["", sel.slice(1)] : sel.split(".");
+      return (!t || t === this.tag) && (!c || this.cls.split(" ").includes(c));
+    },
+    querySelectorAll() {
+      throw new Error("a ranking pass searched a subtree");
+    },
+  });
+  const p1 = el("section", "project");
+  const p2 = el("section", "project collapsed");
+  const nested = el("section", "project"); // inside a card: never one of the folder's own sections
+  const body = el("div", "root-body", [el("p", "root-empty"), p1, el("div", "card", [nested]), p2]);
+  const group = el("section", "root-group", [el("div", "root-head"), el("div", "root-clone"), body]);
+  const host = el("main", "", [group, el("div", "board-foot")]);
+  return { host, group, body, p1, p2 };
+}
+
+test("the ranking passes read the board's children: its folders, a folder's body, the body's projects", () => {
+  const m = boardModel();
+  const ctx = { $: (id) => (id === "projects" ? m.host : null) };
+  vm.createContext(ctx);
+  vm.runInContext([grab("childrenMatching"), grab("boardGroups"), grab("groupBody")].join("\n"), ctx);
+  const groups = ctx.boardGroups();
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0], m.group, "the folder, from #projects' own children");
+  assert.equal(ctx.groupBody(m.group), m.body, "its body");
+  const sections = ctx.childrenMatching(m.body, "section.project");
+  assert.equal(sections.length, 2);
+  assert.ok(sections[0] === m.p1 && sections[1] === m.p2, "and the body's own sections, in order, without a search");
+  assert.equal(ctx.groupBody(null), null, "a missing folder has no body (control)");
+  assert.equal(ctx.childrenMatching(null, "section.project").length, 0);
+});
+
+test("reorderProjects, tickProjectScopes and boardRoots no longer search below the host", () => {
+  for (const name of ["reorderProjects", "tickProjectScopes", "boardRoots"]) {
+    const body = grab(name);
+    assert.doesNotMatch(body, /querySelectorAll\(/, `${name}() reads children instead of searching`);
+  }
+  assert.match(grab("reorderProjects"), /boardGroups\(host\)/);
+});
