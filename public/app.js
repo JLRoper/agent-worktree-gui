@@ -10481,13 +10481,39 @@ function rowKeyForThread(thread) {
 
 // The green pulse a row gets when the scanner finds life - reused here, so an event and a scan say the same thing.
 function pulseRow(key) {
-  const tr = document.querySelector(`#projects tr.row[data-key="${CSS.escape(key)}"]`);
+  const tr = rowNode(key);
   if (!tr) return;
-  tr.classList.remove("flash", "flash-idle");
-  void tr.offsetWidth; // restart the animation rather than let one already running expire under the new class
-  tr.classList.add("flash");
+  tr.classList.remove("flash-idle"); // a grey flash gives way to the green one: a new animation name starts fresh
+  restartClassAnimation(tr, "flash", "flashrow");
   clearTimeout(tr._flashT);
   tr._flashT = setTimeout(() => tr.classList.remove("flash"), flashRowMs() + 40);
+}
+
+// A worktree row's own node, from the map placeRow keeps, checked before use (still in the page, still this key);
+// the document is asked only when the map has no live node. Both callers run on every agent event, and a lookup by
+// attribute value walks the whole board.
+function rowNode(key) {
+  const kept = state.rowEls.get(key);
+  if (kept && kept.isConnected && kept.dataset.key === key) return kept;
+  return document.querySelector(`#projects tr.row[data-key="${CSS.escape(key)}"]`);
+}
+
+// Restart a one-shot animation a class carries, without a forced layout. Taking the class off and putting it back in
+// one task needs a reflow between the two (`void el.offsetWidth`) or the browser sees no change, and on a 55k-node
+// board that reflow ran on every pulse. A running animation is put back to its first frame instead, and a class
+// that is not there is simply added: neither needs layout. Only the instant between an animation ending and its
+// class being taken off still pays the reflow.
+function restartClassAnimation(el, cls, animationName) {
+  if (el.classList.contains(cls)) {
+    const running = el.getAnimations().find((a) => a.animationName === animationName);
+    if (running) {
+      running.currentTime = 0;
+      return;
+    }
+    el.classList.remove(cls);
+    void el.offsetWidth;
+  }
+  el.classList.add(cls);
 }
 
 function pulseProject(project) {
@@ -10903,7 +10929,7 @@ function noteEventLife(thread) {
   // and repaints the age cell exactly as it did before.
   pushEventLife(lifeRowKey(key), now);
   if (row && row.project) pushEventLife(lifeProjKey(row.project), now);
-  const cell = document.querySelector(`td.age[data-key="${CSS.escape(key)}"]`);
+  const cell = rowNode(key)?.querySelector("td.age") || null;
   if (cell && row) paintAgeCell(cell, row);
   if (state.eventFlash) {
     const last = state.lastEventFlashAt.get(key) || 0;
