@@ -7420,8 +7420,16 @@ function setScroll(el, top) {
   if (!el) return;
   const v = Math.max(0, Math.round(Number(top) || 0));
   el._selfTop = v;
-  selfScrolled.add(el);
+  // Only a write that MOVES the box sends a scroll event, so only that write may claim the next one as the panel's.
+  // Most writes move nothing - the follow path re-sticks a console already on its newest line every frame, and a
+  // restore often lands on the line the box is on - and the flag such a write left behind had no event of its own to
+  // spend it on: it was spent on the reader's next real scroll instead. The wheel still unpinned the console, but its
+  // place was never recorded, so state.outScrolls kept the old answer (none at all, or "at the bottom") and the next
+  // rebuild that restores from it put the reader somewhere they had not been (docs/console-bounce-manual-7391.md).
+  // Reading scrollTop here costs no layout: assigning it already lays the box out to clamp the value.
+  const from = el.scrollTop;
   el.scrollTop = v;
+  if (el.scrollTop !== from) selfScrolled.add(el);
 }
 
 // Rebuilds land before the browser has finished laying the new nodes out, so a "go to the bottom" can be clamped
