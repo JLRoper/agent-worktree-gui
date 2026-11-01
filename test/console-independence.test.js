@@ -6,8 +6,9 @@
 // every open console on the board went to its first line in the same frame - the reader saw two consoles that were
 // being written to jump to the top together and come back together, and read it as something switching between them.
 // A single console did it as often as each of two (the cause never looked at the consoles); the second one only made it
-// visible. The browser half is tools/verify-console-independence.mjs (five layouts, a real Chromium, every frame
-// sampled). This file is the part that must never need a browser to fail.
+// visible. The browser half is tools/verify-console-independence.mjs (six layouts, a real Chromium, every frame
+// sampled) and the write half is tools/measure-console-writes.mjs (every scrollTop write and its caller). This file is
+// the part that must never need a browser to fail.
 //
 // The helpers under test are READ OUT of public/app.js between their markers, not copied here (the way
 // tool-group-key.test.js reads the group key): the DOM they act on is a model with the ONE browser rule they exist for,
@@ -23,7 +24,13 @@
 //      move leaves the box at 0 (the control: that is the frame a reader saw);
 //   4. every function that re-orders a list holding consoles goes through them: reorderProjects, reorder,
 //      sweepStaleBoard and reorderAgentCards hold the boxes, release them, and put nothing down with a raw append;
-//   5. a subagent strip's signature is its OWN: one child's read, or the reader opening a child in another session's
+//   5. the COMBINED layout (reasoning drawn as rows inside the console) has ONE box per card where the separated one has
+//      two, and it obeys the same rule: a move holds that box once and puts it back on its newest line, a repaint that
+//      patches a row inside it moves nothing (only replacing the box does), and the detail swap placeRow performs is
+//      held before the card leaves and handed back in the same task. Measured on the page, that swap clamps a console
+//      to its first line 95-110 times in 60 s with no write at all, and the same-task restore is why no frame paints it
+//      (docs/console-combined-first-line.md);
+//   6. a subagent strip's signature is its OWN: one child's read, or the reader opening a child in another session's
 //      strip, changes only the strip that draws that child - so a repaint cannot throw another session's open child
 //      console back to its first line. The page-global counter this replaced is gone.
 import assert from "node:assert/strict";
@@ -99,6 +106,14 @@ class El {
   appendChild(el) {
     return this.insertBefore(el, null);
   }
+  remove() {
+    if (!this.parentNode) return this;
+    const sibs = this.parentNode.children;
+    sibs.splice(sibs.indexOf(this), 1);
+    this.parentNode = null;
+    leaveLayout(this); // taking a subtree out of the page is the same leave as a move's first half
+    return this;
+  }
   closest(sel) {
     for (let n = this; n; n = n.parentNode) if (matches(n, sel)) return n;
     return null;
@@ -141,11 +156,41 @@ const board = (ids) => {
 };
 const order = (root) => root.children.map((s) => s.dataset.project ?? s.tag);
 
+// The COMBINED layout (🌊). With the reasoning drawn as rows INSIDE the console, a card has ONE scroll box where the
+// separated layout has two (`pre.job-out` plus a `.think-body`), and the reasoning rows are not boxes at all. Four
+// agents were driven in this layout while three of them kept writing: the write log blames the card swap placeRow
+// performs for 95 clamps to scrollTop 0 in 60 s with no write behind them (docs/console-combined-first-line.md).
+const thinkRow = (id, i) => new El("div", { cls: "jl-think", data: { lid: `${id}:${i}` } });
+const combinedCard = (id, rows = 3) => {
+  const card = new El("div", { cls: "job", data: { thread: `t-${id}` } });
+  const out = new El("pre", { cls: "job-out", data: { out: id }, box: { ...OVERFLOW } });
+  add(out, ...Array.from({ length: rows }, (_, i) => thinkRow(id, i)));
+  add(card, out);
+  return { card, out };
+};
+const combinedSection = (id, rows = 3) => {
+  const { card, out } = combinedCard(id, rows);
+  const section = add(new El("section", { cls: "project", data: { project: id } }), card);
+  return { section, card, out };
+};
+// The keyed row patch syncStreamConsole makes on every 1.2 s poll: the row is re-drawn in place and the box that holds
+// it never leaves the page. `out.insertBefore(fresh, have)` then `have.remove()` is the model's `have.replaceWith()`.
+const repaintRow = (out, index, fresh) => {
+  out.insertBefore(fresh, out.children[index]);
+  out.children[index + 1].remove();
+  return out;
+};
+
 // The page's own answers, stood in for: who is pinned, and the clamp the browser applies to every scrollTop write.
 const state = { thinkPinned: new Map(), subConsolePinned: new Map(), outPinned: {} };
 const consolePinned = (id) => state.outPinned[id] !== false;
 const setScroll = (el, top) => {
-  if (el) el.scrollTop = Math.min(Math.max(0, Math.round(Number(top) || 0)), Math.max(0, el.scrollHeight - el.clientHeight));
+  if (!el) return;
+  const v = Math.min(Math.max(0, Math.round(Number(top) || 0)), Math.max(0, el.scrollHeight - el.clientHeight));
+  // The page stamps every write it makes (`el._selfTop = v`), and captureScrolls() reads that stamp to tell "the
+  // panel placed this box" from "this is a fresh node sitting at 0". The model keeps the stamp for the same reason.
+  el._selfTop = v;
+  el.scrollTop = v;
 };
 const { placeInOrder, holdScrolls, releaseScrolls } = new Function(
   "state",
@@ -336,7 +381,131 @@ for (const name of ["reorderProjects", "reorder", "sweepStaleBoard", "reorderAge
   });
 }
 
-// ---- 5. a subagent strip's signature ---------------------------------------------------------------------------
+// ---- 5. the combined layout: the reasoning is rows OF the console -------------------------------------------------
+// Four agents on one board, all drawn with the reasoning combined into the console and three of them still writing
+// while the first was being read: 5,083 scrollTop writes in 60 s, and 110 scrollTop changes with NO write at all - every
+// one of them DOWN to 0, every one of them a card carried into a fresh agent slot (fillAgentSlots' replaceWith,
+// public/app.js:11112, reached from placeRow on the 5 s row pass and from renderProjectRows on a project frame). The
+// restore in that same task is why not one painted frame showed a pinned console at its first line.
+// docs/console-combined-first-line.md is the measurement; this section is its rule.
+const scrollCode = ["captureScrolls", "restoreScrolls"].map(fn).join("\n");
+const { captureScrolls, restoreScrolls } = new Function(
+  "state",
+  "consolePinned",
+  "setScroll",
+  `${scrollCode}\nreturn { captureScrolls, restoreScrolls };`,
+)(state, consolePinned, setScroll);
+// The swap placeRow performs: the detail's agent slot is replaced and the live card is moved into the fresh one. The
+// card leaves the page on the way, so the console inside it is a scroll area at 0 by the time the slot is back.
+const swapSlot = (detail, card) => {
+  const slot = card.parentNode;
+  const fresh = new El("div", { cls: "agent-slot" });
+  detail.insertBefore(fresh, slot);
+  slot.remove();
+  fresh.appendChild(card);
+  return fresh;
+};
+const detailOf = (...cards) => {
+  const detail = new El("tr", { cls: "detail", data: { detail: "alpha::a" } });
+  for (const card of cards) add(detail, add(new El("div", { cls: "agent-slot" }), card));
+  return detail;
+};
+
+test("the combined layout is ONE box per card: a moved section holds its console once and puts it back", () => {
+  reset();
+  const a = combinedSection("a");
+  const b = combinedSection("b");
+  const root = new El("tbody");
+  root.isRoot = true;
+  add(root, a.section, b.section);
+  assert.equal(root.querySelectorAll(".think-body").length, 0, "combined: the reasoning is rows of the console, so there is no second box to lose");
+  assert.equal(a.out.children.length, 3, "and the rows really are inside it - nothing below is vacuous");
+  a.out.scrollTop = MAX;
+  b.out.scrollTop = MAX;
+  const held = holdScrolls(root);
+  assert.deepEqual(held.map((h) => h.key), ["a", "b"], "one entry per console: a reasoning row is not a scroll box of its own");
+  placeInOrder(root, [b.section, a.section]); // a moves: it leaves the layout on the way
+  assert.equal(a.out.scrollTop, 0, "mid-move the combined console is at its first line, exactly as a separated one is");
+  releaseScrolls(held);
+  assert.deepEqual([a.out.scrollTop, b.out.scrollTop], [MAX, MAX], "and both are back on their newest line in the same task");
+});
+
+test("a repaint that patches a row inside the combined console moves nothing - only replacing the box does", () => {
+  reset();
+  const a = combinedSection("a");
+  const root = new El("tbody");
+  root.isRoot = true;
+  add(root, a.section);
+  a.out.scrollTop = MAX;
+  for (let i = 0; i < 3; i++) repaintRow(a.out, 0, thinkRow("a", 100 + i)); // the 1.2 s poll re-drawing the first row
+  assert.equal(a.out.scrollTop, MAX, "the box the reader is following never left the page");
+  assert.equal(a.out.resets, 0, "and the browser never put it back at its first line");
+  // The failure shape this rules out: a repaint that replaces the console node instead of patching a row in it.
+  const fresh = consoleBox("a");
+  a.card.insertBefore(fresh, a.out);
+  a.out.remove();
+  assert.equal(fresh.scrollTop, 0, "a replaced box starts at its first line - which is why the 🌊 renderer patches rows");
+});
+
+test("the detail swap placeRow performs clamps the console to 0 and the same task hands each reader their place back", () => {
+  reset();
+  const parked = combinedCard("parked");
+  const pinned = combinedCard("pinned");
+  const detail = detailOf(parked.card, pinned.card);
+  const root = new El("tbody");
+  root.isRoot = true;
+  add(root, detail);
+  setScroll(parked.out, 300); // the reader scrolled this one up and left it there
+  setScroll(pinned.out, MAX); // this one follows its newest line
+  state.outPinned = { parked: false };
+  const held = captureScrolls(detail); // read BEFORE the card leaves the page
+  swapSlot(detail, parked.card);
+  swapSlot(detail, pinned.card);
+  assert.deepEqual([parked.out.scrollTop, pinned.out.scrollTop], [0, 0], "both consoles are at their first line mid-swap");
+  restoreScrolls(detail, held); // and the page hands them back in the same task, so no frame is painted at 0
+  assert.deepEqual(
+    [parked.out.scrollTop, pinned.out.scrollTop],
+    [300, MAX],
+    "the parked box goes back to the reader's line, the pinned one to its newest line - neither to the top",
+  );
+});
+
+test("without that restore the same swap leaves the console at its first line - the frame the write log caught", () => {
+  reset();
+  const a = combinedSection("a");
+  const detail = detailOf(a.card);
+  const root = new El("tbody");
+  root.isRoot = true;
+  add(root, detail);
+  setScroll(a.out, 300);
+  state.outPinned = { a: false };
+  captureScrolls(detail); // taken and thrown away: the swap without the hand-back
+  swapSlot(detail, a.card);
+  assert.equal(a.out.scrollTop, 0, "110 times in 60 s on the page - and only the same-task restore kept it off the screen");
+});
+
+test("placeRow reads every console's top before the card leaves the detail and restores it after fillAgentSlots", () => {
+  const body = fn("placeRow");
+  const capture = body.search(/querySelectorAll\("pre\.job-out"\)/);
+  const fill = body.indexOf("fillAgentSlots(");
+  const restore = body.indexOf("restoreScrolls(");
+  const stored = body.indexOf("applyStoredScrolls(");
+  assert.ok(capture >= 0, "placeRow() captures the consoles it is about to move");
+  assert.ok(fill > capture, "the capture is taken before fillAgentSlots() moves the cards - a read taken after it reads the 0");
+  assert.ok(restore > fill, "and every console is put back after the cards are in the new detail");
+  assert.ok(stored > restore, "with the remembered positions applied after the pre-move capture");
+  assert.match(body, /\bholdSubConsoles\(/, "a child's console cannot ride on the element, so it is held by the card");
+  assert.match(body, /\breleaseScrolls\(heldSubs\)/, "and handed back in the same task");
+});
+
+test("the 🌊 repaint patches the console's rows and never replaces the console itself", () => {
+  const body = fn("syncStreamConsole");
+  assert.doesNotMatch(body, /out\.replaceWith\(/, "replacing the box would be a fresh scroll area at its first line");
+  assert.match(body, /out\.insertBefore\(/, "rows are moved into place inside the same box");
+  assert.match(body, /have\.replaceWith\(fresh\)/, "only a row whose words moved is replaced");
+});
+
+// ---- 6. a subagent strip's signature ---------------------------------------------------------------------------
 // The subagent strip under a turn's console is rebuilt in place from its signature. The signature it used to build
 // carried `[...state.openSubConsole]` and a PAGE-GLOBAL counter bumped by every child's read, so a poll of one
 // session's child changed every session's strip: with two sessions each showing an open child console, each 5 s poll
