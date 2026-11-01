@@ -242,6 +242,12 @@ async function browserPhase(pw) {
         state.codeBoxOpen.clear();
         state.callFolded.clear();
         state.outPinned = {};
+        // renderJobs() rewrites the card list only when the set of cards, or a card's own conversationSignature,
+        // has moved — that is what stops a live console being replaced under the reader on every append. This probe
+        // paints the SAME turn twice (with the store's row and without it) to drive the cut edge, which moves no
+        // signature: clear the memo first, or section (c) measures the card (a) left in the DOM (its stored rows
+        // already fill the frame, so the cut row it is looking for was never drawn).
+        state.jobsListSig = "";
         // The card fills the window, which is a state the reader has a button for ("expand this chat to fill the
         // window"): the console then has no max-height, so nothing under test is scrolled out of the box the
         // pointer has to reach.
