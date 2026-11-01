@@ -336,7 +336,9 @@ const noPr = wanted((p, w) => !w.pr);
 for (const [key, v] of noPr) {
   const c = prCells[key];
   if (!c) continue;
-  prChecks.push(checks(/^none\b/.test(norm(c.pr.text)), `${key}: no PR reads none`, "none…", c.pr.text));
+  // One word, not a sentence: the branch column already answers "the copy was deleted on the remote", so the PR cell
+  // says `none` and nothing else (test/pr-cell-none.test.js holds the page to it too).
+  prChecks.push(checks(eq(norm(c.pr.text), "none"), `${key}: no PR reads exactly none`, "none", c.pr.text));
 }
 results.pr = { rowsWithPr: prRows.length, rowsWithout: noPr.length, checks: prChecks };
 
