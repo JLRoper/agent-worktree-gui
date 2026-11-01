@@ -6645,16 +6645,28 @@ function shouldPaceResultRow(lines, line, cap = RESULT_PACED_ROWS) {
 function typedText(line, jobId) {
   const P = state.typePacer;
   const full = String(line?.text ?? "");
-  // A tab nobody is looking at has no flow to show: while it is hidden every frame is drawn whole, so coming back to
-  // it shows the answer as it stands instead of a paragraph still typing out the minutes nobody watched.
-  if (!P || line?.lid == null || document.hidden) return full;
-  return P.feed(String(line.lid), String(jobId ?? ""), full);
+  if (!P || line?.lid == null) return full;
+  // The wire's text reaches the pacer whether or not anybody is looking. A hidden tab has no flow to show — the frame
+  // is drawn whole and held whole — but the pacer still has to be TOLD the rest of the line. It used to be skipped
+  // while hidden, so a paragraph that was mid-type when the reader left stayed at the text it had then; every repaint
+  // after they came back drew that prefix over the whole line, and the console showed "This" for a paragraph that
+  // starts "This branch was added to main as version 0.47.0." until the card was reloaded from the store.
+  const shown = P.feed(String(line.lid), String(jobId ?? ""), full);
+  if (document.hidden) {
+    P.flush(String(line.lid));
+    return full;
+  }
+  return shown;
 }
 
 function typedShown(line) {
   const P = state.typePacer;
   if (!P || !line || line.lid == null) return null;
-  return P.shownFor(String(line.lid));
+  // The record's own text goes with the question, so a repaint may only draw a prefix of THAT line (see
+  // core/type-stream.js shownFor). A line with no text of its own — a reasoning row holds its words elsewhere — asks
+  // with nothing, and the pacer answers for itself, exactly as it did before.
+  const rec = line.text;
+  return P.shownFor(String(line.lid), rec == null ? undefined : String(rec));
 }
 // The console's own row renderer asks the same question for every row it draws (see consoleSetShownFor).
 window.WMApp?.core?.consoleFormat?.setShownFor?.(typedShown);
@@ -6775,14 +6787,18 @@ function paintTypedLines(lids) {
   if (!P) return;
   const byJob = consoleOuts();
   for (const lid of lids) {
-    const shown = P.shownFor(lid);
-    if (shown == null) continue;
     const outs = byJob.get(String(P.jobFor(lid) ?? ""));
     if (!outs || !outs.length) continue;
     for (const out of outs) {
       // A reasoning row types inside its thinking block, which follows its own stickiness, not the console's.
       for (const el of out.querySelectorAll(`[data-lid="${CSS.escape(String(lid))}"]`)) {
         if (!el.isConnected) continue;
+        // The row's own record goes with the question, so a paint can never shorten a line to a prefix the pacer has
+        // stopped growing (see typedShown): the worst a stale tick can do is nothing. A row with no record of its own
+        // (a reasoning row) asks with nothing.
+        const rec = el.dataset.ltext;
+        const shown = rec == null ? P.shownFor(lid) : P.shownFor(lid, rec);
+        if (shown == null) continue;
         if (!drawRowText(el, shown)) continue;
         const body = el.closest(".think-body");
         if (body) stickThinkBody(body);
