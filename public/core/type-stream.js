@@ -288,6 +288,10 @@
     return {
       feed,
       shownFor,
+      // Which job a paced line belongs to. A paint must resolve a line's rows through the consoles of THIS job:
+      // line ids are the server's sequence, not a page-wide key (a card adopted from another process can carry the
+      // same numbers), and a document-wide lookup by lid is how one agent's tick wrote into another agent's console.
+      jobFor: (lid) => lines.get(lid)?.job ?? null,
       pendingFor,
       tick,
       flush,
