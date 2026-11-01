@@ -1,11 +1,19 @@
 // The console flicker, caught in a browser against a REAL run's output.
 //
 //   node tools/verify-console-flicker.mjs                      # drive this checkout, write the capture
+//   npm run verify:flicker -- --only repainters                # the same run through npm, with no shell `node`
 //   node tools/verify-console-flicker.mjs --label before       # name the capture (before | after | anything)
 //   node tools/verify-console-flicker.mjs --root <checkout>    # serve another checkout's server.js + public/
 //   node tools/verify-console-flicker.mjs --compose            # merge the `before` and `after` captures into the report
 //   --report <dir>   where the captures, screenshots and report go (default C:/CodeReviews/agent-worktree-gui)
 //   --only <name>    one scenario: deliverables | stream | repainters
+//
+// NO TTY IS NEEDED, AND NONE IS READ. The harness writes lines to stdout and nothing else; it runs identically with
+// stdout piped or redirected, with stdin at /dev/null, and under tools/verify.mjs (which spawns a harness with stdin
+// ignored). The one environment that cannot start it is a shell that aliases `node` to a pty wrapper — winpty, for
+// one, prints "stdin is not a tty" and exits the moment it has no tty of its own, before this file is ever read. That
+// line is the launcher's, not this tool's: `npm run verify:flicker` goes through npm's own shell and the real node
+// binary, and is the alias-free way in.
 //
 // WHAT THE FLICKER IS (the finding this tool carries)
 //   The dark console of a live turn is not wiped by a tool group re-cutting itself; it is wiped by the NEXT live
@@ -37,7 +45,10 @@
 //       arriving mid-turn and the turn flipping running → done each rebuild the card — and each rebuild has to hand
 //       the reader the same line, at the same place, still scrolled away. This is the check the deliverable phase
 //       makes by proxy (the reply box's top); here it names the line itself. A rebuild that lands on another line,
-//       or throws the console back to the bottom, fails it.
+//       or throws the console back to the bottom, fails it. The stub HOLDS the approval at the gateway until the
+//       harness has parked the console: the console only becomes scrollable late in the scripted turn, and an
+//       approval sent on the script's own clock used to land seconds before the park, so the check measured a
+//       rebuild on a console still pinned to the bottom (and recorded no reading for it at all).
 //   (7) 🌊 console (the `stream` scenario): every sweep of the console PATCHES it — the transcript above its newest
 //       rows keeps its own nodes. A sweep that replaces the child list leaves 0 of them, which is what this recorded
 //       before `paintStreamConsole` was changed to patch the console in place (a reader's selection goes with those
@@ -158,7 +169,7 @@ const LONG = (dir, files) =>
 
 // ---- the stub gateway: a Runs API that plays a script over real SSE ---------------------------------------------
 function makeGateway() {
-  const state = { runs: new Map(), posts: 0, dir: "", files: false };
+  const state = { runs: new Map(), posts: 0, dir: "", files: false, holdApprovals: false, parked: false, held: [] };
   const timers = new Set();
   const later = (ms, fn) => {
     const h = setTimeout(() => {
@@ -166,6 +177,16 @@ function makeGateway() {
       fn();
     }, ms);
     timers.add(h);
+  };
+  // An approval the `repainters` scenario must not deliver until the reader has the console parked: the harness parks
+  // it once there is history above the fold, and the script cannot know when that is. Held here, the rebuild the
+  // check names is really measured on a parked console — measured before this, the approval landed four seconds
+  // BEFORE the park, so the card was rebuilt under a console still pinned to the bottom and the reading was `null`.
+  // The harness calls release() once it has parked (which also lets a later approval straight through); the 30 s
+  // fallback only keeps a run whose console never gets parkable from hanging.
+  state.release = () => {
+    state.parked = true;
+    for (const f of state.held.splice(0)) f();
   };
   const server = createServer((req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
@@ -201,18 +222,41 @@ function makeGateway() {
       req.on("close", () => {
         open = false;
       });
-      rec.script.forEach((step, i) => {
-        if (i < from) return;
-        later(Math.max(0, rec.startedAt + step.at - Date.now()), () => {
-          if (!open) return;
-          res.write(`id: ${i}\ndata: ${JSON.stringify({ ...step.evt, run_id: rec.id, seq: i, timestamp: Date.now() / 1000 })}\n\n`);
-          if (step.evt.event === "run.completed") {
-            rec.status = "completed";
-            rec.output = step.evt.output;
-            later(50, () => res.end());
-          }
-        });
-      });
+      // One frame of the script, or nothing when the reader's connection is gone (a held approval can outlive it).
+      const send = (step, i, live) => {
+        if (!live()) return;
+        res.write(`id: ${i}\ndata: ${JSON.stringify({ ...step.evt, run_id: rec.id, seq: i, timestamp: Date.now() / 1000 })}\n\n`);
+        if (step.evt.event === "run.completed") {
+          rec.status = "completed";
+          rec.output = step.evt.output;
+          later(50, () => res.end());
+        }
+      };
+      // Walk the script one step at a time rather than scheduling every step up front: a held approval pauses the
+      // walk, and the steps behind it keep their own gaps when it resumes (`shift` absorbs the hold), so a park that
+      // took longer than the script's own tail can neither end the stream first nor compress the pause after the
+      // approval that gives the reader time to see the permission box.
+      let idx = Math.max(0, from);
+      let shift = 0;
+      const atOf = (i) => Math.max(0, rec.startedAt + rec.script[i].at + shift - Date.now());
+      const walk = () => {
+        if (!open || idx >= rec.script.length) return;
+        const step = rec.script[idx];
+        if (state.holdApprovals && !state.parked && step.evt.event === "approval.request") {
+          const due = rec.startedAt + step.at;
+          state.held.push(() => {
+            shift = Math.max(0, Date.now() - due);
+            idx += 1;
+            walk();
+          });
+          later(30_000, () => state.release());
+          return;
+        }
+        send(step, idx, () => open);
+        idx += 1;
+        if (open && idx < rec.script.length) later(atOf(idx), walk);
+      };
+      later(atOf(idx), walk);
       return;
     }
     json(404, {});
@@ -578,6 +622,9 @@ async function runScenario(pw, sc, { pair }) {
   gw.state.dir = sb.repo;
   gw.state.files = sc.files;
   gw.state.kind = sc.name;
+  // The `repainters` scenario's approval is held at the gateway until the page has the console parked (see
+  // makeGateway): the two clocks cannot be lined up from the script alone.
+  gw.state.holdApprovals = Boolean(sc.parked);
   const browser = await pw.chromium.launch({ headless: true });
   const out = { name: sc.name, shots: [], errors: [], paired: null };
   try {
@@ -658,10 +705,14 @@ async function runScenario(pw, sc, { pair }) {
       // Take the console over the way a reader does, once there is history above the fold. The pin is a reader's own
       // input in this page, so it is set here instead of left for a scroll event to guess; `_selfTop` is recorded the
       // way setScroll() records it, so the next rebuild reads "not at the bottom" rather than "a node never placed".
+      // The floor is `parkedReading`'s own 40px of room below the parked line, not a round number: the approval this
+      // scenario waits on is held at the gateway until the park, so a console that only grows past a higher threshold
+      // ON the approval's own lines would never be parkable and the run would deadlock (measured: 74px of overflow
+      // when the approval was due, 123px after it).
       await page.waitForFunction(
         (id) => {
           const o = document.querySelector(`pre.job-out[data-out="${id}"]`);
-          return Boolean(o && o.scrollHeight - o.clientHeight > 80);
+          return Boolean(o && o.scrollHeight - o.clientHeight > 44);
         },
         job2.id,
         { timeout: 30000 },
@@ -677,6 +728,9 @@ async function runScenario(pw, sc, { pair }) {
         return { scrollTop: Math.round(o.scrollTop), max: Math.round(max), rows: o.querySelectorAll(".jl").length };
       }, job2.id);
       console.log(`   parked console: ${out.parked.rows} rows, scrollTop ${out.parked.scrollTop}/${out.parked.max}`);
+      // The console is parked: let the approval the scenario has been waiting to send go out now, so the card rebuild
+      // it causes is measured on this parked console (and not on one still following the bottom).
+      gw.state.release();
       await page.evaluate(() => {
         window.__rec.traceOn = true;
       });

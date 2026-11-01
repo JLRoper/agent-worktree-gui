@@ -46,7 +46,11 @@ needs, prints what it measured and exits non-zero when the claim failed. `node t
 what is there, `--only <substr>` runs the ones about a subject, `--all` runs every one with a per-harness
 timeout — so a claim is one command away instead of a remembered file name. A browser harness resolves
 Playwright through `tools/browser.mjs` (`PANEL_PLAYWRIGHT_ROOT` when it lives outside the repo) and
-`withBrowser()` closes the browser even when the harness throws.
+`withBrowser()` closes the browser even when the harness throws. None of them reads stdin, so they run the same
+piped, redirected or under the runner — but a shell that aliases `node` to a pty wrapper (winpty prints
+`stdin is not a tty` the moment it has no tty of its own) cannot start one at all; `npm run verify:all` and the
+per-gate scripts beside it (`npm run verify:flicker -- --only repainters`) go through npm's own shell and the
+real node binary, which is the way in from such a shell.
 
 `node tools/verify-verdicts.mjs [project]` re-derives every row's merge verdict straight from git and
 diffs it against the panel (exit 1 on any mismatch) — useful after touching the scan logic.
