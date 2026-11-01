@@ -460,11 +460,13 @@ Semantics, all verified against real runs:
   `git worktree add -b wtgui/<slug>-<tag> <repo>/.worktrees/<slug>-<tag>` and passes that path as the
   run's `cwd`. Nothing removes it afterwards — the branch and tree are yours to keep, review or
   reclaim.
-- **`cwd` is set twice, and both matter.** The tools resolve a directory per *task*
-  (`register_task_env_overrides`), while the system prompt and context-file discovery read the
-  *session* cwd (`agent.runtime_cwd.set_session_cwd`). A gateway without the local patch
-  (`docs/hermes-runs-api-knobs.diff`) ignores `cwd` entirely and runs every agent in its own
-  directory — the header chip warns when that is the case.
+- **The gateway must bind `cwd`, not just accept it.** Both the system prompt and the
+  terminal/file tools need the requested workspace. Current canonical runs require the
+  cwd-only gateway proposal in [docs/hermes-run-cwd.md](docs/hermes-run-cwd.md), which is
+  prepared for review, not automatically installed. The older combined
+  `docs/hermes-runs-api-knobs.diff` targets a legacy factory that canonical runs bypass.
+  Without working gateway support, the header chip warns and the prompt retains its
+  directory safeguard; neither a warning change nor a `cwd` JSON field proves tool isolation.
 - **Output** is the run's event stream: each tool call with its argument preview, the assistant's text
   as it arrives, approval requests, and a closing line with tokens and exit. Tool results are the
   gateway's redacted, 500-character preview (the full payload stays in the session transcript).
@@ -760,8 +762,10 @@ whose `defaultCwd` pointed at a deleted checkout refused every turn with `cwd is
 Set it under **Settings → working dir**; an unusable path is kept as written, logged, and the turn falls back
 to a directory that exists rather than failing. That directory is what the panel ASKS for: a stock gateway
 ignores the `cwd` a run body carries (no `cwd` handling in `gateway/platforms/api_server*.py`, and
-`GET /v1/capabilities` does not advertise `run_cwd`), so the run's working directory is the gateway's own
-until the per-run-knobs patch in `docs/hermes-runs-api-knobs.diff` is applied and the gateway restarted.
+`GET /v1/capabilities` does not advertise `run_cwd`), so the run's working directory is the gateway's own.
+The combined `docs/hermes-runs-api-knobs.diff` does not change that on canonical runs: it advertises
+`run_cwd`, but its binding lives in the legacy direct-worker factory those runs bypass. The proposal that
+binds it is [docs/hermes-run-cwd.md](docs/hermes-run-cwd.md) — prepared for review, not installed.
 Nothing the assistant does depends on it — it reads the board and starts workers, and a worker's own tree
 comes from the `cd` line the spawn wrapper carries.
 
@@ -1129,9 +1133,11 @@ Watches without a deadline, and finished ones, say so instead.
 - **`503 the Hermes gateway API is not usable at http://127.0.0.1:8642`** — the gateway is down, or
   `API_SERVER_KEY` is missing from `$HERMES_HOME/.env`. Start it with `hermes gateway restart`; the
   chip in the New-agent header tells you which of the two it is.
-- **The agent works in the gateway's directory instead of its worktree** — the local gateway patch
-  (`docs/hermes-runs-api-knobs.diff`) is not applied, or was lost to `hermes update`. The chip says
-  `gateway ignores per-run cwd` when this is the case.
+- **The agent works in the gateway's directory instead of its worktree** — the gateway has no working
+  per-run `cwd` for canonical runs. Stock Hermes ignores the field, and the combined
+  `docs/hermes-runs-api-knobs.diff` binds it only in the legacy direct-worker factory. The chip says
+  `gateway ignores per-run cwd` when `run_cwd` is absent; [docs/hermes-run-cwd.md](docs/hermes-run-cwd.md)
+  is the proposal that binds it on the canonical path.
 - **A tool result in the console is cut short** — the run stream carries a *preview* of each tool
   result, not all of it. The gateway caps it at **500 chars** by default (`preview[:497] + "..."`, cut
   mid-line); `HERMES_RUN_PREVIEW_CHARS` on the gateway process raises it — `0` = full — and a running
@@ -1143,12 +1149,14 @@ Watches without a deadline, and finished ones, say so instead.
   re-measurable with `node tools/measure-tool-output-cap.mjs`.
 - **A flagged command runs without asking** — check `approvals.mode` (`smart` waves many through)
   and `security.approval.transport` (must be `builtin` for runs).
-- **No stats row above a reply box, or an agent writing outside its worktree** — the same cause:
+- **No stats row above a reply box, or an agent writing outside its worktree** — two different causes:
   `gateway/platforms/*.py` is the stock file again (`hermes update` replaces them). Check the running
   gateway, not the source: `curl -s -H "Authorization: Bearer $API_SERVER_KEY"
   http://127.0.0.1:8642/v1/capabilities | grep run_cwd` — absent means the process has no local patch,
   so `cwd` / `max_turns` / `run_budget` are silently ignored and no `run.usage` is ever emitted.
-  Re-apply `docs/hermes-runs-api-knobs.diff` and restart the gateway.
+  Re-apply `docs/hermes-runs-api-knobs.diff` and restart the gateway. That patch does not bind `cwd` on
+  canonical runs — it advertises `run_cwd` and binds it only in the legacy factory — so the cwd half is
+  [docs/hermes-run-cwd.md](docs/hermes-run-cwd.md).
 - **`fatal: cannot change to ...: No such file or directory`** — native git can't take MSYS
   `/c/...` paths; use `C:/...`.
 - **A restart is refused: `no provider key in <HERMES_HOME>/.env`** — that is the preflight, not a failure of the
