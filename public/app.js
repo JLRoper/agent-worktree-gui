@@ -6763,10 +6763,50 @@ function wireConsole(el) {
   return el;
 }
 
+// ---- the board's consoles, without walking the board ----------------------------------------------------------
+// Six paths want every console of one kind on the page, and each asked the whole document for them every time:
+// - the typing pacer on every tick (paintTypedLines -> consoleOuts);
+// - every streamed line (drawJobLine);
+// - every stream repaint (paintStreamConsole);
+// - the 400 ms sweep, three times over (consoles, thinking bodies, subagent consoles).
+// On the reader's board each of those is a walk of a 55k-node page to find a few dozen nodes. A console only arrives by
+// being placed, so a node observer of their own notes each one as it lands. A lookup returns the noted ones still in
+// the page, still of that kind, in document order: the same list the walk returned. It must be its own observer and
+// not the copy observer's queue. A lookup first takes the records still waiting for it, so a console placed earlier in
+// this same task is counted; taking the copy observer's records would run the copy buttons' mount in the middle of a
+// paint. Before the watch is set up (placedNodes.watch, beside the copy observer) a lookup is the walk it replaces.
+// What it cannot see is a node that TAKES one of these classes after it was placed; nothing in this file does that
+// (no classList.add / className write names job-out, think-body or sub-console), and test/placed-nodes.test.js holds
+// the lookup to the walk's answer through every way a node does arrive and leave.
+function placedNodes(sel) {
+  const w = placedNodes.watch;
+  const set = w && w.sets.get(sel);
+  if (!set) return [...document.querySelectorAll(sel)];
+  for (const r of w.mo.takeRecords()) for (const n of r.addedNodes) notePlaced(w, n);
+  const out = [];
+  for (const el of set) {
+    if (!el.isConnected) set.delete(el);
+    else if (el.matches(sel)) out.push(el);
+  }
+  return out.length > 1 ? out.sort(byDocumentOrder) : out;
+}
+
+function notePlaced(w, node) {
+  if (!node || node.nodeType !== 1) return;
+  for (const [sel, set] of w.sets) if (node.matches(sel)) set.add(node);
+  if (!node.firstElementChild) return;
+  for (const el of node.querySelectorAll(w.any)) for (const [sel, set] of w.sets) if (el.matches(sel)) set.add(el);
+}
+
+function byDocumentOrder(a, b) {
+  if (a === b) return 0;
+  return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+}
+
 // One scan per paint: every console on the board, grouped by the job it draws (a pinned copy is its job's too).
 function consoleOuts() {
   const byJob = new Map();
-  for (const el of document.querySelectorAll("pre.job-out")) {
+  for (const el of placedNodes("pre.job-out")) {
     const id = el.dataset.out || "";
     const job = id.endsWith("@pin") ? id.slice(0, -4) : id;
     let list = byJob.get(job);
@@ -7051,7 +7091,7 @@ function syncStreamConsole(out, body, stick) {
 }
 
 function paintStreamConsole(turn, copy = "") {
-  const out = [...document.querySelectorAll("pre.job-out")].find((el) => el.dataset.out === `${turn.id}${copy}`);
+  const out = placedNodes("pre.job-out").find((el) => el.dataset.out === `${turn.id}${copy}`);
   if (!out) return false;
   const all = jobLines(turn.id).filter((l) => !isBookkeeping(l));
   const stick = consolePinned(`${turn.id}${copy}`) || wireConsole(out)._atBottom !== false;
@@ -7319,6 +7359,19 @@ const copyObserver = new MutationObserver((records) => {
 copyObserver.observe(document.documentElement, { childList: true, subtree: true });
 mountCopyButtons(document.documentElement);
 watchMotion(document.documentElement);
+
+// The watch placedNodes() reads (see there): its own observer, so a lookup can take the records waiting for it
+// without taking the copy observer's.
+placedNodes.watch = (() => {
+  const kinds = ["pre.job-out", ".think-body", ".sub-console"];
+  const w = { sets: new Map(kinds.map((k) => [k, new Set()])), any: kinds.join(", "), mo: null };
+  w.mo = new MutationObserver((records) => {
+    for (const r of records) for (const n of r.addedNodes) notePlaced(w, n);
+  });
+  w.mo.observe(document.documentElement, { childList: true, subtree: true });
+  notePlaced(w, document.documentElement);
+  return w;
+})();
 
 // What a block copies: its own text, as the reader sees it. innerText alone will not do - a flex row (a
 // tool burst's call: glyph, name, tally, arguments, timer) has its items blockified, so innerText breaks
@@ -8268,7 +8321,7 @@ function drawJobLine(evt) {
   if (isBookkeeping(line)) return;
   // A pinned turn renders twice — in its page and in the pinned block above — so every pane carrying
   // this id (or its "@pin" copy) gets the line.
-  const outs = [...document.querySelectorAll("pre.job-out")]
+  const outs = placedNodes("pre.job-out")
     .filter((el) => el.dataset.out === evt.id || el.dataset.out === `${evt.id}@pin`)
     .map(wireConsole);
   if (!outs.length) return;
@@ -15847,15 +15900,15 @@ document.addEventListener(
 // Whatever moved a pinned console off its newest line - a rebuild, the browser clamping a replaced node, a resize -
 // is corrected here within a frame or two. Only pinned consoles are touched, so reading history is never interrupted.
 setInterval(() => {
-  for (const pre of document.querySelectorAll("pre.job-out")) {
+  for (const pre of placedNodes("pre.job-out")) {
     stickConsole(pre);
     paintToBottom(pre);
   }
-  for (const body of document.querySelectorAll(".think-body")) {
+  for (const body of placedNodes(".think-body")) {
     stickThinkBody(body);
     paintToBottom(body);
   }
-  for (const box of document.querySelectorAll(".sub-console")) stickSubConsole(box);
+  for (const box of placedNodes(".sub-console")) stickSubConsole(box);
 }, 400);
 
 // A wheel up is the reader leaving the bottom on purpose; coming back down re-pins in the scroll handler.
