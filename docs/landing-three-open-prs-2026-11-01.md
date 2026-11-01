@@ -58,3 +58,41 @@ place — the brief scoped the cleanup to the primary checkout. Four directories
 part of it.
 
 PRs **#115** and **#18** were not touched.
+
+## Re-verification, same day — a second landing tree
+
+A second landing brief, cut from `main` after #173 merged, asked for the same four steps again: rebase #170 → 0.46.5,
+#171 → 0.46.6, #169 → 0.46.7, then remove the three trees and branches. Nothing was left to do. All three PRs already
+read `MERGED` and both the worktrees and the local branches were already gone, so this tree re-checked each claim
+against the remote and the checkout instead of re-landing anything. No PR was reopened, re-pushed or edited.
+
+Read from `origin/main` `8e7c01e` (0.48.3) on 2026-11-01 at 18:20 EST:
+
+| # | `state` | merged | merge commit | `package.json` at that merge | ancestor of `origin/main` |
+|---|---|---|---|---|---|
+| 170 | MERGED | 16:02:06Z | `788a7a8f72cd40c7849334e5a881b3cbc41a7e9f` | 0.46.5 | yes |
+| 171 | MERGED | 16:03:49Z | `4ea03f7d617b40ffb72576169b0ff576c6f6e399` | 0.46.6 | yes |
+| 169 | MERGED | 16:05:20Z | `b1c5bd294a6a804a540722ae31dd345d76805175` | 0.46.7 | yes |
+
+- `gh pr view <n> --json state,mergeCommit` reports MERGED with the same oid for each of the three, so the versions in
+  the table are the numbers each branch carried into main, not main's current number.
+- `git merge-base --is-ancestor <merge> origin/main` is true for all three: the work is on main, and later landings
+  (0.46.8 through 0.48.3) sit on top of it.
+- `git worktree list` holds 7 entries and none of them is one of the three trees; `.worktrees/` has no directory
+  ending `01e39b`, `24ca82` or `1c2c38`, registered or orphan.
+- `git rev-parse --verify --quiet refs/heads/<branch>` is empty for all three local branches.
+- The three **remote** refs were left in place, because the first brief scoped the cleanup to the primary checkout.
+
+This branch therefore carries this re-verification and a patch bump only. The three merges and the three removals
+recorded above belong to the earlier landing (#173); repeating them would have meant re-pushing already-merged
+branches. The suite below was run on **this** tree, so the record's own commit is covered by a green run.
+
+### Checks
+
+`npm test` (`node --test --test-concurrency=4 test/*.test.js`) on this tree at 0.48.4, before the push:
+
+| tests | pass | fail | skipped | duration |
+|---|---|---|---|---|
+| 706 | 706 | 0 | 0 | 59.4 s |
+
+The three trees of the first landing each ran 661 tests; main has gained 45 since, which is why this number is higher.
