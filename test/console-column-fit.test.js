@@ -109,6 +109,22 @@ class El {
   get cells() {
     return this.children.filter((c) => c.tagName === "TH" || c.tagName === "TD");
   }
+  get textContent() {
+    return this.text + this.children.map((c) => c.textContent).join("");
+  }
+  // Class selectors only (".a, .b"), which is all the signature asks.
+  querySelectorAll(sel) {
+    const want = sel.split(",").map((s) => s.trim().replace(/^\./, ""));
+    const out = [];
+    const walk = (n) => {
+      for (const c of n.children) {
+        if (want.some((w) => c.classes.has(w))) out.push(c);
+        walk(c);
+      }
+    };
+    walk(this);
+    return out;
+  }
   // The one layout rule this needs: a header cell is as wide as the widest cell of its column (8 px a character),
   // and a cell spanning every column shares its width out over them - the way an auto table layout distributes a
   // colspan cell. It also counts layouts on the reader's own table, which is the thing that clamps a console.
@@ -170,7 +186,7 @@ function board({ transcript = 4000 } = {}) {
 
 const context = { document: doc, Math, Number, WeakSet, Set };
 vm.createContext(context);
-vm.runInContext([grab("headerCells"), grab("naturalColumnWidths")].join("\n"), context);
+vm.runInContext([grab("headerCells"), grab("naturalColumnWidths"), grab("columnSignature")].join("\n"), context);
 
 test("measuring the columns never restyles or lays out the table the consoles live in", () => {
   const { table } = board();
@@ -231,6 +247,36 @@ test("the copy measures the header and the worktree rows, with the table's own s
   assert.deepEqual(seen.headWidths, ["", "", ""], "and no applied split constrains what it measures");
   assert.equal(table.style.tableLayout, undefined, "while the live table kept its fixed layout");
   assert.deepEqual([...table.tHead.rows[0].cells].map((th) => th.style.width), ["120px", "120px", "120px"], "and its split");
+});
+
+// ---- the memo that decides whether a repaint measures at all ------------------------------------------------------
+// fitColumns() measures only when columnSignature() changed. It is read over the same set the copy measures - the
+// worktree rows - so a line an agent writes into an open card (a spanning detail row) is not a reason to measure.
+test("an agent writing into an open card does not ask for a measurement", () => {
+  const { table, detail } = board({ transcript: 4000 });
+  const tbody = table.tBodies[0];
+  const before = context.columnSignature(tbody);
+  detail.cells[0].text += "\nanother paragraph the agent wrote ".repeat(40);
+  assert.equal(context.columnSignature(tbody), before, "the console grew and the signature did not move");
+  tbody.children = tbody.children.filter((tr) => !tr.classes.has("detail"));
+  assert.equal(context.columnSignature(tbody), before, "and closing the card is not a column change either");
+});
+
+test("a worktree row that changed still asks for one (control)", () => {
+  const { table } = board();
+  const tbody = table.tBodies[0];
+  const before = context.columnSignature(tbody);
+  const first = tbody.rows.find((tr) => tr.classes.has("row"));
+  first.cells[2].text = "12m"; // the life column grew a character
+  const grown = context.columnSignature(tbody);
+  assert.notEqual(grown, before, "a cell's text changed, so the split may have");
+  const chip = new El("span", { cls: ["chip"], text: "PR" });
+  first.cells[0].appendChild(chip);
+  assert.notEqual(context.columnSignature(tbody), grown, "a chip appeared in the worktree column");
+  const withChip = context.columnSignature(tbody);
+  const tr = tbody.appendChild(new El("tr", { cls: ["row"] }));
+  for (const t of ["a-new-tree", "wtgui/a-new-tree", "1s"]) tr.appendChild(new El("td", { text: t }));
+  assert.notEqual(context.columnSignature(tbody), withChip, "and a new worktree row is counted");
 });
 
 // ---- setScroll and the flag it leaves for the scroll handler -------------------------------------------------------
