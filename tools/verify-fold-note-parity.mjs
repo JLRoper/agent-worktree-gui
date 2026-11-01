@@ -327,6 +327,9 @@ async function browserPhase(pw) {
           return realFetch(url, opts);
         };
         localStorage.setItem("wtgui.autoCollect", "0");
+        // The condensed half of this probe reads the tallied group's body (a head row per tool, its fold, the
+        // "all N" button). The shipped default is one expandable line per call, so the tally is asked for here.
+        localStorage.setItem("wtgui.toolGroups", "1");
         const foldRe = /^\s*…\s+\d+ lines?(?: hidden| shortened)(?:, \d+ lines? shortened)? — click to read\s*$/;
         const pre = () => document.querySelector(`pre.job-out[data-out="${id}"]`);
         probe.show = (which = "full", stream = false) => {
@@ -341,6 +344,11 @@ async function browserPhase(pw) {
           state.foldPending?.clear();
           state.toolStorePending.clear();
           state.outPinned = {};
+          // renderJobs() rewrites the card list only when the set of cards, or a card's own conversationSignature,
+          // has moved — that is what stops a live console being replaced under the reader on every append. This
+          // probe paints the same turn from different lines (full | trimmed | old), which moves no signature:
+          // clear the memo of the last one first, or section (g) reads the card (f) left in the DOM.
+          state.jobsListSig = "";
           state.maximized = id;
           localStorage.setItem(`wtgui.stream.${thread}`, stream ? "1" : "0");
           probe.calls = [];
@@ -396,6 +404,9 @@ async function browserPhase(pw) {
         };
         probe.readStore = async (tool) => {
           await ensureToolStore(id, tool, null);
+          // The store read lands in state.toolStore, which no conversationSignature carries: force the card list to
+          // repaint (same reason as show()), or the legacy note stays a plain note instead of resolving to its row.
+          state.jobsListSig = "";
           renderJobs();
           return probe.read();
         };
@@ -417,10 +428,22 @@ async function browserPhase(pw) {
         if (await groups.nth(i).locator(".tgrp-body").evaluate((b) => b.hidden)) await groups.nth(i).locator("[data-tgrp-more]").click();
       }
     };
+    // In the 🌊 view a call's box is drawn BEHIND its own row, and that row is the box's opener there: the header
+    // lives inside the shut `.tgrp-out`, so it has no box to press until the row is opened. That is the reader's own
+    // two steps (press the row, then the header inside it) and the ones verify-output-boxes drives; the condensed
+    // view has no `.tgrp-call`, so this is a no-op there.
+    const reveal = async (tool, row) => {
+      const call = header(tool, row).locator("xpath=ancestor::div[contains(@class,'tgrp-call')][1]");
+      if ((await call.count()) !== 1) return;
+      if (await header(tool, row).isVisible()) return;
+      await call.locator("xpath=.//div[contains(@class,'tgrp-row')]").click();
+      await waitFor(() => header(tool, row).isVisible(), { timeoutMs: 5000, stepMs: 50, what: `the stream's row ${tool} ${row} to open its box` });
+    };
     const press = async (tool, row) => {
       const before = await read();
       const own = before.controls.find((c) => c.tool === tool && c.row === String(row));
       if (await header(tool, row).count() !== 1) return { pressed: false, before, own, after: before, requests: [] };
+      await reveal(tool, row);
       await header(tool, row).click();
       const loaded = await waitFor(() => page.evaluate(([id, t, r]) => {
         const c = window.__probe.result(t, r);

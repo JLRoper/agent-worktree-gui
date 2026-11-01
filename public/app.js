@@ -2368,7 +2368,10 @@ function turnBody(turn, copy = "") {
               const m = TOOL_DONE_RE.exec(String(l.text || ""));
               if (m) storeSeen.set(m[1], (storeSeen.get(m[1]) || 0) + 1);
             }
-            return toolGroupHtml(item.lines, `${turn.id}#${gi}`, "", false, "", gofs);
+            // The reader's own answer to "count them, or one line each": with the tally off a burst is drawn as
+            // the same run of rows the 🌊 console draws — no head row, no "all N" button, one press per call —
+            // and the group keeps its two rules, its identity and its store offsets.
+            return toolGroupHtml(item.lines, `${turn.id}#${gi}`, "", false, "", gofs, toolGroupsOn() ? {} : { flat: true });
           }
           const l = item.line;
           const i = lines.indexOf(l);
@@ -3570,7 +3573,7 @@ function subConsoleHtml(id) {
   // The child's transcript is condensed exactly like a turn's: a run of tool calls is one row per tool with a tally,
   // the rest is its text. Same components, so the two consoles behave the same way.
   const body = burstGroups(c.lines)
-    .map((item, gi) => (item.group ? toolGroupHtml(item.lines, `${id}#${gi}`) : lineHtml(item.line)))
+    .map((item, gi) => (item.group ? toolGroupHtml(item.lines, `${id}#${gi}`, "", false, "", null, toolGroupsOn() ? {} : { flat: true }) : lineHtml(item.line)))
     .join("");
   return `<pre class="sub-console mono" data-sub-console-box="${esc(id)}">${body}</pre>`;
 }
@@ -6333,6 +6336,35 @@ function setStreamMode(thread, on) {
   renderConversation(thread);
 }
 
+// ---- a run of tool calls: tallied, or one line each (Settings > Agent cards) -------------------
+// The condensed card draws a burst of calls as ONE tallied group by default: a head row per tool with its count
+// (terminal ×12), the batch's "+ N commands" tail, and a button that opens the whole run. That shape repeats the
+// call it is tallying - a single `terminal ×1` cost a head row, the "all N" button, the call row, its "↳ tool"
+// result line and the output box, five rows for one call - so the reader can turn it off: every call is then ONE
+// row (glyph, tool, and the file, range or command it was given) and pressing that row opens what the call
+// returned, in the same box the tallied view opens. Saved in this browser; one answer for every console.
+const TOOL_GROUPS_KEY = "wtgui.toolGroups";
+
+function toolGroupsOn() {
+  try {
+    return localStorage.getItem(TOOL_GROUPS_KEY) === "1";
+  } catch {
+    /* private mode: the one-line shape, which is the default anyway */
+    return false;
+  }
+}
+
+function setToolGroups(on) {
+  try {
+    localStorage.setItem(TOOL_GROUPS_KEY, on ? "1" : "0");
+  } catch {
+    /* the choice just will not persist */
+  }
+  // The shape is decided per card at render time, and conversationSignature carries the setting, so this rebuilds
+  // every console into the shape just chosen instead of leaving the cards drawn under the old one.
+  for (const c of conversations()) renderConversation(c.thread);
+}
+
 // ---- how a run's output arrives (Settings > Display) ------------------------------------------
 // The wire is not the reader's pace. A paragraph reaches the console in coalesced frames (120 ms on the server, and
 // several words in a fast model) and tool calls and results arrive as whole lines, so a live card used to jump a
@@ -7599,6 +7631,10 @@ function conversationSignature(conv) {
     // localStorage, asks for a repaint, and the repaint concludes nothing changed — the card flips only when some
     // unrelated event moves this signature.
     streamOn(conv.thread) ? "s" : "-",
+    // …and the tool-call shape for the same reason, one level up: `toolGroupsOn` decides whether a run of calls in
+    // this card is the tallied group or one row each, so a press in Settings (which repaints every conversation)
+    // would otherwise conclude nothing changed and leave the console in the shape it was drawn under.
+    toolGroupsOn() ? "g" : "-",
     // A card stays RUNNING while children it delegated are out, so that answer belongs in the signature.
     (subagentFallback.get(conv.thread) || []).some((s) => s.running) ||
     conv.turns.some((t) => (t.subagents || []).some((s) => s.running))
@@ -7967,12 +8003,15 @@ function drawJobLine(evt) {
         gofs = storeOffsetsBefore(out, null);
       }
       // The group already on screen says whether this console is drawn as a stream; a new one asks its card. A flat
-      // piece has no head row and no "N lines" button, so a call appended to it must not grow one back.
-      const flat = openGroup ? openGroup.dataset.gflat === "1" : streaming;
+      // piece has no head row and no "N lines" button, so a call appended to it must not grow one back. A NEW group
+      // in a card is flat when the reader turned the tally off (Settings > Count tool calls) - the append has to
+      // draw the shape the repaint will, or the next repaint would move every row of the burst.
+      const flat = openGroup ? openGroup.dataset.gflat === "1" : streaming || !toolGroupsOn();
       // The blank line a reasoning block has always had, before every piece of a stream: a group that opens where
       // another piece already stands is set apart from it, and a group growing in place keeps the separation it was
-      // drawn with (the same piece, not a new one).
-      const sep = flat && (openGroup ? openGroup.classList.contains("jl-sep") : Boolean(out.lastElementChild));
+      // drawn with (the same piece, not a new one). The condensed console has no such blank line, so a flat group
+      // there takes none: `streaming`, not `flat`, is what decides.
+      const sep = streaming && (openGroup ? openGroup.classList.contains("jl-sep") : Boolean(out.lastElementChild));
       const holder = document.createElement("div");
       holder.innerHTML = toolGroupHtml(lines, key, filter, bodyEl ? !bodyEl.hidden : false, openGroup ? openGroup.dataset.gat || "" : "", gofs, flat ? { flat: true, sep } : {});
       const fresh = holder.firstElementChild;
@@ -17382,6 +17421,9 @@ $("auto-collect")?.addEventListener("change", (e) => {
   }
 });
 $("prev-turn-mode")?.addEventListener("change", (e) => applyPrevTurnMode(e.target.value));
+// How a run of tool calls is drawn: the tallied group, or one expandable line per call. The shape is a render-time
+// decision in every console, so the handler repaints them (setToolGroups does).
+$("group-tools")?.addEventListener("change", (e) => setToolGroups(Boolean(e.target.checked)));
 $("show-thinking")?.addEventListener("change", (e) => {
   try {
     localStorage.setItem(THINK_KEY, e.target.checked ? "1" : "0");
@@ -17460,6 +17502,7 @@ applyContrast(contrastSetting(), { save: false });
 applyAddBarBrightness(addBarBrightnessSetting(), { save: false });
 applyAddBarTop(addBarAtTop(), { save: false });
 if ($("show-thinking")) $("show-thinking").checked = thinkDefault();
+if ($("group-tools")) $("group-tools").checked = toolGroupsOn();
 if ($("auto-collect")) $("auto-collect").checked = autoCollectOn();
 if ($("prev-turn-mode")) $("prev-turn-mode").value = prevTurnMode();
 void refreshSubagentRoster();
