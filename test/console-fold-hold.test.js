@@ -92,7 +92,7 @@ function drive(seed) {
   });
   const fn = part("function holdConsoleFor(", "\n// Every scroll the panel performs goes through here.");
   vm.runInContext(`${part("const FOLD_FOLLOW_KEY =", "// ---- how a run's output arrives")}\n${fn}`, context, { filename: "public/app.js" });
-  const pre = { dataset: { out: "t1" }, scrollTop: 58, scrollHeight: 588, clientHeight: 230 };
+  const pre = { dataset: { out: "t1" }, scrollTop: 58, scrollHeight: 588, clientHeight: 230, _atBottom: true };
   const control = { closest: (sel) => (sel === "pre.job-out" ? pre : null) };
   const out = vm.runInContext("holdConsoleFor", context)(control);
   return { pre, out, held: vm.runInContext("state", context) };
@@ -103,6 +103,7 @@ test("the hold unpins the console and records where the reader is, writing no sc
   assert.equal(out, pre, "it answers with the console it took over");
   assert.equal(held.outPinned.t1, false, "the 400 ms stick has nothing to pull back to its end");
   assert.deepEqual(JSON.parse(JSON.stringify(held.outScrolls.t1)), { top: 58, atBottom: false }, "a repaint restores this, not the end");
+  assert.equal(pre._atBottom, false, "and the page's cached at-bottom answer is cleared: a paced paint reads that, and no scroll event will fire to correct it");
   assert.equal(pre.scrollTop, 58, "the panel writes no scroll position at all: the growth is the reader's");
 });
 

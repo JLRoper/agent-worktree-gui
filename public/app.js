@@ -6698,11 +6698,11 @@ function wireConsole(el) {
   el.addEventListener(
     "scroll",
     () => {
-      // The panel's own writes arrive here too, and a box that is still where the panel put it is following.
-      if (justPlaced(el)) {
-        el._atBottom = true;
-        return;
-      }
+      // Every scroll is measured, the panel's own included. A restore puts the reader back where its record says, and
+      // that is the bottom only when the record says so: assuming "the panel wrote it, so it is following" pinned a
+      // console the reader had been handed back to the middle of (applyStoredScrolls writes atBottom:false). One
+      // scroll event is a gesture or a rebuild, not a row, so the layout read this costs is the one the per-row
+      // paints were paying for.
       el._atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     },
     { passive: true },
@@ -7378,6 +7378,10 @@ function holdConsoleFor(control) {
   if (!pre || !pre.dataset.out || foldFollowsConsole()) return null;
   state.outPinned[pre.dataset.out] = false;
   state.outScrolls[pre.dataset.out] = { top: pre.scrollTop, atBottom: false };
+  // …and the page's cached answer has to say so too. A paced paint consults `_atBottom` instead of measuring, and the
+  // fold's own growth fires no scroll event to correct it, so a console that was just handed over would be carried to
+  // the bottom of what the reader opened on the next tick — the fault this function exists to prevent.
+  pre._atBottom = false;
   return pre;
 }
 
