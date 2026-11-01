@@ -146,6 +146,20 @@ how many frames it sat at 0, so #165's `placeBuiltConsoles` is proved on the exp
 with a source read; exit 1 names any frame that painted an unparked console at 0, with the DOM op and SSE frame in
 front of it (`docs/console-frames-7393-0461.md`).
 
+`node tools/verify-console-column-fit.mjs` gates the console against the worktree chart's own column measurement, the
+cause of the console that "bounces up and back down in a split second" and of the parked reader who "loses their place
+somewhere else in the scrollbar" (`docs/console-bounce-column-fit.html`). A panel of its own streams the long
+paragraphs a real agent writes into two cards of one worktree row (a stub that streams short lines cannot show it: a
+short line is already its own max-content width); one console follows its run, the other is parked with a real wheel.
+It calls `fitColumns()` on the open table three times between frames, then runs 30 s of the board's own clocks with a
+file written into the worktree every 3 s, sampling what every frame painted. It asserts that no measurement moves either
+console, that no frame paints the following one more than two lines off its newest line, that the parked one never
+leaves the reader's line, and that the run measured something (scrollback, a park the page recorded, at least three
+measurements, a planted fall the recorder sees). `--seconds N`, `--root <checkout>`, `--json <file>`, `--headed`. On
+an export of 0.46.8 it is red: one `fitColumns()` takes the following console from 716/716 to 147/716, and 18 of 18
+measurements in the window move a console by 604-1139 px. `test/console-column-fit.test.js` is the half that needs no
+browser.
+
 `node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
 `--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
 ancestry cannot see the merge: the repository ruleset requires linear history, so a PR lands as a squash or a
