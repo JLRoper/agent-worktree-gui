@@ -1366,7 +1366,6 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
     locks.setBranch(projectName, newBranch, true, { by: heldBranch.by || "the reader", path: finalPath });
     log(`branch lock follows the rename: ${oldBranch} -> ${newBranch}`);
   }
-  const repointed = jobs.repointPath(oldPath, finalPath);
   if (moved) {
     // A locked tree stays locked when it moves. The lock is keyed by the directory (lib/locks.js), so a rename would
     // otherwise unlock a tree nobody asked to unlock — the old key goes and the new path carries the same record.
@@ -1408,7 +1407,7 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
       path: finalPath.replace(/\\/g, "/"),
       branch: (scanned && scanned.branch) || oldBranch,
       branchRenamed: false,
-      jobs: repointed,
+      jobs: 0,
       warning: `the directory keeps its old name (${whyNot})`,
     };
   }
@@ -1416,6 +1415,12 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
   // board should show the new name in the same breath as the banner.
   const scanned = await scheduler.scanOne(project, finalPath.replace(/\\/g, "/"), "full").catch(() => null);
   const finalBranch = (scanned && scanned.branch) || (branchRenamed ? newBranch : oldBranch);
+  // Every record the panel keeps about the tree follows the move — the paths AND the branch name, in the job, the
+  // measured tree and the completion payload alike (lib/jobs.js `repointPath`). Done HERE rather than at the top of
+  // the function because the branch the tree actually ended up on is only known once it has been read back: passing
+  // the old name would have left `branch` spelling a ref git no longer has, which is half of what the panel's own
+  // dogfood run found on a renamed tree's earlier turn.
+  const repointed = jobs.repointPath(oldPath, finalPath, { branch: finalBranch, oldBranch });
   // The record follows the tree: a name with no tag gets one here (rename keeps a tag, and makes one when the tree
   // had none), so the key changes with the name and the old one is dropped. settle() — not record() — is the write
   // that says the name is final: it clears the cut marker so no later event, and no later run, can give this tree
@@ -1462,13 +1467,57 @@ naming = new WorktreeNaming({
   // that arrived before Hermes wrote the name — the 10-second sweep emits again as soon as it has one.
   titleFor: (job) => job.title || jobs.sessionInfoFor(job.thread).title,
   // A tree a live run is standing in cannot be moved by git, so the attempt waits for the settle rather than fail.
-  isBusy: (dir) => jobs.list().some((x) => isLiveJobStatus(x.status) && normPathKey(x.ownerPath || x.cwd) === normPathKey(dir)),
+  // All three of a card's tree fields are asked: `ownerPath || cwd` missed a live run whose owner was recorded
+  // elsewhere and whose cwd was the tree, which is a tree moved under a working agent — the other half of what the
+  // policy's own settle gate now refuses outright.
+  isBusy: (dir) =>
+    jobs.list().some(
+      (x) =>
+        isLiveJobStatus(x.status) &&
+        [x.ownerPath, x.worktreePath, x.cwd].filter(Boolean).some((p) => normPathKey(p) === normPathKey(dir)),
+    ),
   rename: (args) => renameWorktree(args),
   log,
   // The boot backfill: a tree that was here before this process must be written down before any restored run's
   // title is considered, or "no entry" would let it through.
   ready: treeNamesReady,
 });
+
+// An earlier turn's record outlives its tree's name: the panel renames a tree once, and a job written before that
+// rename keeps the path and branch it was written with unless something moves them. The rename itself repoints every
+// record it can see (lib/jobs.js `repointPath`, called from renameWorktree); this pass is for the records it could
+// not see — a card restored over a tree an earlier process renamed, or a tree moved by another tool. Each dead
+// reference is resolved through the naming ledger by the six-hex tag a rename keeps, and a record nothing can place
+// is marked so the card says the tree was renamed instead of quoting a directory that is gone. Run once, after the
+// boot seeding has written the fleet down: before that the ledger has no entry for a tree it is about to seed.
+function resolveThroughNamingLedger({ path: gone, branch, projectPath }) {
+  const project = spawnFeature.projectForPath(gone) || spawnFeature.projectForPath(projectPath) || null;
+  if (!project?.name || !project.path) return null;
+  const rec = treeNames.forTree({ project: project.name, path: gone, branch });
+  // A cut record is a tree waiting for its one name, not a name it has: nothing to resolve to.
+  if (!rec || namingState(rec) !== "named") return null;
+  const dir = String(rec.dir || "").trim();
+  const name = String(rec.name || "").trim();
+  const at = (p) => (p && existsSync(p) ? p.replace(/\\/g, "/").replace(/\/+$/, "") : null);
+  const found =
+    at(path.isAbsolute(dir) ? dir : "") ||
+    at(name ? path.join(project.path, ".worktrees", name) : "") ||
+    at(dir ? path.join(project.path, ".worktrees", dir) : "") ||
+    at(dir ? path.join(project.path, dir) : "");
+  return found ? { path: found, branch: rec.branch || branch || null } : null;
+}
+
+void treeNamesReady
+  .then(() => {
+    const out = jobs.reconcileTreeRecords({ resolve: resolveThroughNamingLedger });
+    if (out.moved || out.unresolved) {
+      log(
+        `tree-names: ${out.moved} job record(s) repointed to their tree's current name, ` +
+          `${out.unresolved} left saying the tree was renamed (their path is gone and the ledger cannot place it)`,
+      );
+    }
+  })
+  .catch(() => {});
 
 // The cut half of the ledger, called by lib/jobs.js around `git worktree add`: BEFORE the directory exists the tree is
 // recorded as this run's to name, and if git then fails the record is handed back. Injected here because the ledger
@@ -1581,6 +1630,19 @@ function withTreeNames(snap) {
       // A `skipped` record says the panel looked and LEFT THE NAME ALONE (the branch already carried its own
       // commits): it is written so the title sweep stops asking, not because a name landed, so the row must not
       // claim to have been named either. The ledger keeps the reason for anyone reading the file.
+      // A cut tree's record can still carry the title the automatic half DECLINED (it promised a PR, a commit, a
+      // merge). That is not a name, but it is why the tree keeps the name it was cut with, so the row carries it
+      // separately — the ✎ tooltip says it was offered and turned down, and no `named` line is invented for it.
+      if (rec && namingState(rec) === "cut" && rec.offered?.title) {
+        row.nameOffer = {
+          title: rec.offered.title,
+          why: rec.offered.why || "",
+          at: rec.offered.at || null,
+          line: describeNaming(rec),
+        };
+      } else {
+        delete row.nameOffer;
+      }
       if (!rec || namingState(rec) === "cut" || rec.skipped) {
         delete row.named;
         continue;

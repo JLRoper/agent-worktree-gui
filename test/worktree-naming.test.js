@@ -20,7 +20,7 @@ import path from "node:path";
 import test, { after, before } from "node:test";
 
 import { TreeNames, autoNameRefusal, describeNaming, namingState, tagOf, treeKey } from "../lib/tree-names.js";
-import { WorktreeNaming } from "../lib/worktree-naming.js";
+import { WorktreeNaming, settleRefusal, titlePromise } from "../lib/worktree-naming.js";
 import { git, post, startPanel } from "../tools/panel-testkit.mjs";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -128,7 +128,7 @@ test("a seeded tree cannot be renamed by a later run, even one that says it cut 
   assert.equal(ledger.get(key).seeded, true, "seed() is what wrote it, and nothing overwrote it");
 });
 
-test("a freshly cut tree is renamed once, on the first title, whatever the run's status", async () => {
+test("a freshly cut tree is named when its first run settles, and never while the run is still going", async () => {
   const { ledger } = freshLedger();
   const tree = "/repo/demo/.worktrees/land-every-piece-of-unla-adc74e";
   const key = treeKey({ project: "demo", path: tree });
@@ -169,14 +169,21 @@ test("a freshly cut tree is renamed once, on the first title, whatever the run's
     },
   });
 
-  // The first event is a RUNNING run with a title: the old code waited for a terminal status, which is the
-  // "named at the end of a later turn" the reader objected to. The title is the trigger.
+  // A RUNNING run's title is not a name yet: the tree was moved under a live turn by exactly this, and the turn's
+  // own record and the reader's path went with it (the panel's dogfood run). Nothing may move until the run ends.
   const base = { id: "run-cut", thread: "thread-cut", worktreePath: tree, title: "Fix delete worktree button" };
+  const live = await naming.consider({ ...base, status: "running" });
+  assert.equal(renames, 0, "a live run's title moves nothing");
+  assert.equal(calls.length, 0);
+  assert.match(live.skipped, /still going/, "and the skip says why");
+  assert.equal(namingState(ledger.get(key)), "cut", "the tree is still waiting for its name");
+  // The same title, offered by the event that settles the run — and the SECOND settled event of that same tick
+  // lands inside the first rename's git work, so the in-flight guard has to hold as it always did.
   const [a, b] = await Promise.all([
-    naming.consider({ ...base, status: "running" }),
     naming.consider({ ...base, status: "done" }),
+    naming.consider({ ...base, status: "failed" }),
   ]);
-  assert.equal(renames, 1, "one title, one rename — the second event on the same tick changed nothing");
+  assert.equal(renames, 1, "one title, one rename — the second settled event on the same tick changed nothing");
   assert.ok(a || b, "at least one attempt ran");
   assert.equal(calls.length, 1);
   assert.equal(ledger.get(key).name, "fix-delete-worktree-button-adc74e");
@@ -201,7 +208,7 @@ test("a run that did not cut the tree cannot name it, even before the cut run ha
   await naming.consider({ id: "run-second", thread: "t2", worktreePath: tree, status: "done", title: "Second run's title" });
   assert.equal(calls.length, 0, "the second run's title was not used");
   // The cut run itself still may, so the refusal is about the run, not about the tree being frozen too early.
-  await naming.consider({ id: "run-cut", thread: "t", worktreePath: tree, status: "running", title: "The cut run's title" });
+  await naming.consider({ id: "run-cut", thread: "t", worktreePath: tree, status: "done", title: "The cut run's title" });
   assert.equal(calls.length, 1, "the run that cut it still gets its one name");
 });
 
@@ -230,6 +237,105 @@ test("a tree nobody recorded is never renamed, and nothing is decided before the
   release();
   await pending;
   assert.equal(gated.calls.length, 1, "and the attempt lands as soon as it has");
+});
+
+test("a title that promises a PR, a commit or a merge never names the tree — and never spends its one name", async () => {
+  const { ledger } = freshLedger();
+  const tree = "/repo/demo/.worktrees/work-only-inside-c-users-9791a7";
+  const key = treeKey({ project: "demo", path: tree });
+  ledger.claimCut(key, {
+    name: "work-only-inside-c-users-9791a7",
+    dir: "work-only-inside-c-users-9791a7",
+    branch: "wtgui/work-only-inside-c-users-9791a7",
+    tag: "9791a7",
+    by: "run run-cut (thread-cut)",
+    how: "cut by this panel — its one name is the run's to give",
+    at: new Date().toISOString(),
+    cutRun: "run-cut",
+    thread: "thread-cut",
+  });
+  const { naming, calls } = namingHarness({ ledger });
+  const base = { id: "run-cut", thread: "thread-cut", worktreePath: tree, status: "done" };
+  // The exact title the panel's own dogfood run was renamed to. That run changed nothing, so there was no commit
+  // and no PR — the sentence described work that never happened, and the tree wore it anyway.
+  const out = await naming.consider({ ...base, title: "Commit notes.txt and open PR" });
+  assert.equal(calls.length, 0, "nothing was renamed");
+  assert.match(out.skipped, /promises work that has not been done/, "and the refusal says what is wrong with it");
+  assert.match(out.skipped, /open PR/, "quoting the clause that made the promise");
+  const rec = ledger.get(key);
+  assert.equal(namingState(rec), "cut", "the tree is still the cut run's to name — the one name was not spent");
+  assert.equal(rec.offered.title, "Commit notes.txt and open PR", "the title was recorded beside the record");
+  assert.match(rec.offered.why, /promises work/);
+  assert.match(describeNaming(rec), /“Commit notes\.txt and open PR” was offered and declined/, "and the row can say so");
+  assert.equal(ledger.isNamed(key), false, "a declined offer is not a name anyone may read back");
+
+  // The run's later turn writes a title that describes what the tree now holds. THAT may name it — the refusal
+  // above cost the tree nothing.
+  await naming.consider({ ...base, status: "done", title: "Retention sweep for the job store" });
+  assert.equal(calls.length, 1, "a settled title that describes the work still names the tree");
+  assert.equal(calls[0].name, "Retention sweep for the job store");
+});
+
+test("a title is refused for the deliverable it PROMISES, not for the one it merely describes", () => {
+  // Promises: an action clause whose object is a commit, a push, a PR, a merge, a landing, a deploy, a release.
+  for (const title of [
+    "Commit notes.txt and open PR",
+    "Push the branch and open a pull request",
+    "Land unmerged work onto main via PR",
+    "Merge #12",
+    "Commit notes.txt",
+    "Open PR for the rename",
+    "Build and deploy Menu OAuth2 WAR",
+    "Will open a PR when the tests pass",
+  ]) {
+    assert.notEqual(titlePromise(title), "", `“${title}” promises work and must not name a tree`);
+  }
+  // Describes: a deliverable is mentioned, but the clause's verb is about the work itself.
+  for (const title of [
+    "Read-only review of Bitbucket PR #1",
+    "Show the push guard chip",
+    "Open the settings modal by default",
+    "Fix delete worktree button not removing directory",
+    "Retention sweep for the job store",
+    "Add merge status column",
+    "Stop board showing deleted worktrees",
+    "Review Menu OAuth2 gateway integration diff",
+  ]) {
+    assert.equal(titlePromise(title), "", `“${title}” describes work, so it may name the tree`);
+  }
+});
+
+test("a settled run is still not allowed to name a tree another live run is standing in", async () => {
+  const { ledger } = freshLedger();
+  const tree = "/repo/demo/.worktrees/shared-tree-2b3c4d";
+  const key = treeKey({ project: "demo", path: tree });
+  ledger.claimCut(key, { name: "shared-tree-2b3c4d", dir: "shared-tree-2b3c4d", tag: "2b3c4d", by: "run run-cut (t)", at: new Date().toISOString(), cutRun: "run-cut" });
+  // The run that cut it has settled, but a second turn is still live in the same directory: the branch half can
+  // land while the directory half cannot, and that split is what the guard exists to prevent.
+  const { naming, calls } = namingHarness({ ledger, busy: true });
+  const out = await naming.consider({ id: "run-cut", thread: "t", worktreePath: tree, status: "done", title: "Fix the export" });
+  assert.equal(calls.length, 0);
+  assert.match(out.skipped, /a run is still in the tree/);
+  assert.equal(namingState(ledger.get(key)), "cut", "and the name is still there to give later");
+});
+
+test("an interrupted run cannot name a tree it may still be working in", async () => {
+  const { ledger } = freshLedger();
+  const tree = "/repo/demo/.worktrees/lost-stream-3c4d5e";
+  const key = treeKey({ project: "demo", path: tree });
+  ledger.claimCut(key, { name: "lost-stream-3c4d5e", dir: "lost-stream-3c4d5e", tag: "3c4d5e", by: "run run-cut (t)", at: new Date().toISOString(), cutRun: "run-cut" });
+  const { naming, calls } = namingHarness({ ledger });
+  const out = await naming.consider({ id: "run-cut", thread: "t", worktreePath: tree, status: "interrupted", title: "Fix the export" });
+  assert.equal(calls.length, 0, "a lost stream is not proof the run ended");
+  assert.match(out.skipped, /cannot prove the run ended/);
+  // The settled statuses are exactly the ones the panel watched end; `settleRefusal` is the one answer both this
+  // policy and any future caller asks.
+  assert.equal(settleRefusal({ status: "done" }), "");
+  assert.equal(settleRefusal({ status: "failed" }), "");
+  assert.equal(settleRefusal({ status: "cancelled" }), "");
+  assert.match(settleRefusal({ status: "running" }), /still going/);
+  assert.match(settleRefusal({ status: "waiting" }), /still going/);
+  assert.match(settleRefusal({ status: "interrupted" }), /cannot prove/);
 });
 
 // =============================================================================================
@@ -304,11 +410,11 @@ test("the first session in a new tree names it once, and the lock it writes outl
   const renames = { count: 0 };
   const { naming, calls } = renamingHarness({ ledger, tree, session, thread, renames });
   const base = { id: session, thread, worktreePath: tree.path, title: "Fix the export" };
-  // Two events on one tick — the running one carrying the first title, the done one following it — then one more
-  // from the same session. One tree, one name.
+  // Two settled events on one tick — a `done` and a `failed` for the same turn — then one more from the same
+  // session. One tree, one name.
   await Promise.all([
-    naming.consider({ ...base, status: "running" }),
     naming.consider({ ...base, status: "done" }),
+    naming.consider({ ...base, status: "failed" }),
   ]);
   await naming.consider({ ...base, status: "failed", title: "A later title from the same session" });
   assert.equal(renames.count, 1, "the first session named the tree exactly once");
