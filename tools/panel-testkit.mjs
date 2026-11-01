@@ -95,11 +95,15 @@ export function freePort() {
 // over it, keeping every key the last run (or a route it answered) wrote. Only the port and the paths this kit
 // derives are refreshed, because the test needs a free port and the same throwaway store. Without it a restart test
 // silently proves that the kit's defaults survive a restart, not the setting under test.
-export async function startPanel({ token = null, config = {}, env = {}, dir: givenDir = null, keep = false, reuseConfig = false } = {}) {
+//
+// `port` pins the listener instead of asking the OS for one. A measurement whose brief names a port (7200-and-up
+// slots running side by side, each told which port is its own) has to answer on THAT port, or the report cannot
+// prove which panel its numbers came from; the boot fails loudly on EADDRINUSE rather than landing somewhere else.
+export async function startPanel({ token = null, config = {}, env = {}, dir: givenDir = null, keep = false, reuseConfig = false, port: fixedPort = null } = {}) {
   const dir = givenDir || (await mkdtemp(path.join(os.tmpdir(), "wtgui-test-")));
   const repos = path.join(dir, "repos");
   await mkdir(repos, { recursive: true });
-  const port = await freePort();
+  const port = fixedPort || (await freePort());
   const cfgPath = path.join(dir, "config.json");
   const cfg = {
     port,
