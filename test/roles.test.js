@@ -135,11 +135,11 @@ test("Assistant #1 keeps its thread, its file and its route; #2 gets a copy of i
   assert.equal(typeof payload.mtime, "number");
 
   const out = assistant.createAssistant({ roleId: "agent-manager" });
-  assert.equal(out.assistant.id, "assistant-2");
-  assert.equal(out.assistant.threadId, threadFor("assistant-2"));
-  assert.equal(out.assistant.threadId, "panel-assistant-2");
-  assert.notEqual(out.assistant.threadId, ASSISTANT_THREAD, "its own thread, not the first one's");
-  assert.deepEqual(out.assistant.rules, [], "its own rules start empty");
+  assert.equal(out.created.id, "assistant-2");
+  assert.equal(out.created.threadId, threadFor("assistant-2"));
+  assert.equal(out.created.threadId, "panel-assistant-2");
+  assert.notEqual(out.created.threadId, ASSISTANT_THREAD, "its own thread, not the first one's");
+  assert.deepEqual(out.created.rules, [], "its own rules start empty");
   const copy = assistant.charterPathOf(assistant.assistantRecord("assistant-2"));
   assert.equal(await readFile(copy, "utf8"), seed, "its charter is the role's bytes");
   assert.notEqual(copy, charter, "in a file of its own");
@@ -223,4 +223,57 @@ test("both copies refuse a save over the 20,000-character cap", async (t) => {
     assert.ok(assistant.charterPayloadFor(id).chars < CHARTER_MAX_CHARS, `${id}: and nothing was written`);
   }
   assert.equal(assistant.setCharterFor("assistant-2", "y".repeat(CHARTER_MAX_CHARS)).chars, CHARTER_MAX_CHARS, "exactly the cap is allowed");
+});
+
+test("an assistant's charter meta names ITS file, so #2's row is not #1's", async (t) => {
+  // The name this method shares with the helper it calls (`charterMetaFor` in charter-file.js) is exactly how a
+  // per-assistant read turns into Assistant #1's row everywhere the float lists the assistants. Pinned here so the
+  // collision cannot come back as a state payload whose #2 entry points at #1's path, size and age.
+  const { assistant, charter } = await panel(t);
+  assistant.setCharter("# #1\n");
+  assistant.createAssistant({ roleId: "agent-manager" });
+  const copy2 = assistant.charterPathOf(assistant.assistantRecord("assistant-2"));
+  const text2 = "# #2 only\n\nSECOND-ONLY-TEXT\n";
+  assistant.setCharterFor("assistant-2", text2);
+
+  const m1 = assistant.charterMetaFor("assistant-1");
+  const m2 = assistant.charterMetaFor("assistant-2");
+  const slash = (p) => p.replace(/\\/g, "/");
+  assert.equal(m1.path, slash(charter));
+  assert.equal(m2.path, slash(copy2), "the meta names #2's own file");
+  assert.notEqual(m2.path, m1.path);
+  assert.equal(m2.chars, (await readFile(copy2, "utf8")).length, "and sizes #2's own bytes");
+  assert.notEqual(m2.chars, m1.chars, "#1's 5 chars are not #2's count");
+  assert.equal(Object.hasOwn(m2, "text"), false, "the meta never carries the 20 KB body");
+
+  const list = assistant.assistantList();
+  assert.deepEqual(
+    list.map((a) => a.charter.path),
+    [slash(charter), slash(copy2)],
+    "every row in the float's list points at its own charter",
+  );
+  assert.deepEqual(list.map((a) => a.charter.chars), [m1.chars, m2.chars]);
+  assert.equal(assistant.charterPayloadFor("assistant-2").text, text2, "and the payload is #2's text");
+});
+
+test("Assistant #1's preamble carries its charter whole, and #2's edit does not touch its bytes", async (t) => {
+  // Item 11 of this feature: the injected charter of the assistant the reader already has stays byte-identical to
+  // `state/assistant-charter.md`. The file here is the repo's own seed (19,956 chars, under the 20,000 cap), which is
+  // what a panel boots with; the point is that it arrives WHOLE and that a second assistant's save moves none of it.
+  const { assistant, charter } = await panel(t);
+  const seed = await readFile(SEED_URL, "utf8");
+  const payload = assistant.setCharter(seed);
+  assert.equal(payload.chars, seed.length, "#1's file holds the seed exactly");
+  const before = sha(await readFile(charter, "utf8"));
+
+  assistant.createAssistant({ roleId: "agent-manager" });
+  const first = assistant.preamble(PRIMARY_ASSISTANT);
+  assert.ok(first.includes(seed.trim()), `the whole file rides in the preamble (${seed.length} chars, unclipped)`);
+  assert.match(first, /Charter — the long tier, read in full on every turn \(role Agent Manager; /, "labelled with the role and the file");
+  assert.ok(first.includes(seed.slice(0, 80)), "…from its first line");
+
+  assistant.setCharterFor("assistant-2", "# only #2\n\nSECOND-ONLY-TEXT\n");
+  assert.equal(sha(await readFile(charter, "utf8")), before, "#1's charter file is byte for byte what it was");
+  assert.ok(assistant.preamble(PRIMARY_ASSISTANT).includes(seed.trim()), "and #1 is still told the same file");
+  assert.ok(!assistant.preamble(PRIMARY_ASSISTANT).includes("SECOND-ONLY-TEXT"), "the second assistant's edit never reaches it");
 });
