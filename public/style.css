@@ -1003,9 +1003,15 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
 .tgrp-flat > .tgrp-body { margin-top: 0; padding-top: 0; border-top: 0; }
 /* The reasoning, drawn as a line of that stream rather than as a block above it. It keeps the block's own voice
    (italic, dim) so it still reads as thought and not as something the agent said out loud. */
-.jl-think { color: var(--think-color, #b3a8cc); font-style: italic; font-size: var(--think-font-size, inherit); margin-top: 1.5em; }
+.jl-think { color: var(--think-color, #b3a8cc); font-style: italic; font-size: var(--think-font-size, inherit); }
+/* ONE blank line sets every piece of the stream apart from the piece above it — a reasoning block, a group of tool
+   output, a chunk of the agent's own words. The reasoning block had this rule first and everything else wears the same
+   class (`jl-sep`, put on each piece by streamBodyHtml and by the live append), so the three cannot drift into three
+   different gaps: 1.5em is one line of this console at its own line-height. Declared below `.tgrp.tgrp-flat`'s
+   `margin: 0` on purpose — at equal specificity the later rule is the one a flat group's top margin comes from. */
+.job-out > .jl-sep { margin-top: 1.5em; }
 /* ...except at the very top of a console, where there is nothing above it to be set apart from. */
-.job-out > .jl-think:first-child { margin-top: 0; }
+.job-out > .jl-sep:first-child { margin-top: 0; }
 .tgrp .jl { white-space: pre-wrap; }
 .tgrp-head { display: flex; flex-direction: column; gap: 1px; }
 .tgrp-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; cursor: pointer; border-radius: 3px; }

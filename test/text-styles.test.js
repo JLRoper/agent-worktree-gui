@@ -93,12 +93,20 @@ test("the stylesheet reads each style with a fallback to the look the console al
 });
 
 test("an empty line stands before every reasoning section, in the stream and in the block", () => {
-  const stream = css.match(/\.jl-think\s*\{([^}]*)\}/)[1];
-  assert.match(stream, /margin-top:\s*1\.5em/, "one console line (line-height 1.5) above each reasoning line of the stream");
-  assert.match(css, /\.job-out\s*>\s*\.jl-think:first-child\s*\{\s*margin-top:\s*0/, "but not above the very first line of a console");
+  // In the stream the reasoning row is a piece like any other: the blank line above it is the stream's own `jl-sep`
+  // rule, which every piece wears — one rule, so a reasoning row, a tool group and a chunk of prose cannot drift into
+  // three different gaps. The reasoning line's own rule is its VOICE only.
+  const sep = css.match(/\.job-out\s*>\s*\.jl-sep\s*\{([^}]*)\}/)[1];
+  assert.match(sep, /margin-top:\s*1\.5em/, "one console line (line-height 1.5) above every piece of the stream");
+  assert.doesNotMatch(css.match(/\n\.jl-think\s*\{([^}]*)\}/)[1], /margin-top/, "the reasoning row adds no second gap of its own");
+  assert.match(css, /\.job-out\s*>\s*\.jl-sep:first-child\s*\{\s*margin-top:\s*0/, "but not above the very first piece of a console");
   assert.match(css, /\.think-block\s*\+\s*\.think-block\s*\{\s*margin-top:\s*1\.5em/, "between the blocks of the 🧠 block");
   const block = css.match(/\n\.think\s*\{([^}]*)\}/)[1];
   assert.match(block, /margin:\s*18px 0 8px/, "and above the 🧠 block itself, where the old gap was 6px");
+  // The rule has to win over a flat piece's own `margin: 0`, or a tool group would get no blank line above it at all.
+  const flatAt = css.indexOf(".tgrp.tgrp-flat {");
+  const sepAt = css.indexOf(".job-out > .jl-sep {");
+  assert.ok(flatAt >= 0 && sepAt > flatAt, "the stream's blank line is declared after the flat piece's margin: 0");
 });
 
 test("a skill's box says it is a skill's, and only a skill's does", async () => {
