@@ -7479,6 +7479,29 @@ function applyStoredScrolls(root) {
   applySubConsoleScrolls(root);
 }
 
+// A console a rebuild BUILT, rather than moved: the markup came out of conversationHtml() a moment ago, so there is no
+// old node to measure and no entry in the caller's capture map, and nothing else in that rebuild is going to place it.
+// Left alone it is a fresh scroll area at its first line, and the run has been writing into that console all along: the
+// reader sees the top of a log the panel was following to the end - one card, once per rebuild that builds it, which is
+// the "one that is never repaired" the write log could not name (docs/console-combined-first-line.md).
+// Called in the same task as the insert, so no frame is ever painted at 0. A console the reader has taken over goes
+// back to the line they left it on; everything else follows its newest line, which is the panel's promise.
+function placeBuiltConsoles(root) {
+  if (!root) return;
+  for (const o of root.querySelectorAll("pre.job-out")) {
+    if (o._selfTop != null) continue; // someone already placed it in this task; their answer is the one to keep
+    const id = o.dataset.out || "";
+    const was = state.outScrolls[id];
+    if (was && !consolePinned(id) && !was.atBottom) {
+      setScroll(o, Math.min(was.top, Math.max(0, o.scrollHeight - o.clientHeight)));
+      continue;
+    }
+    setScroll(o, o.scrollHeight);
+  }
+  // A child's console lives in the same card and was built by the same insert, so it is in the same state.
+  applySubConsoleScrolls(root);
+}
+
 // A repainted strip and a rebuilt card both REPLACE the node a child's console lives in, so its position cannot ride
 // on the element the way holdScrolls() carries a moved one: it is remembered by child id and written back onto the
 // fresh node in the same task. A box still following its newest line goes to the bottom; one the reader took over
@@ -11506,6 +11529,10 @@ function fillAgentSlots(root, reuse) {
     if (fresh) {
       fresh.dataset.sig = conversationSignature(conv);
       slot.replaceWith(fresh);
+      // No card was carried into this slot: the rebuild BUILT one, so its consoles have no old node to read and no
+      // entry in the caller's scroll map, and the same-task restores below skip them. Place them here, before the
+      // frame the insert is in is painted - the top of a log the run has been writing is not where the reader was.
+      placeBuiltConsoles(fresh);
     } else slot.remove();
   }
   if (heldSelection && heldSelection.length) restoreCardSelection(heldSelection);
@@ -13180,11 +13207,16 @@ function placeRow(project, row, { flash = false } = {}) {
   const keepDetail = Boolean(oldDetail && oldDetail.isConnected && oldDetail.dataset.dsig === detailSig);
   // Only when the detail is really leaving: this detaches its child consoles into a holder to be re-attached below.
   const heldSubs = oldDetail && !keepDetail ? holdSubConsoles(oldDetail) : [];
+  // A detail carrying cards is not taken down before its cards are carried out of it. fillAgentSlots() reads each
+  // console's place off the node it is about to move, and a node that has already left the page reports 0 - the top,
+  // which is the wrong answer for a reader who parked it. The rebuilt detail is attached below, the cards move into it
+  // while the old one is still on screen, and only then does the old one go.
+  const cardOut = Boolean(oldDetail && oldDetail.isConnected && state.expanded.has(key) && !keepDetail);
   beginDomMove();
-  if (oldDetail && !keepDetail) oldDetail.remove();
+  if (oldDetail && !keepDetail && !cardOut) oldDetail.remove();
   // Any other copy for this key is a stray from an earlier render: one row, one detail.
   for (const stray of document.querySelectorAll(`tr.detail[data-detail="${CSS.escape(key)}"]`)) {
-    if (!keepDetail || stray !== oldDetail) stray.remove();
+    if (stray !== oldDetail) stray.remove();
   }
   state.detailEls.delete(key);
   if (old) old.replaceWith(newTr);
@@ -13208,8 +13240,12 @@ function placeRow(project, row, { flash = false } = {}) {
     newTr.after(dEl);
     state.detailEls.set(key, dEl);
     // The cards move across before anything is measured, so "where was this console" is answered by the node
-    // that is actually going to stay on screen.
+    // that is actually going to stay on screen - the OLD detail is still on the page here and gives up its cards one at
+    // a time, so each hold reads the line the reader left, not the 0 a detail already taken down reports.
     fillAgentSlots(dEl, oldCards);
+    // Every card of the old detail that is still in it is a straggler (its slot went away): the detail has nothing left
+    // to show, and leaving it on the page would be a duplicate.
+    if (cardOut && oldDetail) oldDetail.remove();
     rememberAgentOrder(key, dEl);
     restoreThinkBodies(dEl);
     // Put the reader back: the reply they were typing, where the caret was, and how far each
