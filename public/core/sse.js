@@ -40,6 +40,20 @@ function setStream(label, cls = "ok") {
   $("health").className = `dot ${cls}`;
 }
 
+// A project event is worth a repaint only when it carries something the page does not already hold. The store sends
+// one on every patch, changed or not (lib/store.js patchProject), and the board answered each one by rebuilding the
+// project's section: forced layout reads, a fresh header, the rows moved across, a row repaint and a re-sort. On the
+// reader's board 68 of 68 repeat events in 100 s were byte-identical to the last one for their project, and that
+// handler was the most expensive path on the page (350 ms of main thread a minute, 0.48.1). Compared field by field
+// over what the event carries: the snapshot's own `worktrees` list is not in it and is not re-serialised.
+function projectEventIsNew(cur, patch) {
+  if (!cur) return true;
+  for (const k of Object.keys(patch || {})) {
+    if (JSON.stringify(cur[k]) !== JSON.stringify(patch[k])) return true;
+  }
+  return false;
+}
+
 function connect() {
   if (state.es) state.es.close();
   const es = new EventSource("/api/stream");
@@ -60,7 +74,10 @@ function connect() {
   });
   es.addEventListener("project", (e) => {
     const evt = JSON.parse(e.data);
-    const cur = state.projects.get(evt.project.name) || {};
+    const known = state.projects.get(evt.project.name);
+    // Nothing new: the section, its rows, the reader's place and caret are already what this event would draw.
+    if (!projectEventIsNew(known, evt.project)) return;
+    const cur = known || {};
     state.projects.set(evt.project.name, { ...cur, ...evt.project });
     refreshChips(evt.project.name);
     const sec = document.querySelector(`section.project[data-project="${CSS.escape(evt.project.name)}"]`);
