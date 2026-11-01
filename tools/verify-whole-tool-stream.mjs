@@ -329,6 +329,12 @@ async function browserPhase(pw) {
           state.foldPending?.clear();
           state.toolStorePending.clear();
           state.outPinned = {};
+          // renderJobs() rewrites the card list only when the set of cards, or a card's own conversationSignature,
+          // has moved — that is what stops a live console being replaced under the reader on every append. This
+          // probe paints the SAME turn from different lines and different store state, which moves no signature:
+          // clear the memo of the last one first, or the card under test is whatever the previous section left in
+          // the DOM (measured: the (f)/(g)/(h) sections clicked a box that was still open from (c)).
+          state.jobsListSig = "";
           state.maximized = id;
           state.jobLines.set(id, lines);
           state.jobs.set(id, {
