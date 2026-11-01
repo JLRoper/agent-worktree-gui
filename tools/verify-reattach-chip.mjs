@@ -46,7 +46,7 @@ import path from "node:path";
 
 import { runGonePointerLines } from "../lib/jobs.js";
 import { loadPlaywright } from "./browser.mjs";
-import { ROOT, pickFreePort as freePort } from "./panel-testkit.mjs";
+import { ROOT, freePort } from "./panel-testkit.mjs";
 
 let failures = 0;
 let checks = 0;

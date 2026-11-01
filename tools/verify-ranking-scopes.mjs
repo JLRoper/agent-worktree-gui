@@ -31,7 +31,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadPlaywright, openSettingsGroup } from "./browser.mjs";
-import { ROOT, pickFreePort as freePort } from "./panel-testkit.mjs";
+import { ROOT, freePort } from "./panel-testkit.mjs";
 
 let failures = 0;
 let checks = 0;
