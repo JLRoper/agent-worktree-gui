@@ -15,7 +15,8 @@
 //              one-line result — drawn as exactly one box that is folded, with its header line OUTSIDE it
 //   driven     (2) a real click opens a box to its full size and a second one folds it; the choice survives a repaint
 //              and a burst rebuild; a diff's windows live inside the box and the header says what it adds/removes
-//   driven     (3) the one-stream view (🌊) draws the same boxes, folded, and remembers them the same way
+//   driven     (3) the one-stream view (🌊) draws the same boxes folded and remembers them the same way, with the
+//              card's ROW as the box's opener (one action, one box)
 //   driven     (4) opening a long result's own header fetches the whole row into that SAME box, updates its count,
 //              and keeps ordinary open/shut state through repaints and burst rebuilds without fetching it twice
 //   driven     (5) the live path: `jobline` frames through the page's own EventSource handler. A skill's lines are
@@ -288,7 +289,18 @@ async function main() {
     ok("the card is drawn as a stream", flat.flat > 0, `${flat.flat} flat piece(s)`);
     check("a stream's boxes start folded too", flat.boxes, [false, false, false, false, false]);
     await shot("04-stream-folded.png");
-    await page.locator("pre.job-out .code-head").nth(1).click();
+    // In the stream a call is a ROW, and the row is the box's opener: the box behind it is the same console box the
+    // condensed view draws, so a press on the row opens it whole — one action, one box — while the header inside it
+    // still folds that box on its own (the case (2) above drives). A press on the header alone is not reachable here:
+    // the box is behind a shut row.
+    const rows = page.locator("pre.job-out .tgrp-call > .tgrp-row");
+    ok("the stream draws one row per call", (await rows.count()) === CALLS.length, `${await rows.count()} row(s) for ${CALLS.length} call(s)`);
+    await rows.nth(1).click();
+    const opened = await page.evaluate(() => {
+      const box = document.querySelectorAll("pre.job-out .code-box")[1];
+      return { open: box ? !box.querySelector(".code-body").hidden : null, head: box ? box.querySelector(".code-head")?.getAttribute("aria-expanded") : null };
+    });
+    ok("a row opens the box behind it whole", opened.open === true && opened.head === "true", JSON.stringify(opened));
     await page.evaluate(() => renderJobs());
     check("a stream remembers the box the reader opened", await state1(), [false, true, false, false, false]);
     await page.evaluate(() => localStorage.removeItem("wtgui.stream.probe-turn"));
