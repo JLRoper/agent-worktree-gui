@@ -612,7 +612,12 @@ function pageInit(opts) {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const st = { at: now(), steps: [] };
     R.selftest = st;
-    const pick = [...document.querySelectorAll("pre.job-out")].filter((o) => o.scrollHeight - o.clientHeight > 40).sort((a, b) => (b.scrollHeight - b.clientHeight) - (a.scrollHeight - a.clientHeight))[0];
+    // The box this drives must be one the jump can be SEEN on: a console already at its first line (the reader's
+    // parked box, which a --stream run leaves there) makes step (1) vacuous - "before 0, jumped 0" is not a self-test.
+    // So a box that is off its bottom wins over one with more room, and the room only breaks the tie.
+    const pick = [...document.querySelectorAll("pre.job-out")]
+      .filter((o) => o.scrollHeight - o.clientHeight > 40)
+      .sort((a, b) => (b.scrollTop > 40) - (a.scrollTop > 40) || b.scrollHeight - b.clientHeight - (a.scrollHeight - a.clientHeight))[0];
     if (!pick) {
       st.steps.push({ ok: false, why: "no overflowing console" });
       return st;

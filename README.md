@@ -129,7 +129,10 @@ the commit before the fix it is red in the first four layouts (6 to 16 painted h
 `reorderProjects | appendChild`); `cards` was red until `reorderAgentCards()` moved only what was out of place.
 `--only one|siblings|projects|folders|cards`, `--seconds N`, `--root <checkout>`. `test/console-independence.test.js` is
 the half that needs no browser: the helpers every mover goes through, read out of `public/app.js` and run over a model
-of the one browser rule behind the fault, and a check that each mover still goes through them.
+of the one browser rule behind the fault, a check that each mover still goes through them, and the combined (🌊)
+layout's own rule - one box per card, a row repaint that moves nothing, and the card swap `placeRow` performs, which is
+the only thing measured putting a combined console's `scrollTop` at 0 with no write behind it
+(`docs/console-combined-first-line.md`).
 
 `node tools/merged-branches.mjs` lists every local branch with the merged or open PR that owns it, and
 `--prune` deletes only the branches a **merged** PR accounts for. It decides from PR state because git
