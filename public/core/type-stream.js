@@ -183,10 +183,26 @@
       return e.full.slice(0, e.shown);
     }
 
-    /** What may be drawn for this line now, or null when this line is not being paced (draw it whole). */
-    function shownFor(lid) {
+    /**
+     * What may be drawn for this line now, or null when this line is not being paced (draw it whole).
+     *
+     * `text` is the line as the RECORD holds it — the caller's own row, not the pacer's memory. Given it, the pacer
+     * only answers while it can honestly claim a prefix of that line: a line the record has moved past (the reader
+     * was away, so no frame was ever fed here) or rewritten (a trim moved it) is not being typed any more, and the
+     * entry is dropped so the record draws whole from then on. Without it the entry answers for itself, which is
+     * what a caller with no record in hand wants. Why this matters: a prefix that can no longer grow is text the
+     * console loses — "This" painted over a paragraph that started "This branch was added to main".
+     */
+    function shownFor(lid, text) {
       const e = lines.get(lid);
       if (!e) return null;
+      if (text == null) return e.full.slice(0, e.shown);
+      const full = String(text);
+      if (full === e.full) return e.full.slice(0, e.shown);
+      if (restOf(e) === 0 || !full.startsWith(e.full)) {
+        lines.delete(lid);
+        return null;
+      }
       return e.full.slice(0, e.shown);
     }
 
