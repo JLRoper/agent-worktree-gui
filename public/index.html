@@ -39,23 +39,35 @@
       <button id="btn-as-max" type="button" class="as-max" aria-pressed="false" title="maximize the assistant to the whole window (double-click the header; Esc restores)">⤢</button>
       <button id="btn-as-close" type="button" title="close (Esc) — it keeps watching while closed">✕</button>
     </div>
+    <!-- The float's own row: the assistant sessions first — each one a real agent thread of its own — then the
+         lists that are the assistant's: what it noticed, what it watches, what it said to the agents, its
+         scratchpad and its charter. The number is part of the id, not of this markup's shape: a second assistant
+         is another button here and another pane below, and no code names a tab. -->
     <div class="as-tabs" id="as-tabs">
-      <button type="button" data-as-tab="chat" class="is-on" title="the assistant itself — a normal agent card, with its own thread">Chat</button>
+      <button type="button" data-as-tab="assistant-1" class="is-on" title="Assistant #1 — the assistant itself: a normal agent card with its own thread. Its Chat and Settings are the quiet row under this one">Assistant #1</button>
       <button type="button" data-as-tab="alerts" title="what it noticed and what is waiting on you — spawn cards waiting for a click sit at the top">Alerts <span class="as-n" id="as-alert-n">0</span><span class="as-n is-spawn" id="as-spawn-n" hidden>0</span></button>
       <button type="button" data-as-tab="watches" title="what it is keeping an eye on, and until when">Watches <span class="as-n" id="as-watch-n">0</span></button>
       <button type="button" data-as-tab="messages" title="the message board between it and the agents — what it sent them and what they sent back, thread by thread, over the last 7 days">Messages</button>
       <button type="button" data-as-tab="pad" title="the server-side scratchpad: notes, standing rules and the journal">Scratchpad</button>
       <button type="button" data-as-tab="charter" title="the continuity file: the long tier of its memory, injected in full on every turn">Charter</button>
-      <button type="button" data-as-tab="settings" title="how aggressive it is, per rule">Settings</button>
+    </div>
+    <!-- The session's own row, under the assistant's tabs: what the assistant is showing (Chat) and how it behaves
+         (Settings). It belongs to a session, so it is hidden while one of the lists is on, and it holds the
+         reader's place — Chat comes back to the foot of the thread, Settings to the rules they were reading. -->
+    <div class="as-subtabs" id="as-subtabs">
+      <button type="button" data-as-subtab="chat" class="is-on" title="the assistant's own thread — the card, its console and the box you type in">Chat</button>
+      <button type="button" data-as-subtab="settings" title="how aggressive it is, per rule">Settings</button>
     </div>
     <div class="as-body">
-      <section class="as-pane" data-pane="chat" id="as-chat"></section>
+      <section class="as-pane" data-pane="assistant-1" id="as-assistant-1">
+        <section class="as-subpane" data-subpane="chat" id="as-chat"></section>
+        <section class="as-subpane hidden" data-subpane="settings" id="as-settings"></section>
+      </section>
       <section class="as-pane hidden" data-pane="alerts" id="as-alerts"></section>
       <section class="as-pane hidden" data-pane="watches" id="as-watches"></section>
       <section class="as-pane hidden" data-pane="messages" id="as-messages"></section>
       <section class="as-pane hidden" data-pane="pad" id="as-pad"></section>
       <section class="as-pane hidden" data-pane="charter" id="as-charter"></section>
-      <section class="as-pane hidden" data-pane="settings" id="as-settings"></section>
     </div>
     <!-- Eight grabs, one per edge and corner. The single bottom-right grip could only grow the float toward that
          corner, and it walked away from the pointer once the frame hit the viewport: a band is where a reader
