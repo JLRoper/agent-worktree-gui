@@ -28,6 +28,9 @@ function fixture({ flat = false, trimmed = false, response = null } = {}) {
     jobs: new Map([["turn", { id: "turn", thread: "fixture-thread", status: "done", startedAt: "2026-01-01T00:00:00Z", endedAt: "2026-01-01T00:01:00Z" }]]),
     toolStore: new Map(), toolGroupOpen: new Map(), codeBoxOpen: new Set(), codeBoxShut: new Set(),
     callFolded: new Set(), callOpen: new Set(), foldRows: new Map(), foldPending: new Map(), batchCalls: new Map(),
+    // The console's own scroll book. A fold press hands the console over (Settings > Agent cards, off by default);
+    // the button below is inside no `pre.job-out`, so the hold answers null here and nothing is written.
+    outPinned: {}, outScrolls: {},
   };
   const requests = [];
   let repaints = 0;
@@ -37,6 +40,9 @@ function fixture({ flat = false, trimmed = false, response = null } = {}) {
     normPath: (p) => String(p ?? "").split("\\").join("/"),
     turnLive: () => false,
     repaintToolGroup: () => { repaints++; },
+    // The console hold's setting, read once per press. This fixture's control lives in no console, so the hold never
+    // reaches it — the answer here is only what the shipped code would read from a browser that never set the switch.
+    foldFollowsConsole: () => false,
     apiFetch: async (url) => {
       requests.push(url);
       return response ? response() : { ok: true, json: async () => ({ results: [{ text: full.join("\n"), truncated: false }] }) };
@@ -50,6 +56,8 @@ function fixture({ flat = false, trimmed = false, response = null } = {}) {
     part("const TOOL_START_RE =", "// Index of the started tool call"),
     part("function toolBurstRows(", "function groupLines("),
     part("function groupLines(", "function storeOffsetsBefore("),
+    // The hold a fold press takes on its console: the shipped function, with this fixture's control inside none.
+    part("function holdConsoleFor(", "\n// Every scroll the panel performs goes through here."),
     part("const READ_CODE_OPEN =", "// A block the reader has open keeps"),
     part("// ---- tool group key", "// ---- end tool group key"),
     part("const BATCH_TAIL_RE =", "function toBottomBtnHtml("),

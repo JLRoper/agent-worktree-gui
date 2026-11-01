@@ -591,6 +591,14 @@ lines and says `click to read`; a diff also says what it adds and removes (`patc
 that header opens the complete recorded output, wrapped with no inner scroll. A second click folds the same box.
 The choice survives a repaint, a burst rebuild and a switch between condensed and one-stream (🌊) views.
 
+Opening one does **not** carry the console with it. The box unfolds under the header you pressed, which stays exactly
+where it was, and the console's reading position does not move — a console that is following the newest line stops
+following at that press (the ↓ chip appears, and a scroll back to the end or a press on it follows the run again).
+The rule is the same for every fold a card draws: a result box's head, a call's own row, a row inside a 🌊 tool-usage
+group, the run's `N lines` / `all N` button, and a fold note that reads the store. Settings → Agent cards →
+**Jump to an opened result** is the old behaviour — the console slides down to the end of what was just opened — and it
+is **off** by default; the setting is saved in this browser.
+
 **In the 🌊 view a run of calls is one tool-usage group.** Nothing is condensed there, so the run is drawn as a
 **rule above its rows and a rule below them**, and inside it **one row per call**: the tool's glyph and name, the
 target the call was given — the file and its line range (`docs/a.md L1-40`) or the command (`wc -l docs/a.md`) — and
@@ -817,6 +825,7 @@ a restart):
 | Display | Compact answers | Tighter padding and gaps between the answer rows, so a question takes less room in a card. The type size is separate. |
 | Display | Typed answer box | Shows the free-text row under the choices. An open-ended question keeps it whatever this says, or there would be nothing to answer with. |
 | Agent cards | Show thinking | The default for cards' `🧠`; a card's own toggle wins. |
+| Agent cards | Jump to an opened result | Off by default: opening a folded tool output holds the console where it is, so the box unfolds under the header you pressed. On restores the old follow-the-growth behaviour, where the console slides down to the end of what was just opened. Saved in this browser. |
 | Agent cards | Collect subagent results | Hand a parent the results of children that outlived its turn, once per turn. |
 | Agent cards | Previous turn on send | What the turn you were reading becomes when you send a reply: **freeze a snippet** (the default — the last tool line, the answer it ended on, and what folded), **leave as is** (its console stays open above the new turn), or **minimize it** (folded to its one-line peek first). Saved in this browser. |
 | Board | Board reorder | Seconds between re-sorts of closed folders and projects (`off`/5/15/30/60 presets). A project you have open keeps its slot. |
