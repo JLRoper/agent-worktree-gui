@@ -289,6 +289,88 @@ console.log("GET and PUT /api/assistant/charter, over a real instance on a scrat
 
       const g2 = await fetch(`${base}/api/assistant/charter`);
       eq((await g2.json()).charter.text, "# written by the route\n", "the route reads back what it wrote");
+
+      // ---- the role route, and a second assistant made from the role ------------------------------------
+      // The charter tab is the Role tab now: a role is {id, name, description, charter}, an assistant runs one,
+      // and "new assistant" is a COPY of that role's charter. The three claims here are the ones the feature was
+      // asked for: the seeded role is the panel's own file, a save through the role route lands on the role, and
+      // a second assistant's edit does not move the first assistant's file.
+      const seedText = readFileSync(path.join(ROOT, "data", "roles", "agent-manager.md"), "utf8");
+      const rolesFile = path.join(sandbox, "logs", "roles.json");
+      const assistantsFile = path.join(sandbox, "logs", "assistants.json");
+      ok(existsSync(rolesFile), "the instance seeded its own role library beside its own job store", rolesFile);
+      ok(existsSync(assistantsFile), "and its own assistant records", assistantsFile);
+
+      const r1 = await fetch(`${base}/api/assistant/role?assistantId=assistant-1`);
+      const rd = await r1.json();
+      eq(r1.status, 200, "GET /api/assistant/role answers 200");
+      eq(rd.role.name, "Agent Manager", "Assistant #1 runs the seeded role");
+      ok(rd.role.description.includes("approved PR ready to merge"), "whose remit names the end state", rd.role.description);
+      eq(rd.roles.length, 1, "the picker is handed the library");
+      eq(rd.target.threadId, "panel-assistant", "#1's thread is unchanged");
+      // The payload carries the ASSISTANT's copy, which the tab edits; the role's own text is the library's, and it
+      // is still the seed even after #1's file was replaced above.
+      eq(rd.charter.text, "# written by the route\n", "the payload carries #1's own copy, the one the tab edits");
+      const library = JSON.parse(readFileSync(rolesFile, "utf8"));
+      eq(library.roles[0].charter, seedText, "while the role itself still holds the seed file, byte for byte");
+      eq(rd.charter.cap, CHARTER_MAX_CHARS, "and it rides with the cap");
+      ok(rd.sameAsRole === false, "the earlier charter PUT edited #1's copy, so it is no longer the role's own text");
+
+      const rolePut = await fetch(`${base}/api/assistant/role`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assistantId: "assistant-1", text: "# #1 through the role route\n", expectMtime: rd.charter.mtime }),
+      });
+      eq(rolePut.status, 200, "PUT /api/assistant/role answers 200");
+      eq(readFileSync(charterFile, "utf8"), "# #1 through the role route\n", "and #1's charter file is what the route was given");
+
+      const roleBig = await fetch(`${base}/api/assistant/role`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assistantId: "assistant-1", text: "x".repeat(CHARTER_MAX_CHARS + 10) }),
+      });
+      eq(roleBig.status, 413, "the role route's cap refusal is the same 413");
+      const made = await fetch(`${base}/api/assistant/assistants`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roleId: "agent-manager" }),
+      });
+      const md = await made.json();
+      eq(made.status, 201, "POST /api/assistant/assistants answers 201");
+      eq(md.created.id, "assistant-2", "the second assistant is Assistant #2");
+      eq(md.created.threadId, "panel-assistant-2", "with a thread of its own");
+      const copy2 = path.join(sandbox, "logs", "assistants", "assistant-2", "charter.md");
+      ok(existsSync(copy2), "and a charter file of its own", copy2);
+      eq(readFileSync(copy2, "utf8"), seedText, "copied from the role, in full");
+
+      const r2 = await fetch(`${base}/api/assistant/role?assistantId=assistant-2`);
+      const rd2 = await r2.json();
+      eq(rd2.target.threadId, "panel-assistant-2");
+      eq(rd2.sameAsRole, true, "#2's copy is still the role's own text");
+      const put2 = await fetch(`${base}/api/assistant/role`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assistantId: "assistant-2", text: "# #2 only\n", expectMtime: rd2.charter.mtime }),
+      });
+      eq(put2.status, 200, "#2's charter can be saved through the same route");
+      eq(readFileSync(copy2, "utf8"), "# #2 only\n", "and lands in #2's own file");
+      eq(readFileSync(charterFile, "utf8"), "# #1 through the role route\n", "while #1's file is untouched by it");
+
+      const newRole = await fetch(`${base}/api/assistant/roles`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Reviewer", description: "reads PRs", from: "agent-manager" }),
+      });
+      eq(newRole.status, 201, "a second role can be created");
+      const picked = await fetch(`${base}/api/assistant/role/pick`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assistantId: "assistant-2", roleId: "reviewer", adopt: false }),
+      });
+      const pickd = await picked.json();
+      eq(picked.status, 200, "and picked for an assistant");
+      eq(pickd.role.name, "Reviewer", "which changes the title");
+      eq(pickd.charter.text, "# #2 only\n", "and, without adopt, leaves that assistant's own text alone");
     }
   } finally {
     child.kill();
