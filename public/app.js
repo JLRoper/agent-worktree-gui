@@ -6625,11 +6625,17 @@ function paintTypedLines(lids) {
     if (shown == null) continue;
     for (const el of document.querySelectorAll(`[data-lid="${CSS.escape(String(lid))}"]`)) {
       if (!el.isConnected) continue;
+      // A row that already says this is not re-parsed. The pacer and the live append both paint the same prefix
+      // (the append asks the pacer how much of the line may be drawn), so without this the first wire frame after
+      // a tick rewrote the row with the text the tick had just put there — an innerHTML assignment that changes no
+      // character and still replaces every text node under the reader's selection.
+      if (el._drawn === shown) continue;
       // A reasoning block types inside its thinking block, which follows its own stickiness, not the console's.
       const body = el.closest(".think-body");
       const out = body ? null : el.closest("pre.job-out");
       if (out && !stuck.has(out)) stuck.set(out, consolePinned(out.dataset.out) || out.scrollHeight - out.scrollTop - out.clientHeight < 40);
       el.innerHTML = linkifyText(shown);
+      el._drawn = shown;
       if (body) stickThinkBody(body);
     }
   }
@@ -8096,7 +8102,12 @@ function drawJobLine(evt) {
     } else {
       const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
       if (line.mode === "set" && existing) {
-        existing.innerHTML = linkifyText(shownText);
+        // Same rule as the pacer's paint: write only what the row does not already say. The append's prefix comes
+        // from the pacer (typedText), so after a tick this text is usually the one already in the row.
+        if (existing._drawn !== shownText) {
+          existing.innerHTML = linkifyText(shownText);
+          existing._drawn = shownText;
+        }
         existing.dataset.ltext = String(line.text ?? "");
       } else {
         const div = document.createElement("div");
@@ -8110,6 +8121,7 @@ function drawJobLine(evt) {
         div.dataset.ltext = String(line.text ?? "");
         div.dataset.lkind = String(line.kind || "raw");
         div.innerHTML = linkifyText(shownText);
+        div._drawn = shownText;
         out.appendChild(div);
       }
     }
