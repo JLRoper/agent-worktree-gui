@@ -10333,7 +10333,7 @@ function ageSlotHtml(project) {
 // The arrow's own state, in place. The rows are re-rendered by the caller, and this is the button that asked for
 // it: keeping the same node means the pointer does not fall off a control that just moved under it.
 function paintAgeToggle(project) {
-  const btn = document.querySelector(`[data-age-toggle="${CSS.escape(project)}"]`);
+  const btn = projectNode("data-age-toggle", project);
   if (!btn) return;
   const days = ageHideDays();
   const showing = state.showOldProjects.has(project);
@@ -10348,7 +10348,7 @@ function paintAgeToggle(project) {
 // therefore filled into this slot on every rows change instead (refreshChips below calls straight through): the
 // chart draws an arrow exactly while it has something held back or is showing everything, and none otherwise.
 function refreshAgeToggle(project) {
-  const slot = document.querySelector(`[data-age-slot="${CSS.escape(project)}"]`);
+  const slot = projectNode("data-age-slot", project);
   if (!slot) return;
   const want = ageSlotHtml(project);
   if (!want) {
@@ -12580,10 +12580,36 @@ function projectSection(name) {
 }
 
 function refreshChips(name) {
-  const el = document.querySelector(`[data-chips="${CSS.escape(name)}"]`);
-  if (el) el.innerHTML = chipsHtml(name);
+  const el = projectNode("data-chips", name);
+  if (el) {
+    // The same strip again is not a repaint: rewriting it rebuilt every chip node (style, layout, and a pass of the
+    // copy observer over each one) on every row placed, for a strip that reads exactly as it did.
+    const html = chipsHtml(name);
+    if (el._chipsHtml !== html) {
+      el.innerHTML = html;
+      el._chipsHtml = html;
+    }
+  }
   // The age arrow's presence depends on the same rows, so it is refreshed from the same place.
   refreshAgeToggle(name);
+}
+
+// One project's node by its attribute (its chip strip, its age slot, its age button). A lookup by attribute value
+// walks the whole document, and refreshChips runs on every row placed - about 340 calls a minute on the reader's
+// board, three lookups each: about 300 ms a minute of querySelector under refreshChips and refreshAgeToggle in a
+// read-only profile of it. The node found is kept and checked before each use - still in the page, still carrying this
+// name - so a section rebuilt from scratch, or a strip some other attribute owner reuses, is simply looked up again.
+// The cache hangs off the function itself, so it exists from the first line of this file (a top-level `const` here
+// would be in its temporal dead zone for any call made before this point is evaluated).
+function projectNode(attr, name) {
+  const nodes = (projectNode.nodes ||= new Map());
+  const key = `${attr}\u0000${name}`;
+  const kept = nodes.get(key);
+  if (kept && kept.isConnected && kept.getAttribute(attr) === name) return kept;
+  const found = document.querySelector(`[${attr}="${CSS.escape(name)}"]`);
+  if (found) nodes.set(key, found);
+  else nodes.delete(key);
+  return found;
 }
 
 // ---- chart columns: which of the table's ten the reader keeps ---------------------------------------------
