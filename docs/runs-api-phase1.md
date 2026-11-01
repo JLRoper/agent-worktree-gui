@@ -1,5 +1,11 @@
 # Phase 1 — the panel runs agents through the Runs API
 
+Current canonical runtime: see [Prepared canonical Runs API cwd patch](hermes-run-cwd.md).
+The combined `hermes-runs-api-knobs.diff` described below is a historical legacy-factory patch;
+it does not bind cwd on the current SessionAuthority/TurnRunner path. Do not treat its old
+verification notes as proof that the currently installed gateway enforces cwd, or apply it
+on top of the new cwd-only proposal. The prepared proposal is not installed automatically.
+
 The panel no longer spawns `hermes chat -q --format stream-json`. A job is now an HTTP run on the
 gateway's api_server, which is what buys the three things the CLI transport could never give: a
 handle on a live turn (steering), a transcript that does not die with the panel, and one process
