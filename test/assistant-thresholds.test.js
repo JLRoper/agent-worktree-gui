@@ -16,6 +16,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { sliceRegion } from "../tools/panel-testkit.mjs";
 import { DEFAULTS, RULE_DEFS } from "../lib/assistant/config.js";
 
 const src = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
@@ -23,7 +24,11 @@ const src = readFileSync(new URL("../public/assistant.js", import.meta.url), "ut
 const begin = src.indexOf("// ---- settings ---");
 const end = src.indexOf("// ---- talking to the server");
 assert.ok(begin > 0 && end > begin, "the settings region is in public/assistant.js");
-const region = src.slice(begin, end);
+const settings = src.slice(begin, end);
+// The settings paint resolves its host per assistant now (`hostFor(id, "settings")`), and those helpers live in the
+// tab region above it. Both regions are sliced — in the page's own order — so the lookup under test is the page's,
+// not a copy of it. The painters come along unused; nothing here calls one.
+const region = `${sliceRegion(src, "the float's two rows")}\n${settings}`;
 
 // The contract, written out here rather than read back off the page: a test that takes the page's own table as
 // its expectation proves only that the table agrees with itself.
@@ -102,14 +107,14 @@ function page({ settings = {}, aggressive = null, open = null } = {}) {
     "sentryState",
     "ModelMenu",
     "as$",
-    `${region}; return { renderAssistantSettings, RULE_THRESHOLDS, THRESHOLDS_OPEN_KEY, thresholdsOpen, saveThresholdsOpen, rememberThresholdOpen, thresholdSummary };`,
+    `${region}; return { renderAssistantSettings, FIRST_ASSISTANT, RULE_THRESHOLDS, THRESHOLDS_OPEN_KEY, thresholdsOpen, saveThresholdsOpen, rememberThresholdOpen, thresholdSummary };`,
   )(document, localStorage, state, esc, () => false, () => null, { attach() {} }, (id) => document.getElementById(id));
   return { ...api, host, store, state };
 }
 
 const render = (opts) => {
   const p = page(opts);
-  p.renderAssistantSettings(true);
+  p.renderAssistantSettings(p.FIRST_ASSISTANT, true);
   return { ...p, html: p.host.innerHTML };
 };
 
@@ -258,22 +263,24 @@ test("the open disclosures are remembered per browser under one key, and ship cl
 
 test("a re-render repaints the settings host only, so the delegated change handler still applies", () => {
   const p = page({ settings: { quietSeconds: 999 } });
-  p.renderAssistantSettings(true);
+  p.renderAssistantSettings(p.FIRST_ASSISTANT, true);
   assert.equal(count(p.host.innerHTML, 'data-as-set="quietSeconds"'), 1, "one control after the first paint");
   assert.match(inputTag(p.host.innerHTML, "quietSeconds"), /value="999"/, "the painted value is the current one");
 
   p.state.assistant.settings.quietSeconds = 1200;
-  p.renderAssistantSettings(true);
+  p.renderAssistantSettings(p.FIRST_ASSISTANT, true);
   assert.equal(count(p.host.innerHTML, 'data-as-set="quietSeconds"'), 1, "a re-render does not duplicate the control");
   assert.match(inputTag(p.host.innerHTML, "quietSeconds"), /value="1200"/, "and carries the new value");
 
   // The handler is delegated from the float root, reads `el.dataset.asSet`, and this paint touches only the
-  // settings host — which is why the rebuilt inputs answer their change events without a second binding.
+  // settings host — which is why the rebuilt inputs answer their change events without a second binding. The Role
+  // tab's two change branches sit above it now, so the match allows anything between the root and this branch
+  // rather than demanding the branch be first; what it pins is that the SAME delegated listener still serves it.
   assert.match(
     src,
-    /as\$\("assistant"\)\?\.addEventListener\("change", async \(e\) => \{\s*const el = e\.target;\s*if \(el\.dataset\.asSet\) \{/,
+    /as\$\("assistant"\)\?\.addEventListener\("change", async \(e\) => \{\s*const el = e\.target;[\s\S]*?if \(el\.dataset\.asSet\) \{/,
     "the [data-as-set] change handler is delegated from the float root",
   );
-  assert.match(region, /const host = as\$\("as-settings"\)/, "the paint's host is the settings pane");
-  assert.match(region, /host\.innerHTML = `/, "and innerHTML on that host is the whole of it");
+  assert.match(settings, /const host = hostFor\(id, "settings"\)/, "the paint's host is the assistant's own settings pane");
+  assert.match(settings, /host\.innerHTML = `/, "and innerHTML on that host is the whole of it");
 });
