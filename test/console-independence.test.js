@@ -45,8 +45,15 @@ const code = src.slice(src.indexOf("\n", begin) + 1, end);
 
 // ---- a just-enough DOM, with the one rule that matters ---------------------------------------------------------
 const matches = (el, simple) => {
-  const m = /^([a-z]*)((?:\.[\w-]+)*)$/.exec(simple.trim());
+  // tag, then classes, then any number of `[data-x]` / `[data-x="v"]` predicates - the shapes this page selects with.
+  const m = /^([a-z]*)((?:\.[\w-]+)*)((?:\[[^\]]*\])*)$/.exec(simple.trim());
   if (!m) throw new Error(`selector this model does not read: ${simple}`);
+  const camel = (name) => name.replace(/^data-/, "").replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+  for (const a of (m[3] || "").matchAll(/\[([\w-]+)(?:=(?:"([^"]*)"|'([^']*)'|([^\]]*)))?\]/g)) {
+    const want = a[2] ?? a[3] ?? a[4];
+    const have = el.dataset[camel(a[1])];
+    if (want === undefined ? have === undefined : String(have) !== want) return false;
+  }
   return (!m[1] || el.tag === m[1]) && m[2].split(".").filter(Boolean).every((c) => el.classes.has(c));
 };
 // A subtree that leaves the page is a subtree that leaves layout: every scroll box in it forgets where it was.
@@ -182,7 +189,7 @@ const repaintRow = (out, index, fresh) => {
 };
 
 // The page's own answers, stood in for: who is pinned, and the clamp the browser applies to every scrollTop write.
-const state = { thinkPinned: new Map(), subConsolePinned: new Map(), outPinned: {} };
+const state = { thinkPinned: new Map(), subConsolePinned: new Map(), subConsoleTop: new Map(), outPinned: {}, outScrolls: {} };
 const consolePinned = (id) => state.outPinned[id] !== false;
 const setScroll = (el, top) => {
   if (!el) return;
@@ -202,6 +209,7 @@ const reset = () => {
   state.thinkPinned.clear();
   state.subConsolePinned.clear();
   state.outPinned = {};
+  state.outScrolls = {};
 };
 
 // ---- 1. the model ---------------------------------------------------------------------------------------------
@@ -482,6 +490,57 @@ test("without that restore the same swap leaves the console at its first line - 
   captureScrolls(detail); // taken and thrown away: the swap without the hand-back
   swapSlot(detail, a.card);
   assert.equal(a.out.scrollTop, 0, "110 times in 60 s on the page - and only the same-task restore kept it off the screen");
+});
+
+// The console that had no old node to measure: a rebuild that BUILDS a card (an agent whose card was not on the page -
+// a row the reader has just opened, an agent that arrived since the last paint). Nothing holds it, nothing has a place
+// to restore for it, and the 400 ms sweep is two frames too late: the frame in between paints the top of a log the run
+// has been writing all along. Measured on the page: one card, once per rebuild that builds it, while every carried
+// console was put back in the same task.
+const placeBuiltCode = [fn("placeBuiltConsoles"), fn("applySubConsoleScrolls")].join("\n");
+const placeBuilt = new Function("state", "consolePinned", "setScroll", `${scrollCode}\n${placeBuiltCode}\nreturn placeBuiltConsoles;`)(
+  state,
+  consolePinned,
+  setScroll,
+);
+
+test("a console a rebuild BUILDS is on its newest line in the same task, not at the top of its log", () => {
+  reset();
+  const { card, out } = combinedCard("built");
+  assert.equal(out.scrollTop, 0, "a built console starts at its first line - that is what conversationHtml writes");
+  placeBuilt(card);
+  assert.equal(out.scrollTop, MAX, "so the rebuild places it on the newest line itself, before any frame is painted");
+  assert.equal(out._selfTop, MAX, "through the panel's own writer, so the page knows the position is its own");
+});
+
+test("a console the reader had taken over goes back to their line, not to the bottom and not to the top", () => {
+  reset();
+  const { card, out } = combinedCard("built");
+  state.outPinned = { built: false };
+  state.outScrolls = { built: { top: 240, atBottom: false } };
+  placeBuilt(card);
+  assert.equal(out.scrollTop, 240, "the remembered line, clamped to what the fresh box can hold");
+  // A remembered box that WAS at its end follows the run: the reader never took it over in the first place.
+  reset();
+  const second = combinedCard("built2");
+  state.outScrolls = { built2: { top: 0, atBottom: true } };
+  placeBuilt(second.card);
+  assert.equal(second.out.scrollTop, MAX, "a console that was at its bottom when it was rebuilt is still following");
+});
+
+test("without that place the same built console paints its first line - the frame the browser sampler caught", () => {
+  reset();
+  const { out } = combinedCard("built");
+  assert.equal(out.scrollTop, 0, "1-2 frames at 0 with ~460 px of scrollback: tools/verify-console-independence.mjs --only rebuild");
+});
+
+test("placeRow takes the cards out of the old detail while it is still on the page", () => {
+  const body = fn("placeRow");
+  const fill = body.indexOf("fillAgentSlots(");
+  const remove = body.lastIndexOf("oldDetail.remove()");
+  assert.ok(fill >= 0, "placeRow() carries the cards with fillAgentSlots");
+  assert.ok(remove > fill, "and the old detail leaves only after they have moved - a detached card reads 0 for its console");
+  assert.match(body, /const cardOut = /, "which is what keeps that detail in the page up to that point");
 });
 
 test("placeRow reads every console's top before the card leaves the detail and restores it after fillAgentSlots", () => {
