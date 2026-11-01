@@ -1362,6 +1362,9 @@
     loop: [{ key: "repeatLimit", min: 2, max: 12, before: "same call ×", after: "" }],
     quiet: [{ key: "quietSeconds", min: 30, max: 3600, before: "silent for", after: "s" }],
     approval: [{ key: "approvalSeconds", min: 15, max: 3600, before: "approval waiting", after: "s" }],
+    // The EXITED rule's bar: how long the card may read EXITED before the wake. 0 is the transition itself; a
+    // repair turn on the same thread before the bar takes the failure over and nothing is sent.
+    exited: [{ key: "exitedSeconds", min: 0, max: 3600, before: "exited for", after: "s", title: "how long a failed run's card may read EXITED before the assistant is woken — a repair turn on the same thread before then takes it over, and 0 wakes on the transition" }],
     context: [{ key: "contextPercent", min: 50, max: 100, before: "context over", after: "%" }],
     repeat: [{ key: "repeatTurns", min: 2, max: 10, before: "same failure ×", after: "", title: "consecutive turns of one thread ending on the same failure before it is reported" }],
     leftover: [{ key: "leftoverMinutes", min: 1, max: 240, before: "leftover work", after: "min", title: "how recently a worker must have finished for work left in its tree to be worth a word" }],

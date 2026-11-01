@@ -1,13 +1,13 @@
 // The assistant's Settings tab: every threshold belongs to the rule it feeds.
 //
-// Nine number inputs used to sit in one flat "Thresholds" block above the rules, so nothing on the page said
+// Ten number inputs used to sit in one flat "Thresholds" block above the rules, so nothing on the page said
 // which bar belonged to which rule — and the two knobs no rule owns (the sentry's cadence and its hourly wake
-// budget) looked like the seven that do. This drives the page's own `renderAssistantSettings` (the settings
+// budget) looked like the eight that do. This drives the page's own `renderAssistantSettings` (the settings
 // region is sliced out of public/assistant.js and run against a stub host, the way settings-groups.test.js runs
 // the panel's fold region) and pins six facts:
 //
 //   1. every threshold key renders exactly once, and no data-as-set key renders twice anywhere in the HTML;
-//   2. each of the seven sits inside the <details> of the rule that reads it, and the nine rules with no
+//   2. each of the eight sits inside the <details> of the rule that reads it, and the nine rules with no
 //      threshold carry no disclosure at all;
 //   3. the two ruleless knobs live in one Global group, above Per-rule escalation, and the flat block is gone;
 //   4. every input keeps its exact key, its min/max and the aggressive-mode disabled/title handling;
@@ -31,6 +31,7 @@ const OWNER = {
   loop: "repeatLimit",
   quiet: "quietSeconds",
   approval: "approvalSeconds",
+  exited: "exitedSeconds",
   context: "contextPercent",
   repeat: "repeatTurns",
   leftover: "leftoverMinutes",
@@ -45,6 +46,7 @@ const BOUNDS = {
   repeatLimit: [2, 12],
   quietSeconds: [30, 3600],
   approvalSeconds: [15, 3600],
+  exitedSeconds: [0, 3600],
   contextPercent: [50, 100],
   leftoverMinutes: [1, 240],
   childQuietSeconds: [60, 3600],
@@ -56,6 +58,7 @@ const PHRASE = {
   loop: (v) => `same call × ${v}`,
   quiet: (v) => `silent for ${v} s`,
   approval: (v) => `approval waiting ${v} s`,
+  exited: (v) => `exited for ${v} s`,
   context: (v) => `context over ${v} %`,
   repeat: (v) => `same failure × ${v}`,
   leftover: (v) => `leftover work ${v} min`,
@@ -134,20 +137,31 @@ test("every threshold key in the defaults renders exactly once, and no key rende
     assert.ok(Object.hasOwn(DEFAULTS, key), `${key} is a knob in lib/assistant/config.js`);
     assert.equal(count(html, `data-as-set="${key}"`), 1, `${key} renders exactly once`);
   }
-  // The whole page, not just the nine: a control drawn in two groups is the duplicate this move was asked to
+  // The whole page, not just the ten: a control drawn in two groups is the duplicate this move was asked to
   // remove, and a second copy is exactly how it would come back.
   const keys = [...html.matchAll(/data-as-set="([^"]+)"/g)].map((m) => m[1]);
   assert.equal(new Set(keys).size, keys.length, `no data-as-set key renders twice: ${keys.join(", ")}`);
   for (const key of keys) assert.equal(count(html, `data-as-set="${key}"`), 1, `${key} is drawn once`);
-  // The seven behaviour rows (enabled, autonomy, spawn, spawnAutoStart, commandAudit, model, cwd) plus the nine
+  // The seven behaviour rows (enabled, autonomy, spawn, spawnAutoStart, commandAudit, model, cwd) plus the ten
   // numbers: the whole tab, written out so a control that quietly stops rendering is a failure too.
-  assert.deepEqual(keys.sort(), ["approvalSeconds", "autonomy", "childQuietSeconds", "commandAudit", "contextPercent", "cwd", "enabled", "leftoverMinutes", "maxWakesPerHour", "model", "quietSeconds", "repeatLimit", "repeatTurns", "seconds", "spawn", "spawnAutoStart"], "the settings tab draws each knob it owns, once");
+  assert.deepEqual(keys.sort(), ["approvalSeconds", "autonomy", "childQuietSeconds", "commandAudit", "contextPercent", "cwd", "enabled", "exitedSeconds", "leftoverMinutes", "maxWakesPerHour", "model", "quietSeconds", "repeatLimit", "repeatTurns", "seconds", "spawn", "spawnAutoStart"], "the settings tab draws each knob it owns, once");
 });
 
-test("each of the seven thresholds sits inside the details of the rule that consumes it", () => {
+test("the EXITED rule is a row in the per-turn list, with its own bar beside it", () => {
+  assert.equal(RULE_DEFS.exited?.default, "wake", "the rule ships awake: a failed run with no watch is the board's news");
+  const { html } = render();
+  assert.match(html, /<b>Run exited<\/b>/, "the rule has a labelled row");
+  assert.match(html, /data-as-rule="exited"/, "and an escalation select of its own");
+  const block = detailsBlocks(html).get("exited");
+  assert.ok(block, "its threshold is a disclosure under the row");
+  assert.match(block.body, /data-as-set="exitedSeconds"/, "the bar it owns is inside that disclosure");
+  assert.match(block.body, /exited for 30 s/, "the summary states the default in force");
+});
+
+test("each of the eight thresholds sits inside the details of the rule that consumes it", () => {
   const { html, RULE_THRESHOLDS } = render();
   const blocks = detailsBlocks(html);
-  assert.deepEqual([...blocks.keys()].sort(), Object.keys(OWNER).sort(), "exactly the seven rules with a threshold carry a disclosure");
+  assert.deepEqual([...blocks.keys()].sort(), Object.keys(OWNER).sort(), "exactly the eight rules with a threshold carry a disclosure");
 
   for (const [id, key] of Object.entries(OWNER)) {
     const block = blocks.get(id);
