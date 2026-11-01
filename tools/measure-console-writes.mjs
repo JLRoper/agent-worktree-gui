@@ -5,6 +5,8 @@
 //   node tools/measure-console-writes.mjs --only projects --json out.json
 //   node tools/measure-console-writes.mjs --control                        # same run, read-logging OFF
 //   node tools/measure-console-writes.mjs --root <dir>                     # serve another checkout
+//   node tools/measure-console-writes.mjs --only busy --stream --port 7385 --seconds 120
+//                                                                          # this run's OWN panel on a named port
 //
 // WHY THIS TOOL EXISTS. Every console harness in this repo samples what a frame PAINTS (requestAnimationFrame, then a
 // threshold on `scrollHeight - scrollTop - clientHeight`). That is the right instrument for a hop that lasts a frame and
@@ -39,8 +41,9 @@
 // something and 2 on a run that measured nothing (no console overflowed, or no write was ever logged), so a green run
 // can never be a pass on an empty log.
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createServer } from "node:http";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -54,6 +57,14 @@ const SECONDS = Number(opt("--seconds", 75));
 const ONLY = opt("--only");
 const JSON_OUT = opt("--json");
 const HEADLESS = !argv.includes("--headed");
+// A named port is how a report can prove WHICH panel its numbers came from: several measurement windows run side by
+// side, each briefed with its own port, and a random one would leave the claim unprovable. 0 keeps the old behaviour
+// (a free port from the kit). The reading board's ports are refused rather than measured.
+const PORT = Number(opt("--port", 0)) || 0;
+if (PORT && (PORT < 1024 || PORT > 65535 || [7331, 7473].includes(PORT))) {
+  console.log(`--port must be a free port other than the reading panels' 7331 / 7473 (got ${PORT})`);
+  process.exit(2);
+}
 // The control run turns READ logging off and leaves everything else identical: if the excursion count moves, the
 // instrument is measuring itself and no number in the report means anything.
 const CONTROL = argv.includes("--control");
@@ -726,13 +737,16 @@ function rank(writes, boxes) {
     const name = callerOf(w.by);
     let r = rows.get(name);
     if (!r) {
-      r = { name, sites: new Map(), n: 0, off: 0, asked: 0, grew: 0, stale: 0, dead: 0, up: 0, parked: 0, shortSum: 0, shortMax: 0, staleAges: [], domAges: [], maxOff: 0 };
+      r = { name, sites: new Map(), n: 0, off: 0, asked: 0, grew: 0, stale: 0, dead: 0, up: 0, parked: 0, land0: 0, shortSum: 0, shortMax: 0, staleAges: [], domAges: [], maxOff: 0 };
       rows.set(name, r);
     }
     r.n += 1;
     const site = siteOf(w.by);
     r.sites.set(site, (r.sites.get(site) || 0) + 1);
     if (w.from - w.asked > 2) r.up += 1;
+    // A box put back on its FIRST line. Meaningful only on a box that had a layout: a detached one lands on 0 because
+    // it stores nothing at all, which is the `dead` column's business.
+    if (!w.dead && w.landed === 0) r.land0 += 1;
     if (w.dead) {
       r.dead += 1;
       continue;
@@ -877,10 +891,22 @@ async function runLayout(name, spec, pw, startPanel) {
       apiServer: { url: `http://127.0.0.1:${gwPort}`, key: "probe" },
     },
     env: { API_SERVER_KEY: "" },
+    ...(PORT ? { port: PORT } : {}),
   });
+  // Which file this port is serving, read back BEFORE anything is measured. A window whose numbers cannot name their
+  // build (or their port) cannot be compared with the next window's, so this is a hard stop rather than a note.
+  const appSha = createHash("sha256").update(readFileSync(path.join(TREE, "public", "app.js"))).digest("hex");
+  const servedRes = await fetch(`${sandbox.base}/app.js`);
+  const servedBody = await servedRes.text();
+  const servedSha = createHash("sha256").update(servedBody).digest("hex");
+  const health = await fetch(`${sandbox.base}/api/health`).then((r) => r.status).catch(() => 0);
+  const panelInfo = { base: sandbox.base, port: sandbox.port, health, servedBytes: servedBody.length, servedSha, appSha, match: servedSha === appSha };
+  console.log(`[panel] ${name}: ${sandbox.base} (health ${health}), ${servedBody.length} B of app.js, served sha256 ${servedSha.slice(0, 16)}… on disk ${appSha.slice(0, 16)}… match ${servedSha === appSha}`);
+  if (PORT && sandbox.port !== PORT) throw new Error(`--port ${PORT} was asked for but the panel answered on ${sandbox.base}`);
+  if (servedSha !== appSha) throw new Error(`the panel on ${sandbox.base} is serving a different public/app.js (${servedSha.slice(0, 12)} vs ${appSha.slice(0, 12)}) - the numbers would not name this tree`);
   const browser = await pw.chromium.launch({ headless: HEADLESS });
   let touch = null;
-  const out = { name, desc: spec.desc, failures: [], notMeasured: [], errors: [], consoles: 0, writes: [], ops: [], boxes: {}, rank: [], excursions: [], frames: 0, reads: 0, control: CONTROL };
+  const out = { name, desc: spec.desc, failures: [], notMeasured: [], errors: [], consoles: 0, writes: [], ops: [], boxes: {}, rank: [], excursions: [], frames: 0, reads: 0, control: CONTROL, panel: panelInfo };
   try {
     const page = await (await browser.newContext({ viewport: { width: 1400, height: 1000 } })).newPage();
     page.on("pageerror", (e) => out.errors.push(String((e && e.message) || e).slice(0, 200)));
@@ -1141,15 +1167,25 @@ for (const r of results) {
   const grew = off.filter((w) => w.short <= 2);
   const viaScroll = r.writes.filter((w) => w.via);
   const parked = r.writes.filter((w) => w.asked != null && !w.dead && w.landedShort > 2 && !w.pin);
+  // The two numbers a "does it bounce" question is answered with, in the vocabulary of docs/console-combined-first-line.md:
+  // `land0` is a WRITE that put a box back on its first line (attributable, per caller below), and `zero` counts every
+  // arrival at 0 in the window including the ones no write explains - the clamps in the silent ledger, which are what a
+  // reader sees as the console hopping and which no caller can be blamed for.
+  const land0 = r.writes.filter((w) => w.asked != null && !w.dead && w.landed === 0);
+  const land0Asked = land0.filter((w) => w.asked === 0).length;
+  const silent0 = (r.silent || []).filter((s) => s.to === 0);
   console.log(
     `             writes: ${r.writes.length} total, ${ups.length} moved a box up, ${off.length} left a PINNED box off the bottom (${grew.length} of those asked for the bottom as it then was and the box grew inside the write), ${parked.length} left a box the reader had taken over off the bottom (expected), ${dead.length} into a box with no layout${viaScroll.length ? `, ${viaScroll.length} via scrollTo/scrollBy` : ""}`,
   );
+  console.log(
+    `             landed-at-0: ${land0.length} write(s) put a box on scrollTop 0 (${land0Asked} asked for 0, ${land0.length - land0Asked} asked for more and the browser landed 0); zero-reaches: ${land0.length + silent0.length} arrival(s) at 0 in the window, ${silent0.length} of them with no write at all`,
+  );
 
-  console.log("             caller                                n     up    off  asked   grew  stale  dead  maxOff");
+  console.log("             caller                                n     up  land0    off  asked   grew  stale  dead  maxOff");
   for (const row of r.rank.slice(0, 14)) {
     const ages = row.staleAges.filter((x) => typeof x === "number");
     console.log(
-      `             ${row.name.padEnd(36)} ${String(row.n).padStart(4)} ${String(row.up).padStart(6)} ${String(row.off).padStart(6)} ${String(row.asked).padStart(6)} ${String(row.grew).padStart(6)} ${String(row.stale).padStart(6)} ${String(row.dead).padStart(5)} ${String(row.maxOff).padStart(7)}${ages.length ? `  (src read age p50 ${med(ages)} ms, domAge p50 ${med(row.domAges)})` : ""}`,
+      `             ${row.name.padEnd(36)} ${String(row.n).padStart(4)} ${String(row.up).padStart(6)} ${String(row.land0).padStart(6)} ${String(row.off).padStart(6)} ${String(row.asked).padStart(6)} ${String(row.grew).padStart(6)} ${String(row.stale).padStart(6)} ${String(row.dead).padStart(5)} ${String(row.maxOff).padStart(7)}${ages.length ? `  (src read age p50 ${med(ages)} ms, domAge p50 ${med(row.domAges)})` : ""}`,
     );
     for (const [site, n] of [...row.sites.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)) console.log(`               ${String(n).padStart(4)}x ${site}`);
   }
