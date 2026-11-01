@@ -160,7 +160,15 @@ test("installing the guard again leaves the same shims, never one that execs its
   const shim = () => readFile(path.join(guardDir, "commit-msg"), "utf8");
 
   assert.equal(first.previous, realHooks, "the dir the guard replaced is the worktree's own .githooks");
-  assert.match(await shim(), new RegExp(`exec "${realHooks.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/commit-msg"`));
+  // RELATIVE, and the assertion is on the absence of the absolute path too: this file is shared by every worktree
+  // of the clone, so the installing tree's own path in it is what the OTHER trees would run — until that tree is
+  // released and every commit in the clone dies on a path that no longer exists.
+  assert.match(await shim(), /^target='\.githooks\/commit-msg'$/m, "the shim names the hook relative to the tree doing the commit");
+  assert.doesNotMatch(
+    await shim(),
+    new RegExp(realHooks.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    "no absolute path of the installing tree is baked into a file the whole clone runs",
+  );
 
   const second = await install();
   assert.equal(second.ok, true, `a second install works: ${second.error || ""}`);
@@ -187,10 +195,75 @@ test("installing the guard again leaves the same shims, never one that execs its
   assert.doesNotMatch(await shim(), new RegExp(guardDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), "no shim execs the guard's own dir");
   assert.match(
     await shim(),
-    new RegExp(`exec "${realHooks.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/commit-msg"`),
-    "the repaired shim runs the worktree's own hook",
+    /^target='\.githooks\/commit-msg'$/m,
+    "the repaired shim runs the worktree's own hook, named relative to the tree that commits",
   );
   assert.ok((await readFile(path.join(guardDir, "pre-push"), "utf8")).startsWith("#!/bin/sh"), "the guard's own hook is still there");
+});
+
+test("a tree that did not install the shim still commits after the installer is released", { skip: NO_SH }, async (t) => {
+  // THE MEASURED OUTAGE. The guard dir lives in <git-common-dir>, so every worktree of the clone runs the same shim
+  // file, and that shim can only name ONE target. Installed last from a tree that is then released, the baked-in
+  // absolute path refuses every commit in every remaining tree — "…/.githooks/commit-msg: No such file or directory",
+  // exit 1, nothing committed, --no-verify the only way forward. This runs the real sequence with real git: two
+  // trees of one clone, the repo's tracked .githooks/commit-msg in each, and each copy writes to its OWN marker, so
+  // "which copy ran" is an observation instead of an assumption. The shim has to run the committing tree's copy
+  // (relative, resolved at run time) rather than the installer's path.
+  const repo = await mkdtemp(path.join(os.tmpdir(), "wtgui-shim-repo-"));
+  t.after(() => rm(repo, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
+  const other = await mkdtemp(path.join(os.tmpdir(), "wtgui-shim-tree-"));
+  t.after(() => rm(other, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
+  const posix = (p) => p.replace(/\\/g, "/");
+  const git = (cwd, ...args) => spawnSync("git", args, { cwd, encoding: "utf8", windowsHide: true });
+
+  const markerHere = path.join(repo, "ran-in-repo.txt");
+  const markerOther = path.join(other, "ran-in-other.txt");
+  const gate = (marker) => `#!/bin/sh\nprintf 'ran\\n' >> "${posix(marker)}"\nexit 0\n`;
+  const ranIn = async (marker) => {
+    try {
+      return (await readFile(marker, "utf8")).split("\n").filter(Boolean).length;
+    } catch {
+      return 0;
+    }
+  };
+
+  git(repo, "init", "-q", ".");
+  git(repo, "config", "user.email", "guard@example.invalid");
+  git(repo, "config", "user.name", "guard fixture");
+  await mkdir(path.join(repo, ".githooks"), { recursive: true });
+  await writeFile(path.join(repo, ".githooks", "commit-msg"), gate(markerHere), "utf8");
+  assert.equal(git(repo, "add", "-A").status, 0);
+  assert.equal(git(repo, "commit", "-q", "-m", "Initial commit of the shim fixture").status, 0, "the fixture repo has a commit");
+  // The state a repo that ships hooks is in: a repo-wide relative hooks path, which every worktree resolves to its
+  // own .githooks. That is the predecessor the guard has to chain.
+  git(repo, "config", "core.hooksPath", ".githooks");
+  assert.equal(git(repo, "worktree", "add", "--detach", posix(other), "HEAD").status, 0, "a second tree of the same clone");
+  // Each tree's copy marks itself, so a commit in one tree can PROVE which copy ran.
+  await writeFile(path.join(other, ".githooks", "commit-msg"), gate(markerOther), "utf8");
+
+  const install = (tree) => installGuard({ projectPath: repo, worktree: tree, panelUrl: "http://127.0.0.1:7331", policy: "local-only", landing: [] });
+  assert.equal((await install(repo)).ok, true);
+  // The installer that finishes LAST is the one whose path a v2 shim would carry for the whole clone.
+  const last = await install(other);
+  assert.equal(last.ok, true);
+  assert.equal(last.previous, posix(path.join(other, ".githooks")), "the second install shims the other tree's own hooks");
+
+  const shimText = await readFile(path.join(last.dir, "commit-msg"), "utf8");
+  assert.match(shimText, /^target='\.githooks\/commit-msg'$/m, "the shim names the hook relative to whichever tree commits");
+  assert.ok(!shimText.includes(posix(other)), "the shim does not carry the installing tree's absolute path");
+
+  // 1. A commit from the tree that did NOT install the shim runs ITS copy, while the installer is still on disk.
+  const first = git(repo, "commit", "--allow-empty", "-m", "Commit from the tree that did not install the shim");
+  assert.equal(first.status, 0, `a commit from the other tree works: ${first.stderr || ""}`);
+  assert.equal(await ranIn(markerHere), 1, "the committing tree's own commit-msg ran");
+  assert.equal(await ranIn(markerOther), 0, "the installing tree's copy was not run");
+
+  // 2. Release the installer, then commit again from the same tree: the path it used to point at is gone.
+  assert.equal(git(repo, "worktree", "remove", "--force", posix(other)).status, 0, "the installing tree is released");
+  const second = git(repo, "commit", "--allow-empty", "-m", "Commit from a tree whose installer was just released");
+  assert.equal(second.status, 0, `a commit still works after the installer is released: ${second.stderr || ""}`);
+  assert.doesNotMatch(second.stderr || "", /No such file or directory/, "nothing dies on the released tree's path");
+  assert.equal(await ranIn(markerHere), 2, "the committing tree's hook still runs after the installer is gone");
 });
 
 test("an env-granted push neither asks the panel nor parks", { skip: NO_SH }, async (t) => {
