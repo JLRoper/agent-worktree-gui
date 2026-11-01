@@ -697,7 +697,7 @@ function toggleRootRecent(root) {
 // again. Collapsing has to include the folders — with 95 projects across a few roots, folding only
 // the projects still leaves a long list of folder headers that each need their own click.
 function boardRoots() {
-  return [...document.querySelectorAll("section.root-group")].map((s) => s.dataset.root).filter(Boolean);
+  return boardGroups().map((s) => s.dataset.root).filter(Boolean);
 }
 
 // The two cards above the board — New agent and Unattached agents — fold like project sections, and
@@ -10942,7 +10942,7 @@ function tickProjectScopes(now = Date.now()) {
     arr.push(name);
     byRoot.set(root, arr);
   }
-  const roots = [...host.querySelectorAll("section.root-group")].map((g) => g.dataset.root).filter(Boolean);
+  const roots = boardGroups(host).map((g) => g.dataset.root).filter(Boolean);
   if (roots.length) tickRankedOrder("folders", roots, folderRankCtx(byRoot, rank, now));
 }
 
@@ -12389,6 +12389,24 @@ function queueReorderProjects() {
   reorderFrame = requestAnimationFrame(flush);
 }
 
+// ---- the board's own children, not its subtree -----------------------------------------------------------------
+// The board is #projects > section.root-group > div.root-body > section.project (the root-group template), and a
+// re-rank only ever moves those children. A querySelectorAll below the host visits every node under it, consoles and
+// open cards included. reorderProjects is queued after every batch of placed rows and ran 393 times a minute on the
+// reader's board; its four such searches a call were 160 ms a minute of native search (0.48.1). On that board the
+// children reads find exactly the same nodes in the same order (1 folder, 1 body, 105 sections).
+function childrenMatching(el, sel) {
+  const out = [];
+  for (const c of el?.children || []) if (c.matches(sel)) out.push(c);
+  return out;
+}
+function boardGroups(host = $("projects")) {
+  return childrenMatching(host, "section.root-group");
+}
+function groupBody(group) {
+  return childrenMatching(group, ".root-body")[0] || null;
+}
+
 function reorderProjects() {
   const host = $("projects");
   if (!host) return;
@@ -12423,8 +12441,9 @@ function reorderProjects() {
   // in advance whether this tick has any work at all - and the console scroll boxes can be read while they are still
   // laid out, which a read after the move is not.
   const plans = [];
-  for (const body of host.querySelectorAll(".root-body")) {
-    const sections = [...body.querySelectorAll("section.project")];
+  for (const body of boardGroups(host).map(groupBody)) {
+    if (!body) continue;
+    const sections = childrenMatching(body, "section.project");
     if (!sections.length) continue;
     const want = order(sections);
     if (want.every((el, i) => el === sections[i])) continue;
@@ -12432,7 +12451,7 @@ function reorderProjects() {
   }
   // Then the folders themselves, on the same ranking: a folder holding the project an agent is busy
   // in leads, then the one worked in most recently.
-  const groups = [...host.querySelectorAll("section.root-group")];
+  const groups = boardGroups(host);
   // A folder's rate is its busiest project's, and it is ranked the same smoothed way, on the same clock.
   const byRoot = new Map();
   for (const name of state.projects.keys()) {
@@ -12447,7 +12466,7 @@ function reorderProjects() {
     .filter(Boolean);
   // A folder you are reading a project in holds its slot for the same reason the project does: the
   // folder sliding up takes the open section with it, which looks exactly like the section itself jumping.
-  const holdsOpen = (g) => [...g.querySelectorAll("section.project")].some((s) => state.expandedProjects.has(s.dataset.project));
+  const holdsOpen = (g) => childrenMatching(groupBody(g), "section.project").some((s) => state.expandedProjects.has(s.dataset.project));
   const pinnedGroups = new Map();
   groups.forEach((g, i) => { if (holdsOpen(g)) pinnedGroups.set(i, g); });
   const freeGroups = ranked.filter((g) => !pinnedGroups.has(groups.indexOf(g)));
