@@ -37,6 +37,10 @@
 //   subs      TWO sessions in sibling rows, each with a running SUBAGENT whose own console the reader has opened under
 //             its card: the roster poll re-reads both children, and one child's read must not rebuild, or put back at its
 //             first line, the other session's console. The poll is the page's own; only its two endpoints are answered here
+//   rebuild   TWO live consoles in one row whose own DETAIL a file in its worktree rebuilds, with one console parked by
+//             the reader, and a third agent in a row that stays shut until the window is open - so one rebuild has to
+//             BUILD a card: a console with the whole history in it, no old node to measure and no remembered place. That
+//             is docs/console-rebuild-built-card.md; before the fix it was painted at its first line for two frames.
 //
 // WHAT IT ASSERTS, per layout
 //   (1) hops: no console that overflows is painted at scrollTop <= 2 in any frame of the window (a reader who never
@@ -83,6 +87,14 @@ const LAYOUTS = {
   // there. The roster poll re-reads every open child that is still running and repaints the strips: one child's read
   // is the other session's business only if the page makes it so.
   subs: { desc: "TWO sessions, each with a running subagent whose console is open", cards: [{ project: "alpha" }, { project: "alpha", branch: "feature-b" }], folders: 1, subs: true },
+  // A row's detail is rebuilt whenever a field it draws changes - the row gaining a file, its verdict moving. placeRow
+  // then carries every card through a fresh agent slot, and the browser gives every scroll box in a moved subtree
+  // scrollTop 0 with no write. This is the layout for the reader's report ("every card rebuild jumps a console to the
+  // top"): a file appearing in the row's OWN worktree is the panel's own news, and the consoles have to survive it.
+  // Two cards in the row so a move has another console to get wrong, and a THIRD agent in a second row that stays
+  // closed until the window is open - the row the reader opens then has a card a rebuild has to BUILD, with the whole
+  // history in it and no old node to measure.
+  rebuild: { desc: "TWO live consoles in a row whose own detail a new file rebuilds", cards: [{ project: "alpha" }, { project: "alpha" }], extra: [{ project: "alpha", branch: "feature-b" }], folders: 1, rebuild: true },
 };
 
 // ---- the stub Hermes gateway: plain text, one word per 75 ms, over real SSE ---------------------------------------------
@@ -189,7 +201,7 @@ function pageInit(opts) {
   }
   const T0 = performance.now();
   const now = () => Math.round((performance.now() - T0) * 10) / 10;
-  const R = { hops: [], moves: [], reorder: { calls: 0, sectionMoves: 0, folderMoves: 0, cardCalls: 0, cardMoves: 0, stripPaints: 0, stripRebuilds: 0 }, errors: [], frames: 0, overflowAt: null, armN: 0, stopped: false };
+  const R = { hops: [], moves: [], reorder: { calls: 0, sectionMoves: 0, folderMoves: 0, cardCalls: 0, cardMoves: 0, stripPaints: 0, stripRebuilds: 0, fillCalls: 0, fresh: 0 }, errors: [], frames: 0, overflowAt: null, armN: 0, stopped: false };
   window.__rec = R;
   window.__now = now;
   window.addEventListener("error", (e) => R.errors.push(String((e && e.message) || e)));
@@ -233,6 +245,7 @@ function pageInit(opts) {
         seen.add(out);
         if (R.armN && R.overflowAt == null && seen.size >= R.armN) R.overflowAt = t;
       }
+      if (max > (R.maxDepth || 0)) R.maxDepth = max;
       const open = inHop.get(el);
       if (R.overflowAt != null && isHop(top, max)) {
         if (open) open.frames += 1;
@@ -373,6 +386,27 @@ function pageInit(opts) {
       cc.__c = true;
       window.reorderAgentCards = cc;
     }
+    // A detail rebuild: fillAgentSlots() moves a row's cards into a fresh detail, and a thread with no old card is
+    // BUILT there - a console that never had a node to measure and starts at its first line. Counted separately,
+    // because "the rebuild never ran" and "the rebuild built a card" are different answers about a clean run.
+    const origFill = window.fillAgentSlots;
+    if (typeof origFill === "function" && !origFill.__c) {
+      const cf = function (root, reuse) {
+        // A card BUILT by this rebuild is a slot with no card to carry into it. A console node that was carried in is
+        // not "fresh" just because it was outside the document (the old detail) when the call started.
+        const slots = root ? [...root.querySelectorAll("[data-agent-slot]")] : [];
+        const carried = slots.filter((s) => reuse && reuse.has(s.dataset.agentSlot)).length;
+        const made = slots.length - carried;
+        const r = origFill.apply(this, arguments);
+        R.reorder.fillCalls += 1;
+        R.reorder.fresh += made;
+        R.reorder.fillLog = R.reorder.fillLog || [];
+        if (R.reorder.fillLog.length < 40) R.reorder.fillLog.push({ t: now(), by: pageStack(3), reuse: carried, fresh: made });
+        return r;
+      };
+      cf.__c = true;
+      window.fillAgentSlots = cf;
+    }
     return true;
   };
   // Flip the stored order of every row's cards and let the page's own reorderAgentCards() act on it.
@@ -390,6 +424,16 @@ function pageInit(opts) {
         reorderAgentCards(state.rows.get(key).project);
       }
     }, everyMs);
+  };
+  // The measured window can start later than the arm: a layout that has to wait for a DEEP console, a parked reader or
+  // a card that a rebuild must build discards what happened while setting that up, so its frames are not the finding.
+  window.__restartWindow = () => {
+    R.overflowAt = now();
+    R.hops.length = 0;
+    R.moves.length = 0;
+    R.reorder.fillCalls = 0;
+    R.reorder.fresh = 0;
+    inHop.clear();
   };
   window.__stop = () => {
     R.stopped = true;
@@ -426,7 +470,10 @@ async function runLayout(name, spec, pw, startPanel) {
     for (const r of roots.slice(1)) for (const n of readdirSync(r)) closed.push(path.join(r, n));
   }
   const cardCwd = (c) => (c.branch ? path.join(roots[0], c.project, ".worktrees", c.branch) : path.join(roots[0], c.project));
-  for (const c of spec.cards) if (c.branch) git(["worktree", "add", "-q", "-b", c.branch, cardCwd(c)], path.join(roots[0], c.project));
+  // `extra` cards are spawned too, but their rows are NOT opened with the board: one of them is the row the reader
+  // opens during the window, whose card a rebuild has to build from nothing.
+  const extraCards = spec.extra || [];
+  for (const c of [...spec.cards, ...extraCards]) if (c.branch) git(["worktree", "add", "-q", "-b", c.branch, cardCwd(c)], path.join(roots[0], c.project));
 
   const gw = makeGateway(420_000);
   const gwPort = await gw.listen();
@@ -451,6 +498,7 @@ async function runLayout(name, spec, pw, startPanel) {
   });
   const browser = await pw.chromium.launch({ headless: HEADLESS });
   let touch = null;
+  let openTimer = null;
   const out = { name, desc: spec.desc, failures: [], notMeasured: [], hops: [], rank: null, consoles: 0, errors: [] };
   try {
     const page = await (await browser.newContext({ viewport: { width: 1400, height: 1000 } })).newPage();
@@ -478,15 +526,45 @@ async function runLayout(name, spec, pw, startPanel) {
       if (!r || !r.job) throw new Error(`spawn failed for ${JSON.stringify(c)}: ${JSON.stringify(r).slice(0, 300)}`);
       spawned.push({ thread, job: r.job.id });
     }
-    touch = setInterval(() => {
-      const pick = closed[Math.floor(Date.now() / 4000) % closed.length];
-      try {
-        writeFileSync(path.join(pick, `probe-${Date.now()}.txt`), "activity\n");
-      } catch {
-        /* the next tick picks another */
-      }
-    }, 4000);
-    touch.unref?.();
+    // A second row's agent, streaming from the same moment, whose row stays shut: nothing draws its card until the
+    // rebuild that opens the row, and that card's console is built with the whole history and no old node to measure.
+    const extraSpawned = [];
+    for (const [i, c] of extraCards.entries()) {
+      const thread = `indep-${name}-next-${i + 1}`;
+      const r = await fetch(`${sandbox.base}/api/agents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: `probe: a card a rebuild has to build #${i + 1}`, cwd: cardCwd(c), existing: true, thread }),
+      }).then((x) => x.json());
+      if (!r || !r.job) throw new Error(`spawn failed for extra ${JSON.stringify(c)}: ${JSON.stringify(r).slice(0, 300)}`);
+      extraSpawned.push({ thread, job: r.job.id, cwd: cardCwd(c) });
+    }
+    out.extra = extraSpawned.length;
+    const startTouch = () => {
+      if (touch) return;
+      touch = setInterval(() => {
+        if (spec.rebuild) {
+          // A file in the row's OWN worktree. The panel's next scan sends that row again, placeRow sees a field it
+          // draws changed and rebuilds its detail - the reader's own board doing the thing that jumps their consoles.
+          try {
+            writeFileSync(path.join(roots[0], "alpha", `probe-${Date.now()}.txt`), "activity\n");
+          } catch {
+            /* the next tick writes another */
+          }
+          return;
+        }
+        const pick = closed[Math.floor(Date.now() / 4000) % closed.length];
+        try {
+          writeFileSync(path.join(pick, `probe-${Date.now()}.txt`), "activity\n");
+        } catch {
+          /* the next tick picks another */
+        }
+      }, spec.rebuild ? 3000 : 4000);
+      touch.unref?.();
+    };
+    // A rebuild layout starts its clock with the window: a touch before the reader is parked would rebuild the very
+    // detail the park is being taken in, and the park (a wheel on a node that is gone) would not stick.
+    if (!spec.rebuild) startTouch();
     await page.waitForFunction((threads) => threads.every((t) => [...state.jobs.values()].some((j) => (j.thread || j.id) === t)), spawned.map((s) => s.thread), { timeout: 60_000 });
     // The reader has these projects and rows open: that is what a console on screen means.
     await page.evaluate((w) => {
@@ -531,14 +609,75 @@ async function runLayout(name, spec, pw, startPanel) {
     out.consoles = spawned.length * (spec.subs ? 2 : 1);
     await page.evaluate((n) => window.__arm(n), out.consoles);
     const t0 = Date.now();
-    await page.waitForFunction(() => window.__rec.overflowAt != null, null, { timeout: MAX_WAIT_MS, polling: 250 }).catch(() => {});
-    const overflowAt = await page.evaluate(() => window.__rec.overflowAt);
+    // A parked console needs somewhere to park: a box 30 px deep has no scrollback to take away, and a wheel over it
+    // moves nothing, which would make the park (and therefore every "did it move" claim) vacuous.
+    const needDepth = spec.rebuild ? 300 : 0;
+    await page
+      .waitForFunction((need) => window.__rec.overflowAt != null && (window.__rec.maxDepth || 0) >= need, needDepth, { timeout: MAX_WAIT_MS, polling: 250 })
+      .catch(() => {});
+    let overflowAt = await page.evaluate(() => window.__rec.overflowAt);
     if (overflowAt == null) {
       out.notMeasured.push(`the consoles did not all overflow within ${Math.round(MAX_WAIT_MS / 1000)} s`);
       return out;
     }
     log(name, `${out.consoles} console(s) overflowing after ${Math.round((Date.now() - t0) / 1000)} s; measuring ${SECONDS} s`);
     if (spec.swap) await page.evaluate(() => window.__startSwaps(4000));
+    // A row that is still shut, whose agent has been streaming since the board loaded: the reader opens it DURING the
+    // window, and the card that row needs has never existed. That is the "created in that same rebuild" half of the
+    // report - the console the caller's capture map cannot have an entry for.
+    const shutRow = async () => {
+      const c = extraCards[0];
+      if (!c) return null;
+      const found = await page.evaluate((want) => {
+        const row = [...state.rows.values()].find(
+          (r) => r.project === want.project && String(r.path || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase().endsWith(want.branch),
+        );
+        if (!row) return null;
+        const key = `${row.project}::${row.path}`;
+        state.expanded.add(key);
+        renderProjectRows(row.project);
+        return { key, cards: [...(state.detailEls.get(key)?.querySelectorAll(".job[data-thread]") || [])].length };
+      }, { project: c.project, branch: String(c.branch) });
+      return found;
+    };
+    if (spec.rebuild) {
+      // The reader parks one console well above its tail with a real wheel, and leaves it alone. If any console may be
+      // painted at its first line it must not be this one.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const spot = await page.evaluate(() => {
+          const el = [...document.querySelectorAll("pre.job-out")].find((o) => o.scrollHeight - o.clientHeight > 260);
+          if (!el) return null;
+          el.scrollIntoView({ block: "center" });
+          const r = el.getBoundingClientRect();
+          return { id: el.dataset.out, x: Math.round(r.x + 30), y: Math.round(r.y + 30), max: Math.round(el.scrollHeight - el.clientHeight) };
+        });
+        if (!spot) break;
+        await page.mouse.move(spot.x, spot.y);
+        // A wheel of a third of the box: far enough off the tail that the page records a real park, short of the top so
+        // a box painted at 0 is never the reader's own doing.
+        await page.mouse.wheel(0, -Math.max(40, Math.min(140, Math.floor(spot.max / 3))));
+        await sleep(600);
+        const held = await page.evaluate((id) => {
+          const rec = state.outScrolls[id];
+          return { pin: state.outPinned[id], top: rec ? Math.round(rec.top) : null, atBottom: rec ? rec.atBottom : null };
+        }, spot.id);
+        out.park = { ...spot, ...held };
+        if (held.pin === false && held.top >= 60) break;
+      }
+      if (!out.park || out.park.pin !== false) out.notMeasured.push(`the reader's park did not stick (${JSON.stringify(out.park)})`);
+      // Everything above was setup: the window this layout is judged on starts now, with the reader parked and a row
+      // still shut. The touches (and the rebuilds they cause) start here too, so none of the setup is counted.
+      overflowAt = await page.evaluate(() => {
+        window.__restartWindow();
+        return window.__rec.overflowAt;
+      });
+      startTouch();
+      openTimer = setTimeout(() => {
+        void shutRow().then((r) => {
+          out.opened = r;
+        });
+      }, Math.max(3000, Math.min(8000, Math.round((SECONDS * 1000) / 4))));
+    }
     for (;;) {
       const t = await page.evaluate(() => window.__now());
       if (t >= overflowAt + SECONDS * 1000) break;
@@ -569,17 +708,32 @@ async function runLayout(name, spec, pw, startPanel) {
     });
     out.premise = premise;
     if (!premise.ok) out.notMeasured.push(`a raw re-append of an open section did not reset a console here (${JSON.stringify(premise)}), so this browser cannot show the fault`);
-    const moved = spec.swap ? rec.reorder.cardMoves : spec.subs ? rec.reorder.stripPaints : rec.reorder.sectionMoves + rec.reorder.folderMoves;
+    const moved = spec.rebuild
+      ? rec.reorder.fillCalls
+      : spec.swap
+        ? rec.reorder.cardMoves
+        : spec.subs
+          ? rec.reorder.stripPaints
+          : rec.reorder.sectionMoves + rec.reorder.folderMoves;
     if (moved < MIN_RANK_MOVES) {
       out.notMeasured.push(
-        `${spec.swap ? "the cards swapped places" : spec.subs ? "the subagent strips were repainted" : "the ranking moved a section/folder"} only ${moved}x (< ${MIN_RANK_MOVES}); nothing was there to survive`,
+        `${spec.rebuild ? "a row detail was rebuilt through fillAgentSlots" : spec.swap ? "the cards swapped places" : spec.subs ? "the subagent strips were repainted" : "the ranking moved a section/folder"} only ${moved}x (< ${MIN_RANK_MOVES}); nothing was there to survive`,
       );
+    }
+    // The other half of the rebuild: one of those rebuilds has to have BUILT a card, or the console with no old node
+    // (the one this layout exists for) was never on the page and a clean result says nothing about it.
+    if (spec.rebuild && rec.reorder.fresh < 1) {
+      out.notMeasured.push("no rebuild created a card, so the console with no old node to measure was never exercised");
+    }
+    if (spec.rebuild && (!out.opened || !out.opened.cards)) {
+      out.notMeasured.push(`the row that was still shut was never opened (${JSON.stringify(out.opened)})`);
     }
     if (out.hops.length) out.failures.push(`${out.hops.length} painted hop(s)`);
     if (out.errors.length) out.failures.push(`${out.errors.length} page error(s): ${out.errors[0]}`);
     return out;
   } finally {
     if (touch) clearInterval(touch);
+    if (openTimer) clearTimeout(openTimer);
     await browser.close().catch(() => {});
     await gw.close().catch(() => {});
     await sandbox.stop().catch(() => {});
@@ -614,7 +768,7 @@ let blind = 0;
 console.log("");
 for (const r of results) {
   const rank = r.rank
-    ? `${r.rank.sectionMoves} section move(s), ${r.rank.folderMoves} folder move(s) in ${r.rank.calls} reorderProjects call(s); ${r.rank.cardMoves} card swap(s) in ${r.rank.cardCalls} reorderAgentCards call(s); ${r.rank.stripRebuilds} of ${r.rank.stripPaints} strip repaint(s) replaced a sub-console`
+    ? `${r.rank.sectionMoves} section move(s), ${r.rank.folderMoves} folder move(s) in ${r.rank.calls} reorderProjects call(s); ${r.rank.cardMoves} card swap(s) in ${r.rank.cardCalls} reorderAgentCards call(s); ${r.rank.stripRebuilds} of ${r.rank.stripPaints} strip repaint(s) replaced a sub-console; ${r.rank.fillCalls || 0} detail rebuild(s) moved cards through fillAgentSlots, ${r.rank.fresh || 0} console(s) built by one`
     : "no ranking data";
   const verdict = r.notMeasured.length ? "NOT MEASURED" : r.failures.length ? "FAIL" : "PASS";
   if (verdict === "FAIL") red += 1;
@@ -636,6 +790,8 @@ for (const r of results) {
     for (const h of r.hops.slice(0, 5)) console.log(`             t=${Math.round(h.t)}ms console ${h.out} at ${h.top} (max ${h.max}), ${h.frames} frame(s)`);
   }
   if (r.premise) console.log(`             sensitivity: raw re-append took a console from ${r.premise.before ?? "?"} to ${r.premise.after ?? "?"} (hop test says ${r.premise.ok ? "hop" : "no hop"})`);
+  if (r.park) console.log(`             the reader's park: console ${r.park.id} at ${r.park.top} of ${r.park.max} (max), pin ${r.park.pin}, atBottom ${r.park.atBottom}`);
+  for (const f of (r.rank && r.rank.fillLog) || []) console.log(`             fill t=${Math.round(f.t)}ms reuse ${f.reuse} fresh ${f.fresh} by ${String(f.by).slice(0, 120)}`);
 }
 console.log("");
 if (red) {
