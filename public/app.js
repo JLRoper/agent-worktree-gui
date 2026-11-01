@@ -283,9 +283,26 @@ const state = {
   zoom: 100, // page zoom percent (the browser's own Ctrl +/- is not always delivered)
   // The assistant's own Hermes thread, and the last state the server sent for it. Its card lives in the
   // floating panel (assistant.js owns the frame); the board must never render a second copy of it.
+  // `assistantThreads` is EVERY assistant thread — #1's and any created from a role — because each of them is a
+  // conversation with no worktree, a home in the float and nothing to count on the board.
   assistantThread: "panel-assistant",
+  assistantThreads: ["panel-assistant"],
   assistant: null,
 };
+
+// The assistant session a conversation belongs to, or null when it is an agent's. A thread is an assistant's when
+// one of the records the server sent names it; before that first /api/assistant answer, Assistant #1's fixed thread
+// is the only assistant thread there is. Every "is this a board agent" question goes through here, because with
+// roles there is more than one assistant thread and comparing against #1's alone leaves #2 counted as a worker.
+function assistantSessionFor(thread) {
+  const t = String(thread || "");
+  if (!t) return null;
+  const list = state.assistant?.assistants;
+  const hit = Array.isArray(list) ? list.find((a) => a.threadId === t) : null;
+  if (hit) return hit;
+  if (t === state.assistantThread) return { id: "assistant-1", name: "Assistant #1", threadId: t };
+  return null;
+}
 
 // ---------------- agents ----------------
 function jobLines(id) {
@@ -5666,12 +5683,12 @@ async function sendReply(thread, preset = null) {
   if (btn) btn.disabled = true;
   // The assistant's thread is answered through its own route: the server attaches the scratchpad and the
   // board digest to that turn, and a plain reply here would start a turn with neither.
-  const toAssistant = thread === state.assistantThread;
+  const toAssistant = assistantSessionFor(thread);
   try {
     const r = await apiFetch(toAssistant ? "/api/assistant/say" : "/api/agents/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(toAssistant ? { text } : { thread, text, attachments: attachmentsFor(thread) }),
+      body: JSON.stringify(toAssistant ? { text, assistantId: toAssistant.id } : { thread, text, attachments: attachmentsFor(thread) }),
     });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
@@ -7624,7 +7641,7 @@ function renderJobs() {
   // agents whose worktree was removed).
   // The assistant's thread is a conversation but not a board agent: it is counted on neither side of
   // "unattached / in worktrees", and it is rendered only inside its floating panel.
-  const boardConvs = conversations().filter((c) => c.thread !== state.assistantThread);
+  const boardConvs = conversations().filter((c) => !assistantSessionFor(c.thread));
   const convs = homelessConversations();
   const nested = boardConvs.length - convs.length;
   for (const id of [...state.collapsedJobs]) if (!conversations().some((c) => c.thread === id)) state.collapsedJobs.delete(id);
@@ -7705,7 +7722,7 @@ function renderJobs() {
   scheduleBoardSweep(anchor);
   const running = convs.filter((c) => c.turns.some((t) => turnLive(t))).length;
   const folded = convs.filter((c) => state.collapsedJobs.has(c.thread)).length;
-  const turns = [...state.jobs.values()].filter((j) => (j.thread || j.id) !== state.assistantThread).length;
+  const turns = [...state.jobs.values()].filter((j) => !assistantSessionFor(j.thread || j.id)).length;
   $("agents-chips").innerHTML =
     `<span class="chip">${convs.length} unattached</span>` +
     (nested ? `<span class="chip">${nested} in worktrees</span>` : "") +
@@ -8007,8 +8024,8 @@ function renderConversation(thread, { scroll = false } = {}) {
   if (!el) {
     // The assistant's card lives in the floating panel, not in #jobs. Rebuilding the unattached list would
     // leave the float empty until some unrelated render, so paint that one card in its own host.
-    if (thread === state.assistantThread && typeof window.__assistantRenderChat === "function") {
-      window.__assistantRenderChat();
+    if (assistantSessionFor(thread) && typeof window.__assistantRenderChat === "function") {
+      window.__assistantRenderChat(thread);
       return;
     }
     return renderJobs();
@@ -8990,7 +9007,7 @@ function isAgentRunning(conv) {
 function isHomelessConv(conv) {
   // The assistant is not a homeless worker even though it has no worktree: its card belongs to the floating
   // panel, and listing it in the Agents section as well would put two copies of one thread on the page.
-  if (conv?.thread === state.assistantThread) return false;
+  if (assistantSessionFor(conv?.thread)) return false;
   const owner = conv.latest.ownerPath || conv.first.ownerPath || null;
   if (!owner) return true;
   const k = normPath(owner).toLowerCase();
@@ -11477,7 +11494,7 @@ function sweepStaleBoard() {
     const owner = normPath(conv?.latest?.ownerPath || conv?.first?.ownerPath || "").toLowerCase();
     const rank = (card) => {
       // The floating assistant panel is the assistant thread's only home: it outranks every board copy.
-      if (card.closest("#as-chat")) return 5;
+      if (card.closest("[data-subpane=\"chat\"]")) return 5;
       const body = card.closest("tr.detail");
       const key = body?.previousElementSibling?.dataset?.key || "";
       const path = String(key).split("::").slice(1).join("::");
@@ -15775,7 +15792,7 @@ setInterval(() => {
   if (state.jobs.size) {
     // The assistant is a conversation but not a board agent: the float says "thinking" for it, and counting
     // it here read as a phantom agent while the Agents panel said there were none.
-    const convs = conversations().filter((c) => c.thread !== state.assistantThread);
+    const convs = conversations().filter((c) => !assistantSessionFor(c.thread));
     const running = convs.filter(convLive).length;
     if (convs.length) bits.push(`${convs.length} conversation${convs.length === 1 ? "" : "s"}${running ? ` · ${running} running` : ""}`);
   }
