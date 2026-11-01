@@ -1,10 +1,11 @@
-// The default settle notice: a worker's run ending is news, even when nobody asked for a watch.
+// The default settle notice: a worker's run ending `done` is news, even when nobody asked for a watch.
 //
 // What this file is the contract for: a run that ends `done` (the case the board used to answer with a changed row
-// and nothing else) or `failed` wakes the assistant ONCE, carrying the completion payload — the worker's final
-// message included, because that is what "is this branch ready to land" is judged on. And the three ways that
-// could become noise: the assistant waking on its own turn (a self-loop), N runs settling together (N notices),
-// and a thread the reader already has a watch on (two notices for one finish).
+// and nothing else) wakes the assistant ONCE, carrying the completion payload — the worker's final message
+// included, because that is what "is this branch ready to land" is judged on. And the three ways that could
+// become noise: the assistant waking on its own turn (a self-loop), N runs settling together (N notices), and a
+// thread the reader already has a watch on (two notices for one finish). A run that ends `failed` is the separate
+// `exited` rule's (test/exited-wake.test.js): same payload, its own threshold, and no second wake for one finish.
 //
 // `observe` is the same call the server makes for every job event (`onEvent` -> `assistant.observe`), and the
 // settle is deliberately driven through it rather than through a private method: the wiring is half the claim.
@@ -125,16 +126,15 @@ test("a run that ends done with no watch wakes the assistant with its final mess
   assert.equal(alert?.severity, "info");
 });
 
-test("a failed run wakes too, on the exit code that failed it", async (t) => {
+test("a failed run is not the settle's: it does not queue a done-notice", async (t) => {
   const { assistant, said } = await board(t);
   assistant.observe({ type: "job", job: settled({ id: "job-f", status: "failed", finalMessage: "blocked: no gateway key in .env" }) });
   await wait();
 
-  assert.equal(said.length, 1, "a run that failed needs its thread's next turn, which is the same judgement");
-  assert.match(said[0].text, /ended failed/);
-  assert.match(said[0].text, /exit: 1/);
-  assert.match(said[0].text, /blocked: no gateway key in \.env/, "its last words are what says why");
-  assert.equal(settles(assistant)[0]?.severity, "warn");
+  assert.equal(said.length, 0, "a failure is the exited rule's judgement, not the landing one");
+  assert.equal(settles(assistant).length, 0, "and it files no settle alert");
+  assert.equal(assistant.pendingSettles.size, 0, "nothing is left waiting in the settle's queue");
+  assert.equal(assistant.settleSeen.size, 0, "and the failed run is not recorded as a settle at all");
 });
 
 test("a card that is emitted again as its measurement lands wakes nobody twice", async (t) => {
@@ -166,7 +166,7 @@ test("several runs settling together are one wake, not one each", async (t) => {
   const { assistant, said, rows } = await board(t);
   const jobs = [
     settled({ id: "job-a", thread: "wtgui-alpha-111111" }),
-    settled({ id: "job-b", thread: "wtgui-bravo-222222", status: "failed", finalMessage: "the suite failed: 2 of 41" }),
+    settled({ id: "job-b", thread: "wtgui-bravo-222222", finalMessage: "the suite is green: 41 of 41" }),
     settled({ id: "job-c", thread: "wtgui-charlie-333333" }),
   ];
   rows.push(...jobs);
@@ -179,7 +179,7 @@ test("several runs settling together are one wake, not one each", async (t) => {
   for (const job of jobs) assert.match(text, new RegExp(job.thread), `${job.thread} is named in the one notice`);
   assert.equal(settles(assistant).length, 1, "one alert, too");
   assert.equal(settles(assistant)[0].thread, null, "a batch of threads has no single thread to be filed under");
-  assert.equal(settles(assistant)[0].severity, "warn", "one failure makes the batch worth a look");
+  assert.equal(settles(assistant)[0].severity, "info", "three clean finishes are information, not a warning");
 });
 
 test("a thread with an open watch gets the watch's notice and not a second one", async (t) => {
@@ -273,16 +273,16 @@ test("a spent wake budget still refuses a quiet wake, but a settle goes out", as
   assert.match(suppressed[0].text, /no new output/, "and it was the quiet rule's wake that was refused");
   assert.equal(assistant.pendingWake.length, 0, "nothing from the quiet rule was queued");
 
-  // The settle — a FAILED run, the case the budget silently ate — is exempt and goes out anyway.
-  const job = settled({ id: "job-budget", thread: "wtgui-failed-worker-666666", status: "failed", finalMessage: "blocked: the suite failed 2 of 41" });
+  // The settle — the finished run the budget used to silently eat — is exempt and goes out anyway.
+  const job = settled({ id: "job-budget", thread: "wtgui-finished-worker-666666", finalMessage: "done: the suite is 41 of 41" });
   rows.push(job);
   assistant.observe({ type: "job", job });
   await wait();
 
   assert.equal(assistant.pendingWake.length, 0, "the settle's wake was taken off the queue and sent");
   assert.equal(said.length, 1, "one wake left the panel: the settle's");
-  assert.match(said[0].text, /\[settle\] wtgui-failed-worker-666666 ended failed/);
-  assert.match(said[0].text, /blocked: the suite failed 2 of 41/, "with the worker's own last words");
+  assert.match(said[0].text, /\[settle\] wtgui-finished-worker-666666 ended normal/);
+  assert.match(said[0].text, /done: the suite is 41 of 41/, "with the worker's own last words");
   assert.equal(
     assistant.journal.filter((j) => j.kind === "wake-suppressed").length,
     1,
@@ -294,9 +294,9 @@ test("a spent wake budget still refuses a quiet wake, but a settle goes out", as
   assert.equal(refused?.refused, "budget", "every other rule is still budgeted");
 });
 
-// The other arm of the spent budget: a run that ended `done`. The failed-run case above is the one that was
-// invisible; this one proves the same exemption covers a completion, and — the part worth pinning — that a settle
-// spends what it is allowed to ignore without refilling the hour for the quiet rule behind it.
+// The other arm of the spent budget: the settle above goes out, and this one proves — the part worth pinning — that
+// it spends what it is allowed to ignore without refilling the hour for the quiet rule behind it. (The failed run's
+// own exemption is `checkExit`'s, and test/exited-wake.test.js drives that one.)
 test("a completion still wakes with the hour's budget spent, and the budget stays spent", async (t) => {
   const { assistant, said } = await board(t);
   const limit = assistant.settings.maxWakesPerHour;
