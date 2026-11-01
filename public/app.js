@@ -6590,8 +6590,36 @@ function paceResultLine(lines, line, jobId) {
   const text = String(line.text ?? "");
   if (TOOL_DONE_RE.test(text) || consoleFoldNote(text) || /^\s*(?:…|\.\.\.)\s/.test(text)) return;
   if (!globalThis.wtType.isPacedTool(resultToolOf(lines, line))) return;
+  // Only the head of the result is typed; the tail lands with the burst (see RESULT_PACED_ROWS).
+  if (!shouldPaceResultRow(lines, line)) return;
   typedText(line, jobId);
 }
+
+// ---- result row head
+// How many rows of one result are typed, and no more. A skill's result arrives as one row per line, and handing all
+// forty to the pacer made every tick write every row that had grown: one second carried 296 row writes, and the two
+// seconds of that burst were 61% of a streamed window's writes (docs/console-redraw-spam.html). The head is what a
+// reader watches arrive; past a handful of rows the typing is a delay rather than a reveal, so the rest of a long
+// result is drawn at once. Six is a whole short result and the head of a SKILL.md.
+const RESULT_PACED_ROWS = 6;
+
+// Which row of its result this line is, counting from the call's own header (0 = the first line under it). Another
+// call's header ends the count, so two results in one burst type the head of each.
+function resultRowIndex(lines, line) {
+  let n = 0;
+  for (let k = lines.length - 1; k >= 0; k--) {
+    const l = lines[k];
+    if (!l || l === line) continue;
+    if (l.kind === "tool") return n;
+    if (l.kind === "tool-out") n += 1;
+  }
+  return n;
+}
+
+function shouldPaceResultRow(lines, line, cap = RESULT_PACED_ROWS) {
+  return resultRowIndex(lines, line) < cap;
+}
+// ---- end result row head
 
 // The words of a line that may be drawn now: the live append asks for them, and every render path asks too, so a
 // repaint mid-paragraph draws the same prefix the console is showing instead of jumping to the wire's whole text.
