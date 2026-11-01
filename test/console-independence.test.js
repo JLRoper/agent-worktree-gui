@@ -189,7 +189,7 @@ const repaintRow = (out, index, fresh) => {
 };
 
 // The page's own answers, stood in for: who is pinned, and the clamp the browser applies to every scrollTop write.
-const state = { thinkPinned: new Map(), subConsolePinned: new Map(), subConsoleTop: new Map(), outPinned: {}, outScrolls: {} };
+const state = { thinkPinned: new Map(), subConsolePinned: new Map(), subConsoleTop: new Map(), outPinned: {}, outScrolls: {}, outHeights: {} };
 const consolePinned = (id) => state.outPinned[id] !== false;
 const setScroll = (el, top) => {
   if (!el) return;
@@ -497,11 +497,14 @@ test("without that restore the same swap leaves the console at its first line - 
 // to restore for it, and the 400 ms sweep is two frames too late: the frame in between paints the top of a log the run
 // has been writing all along. Measured on the page: one card, once per rebuild that builds it, while every carried
 // console was put back in the same task.
-const placeBuiltCode = [fn("placeBuiltConsoles"), fn("applySubConsoleScrolls")].join("\n");
-const placeBuilt = new Function("state", "consolePinned", "setScroll", `${scrollCode}\n${placeBuiltCode}\nreturn placeBuiltConsoles;`)(
+const placeBuiltCode = [fn("applyStoredHeight"), fn("placeBuiltConsoles"), fn("applySubConsoleScrolls")].join("\n");
+// `getComputedStyle` is the one browser answer the height restore asks for; no console in this file has a dragged
+// height stored, so it is never reached with one, and the stub says only "the sheet caps this box".
+const placeBuilt = new Function("state", "consolePinned", "setScroll", "getComputedStyle", `${scrollCode}\n${placeBuiltCode}\nreturn placeBuiltConsoles;`)(
   state,
   consolePinned,
   setScroll,
+  () => ({ maxHeight: "230px" }),
 );
 
 test("a console a rebuild BUILDS is on its newest line in the same task, not at the top of its log", () => {
