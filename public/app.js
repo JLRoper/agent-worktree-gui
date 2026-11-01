@@ -1721,7 +1721,7 @@ async function expandToolFold(btn) {
 // A block the reader has open keeps its stored output current while its turn runs, and settles once when the turn
 // ends. Only open blocks are asked for, and ensureToolStore's own throttle bounds the requests.
 setInterval(() => {
-  for (const grp of document.querySelectorAll(".tgrp")) {
+  for (const grp of placedNodes(".tgrp")) {
     const bodyEl = grp.querySelector(".tgrp-body");
     if (!bodyEl || bodyEl.hidden) continue;
     const turnId = String(grp.dataset.tgrp || "").split("#")[0];
@@ -2721,7 +2721,7 @@ function fmtLeft(ms) {
 // tick only repaints the bars that are on screen and a repaint or a board poll never has to drive it.
 function tickQuestionClocks() {
   const now = Date.now();
-  for (const el of document.querySelectorAll("[data-q-clock]")) {
+  for (const el of placedNodes("[data-q-clock]")) {
     const deadline = Number(el.dataset.qDeadline) || 0;
     const windowMs = Number(el.dataset.qWindow) || 0;
     if (!deadline || !windowMs) continue;
@@ -6776,8 +6776,9 @@ function wireConsole(el) {
 // this same task is counted; taking the copy observer's records would run the copy buttons' mount in the middle of a
 // paint. Before the watch is set up (placedNodes.watch, beside the copy observer) a lookup is the walk it replaces.
 // What it cannot see is a node that TAKES one of these classes after it was placed; nothing in this file does that
-// (no classList.add / className write names job-out, think-body or sub-console), and test/placed-nodes.test.js holds
-// the lookup to the walk's answer through every way a node does arrive and leave.
+// (no classList.add / className write names job-out, think-body, sub-console, detail, tgrp or queue-ago, and nothing
+// sets data-q-clock or data-detail on a placed node), and test/placed-nodes.test.js holds the lookup to the walk's
+// answer through every way a node does arrive and leave.
 function placedNodes(sel) {
   const w = placedNodes.watch;
   const set = w && w.sets.get(sel);
@@ -7363,7 +7364,11 @@ watchMotion(document.documentElement);
 // The watch placedNodes() reads (see there): its own observer, so a lookup can take the records waiting for it
 // without taking the copy observer's.
 placedNodes.watch = (() => {
-  const kinds = ["pre.job-out", ".think-body", ".sub-console"];
+  // The consoles (pre.job-out, .think-body, .sub-console: the 400 ms sweep, the pacer, every line, every stream
+  // repaint), plus the other nodes a clock walked the page for: tr.detail (sweepStaleBoard, ~44 a minute), .tgrp (the
+  // 3 s tool-store refresh), .queue-ago (the 1 s queue clock, 49 ms a minute of native search on its own) and
+  // [data-q-clock] (the question clocks).
+  const kinds = ["pre.job-out", ".think-body", ".sub-console", "tr.detail", ".tgrp", ".queue-ago", "[data-q-clock]"];
   const w = { sets: new Map(kinds.map((k) => [k, new Set()])), any: kinds.join(", "), mo: null };
   w.mo = new MutationObserver((records) => {
     for (const r of records) for (const n of r.addedNodes) notePlaced(w, n);
@@ -11619,7 +11624,7 @@ function sweepStaleBoard() {
   let heldScrolls = null;
   beginDomMove();
   // A detail whose row is gone, or which no longer follows its own row.
-  for (const d of [...document.querySelectorAll("tr.detail[data-detail]")]) {
+  for (const d of placedNodes("tr.detail").filter((el) => el.hasAttribute("data-detail"))) {
     const key = d.dataset.detail;
     const ownRow = state.rowEls.get(key) || null;
     if (!state.rows.has(key)) {
@@ -16008,7 +16013,7 @@ setInterval(() => {
   // A hidden tab has nothing to repaint: timers keep firing there, and the work (plus the layout
   // each repaint forces) is what made coming back to the tab feel like a freeze.
   if (document.hidden) return;
-  for (const el of document.querySelectorAll(".queue-ago[data-queued-at]")) {
+  for (const el of placedNodes(".queue-ago")) {
     const at = Number(el.dataset.queuedAt) || 0;
     if (!at) continue;
     const next = fmtDur(Date.now() - at);
