@@ -267,6 +267,12 @@
           <span class="settings-unit mono">default for cards</span>
         </label>
 
+        <label class="settings-row" for="stream-default" title="Draw every card's console as ONE stream: what the agent thought (while Show thinking is on), said, called and got back, in the order it happened, with no burst to open. A result is still the shut box it is everywhere else, one click away. Off — the card keeps the separate thinking block over its console and its condensed tool groups, which is what every card did before this switch existed. The wave button on a card turns it on or off for that one session, and that choice wins over this switch. Saved in this browser.">
+          <span>Combined output <span class="settings-info">ⓘ</span></span>
+          <input id="stream-default" type="checkbox">
+          <span class="settings-unit mono">default for cards</span>
+        </label>
+
         <label class="settings-row" for="group-tools" title="How a run of tool calls is drawn in a card's console. On — one tallied group: a head row per tool with the number of times it ran (terminal ×12), the batch's + N commands tail, and a button that opens the whole run, each call listing its own output underneath. Off — every call is ONE line of its own (glyph, tool, and the file, range or command it was given), and pressing that line opens what the call returned. Off is the default: the counted group repeats the call it is tallying — one terminal call cost a head row, the all N button, the call row, its ↳ tool line and the output box — while a run of calls reads as a handful of lines, one press each. The one-stream console has never had a tally and draws the same either way. Saved in this browser, and every console follows it.">
           <span>Count tool calls <span class="settings-info">ⓘ</span></span>
           <input id="group-tools" type="checkbox">
