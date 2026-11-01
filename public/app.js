@@ -16558,9 +16558,38 @@ function toggleSettings(open = null) {
 }
 
 // ---- the provider endpoint every run talks to ------------------------------------------------
-// model.base_url and model.api_key in config.yaml. The key never comes back from the server: the box
-// shows whether one is set, where it came from and its last four characters, and typing replaces it.
+// model.provider, model.base_url and model.api_key in config.yaml. The key never comes back from
+// the server: the box shows whether one is set, where it came from and its last four characters,
+// and typing replaces it. The provider dropdown is populated once from the API's providerOptions.
 let providerStateCache = null;
+
+function populateProviderSelect(sel, options, current) {
+  if (!sel || !options) return;
+  if (sel.options.length <= 1) {
+    for (const opt of options) {
+      const o = document.createElement("option");
+      o.value = opt.id;
+      o.textContent = opt.label;
+      sel.appendChild(o);
+    }
+  }
+  if (document.activeElement !== sel) sel.value = current || "";
+}
+
+function providerLabel() {
+  const s = providerStateCache;
+  const sel = $("provider-select");
+  const id = sel?.value || s?.provider;
+  return s?.providerOptions?.find((o) => o.id === id)?.label || "Provider";
+}
+
+function updateProviderLabels() {
+  const label = providerLabel();
+  const urlLabel = $("provider-url-label");
+  const keyLabel = $("provider-key-label");
+  if (urlLabel) urlLabel.textContent = label;
+  if (keyLabel) keyLabel.textContent = label;
+}
 
 function paintProviderSetting(error = null) {
   const url = $("provider-url");
@@ -16575,6 +16604,8 @@ function paintProviderSetting(error = null) {
     preview.classList.add("bad");
     return;
   }
+  populateProviderSelect($("provider-select"), s.providerOptions, s.provider);
+  updateProviderLabels();
   if (url && document.activeElement !== url) url.value = s.baseUrl || "";
   if (url) url.placeholder = s.defaultBaseUrl || "https://openrouter.ai/api/v1";
   if (key) {
@@ -16584,11 +16615,12 @@ function paintProviderSetting(error = null) {
   }
   if (save) save.disabled = !s.editable;
   if (clear) clear.disabled = !s.editable || !s.key.inConfig;
+  const providerText = s.provider || "(not set)";
   const urlText = s.baseUrl || `${s.defaultBaseUrl} (default)`;
   const keyText = s.key.set ? `${s.key.masked}${s.key.inConfig ? " in config.yaml" : s.key.envName ? ` from ${s.key.envName}` : ""}` : "not set";
   preview.textContent = error
     ? `NOT SAVED — ${error}`
-    : `${s.provider} · ${urlText} · key ${keyText}`;
+    : `${providerText} · ${urlText} · key ${keyText}`;
   preview.classList.toggle("bad", Boolean(error) || !s.editable);
   preview.title = s.editable ? s.configPath : s.reason || s.configPath;
 }
@@ -16617,7 +16649,7 @@ async function saveProviderSetting() {
     const r = await apiFetch("/api/settings/provider", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ baseUrl: url?.value || "", apiKey: key?.value || "" }),
+      body: JSON.stringify({ provider: $("provider-select")?.value || "", baseUrl: url?.value || "", apiKey: key?.value || "" }),
     });
     const d = await r.json();
     providerStateCache = d;
@@ -17065,6 +17097,219 @@ function initFonts() {
 function initQLook() {
   applyQLook({}, { save: false });
 }
+
+// ---- projects and scan roots configuration ------
+let projectsState = { scanRoots: [], projects: [] };
+
+function paintProjectsSetting(note = "") {
+  const list = $("scanroots-list");
+  const input = $("scanroot-new");
+  const preview = $("scanroots-preview");
+  const save = $("btn-scanroots-save");
+
+  if (list) {
+    list.innerHTML = projectsState.scanRoots.map((root, i) =>
+      `<div class="settings-list-item"><span>${esc(root)}</span><button type="button" data-remove="${i}" title="remove this folder">Remove</button></div>`
+    ).join("");
+    for (const btn of list.querySelectorAll("button[data-remove]")) {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const idx = Number(btn.dataset.remove);
+        const updated = projectsState.scanRoots.filter((_, i) => i !== idx);
+        projectsState.scanRoots = updated;
+        paintProjectsSetting();
+        save?.classList.add("dirty");
+      });
+    }
+  }
+
+  if (preview) {
+    if (note) {
+      preview.textContent = `${note} — ${projectsState.scanRoots.length} folder${projectsState.scanRoots.length === 1 ? "" : "s"}`;
+    } else {
+      preview.textContent = projectsState.scanRoots.length
+        ? `${projectsState.scanRoots.length} folder${projectsState.scanRoots.length === 1 ? "" : "s"}`
+        : "no folders configured";
+    }
+  }
+
+  if (save) {
+    save.classList.toggle("dirty", String(JSON.stringify(projectsState.scanRoots)) !== String(JSON.stringify(state.savedScanRoots || [])));
+  }
+}
+
+async function loadProjectsSetting() {
+  try {
+    const r = await apiFetch("/api/settings/projects");
+    projectsState = await r.json();
+    state.savedScanRoots = [...projectsState.scanRoots];
+    paintProjectsSetting();
+  } catch (e) {
+    const preview = $("scanroots-preview");
+    if (preview) {
+      preview.textContent = `could not read projects: ${e.message}`;
+      preview.classList.add("bad");
+    }
+  }
+}
+
+async function saveProjectsSetting() {
+  const preview = $("scanroots-preview");
+  if (!projectsState.scanRoots.length) {
+    if (preview) preview.textContent = "NOT SAVED — at least one folder is required";
+    return;
+  }
+  if (preview) {
+    preview.textContent = "saving…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch("/api/settings/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scanRoots: projectsState.scanRoots }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      paintProjectsSetting(d.error || `HTTP ${r.status}`, true);
+      return;
+    }
+    projectsState = d;
+    state.savedScanRoots = [...projectsState.scanRoots];
+    paintProjectsSetting(d.note || "saved");
+    $("scanroot-new").value = "";
+    $("btn-scanroots-save").classList.remove("dirty");
+  } catch (e) {
+    paintProjectsSetting(e.message, true);
+  }
+}
+
+// ---- first-run setup ------------------------------------------------------------------------------
+// Gated on one fact the server owns: config.json names no scan roots (settings.needsSetup). While it holds, this
+// screen stands in place of the board; once a folder is saved it never shows again, and Settings > Projects &
+// Folders is where roots change. Each folder is previewed before it is saved, with the same "a repo is a directory
+// with a .git directory in it" rule discovery uses, so the count here is the board the reader will get.
+const setupState = { roots: [], previews: new Map(), saving: false };
+
+function paintSetup() {
+  const on = Boolean(state.settings?.needsSetup);
+  $("setup")?.classList.toggle("hidden", !on);
+  document.querySelector("main")?.classList.toggle("hidden", on);
+  if (!on) return;
+  $("setup-roots").innerHTML = setupState.roots
+    .map((root, i) => {
+      const p = setupState.previews.get(root);
+      const n = p?.repos?.length || 0;
+      const [tone, text] = !p
+        ? ["", "checking…"]
+        : p.error
+          ? ["bad", p.error]
+          : !p.exists
+            ? ["bad", "not a folder on this machine"]
+            : n
+              ? ["ok", `${n} git repo${n === 1 ? "" : "s"}`]
+              : ["warn", "no git repos directly inside"];
+      return `<li class="setup-root"><span class="setup-root-path">${esc(root)}</span><span class="setup-root-count ${tone}" title="${esc((p?.repos || []).join(", "))}">${esc(text)}</span><button type="button" data-setup-remove="${i}" title="remove this folder" aria-label="remove ${esc(root)}">✕</button></li>`;
+    })
+    .join("");
+  // The server refuses a folder that does not exist, so the button waits until every folder listed is a real one.
+  const ready = setupState.roots.length > 0 && setupState.roots.every((r) => setupState.previews.get(r)?.exists);
+  $("setup-save").disabled = setupState.saving || !ready;
+  if (!setupState.providerLoaded) {
+    setupState.providerLoaded = true;
+    void loadSetupProviderOptions();
+  }
+}
+
+async function loadSetupProviderOptions() {
+  try {
+    const r = await apiFetch("/api/settings/provider");
+    const d = await r.json();
+    populateProviderSelect($("setup-provider-select"), d.providerOptions, d.provider);
+  } catch { /* setup works without it */ }
+}
+
+function setupStatus(text, bad = false) {
+  const el = $("setup-status");
+  el.textContent = text;
+  el.classList.toggle("bad", bad);
+}
+
+async function previewSetupRoot(root) {
+  try {
+    const r = await apiFetch(`/api/settings/scan-preview?root=${encodeURIComponent(root)}`);
+    const d = await r.json();
+    setupState.previews.set(root, r.ok ? d : { error: d.error || `HTTP ${r.status}` });
+  } catch (e) {
+    setupState.previews.set(root, { error: e.message });
+  }
+  paintSetup();
+}
+
+$("setup-form")?.addEventListener("submit", (e) => {
+  e.preventDefault();
+  // "Copy as path" on Windows wraps the path in quotes; a trailing slash is the same folder.
+  const root = $("setup-path").value.trim().replace(/^"(.*)"$/, "$1").trim().replace(/(.)[\\/]+$/, "$1");
+  if (!root) return;
+  $("setup-path").value = "";
+  setupStatus("");
+  if (!setupState.roots.includes(root)) {
+    setupState.roots.push(root);
+    void previewSetupRoot(root);
+  }
+  paintSetup();
+});
+
+$("setup-roots")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-setup-remove]");
+  if (!btn) return;
+  const [root] = setupState.roots.splice(Number(btn.dataset.setupRemove), 1);
+  setupState.previews.delete(root);
+  paintSetup();
+});
+
+$("setup-save")?.addEventListener("click", async () => {
+  setupState.saving = true;
+  setupStatus("saving…");
+  paintSetup();
+  try {
+    const r = await apiFetch("/api/settings/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scanRoots: setupState.roots }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      setupStatus(d.error || `HTTP ${r.status}`, true);
+      return;
+    }
+    state.scanRoots = d.scanRoots;
+    state.savedScanRoots = [...d.scanRoots];
+    state.settings = { ...(state.settings || {}), needsSetup: false };
+    // Write the selected provider into config.yaml (non-fatal — the user can set it in Settings later).
+    const setupProvider = $("setup-provider-select")?.value;
+    if (setupProvider) {
+      try {
+        await apiFetch("/api/settings/provider", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: setupProvider }),
+        });
+      } catch { /* best-effort */ }
+    }
+    setupStatus("");
+    // The server is already sweeping the new roots and broadcasts the board when the sweep lands. No resync here: one
+    // now would paint the empty pre-sweep board as "No git repos found", right after the preview counted them.
+    $("projects").innerHTML = '<p class="empty">Scanning your folders…</p>';
+    paintSetup();
+    paintConfigLine();
+  } catch (e) {
+    setupStatus(e.message, true);
+  } finally {
+    setupState.saving = false;
+    paintSetup();
+  }
+});
 
 $("btn-settings")?.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -17788,6 +18033,7 @@ $("btn-provider-default-url")?.addEventListener("click", () => {
   const url = $("provider-url");
   if (url) url.value = url.placeholder || "https://openrouter.ai/api/v1";
 });
+$("provider-select")?.addEventListener("change", () => updateProviderLabels());
 $("btn-models-refresh")?.addEventListener("click", () => void refreshModels());
 $("session-limit")?.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;

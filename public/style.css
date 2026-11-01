@@ -3152,3 +3152,27 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-msg-copy { border: 1px solid var(--line); background: var(--card); color: var(--dim); font-family: var(--mono); font-size: 10px; border-radius: 5px; padding: 2px 6px; cursor: pointer; }
 .as-msg-copy:hover { color: var(--text); }
 .as-msg-copy.is-copied { color: #7ee787; border-color: #2ea043; }
+
+/* ---- first-run setup: shown in place of the board while config.json names no scan roots ---------------------- */
+.setup { max-width: 720px; margin: 32px auto 48px; padding: 22px 24px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+.setup h2 { margin: 0 0 8px; font-size: 18px; }
+.setup-lede { margin: 0 0 16px; color: var(--dim); line-height: 1.5; }
+.setup-lede code { font: 12px var(--mono); }
+.setup-add { display: flex; flex-wrap: wrap; gap: 8px; }
+.setup-add input { flex: 1 1 260px; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; font: 13px var(--mono); }
+.setup-roots { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.setup-roots:empty { display: none; }
+.setup-root { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.setup-root-path { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; font: 13px var(--mono); }
+.setup-root-count { font-size: 12px; color: var(--dim); }
+.setup-root-count.ok { color: var(--green); }
+.setup-root-count.bad { color: var(--red); }
+.setup-root-count.warn { color: var(--amber); }
+.setup-root button { padding: 1px 7px; font-size: 12px; }
+.setup-provider { margin-top: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.setup-provider label { font-size: 13px; color: var(--dim); white-space: nowrap; }
+.setup-provider select { flex: 1; min-width: 180px; max-width: 280px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; font: 13px var(--mono); }
+.setup-provider-hint { flex-basis: 100%; margin: 4px 0 0; font-size: 12px; color: var(--dim); }
+.setup-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; }
+.setup-status { font-size: 12px; color: var(--dim); }
+.setup-status.bad { color: var(--red); }

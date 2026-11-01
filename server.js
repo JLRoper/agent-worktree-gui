@@ -1968,11 +1968,12 @@ const server = createServer(async (req, res) => {
       if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
       try {
         const wrote = writeProviderSettings({
+          provider: body.provider,
           baseUrl: body.baseUrl,
           apiKey: body.apiKey,
           clearKey: Boolean(body.clearKey),
         });
-        const what = [wrote.wroteUrl ? "model.base_url" : null, wrote.wroteKey ? "model.api_key" : null, wrote.clearedKey ? "model.api_key removed" : null]
+        const what = [wrote.wroteProvider ? "model.provider" : null, wrote.wroteUrl ? "model.base_url" : null, wrote.wroteKey ? "model.api_key" : null, wrote.clearedKey ? "model.api_key removed" : null]
           .filter(Boolean)
           .join(", ");
         log(`${what || "provider settings"} written to ${wrote.configPath}`);
