@@ -176,6 +176,9 @@ async function main() {
         }
       };
       localStorage.setItem("wtgui.autoCollect", "0");
+      // The TALLIED tool group: this probe drives the condensed card's group head, whose body is what it opens.
+      // (The shipped default is one expandable line per call — Settings > Count tool calls — with no head to click.)
+      localStorage.setItem("wtgui.toolGroups", "1");
     });
     const page = await context.newPage();
     page.on("pageerror", (e) => pageErrors.push(String(e && e.message ? e.message : e)));

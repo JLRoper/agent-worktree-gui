@@ -327,6 +327,9 @@ async function browserPhase(pw) {
           return realFetch(url, opts);
         };
         localStorage.setItem("wtgui.autoCollect", "0");
+        // The condensed half of this probe reads the tallied group's body (a head row per tool, its fold, the
+        // "all N" button). The shipped default is one expandable line per call, so the tally is asked for here.
+        localStorage.setItem("wtgui.toolGroups", "1");
         const foldRe = /^\s*…\s+\d+ lines?(?: hidden| shortened)(?:, \d+ lines? shortened)? — click to read\s*$/;
         const pre = () => document.querySelector(`pre.job-out[data-out="${id}"]`);
         probe.show = (which = "full", stream = false) => {

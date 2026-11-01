@@ -221,6 +221,14 @@ async function browserPhase(pw) {
         return json({ ok: true });
       };
 
+      // This probe measures the condensed card's TALLIED group (its head row, the body it folds and the store read
+      // behind it). The shipped default is one expandable line per call, which has no head and no body to fold.
+      try {
+        localStorage.setItem("wtgui.toolGroups", "1");
+      } catch {
+        /* storage may be unavailable */
+      }
+
       // The turn, fabricated in the PAGE's own state and painted by the shipped renderJobs(): two patch calls in
       // one burst, the first with the gateway's cut preview, the second with a change block.
       probe.show = (opts = {}) => {

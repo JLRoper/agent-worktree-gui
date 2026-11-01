@@ -197,6 +197,9 @@ async function browserPhase(pw) {
       // The Settings toggle the brief names: thinking on for this session.
       try {
         localStorage.setItem("wtgui.think", "1");
+        // And the TALLIED tool group, which this harness is about: the shipped default draws one expandable line
+        // per call (Settings > Count tool calls, off), and that shape has no group head to carry a copy button.
+        localStorage.setItem("wtgui.toolGroups", "1");
       } catch {
         /* the page just will not remember it */
       }
