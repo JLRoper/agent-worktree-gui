@@ -12819,12 +12819,25 @@ function applyFitMode(table, fit) {
 }
 
 // Measurements are only good while the cells are: a repaint that changed no text should not pay for a layout.
+//
+// "The cells" are the worktree rows and nothing else - exactly the set naturalColumnWidths() copies. A row that spans
+// every column (a card's detail, a delete confirmation) is not a column's content, so its text cannot move the split,
+// and counting it here re-measured the chart on every line an agent wrote: read on the reader's board with a read-only
+// client, 31 and 45 measurements in a minute where a signature over the worktree rows changed 3 and 14 times, and
+// every check built one string of the whole tbody's text, consoles included (about 250 KB; 12.7 MB a minute).
 const columnSigs = new WeakMap();
 
 function columnSignature(tbody) {
+  let rows = 0;
+  let text = 0;
   let chips = 0;
-  for (const el of tbody.querySelectorAll(".sig, .chip")) chips += 1;
-  return `${tbody.children.length}:${tbody.textContent.length}:${chips}`;
+  for (const tr of tbody.rows) {
+    if (!tr.classList.contains("row")) continue;
+    rows += 1;
+    text += tr.textContent.length;
+    chips += tr.querySelectorAll(".sig, .chip").length;
+  }
+  return `${rows}:${text}:${chips}`;
 }
 
 function fitColumns(table) {
