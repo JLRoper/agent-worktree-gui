@@ -553,6 +553,11 @@ RELEASE <worktree path or slug> | <why it is finished>
 CHECKED <path> | <one word>
 ```
 
+In the id forms the id is the **leading integer**; a trailing reason (`TODO DROP 7 — obsolete`) is ignored rather
+than read as part of the id, and a line with no leading integer is still refused with what it got. Reading the whole
+argument as the id refused such a line whole while the writer was already telling the reader the item was dropped —
+the list and the prose disagreed, and the next turn's block still offered the item.
+
 The grammar has four properties, and together they are the most distinctive architectural
 decision in the repo:
 
