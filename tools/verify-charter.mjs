@@ -345,7 +345,7 @@ console.log("GET and PUT /api/assistant/charter, over a real instance on a scrat
 
       const r2 = await fetch(`${base}/api/assistant/role?assistantId=assistant-2`);
       const rd2 = await r2.json();
-      eq(rd2.target.threadId, "panel-assistant-2");
+      eq(rd2.target.threadId, "panel-assistant-2", "and its own thread in the payload");
       eq(rd2.sameAsRole, true, "#2's copy is still the role's own text");
       const put2 = await fetch(`${base}/api/assistant/role`, {
         method: "PUT",
