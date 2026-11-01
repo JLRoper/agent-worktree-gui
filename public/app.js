@@ -6354,20 +6354,31 @@ function setThinking(thread, on) {
 // The 🌊 beside the 🧠: draw this session as ONE stream — what the agent thought, said, called and got back, in the
 // order it happened, with no burst to open. What is NOT folded there is the run of calls itself: a result is still the
 // shut box it is in the condensed view (core/console-format.js), so the stream is one flow of what happened rather
-// than a wall of output. Per session like thinking, but with no global default: a card that never pressed it renders
-// exactly as it always did, which is what every card did before this existed.
-const STREAM_KEY = "wtgui.stream";
+// than a wall of output. Per session like thinking, and with a global default like it too (Settings > Agent cards >
+// Combined output): a card that never pressed the button follows that switch, and a card that did keeps its answer.
+const STREAM_KEY = "wtgui.stream"; // global default, "1" when a card without its own answer should be drawn as one stream
+
+function streamDefault() {
+  try {
+    return localStorage.getItem(STREAM_KEY) === "1";
+  } catch {
+    /* private mode: off, which is the default anyway */
+    return false;
+  }
+}
 
 // NOT `setStream`. That name is already core/sse.js's connection label (the ● live / offline pill, called from
 // there, from core/transport.js and from this file); it is a global in a classic script, so a function of the same
 // name here would replace it for every caller and the status pill would stop moving.
 function streamOn(thread) {
   try {
-    return localStorage.getItem(`${STREAM_KEY}.${thread}`) === "1";
+    const own = localStorage.getItem(`${STREAM_KEY}.${thread}`);
+    if (own === "1") return true;
+    if (own === "0") return false;
   } catch {
-    /* private mode: off, which is the default anyway */
-    return false;
+    /* private mode: fall through to the default */
   }
+  return streamDefault();
 }
 
 function setStreamMode(thread, on) {
@@ -18047,6 +18058,24 @@ $("show-thinking")?.addEventListener("change", (e) => {
     if (own === null) renderConversation(c.thread);
   }
 });
+// The 🌊 default. Same shape as the 🧠 row above: the switch is the answer for a card that never made one, and the
+// per-card button (its own `wtgui.stream.<thread>`) still wins — so only the cards with no key are repainted here.
+$("stream-default")?.addEventListener("change", (e) => {
+  try {
+    localStorage.setItem(STREAM_KEY, e.target.checked ? "1" : "0");
+  } catch {
+    /* private mode: the default just will not persist */
+  }
+  for (const c of conversations()) {
+    let own = null;
+    try {
+      own = localStorage.getItem(`${STREAM_KEY}.${c.thread}`);
+    } catch {
+      /* ignore */
+    }
+    if (own === null) renderConversation(c.thread);
+  }
+});
 $("term-weight-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, weight: e.target.value }));
 
 // The approval window. A preset only fills the box and lights Save: one click here rewrites the
@@ -18108,6 +18137,7 @@ applyContrast(contrastSetting(), { save: false });
 applyAddBarBrightness(addBarBrightnessSetting(), { save: false });
 applyAddBarTop(addBarAtTop(), { save: false });
 if ($("show-thinking")) $("show-thinking").checked = thinkDefault();
+if ($("stream-default")) $("stream-default").checked = streamDefault();
 if ($("group-tools")) $("group-tools").checked = toolGroupsOn();
 if ($("follow-opened")) $("follow-opened").checked = foldFollowsConsole();
 if ($("auto-collect")) $("auto-collect").checked = autoCollectOn();
