@@ -52,7 +52,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { sessionCost } from "../lib/session-usage.js";
 import { loadPlaywright } from "./browser.mjs";
-import { ROOT, pickFreePort as freePort } from "./panel-testkit.mjs";
+import { ROOT, freePort } from "./panel-testkit.mjs";
 
 let failures = 0;
 let checks = 0;
@@ -177,7 +177,7 @@ ok("...with no `~`, because it is not an estimate", free.measured === false && f
 // (4) a model the panel's copy has no price for: no dollars, and the tooltip names the model and the fix.
 const unpriceable = costOf(usage({ model: "vendor/none", tokens: { input_tokens: 9_000, output_tokens: 100 } }));
 check("a model with no price in the panel's copy has no dollar figure (never a 0)", unpriceable.usd, null);
-ok("...and the tooltip names the model and where prices are rebuilt", /vendor\/none/.test(unpriceable.note) && /Model prices/.test(unpriceable.note), unpriceable.note);
+ok("...and the tooltip names the model and where prices are rebuilt", /vendor\/none/.test(unpriceable.note) && /Models & prices/.test(unpriceable.note), unpriceable.note);
 
 // (5) one side unpriced, with tokens on that side: half a bill is not the bill.
 const halfOut = costOf(usage({ model: "vendor/half", tokens: { input_tokens: 1_000_000, output_tokens: 5_000 } }));

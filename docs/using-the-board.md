@@ -835,6 +835,16 @@ machine is disabled, and its note gives the reason):
 Every gateway write re-reads the file and refuses the change if the file does not say what was asked, and it edits
 only its own line so your comments and formatting survive.
 
+**Models & prices** is the one Gateway row that is a gesture rather than a setting. The model menu shows two columns —
+in/out price per million tokens and a 0-10 rating — and they come from two different places, so the row dates both. One
+press of **Refresh models & prices** makes the gateway re-fetch every authenticated provider's live model list
+(`provider_models_cache.json`, the file `hermes model --refresh` writes and the menu lists from) and then rebuilds this
+panel's own price cache from that same answer: one gateway call, not two, which is why there is one button and not a
+separate "refresh prices" beside it. The line under the row reads the list's age and the price cache's age side by side,
+then how many rows the committed OpenRouter snapshot fills and the date it was fetched. That snapshot
+(`data/openrouter-model-prices.json`) is the only source of the ratings, and of prices for OpenRouter models the gateway
+does not price; no press can re-fetch it — `python tools/openrouter-prices.py` does, and its result is committed.
+
 ---
 
 ## Keyboard and mouse

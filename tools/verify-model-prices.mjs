@@ -54,6 +54,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadPlaywright, openSettingsGroup } from "./browser.mjs";
+import { SNAPSHOT_PATH } from "../lib/model-prices.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
@@ -364,6 +365,11 @@ async function warmPhase() {
 
   const second = await models();
   check("the next read carries the prices it stored", [second.pricedCount, second.ratedCount], [2, 1]);
+  ok(
+    "and names the URL the cache was built from — the field that was absent while menuPricing read a key readPricingCache no longer sets",
+    /\/api\/model\/options\?refresh=true$/.test(String(second.pricingSource || "")),
+    String(second.pricingSource),
+  );
   check("and no further call was made", gateway.calls.length, 1);
   ok("every gateway call so far was a regeneration — the read path itself never fetched", gateway.calls.every((c) => c.refresh === true));
   const openrouter = second.providers.find((p) => p.id === "openrouter");
@@ -385,6 +391,9 @@ async function refreshPhase() {
   ok("a hand-planted row is in the panel's cache before the press", Boolean(readJson(pricingFile).providers.openrouter["bogus/planted"]));
 
   const callsBefore = gateway.calls.length;
+  // The ratings come from a committed file this route cannot write. Its mtime is the proof that a press
+  // refreshes the list and the panel's price cache, and nothing else — the row says so, so it is asserted.
+  const snapBefore = fileFacts(SNAPSHOT_PATH);
   const res = await api("/api/models/refresh", {});
   check("the press is accepted", res.status, 200);
   const d = res.body;
@@ -397,6 +406,11 @@ async function refreshPhase() {
   check("and it grew by the model the gateway added", [d.before.models.rows, d.after.models.rows], [6, 7]);
   ok("the panel's cache file was rewritten", d.after.pricing.mtime > d.before.pricing.mtime, `${d.before.pricing.mtimeIso} → ${d.after.pricing.mtimeIso}`);
   check("the planted row is counted before the press and gone after it", [d.before.pricing.priced, d.after.pricing.priced], [3, 2]);
+  ok(
+    "the committed OpenRouter snapshot — the ratings' only source — was NOT touched by the press",
+    fileFacts(SNAPSHOT_PATH).mtime === snapBefore.mtime,
+    `${snapBefore.mtime} → ${fileFacts(SNAPSHOT_PATH).mtime}`,
+  );
 
   const onDisk = readJson(pricingFile);
   ok("the planted row is GONE — the cache was busted, not merged", onDisk.providers.openrouter["bogus/planted"] === undefined, JSON.stringify(Object.keys(onDisk.providers.openrouter)));
@@ -440,25 +454,47 @@ async function browserPhase(pw) {
     );
     check("no page errors so far", pageErrors, []);
 
-    console.log("\n== the Settings control exists, and one press refills the menu ==");
+    console.log("\n== the Settings row: one control, named for both halves, and one press refills the menu ==");
     await openSettingsGroup(page, "gateway");
-    ok("the settings panel opens on the Model prices row", await page.isVisible("#models-row"), "");
+    ok("the settings panel opens on the Models & prices row", await page.isVisible("#models-row"), "");
+    check("the row is named for BOTH halves the press moves", await page.$eval("#models-row > span", (el) => el.firstChild.textContent.trim()), "Models & prices");
+    check("and so is the button, which used to say only 'Refresh now'", (await page.textContent("#btn-models-refresh")).trim(), "Refresh models & prices");
     await waitFor(async () => /priced/.test((await page.textContent("#models-preview")) || ""), { what: "the preview to read back the cache" });
     const preview = await page.textContent("#models-preview");
-    ok("which reads back what the menu is showing", /priced/.test(preview || ""), preview);
-    ok("and the cache's own age", /old|never built/.test(await page.textContent("#models-age")), await page.textContent("#models-age"));
+    ok("the preview reads back both halves of the table", /models in \d+ providers · \d+ priced · \d+ rated/.test(preview || ""), preview);
+    const ageBefore = (await page.textContent("#models-age")).trim();
+    ok("and the row dates the list AND the price cache, not one of them standing for both", /^list .+ old · prices .+ old$/.test(ageBefore), ageBefore);
 
     const callsBefore = gateway.calls.length;
+    const filesBefore = { list: fileFacts(modelsCacheFile), prices: fileFacts(pricingFile), snapshot: fileFacts(SNAPSHOT_PATH) };
     await page.click("#btn-models-refresh");
     const refilled = await waitFor(async () => /5\.5/.test((await textFor("acme/priced-rated")) || ""), { what: "the menu to be refilled from the regenerated answer" });
     ok("the press refilled the dropdown from the newly regenerated answer", refilled, await textFor("acme/priced-rated"));
     check("and went to the gateway exactly once, for a regeneration", gateway.calls.length - callsBefore, 1);
     check("which asked for it", gateway.calls.at(-1).refresh, true);
+    const filesAfter = { list: fileFacts(modelsCacheFile), prices: fileFacts(pricingFile), snapshot: fileFacts(SNAPSHOT_PATH) };
+    ok("the provider list file moved", filesAfter.list.mtime > filesBefore.list.mtime, `${filesBefore.list.mtime} → ${filesAfter.list.mtime}`);
+    ok("the price cache file moved too", filesAfter.prices.mtime > filesBefore.prices.mtime, `${filesBefore.prices.mtime} → ${filesAfter.prices.mtime}`);
+    ok(
+      "the ratings snapshot did not move — this press cannot rewrite it",
+      filesAfter.snapshot.mtime === filesBefore.snapshot.mtime,
+      `${filesBefore.snapshot.mtime} → ${filesAfter.snapshot.mtime}`,
+    );
     ok("the model the new answer dropped is gone from the menu", (await textFor("acme/new-model")) === null, JSON.stringify((await options()).map((o) => o.value)));
     ok("and a row the new answer started pricing gained its columns", /in \/ \$0\.75 out/.test((await textFor("acme/unpriced")) || ""), await textFor("acme/unpriced"));
-    await waitFor(async () => /regenerated/.test((await page.textContent("#banner")) || ""), { what: "the banner's report" });
+    await waitFor(async () => /refreshed/.test((await page.textContent("#banner")) || ""), { what: "the banner's report" });
     const banner = await page.textContent("#banner");
-    ok("the banner reports the before/after row counts", /→/.test(banner || "") && /rows/.test(banner || ""), banner);
+    ok(
+      "the banner names both halves it moved",
+      /provider list \d+ → \d+ rows/.test(banner || "") && /price cache \d+ → \d+ rows/.test(banner || ""),
+      banner,
+    );
+    ok("and says the ratings snapshot was not re-fetched", /snapshot was not re-fetched/.test(banner || ""), banner);
+    const ageAfter = (await page.textContent("#models-age")).trim();
+    ok("both ages on the row are fresh after the press", /^list \d+s old · prices \d+s old$/.test(ageAfter), ageAfter);
+    const titleLines = String((await page.getAttribute("#models-preview", "title")) || "").split("\n");
+    ok("the tooltip carries BOTH files' before/after mtimes", titleLines.filter((l) => /mtime .+ → .+/.test(l)).length === 2, JSON.stringify(titleLines));
+    ok("and says the snapshot is not re-fetched", titleLines.some((l) => /not re-fetched/.test(l)), JSON.stringify(titleLines));
     check("still no page errors", pageErrors, []);
     return { banner, preview };
   } finally {

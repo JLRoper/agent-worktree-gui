@@ -8052,7 +8052,7 @@ function renderModelPicker(keep = "") {
     ? `${d.pricedCount} priced, ${d.ratedCount || 0} rated 0-10 (${units})` +
       (d.pricingAge != null ? `, prices ${relTime(new Date(Date.now() - d.pricingAge * 1000).toISOString())} old` : "") +
       (d.ratedFromSnapshot && snapshotAt ? `, the OpenRouter snapshot of ${snapshotAt} filling the gaps` : "")
-    : "no prices yet — Settings → Gateway → Model prices → Refresh now rebuilds them";
+    : "no prices yet — Settings → Gateway → Models & prices → Refresh models & prices rebuilds them";
   sel.title = d?.count
     ? `${d.count} model${d.count === 1 ? "" : "s"} available to ${d.provider || "this account"}, ${freshness}` +
       `${d.staleDays > 7 ? " — stale, run: hermes model --refresh" : ""} · ${priced}`
@@ -16130,6 +16130,18 @@ async function clearProviderKey(btn) {
 // same bytes" otherwise look identical from here.
 let modelsSetting = null;
 
+// Two ages, not one. The press moves BOTH files, and a single "1d old" let the list's age stand for the
+// price cache's — while neither of them dated the snapshot the ratings come from. The list's age is the
+// newest provider stamp the gateway wrote into provider_models_cache.json; the prices' age is this panel's
+// own cache; the ratings are dated by the snapshot's own generatedAt, and no press can move that file.
+function modelListAgeText(state) {
+  return state.fetchedAt ? `list ${relTime(state.fetchedAt)} old` : "list age unknown";
+}
+
+function snapshotDate(state) {
+  return state.pricingSnapshotAt ? String(state.pricingSnapshotAt).slice(0, 10) : "";
+}
+
 function modelAgeText(state) {
   if (state.pricingAge === null || state.pricingAge === undefined) return "never built";
   return `${relTime(new Date(Date.now() - state.pricingAge * 1000).toISOString())} old`;
@@ -16147,13 +16159,16 @@ function paintModelsSetting(error = null) {
     preview.classList.add("bad");
     return;
   }
-  if (age) age.textContent = modelAgeText(s);
+  if (age) age.textContent = `${modelListAgeText(s)} · prices ${modelAgeText(s)}`;
   if (btn) btn.disabled = false;
+  const snapAt = snapshotDate(s);
+  const fromSnapshot = s.ratedFromSnapshot || 0;
   preview.textContent = error
     ? `NOT REGENERATED — ${error}`
-    : `${s.count} model${s.count === 1 ? "" : "s"} · ${s.pricedCount || 0} priced · ${s.ratedCount || 0} rated · ${modelAgeText(s)}`;
+    : `${s.count} model${s.count === 1 ? "" : "s"} in ${(s.providers || []).length} providers · ${s.pricedCount || 0} priced · ${s.ratedCount || 0} rated` +
+      (snapAt && fromSnapshot ? ` · ${fromSnapshot} row${fromSnapshot === 1 ? "" : "s"} from the OpenRouter snapshot of ${snapAt}` : "");
   preview.classList.toggle("bad", Boolean(error));
-  preview.title = error ? "" : `provider list: ${s.source}`;
+  preview.title = error ? "" : `provider list: ${s.source}${s.pricingSource ? `\nprices: ${s.pricingSource}` : ""}${snapAt ? `\nratings snapshot: ${snapAt}` : ""}`;
 }
 
 async function loadModelsSetting() {
@@ -16173,7 +16188,7 @@ async function refreshModels() {
   const preview = $("models-preview");
   if (btn) btn.disabled = true;
   if (preview) {
-    preview.textContent = "regenerating — re-fetching every provider's live model list…";
+    preview.textContent = "refreshing models & prices — re-fetching every provider's live model list, then rebuilding the price cache from that answer…";
     preview.classList.remove("bad");
   }
   try {
@@ -16189,15 +16204,23 @@ async function refreshModels() {
     await loadModelsSetting();
     const b = d.before || {};
     const a = d.after || {};
+    // Local wall clock, not the file's UTC stamp: a reader comparing "at 00:32" against their own clock
+    // would be reading the wrong hour of the day.
+    const clock = (iso) =>
+      iso ? new Date(iso).toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
     if (preview) {
       preview.title =
         `provider_models_cache.json: mtime ${b.models?.mtimeIso || "—"} → ${a.models?.mtimeIso || "—"}, ` +
-        `rows ${b.models?.rows ?? "?"} → ${a.models?.rows ?? "?"}\n${d.path || ""}`;
+        `rows ${b.models?.rows ?? "?"} → ${a.models?.rows ?? "?"}\n` +
+        `model-prices.json: mtime ${b.pricing?.mtimeIso || "—"} → ${a.pricing?.mtimeIso || "—"}, ` +
+        `priced rows ${b.pricing?.priced ?? "?"} → ${a.pricing?.priced ?? "?"}\n` +
+        `the OpenRouter snapshot behind the ratings is not re-fetched by this press`;
     }
     showBanner(
-      `model prices regenerated — provider cache ${b.models?.rows ?? "?"} → ${a.models?.rows ?? "?"} rows ` +
-        `(${b.models?.providers ?? "?"} → ${a.models?.providers ?? "?"} providers), prices ${b.pricing?.priced ?? "?"} → ` +
-        `${a.pricing?.priced ?? "?"} rows, ${a.pricing?.rated ?? "?"} rated`,
+      `models & prices refreshed — provider list ${b.models?.rows ?? "?"} → ${a.models?.rows ?? "?"} rows ` +
+        `(${b.models?.providers ?? "?"} → ${a.models?.providers ?? "?"} providers) at ${clock(a.models?.mtimeIso)} · ` +
+        `price cache ${b.pricing?.priced ?? "?"} → ${a.pricing?.priced ?? "?"} rows at ${clock(a.pricing?.mtimeIso)} · ` +
+        `the OpenRouter ratings snapshot was not re-fetched`,
     );
   } catch (e) {
     paintModelsSetting(e.message);
