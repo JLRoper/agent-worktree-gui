@@ -19,21 +19,44 @@
   // The one-tab record this replaced: a reader who left the float on "chat" or "settings" is moved onto the new
   // shape once, and this key is never written again.
   const TAB_KEY = "wm.assistantTab";
-  // The float's own row: the assistant sessions first — each is a real agent thread of its own — then the lists
-  // that are the assistant's. A second assistant is one more id here and its own pane in the page: every loop below
-  // is keyed by the id, so no branch has to learn a name.
-  const ASSISTANTS = ["assistant-1"];
+  // The lists that are the assistant's own. The SESSIONS are deliberately NOT in here: they come from the assistant
+  // records the server sends (`state.assistant.assistants`), so "Assistant #2" is one more record and no new branch
+  // anywhere — the button, the pane and the sub-row are all built from that list, on every paint.
+  const LISTS = ["alerts", "watches", "messages", "pad", "role"];
   // What a session holds: the card you talk to, and how it behaves.
   const SUBTABS = ["chat", "settings"];
-  const TABS = [...ASSISTANTS, "alerts", "watches", "messages", "pad", "charter"];
-  const DEFAULT_VIEW = { assistant: ASSISTANTS[0], subTab: SUBTABS[0] };
-  const isAssistant = (id) => ASSISTANTS.includes(id);
+  const FIRST_ASSISTANT = "assistant-1";
+  const DEFAULT_VIEW = { assistant: FIRST_ASSISTANT, subTab: SUBTABS[0] };
+  // Every session the page knows about. Before the first /api/assistant answer there is still Assistant #1 — the
+  // panel has always had it, and an empty row until a fetch lands reads as a broken float rather than a slow one.
+  function sessionRecords() {
+    const list = state.assistant?.assistants;
+    return Array.isArray(list) && list.length
+      ? list
+      : [{ id: FIRST_ASSISTANT, name: "Assistant #1", threadId: state.assistantThread || "panel-assistant", rules: [] }];
+  }
+  const sessionById = (id) => sessionRecords().find((x) => x.id === String(id || "")) || null;
+  const assistantIds = () => sessionRecords().map((x) => x.id);
+  const tabsNow = () => [...assistantIds(), ...LISTS];
+  const isAssistant = (id) => assistantIds().includes(id);
+  // The id of a session's own chat or settings pane. #1 keeps the ids the page and the harnesses have always used;
+  // a second one is `as-chat-2`, derived from its number rather than stored anywhere.
+  const paneIdFor = (id, sub) => (id === FIRST_ASSISTANT ? `as-${sub}` : `as-${sub}-${String(id).replace(/^assistant-/, "")}`);
+  // The session whose tab is on screen (a list tab reads as #1, which is what the float opens on), and that
+  // session's own chat or settings pane. Every renderer below asks these two instead of a fixed id.
+  const activeSessionId = () => (isAssistant(state.assistantView?.assistant) ? state.assistantView.assistant : FIRST_ASSISTANT);
+  const hostFor = (id, sub) => document.getElementById(paneIdFor(id, sub));
+  // The last session tab the reader was on. A list tab (Alerts, Role, …) is not a session, so the session-owned
+  // things — the Role pane's default target, a send from an intro box — fall back to this rather than to #1.
+  let lastSession = FIRST_ASSISTANT;
 
   // The old record was one tab name, where "chat" was the assistant's card and "settings" was a tab of the float's.
-  // Both are the session's own row now, so a reader who left the float on either lands where they were.
+  // Both are the session's own row now, so a reader who left the float on either lands where they were. "charter"
+  // was this tab under its old name.
   function legacyView(tab) {
     if (tab === "settings") return { assistant: DEFAULT_VIEW.assistant, subTab: "settings" };
-    if (TABS.includes(tab)) return { assistant: tab, subTab: DEFAULT_VIEW.subTab };
+    if (tab === "charter") return { assistant: "role", subTab: DEFAULT_VIEW.subTab };
+    if (tabsNow().includes(tab)) return { assistant: tab, subTab: DEFAULT_VIEW.subTab };
     return null;
   }
   // {assistant, subTab} is the whole record of where the float is: which session (or list) is the tab on screen, and
@@ -44,7 +67,7 @@
       const raw = JSON.parse(localStorage.getItem(VIEW_KEY) || "null");
       if (raw && typeof raw === "object") {
         return {
-          assistant: TABS.includes(raw.assistant) ? raw.assistant : DEFAULT_VIEW.assistant,
+          assistant: tabsNow().includes(raw.assistant) ? raw.assistant : DEFAULT_VIEW.assistant,
           subTab: SUBTABS.includes(raw.subTab) ? raw.subTab : DEFAULT_VIEW.subTab,
         };
       }
@@ -67,12 +90,47 @@
   function setView(patch, { render = true } = {}) {
     const next = { ...state.assistantView, ...patch };
     state.assistantView = {
-      assistant: TABS.includes(next.assistant) ? next.assistant : DEFAULT_VIEW.assistant,
+      assistant: tabsNow().includes(next.assistant) ? next.assistant : DEFAULT_VIEW.assistant,
       subTab: SUBTABS.includes(next.subTab) ? next.subTab : DEFAULT_VIEW.subTab,
     };
     writeView(state.assistantView);
+    // `lastSession` is what a list tab falls back to: the Role pane edits the session the reader last had open.
+    if (isAssistant(state.assistantView.assistant)) lastSession = state.assistantView.assistant;
     if (render) renderAssistant();
     return state.assistantView;
+  }
+
+  // The buttons and the panes a session needs, created once and then left alone: the button at the head of the row
+  // (before the lists, so the sessions always read first) and the pane at the head of the body. This is the whole of
+  // "a second assistant shows up in the top tab row" — the records are the source and nothing here knows a number.
+  function syncSessionTabs() {
+    const row = as$("as-tabs");
+    const body = document.querySelector("#assistant .as-body");
+    for (const rec of sessionRecords()) {
+      if (row && !document.querySelector(`#as-tabs [data-as-tab="${rec.id}"]`)) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.dataset.asTab = rec.id;
+        b.title = `${rec.name} — a real agent thread of its own (${rec.threadId ?? ""}), running the role it picked`;
+        b.textContent = rec.name;
+        const firstList = [...row.querySelectorAll("[data-as-tab]")].find((x) => LISTS.includes(x.dataset.asTab));
+        row.insertBefore(b, firstList || null);
+      }
+      if (body && !document.getElementById(`as-${rec.id}`)) {
+        const pane = document.createElement("section");
+        pane.className = "as-pane hidden";
+        pane.dataset.pane = rec.id;
+        pane.id = `as-${rec.id}`;
+        for (const sub of SUBTABS) {
+          const s = document.createElement("section");
+          s.className = `as-subpane${sub === SUBTABS[0] ? "" : " hidden"}`;
+          s.dataset.subpane = sub;
+          s.id = paneIdFor(rec.id, sub);
+          pane.appendChild(s);
+        }
+        body.insertBefore(pane, body.firstElementChild || null);
+      }
+    }
   }
 
   // Both rows, and the panes under them, painted from that one record. The second row exists only while a session is
@@ -80,6 +138,7 @@
   // panes follow the one subTab, so a second assistant needs no second row either.
   function paintAssistantTabs() {
     const view = state.assistantView;
+    syncSessionTabs();
     for (const b of document.querySelectorAll("#as-tabs [data-as-tab]")) {
       b.classList.toggle("is-on", b.dataset.asTab === view.assistant);
     }
@@ -253,10 +312,10 @@
   }
 
   // The chat's scroll box: the card's body, and the only thing in the float that scrolls.
-  function chatBody() {
-    const host = as$("as-chat");
+  const chatBody = (id = activeSessionId()) => {
+    const host = hostFor(id, "chat");
     return host ? host.querySelector(":scope > .job > .job-body") : null;
-  }
+  };
 
   // Which turn takes the room the float gains. A taller panel used to hand the extra height to the spacer above the
   // turns — blank background between the card's head and the first turn — while the thing the reader is reading, the
@@ -298,10 +357,13 @@
   // the room to a console. Watch the pane's children instead of chasing every call site. An attribute-only repaint
   // cannot loop: only `class` is written, and childList is all that is observed.
   const slackObserver = typeof MutationObserver === "function" ? new MutationObserver(queueSlackPaint) : null;
+  // One observer, one host each: a second assistant's chat pane is a second host, and the old `started` flag would
+  // have observed whichever pane was on screen first and never the other.
+  const slackWatched = typeof WeakSet === "function" ? new WeakSet() : null;
   function watchSlack() {
-    const host = as$("as-chat");
-    if (!slackObserver || !host || watchSlack.started) return;
-    watchSlack.started = true;
+    const host = hostFor(activeSessionId(), "chat");
+    if (!slackObserver || !host || (slackWatched && slackWatched.has(host))) return;
+    if (slackWatched) slackWatched.add(host);
     slackObserver.observe(host, { childList: true, subtree: true });
     queueSlackPaint();
   }
@@ -450,12 +512,19 @@
     if (!data || typeof data !== "object") return;
     state.assistant = data;
     if (data.thread) state.assistantThread = data.thread;
+    // Every assistant thread, for app.js: a conversation is the float's when its thread is in here, and with
+    // roles there can be more than one.
+    state.assistantThreads = (Array.isArray(data.assistants) && data.assistants.length ? data.assistants : [{ threadId: data.thread }])
+      .map((a) => a.threadId)
+      .filter(Boolean);
     paintAssistantBadge();
     paintSpawnStrip();
     paintAggressive();
     // The card has to exist even while the float is closed: app.js's renderConversation finds it by thread
-    // anywhere in the document, and that is what keeps a running turn current instead of frozen.
-    renderAssistantChat();
+    // anywhere in the document, and that is what keeps a running turn current instead of frozen. Every session's
+    // card, not only the one on screen — Assistant #2's turn can land while #1 is the tab the reader has open.
+    syncSessionTabs();
+    for (const rec of sessionRecords()) renderAssistantChat(rec.id);
     if (state.assistantOpen) renderAssistant();
   }
 
@@ -679,7 +748,7 @@
       if (d && d.changed === false) aggressiveNote(d.reason || "no change");
       else aggressiveNote(on ? "aggressive mode on — your settings are saved" : "aggressive mode off — your settings are back");
       paintAggressive();
-      renderAssistantSettings(true);
+      renderAssistantSettings(FIRST_ASSISTANT, true);
     } catch (err) {
       aggressiveNote(err.message);
     } finally {
@@ -732,27 +801,34 @@
       ].join("");
     }
     paintAssistantTabs();
-    renderAssistantChat();
+    renderAssistantChat(activeSessionId());
     // A session's own row decides what is showing inside it: the thread (pinned to its foot, where the composer is —
     // the turns only scroll while the reader scrolls them) or the rules it follows. Everything else is a list.
     const view = state.assistantView;
     if (isAssistant(view.assistant)) {
-      if (view.subTab === "settings") renderAssistantSettings();
+      if (view.subTab === "settings") renderAssistantSettings(view.assistant);
       else pinChatToBottom();
     } else if (view.assistant === "alerts") renderAssistantAlerts();
     else if (view.assistant === "watches") renderAssistantWatches();
     else if (view.assistant === "messages") renderAssistantMessages();
     else if (view.assistant === "pad") renderAssistantPad();
-    else if (view.assistant === "charter") renderAssistantCharter();
+    else if (view.assistant === "role") renderAssistantRole();
   }
 
   // ---- chat: the assistant as one of the agents -------------------------------------------------
 
-  function assistantIntroHtml() {
+  // The intro box's ids: #1 keeps the ones the page and its harnesses have always used, a second assistant gets its
+  // own suffix so two intro boxes can never answer for each other.
+  const firstBoxId = (id) => (id === FIRST_ASSISTANT ? "as-first-text" : `as-first-text-${String(id).replace(/^assistant-/, "")}`);
+  const firstBtnId = (id) => (id === FIRST_ASSISTANT ? "btn-as-first" : `btn-as-first-${String(id).replace(/^assistant-/, "")}`);
+
+  function assistantIntroHtml(id = FIRST_ASSISTANT) {
     const off = state.assistant?.enabled === false;
+    const rec = sessionById(id);
+    const role = rec?.roleName ? ` It runs the <b>${esc(rec.roleName)}</b> role.` : "";
     return `<div class="as-intro">
-      <p><b>✧ Assistant</b> reads this board and nothing else: the agents' cards, the approvals and its own
-      scratchpad. It has no terminal of its own.</p>
+      <p><b>✧ ${esc(rec?.name || "Assistant")}</b> reads this board and nothing else: the agents' cards, the approvals and its own
+      scratchpad. It has no terminal of its own.${role}</p>
       <ul>
         <li>“What is going on?” — a digest of the live agents.</li>
         <li>“Keep an eye on the deploy one, and tell me if it stalls.”</li>
@@ -766,25 +842,27 @@
         <!-- A chipbox like every other prompt box (board/paste-chips.js): a long paste collapses in place
              here too. No data-single, so a multi-line paste keeps its lines; the placeholder is data-ph,
              because :empty draws it and a div takes no placeholder attribute. -->
-        <div id="as-first-text" class="chipbox" contenteditable="true" role="textbox" aria-multiline="true" data-chipbox="as-first" spellcheck="false" data-ph="Ask it something, or tell it what to watch…"${off ? ' data-off="1"' : ""}></div>
+        <div id="${firstBoxId(id)}" class="chipbox" contenteditable="true" role="textbox" aria-multiline="true" data-chipbox="as-first-${esc(id)}" spellcheck="false" data-ph="Ask it something, or tell it what to watch…"${off ? ' data-off="1"' : ""}></div>
         <div class="as-first-actions">
-          <button id="btn-as-first" type="button" class="primary"${off ? " disabled" : ""}>Send to the assistant</button>
-          <span class="as-hint">its own Hermes thread · it knows the board, not your repository</span>
+          <button id="${firstBtnId(id)}" type="button" class="primary" data-as-send="${esc(id)}"${off ? " disabled" : ""}>Send to ${esc(rec?.name || "the assistant")}</button>
+          <span class="as-hint">its own Hermes thread${rec?.threadId ? ` (${esc(rec.threadId)})` : ""} · it knows the board, not your repository</span>
         </div>
       </div>
     </div>`;
   }
 
-  function renderAssistantChat() {
-    const host = as$("as-chat");
+  function renderAssistantChat(id = activeSessionId()) {
+    const host = hostFor(id, "chat");
     if (!host) return;
-    const conv = conversations().find((c) => c.thread === state.assistantThread);
+    const rec = sessionById(id);
+    const thread = rec?.threadId || (id === FIRST_ASSISTANT ? state.assistantThread : null);
+    const conv = conversations().find((c) => c.thread === thread);
     if (!conv) {
       if (host.dataset.mode !== "intro") {
         host.dataset.mode = "intro";
-        host.innerHTML = assistantIntroHtml();
+        host.innerHTML = assistantIntroHtml(id);
         // A pasted block the reader was writing here before a reload comes back as a chip, with its text.
-        restorePersistedBox(as$("as-first-text"));
+        restorePersistedBox(as$(firstBoxId(id)));
       }
       return;
     }
@@ -840,8 +918,11 @@
   // #jobs — the wrong place — when it is not. Same path the row's own ⧉ badge takes.
   function openAgentThread(thread) {
     if (!thread) return;
-    if (thread === state.assistantThread) {
-      setView({ assistant: ASSISTANTS[0], subTab: SUBTABS[0] });
+    // "Open agent" on an assistant's own message lands on THAT assistant's Chat: with two of them, comparing the
+    // thread against #1's alone would open the wrong tab.
+    const session = sessionRecords().find((s) => s.threadId === thread);
+    if (session) {
+      setView({ assistant: session.id, subTab: SUBTABS[0] });
       return;
     }
     const conv = conversations().find((c) => c.thread === thread);
@@ -1312,73 +1393,131 @@
     if (scroller) scroller.scrollTop = keepScroll;
   }
 
-  // ---- the charter: the continuity file ---------------------------------------------------------
+  // ---- the role: the job an assistant runs, and the charter it carries --------------------------
 
-  // The text is NOT in the polled state: it runs to 20 KB and the board repaints on every event, so the pane
-  // fetches it when it is opened instead. `charterLoaded` is what keeps the box honest — a textarea that never
-  // read the file must not be able to save an empty one over it, which is why Save stays disabled until the
-  // GET has landed. `charterMtime` is sent back with the save so a write the assistant made in between is a
-  // refusal rather than a lost edit.
-  let charterText = null;
-  let charterMtime = null;
-  let charterLoaded = false;
-  let charterTried = false;
-  let charterLoadedAt = 0;
-  let charterErr = "";
+  // The text is NOT in the polled state: it runs to 20 KB and the board repaints on every event, so the pane fetches
+  // the ONE assistant it is showing when it is opened instead. `roleLoaded` is what keeps the box honest — a textarea
+  // that never read the file must not be able to save an empty one over it, which is why Save stays disabled until
+  // the GET has landed. `roleMtime` is sent back with the save so a write the assistant made in between is a refusal
+  // rather than a lost edit. Every field is keyed by the assistant it describes (`roleFor`), so a late answer for #1
+  // cannot paint over #2's box.
+  let roleText = null;
+  let roleMtime = null;
+  let roleLoaded = false;
+  // WHICH assistant the text in the box belongs to, and which one has already been asked for. A single boolean here
+  // is the bug this replaces: the first open of the tab asked for #1, and every later assistant then read as "already
+  // tried" — its box stayed empty and readonly while the pane showed its name.
+  let roleTriedFor = "";
+  let roleFor = "";
+  let roleLoadedAt = 0;
+  let roleErr = "";
+  let rolePick = "";
+  let roleInfo = null;
+  let roleRoles = [];
+  // Which assistant the Role tab is editing. A role belongs to ONE assistant, and the tab is a list tab (it sits
+  // beside Alerts), so it carries its own selector and remembers the last session the reader was on.
+  let roleTarget = "";
+  const roleTargetSession = () => (isAssistant(roleTarget) ? roleTarget : lastSession);
 
-  async function loadCharter() {
-    charterTried = true;
-    try {
-      const r = await apiFetch("/api/assistant/charter");
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-      if (d.assistant) applyAssistant(d.assistant);
-      charterText = String(d.charter?.text ?? "");
-      charterMtime = Number.isFinite(Number(d.charter?.mtime)) ? Number(d.charter.mtime) : null;
-      charterLoaded = true;
-      charterLoadedAt = Date.now();
-      charterErr = "";
-    } catch (err) {
-      charterErr = String((err && err.message) || err);
-    }
-    renderAssistantCharter(true);
+  function loadRole(id = roleTargetSession()) {
+    roleTriedFor = id;
+    roleFor = id;
+    return apiFetch(`/api/assistant/role?assistantId=${encodeURIComponent(id)}`)
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+        if (d.assistant) applyAssistant(d.assistant);
+        if (roleFor !== id) return;
+        roleText = String(d.charter?.text ?? "");
+        roleMtime = Number.isFinite(Number(d.charter?.mtime)) ? Number(d.charter.mtime) : null;
+        roleInfo = { role: d.role, sameAsRole: Boolean(d.sameAsRole), charter: d.charter, target: d.target };
+        roleRoles = Array.isArray(d.roles) ? d.roles : [];
+        rolePick = d.role?.id || rolePick;
+        roleLoaded = true;
+        roleLoadedAt = Date.now();
+        roleErr = "";
+      })
+      .catch((err) => {
+        if (roleFor === id) roleErr = String((err && err.message) || err);
+      })
+      .finally(() => {
+        renderAssistantRole(true);
+      });
   }
 
-  function renderAssistantCharter(force = false) {
-    const host = as$("as-charter");
+  function renderAssistantRole(force = false) {
+    const host = as$("as-role");
     if (!host || !state.assistant) return;
-    if (!force && typingInside("#as-charter")) return;
-    const c = state.assistant.charter || {};
-    // First open: ask for the text once. `charterTried` keeps a failed fetch from re-asking on every repaint.
-    if (!charterTried) void loadCharter();
-    const size = charterLoaded ? String(charterText ?? "").length : Number(c.chars) || 0;
+    if (!force && typingInside("#as-role")) return;
+    const target = roleTargetSession();
+    // A different assistant is a different charter: drop what is on screen and ask for ITS text instead of painting
+    // #1's under #2's name. `roleTriedFor` is per assistant, so opening the tab for a second one fetches it, while a
+    // failed fetch is still not retried on every repaint — Reload from disk is what does that.
+    if (roleFor !== target) {
+      roleLoaded = false;
+      roleText = null;
+      roleMtime = null;
+      roleErr = "";
+      roleInfo = null;
+      rolePick = "";
+    }
+    if (roleTriedFor !== target) void loadRole(target);
+    const rec = sessionById(target);
+    const c = (state.assistant.assistants || []).find((x) => x.id === target)?.charter || {};
+    const role = roleInfo?.role || (rec ? { name: rec.roleName, description: "" } : null);
+    const roles = roleRoles.length ? roleRoles : state.assistant.roles || [];
+    const size = roleLoaded ? String(roleText ?? "").length : Number(c.chars) || 0;
     const cap = Number(c.cap) || 0;
     const pct = cap ? Math.round((size / cap) * 100) : 0;
     const when = c.exists ? `last written ${esc(relTime(c.mtimeIso))} ago` : "not on disk yet — the panel seeds it on first boot";
+    const pick = rolePick || role?.id || "";
+    const options = roles.map((r) => `<option value="${esc(r.id)}"${r.id === pick ? " selected" : ""}>${esc(r.name)}</option>`).join("");
+    const sessions = sessionRecords()
+      .map((s) => `<option value="${esc(s.id)}"${s.id === target ? " selected" : ""}>${esc(s.name)}</option>`)
+      .join("");
     host.innerHTML = `
       <div class="as-group">
-        <h4>The continuity file — the long tier, injected in full on every turn</h4>
+        <h4>The role — the job this assistant runs, and the charter text it carries</h4>
+        <div class="as-line">
+          <label title="a role belongs to one assistant: this picks whose role and charter text the pane is editing">editing
+            <select id="as-roletarget" data-as-roletarget>${sessions}</select></label>
+          <span class="as-hint">${esc(rec?.threadId || "")}${state.assistant.assistants?.length > 1 ? " · each assistant has its own copy" : ""}</span>
+        </div>
+        <div class="as-line">
+          <label title="the job this assistant does. Picking one changes the title; the charter text below is the copy this assistant carries">role
+            <select id="as-role-pick" data-as-role-pick>${options}</select></label>
+          <button id="btn-as-role-adopt" type="button" title="replace this assistant's charter text with the role's own text">Adopt this role's charter</button>
+          <button id="btn-as-new-assistant" type="button" class="primary" title="make the next assistant from this role: its own thread, its own rules and its own copy of the charter text — Assistant #1 is not touched">New assistant from this role</button>
+        </div>
+        ${role ? `<div class="as-help"><b>${esc(role.name)}</b> — ${esc(role.description || "(no remit written yet)")}</div>` : ""}
         <div class="as-charter-meta">
           <code class="as-charter-path" title="${esc(c.path || "")}">${esc(c.path || "…")}</code>
           <span class="as-hint">${when}</span>
           <span class="as-hint${c.over ? " is-bad" : ""}">${size}/${cap} chars${c.over ? " — over the cap, prune it" : pct >= 90 ? ` (${pct}%)` : ""}</span>
+          <span class="as-hint">${roleLoaded ? (roleInfo?.sameAsRole ? "this is the role's own text" : "edited — this assistant's own copy") : ""}</span>
         </div>
-        <textarea class="as-note-box as-charter-box" id="as-charter-text" rows="16" spellcheck="false"${charterLoaded ? "" : " readonly"} placeholder="${charterLoaded ? "" : "reading the file…"}">${esc(charterText ?? "")}</textarea>
+        <textarea class="as-note-box as-charter-box" id="as-role-text" rows="16" spellcheck="false"${roleLoaded ? "" : " readonly"} placeholder="${roleLoaded ? "" : "reading the charter text…"}">${esc(roleText ?? "")}</textarea>
         <div class="as-actions">
-          <button id="btn-as-charter" type="button" class="primary"${charterLoaded ? "" : " disabled"}>Save charter</button>
-          <button id="btn-as-charter-reload" type="button">Reload from disk</button>
+          <button id="btn-as-role" type="button" class="primary"${roleLoaded ? "" : " disabled"}>Save role charter</button>
+          <button id="btn-as-role-reload" type="button">Reload from disk</button>
           <span class="as-hint">${
-            charterLoaded
-              ? `read from disk ${esc(relTime(new Date(charterLoadedAt).toISOString()))} ago — saving replaces the whole file`
-              : "read-only until the file has been read"
+            roleLoaded
+              ? `read from disk ${esc(relTime(new Date(roleLoadedAt).toISOString()))} ago — saving replaces this assistant's copy whole`
+              : "read-only until the charter text has been read"
           }</span>
-          <span class="as-err" id="as-charter-err">${esc(charterErr)}</span>
+          <span class="as-err" id="as-role-err">${esc(roleErr)}</span>
         </div>
-        <div class="as-help">This is what the assistant is handed on every turn, whole, the way the standing rules
-        and the scratchpad are — Hermes does not read it by itself, the panel injects it. It is where the
-        reasoning behind a rule and the lore that a compaction would take go: one dated entry per changed
-        standing answer or closed long task, the oldest entries pruned first over the ${cap}-character cap. The
-        assistant writes one with a CHARTER: line at the end of a reply.</div>
+        <div class="as-line">
+          <label title="a role is a named charter: the new one starts as a copy of the role above">new role
+            <input type="text" id="as-role-name" spellcheck="false" maxlength="80" placeholder="e.g. PR Reviewer"></label>
+          <button id="btn-as-role-newrole" type="button" title="create a role from the charter text above, under a new name">Create role</button>
+          <span class="as-hint" id="as-role-newerr"></span>
+        </div>
+        <div class="as-help">A role is {name, description, charter text}: the job title, one line of what it is for, and the
+        long tier of memory that job needs — injected in full on every one of this assistant's turns, the way the
+        standing rules and the scratchpad are. Each assistant carries its OWN copy, so editing Assistant #2's charter
+        never changes what Assistant #1 is told. Keep it inside the ${cap}-character cap: prune the OLDEST changelog
+        entries first. The assistant adds one with a CHARTER: line at the end of a reply.</div>
       </div>`;
   }
 
@@ -1473,10 +1612,44 @@
     return `${list.length} threshold${list.length === 1 ? "" : "s"} · ${values}`;
   }
 
-  function renderAssistantSettings(force = false) {
-    const host = as$("as-settings");
+  // A second assistant's Settings: its own rules, said plainly. The rest of the panel's assistant settings are the
+  // sentry's, and the sentry is Assistant #1's — so this pane names the assistant's thread and points at the Role tab
+  // for its charter rather than offering knobs that would change the other assistant.
+  function renderAssistantRules(id, host) {
+    const rec = sessionById(id);
+    const n = String(id).replace(/^assistant-/, "");
+    const rules = Array.isArray(rec?.rules) ? rec.rules : [];
+    host.innerHTML = `
+      <div class="as-group">
+        <h4>${esc(rec?.name || "Assistant")}'s rules — its own, not Assistant #1's</h4>
+        <div class="as-help">These ride in THIS assistant's preamble, clipped the way every rule is. Adding or
+        removing one here never changes Assistant #1's standing rules.</div>
+        <div class="as-actions">
+          <input type="text" id="as-rules-text-${esc(n)}" class="as-grow" spellcheck="false" maxlength="400" placeholder="e.g. Ask before writing to a tree another agent owns">
+          <button type="button" class="primary" data-as-addrule="${esc(id)}">Add rule</button>
+          <span class="as-err" id="as-rules-err-${esc(n)}"></span>
+        </div>
+        ${rules.length
+          ? rules
+              .map(
+                (r) =>
+                  `<div class="as-rule-row"><span class="as-rule-name">${esc(r.text)}</span><button type="button" data-as-unrule="${esc(r.id)}" data-as-rulefor="${esc(id)}" title="remove this rule">✕</button></div>`,
+              )
+              .join("")
+          : `<div class="as-help">(none written down yet)</div>`}
+        <div class="as-help">Its role and its charter are in the <b>Role</b> tab, beside Scratchpad. Its thread is
+        <code>${esc(rec?.threadId || "")}</code>; it shares this panel's autonomy, spawn mode and model.</div>
+      </div>`;
+  }
+
+  function renderAssistantSettings(id = activeSessionId(), force = false) {
+    const host = hostFor(id, "settings");
     if (!host || !state.assistant) return;
-    if (!force && typingInside("#as-settings")) return;
+    if (!force && typingInside(`#${paneIdFor(id, "settings")}`)) return;
+    // A second assistant has ITS OWN rules and nothing else of its own: the knobs below (autonomy, spawn mode, model,
+    // the cwd, the sentry clock) belong to the panel's one sentry, which is Assistant #1's. Drawing them again under
+    // #2 would be two controls for one value, and the reader would be right to think they were #2's.
+    if (id !== FIRST_ASSISTANT) return renderAssistantRules(id, host);
     const a = state.assistant;
     const s = a.settings;
     const defs = a.ruleDefs || {};
@@ -1624,17 +1797,17 @@
     if (el) el.textContent = message || "";
   }
 
-  async function say(text, button = null) {
+  async function say(text, button = null, assistantId = FIRST_ASSISTANT) {
     const t = String(text || "").trim();
     if (!t) return;
     if (button) button.disabled = true;
     try {
-      await asPost("/api/assistant/say", { text: t });
+      await asPost("/api/assistant/say", { text: t, assistantId });
       // The intro box is gone once the card exists; clear it in case a repaint has not landed yet.
-      const box = as$("as-first-text");
+      const box = as$(firstBoxId(assistantId));
       if (box) writeBox(box, "");
-      // Sending from the intro lands on the thread it just started: the session's Chat, whichever list was open.
-      setView({ assistant: ASSISTANTS[0], subTab: SUBTABS[0] });
+      // Sending from the intro lands on the thread it just started: that session's Chat, whichever list was open.
+      setView({ assistant: assistantId, subTab: SUBTABS[0] });
     } catch (e) {
       showBanner(`assistant: ${e.message}`);
     } finally {
@@ -1719,7 +1892,7 @@
         await asPost("/api/assistant/alert", { id: t.dataset.id, action: t.dataset.asAction });
         renderAssistantAlerts(true);
         // "Ask" hands the question to the thread: land on the session's Chat so the reply box is what they see.
-        if (t.dataset.asAction === "ask") setView({ assistant: ASSISTANTS[0], subTab: SUBTABS[0] }, { render: false });
+        if (t.dataset.asAction === "ask") setView({ assistant: FIRST_ASSISTANT, subTab: SUBTABS[0] }, { render: false });
         renderAssistant();
       } catch (err) {
         const slot = document.querySelector(`[data-as-err="${CSS.escape(t.dataset.id || "")}"]`);
@@ -1804,21 +1977,28 @@
     }
 
     if (t.dataset.asUnrule) {
+      // A rule on another assistant's record names that assistant; #1's rules are the ones in the Scratchpad.
+      const forId = t.dataset.asRulefor || "";
       t.disabled = true;
       try {
-        await asPost("/api/assistant/rule/remove", { id: t.dataset.asUnrule });
-        renderAssistantPad(true);
+        await asPost("/api/assistant/rule/remove", { id: t.dataset.asUnrule, ...(forId ? { assistantId: forId } : {}) });
+        // The pane that owns the rule is the one that repaints: #1's list is in the Scratchpad, another assistant's
+        // is in its own Settings.
+        if (forId) renderAssistantSettings(forId, true);
+        else renderAssistantPad(true);
       } catch (err) {
-        setErr("as-pad-err", err.message);
+        setErr(forId ? `as-rules-err-${String(forId).replace(/^assistant-/, "")}` : "as-pad-err", err.message);
       } finally {
         t.disabled = false;
       }
       return;
     }
 
-    if (t.id === "btn-as-first") {
-      // readBox: a chip pasted into the intro box is the text it swallowed.
-      await say(readBox(as$("as-first-text")), t);
+    if (t.dataset.asSend) {
+      // readBox: a chip pasted into the intro box is the text it swallowed. The button carries WHICH assistant —
+      // #1 keeps its own id, a second one has its own box and its own thread.
+      const id = t.dataset.asSend;
+      await say(readBox(as$(firstBoxId(id))), t, id);
       return;
     }
 
@@ -1868,31 +2048,121 @@
       return;
     }
 
-    if (t.id === "btn-as-charter") {
-      const text = String(as$("as-charter-text")?.value ?? "");
+    if (t.id === "btn-as-role") {
+      const target = roleTargetSession();
+      const text = String(as$("as-role-text")?.value ?? "");
       t.disabled = true;
       try {
-        const d = await asPut("/api/assistant/charter", { text, expectMtime: charterMtime });
-        charterText = String(d.charter?.text ?? text);
-        charterMtime = Number.isFinite(Number(d.charter?.mtime)) ? Number(d.charter.mtime) : null;
-        charterLoaded = true;
-        charterLoadedAt = Date.now();
-        setErr("as-charter-err", "");
-        renderAssistantCharter(true);
+        const d = await asPut("/api/assistant/role", { assistantId: target, text, expectMtime: roleMtime });
+        roleText = String(d.charter?.text ?? text);
+        roleMtime = Number.isFinite(Number(d.charter?.mtime)) ? Number(d.charter.mtime) : null;
+        roleInfo = { ...(roleInfo || {}), sameAsRole: Boolean(d.sameAsRole) };
+        roleLoaded = true;
+        roleLoadedAt = Date.now();
+        setErr("as-role-err", "");
+        renderAssistantRole(true);
       } catch (err) {
         // A stale save (409) and an over-cap save (413) both land here as the server's own words: the reader
         // is told what to do about it rather than that something went wrong.
-        setErr("as-charter-err", err.message);
+        setErr("as-role-err", err.message);
       } finally {
         t.disabled = false;
       }
       return;
     }
 
-    if (t.id === "btn-as-charter-reload") {
+    if (t.id === "btn-as-role-reload") {
       t.disabled = true;
       try {
-        await loadCharter();
+        await loadRole(roleTargetSession());
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.id === "btn-as-role-adopt") {
+      const target = roleTargetSession();
+      const pick = String(as$("as-role-pick")?.value || rolePick || "");
+      if (!pick) return;
+      // Replacing a copy the reader has edited is their decision, not a side effect of picking a role.
+      if (roleLoaded && roleInfo?.sameAsRole === false && !window.confirm("Replace this assistant's charter with the role's own text? Your edits to this copy are lost.")) return;
+      t.disabled = true;
+      try {
+        const d = await asPost("/api/assistant/role/pick", { assistantId: target, roleId: pick, adopt: true });
+        rolePick = d.role?.id || pick;
+        roleText = String(d.charter?.text ?? "");
+        roleMtime = Number.isFinite(Number(d.charter?.mtime)) ? Number(d.charter.mtime) : null;
+        roleInfo = { role: d.role, sameAsRole: Boolean(d.sameAsRole), charter: d.charter, target: d.target };
+        roleRoles = Array.isArray(d.roles) ? d.roles : roleRoles;
+        roleLoaded = true;
+        roleLoadedAt = Date.now();
+        setErr("as-role-err", "");
+        renderAssistantRole(true);
+      } catch (err) {
+        setErr("as-role-err", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.id === "btn-as-new-assistant") {
+      const pick = String(as$("as-role-pick")?.value || rolePick || "");
+      t.disabled = true;
+      try {
+        const d = await asPost("/api/assistant/assistants", { roleId: pick });
+        const id = d.created?.id || "";
+        showBanner(`assistant: ${d.created?.name || "a new assistant"} is up — thread ${d.created?.threadId || "?"}, its own charter and rules`);
+        // Land the reader on the thing they just made: its own tab, its own Chat, its own intro box.
+        if (id) setView({ assistant: id, subTab: SUBTABS[0] });
+        else renderAssistantRole(true);
+      } catch (err) {
+        setErr("as-role-err", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.id === "btn-as-role-newrole") {
+      const name = String(as$("as-role-name")?.value || "").trim();
+      if (!name) {
+        setErr("as-role-newerr", "name the role first");
+        return;
+      }
+      t.disabled = true;
+      try {
+        const d = await asPost("/api/assistant/roles", { name, from: String(as$("as-role-pick")?.value || rolePick || "") });
+        roleRoles = Array.isArray(d.roles) ? d.roles : roleRoles;
+        rolePick = d.role?.id || rolePick;
+        const box = as$("as-role-name");
+        if (box) box.value = "";
+        setErr("as-role-newerr", "");
+        renderAssistantRole(true);
+      } catch (err) {
+        setErr("as-role-newerr", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    if (t.dataset.asAddrule) {
+      // `data-as-addrule` lowercases to `dataset.asAddrule` — reading `asAddRule` was always undefined, so the press
+      // fell through to the branches below it and added nothing.
+      const id = t.dataset.asAddrule;
+      const n = String(id).replace(/^assistant-/, "");
+      const box = as$(`as-rules-text-${n}`);
+      const text = String(box?.value || "").trim();
+      if (!text) return;
+      t.disabled = true;
+      try {
+        await asPost("/api/assistant/rule", { text, assistantId: id });
+        if (box) box.value = "";
+        renderAssistantSettings(id, true);
+      } catch (err) {
+        setErr(`as-rules-err-${n}`, err.message);
       } finally {
         t.disabled = false;
       }
@@ -1968,12 +2238,40 @@
   // will believe is live when it is not.
   as$("assistant")?.addEventListener("change", async (e) => {
     const el = e.target;
+    if (el.dataset.asRoletarget) {
+      // Which assistant the Role tab is editing. Its charter is a different file, so the text is dropped and read
+      // again rather than painted under the new name.
+      roleTarget = el.value;
+      rolePick = "";
+      roleInfo = null;
+      roleText = null;
+      roleMtime = null;
+      roleLoaded = false;
+      void loadRole(roleTarget);
+      renderAssistantRole(true);
+      return;
+    }
+    if (el.dataset.asRolepick) {
+      // Picking a role sets the job title; adopting the role's charter is its own press, because that replaces an
+      // edit the reader may have made in the box below.
+      const target = roleTargetSession();
+      try {
+        const d = await asPost("/api/assistant/role/pick", { assistantId: target, roleId: el.value, adopt: false });
+        rolePick = d.role?.id || el.value;
+        roleInfo = { role: d.role, sameAsRole: Boolean(d.sameAsRole), charter: d.charter, target: d.target };
+        roleRoles = Array.isArray(d.roles) ? d.roles : roleRoles;
+        renderAssistantRole(true);
+      } catch (err) {
+        setErr("as-role-err", err.message);
+      }
+      return;
+    }
     if (el.dataset.asSet) {
       const key = el.dataset.asSet;
       const value = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
       try {
         await asPost("/api/assistant/settings", { [key]: value });
-        renderAssistantSettings(true);
+        renderAssistantSettings(FIRST_ASSISTANT, true);
       } catch (err) {
         setErr("as-set-err", err.message);
       }
@@ -1982,7 +2280,7 @@
     if (el.dataset.asRule) {
       try {
         await asPost("/api/assistant/settings", { rules: { [el.dataset.asRule]: el.value } });
-        renderAssistantSettings(true);
+        renderAssistantSettings(FIRST_ASSISTANT, true);
       } catch (err) {
         setErr("as-set-err", err.message);
       }
@@ -2196,7 +2494,7 @@
     "scroll",
     (e) => {
       const body = e.target;
-      if (!body?.matches?.("#as-chat > .job > .job-body")) return;
+      if (!body?.matches?.("[data-subpane=\"chat\"] > .job > .job-body")) return;
       chatPinned = body.scrollTop + body.clientHeight >= body.scrollHeight - 8;
     },
     true,
@@ -2288,6 +2586,10 @@
   // app.js calls these: applyAssistant from the snapshot, the SSE event and after a reply; the chat renderer
   // when a job event arrives for a card that does not exist yet (the float may never have been opened).
   window.applyAssistant = applyAssistant;
-  window.__assistantRenderChat = renderAssistantChat;
+  // app.js hands the THREAD that changed; the renderer wants the session it belongs to.
+  window.__assistantRenderChat = (thread) => {
+    const rec = sessionRecords().find((x) => x.threadId === thread);
+    renderAssistantChat(rec ? rec.id : activeSessionId());
+  };
   window.__assistantToggle = toggleAssistant;
 })();

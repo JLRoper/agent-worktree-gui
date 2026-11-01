@@ -41,15 +41,16 @@
     </div>
     <!-- The float's own row: the assistant sessions first — each one a real agent thread of its own — then the
          lists that are the assistant's: what it noticed, what it watches, what it said to the agents, its
-         scratchpad and its charter. The number is part of the id, not of this markup's shape: a second assistant
-         is another button here and another pane below, and no code names a tab. -->
+         scratchpad, and the ROLE it runs. Only Assistant #1 is in this markup: the rest come from the assistant
+         records the server sends, and the painter adds a button and a pane for each — so a second assistant is a
+         record, not an edit here. -->
     <div class="as-tabs" id="as-tabs">
       <button type="button" data-as-tab="assistant-1" class="is-on" title="Assistant #1 — the assistant itself: a normal agent card with its own thread. Its Chat and Settings are the quiet row under this one">Assistant #1</button>
       <button type="button" data-as-tab="alerts" title="what it noticed and what is waiting on you — spawn cards waiting for a click sit at the top">Alerts <span class="as-n" id="as-alert-n">0</span><span class="as-n is-spawn" id="as-spawn-n" hidden>0</span></button>
       <button type="button" data-as-tab="watches" title="what it is keeping an eye on, and until when">Watches <span class="as-n" id="as-watch-n">0</span></button>
       <button type="button" data-as-tab="messages" title="the message board between it and the agents — what it sent them and what they sent back, thread by thread, over the last 7 days">Messages</button>
       <button type="button" data-as-tab="pad" title="the server-side scratchpad: notes, standing rules and the journal">Scratchpad</button>
-      <button type="button" data-as-tab="charter" title="the continuity file: the long tier of its memory, injected in full on every turn">Charter</button>
+      <button type="button" data-as-tab="role" title="the role this assistant runs — the job title, the charter it carries (its own copy, injected in full on every turn), and a new assistant made from the same role">Role</button>
     </div>
     <!-- The session's own row, under the assistant's tabs: what the assistant is showing (Chat) and how it behaves
          (Settings). It belongs to a session, so it is hidden while one of the lists is on, and it holds the
@@ -67,7 +68,7 @@
       <section class="as-pane hidden" data-pane="watches" id="as-watches"></section>
       <section class="as-pane hidden" data-pane="messages" id="as-messages"></section>
       <section class="as-pane hidden" data-pane="pad" id="as-pad"></section>
-      <section class="as-pane hidden" data-pane="charter" id="as-charter"></section>
+      <section class="as-pane hidden" data-pane="role" id="as-role"></section>
     </div>
     <!-- Eight grabs, one per edge and corner. The single bottom-right grip could only grow the float toward that
          corner, and it walked away from the pointer once the frame hit the viewport: a band is where a reader
