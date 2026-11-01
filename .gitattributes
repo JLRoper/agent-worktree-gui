@@ -2,3 +2,9 @@
 # core.autocrlf=true would hand every checkout CRLF line endings. Scoped to .githooks/ so no
 # existing file's checkout changes.
 .githooks/** text eol=lf
+
+# The role seed is a byte-for-byte copy of a charter a reader wrote, and its sha256 is quoted in the commit
+# that added it: a CRLF checkout would change those bytes and quietly make that claim false. `-text` keeps
+# both the blob and every checkout as the reader's own file, and it is scoped to this folder so no existing
+# file's checkout changes.
+data/roles/** -text
