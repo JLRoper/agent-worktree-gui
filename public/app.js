@@ -10341,6 +10341,35 @@ function prCellHtml(row) {
 }
 // ---- end pr cell
 
+// ---- owner cell: the assistant's name, and its role in the tooltip ---------------------------------------------
+// The owner column answers "whose is this tree", so its text is the ASSISTANT'S OWN NAME — "Assistant #1",
+// "Assistant #2" — and the detail's bullet is "Controlled by: <name> — <role>". The numbered ROLE LABEL ("Manager 1")
+// is resolved by the server from the role the owner runs and rides in the cell's tooltip beside the display-only
+// sentence: two assistants can run one role, so a cell that read the label named a team rather than an owner.
+//
+// The default owner IS Assistant #1, so a row with no `assistant` at all (an older payload, a hand-built row) still
+// draws that name rather than an empty cell or a dash: a column of dashes hides the fact that nothing there is
+// unowned. The fallback sentence — the stored owner is no longer on the board — travels in the tooltip and in the
+// detail's bullet, because a cell is one word wide. Nothing in the wake path reads any of this.
+const ownerNameOf = (row) => String(row?.assistant?.name || "").trim() || "Assistant #1";
+const ownerLabelOf = (row) => String(row?.assistant?.label || "").trim();
+const ownerRoleOf = (row) => String(row?.assistant?.role || "").trim();
+function ownerCellHtml(row) {
+  const name = ownerNameOf(row);
+  const label = ownerLabelOf(row);
+  const seat = `${name}${label ? ` (${label})` : ""} owns this worktree`;
+  const title = row?.assistant?.fallback
+    ? `${seat} — ${row.assistant.fallback}`
+    : `${seat}. Display only: it does not change who wakes or runs.`;
+  return `<td class="assistant nowrap" title="${esc(title)}">${esc(name)}</td>`;
+}
+function ownerDetailHtml(row) {
+  const role = ownerRoleOf(row);
+  const fallback = row?.assistant?.fallback ? `<span class="owner-fallback"> — ${esc(row.assistant.fallback)}</span>` : "";
+  return `<li class="git-owner" title="the assistant that owns this worktree — its own name, then the role it runs; display only: it does not change who wakes or runs">Controlled by: ${esc(ownerNameOf(row))}${role ? ` — ${esc(role)}` : ""}${fallback}</li>`;
+}
+// ---- end owner cell
+
 function rowHtml(row) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   const dirty =
@@ -10416,18 +10445,10 @@ function rowHtml(row) {
     name: `<td class="name"><div class="name-line"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
       title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${treeLockBtn}${renameBtn}${nameFromWorkBtn}${agentBadgeHtml(row)}</div></td>`,
     branch: `<td class="mono branch">${branchCellHtml(row)}${branchLockBtn}</td>`,
-    // The owner column: the ROLE LABEL ("Manager 1"), never the raw id — the label is resolved by the server from
-    // the role the owner runs, on every read, so a role rename renames this cell without a write anywhere. A row
-    // whose stored owner is gone says so in the tooltip (the cell keeps the fallback's label; the detail's bullet
-    // carries the sentence, because a cell is one word wide). Display only — nothing in the wake path reads it.
-    // OFF by default: lib/chart-columns.js `DEFAULT_HIDDEN_COLUMNS`, applied when the reader has no stored list.
-    assistant: `<td class="assistant nowrap" title="${esc(
-      row.assistant?.fallback
-        ? `${row.assistant.label} owns this worktree — ${row.assistant.fallback}`
-        : row.assistant?.label
-          ? `${row.assistant.label}${row.assistant.name ? ` — ${row.assistant.name}` : ""} owns this worktree. Display only: it does not change who wakes or runs.`
-          : "no owner recorded — Assistant #1 owns this worktree",
-    )}">${esc(row.assistant?.label || "Assistant #1")}</td>`,
+    // The owner column: the assistant's NAME from the owner cell region above — never the raw id, never the role
+    // label and never a dash. OFF by default: lib/chart-columns.js `DEFAULT_HIDDEN_COLUMNS`, applied when the reader
+    // has no stored list.
+    assistant: ownerCellHtml(row),
     tip: `<td class="mono dim nowrap">${esc(row.head || "—")}</td>`,
     ahead: `<td class="mono nowrap">${aheadBehindCellHtml(row)}</td>`,
     cherry: `<td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>`,
@@ -12311,9 +12332,7 @@ function detailHtml(row) {
       <div class="git-body">
         <ul class="git-list">
           <li class="git-summary-line">${esc(gitSummary)}</li>
-          <li class="git-owner" title="the assistant whose role label owns this worktree — display only: it does not change who wakes or runs">Controlled by: ${esc(row.assistant?.label || "Assistant #1")}${
-            row.assistant?.fallback ? `<span class="owner-fallback"> — ${esc(row.assistant.fallback)}</span>` : ""
-          }</li>
+          ${ownerDetailHtml(row)}
           ${metaItems.map((m) => `<li>${m}</li>`).join("")}
         </ul>
         ${commitsBlock}
@@ -12905,7 +12924,7 @@ const CHART_COLUMNS = [
     min: 92,
     give: 0.8,
     title:
-      "the assistant whose role label owns this worktree — \"Manager 1\" for the first assistant on the Agent Manager role. Stored per tree and DISPLAY ONLY: it does not change who wakes, who runs, or who answers. OFF by default; switch it on in Settings → Display → Chart columns.",
+      "the assistant that controls this worktree, by its own name — \"Assistant #1\", \"Assistant #2\". The cell's tooltip carries the role it runs (\"Manager 1\"), and the same fact is a line in the row's detail: \"Controlled by: Assistant #1 — Manager\". Stored per tree and DISPLAY ONLY: it does not change who wakes, who runs, or who answers. OFF by default; switch it on in Settings → Display → Chart columns.",
   },
   { id: "tip", label: "Tip", min: 70, give: 1 },
   {

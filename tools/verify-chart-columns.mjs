@@ -15,10 +15,12 @@
 //             a config that has never expressed a preference gets DEFAULT_HIDDEN_COLUMNS — ten cells per row, no key
 //             in config.json (the default lives in memory; the file stays keyless until the reader moves a switch),
 //             and ten of the eleven switches checked in Settings
-//   driven    switching the owner column on draws its header and its cell — the cell reads the ROLE LABEL ("Manager 1"),
-//             never `assistant-1` — and the counter says 11/11; switching it off again stores exactly that one column
-//   driven    an expanded worktree's detail carries its own line, "Controlled by: Manager 1", beside the branch and
-//             the verdict
+//   driven    switching the owner column on draws its header and its cell — the cell reads the assistant's NAME
+//             ("Assistant #1"), never `assistant-1`, never the role label and never a dash, while the tooltip carries
+//             the numbered label ("Manager 1") beside the display-only sentence — and the counter says 11/11;
+//             switching it off again stores exactly that one column
+//   driven    an expanded worktree's detail carries its own line, "Controlled by: Assistant #1 — Manager", beside
+//             the branch and the verdict
 //   driven    unchecking Cherry and Tip rebuilds every project table to eight columns — the header loses those two
 //             <th>, each row loses those two <td>, an expanded worktree's detail row spans exactly eight, and the
 //             remaining columns still add up to the table's width (no horizontal scroll where there was none)
@@ -281,7 +283,8 @@ const run = async () => {
 
   // ---- the owner column, switched ON --------------------------------------------------------------
   // The whole point of the column: one press draws it in every table, its header sits where the chart's list puts it,
-  // and the cell reads the role label the SERVER resolved rather than the id the store holds.
+  // and the cell reads the assistant's NAME the SERVER resolved — with the role label the server also resolved in its
+  // tooltip — rather than the id the store holds.
   const ownerBox = page.locator('#chart-cols input[data-chart-col="assistant"]');
   await ownerBox.click();
   const ownerOn = await waitFor(
@@ -296,9 +299,19 @@ const run = async () => {
     [...document.querySelectorAll("section.project tbody tr.row td.assistant")].map((td) => td.textContent.trim()),
   );
   ok(
-    "the cell reads the role label, never the raw id",
-    ownerCells.length > 0 && ownerCells.every((x) => x === "Manager 1"),
+    "the cell reads the assistant's name, never the raw id or the role label",
+    ownerCells.length > 0 && ownerCells.every((x) => x === "Assistant #1"),
     JSON.stringify(ownerCells.slice(0, 3)),
+  );
+  ok("…and never draws a bare dash", ownerCells.length > 0 && ownerCells.every((x) => !/^[—–-]+$/.test(x)), JSON.stringify(ownerCells.slice(0, 3)));
+  const ownerTitles = await page.evaluate(() =>
+    [...document.querySelectorAll("section.project tbody tr.row td.assistant")].map((td) => td.getAttribute("title") || ""),
+  );
+  ok(
+    "the tooltip carries the owner's numbered role label beside the display-only sentence",
+    ownerTitles.length > 0 &&
+      ownerTitles.every((t) => /^Assistant #1 \(Manager 1\) owns this worktree\. Display only: it does not change who wakes or runs\.$/.test(t)),
+    JSON.stringify(ownerTitles.slice(0, 2)),
   );
   check("the counter counts the column now drawn", await page.evaluate(() => document.querySelector("#chart-cols-count")?.textContent), "11/11");
   await page.evaluate(() => document.getElementById("chart-cols-row")?.scrollIntoView({ block: "center" }));
@@ -353,7 +366,7 @@ const run = async () => {
     const colspan = await page.evaluate(() => Number(document.querySelector("tr.detail td[colspan]")?.getAttribute("colspan") || 0));
     ok("an expanded worktree's detail cell spans the eight visible columns", span && colspan === 8, `colspan=${colspan}`);
     const ownerLine = await page.evaluate(() => document.querySelector("tr.detail .git-owner")?.textContent.trim() || "");
-    check("the detail carries its own owner line, in the role's label", ownerLine.startsWith("Controlled by: Manager 1"), true);
+    check("the detail carries its own owner line: the name, then the role", ownerLine.startsWith("Controlled by: Assistant #1 — Manager"), true);
     ok("…and never the raw id", !/assistant-1/.test(ownerLine), ownerLine);
     await shot(page, "eight-columns");
   } else {
