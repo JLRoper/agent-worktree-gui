@@ -501,11 +501,19 @@ async function browserPhase(pw) {
   await page.evaluate(() => toggleSettings(true));
   await page.waitForTimeout(150);
   const foreign = [
-    ["#job-prompt", "the add-agent field"],
-    ["#provider-key", "a settings text box"],
-    ["#q-width", "a settings preset row's own box"],
+    [null, "#job-prompt", "the add-agent field"],
+    ["gateway", "#provider-key", "a settings text box"],
+    ["display", "#q-width", "a settings preset row's own box"],
   ];
-  for (const [sel, what] of foreign) {
+  for (const [tab, sel, what] of foreign) {
+    // Settings is a tab strip: a box is only on screen on its own tab, so the reader's press is made first.
+    if (tab) {
+      const pick = page.locator(`[data-settings-tab="${tab}"]`);
+      if ((await pick.count()) === 1) {
+        await pick.click();
+        await page.waitForTimeout(120);
+      }
+    }
     if ((await page.locator(sel).count()) !== 1 || !(await page.locator(sel).isVisible())) {
       note(`(${sel} — ${what} — is not on this page, skipped)`);
       continue;

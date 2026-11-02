@@ -111,11 +111,12 @@ test("Settings has one size picker for the console, and it is the one reasoning 
 });
 
 // The Thinking text row carries no size picker any more, so the group's own tooltip must not promise it one: a
-// reader who opened Display was told all three rows set "a colour and a size for their own part of it" and then found
+// reader who chose Display was told all three rows set "a colour and a size for their own part of it" and then found
 // no size under Thinking text. The console's one size is named instead, and the skill box's real size is not hidden.
+// The tooltip lives on the tab now — the strip is the panel's heading — so that is where the copy is read.
 test("the Display group's tooltip does not promise Thinking text a size of its own", () => {
-  const head = html.match(/<h3 class="settings-group-head" data-settings-group="display"[^>]*title="([^"]*)"/);
-  assert.ok(head, "the Display group's heading carries a tooltip");
+  const head = html.match(/<button[^>]*id="settings-tab-display"[^>]*title="([^"]*)"/);
+  assert.ok(head, "the Display tab carries the group's tooltip");
   assert.doesNotMatch(head[1], /each set a colour and a size/, "the rows no longer each set a size");
   assert.match(head[1], /one size its words, a tool's output and the reasoning all read/, "it names the console's one size");
   assert.match(head[1], /a skill's box has a size of its own/, "and does not hide the size a skill's box really has");

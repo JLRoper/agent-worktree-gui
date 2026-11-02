@@ -28,15 +28,23 @@
   <div id="settings" class="settings hidden">
     <div class="settings-head">
       <h2 title="drag this bar to move Settings">Settings</h2>
-      <input id="settings-search" type="search" autocomplete="off" spellcheck="false" placeholder="search settings — labels and tooltips" aria-label="search settings by label or tooltip" title="Type to filter the rows below by what they say and by their tooltip. A group with a match opens while the search is on; a group with no match folds away. Esc clears the box.">
+      <input id="settings-search" type="search" autocomplete="off" spellcheck="false" placeholder="search settings — labels and tooltips" aria-label="search settings by label or tooltip" title="Type to filter the rows on EVERY tab by what they say and by their tooltip. Each tab counts the rows that answer it while the search is on, and the first tab with a match is shown, so a setting on another tab is revealed rather than hidden behind its tab. Clearing the box puts you back on the tab you chose. Esc clears the box.">
       <button id="btn-settings-search-clear" type="button" title="clear the search (Esc)" hidden>✕</button>
       <span class="spacer"></span>
       <button id="btn-settings-close" type="button" title="close (Esc)">✕</button>
     </div>
+    <div class="settings-tabs" id="settings-tabs" role="tablist" aria-label="Settings sections">
+      <button type="button" class="settings-tab" id="settings-tab-display" role="tab" aria-controls="settings-panel-display" aria-selected="true" tabindex="0" data-settings-tab="display" title="How the board and the agent's output look. Panel font covers the headings, labels, buttons and whatever you type; terminal font and weight cover the console and the tool lines inside it; Thinking text, Skill output and Console text each set a colour for their own part of it; the console also carries the one size its words, a tool's output and the reasoning all read, and a skill's box has a size of its own. All of it is saved in this browser. The tab you choose is remembered in this browser."><span class="settings-tab-label">Display</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
+      <button type="button" class="settings-tab" id="settings-tab-cards" role="tab" aria-controls="settings-panel-cards" aria-selected="false" tabindex="-1" data-settings-tab="cards" title="What a card shows and does for you. The tab you choose is remembered in this browser."><span class="settings-tab-label">Cards</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
+      <button type="button" class="settings-tab" id="settings-tab-board" role="tab" aria-controls="settings-panel-board" aria-selected="false" tabindex="-1" data-settings-tab="board" title="How the board behaves while you are reading it, and the two gestures that read it now instead of on the clock. The tab you choose is remembered in this browser."><span class="settings-tab-label">Board</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
+      <button type="button" class="settings-tab" id="settings-tab-branches" role="tab" aria-controls="settings-panel-branches" aria-selected="false" tabindex="-1" data-settings-tab="branches" title="Whether a branch may exist on a REMOTE at all. Most of what this panel starts is research or a browser probe, and a remote branch per probe clutters a repository other people share — so local-only is the default, and the exception is a grant you give on purpose in the permission box. It is written into this panel's config.json (remoteBranchPolicy), so it applies to every browser and survives a restart. The tab you choose is remembered in this browser."><span class="settings-tab-label">Branches</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
+      <button type="button" class="settings-tab" id="settings-tab-data" role="tab" aria-controls="settings-panel-data" aria-selected="false" tabindex="-1" data-settings-tab="data" title="The two folders this panel keeps things in, both outside the checkout on purpose: a re-clone, a move or a read-only checkout keeps the board's history, and nothing it writes shows up in git status. The data directory is the durable half; the scratch directory is the throwaway half, and the OS is free to clean it. Either can be moved by naming dataDir / scratchDir in config.json, or by setting WAG_HOME / WAG_SCRATCH in the environment — the row below says which of those answered, so an unexpected path is explainable. The tab you choose is remembered in this browser."><span class="settings-tab-label">Data</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
+      <button type="button" class="settings-tab" id="settings-tab-gateway" role="tab" aria-controls="settings-panel-gateway" aria-selected="false" tabindex="-1" data-settings-tab="gateway" title="Written to the gateway's config.yaml, not this browser. It re-reads them, so the next prompt or session list uses the new number without a restart. The tab you choose is remembered in this browser."><span class="settings-tab-label">Gateway</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
+      <button type="button" class="settings-tab" id="settings-tab-updates" role="tab" aria-controls="settings-panel-updates" aria-selected="false" tabindex="-1" data-settings-tab="updates" title="A panel that restarted (or whose public/ was edited while it ran) serves a new build. This is what this tab does about it — and what it refuses to do while you are mid-sentence or an agent is mid-turn. The tab you choose is remembered in this browser."><span class="settings-tab-label">Updates</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
+    </div>
     <div class="settings-body">
 
-      <div class="settings-group folded">
-        <h3 class="settings-group-head" data-settings-group="display" role="button" tabindex="0" aria-expanded="false" title="How the board and the agent's output look. Panel font covers the headings, labels, buttons and whatever you type; terminal font and weight cover the console and the tool lines inside it; Thinking text, Skill output and Console text each set a colour for their own part of it; the console also carries the one size its words, a tool's output and the reasoning all read, and a skill's box has a size of its own. All of it is saved in this browser. It starts folded — click the heading to open it, and the open group is remembered in this browser.">Display</h3>
+      <div class="settings-group" id="settings-panel-display" data-settings-group="display" role="tabpanel" aria-labelledby="settings-tab-display">
 
         <div class="settings-row" title="page zoom — Ctrl+wheel, Ctrl + / Ctrl − , Ctrl 0 resets. Saved in this browser.">
           <span>Page zoom <span class="settings-info">ⓘ</span></span>
@@ -197,8 +205,7 @@
 
       </div>
 
-      <div class="settings-group folded">
-        <h3 class="settings-group-head" data-settings-group="cards" role="button" tabindex="0" aria-expanded="false" title="What a card shows and does for you. It starts folded — click the heading to open it, and the open group is remembered in this browser.">Agent cards</h3>
+      <div class="settings-group" id="settings-panel-cards" data-settings-group="cards" role="tabpanel" aria-labelledby="settings-tab-cards" hidden>
 
         <label class="settings-row" for="show-thinking" title="The agent's own reasoning, read from its session store, as a block above each turn's console — folded until you open it. It is 1–2 KB a block, which is why it is off by default. The brain button on a card turns it on for that one session, and that choice wins over this switch.">
           <span>Show thinking <span class="settings-info">ⓘ</span></span>
@@ -237,8 +244,7 @@
         </label>
       </div>
 
-      <div class="settings-group folded">
-        <h3 class="settings-group-head" data-settings-group="board" role="button" tabindex="0" aria-expanded="false" title="How the board behaves while you are reading it, and the two gestures that read it now instead of on the clock. It starts folded — click the heading to open it, and the open group is remembered in this browser.">Board</h3>
+      <div class="settings-group" id="settings-panel-board" data-settings-group="board" role="tabpanel" aria-labelledby="settings-tab-board" hidden>
 
         <div class="settings-row" id="board-now-row" title="Read the board now, instead of waiting for the clock. Refresh now re-reads every worktree row of the projects in view — the same cheap pass the board runs every few seconds, so a row that already matches stays exactly as it is. Fetch remotes runs git fetch --prune in every project (the one routine gesture here that touches git refs) and then re-reads the rows; each project's answer arrives on its own as the fetch lands. Both say in the banner what they started, because neither moves anything on screen until a read comes back.">
           <span>Read now <span class="settings-info">ⓘ</span></span>
@@ -349,8 +355,7 @@
         <div class="settings-preview mono" id="agent-cleanup-preview">…</div>
       </div>
 
-      <div class="settings-group folded">
-        <h3 class="settings-group-head" data-settings-group="branches" role="button" tabindex="0" aria-expanded="false" title="Whether a branch may exist on a REMOTE at all. Most of what this panel starts is research or a browser probe, and a remote branch per probe clutters a repository other people share — so local-only is the default, and the exception is a grant you give on purpose in the permission box. It is written into this panel's config.json (remoteBranchPolicy), so it applies to every browser and survives a restart. It starts folded — click the heading to open it, and the open group is remembered in this browser.">Branches on the remote</h3>
+      <div class="settings-group" id="settings-panel-branches" data-settings-group="branches" role="tabpanel" aria-labelledby="settings-tab-branches" hidden>
 
         <label class="settings-row" for="remote-policy" title="local only (the default) — every branch stays on this box; a push from a worktree the panel cut is REFUSED by the pre-push guard the panel installs, and that refusal asks you through the permission box in the dock (Allow once / this session / Always allow / Deny). allow — remote writes go through without asking; this is what &quot;Always allow&quot; in the box writes, so the setting and the box are the same fact. deny — refused outright, and the box is not even offered. Written into config.json, so it survives a restart and applies to every browser.">
           <span>Remote branches <span class="settings-info">ⓘ</span></span>
@@ -366,8 +371,7 @@
         </div>
       </div>
 
-      <div class="settings-group folded">
-        <h3 class="settings-group-head" data-settings-group="data" role="button" tabindex="0" aria-expanded="false" title="The two folders this panel keeps things in, both outside the checkout on purpose: a re-clone, a move or a read-only checkout keeps the board's history, and nothing it writes shows up in git status. The data directory is the durable half; the scratch directory is the throwaway half, and the OS is free to clean it. Either can be moved by naming dataDir / scratchDir in config.json, or by setting WAG_HOME / WAG_SCRATCH in the environment — the row below says which of those answered, so an unexpected path is explainable. It starts folded — click the heading to open it, and the open group is remembered in this browser.">Data</h3>
+      <div class="settings-group" id="settings-panel-data" data-settings-group="data" role="tabpanel" aria-labelledby="settings-tab-data" hidden>
 
         <div class="settings-row" id="data-dir-row" title="Everything the panel must not lose: the job store, the assistant's scratchpad and charter, the worktree TODOs, the naming ledger, the descriptions, the labels, the model prices, the push-guard record, the restart record, the attachments you paste, and the panel's own server log — under state/, attachments/ and logs/ inside this folder. Read once at boot; changing dataDir in config.json moves it, and an existing logs/ beside the checkout is COPIED here once and left where it was.">
           <span>Data directory <span class="settings-info">ⓘ</span></span>
@@ -387,8 +391,7 @@
         </div>
       </div>
 
-      <div class="settings-group folded">
-        <h3 class="settings-group-head" data-settings-group="gateway" role="button" tabindex="0" aria-expanded="false" title="Written to the gateway's config.yaml, not this browser. It re-reads them, so the next prompt or session list uses the new number without a restart. It starts folded — click the heading to open it, and the open group is remembered in this browser.">Gateway</h3>
+      <div class="settings-group" id="settings-panel-gateway" data-settings-group="gateway" role="tabpanel" aria-labelledby="settings-tab-gateway" hidden>
 
         <label class="settings-row" for="approval-timeout" id="approval-row" title="How long a permission prompt waits for you before it fails closed — if it expires, nothing runs.">
           <span>Approval window <span class="settings-info">ⓘ</span></span>
@@ -436,8 +439,7 @@
         <div class="settings-preview mono" id="models-preview">…</div>
       </div>
 
-      <div class="settings-group folded">
-        <h3 class="settings-group-head" data-settings-group="updates" role="button" tabindex="0" aria-expanded="false" title="A panel that restarted (or whose public/ was edited while it ran) serves a new build. This is what this tab does about it — and what it refuses to do while you are mid-sentence or an agent is mid-turn. It starts folded — click the heading to open it, and the open group is remembered in this browser.">Updates</h3>
+      <div class="settings-group" id="settings-panel-updates" data-settings-group="updates" role="tabpanel" aria-labelledby="settings-tab-updates" hidden>
 
         <label class="settings-row" for="update-mode" title="off — never look; a manual press on Check now still works. prompt (the default) — poll the panel every 30s and, when it is serving a different build, offer a Reload chip. auto — take the reload as soon as the page is idle. Either mode HOLDS the reload while a reply box or a held draft has text, or while a turn is still streaming, so nothing you typed and nothing an agent is writing is thrown away. Saved in this browser.">
           <span>Update check <span class="settings-info">ⓘ</span></span>

@@ -134,7 +134,7 @@ test("the row is one select in the Agent cards group, with exactly the three ans
   assert.equal(html.split('id="prev-turn-mode"').length - 1, 1, "and once in the page");
 
   const cardsStart = settings.indexOf('data-settings-group="cards"');
-  const cards = settings.slice(cardsStart, settings.indexOf('<div class="settings-group">', cardsStart));
+  const cards = settings.slice(cardsStart, settings.indexOf('<div class="settings-group', cardsStart + 10));
   assert.ok(cards.includes('id="prev-turn-mode"'), "the row lives in the Agent cards group");
 
   const row = cards.match(/<label class="settings-row[^"]*" for="prev-turn-mode" title="([^"]+)">([\s\S]*?)<\/label>/);
