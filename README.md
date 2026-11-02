@@ -240,8 +240,10 @@ that lives outside every configured root — an explicit `projects[]` entry can 
 gets its own sibling accordion for its parent folder, so nothing is ever filed under a folder it
 is not in. The folder header carries the aggregate chips (projects, worktrees, unmerged, dirty,
 live), a **Collapse all / Expand all** button for the projects inside it, and a green **+** that
-opens a clone row: type a repo name (`name`, or `owner/name`) and press Enter to clone it over SSH
-into that folder (`git@github.com:<owner>/<name>.git`). The folder itself collapses from its
+opens the folder's own row: type a repo name (`name`, or `owner/name`) and press Enter to clone it
+over SSH into that folder (`git@github.com:<owner>/<name>.git`), or press **New local project** to
+make a brand-new repository there instead — `git init` on `main` plus one README commit, so the
+folder has a base ref the board and a spawn can read. The folder itself collapses from its
 title line; the collapsed set is remembered in localStorage.
 
 **Every project starts minimized** to its title line — click the line (or its chevron) to open it,
@@ -1113,6 +1115,7 @@ Watches without a deadline, and finished ones, say so instead.
 | GET/POST | `/api/hosts` · `/api/hosts/propose` · `/api/hosts/mapping` | where a project's branches and PRs live. GET: the merged mapping (`hosts` records, the file pair, warnings, and each project's `view`). POST `propose` `{project}`: read that project's own remote and return the mapping it implies — writes nothing. POST `mapping` `{project, host, coordinates}`: write ONE project into `logs/hosts.json`, leaving every other record alone. Tokens, precedence and the landing doctrine: `docs/hosts.md` |
 | GET/POST | `/api/approvals`, `/api/approvals/answer`, `/api/approvals/<id>` | human side of the Hermes approval-transport contract: list pending requests, answer one (`{id, choice}` within the request's `allowed_choices`), poll one request's status. Requests expire to `deny` |
 | POST | `/api/clone` | clone a GitHub repo over ssh into one configured scan root: `{root, name}` where `root` must equal a `scanRoots` entry and `name` is `repo` or `owner/repo`. Refuses anything else (no paths, no URLs), and a destination that already exists. Responds when git finishes; discovery picks the repo up on the next pass |
+| POST | `/api/project/new` | create a NEW local git project in one configured scan root: `{root, name}` where `root` must equal a `scanRoots` entry and `name` is ONE path segment (no `owner/`, no separators, no leading dot). Initialises the folder on `main` and makes one commit (`README.md`) so HEAD and `main` both exist — an unborn HEAD scans as `NO BASE REF` and refuses every spawn. Then refreshes discovery and broadcasts a snapshot, so the project lands on the board with no reload. **400** for a root or a name it cannot accept, **409** when the folder already exists |
 | GET | `/api/jobs` | job list plus `transport` (gateway URL, reachability, `capabilities`: runs/events/steer/stop/approval/runCwd/runBudget/maxTurns) |
 | GET | `/api/stream` | SSE: `snapshot`, `row`, `project`, `drop`, `job`, `jobline`, `jobs`, `approval`, `approval-answered`, `remote-write`, `remote-write-answered`, `settings`, `heartbeat` |
 | POST | `/api/agents/preview` | returns the exact run request that would be sent (`{transport, request, blocked}`), without sending it |
