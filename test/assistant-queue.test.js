@@ -12,7 +12,8 @@
 //   6. panel-completed: a settled thread whose PR reads MERGED is marked done by "panel"; a failed settle goes back to
 //      queued with attempts+1 and the reason;
 //   7. the digest: the top N queued, every running task with its thread, every stale one, and nothing at all when the
-//      queue is empty.
+//      queue is empty — and every line carrying the same five facts (state, thread, worktree, PR state, why it is not
+//      going), with a live thread saying LIVE rather than leaving it to the absence of STALE.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -285,24 +286,40 @@ test("queueCounts counts each state and both derived flags", () => {
   assert.equal(c.conflict, 1, "c1's file clashes with the running task's");
 });
 
-test("the digest carries the top N queued, every running task with its thread, every stale one and every parked one", () => {
-  let q = [];
-  for (let i = 1; i <= 7; i += 1) q = addTask(q, { title: `queued ${i}` }, { nextId: i }).tasks;
-  q = addTask(q, { title: "running", thread: "T1", worktree: "C:/wt" }, { nextId: 8 }).tasks;
-  q = setTaskState(q, 8, "running").tasks;
-  q = addTask(q, { title: "parked", reason: "waiting" }, { nextId: 9 }).tasks;
-  q = setTaskState(q, 9, "parked", { reason: "waiting on review" }).tasks;
-  const rowFor = () => ({ path: "C:/wt", verdict: "OPEN", pr: { number: 3, state: "OPEN" } });
+test("every digest line carries state, thread, worktree, PR state and its skip reason", () => {
+  // The clashing task is filed FIRST so it is inside the top N: a skip reason on a line the digest does not print
+  // proves nothing about the lines it does.
+  let q = addTask([], { title: "clashing", files: ["a.js"] }).tasks;
+  for (let i = 2; i <= 8; i += 1) q = addTask(q, { title: `queued ${i}` }, { nextId: i }).tasks;
+  q = addTask(q, { title: "running", thread: "T1", worktree: "C:/wt", files: ["a.js"] }, { nextId: 9 }).tasks;
+  q = setTaskState(q, 9, "running").tasks;
+  q = addTask(q, { title: "parked", reason: "waiting", worktree: "C:/wt2" }, { nextId: 10 }).tasks;
+  q = setTaskState(q, 10, "parked", { reason: "waiting on review" }).tasks;
+  const rowFor = (t) => (t.worktree === "C:/wt" ? { path: "C:/wt", verdict: "OPEN", pr: { number: 3, state: "OPEN" } } : null);
   const lines = queueDigest(q, { size: 3, isLive: () => false, rowFor });
   const text = lines.join("\n");
-  assert.match(lines[0], /7 queued · 1 running, 1 stale · 1 parked · 0 done/);
-  assert.match(text, /- ○ #1 queued 1/);
-  assert.match(text, /- ○ #3 queued 3/);
-  assert.ok(!text.includes("queued 4"), "only the top N queued are listed");
-  assert.match(text, /and 4 more queued/);
-  assert.match(text, /- ● #8 running · thread T1 · PR OPEN/);
-  assert.match(text, /STALE: that thread has no live run/);
-  assert.match(text, /- ⏸ #9 parked · waiting on review/);
+  assert.match(lines[0], /8 queued · 1 running, 1 stale · 1 parked · 0 done/);
+  // A queued task: state, thread, worktree and PR are all said, even when there is nothing to say.
+  assert.match(text, /- ○ #2 queued · queued 2 · thread \(none\) · tree \(none\) · PR none/);
+  // …and the skip reason rides on the line of the task that is being skipped.
+  assert.match(text, /- ○ #1 queued · clashing · thread \(none\) · tree \(none\) · PR none · files a\.js · SKIP: files in use by #9 \(stale\)/);
+  // A running task: the same facts, plus the PR's number and the verdict on its thread.
+  assert.match(text, /- ● #9 running · running · thread T1 · tree C:\/wt · PR OPEN #3 · files a\.js · STALE: that thread has no live run/);
+  // A parked task: the same facts, plus why it is parked.
+  assert.match(text, /- ⏸ #10 parked · parked · thread \(none\) · tree C:\/wt2 · PR none · PARKED: waiting on review/);
+  assert.ok(!text.includes("queued 5"), "only the top N queued are listed");
+  assert.match(text, /and 5 more queued/);
+});
+
+test("a task whose thread is live reads LIVE, never STALE", () => {
+  let q = addTask([], { title: "live one", thread: "T1", worktree: "C:/wt" }).tasks;
+  q = setTaskState(q, 1, "running").tasks;
+  const rowFor = () => ({ path: "C:/wt", verdict: "MERGED", pr: { number: 7, state: "MERGED" } });
+  const lines = queueDigest(q, { isLive: (t) => t === "T1", rowFor });
+  const text = lines.join("\n");
+  assert.match(text, /- ● #1 running · live one · thread T1 · tree C:\/wt · PR MERGED #7 · LIVE$/m);
+  assert.ok(!/STALE/.test(text), "a live thread is never called stale");
+  assert.match(lines[0], /0 queued · 1 running · 0 parked · 0 done/, "and the header counts no stale task");
 });
 
 test("the digest is empty for an empty queue, and clamps a silly size", () => {
