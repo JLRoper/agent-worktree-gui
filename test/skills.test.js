@@ -190,6 +190,12 @@ test("a junction inside the profile is its own source, with its target, and its 
   const beta = index.skills.find((s) => s.name === "beta");
   assert.equal(beta.category, "cat");
   assert.deepEqual(index.skills.map((s) => s.name), ["alpha", "beta", "delta", "echo"], "category, then name, within a source");
+
+  // The path the list DRAWS is relative to the source's own base, so the heading can print the absolute base once.
+  assert.equal(alpha.rel, "alpha/SKILL.md", "a row at the top of a source is drawn relative to that source's base");
+  assert.equal(beta.rel, "cat/beta/SKILL.md", "a categorised row keeps its category folder in the short path");
+  assert.equal(delta.rel, "sefl/delta/SKILL.md", "a linked source's rows are relative to the tree the agent reads, not the target");
+  assert.ok(alpha.path.endsWith(alpha.rel.replace(/\//g, path.sep)), "the short path is the tail of the absolute one");
 });
 
 test("the same target listed twice is deduped by realpath, and the first source keeps it", async (t) => {
@@ -257,6 +263,7 @@ test("the gateway's answer is merged: served, not served, gateway-only", async (
   assert.ok(plugin, "a name the gateway serves and no root carries is still a row");
   assert.equal(plugin.source, "gateway");
   assert.equal(plugin.path, null, "there is no file to point at, and the row says nothing rather than guessing");
+  assert.equal(plugin.rel, null, "and no short path either — there is no source base to be relative to");
   assert.equal(index.counts.gatewayOnly, 1);
   assert.equal(index.counts.served, 2, "alpha and the plugin skill");
   assert.equal(index.counts.unserved, 1);
