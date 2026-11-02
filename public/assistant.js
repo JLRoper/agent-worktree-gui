@@ -2603,7 +2603,11 @@
       return;
     }
 
-    if (t.dataset.asSend) {
+    // An alert's "Send reply" is the ONLY send that carries a thread: it answers a parked question on that
+    // thread. The intro box's Send starts a NEW turn on the assistant's own thread and carries no thread, so this
+    // branch must not claim it — it did, found no `[data-as-draft]` box for the assistant's id, read empty text and
+    // returned, so the intro branch below was unreachable and the press did nothing at all (no request, no error).
+    if (t.dataset.asSend && t.dataset.thread) {
       const id = t.dataset.asSend;
       const box = document.querySelector(`[data-as-draft="${CSS.escape(id)}"]`);
       const text = String(box?.value || "").trim();
