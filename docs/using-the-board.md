@@ -24,7 +24,7 @@ is `rev-parse`, `rev-list`, `merge-base`, `cherry`, `diff`, `status` and `log`.
 | **Spawn cards waiting** | A strip above **New agent**, only while the assistant has proposed workers nobody has clicked yet (see *Spawn cards*). |
 | Folders → projects → worktrees | One accordion per scan root, every git repo under it, a table row per worktree. |
 | Cards | Inside an expanded worktree row: the conversation, its console, its reply box. |
-| Approvals dock | Bottom-right, over the board, only while something is waiting on you outside a card. |
+| Approvals dock | Bottom-right, over the board, while a request is waiting outside a card or a remote write is on record. |
 | Footer | The cadences the board is running at, what each gesture does to git, and any directories skipped. |
 
 ---
@@ -716,9 +716,19 @@ keeps its **Send answer** button). Answered, it reads `✓ answered: …`; a que
 expired leaves `· question closed without an answer here`.
 
 **The dock.** Approvals that do not come over a run's own stream (a selected approval transport, the legacy CLI
-contract) land in a stack pinned bottom-right: `⚠ waiting on you`, a count chip, a `▾` to fold it, and one card per
-request naming the agent, the command and `expires in Ns`. Answering there sends the choice within the host's list;
-an expiry means the command does not run.
+contract) land in a stack pinned bottom-right, with a `▾` that folds it and one card per request naming the agent,
+the command and `expires in Ns`. Answering there sends the choice within the host's list; an expiry means the command
+does not run. **The head counts only what is pending:** `⚠ waiting on you` and the amber count chip while a request is
+really open, `✓ nothing pending` in green once none is — a record of something already decided never sits under the
+waiting label. Below the pending cards sit two groups that are over. `auto-allowed · review` holds the writes a
+standing permission let through without asking: each has **Keep**, and an **Unwind** that names exactly what it would
+run — deleting a named remote branch, where that click is the confirmation, or drafting a message to the agent when
+there is no safe inverse, so nothing runs on its own (the panel never invents an inverse). `decided` holds the
+receipts of answered requests, the last three, one line each with its own `✕` and a `clear` for the group. Both are
+receipts, not fixtures: each ages out after 90 s whether or not another event arrives. Clicking the head or any card
+unfolds the dock and jumps to the agent that asked, opening its root, project and row on the way; a write whose agent
+is not on this board says so on the card and in the banner instead of doing nothing. With nothing pending and no
+records left, the dock hides.
 
 ### Thinking
 

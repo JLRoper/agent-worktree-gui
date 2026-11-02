@@ -569,8 +569,8 @@
       <!-- Approvals dock: a floating stack pinned bottom-right, over the board. It takes no page height and stays
            reachable wherever the reader has scrolled; each card names the agent it belongs to. -->
       <aside id="approvals" class="approval-dock" hidden aria-label="approvals waiting on you">
-        <div class="ap-dock-head">
-          <span class="mono">⚠ waiting on you</span>
+        <div class="ap-dock-head" id="approval-dock-head" title="click to unfold this stack and go to the agent that asked">
+          <span class="mono" id="approval-head">⚠ waiting on you</span>
           <div class="chips" id="approval-chips"></div>
           <span class="spacer"></span>
           <button id="btn-dock-approvals" type="button" title="fold or unfold this stack">▾</button>

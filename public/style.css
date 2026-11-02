@@ -620,7 +620,40 @@ body.addbar-top .agents-block > .add-agent-form { order: -1; margin-top: 0; marg
 .ap-dock-head #btn-dock-approvals:hover { color: var(--text); }
 .approval-dock.is-folded #approval-list { display: none; }
 .approval-dock.is-folded .ap-dock-head { border-bottom: 0; }
+/* Nothing pending: the head says so, and the amber "a question is waiting" chrome goes with the question. The dock
+   can still be open for a receipt or a review — it just must not LOOK like an unanswered request. */
+.approval-dock.is-quiet { border-color: #2f6b3f; }
+.approval-dock.is-quiet .ap-dock-head { background: var(--green-bg); border-bottom-color: #2f6b3f; }
+.approval-dock.is-quiet .ap-dock-head .mono,
+.approval-dock.is-quiet .ap-dock-head #btn-dock-approvals { color: #8fd6a0; }
 #approval-list { overflow: auto; }
+/* A group of records that are OVER. Its own head is what keeps a green check out from under "waiting on you": the
+   label names the group, the `clear` empties it, and neither counts as a pending request. */
+.ap-group { border-top: 1px solid var(--line); }
+.ap-group:first-child { border-top: 0; }
+.ap-group-head { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); background: var(--surface); border-bottom: 1px solid var(--line); }
+.ap-group-head .spacer { flex: 1; }
+.ap-group-head button { border: 1px solid var(--line); background: none; color: var(--dim); font: inherit; font-size: 10.5px; text-transform: none; letter-spacing: 0; padding: 1px 7px; border-radius: 5px; cursor: pointer; }
+.ap-group-head button:hover { color: var(--text); border-color: var(--dim); }
+.rw-record { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; padding: 5px 10px 5px 12px; font-size: 11px; color: #8fd6a0; border-left: 2px solid #2f6b3f; background: rgba(47,107,63,.10); cursor: pointer; }
+.rw-record.is-deny { color: #ff9c9c; border-left-color: #6b2a2a; background: rgba(107,42,42,.10); }
+.rw-record:hover { background: rgba(47,107,63,.18); }
+.rw-record.is-deny:hover { background: rgba(107,42,42,.18); }
+.rw-record-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rw-record .rw-note { flex: 1 1 100%; white-space: normal; }
+.rw-x { flex: 0 0 auto; border: 0; background: none; color: inherit; opacity: .55; font: inherit; line-height: 1; padding: 0 3px; cursor: pointer; }
+.rw-x:hover { opacity: 1; }
+/* An auto-allowed write, after the fact. Same raised box as a question, in green: the reader was never asked, so the
+   card is the only record — Keep closes it, Unwind names exactly what it would do. */
+.rw-review { padding: 8px 12px; border-bottom: 1px solid var(--line); background: rgba(47,107,63,.06); }
+.rw-review:last-child { border-bottom: 0; }
+.rw-review-head { font-size: 11px; color: #8fd6a0; }
+.rw-review-head code { color: var(--text); }
+.rw-review .ap-cmd { margin: 5px 0 4px; }
+.rw-review-why { font-size: 11px; margin-bottom: 2px; }
+.rw-note { margin-top: 5px; font-size: 10.5px; line-height: 1.4; color: #d8c79a; }
+.rw-review .btn-deny { border-color: #6b2a2a; color: #ff9c9c; }
+.rw-review .btn-deny:hover { background: rgba(107,42,42,.18); }
 /* The permission box for a remote write wears the same chrome as a parked turn's approval (.turn-approval), which
    is deliberately in-card markup. Inside the dock it needs nothing but a trim: the dock already has the border and
    the shadow, so the inner box keeps its own colour and loses the outer glow. */

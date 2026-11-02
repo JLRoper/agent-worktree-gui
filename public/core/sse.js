@@ -168,7 +168,35 @@ function connect() {
     const evt = JSON.parse(e.data);
     const r = state.rwPending.get(evt.id) || null;
     state.rwPending.delete(evt.id);
-    state.rwDecided.set(evt.id, { choice: evt.choice || "deny", why: evt.why || "", command: r?.command || "", expired: Boolean(evt.expired), at: Date.now() });
+    // The record keeps what it needs to find its agent later: a decided write has no thread of its own, so the tree
+    // and branch travel with it and `dockGoto` resolves them through state.jobs.
+    state.rwDecided.set(evt.id, {
+      id: evt.id,
+      choice: evt.choice || "deny",
+      why: evt.why || "",
+      command: r?.command || "",
+      worktree: r?.worktree || evt.worktree || "",
+      branch: r?.branch || evt.branch || "",
+      kind: evt.kind || r?.kind || "push",
+      expired: Boolean(evt.expired),
+      at: Date.now(),
+    });
+    renderApprovals();
+  });
+  // A write that went through WITHOUT a question (this clone's policy is `allow`, or the tree was started to land):
+  // the guard reports it and the panel only broadcasts once the remote shows the branch, so this is a write that
+  // really happened. It is drawn as its own review card — Keep, or an Unwind that names exactly what it would do.
+  es.addEventListener("remote-write-review", (e) => {
+    const r = JSON.parse(e.data).review;
+    if (!r || !r.id) return;
+    state.lastEventAt = Date.now();
+    state.rwReviews.set(r.id, r);
+    renderApprovals();
+  });
+  es.addEventListener("remote-write-review-done", (e) => {
+    const evt = JSON.parse(e.data);
+    if (evt.action === "keep") state.rwReviews.delete(evt.id);
+    else if (evt.review && evt.review.id) state.rwReviews.set(evt.review.id, evt.review);
     renderApprovals();
   });
   // A settings change made anywhere (the Settings row, another tab, "Always allow" in the permission box): the page

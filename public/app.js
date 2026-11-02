@@ -2550,6 +2550,9 @@ function permissionBoxHtml({
   closed = false,
   closedHead = APPROVAL_CLOSED_HEAD,
   closedNote = "",
+  // A line under the command, for a box that has something to say about itself (the dock's "no agent on this
+  // board owns that write" is the one caller). Empty for every other question.
+  note = "",
   titles = null,
   extra = "",
 }) {
@@ -2573,6 +2576,7 @@ function permissionBoxHtml({
   return `<div class="turn-approval${closed ? " is-expired" : ""}" ${forAttr}>
     <div class="ta-head mono">${closed ? esc(closedHead) : head}</div>
     <pre class="ta-cmd mono">${esc(command || "(no command text)")}</pre>
+    ${note}
     ${closed ? closedNote : buttons}
     ${closed ? "" : foot}
   </div>`;
@@ -6221,12 +6225,23 @@ function approvalCard(r) {
 // Allow tells the waiting hook to go ahead.
 state.rwPending = state.rwPending || new Map(); // id -> request still waiting for an answer
 state.rwDecided = state.rwDecided || new Map(); // id -> what was decided, shown as the collapsed line
+state.rwReviews = state.rwReviews || new Map(); // id -> an auto-allowed write, drawn as a Keep / Unwind review
 state.rwPolicy = state.rwPolicy || "local-only";
+
+// A decided record and a review are RECEIPTS, not fixtures. The dock is a corner of the screen, and a receipt that
+// outlives the thing it describes is exactly the "waiting on you" box the reader could not get rid of: both age out
+// on the page's own 1 s clock (tickApprovals), so the corner clears itself with no event to wait for.
+const DECIDED_TTL_MS = 90_000;
+const DECIDED_SHOWN = 3; // the last three, as before: a receipt list is not a log
 
 function applyRemoteWrites(rw) {
   state.rwPolicy = (rw && rw.policy) || state.rwPolicy;
   state.rwPending.clear();
   for (const r of (rw && rw.pending) || []) if (r && r.id) state.rwPending.set(r.id, r);
+  // Reviews ride the snapshot too (the panel keeps them for its own window), so a reload inside the receipt's 90 s
+  // comes back to the record of a write nobody was asked about instead of losing it.
+  state.rwReviews.clear();
+  for (const r of (rw && rw.reviews) || []) if (r && r.id) state.rwReviews.set(r.id, r);
   renderApprovals();
 }
 
@@ -6242,6 +6257,7 @@ function remoteWriteBoxHtml(r) {
     requestId: r.id,
     forAttr: `data-remote-write="${esc(r.id)}" data-rw-tree="${esc(r.worktree || "")}"`,
     head: `⚠ waiting on you — ${esc(kind)}: ${esc(r.project || "this project")} is local-only`,
+    note: r.note ? `<div class="rw-note mono" data-rw-note>⚠ ${esc(r.note)}</div>` : "",
     command: r.command || "",
     choices: Array.isArray(r.allowed) && r.allowed.length ? r.allowed : ["once", "session", "always", "deny"],
     deadline,
@@ -6259,19 +6275,93 @@ function remoteWriteBoxHtml(r) {
   });
 }
 
+// A decided record: one line, a ✕ of its own, and a click that goes back to the agent the write was about. It is a
+// receipt for a question that is OVER, which is why it never shares the head with a pending request.
 function remoteWriteDecidedHtml(d) {
+  const id = String(d.id || "");
   const denied = String(d.choice || "") === "deny";
   const verb = denied ? (d.expired ? "not answered — denied" : "denied") : `allowed ${d.choice}`;
-  return `<div class="turn-approval-done mono${denied ? " is-deny" : ""}" title="${esc(d.why || "")}">${denied ? "✕" : "✓"} remote write ${esc(verb)}${d.command ? `: ${esc(String(d.command).slice(0, 140))}` : ""}</div>`;
+  const note = d.note ? `<div class="rw-note mono" data-rw-note>⚠ ${esc(d.note)}</div>` : "";
+  return `<div class="rw-record mono${denied ? " is-deny" : ""}" data-rw-record="${esc(id)}" data-rw-tree="${esc(d.worktree || "")}" data-rw-branch="${esc(d.branch || "")}" title="${esc(d.why || "remote write")} — click to go to the agent this write was about">
+    <span class="rw-record-text">${denied ? "✕" : "✓"} remote write ${esc(verb)}${d.command ? `: ${esc(String(d.command).slice(0, 140))}` : ""}</span>
+    <button type="button" class="rw-x" data-rw-dismiss="${esc(id)}" title="dismiss this record">✕</button>
+    ${note}
+  </div>`;
+}
+
+// The agent a review is about, by the name the reader knows it by — the card's title, else the thread id.
+function reviewAgentName(r) {
+  const thread = String(r.agentThread || "");
+  if (thread) {
+    const job = [...state.jobs.values()].find((j) => (j.thread || j.id) === thread);
+    if (job) return job.title || job.label || thread;
+  }
+  return "the agent";
+}
+
+// An auto-allowed write, after the fact: the panel was never asked, so this is the only record that it happened.
+// Keep closes it; Unwind names EXACTLY what it would do — a remote branch delete, or a message drafted to the agent
+// when there is no safe inverse. The panel never runs an inverse of its own, and the button is the confirmation.
+function remoteWriteReviewHtml(r) {
+  const unwind = r.unwind && r.unwind.type ? r.unwind : { type: "message", text: "" };
+  const target = r.branch ? `${r.remote || "origin"}/${r.branch}` : "";
+  const head =
+    r.state === "unwound"
+      ? `✕ unwound — ${esc(r.unwind?.label || "the write was reversed")}`
+      : `✓ remote write allowed without asking${r.sha ? ` · <code>${esc(String(r.sha).slice(0, 7))}</code>` : ""}`;
+  const why = [r.why, target].filter(Boolean).join(" · ");
+  const buttons =
+    r.state === "unwound"
+      ? `<button type="button" data-rw-review-keep="${esc(r.id)}" title="dismiss this record">Dismiss</button>`
+      : `<button type="button" data-rw-review-keep="${esc(r.id)}" title="keep it — the write stands and this card goes">Keep</button>` +
+        (unwind.type === "delete-branch"
+          ? `<button type="button" class="btn-deny" data-rw-review-unwind="${esc(r.id)}" title="deletes ${esc(unwind.label || "the remote branch")} on the remote — this click is its confirmation">Unwind — ${esc(unwind.label || "delete the remote branch")}</button>`
+          : `<button type="button" data-rw-review-unwind="${esc(r.id)}" title="nothing is run: this drafts a message to the agent instead">Unwind — draft a message to ${esc(reviewAgentName(r))}</button>`);
+  const detail =
+    unwind.type === "delete-branch"
+      ? `<div class="rw-note mono" data-rw-note>unwind runs exactly: ${esc(unwind.command || "")} — this deletes the remote branch, and the click above is its confirmation</div>`
+      : `<div class="rw-note mono" data-rw-note>no safe inverse for this write — unwind drafts a message to the agent and the panel runs nothing</div>`;
+  const jumpNote = r.note ? `<div class="rw-note mono" data-rw-jump-note>⚠ ${esc(r.note)}</div>` : "";
+  return `<div class="rw-review" data-rw-review="${esc(r.id)}" data-rw-tree="${esc(r.worktree || "")}" data-rw-branch="${esc(r.branch || "")}" title="click to go to the agent this write came from">
+    <div class="rw-review-head mono">${head}</div>
+    <pre class="ap-cmd mono">${esc(r.command || "(no command text)")}</pre>
+    ${why ? `<div class="rw-review-why dim">${esc(why)}</div>` : ""}
+    <div class="ap-actions">${buttons}</div>
+    ${detail}${jumpNote}
+  </div>`;
+}
+
+// Records and reviews live under their OWN heads. The reader's report was a green check under "waiting on you":
+// a group label says what a group is, and the dock's head only ever counts what is actually pending.
+function rwGroupHtml(kind, label, title, body) {
+  return `<div class="ap-group" data-rw-group="${esc(kind)}">
+    <div class="ap-group-head mono"><span>${esc(label)}</span><span class="spacer"></span><button type="button" data-rw-clear="${esc(kind)}" title="${esc(title)}">clear</button></div>
+    ${body}
+  </div>`;
 }
 
 function renderApprovals() {
   const sec = $("approvals");
   if (!sec) return;
+  const now = Date.now();
   const list = [...state.approvals.values()].sort((a, b) => (a.deadline || 0) - (b.deadline || 0));
   const writes = [...state.rwPending.values()].sort((a, b) => (a.deadline || 0) - (b.deadline || 0));
-  const decided = [...state.rwDecided.values()].sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, 3);
-  sec.hidden = list.length === 0 && writes.length === 0 && decided.length === 0;
+  const decided = [...state.rwDecided.values()]
+    .filter((d) => now - (Number(d.at) || 0) < DECIDED_TTL_MS)
+    .sort((a, b) => (b.at || 0) - (a.at || 0))
+    .slice(0, DECIDED_SHOWN);
+  // Only a write the remote actually shows is drawn: the panel deletes an unconfirmed one for itself, and a card
+  // claiming a push that never landed would be its own false record.
+  const reviews = [...state.rwReviews.values()]
+    .filter((r) => !r.kept && r.state !== "checking" && now - (Number(r.at) || 0) < DECIDED_TTL_MS)
+    .sort((a, b) => (b.at || 0) - (a.at || 0));
+  const pending = list.length + writes.length;
+  // THE HEAD COUNTS. `⚠ waiting on you` only while something IS waiting; a decided record or a review is never
+  // placed under a label that claims a question, which was the reader's whole report.
+  const headEl = $("approval-head");
+  if (headEl) headEl.textContent = pending ? "⚠ waiting on you" : "✓ nothing pending";
+  sec.classList.toggle("is-quiet", pending === 0);
+  sec.hidden = pending === 0 && decided.length === 0 && reviews.length === 0;
   applyApprovalsFold(sec);
   // The card that says "waiting on you →" is part of the same fact: repaint the threads whose answer changed,
   // instead of leaving the chip on a stale card until the next job event happens to arrive.
@@ -6281,17 +6371,212 @@ function renderApprovals() {
     if (document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)) renderConversation(thread);
   }
   approvalThreadsShown = threadsNow;
-  const total = list.length + writes.length;
-  if (!total && !decided.length) {
-    $("approval-list").innerHTML = "";
-    $("approval-chips").innerHTML = "";
+  const listEl = $("approval-list");
+  const chipsEl = $("approval-chips");
+  if (!listEl || !chipsEl) return;
+  if (!pending && !decided.length && !reviews.length) {
+    listEl.innerHTML = "";
+    chipsEl.innerHTML = "";
     return;
   }
-  $("approval-chips").innerHTML = total ? `<span class="chip bad">${total}</span>` : "";
+  chipsEl.innerHTML = pending ? `<span class="chip bad">${pending}</span>` : "";
   // The panel's own questions lead (they are the ones holding a worker's push), then the CLI-transport approvals,
-  // then the collapsed records of writes already decided.
-  $("approval-list").innerHTML =
-    writes.map(remoteWriteBoxHtml).join("") + list.map(approvalCard).join("") + decided.map(remoteWriteDecidedHtml).join("");
+  // then the two groups that are OVER: auto-allowed writes to review, and the receipts of writes already decided.
+  listEl.innerHTML =
+    writes.map(remoteWriteBoxHtml).join("") +
+    list.map(approvalCard).join("") +
+    (reviews.length
+      ? rwGroupHtml(
+          "review",
+          "auto-allowed · review",
+          "keep a write the panel allowed without asking, or unwind it — nothing here runs on its own",
+          reviews.map(remoteWriteReviewHtml).join(""),
+        )
+      : "") +
+    (decided.length
+      ? rwGroupHtml("decided", "decided", "clear these receipts — each one also ages out after 90 s", decided.map(remoteWriteDecidedHtml).join(""))
+      : "");
+}
+
+// ---- the dock's own gestures --------------------------------------------------------------------------------
+// The reader reported a box that did nothing when clicked. A click on the HEAD or on any CARD is now the way to the
+// agent that asked: unfold the stack, then jump through the same jumpToAgent() a row's agent chip uses, so the card
+// is flashed and the caret follows it. A decided record has no thread (it keeps what/when only), so its agent is
+// resolved from the worktree and branch it was about — and where it cannot be resolved, the card says so.
+function revealAgentHome(thread) {
+  if (!thread) return;
+  // A card only exists in the DOM while its worktree row is open, so unfold the row — and its project and root —
+  // first, exactly the three folds revealSpawnedAgent does before it lands on a card it just made.
+  const key = rowKeyForThread(thread);
+  const row = key ? state.rows.get(key) : null;
+  if (row) {
+    const project = state.projects.get(row.project);
+    const root = project ? rootOf(project) : "";
+    if (root && state.collapsedRoots.has(root)) {
+      state.collapsedRoots.delete(root);
+      saveCollapsedRoots();
+      applyRootCollapse(root);
+    }
+    if (!state.expandedProjects.has(row.project)) toggleProject(row.project);
+    if (!state.expanded.has(key)) document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
+  }
+  jumpToAgent(thread);
+}
+
+// Which agent a remote write came from: the tree first (a write is about one worktree), then the branch. Several
+// agents can share a tree, so one that is working or parked wins over one that has stopped.
+function rwAgentFor(r) {
+  const want = normPath(r?.worktree || "").toLowerCase();
+  const branch = String(r?.branch || "");
+  const jobs = [...state.jobs.values()];
+  const inTree = want ? jobs.filter((j) => normPath(j.ownerPath || j.cwd || "").toLowerCase() === want) : [];
+  const pool = inTree.length ? inTree : branch ? jobs.filter((j) => String(j.branch || "") === branch) : [];
+  if (!pool.length) return null;
+  return pool.find((j) => j.status === "running" || j.status === "starting") || pool[pool.length - 1] || null;
+}
+
+function rwUnresolved(r) {
+  const what = r?.branch ? `branch ${r.branch}` : "that write";
+  const where = r?.worktree ? ` in ${r.worktree}` : "";
+  return `no agent card on this board for ${what}${where} — the write is on record, its agent is not`;
+}
+
+// Say it instead of doing nothing: a card that cannot find its agent keeps the reason on its own face (a banner
+// alone is gone in four seconds) until it is dismissed or ages out.
+function dockNote(record, why) {
+  if (record && typeof record === "object") record.note = why;
+  renderApprovals();
+  showBanner(why);
+  return false;
+}
+
+// One gesture for every dock click that is not a control: unfold, then go to the agent.
+function dockGoto(el) {
+  const dock = $("approvals");
+  if (!dock) return false;
+  try {
+    localStorage.setItem(APPROVALS_FOLDED_KEY, "0"); // a jump always unfolds: the cards live inside
+  } catch {
+    /* the jump still happens */
+  }
+  applyApprovalsFold(dock);
+  // A CLI-transport approval names its thread, so it goes straight to the agent.
+  const approvalId = el?.dataset?.approval || "";
+  if (approvalId) {
+    const r = state.approvals.get(approvalId);
+    if (r?.thread) {
+      revealAgentHome(r.thread);
+      return true;
+    }
+    showBanner(`that approval carries no agent thread${r?.surface ? ` (${r.surface})` : ""} — there is no card to go to`);
+    return false;
+  }
+  const writeId = el?.dataset?.remoteWrite || "";
+  const recordId = el?.dataset?.rwRecord || "";
+  const reviewId = el?.dataset?.rwReview || "";
+  if (writeId || recordId || reviewId) {
+    const r =
+      (writeId && state.rwPending.get(writeId)) || (recordId && state.rwDecided.get(recordId)) || (reviewId && state.rwReviews.get(reviewId)) || null;
+    if (!r) return false;
+    const job = rwAgentFor(r);
+    if (!job) return dockNote(r, rwUnresolved(r));
+    revealAgentHome(job.thread || job.id);
+    return true;
+  }
+  // The head: the most urgent thing the dock holds, in the order it draws them, and the first one that can name an
+  // agent. When none can, the FIRST one carries the reason.
+  const byDeadline = (a, b) => (a.deadline || 0) - (b.deadline || 0);
+  const newest = (a, b) => (b.at || 0) - (a.at || 0);
+  const heads = [
+    [...state.rwPending.values()].sort(byDeadline)[0],
+    [...state.approvals.values()].sort(byDeadline)[0],
+    [...state.rwReviews.values()].filter((r) => !r.kept).sort(newest)[0],
+    [...state.rwDecided.values()].sort(newest)[0],
+  ].filter(Boolean);
+  let first = null;
+  for (const r of heads) {
+    if (!first) first = r;
+    const job = r.thread ? null : rwAgentFor(r);
+    const thread = r.thread || job?.thread || job?.id || "";
+    if (thread) {
+      revealAgentHome(thread);
+      return true;
+    }
+  }
+  return first ? dockNote(first, rwUnresolved(first)) : false;
+}
+
+// Keep: the write stands and the review goes. The panel drops its copy too, so a reload does not bring it back.
+async function keepReview(id) {
+  const r = state.rwReviews.get(id);
+  if (!r) return;
+  r.kept = true; // optimistic: the card goes at once
+  renderApprovals();
+  try {
+    const res = await apiFetch("/api/remote-write/review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action: "keep" }),
+    });
+    if (!res.ok) {
+      const out = await res.json().catch(() => ({}));
+      throw new Error(out.error || `HTTP ${res.status}`);
+    }
+  } catch (e) {
+    state.rwReviews.set(id, { ...r, kept: false });
+    renderApprovals();
+    showBanner(`could not record that keep: ${e.message}`);
+  }
+}
+
+// The inverse of an auto-allowed write. A remote branch delete is run by the PANEL from the review's own record: the
+// button names it, so the click IS the confirmation, and this page sends the record's ID and never a command.
+// Anything with no safe inverse becomes a message DRAFTED to the agent, which the reader sends (or does not) —
+// nothing auto-executes.
+async function unwindReview(id) {
+  const r = state.rwReviews.get(id);
+  if (!r) return;
+  const plan = r.unwind || {};
+  if (plan.type !== "delete-branch") {
+    const job = r.agentThread ? [...state.jobs.values()].find((j) => (j.thread || j.id) === r.agentThread) : rwAgentFor(r);
+    if (!job) return dockNote(r, `no agent card to draft a message to — ${rwUnresolved(r)}`);
+    const thread = job.thread || job.id;
+    const text = String(plan.text || "").trim();
+    if (!text) return dockNote(r, "no message was drafted for that write — nothing was run");
+    revealAgentHome(thread);
+    const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+    if (!box) return dockNote(r, "that agent has no reply box on this board — nothing was drafted");
+    writeBox(box, text);
+    clearBoxDraft(box);
+    state.replyDrafts[thread] = text;
+    try {
+      box.focus({ preventScroll: true });
+    } catch {
+      box.focus();
+    }
+    setCaretOffset(box, readBox(box).length);
+    showNote(`drafted a message to ${job.title || job.label || thread} — it is yours to send`);
+    return;
+  }
+  const btns = [...document.querySelectorAll(`[data-rw-review-unwind="${CSS.escape(id)}"]`)];
+  btns.forEach((b) => (b.disabled = true));
+  try {
+    const res = await apiFetch("/api/remote-write/unwind", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }), // the id only: the command is the review's, never this page's
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok || !out.ok) throw new Error(out.error || `HTTP ${res.status}`);
+    state.rwReviews.set(id, out.review || { ...r, state: "unwound", at: Date.now() });
+    renderApprovals();
+    showBanner(
+      out.alreadyGone ? `the remote branch was already gone — ${plan.label || "nothing to delete"}` : `unwound — ${out.did || plan.label || "the write was reversed"}`,
+    );
+  } catch (e) {
+    btns.forEach((b) => (b.disabled = false));
+    dockNote(r, `unwind failed: ${e.message}`);
+  }
 }
 
 function tickApprovals() {
@@ -6302,10 +6587,27 @@ function tickApprovals() {
     el.textContent = left ? `expires in ${left}s` : "expired";
     el.classList.toggle("warn", left < 20);
   }
+  // A decided record and a review are receipts with a lifetime. They age out HERE, on the page's own clock: the
+  // corner clears itself whether or not another event ever arrives, which is what the reader asked for after a green
+  // check sat under "waiting on you" until a reload.
+  const now = Date.now();
+  let aged = false;
+  for (const [id, d] of state.rwDecided) {
+    if (now - (Number(d.at) || 0) >= DECIDED_TTL_MS) {
+      state.rwDecided.delete(id);
+      aged = true;
+    }
+  }
+  for (const [id, r] of state.rwReviews) {
+    if (now - (Number(r.at) || 0) >= DECIDED_TTL_MS) {
+      state.rwReviews.delete(id);
+      aged = true;
+    }
+  }
+  if (aged) renderApprovals();
   // …and a run's own approval box, which carries the gateway's window: its label counts down, and at the deadline
   // the buttons go. The panel's sweep removes the box a moment later (5s), and this is what covers the gap so the
   // reader never presses a choice the gateway has already refused.
-  const now = Date.now();
   for (const card of document.querySelectorAll(".turn-approval .ta-foot[data-approval-until]")) {
     const until = Number(card.dataset.approvalUntil) || 0;
     const windowMs = Number(card.dataset.approvalWindow) || 0;
@@ -6392,9 +6694,15 @@ async function answerRemoteWrite(id, choice, btn) {
     if (!res.ok || !out.ok) throw new Error(out.error || `HTTP ${res.status}`);
     state.rwPending.delete(id);
     state.rwDecided.set(id, {
+      id,
       choice: out.choice || choice,
       why: out.why || "",
       command: req?.command || "",
+      // The record has to be able to find its agent after the box is gone: a decided remote write carries no
+      // thread, so the tree and the branch it was about are what `dockGoto` resolves through `state.jobs`.
+      worktree: req?.worktree || "",
+      branch: req?.branch || "",
+      kind: req?.kind || "push",
       at: Date.now(),
     });
     renderApprovals();
@@ -15157,7 +15465,8 @@ document.addEventListener("click", async (e) => {
     void reviveSession(reviveBtn);
     return;
   }
-  // The dock's own fold control.
+  // The dock's own controls, then the dock itself. The ▾ folds and unfolds; the HEAD and any CARD take the reader to
+  // the agent that asked — a click there must never fold, which would hide the thing they just aimed at.
   const dockFold = e.target.closest("#btn-dock-approvals");
   if (dockFold) {
     e.preventDefault();
@@ -15168,6 +15477,48 @@ document.addEventListener("click", async (e) => {
       /* private mode: the fold still works, it just does not survive a reload */
     }
     applyApprovalsFold();
+    return;
+  }
+  if (e.target.closest("#approvals")) {
+    const dismiss = e.target.closest("[data-rw-dismiss]");
+    if (dismiss) {
+      e.preventDefault();
+      e.stopPropagation();
+      state.rwDecided.delete(dismiss.dataset.rwDismiss);
+      renderApprovals();
+      return;
+    }
+    // `clear` empties its own group: the decided receipts, or the reviews (which the panel keeps on its own side
+    // until its window closes — a cleared review does not come back on this page).
+    const clear = e.target.closest("[data-rw-clear]");
+    if (clear) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (clear.dataset.rwClear === "review") for (const r of state.rwReviews.values()) r.kept = true;
+      else state.rwDecided.clear();
+      renderApprovals();
+      return;
+    }
+    const keep = e.target.closest("[data-rw-review-keep]");
+    if (keep) {
+      e.preventDefault();
+      e.stopPropagation();
+      void keepReview(keep.dataset.rwReviewKeep);
+      return;
+    }
+    const unwind = e.target.closest("[data-rw-review-unwind]");
+    if (unwind) {
+      e.preventDefault();
+      e.stopPropagation();
+      void unwindReview(unwind.dataset.rwReviewUnwind);
+      return;
+    }
+    // The choice buttons keep the pointerup path that answers them; every other button inside a card (a link, a
+    // control this function does not know) must not turn into a jump.
+    if (e.target.closest("button, a, input, select, textarea, label")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dockGoto(e.target.closest("[data-approval], [data-remote-write], [data-rw-record], [data-rw-review]"));
     return;
   }
   // "waiting on your answer →" on an agent card: take the reader to the question box in that card, unfolding
