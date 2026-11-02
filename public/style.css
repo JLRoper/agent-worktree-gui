@@ -251,12 +251,12 @@ button.primary:hover { background: #24466a; }
    reachable without a horizontal gesture in a window the reader may have narrowed; the selected tab is the one
    Tab stop (roving tabindex), and the arrows walk the strip. */
 .settings-tabs { display: flex; flex-wrap: wrap; gap: 1px; flex: none; padding: 6px 9px 0; border-bottom: 1px solid var(--line); background: var(--panel); }
-.settings-tab { display: inline-flex; align-items: center; gap: 4px; padding: 3px 3px 4px; border: 0; border-bottom: 2px solid transparent; border-radius: 5px 5px 0 0; background: transparent; color: var(--dimmer); font: 9.5px var(--mono); letter-spacing: .02em; text-transform: uppercase; cursor: pointer; user-select: none; }
+.settings-tab { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px 5px 8px; min-height: 26px; border: 0; border-bottom: 2px solid transparent; border-radius: 5px 5px 0 0; background: transparent; color: var(--dimmer); font: 11.5px var(--mono); letter-spacing: .02em; text-transform: uppercase; cursor: pointer; user-select: none; }
 .settings-tab:hover { color: var(--dim); background: var(--surface); }
 .settings-tab:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
 .settings-tab[aria-selected="true"] { color: var(--text); border-bottom-color: #4a90d9; }
 /* The per-tab match count the search hangs on the tab: the number of rows on THAT tab that answer the query. */
-.settings-tab-count { font-size: 9.5px; letter-spacing: 0; color: #46505f; }
+.settings-tab-count { font-size: 10.5px; letter-spacing: 0; color: #46505f; }
 .settings-tab[aria-selected="true"] .settings-tab-count { color: var(--dim); }
 .settings-tab-count[hidden] { display: none; }
 /* One panel at a time, and the attribute is the whole state: the markup ships the six other tabs `hidden`, so a
