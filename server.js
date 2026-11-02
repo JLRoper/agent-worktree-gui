@@ -55,6 +55,10 @@ import {
 } from "./lib/hermes-config.js";
 import { hermesSessionTail } from "./lib/activity.js";
 import { Assistant, ASSISTANT_THREAD } from "./lib/assistant.js";
+// The per-assistant task queue's HTTP adapter. One import and one call site: the module owns the routes and the
+// transitions, the Assistant owns the file path and the read-modify-write, and this composition root only hands both
+// of them the transport helpers.
+import { createQueueRoutes } from "./lib/assistant/queue.js";
 import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./lib/subagents.js";
 import { thinkingFor } from "./lib/thinking.js";
 import { modelCatalogue, refreshModelCatalogue } from "./lib/hermes-models.js";
@@ -684,6 +688,11 @@ assistant = new Assistant({
 // that checkout had been deleted. Logged once, so the path is never a mystery in the boot log.
 log(`assistant cwd: ${assistant.ensureCwd()}`);
 assistant.start();
+
+// The per-assistant task queue's routes. The factory takes the Assistant (which owns each queue's file and its
+// read-modify-write) and the transport helpers this file already imports, so the module itself knows nothing about
+// HTTP and a test can drive it with stubs. Mounted in the request handler as one line — see "the queue's routes".
+const queueRoutes = createQueueRoutes({ assistant, config, sendJson, readBody, authorised });
 
 // ---- restarting the gateway, or this panel ---------------------------------------------
 // Everything that touches the outside world is injectable (lib/restart.js), which is what lets
@@ -1931,6 +1940,11 @@ const server = createServer(async (req, res) => {
     bootPassCanSatisfyReload = false;
   }
   try {
+    // ---- the per-assistant task queue ------------------------------------------------------------
+    // One module owns its routes, its transitions and its wire shape (lib/assistant/queue.js); this handler asks it
+    // first because its own guard is a string compare. `false` means "not mine" and falls through to the board.
+    if (await queueRoutes(req, res, route, url)) return;
+
     if (route === "/api/health") {
       return sendJson(res, 200, { ok: true, host: config.host, projects: registry.projects.map((p) => p.name), settings: settingsOut(), clients: clients.size });
     }

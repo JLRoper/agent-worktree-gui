@@ -42,6 +42,10 @@ const FIRST_SETTINGS_KEYS = [
   "leftoverMinutes",
   "maxWakesPerHour",
   "model",
+  // The queue's two knobs are #1's settings like every other assistant's: the digest size and the sweep cadence
+  // belong in the same object as its wake budget, so `state.settings` carries them and the Watchdog tab draws them.
+  "queueDigestSize",
+  "queueSweepEveryNWakes",
   "quietSeconds",
   "rearmSeconds",
   "repeatLimit",

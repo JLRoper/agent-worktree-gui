@@ -23,8 +23,10 @@
   // records the server sends (`state.assistant.assistants`), so "Assistant #2" is one more record and no new branch
   // anywhere — the button, the pane and the sub-row are all built from that list, on every paint.
   const LISTS = ["alerts", "watches", "messages", "pad", "role", "watchdog"];
-  // What a session holds: the card you talk to, and how it behaves.
-  const SUBTABS = ["chat", "settings"];
+  // What a session holds: the card you talk to, how it behaves, and the work it is carrying. "queue" is a session's
+  // OWN list — one per assistant, in its own file — so it belongs on the session's row beside Chat and Settings and
+  // not in LISTS, which are the float's one panel-wide panes.
+  const SUBTABS = ["chat", "settings", "queue"];
   const FIRST_ASSISTANT = "assistant-1";
   const DEFAULT_VIEW = { assistant: FIRST_ASSISTANT, subTab: SUBTABS[0] };
   // Every session the page knows about. Before the first /api/assistant answer there is still Assistant #1 — the
@@ -807,6 +809,7 @@
     const view = state.assistantView;
     if (isAssistant(view.assistant)) {
       if (view.subTab === "settings") renderAssistantSettings(view.assistant);
+      else if (view.subTab === "queue") renderAssistantQueue(view.assistant);
       else pinChatToBottom();
     } else if (view.assistant === "alerts") renderAssistantAlerts();
     else if (view.assistant === "watches") renderAssistantWatches();
@@ -1910,6 +1913,155 @@
     }
   }
 
+  // ---- the queue sub-tab ------------------------------------------------------------------------
+  //
+  // One assistant's task queue. It is the one session pane that is a LIST and lives on the session's own row, because
+  // the work is that assistant's: what it is carrying, what it has parked and what it has finished. The pane is
+  // fetched when the tab opens and after every change — the polled board state carries each assistant's settings but
+  // not its queue, and pushing up to 200 tasks × N assistants through the board poll would be a payload nobody reads.
+  //
+  // The cache is keyed by assistant id so stepping between tabs is instant, and a failed fetch leaves the last good
+  // list on screen with the error above it rather than a pane that went blank because one request timed out.
+  const queueCache = new Map(); // assistantId -> { view, error, loading, at }
+  let queueSeq = 0; // a stale answer must never overwrite a newer one
+
+  const queueMark = (state) => (state === "done" ? "✓" : state === "parked" ? "⏸" : state === "running" ? "●" : "○");
+  const queueStateName = (state) => (state === "running" ? "running" : state === "parked" ? "parked" : state === "done" ? "done" : "queued");
+
+  // One row. The marker, the id and the title are the head; owner, thread/PR, tree and files are the meta line; a
+  // stale or conflicted task carries its reason under them, because "why is this not moving" is the question a queue
+  // exists to answer. A done row stays in place greyed: "it finished" is a record, not a task that vanished.
+  function queueTaskHtml(id, t) {
+    const mark = queueMark(t.state);
+    const owner = t.owner ? esc(t.owner) : "unowned";
+    const meta = [];
+    if (t.thread) meta.push(`thread <code>${esc(t.thread)}</code>`);
+    if (t.row?.pr?.number) meta.push(`PR #${esc(String(t.row.pr.number))} ${esc(t.row.pr.state || "")}`.trim());
+    else if (t.row?.verdict) meta.push(`PR ${esc(t.row.verdict)}`);
+    if (t.worktree) meta.push(`tree ${esc(t.worktree)}`);
+    if (Array.isArray(t.files) && t.files.length) meta.push(`files ${esc(t.files.slice(0, 4).join(", "))}${t.files.length > 4 ? "…" : ""}`);
+    if (Number(t.attempts) > 0) meta.push(`${Number(t.attempts)} attempt${Number(t.attempts) === 1 ? "" : "s"}`);
+    const note = t.stale
+      ? `<div class="as-task-note">STALE — ${esc(t.staleWhy || "its thread has no live run")}</div>`
+      : t.conflict
+        ? `<div class="as-task-note is-bad">SKIPPED — ${esc(t.skipped || "files in use by a running task")}</div>`
+        : t.state === "parked" && t.reason
+          ? `<div class="as-task-note">parked — ${esc(t.reason)}</div>`
+          : t.state === "queued" && t.reason
+            ? `<div class="as-task-note">${esc(t.reason)}</div>`
+            : "";
+    // What can be pressed depends on where the task is. A transition to the state it is already in is not offered:
+    // a button that reports "already queued" is a button that wasted a click.
+    const acts = [];
+    if (t.state !== "running") acts.push(`<button type="button" data-as-qact="running" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="mark this task running — the thread it names is what carries it">Start</button>`);
+    if (t.state !== "queued") acts.push(`<button type="button" data-as-qact="queued" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="put it back in the queue${t.state === "done" ? " — a finished task can be re-queued" : ""}">${t.state === "done" ? "Requeue" : "Queue"}</button>`);
+    if (t.state !== "parked") acts.push(`<button type="button" data-as-qact="parked" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="park it — blocked, waiting on something outside this assistant">Park</button>`);
+    if (t.state !== "done") acts.push(`<button type="button" data-as-qact="done" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="mark it finished — this is the reader's judgement, not the panel's">Done</button>`);
+    const others = assistantIds().filter((x) => x !== id);
+    const move = others.length
+      ? `<select data-as-qmove="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="hand this task to another assistant — the move is recorded on the task">${others
+          .map((x) => `<option value="${esc(x)}">→ ${esc(sessionById(x)?.name || x)}</option>`)
+          .join("")}</select><button type="button" data-as-qact="reassign" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="move the task to the assistant chosen beside this button">Move</button>`
+      : `<span class="as-hint">no other assistant to move it to</span>`;
+    return `<div class="as-task${t.state === "done" ? " is-done" : ""}" data-as-qrow="${esc(String(t.id))}">
+        <div class="as-task-head">
+          <span class="as-task-mark is-${esc(queueStateName(t.state))}" aria-hidden="true">${mark}</span>
+          <b class="mono">#${esc(String(t.id))}</b>
+          <span class="as-task-title">${esc(t.title)}</span>
+          <span class="as-task-owner">${owner}</span>
+        </div>
+        ${meta.length ? `<div class="as-task-meta">${meta.join(" · ")}</div>` : ""}
+        ${note}
+        <div class="as-task-actions">${acts.join("")}${move}<button type="button" data-as-qact="delete" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="delete this task — a removed task leaves no ghost in the digest">✕</button></div>
+      </div>`;
+  }
+
+  function renderAssistantQueue(id = activeSessionId(), force = false) {
+    const host = hostFor(id, "queue");
+    if (!host || !state.assistant) return;
+    if (!force && typingInside(`#${paneIdFor(id, "queue")}`)) return;
+    const cached = queueCache.get(id);
+    const rec = sessionById(id);
+    const view = cached?.view;
+    const n = String(id).replace(/^assistant-/, "");
+    const others = assistantIds().filter((x) => x !== id);
+    const counts = view?.counts || {};
+    const head = view
+      ? `${counts.queued || 0} queued · ${counts.running || 0} running${counts.stale ? `, ${counts.stale} stale` : ""} · ${counts.parked || 0} parked · ${counts.done || 0} done`
+      : cached?.loading
+        ? "loading…"
+        : "not loaded yet";
+    const rows = Array.isArray(view?.tasks) ? view.tasks : [];
+    const order = { running: 0, queued: 1, parked: 2, done: 3 };
+    const sorted = rows.slice().sort((a, b) => (order[a.state] ?? 9) - (order[b.state] ?? 9) || Number(a.id) - Number(b.id));
+    host.innerHTML = `
+      <div class="as-group">
+        <h4>Its task queue — ${esc(rec?.name || "this assistant")}'s own</h4>
+        <div class="as-help">What THIS assistant is carrying: queued work it has not started, what is running (with its
+        thread), what it has parked, and what has finished. Another assistant — or you — can add work here, hand a task
+        over and set its state. A queued task whose files touch a running task's files is shown as skipped with the
+        reason; a running task whose thread has no live run reads STALE rather than showing phantom work in progress.</div>
+        <div class="as-line"><b>${esc(head)}</b>${view?.file ? `<code>${esc(view.file)}</code>` : ""}<button type="button" class="primary" data-as-qact="reload" data-as-qown="${esc(id)}">Refresh</button></div>
+        <div class="as-line"><label class="as-grow" title="what has to happen — one line is enough">title <input type="text" id="as-qtitle-${esc(n)}" class="as-grow" spellcheck="false" maxlength="200" placeholder="e.g. land the queue sub-tab's PR"></label></div>
+        <div class="as-line"><label class="as-grow" title="optional: the detail an assistant needs to do it without asking">detail <input type="text" id="as-qdetail-${esc(n)}" class="as-grow" spellcheck="false" maxlength="400" placeholder="optional"></label></div>
+        <div class="as-line"><label title="optional: comma-separated paths this task will touch — a queued task that overlaps a running task's files is skipped with the reason">files <input type="text" id="as-qfiles-${esc(n)}" spellcheck="false" maxlength="300" placeholder="lib/assistant/queue.js, public/assistant.js"></label>
+          <label>owner <select id="as-qowner-${esc(n)}"><option value="${esc(id)}">${esc(rec?.name || "this assistant")}</option>${others.map((x) => `<option value="${esc(x)}">${esc(sessionById(x)?.name || x)}</option>`).join("")}</select></label>
+          <button type="button" class="primary" data-as-qact="add" data-as-qown="${esc(id)}">Add task</button>
+          <span class="as-err" id="as-qerr-${esc(n)}">${cached?.error ? esc(cached.error) : ""}</span>
+        </div>
+        ${cached?.loading ? `<div class="as-help">reading its queue…</div>` : ""}
+        ${sorted.length ? sorted.map((t) => queueTaskHtml(id, t)).join("") : cached?.error ? "" : `<div class="as-help">(empty — this assistant is carrying nothing)</div>`}
+        <div class="as-help">The queue lives in <code>state/assistants/${esc(id)}/queue.json</code> beside this assistant's charter.
+        It is read on every wake: the digest names the top of the queue, every running task with its thread and every stale
+        one, so a turn can start whatever can be parallelised. A finished task stays here greyed — the record, not a ghost.</div>
+      </div>`;
+    // Fetch on first paint and when the tab is opened explicitly; a repaint from the board poll reuses the cache so a
+    // poll every second does not become a request every second.
+    if (force || !cached || Date.now() - Number(cached.at || 0) > 20_000) void loadQueue(id);
+  }
+
+  function loadQueue(id = activeSessionId()) {
+    const seq = ++queueSeq;
+    const prior = queueCache.get(id);
+    queueCache.set(id, { ...prior, loading: true, error: null });
+    // The pane is painted by the caller; this only refreshes the cache and asks for one repaint of the pane the reader
+    // is looking at. A second tab's answer repaints nothing.
+    return apiFetch(`/api/assistant/queue?assistantId=${encodeURIComponent(id)}`)
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+        if (d.assistant) applyAssistant(d.assistant);
+        if (seq !== queueSeq) return; // a newer read has landed; this answer describes a moment already gone
+        queueCache.set(id, { view: d.queue, error: null, loading: false, at: Date.now() });
+      })
+      .catch((err) => {
+        if (seq !== queueSeq) return;
+        const last = queueCache.get(id) || {};
+        queueCache.set(id, { ...last, loading: false, error: String((err && err.message) || err), at: Date.now() });
+      })
+      .finally(() => {
+        const view = state.assistantView;
+        if (view.subTab === "queue" && view.assistant === id) renderAssistantQueue(id, true);
+      });
+  }
+
+  async function queueAct(id, action, body = {}) {
+    try {
+      const d = await asPost("/api/assistant/queue", { assistantId: id, action, ...body });
+      // The route answers with the assistant's whole state and the queue it just wrote, so the pane repaints from the
+      // same answer the tab would have fetched — no second read, and no window where the row says "running" while the
+      // file says "queued".
+      if (d.queue) queueCache.set(id, { view: d.queue, error: null, loading: false, at: Date.now() });
+      renderAssistantQueue(id, true);
+      return d;
+    } catch (err) {
+      setErr(`as-qerr-${String(id).replace(/^assistant-/, "")}`, String((err && err.message) || err));
+      return null;
+    }
+  }
+
+  // ---- end the queue sub-tab --------------------------------------------------------------------
+
   // ---- talking to the server -------------------------------------------------------------------
 
   async function asPost(route, body = {}, { timeoutMs } = {}) {
@@ -2524,6 +2676,87 @@
       } catch (err) {
         setErr("as-watchdog-err", err.message);
       }
+    }
+  });
+
+  // ---- the queue's controls ----------------------------------------------------------------------
+  // The pane is rebuilt on every change, so the controls are delegated on the float rather than bound per row: a row
+  // that vanished under a click cannot leave a dead listener behind. `data-as-qown` is WHICH assistant's queue the
+  // control belongs to — a second assistant's pane must never write to Assistant #1's file — and `data-as-qid` is the
+  // task. The add form reads its three fields from the pane's own ids, so a repaint cannot cross-wire two assistants'
+  // forms.
+  as$("assistant")?.addEventListener("click", async (e) => {
+    const t = e.target.closest("[data-as-qact]");
+    if (!t) return;
+    const own = t.dataset.asQown;
+    const action = t.dataset.asQact;
+    if (!own) return;
+    const n = String(own).replace(/^assistant-/, "");
+    if (action === "reload") {
+      t.disabled = true;
+      try {
+        await loadQueue(own);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+    if (action === "add") {
+      const titleEl = as$(`as-qtitle-${n}`);
+      const detailEl = as$(`as-qdetail-${n}`);
+      const filesEl = as$(`as-qfiles-${n}`);
+      const ownerEl = as$(`as-qowner-${n}`);
+      const title = String(titleEl?.value || "").trim();
+      if (!title) {
+        setErr(`as-qerr-${n}`, "a task needs a title");
+        titleEl?.focus();
+        return;
+      }
+      t.disabled = true;
+      try {
+        await queueAct(own, "add", {
+          title,
+          detail: String(detailEl?.value || "").trim(),
+          files: String(filesEl?.value || "").trim(),
+          owner: String(ownerEl?.value || "").trim() || own,
+        });
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+    if (action === "reassign") {
+      // The chosen owner is the select beside the button, not the row's own owner: the row's owner is what the task
+      // is, the select is where it is going.
+      const row = t.closest(".as-task");
+      const sel = row?.querySelector("select[data-as-qmove]");
+      const owner = String(sel?.value || "").trim();
+      if (!owner) return setErr(`as-qerr-${n}`, "pick the assistant to move it to");
+      t.disabled = true;
+      try {
+        await queueAct(own, "reassign", { id: Number(t.dataset.asQid), owner });
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+    if (action === "delete") {
+      t.disabled = true;
+      try {
+        await queueAct(own, "delete", { id: Number(t.dataset.asQid) });
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+    if (["queued", "running", "parked", "done"].includes(action)) {
+      t.disabled = true;
+      try {
+        await queueAct(own, "state", { id: Number(t.dataset.asQid), state: action });
+      } finally {
+        t.disabled = false;
+      }
+      return;
     }
   });
 
