@@ -368,15 +368,19 @@ try {
         owner: el.querySelector(".as-task-owner")?.textContent.trim() || "",
         meta: (el.querySelector(".as-task-meta")?.textContent || "").replace(/\s+/g, " ").trim(),
         note: (el.querySelector(".as-task-note")?.textContent || "").replace(/\s+/g, " ").trim(),
-        // One sub-row per agent: the thread, the mark that RUN owns and the card's own pill word/class.
-        agents: [...el.querySelectorAll(".as-task-agent")].map((a) => ({
+        // One sub-row per agent: the thread, the mark that RUN owns and the card's own pill word/class. Only real
+        // agents are read here — a task nobody has run draws the "no agent yet" line, which `placeholder` reports.
+        agents: [...el.querySelectorAll(".as-task-agent[data-as-qopen]")].map((a) => ({
           thread: a.querySelector(".as-task-agent-thread")?.textContent.trim() || "",
           mark: a.querySelector(".as-agent-mark")?.textContent.trim() || "",
-          open: a.dataset.asQopen || a.querySelector("[data-as-qopen]")?.dataset.asQopen || "",
+          open: a.dataset.asQopen || "",
           word: (a.querySelector(".pill")?.textContent || "").trim(),
           pill: a.querySelector(".pill")?.className || "",
         })),
-        glyphs: [...el.querySelectorAll("[data-as-qact]")].map((b) => ({ act: b.dataset.asQact, text: b.textContent.trim(), aria: b.getAttribute("aria-label") || "" })),
+        placeholder: Boolean(el.querySelector(".as-task-agent.is-none")),
+        // The row's OWN presses. The picks inside the ➡️ popover carry data-as-qact="reassign" too, and they are
+        // asserted where the picker is driven, not as row glyphs.
+        glyphs: [...el.querySelectorAll(".as-task-actions > [data-as-qact]")].map((b) => ({ act: b.dataset.asQact, text: b.textContent.trim(), aria: b.getAttribute("aria-label") || "" })),
         done: el.classList.contains("is-done"),
         opacity: getComputedStyle(el).opacity,
         hasMove: Boolean(el.querySelector('[data-as-qmove-open]')),
@@ -391,18 +395,13 @@ try {
     ok("…and no other row is", rows.slice(0, 2).every((r) => !r.done && Number(r.opacity) === 1), JSON.stringify(rows.map((r) => r.opacity)));
     check("each row shows its id and title", rows.map((r) => r.title), ["rewrite the queue's file claims", "SQL verify for the queue store", "land the per-assistant queue"]);
     // The thread moved out of the meta line and onto its own sub-row: one agent per line, with the mark its RUN owns.
-    check("the running row draws one agent sub-row per thread, naming it", rows.map((r) => r.agents.map((a) => a.thread)), [
-      ["queue-gate-thread-2"],
-      ["queue-gate-thread-3"],
-      ["queue-gate-thread-4"],
-    ]);
-    check("…each sub-row carrying the card's own pill classes", rows.map((r) => r.agents[0]?.pill), [
-      "pill pill-notrunning",
-      "pill pill-notrunning",
-      "pill pill-notrunning",
-    ]);
-    check("…and the card's own words", rows.map((r) => r.agents[0]?.word), ["not-running", "not-running", "not-running"]);
-    check("…with the sub-row itself as the opener", rows.map((r) => r.agents[0]?.open), ["queue-gate-thread-2", "queue-gate-thread-3", "queue-gate-thread-4"]);
+    // Only #2 was added with a thread; #3 and #4 have never run, and say so instead of drawing a fake agent.
+    check("the running row draws one agent sub-row per thread, naming it", rows.map((r) => r.agents.map((a) => a.thread)), [["queue-gate-thread-2"], [], []]);
+    check("…and a task nobody has run says so", rows.map((r) => r.placeholder), [false, true, true]);
+    check("…the sub-row carrying the card's own pill class", rows[0]?.agents[0]?.pill, "pill pill-notrunning");
+    check("…and the card's own word", rows[0]?.agents[0]?.word, "not-running");
+    check("…with the sub-row itself as the opener", rows[0]?.agents[0]?.open, "queue-gate-thread-2");
+    check("…and the mark its RUN owns, not the task's state", rows[0]?.agents[0]?.mark, "○");
     check(
       "every press on the row is a glyph whose title= and aria-label= carry the real word",
       // Row #2 is the running one, so its Start is not offered (a press that reports "already running" wasted a click).
