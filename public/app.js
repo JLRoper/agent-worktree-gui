@@ -5887,25 +5887,13 @@ async function steerTurn(thread, id, text, btn = null) {
     });
     const out = await res.json().catch(() => ({}));
     if (!res.ok || !out.ok) {
-      // A run parked inside delegate_task, or one whose live agent the gateway's authority cannot hand a steer
-      // to, answers 409 rather than swallowing the text. Queue it instead of handing it back: the reader's
-      // instruction is still what they want next, and Queue is the action that survives this state.
-      const code = String(out.code || "");
-      const refused = res.status === 409 && (!code || code === "run_not_accepting_steer" || code === "steer_not_accepted");
-      if (refused) {
-        queueReply(thread, body);
-        state.replyDrafts[thread] = "";
-        clearAttachments(thread);
-        const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-        if (box) {
-          writeBox(box, "");
-          clearBoxDraft(box);
-        }
-        if (warn) warn.textContent = "this turn cannot take a steer right now — queued; it sends when the turn and its subagents are done";
-        if (btn) btn.disabled = false;
-        return true;
-      }
-      if (warn) warn.textContent = out.error || `steer refused (HTTP ${res.status})`;
+      // A steer that did not land is SAID, on the card — that is the whole of it. This used to turn a 409 into a
+      // queued reply: a run parked on an approval (or one past its last tool boundary) silently became a ghost
+      // line under "queued", so the instruction was neither steered nor visibly pending, and the reader was told
+      // it had been held when they had asked for it to be sent. Holding a reply is the Queue reply button's job,
+      // and that press is the reader's to make: the text stays in the box, one keystroke away from it.
+      const why = String(out.error || "").trim() || `HTTP ${res.status}`;
+      if (warn) warn.textContent = `steer refused — ${why}. Nothing was queued; press Queue reply to hold this text.`;
       if (btn) btn.disabled = false;
       return false;
     }

@@ -3492,7 +3492,13 @@ const server = createServer(async (req, res) => {
       // A steer lands inside the turn that is already running, so its documents belong to that turn's
       // card rather than to a new one.
       if (r.ok && Array.isArray(body.attachments) && body.attachments.length) jobs.addAttachments(String(body.id || ""), body.attachments);
-      return sendJson(res, r.ok ? 200 : r.code === "run_not_accepting_steer" ? 409 : 400, r);
+      // 409 is a run that exists and will not take a steer RIGHT NOW — the gateway's own refusal, or the one the
+      // panel knows before asking (a run parked on an approval). 400 stays what it was: a request this route cannot
+      // act on at all (no such card, no text, a card that is not running). The caller says either one in words;
+      // neither is a queue.
+      const refused =
+        ["run_not_accepting_steer", "steer_not_accepted", "run_parked_on_approval"].includes(String(r.code || "")) || Number(r.gatewayStatus) === 409;
+      return sendJson(res, r.ok ? 200 : refused ? 409 : 400, r);
     }
 
     // The NOT-RUNNABLE chip's press: ask the gateway about ONE interrupted card's run and take the same decision
