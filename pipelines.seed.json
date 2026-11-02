@@ -1,0 +1,211 @@
+{
+  "version": 1,
+  "note": "The pipelines this board ships with: a tree is cut local, and these are the definitions a project's defaultTurnover / defaultInvestigation may name. The live file (pipelines.json, in the panel's state folder) overrides this one per id; docs/pipelines.md is the design. A definition here must pass the same validation as one the reader writes: a stage without an exit, a check outside the closed vocabulary, an unknown {{placeholder}} or a `next` that goes backwards is dropped BY ID and named in the log.",
+  "pipelines": [
+    {
+      "id": "local",
+      "kind": "local",
+      "title": "Local work",
+      "description": "Work in this tree and stop. No push, no pull request — the panel's behaviour before pipelines existed.",
+      "stages": [
+        {
+          "id": "work",
+          "title": "Work in this tree",
+          "prompt": "Do the work in this tree and stop there. {{desc}}\n\nCommit what you changed in one revertable commit on {{branch}}, then report what you did: the files you touched, the commands you ran and their real results. Do not push, do not open a pull request, and do not merge anything.",
+          "exit": { "check": "commits", "min": 1 }
+        }
+      ],
+      "next": null
+    },
+    {
+      "id": "investigate",
+      "kind": "investigation",
+      "title": "Investigation",
+      "description": "Find out something and write it down, in this tree. Ends by concluding.",
+      "stages": [
+        {
+          "id": "probe",
+          "title": "Probe",
+          "prompt": "Find out what is actually being asked: {{desc}}\n\nRead, run and probe in this tree. Record what you ran and what it really returned — the capture, the script, the artefact. Commit the evidence on {{branch}} in one revertable commit. Do not push {{main}} and do not open a pull request.",
+          "exit": { "check": "commits", "min": 1 }
+        },
+        {
+          "id": "conclude",
+          "title": "Conclude",
+          "prompt": "Write the conclusion down in docs/investigation.md: what you found, what you ruled out, and what should happen next. Commit it on {{branch}} and report it in a few lines. Do not push.",
+          "exit": { "check": "file-exists", "path": "docs/investigation.md" }
+        }
+      ],
+      "next": null
+    },
+    {
+      "id": "turnover",
+      "kind": "turnover",
+      "title": "Turnover",
+      "description": "This work is going to land: commit, push the branch and open the pull request, following this host's landing doctrine.",
+      "stages": [
+        {
+          "id": "commit",
+          "title": "Commit",
+          "prompt": "Commit everything in this tree on {{branch}} in one revertable commit whose subject names the symptom. {{desc}}\n\nDo not push yet.",
+          "exit": { "check": "commits", "min": 1 }
+        },
+        {
+          "id": "push",
+          "title": "Push the branch",
+          "prompt": "Push the branch, never {{main}}: git push -u origin {{branch}}. If the write is refused, report the refusal and stop — the panel's permission box is the only thing that can grant it.",
+          "exit": { "check": "pushed" }
+        },
+        {
+          "id": "pr",
+          "title": "Open the pull request",
+          "prompt": "Open ONE pull request from {{branch}} into {{main}}, following this project's landing doctrine — the host is {{host}}, and the doctrine names the title, the reviewers and the description sections. Report the PR URL. Leave it open: this definition does not merge.",
+          "exit": { "check": "pr-open" }
+        }
+      ],
+      "next": null
+    },
+    {
+      "id": "github-investigate",
+      "kind": "investigation",
+      "title": "GitHub investigation",
+      "description": "Find out something on a GitHub project, write it down, and stop there — the work may chain into a turnover if it concludes the change has to land.",
+      "stages": [
+        {
+          "id": "probe",
+          "title": "Probe",
+          "prompt": "Find out what is actually being asked: {{desc}}\n\nRead, run and probe in this tree. Record what you ran and what it really returned — the capture, the script, the artefact. Commit the evidence on {{branch}} in one revertable commit. Do not push yet.",
+          "exit": { "check": "commits", "min": 1 }
+        },
+        {
+          "id": "conclude",
+          "title": "Conclude",
+          "prompt": "Write the conclusion down in docs/investigation.md: what you found, what you ruled out, and what should happen next. Commit it on {{branch}} and report it in a few lines. This tree stays local until the reader turns the conclusion into a turnover.",
+          "exit": { "check": "file-exists", "path": "docs/investigation.md" }
+        }
+      ],
+      "next": "github-force-merge"
+    },
+    {
+      "id": "sefl-investigate",
+      "kind": "investigation",
+      "title": "SEFL investigation",
+      "description": "Find out something on a SEFL Bitbucket project, write it down, and stop there — the work may chain into the review loop if it concludes the change has to land.",
+      "stages": [
+        {
+          "id": "probe",
+          "title": "Probe",
+          "prompt": "Find out what is actually being asked: {{desc}}\n\nRead, run and probe in this tree — {{tree}} on {{branch}}, from the {{host}} repository this project maps to. Record what you ran and what it really returned. Commit the evidence on {{branch}} in one revertable commit. Do not push yet.",
+          "exit": { "check": "commits", "min": 1 }
+        },
+        {
+          "id": "conclude",
+          "title": "Conclude",
+          "prompt": "Write the conclusion down in docs/investigation.md: what you found, what you ruled out, and what should happen next. Commit it on {{branch}} and report it in a few lines. This tree stays local until the reader turns the conclusion into a turnover.",
+          "exit": { "check": "file-exists", "path": "docs/investigation.md" }
+        }
+      ],
+      "next": "sefl-review-loop"
+    },
+    {
+      "id": "github-force-merge",
+      "kind": "turnover",
+      "title": "GitHub force merge",
+      "description": "The turnover pipeline for a GitHub project whose reader named it: commit, version, push, open the PR, merge with --admin (the ruleset's bypass) and confirm main moved.",
+      "stages": [
+        {
+          "id": "commit",
+          "title": "Commit",
+          "prompt": "Commit everything in this tree on {{branch}}, one revertable commit whose subject names the symptom. {{desc}}",
+          "exit": { "check": "commits", "min": 1 }
+        },
+        {
+          "id": "version",
+          "title": "Version",
+          "prompt": "Run `node tools/version.mjs suggest`, judge the level against what changed, apply it in the same commit and put the reason in the commit body. The stage is done when `node tools/version.mjs check` exits 0.",
+          "exit": { "check": "command", "argv": ["node", "tools/version.mjs", "check"] }
+        },
+        {
+          "id": "push",
+          "title": "Push the branch",
+          "prompt": "Push the branch, never {{main}}: git push -u origin {{branch}}. If the push is refused, report the refusal and stop — the permission box is the only thing that grants a write.",
+          "exit": { "check": "pushed" }
+        },
+        {
+          "id": "pr",
+          "title": "Open the pull request",
+          "prompt": "Open ONE pull request from {{branch}} into {{main}} and read it back before reporting it:\n\n  gh pr create --fill\n\nWhen this branch carries a version bump, --fill drops the reason the bump gave, so pass --title and --body-file instead and put the level and its reason into the body. Then run `gh pr view <n> --json state,headRefOid,baseRefName` and confirm headRefOid is the commit you just pushed. Report the PR URL.",
+          "exit": { "check": "pr-open" }
+        },
+        {
+          "id": "merge",
+          "title": "Merge",
+          "prompt": "Merge the pull request for {{branch}}: gh pr merge --rebase --admin.\n\n--admin is the ruleset's bypass, not a preference: the repository's ruleset, \"Owner only\" (id 25783530, docs/pushing-to-a-remote.md gate 8), refuses an update to the default branch except through a bypass. --rebase keeps {{main}} linear, which the ruleset requires; --merge would be refused.\n\nIf the merge fails because this account has no bypass, say exactly that and report instead of retrying.",
+          "exit": { "check": "pr-merged" }
+        },
+        {
+          "id": "main",
+          "title": "Confirm main moved",
+          "prompt": "Run `git fetch origin {{main}}` and confirm the merge is on it: the commit you merged is reachable from origin/{{main}}. Report the sha.",
+          "exit": { "check": "main-moved" }
+        }
+      ],
+      "next": null
+    },
+    {
+      "id": "sefl-review-loop",
+      "kind": "turnover",
+      "title": "SEFL review loop",
+      "description": "Cut a correctly named turnover branch, open a PR for code_review_java, answer what arrives, merge when approved.",
+      "stages": [
+        {
+          "id": "branch",
+          "title": "Name the branch",
+          "prompt": "Rename this tree's branch to YYYYMMDD_HHMM_<TICKET>_<desc> and nothing else: the cut's own local time, the ticket id the work names ({{ticket}}), and <desc> as lowercase words joined by underscores. Example: 20261102_1431_ABC-1234_fix_login_redirect. Then report the new name.",
+          "exit": {
+            "check": "branch-name",
+            "pattern": "^\\d{8}_\\d{4}_[A-Z][A-Z0-9]+-\\d+_[a-z0-9._-]+$",
+            "branch": "{{branch}}"
+          }
+        },
+        {
+          "id": "push",
+          "title": "Push the branch",
+          "prompt": "Push the branch, never {{main}}: git push origin {{branch}}. If the push is refused, report the refusal and stop — the panel's permission box is the only thing that grants a write.",
+          "exit": { "check": "pushed" }
+        },
+        {
+          "id": "pr",
+          "title": "Open the pull request",
+          "prompt": "Open ONE pull request from {{branch}} into {{main}} on the project's {{host}}, following the landing doctrine exactly:\n\n- title: \"Java Code Review for <repo> <branch>\"\n- reviewers: the GROUP code_review_java and nothing else — no individuals, no DAL group on a non-DAL change\n- description, four sections, every one present: ## Jira Ticket, ## Description, ## Test Procedures, ## Technical Specifications\n\nPOST it to the host's pull-request endpoint with the landing doctrine's REST path and bearer token, fromRef refs/heads/{{branch}}, toRef refs/heads/{{main}}. Read the PR back: reviewers must be exactly [code_review_java], and fromRef.latestCommit must be the head you pushed. Report the PR id and URL.",
+          "exit": { "check": "pr-open" }
+        },
+        {
+          "id": "wait",
+          "title": "Wait for the reviewer",
+          "prompt": "Read the PR's activities once (the landing doctrine names the endpoint). Report what arrived, then END the turn: say plainly that nothing has arrived if nothing has. Do not sleep, do not poll in a loop, and do not merge — the panel re-checks on its own clock and wakes this thread when there is something to answer.",
+          "exit": { "check": "pr-comments" }
+        },
+        {
+          "id": "address",
+          "title": "Answer the review",
+          "prompt": "For each new comment on the PR for {{branch}}: make the smallest change that answers it, commit on {{branch}}, push, and reply on that comment naming the commit. Then report what you answered. An approval at an older commit is not an approval of the head — after any push the head needs re-approval.",
+          "exit": { "check": "pushed" }
+        },
+        {
+          "id": "approve",
+          "title": "Wait for the approval at the head",
+          "prompt": "Nothing to say: wait for the head to be reviewed. The stage ends when an approval exists whose lastReviewedCommit equals the PR's current head ({{sha}}). Report the reviewer and the commit they approved.",
+          "exit": { "check": "pr-approved" }
+        },
+        {
+          "id": "merge",
+          "title": "Merge",
+          "prompt": "Merge the PR for {{branch}} with its current version: POST the host's merge endpoint (the landing doctrine names it) with the PR id and ?version=<the PR's current version>. Then confirm {{main}} moved. Never push {{main}} directly and never decline or close the PR.",
+          "exit": { "check": "pr-merged" }
+        }
+      ],
+      "next": null
+    }
+  ]
+}

@@ -31,6 +31,9 @@ import { answerDeletes, answerLine, answeredChecks } from "./lib/verify-landed.j
 import { deleteWorktreeRow } from "./lib/worktree-remove.js";
 import { ReleaseRequests, agentCleanupFrom, releaseWorktree, releasesEnabled } from "./lib/worktrees.js";
 import { Hosts, proposeMapping } from "./lib/hosts.js";
+// What a worktree is FOR: the definition catalogue (reader-edited over the shipped seed), where each tree stands in
+// one, and the ladder that is the only way a tree's kind may change (docs/pipelines.md §1–§3).
+import { Pipelines, PipelineRecords, presumedPipeline, changePipeline } from "./lib/pipelines.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
 import { WorktreeNaming } from "./lib/worktree-naming.js";
@@ -252,6 +255,10 @@ async function loadConfig() {
   // pass. The SEED is the opposite: it ships with the code (hosts.seed.json next to this file) and supplies defaults the
   // live file overrides.
   if (!cfg.hostsSeedFile) cfg.hostsSeedFile = path.join(HERE, "hosts.seed.json");
+  // The pipeline catalogue's seed is source in exactly the same way: it ships next to this file and supplies the
+  // built-in definitions (local / investigate / turnover, and the two hosts' turnover loops) that the reader's
+  // pipelines.json overrides per id. lib/paths.js puts the live file beside hosts.json in the state folder.
+  if (!cfg.pipelinesSeedFile) cfg.pipelinesSeedFile = path.join(HERE, "pipelines.seed.json");
   // Whether a branch may exist on a REMOTE at all: the setting the reader's permission box writes, and what the
   // installed pre-push guard reads. local-only by default — a value that cannot be read falls back to it rather
   // than to a permissive one.
@@ -334,6 +341,19 @@ const hosts = new Hosts({
 });
 const hostsFile = hosts.ensure();
 for (const warning of hosts.doc().warnings) log(`hosts: ${warning}`);
+// What each tree is FOR. The catalogue is the reader's pipelines.json (created empty on first boot: the defaults are
+// pipelines.seed.json's, and a copy of them here would freeze them) merged per id over that seed. A definition that
+// fails validation is dropped by id and named here, and the rest of the catalogue still loads; a live file whose
+// version is NEWER than this code's is refused whole and the seed is loaded read-only. The per-TREE record of where a
+// job stands in a definition is durable state beside push-guard.json, because a review loop outlives the job ring.
+const pipelines = new Pipelines({
+  file: config.pipelinesFile,
+  seedFile: config.pipelinesSeedFile || "pipelines.seed.json",
+  log: (line) => log(line),
+});
+pipelines.ensure();
+const pipelineRecords = new PipelineRecords({ file: config.pipelineRecordsFile, log: (line) => log(line) });
+for (const warning of pipelines.doc().warnings) log(`pipelines: ${warning}`);
 const registry = new ProjectRegistry({
   getConfig: () => config,
   store,
@@ -983,6 +1003,9 @@ jobs.todos = todos;
 // The parent book: the panel records every tree it cuts (lib/jobs.js), the scheduler hands the answer to each scan so
 // the row carries it, and the steward + the UNMERGED chip read it from there.
 jobs.parents = parents;
+// The pipeline record book: the cut writes `{id: "local", stage: "work", …}` into it before the run is posted, a
+// switch rewrites it through POST /api/worktree/pipeline, and every card reads its tree's entry back.
+jobs.pipelineRecords = pipelineRecords;
 scheduler.parents = parents;
 if (assistant) {
   assistant.todos = todos;
@@ -3060,6 +3083,79 @@ const server = createServer(async (req, res) => {
       });
       log(`steward: question recorded for ${question.branch || question.path} in ${project.name} — nothing was started`);
       return sendJson(res, 202, { ok: true, question, started: false });
+    }
+
+    // ---- the one way a tree's pipeline changes ---------------------------------------------------------------
+    // POST {path, id}: which definition a tree is on. The route re-reads the tree's own record from disk (a chip's
+    // menu is a claim, not a fact), refuses an id the catalogue does not hold, and applies the ladder strictly
+    // upwards: a downgrade or a sideways swap is a 409 with the sentence and nothing is written. The record's schema
+    // is §3's — `{id, stage, since, history[]}` — and the history entry records the transition, not just the position.
+    //
+    // NOT here, deliberately: starting the new pipeline's first stage as a turn. That is the switching surface's job
+    // (§4.1) and it needs the prompt renderer and the exit-check evaluator, which are later tasks; this route changes
+    // the record the board reads and nothing about a run.
+    if (route === "/api/worktree/pipeline" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const tree = String(body.path || "").trim();
+      if (!tree) return sendJson(res, 400, { error: "a worktree path is required (the row's own path)" });
+      const id = String(body.id || "").trim();
+      if (!id) return sendJson(res, 400, { error: "a pipeline id is required" });
+      const doc = pipelines.doc({ fresh: true });
+      const def = doc.pipelines[id] || null;
+      if (!def) {
+        const dropped = doc.dropped.find((d) => d.id === id) || null;
+        return sendJson(res, 404, {
+          error: dropped
+            ? `pipeline "${id}" is in the catalogue but was dropped: ${dropped.why}`
+            : `no pipeline "${id}" in the catalogue (${Object.keys(doc.pipelines).join(", ") || "none loaded"})`,
+          dropped,
+          refused: doc.refused || null,
+        });
+      }
+      // `from` is the record ON DISK. A tree cut before pipelines has none, and it is LOCAL — that is what the panel
+      // did with it — so it is read as local rather than refused. A record naming a definition the catalogue no
+      // longer holds cannot be judged on the ladder at all, and guessing its rung is exactly the silent downgrade
+      // this rule exists to prevent, so it is refused.
+      const current = pipelineRecords.get(tree, { fresh: true }) || presumedPipeline();
+      let fromKind = "";
+      if (current.id) {
+        const fromDef = doc.pipelines[current.id] || null;
+        if (fromDef) fromKind = String(fromDef.kind || "");
+        else if (current.id === "local") fromKind = "local";
+      } else {
+        fromKind = "local";
+      }
+      if (!fromKind) {
+        return sendJson(res, 409, {
+          error: `this tree's record names "${current.id}", which is not in the catalogue — the change cannot be judged on the ladder, and guessing its kind would be the silent downgrade this rule exists to prevent`,
+          code: "unknown-current",
+          pipeline: current,
+        });
+      }
+      const toKind = String(def.kind || "");
+      const at = new Date().toISOString();
+      const stage = Array.isArray(def.stages) && def.stages.length ? String(def.stages[0].id || "") || null : null;
+      const out = changePipeline(current, { fromKind, toKind, id, stage, by: "reader", why: `the reader chose ${id}`, at });
+      if (!out.ok) {
+        log(`pipeline: refused ${tree} ${current.id || "(none)"} -> ${id}: ${out.error}`);
+        return sendJson(res, 409, { error: out.error, code: out.code, from: current.id || null, fromKind, to: id, toKind, pipeline: current });
+      }
+      pipelineRecords.set(tree, out.pipeline);
+      // The durable file first, then every live card in that tree: a card can never disagree with the record.
+      const touched = jobs.applyPipeline(tree, out.pipeline);
+      log(`pipeline: ${tree} ${current.id || "(none)"} ${fromKind} -> ${id} ${toKind} (stage ${stage || "?"}) — ${touched.cards.length} card(s) updated`);
+      return sendJson(res, 200, {
+        ok: true,
+        path: tree,
+        from: current.id || null,
+        fromKind,
+        id,
+        toKind,
+        stage,
+        pipeline: out.pipeline,
+        cards: touched.cards,
+      });
     }
 
     if (route === "/api/parents" && req.method === "GET") {
