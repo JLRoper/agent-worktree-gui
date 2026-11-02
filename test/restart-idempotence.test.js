@@ -17,6 +17,7 @@ import test from "node:test";
 
 import { Assistant } from "../lib/assistant.js";
 import { RestartController } from "../lib/restart.js";
+import { parseActions } from "../lib/assistant/actions.js";
 import { judgeLanded, pickBase } from "../lib/assistant/landed.js";
 import { resolveExistingTarget } from "../lib/spawn-target.js";
 
@@ -313,6 +314,61 @@ test("a debt whose tree is missing outright is settled as gone", async (t) => {
   assert.equal(assistant.spawnIntents[0].outcome, "landed");
   assert.match(String(assistant.spawnIntents[0].landedWhy), /tree is gone/);
   assert.equal(started.length, 0);
+});
+
+test("a SPAWN line that matches a settled debt is refused, not carried out again", async (t) => {
+  // Settling the debt is bookkeeping on the sentry's loop; the tree is cut by `applyActions`, and that path never
+  // read the debt's outcome. So a line settled as landed could still be carried out — which is exactly what a boot
+  // does when it re-reads one of the assistant's old turns: `harvested` holds 50 turn ids, the oldest fall out, and
+  // the turn reads as one this process never harvested. Measured on the 0.59.0 boot: `065afb5b` was settled
+  // "it names no tree at all" at 10:44:58.691 and the same record was carried out at 10:45:08, cutting a fresh tree
+  // from df3b95d for a brief that had landed as #212.
+  const p = repo("replay-guard");
+  const gone = path.join(p, ".worktrees", "task-1-make-the-queue-ro-2d2c78");
+  const { assistant, started } = await replayBoard(t, p);
+  assistant.settings.spawn = "auto"; // at `ask` a line becomes a card instead of reaching the spawner
+  const name = path.basename(p);
+  assistant.spawnIntents = [
+    debt({ turnId: "turn-settled", target: name, existing: false, prompt: "the brief whose tree is not there", tree: gone, branch: "wtgui/gone-2d2c78" }),
+  ];
+  await assistant.skipLandedReplays({ force: true });
+  assert.equal(assistant.spawnIntents[0].outcome, "landed", "the debt is settled first");
+
+  await assistant.applyActions({ id: "turn-settled", thread: "panel-assistant", lines: [] }, parseActions(`SPAWN ${name} | the brief whose tree is not there`));
+  assert.equal(started.length, 0, "the settled line cut no tree and started no run");
+  const line = assistant.journal.find((j) => j.kind === "spawn-replay-refused");
+  assert.ok(line, "the refusal is journalled");
+  assert.match(String(line.text), /already landed/);
+  assert.match(String(line.text), /was not carried out again/);
+  assert.equal(assistant.spawnIntents.length, 1, "the refusal did not book a second debt for the same line");
+
+  // …and the same words in a NEW turn are a new line: the guard is about one line, not about the brief.
+  await assistant.applyActions({ id: "turn-new", thread: "panel-assistant", lines: [] }, parseActions(`SPAWN ${name} | the brief whose tree is not there`));
+  assert.equal(started.length, 1, "a new turn's line is still carried");
+});
+
+test("a restart wake settles the debt BEFORE the wake is composed", async (t) => {
+  // The digest rides in the preamble, and the preamble is built when the turn starts — so a settle that runs on
+  // the next sentry pass arrives after the turn has already read the debt. `wakeAfterRestart` therefore settles
+  // first, and this pins the order rather than the outcome: at the moment the wake is composed, the debt must
+  // already read landed.
+  const p = repo("replay-order");
+  const vanished = path.join(p, ".worktrees", "vanished-brief-order");
+  const { assistant } = await replayBoard(t, p);
+  assistant.spawnIntents = [debt({ turnId: "turn-order", target: vanished, tree: vanished, branch: "wtgui/vanished-order" })];
+  const composed = [];
+  assistant.say = async (text) => {
+    composed.push({ outcome: assistant.spawnIntents[0].outcome, text: String(text) });
+    return { id: "wake-job" };
+  };
+
+  await assistant.wakeAfterRestart([], { target: "gateway", reason: "the gate's own restart" });
+  await sleep(350);
+  assert.equal(composed.length, 1, "the restart produced one wake");
+  assert.equal(composed[0].outcome, "landed", "the debt was already settled when the wake was composed");
+  assert.equal(assistant.spawnIntents[0].outcome, "landed");
+  assert.doesNotMatch(assistant.digest(), /the brief whose tree is not there/, "the digest the turn would read carries no owed line");
+  assert.match(composed[0].text, /settled before this wake/, "the wake says it settled one, so the reader is not left inferring a silent pass");
 });
 
 test("a live tree holding work main does not have is NOT settled — the skip must not over-reach", async (t) => {
