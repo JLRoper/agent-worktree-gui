@@ -596,6 +596,19 @@ function saveShowOldProjects() {
 
 const normPath = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "");
 
+// ---- the project a card's tree belongs to ---------------------------------------------------
+// A card inside a tree should not spend its chrome on the bare word "worktree": every card on that row is
+// one. What the head cannot show is which REPOSITORY the tree was cut from, and that is the segment above
+// `.worktrees` — the project's own directory:
+//   C:/ProjectDevelopment/agent-worktree-gui/.worktrees/foo-1234  ->  agent-worktree-gui
+// A path with no `.worktrees` in it (the project's own checkout, a tree cut by hand somewhere else) resolves
+// nothing, and the card keeps the bare word.
+function projectOfTree(p) {
+  const parts = normPath(p).split("/").filter(Boolean);
+  const at = parts.lastIndexOf(".worktrees");
+  return at > 0 ? parts[at - 1] : "";
+}
+
 // Longest matching scan root wins, so a nested root groups under the more specific folder.
 // No match means the project lives outside every root: group it under its own parent folder.
 function rootOf(project) {
@@ -4232,21 +4245,6 @@ function conversationHtml(conv) {
   const whenHtml = latest.lastActiveAt
     ? `<span class="job-when mono" data-when="${esc(thread)}" title="last used ${esc(new Date(latest.lastActiveAt).toLocaleString())}">${esc(fmtAgo(latest.lastActiveAt))}</span>`
     : "";
-  const meta = [
-    // cwd is no longer listed here: it has its own line under the card's head, on every card, titled
-    // or not.
-    // Why this card is in the unattached panel: it has no worktree, or one that is not in the scan.
-    homeless ? (latest.ownerPath ? `owner ${latest.ownerPath} (not in the scan)` : "no worktree") : null,
-    // With usage figures present the model leads that strip instead (it is what the numbers belong to);
-    // without them this line is the only place it can appear.
-    latest.stats ? null : latest.model ? `model ${latest.model}` : "(default model)",
-    latest.worktree ? `worktree ${latest.worktree}` : null,
-    latest.baseCheckout ? "in the project checkout (no worktree)" : latest.existing ? "in existing worktree" : null,
-    turns.length > 1 ? `${turns.length} turns` : null,
-    // The run id is bookkeeping and it now sits at the end of the row, to the right of the turn count,
-    // instead of leading the line.
-    latest.runId ? `run ${String(latest.runId).replace(/^run_/, "").slice(0, 8)}` : null,
-  ].filter(Boolean).join(" · ");
   // Where this agent is actually working — the top of every card, one quiet line. A card is re-read to
   // answer "which tree is this one in", and that fact used to appear only on a card whose session never
   // got a title. Only the last segments are drawn; the full path, and the row this agent is filed under
@@ -4259,6 +4257,30 @@ function conversationHtml(conv) {
     cwdRow && cwdRow !== cwdHere ? `worktree row: ${cwdRow}` : null,
     latest.worktree ? `worktree: ${latest.worktree}` : null,
   ].filter(Boolean).join("\n");
+  // The run id is bookkeeping, but it is the id the reader quotes back to the gateway, and a row of its own
+  // cost a line of chrome for eight characters. It rides the cwd line now, beside the path it belongs to.
+  const runIdShort = latest.runId ? String(latest.runId).replace(/^run_/, "").slice(0, 8) : "";
+  // The head's meta line is built after the cwd line because the run id now lives there — it stays on this
+  // line only for a card with no cwd line to draw it on.
+  const meta = [
+    // cwd is no longer listed here: it has its own line under the card's head, on every card, titled
+    // or not.
+    // Why this card is in the unattached panel: it has no worktree, or one that is not in the scan.
+    homeless ? (latest.ownerPath ? `owner ${latest.ownerPath} (not in the scan)` : "no worktree") : null,
+    // With usage figures present the model leads that strip instead (it is what the numbers belong to);
+    // without them this line is the only place it can appear.
+    latest.stats ? null : latest.model ? `model ${latest.model}` : "(default model)",
+    // The project the tree was cut from, where the bare word "worktree" used to stand — every card in this
+    // row is one, so the word says nothing and the repository is what the reader cannot see. A tree path
+    // that resolves no project keeps the bare word.
+    latest.worktree
+      ? `${projectOfTree(latest.worktreePath || latest.ownerPath || latest.cwd) || "worktree"} ${latest.worktree}`
+      : null,
+    latest.baseCheckout ? "in the project checkout (no worktree)" : latest.existing ? "in existing worktree" : null,
+    turns.length > 1 ? `${turns.length} turns` : null,
+    // …and the run id stays on this line only for the card with no cwd line to put it on.
+    runIdShort && !cwdLine ? `run ${runIdShort}` : null,
+  ].filter(Boolean).join(" · ");
   // The session's name and the card's own controls, built once because a minimized card draws them on the cwd
   // line instead of in the head. In the head the spacer pushed the name to the right edge, hard against these
   // buttons, and its tail was cut off under them; on the cwd line the row reads left to right — cwd, then the
@@ -4276,6 +4298,9 @@ function conversationHtml(conv) {
     ? `<div class="job-cwd" title="${esc(cwdTitle)}">` +
       `<span class="cwd-label">cwd</span>` +
       `<span class="cwd-path mono">${esc(tailPath(cwdLine))}</span>` +
+      (runIdShort
+        ? `<span class="cwd-run mono" title="the gateway run this card is attached to — ${esc(latest.runId)}">run ${esc(runIdShort)}</span>`
+        : "") +
       (cwdRow && cwdHere && cwdRow !== cwdHere
         ? `<span class="cwd-row mono" title="the worktree row this agent is filed under">row ${esc(tailPath(cwdRow, 2))}</span>`
         : "") +
