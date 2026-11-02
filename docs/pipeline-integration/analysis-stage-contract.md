@@ -646,7 +646,36 @@ stale under the two landings, this document carries the re-read anchor, not the 
 The guide copy, the text extraction used to read it, the base re-anchor after `a0ecde3` and `b4ee813`, every verdict,
 the counts and the anti-pattern table's verdict words are this run's own work.
 
-## 9. Sources
+## 9. Second independent reading, and where the two passes part
+
+Added by the retry tree `task-48-retry-analysis-a-974632`, which was tasked with the same analysis and did not read
+this document while doing it: it read the same guide, `lib/pipelines.js`, `pipelines.seed.json`, `docs/pipelines.md`
+and `docs/pipelines-audit.md` at the same base (`b4ee813`), and the four model files are byte-identical here (§10,
+the same sha256s). Its full text is not reproduced because it repeats §1–§5; this section records where it agrees,
+where it scored differently, and how the difference was settled.
+
+**The two passes agree on the fields, verdict for verdict.** The same 3 already there (f01, f02, f10), the same 7
+absent (f03, f04, f05, f07, f08, f09, f11) and the same 2 contradicts (f06 trigger-as-position, f12 unenforced prose
+must-nots). They also agree on the structural facts behind the verdicts — a stage is four keys, no prompt renderer
+exists, nothing evaluates an exit, `PIPELINE_SWITCH_STARTS_TURN` is false — and on the three disagreements that would
+hurt most: f10's single unevidenced exit against the composite s02 f10 and s06 require, f09's missing artifact with
+C3 locked at 2, and f06's position in place of a predicate, which is why `wait → address → wait` has no edge.
+
+**They scored C5 and A4 differently, and the stricter reading here stands on re-check.**
+
+- **C5, author ≠ judge.** The retry pass scored 1, reading panel-side code as the "separate role" of the 1 anchor.
+  Nothing evaluates an exit (`lib/pipelines.js:40-41`) and no judging identity exists in the record
+  (`lib/pipelines.js:507-515`), so there is no judge at all — and s03 C5 says *role*. 0, as §2 has it.
+- **A4, mandatory self-check.** The retry pass scored 1, crediting the exit check as the agent's self-check. The check
+  belongs to the panel; the worker is never asked to run it, and the report shape is a sentence
+  (`pipelines.seed.json:14`). The 1 anchor is "runs the check but reports a sentence"; the worker does not run it. 0,
+  as §3 has it.
+
+So the retry pass's totals — 3 of 16 and 2 of 10 — are one point high on each rubric, and its corrections land exactly
+on this document's **2 of 16** and **1 of 10**. That is the useful result of a second pass: the field verdicts are
+independently reproduced, and the two soft scores were the only place the two readings diverged.
+
+## 10. Sources
 
 | File | sha256 | What it supplied |
 |---|---|---|
