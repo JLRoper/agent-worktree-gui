@@ -317,8 +317,8 @@ try {
     await page.waitForSelector("#as-subtabs", { state: "visible" });
 
     const sub = await page.$$eval("#as-subtabs button", (els) => els.map((el) => ({ key: el.dataset.asSubtab, label: el.innerText.trim() })));
-    check("the session's row now ends in a Queue tab", sub.map((s) => s.key), ["chat", "settings", "queue"]);
-    check("…labelled", sub.map((s) => s.label), ["Chat", "Settings", "Queue"]);
+    check("the session's row now ends in a Queue tab", sub.map((s) => s.key), ["chat", "settings", "queue", "worktrees"]);
+    check("…labelled", sub.map((s) => s.label), ["Chat", "Settings", "Queue", "Worktrees"]);
 
     await page.click('#as-subtabs [data-as-subtab="queue"]');
     await page.waitForSelector("#as-queue:not(.hidden)");

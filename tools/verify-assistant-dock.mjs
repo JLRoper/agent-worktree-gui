@@ -287,7 +287,7 @@ async function main() {
         check(view.paneHoldsChat, "the Assistant #1 pane IS the chat, not an empty surface beside it");
         eq(view.tabs, ["assistant-1", "alerts", "watches", "messages", "pad", "role", "watchdog"],
           "every tab the rail had is still there");
-        eq(view.subs.map((s) => s.tab), ["chat", "settings", "queue"], "and every sub-tab");
+        eq(view.subs.map((s) => s.tab), ["chat", "settings", "queue", "worktrees"], "and every sub-tab");
       }
 
       // ---- 10. no page errors anywhere in the run

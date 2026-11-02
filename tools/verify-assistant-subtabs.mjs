@@ -237,10 +237,9 @@ async function browserPhase(pw) {
   ok("and it is the tab on screen", top.filter((t) => t.on).map((t) => t.tab).join() === "assistant-1", JSON.stringify(top.filter((t) => t.on)));
 
   const sub = await subRows();
-  // Three sub-tabs since every assistant got its own task queue: the queue landing updated the page and
-  // test/assistant-subtabs.test.js and left this gate asserting two, so it was red on main before this branch.
-  check("the session's own row", sub.map((s) => s.sub), ["chat", "settings", "queue"]);
-  check("…labelled", sub.map((s) => s.label), ["Chat", "Settings", "Queue"]);
+  // Four sub-tabs: Chat, Settings, Queue and the Worktrees tab the owner-stamped trees show in.
+  check("the session's own row", sub.map((s) => s.sub), ["chat", "settings", "queue", "worktrees"]);
+  check("…labelled", sub.map((s) => s.label), ["Chat", "Settings", "Queue", "Worktrees"]);
   ok("Chat is the sub-tab on screen", sub.filter((s) => s.on).map((s) => s.sub).join() === "chat", JSON.stringify(sub.filter((s) => s.on)));
   ok("the second row is up with the session", await visible("#as-subtabs"));
 
