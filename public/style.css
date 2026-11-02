@@ -234,7 +234,16 @@ button.primary:hover { background: #24466a; }
 .settings-body::-webkit-scrollbar-track { background: var(--panel); }
 .settings-body::-webkit-scrollbar-thumb { background: #39424f; border: 2px solid var(--panel); border-radius: 999px; }
 .settings-body::-webkit-scrollbar-thumb:hover { background: #4b5666; }
-.settings-head { display: flex; align-items: center; gap: 8px; flex: none; margin: 0; padding: 12px 14px 9px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.settings-head { display: flex; align-items: center; gap: 8px; flex: none; margin: 0; padding: 12px 14px 9px; border-bottom: 1px solid var(--line); background: var(--panel); cursor: grab; }
+/* The panel is a WINDOW: its head is the bar a drag starts from — a press on one of the controls in it stays that
+   control's, which the script checks on the target — and the corner grip is the one place a resize starts. Both say
+   so with their cursor, and a gesture in progress is what stops the drag selecting the panel's own text. */
+.settings-grip { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; border-bottom-right-radius: 8px; color: var(--dimmer); cursor: nwse-resize; touch-action: none; }
+.settings-grip::before { content: ""; position: absolute; right: 3px; bottom: 3px; width: 9px; height: 9px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; border-top-right-radius: 1px; }
+.settings-grip::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 4px; height: 4px; border-right: 1px solid currentColor; border-bottom: 1px solid currentColor; }
+.settings-grip:hover { color: var(--dim); background: var(--surface); }
+.settings.is-moving, .settings.is-sizing { user-select: none; }
+.settings.is-moving .settings-head { cursor: grabbing; }
 .settings-group { padding-top: 10px; }
 .settings-group + .settings-group { margin-top: 10px; border-top: 1px solid var(--line); }
 /* A group folds from its heading. The head is the control (role="button" in the markup): the caret says which way
@@ -251,7 +260,7 @@ button.primary:hover { background: #24466a; }
 .settings-group.folded .settings-group-head { margin-bottom: 0; }
 /* The search box sits in the fixed head, so it is on screen whichever group is open — and with every group folded
    it is the panel's first control (it takes the focus when the panel opens). */
-.settings-head input[type="search"] { flex: 0 1 240px; min-width: 76px; margin-left: 4px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font: 11.5px var(--mono); }
+.settings-head input[type="search"] { flex: 0 1 240px; min-width: 76px; margin-left: 4px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font: 11.5px var(--mono); cursor: text; }
 .settings-head input[type="search"]::placeholder { color: var(--dimmer); }
 /* One clear control, not two: the panel's own ✕ answers Esc, so the browser's built-in one is hidden. */
 .settings-head input[type="search"]::-webkit-search-cancel-button { display: none; }
