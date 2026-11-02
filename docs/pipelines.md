@@ -142,6 +142,18 @@ seed record reaches an existing install without the reader merging anything, and
   the panel says which one and why. The rest of the catalogue loads: one bad pipeline must not take the board's
   switching surface with it.
 
+### 1.6 The catalogue, drawn
+
+`npm run render:pipelines` writes the whole catalogue as ONE self-contained page per release —
+`docs/pipelines/viz/pipelines-<version>.html` — with mermaid inlined, so it opens with no network at all. Every
+definition is drawn from the same loader the panel runs (`readPipelinesFile` + `mergeDocs`, §1.5): the stages in
+order, each exit check and its parameters on the arrow that leaves its stage, the holes a prompt may have, the
+chain a definition ends on, and the ladder a tree climbs. The page names every file it read with its sha256, its
+own version and the moment it was generated; `docs/pipelines/viz/index.html` lists every render in the folder
+newest first, so the folder itself is the history and a render whose hash no longer matches the file is visibly
+stale. `node tools/verify-pipelines-viz.mjs` re-renders into a temp file and asserts the picture still matches the
+JSON.
+
 ---
 
 ## 2. Per-project defaults, beside `remoteBranchPolicy`

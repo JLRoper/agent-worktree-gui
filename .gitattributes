@@ -8,3 +8,10 @@
 # both the blob and every checkout as the reader's own file, and it is scoped to this folder so no existing
 # file's checkout changes.
 data/roles/** -text
+
+# The vendored mermaid bundle and the renders that inline it are byte-for-byte artefacts: a render quotes the
+# bundle's sha256 and node tools/verify-pipelines-viz.mjs asserts the bundle sits inside the page. A CRLF
+# checkout would change both files' bytes and quietly make both claims false. `-text` keeps the blob and every
+# checkout as they were written, scoped to these folders so no existing file's checkout changes.
+tools/vendor/** -text
+docs/pipelines/viz/** -text
