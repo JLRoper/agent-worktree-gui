@@ -2124,8 +2124,9 @@ const server = createServer(async (req, res) => {
         return sendJson(res, (e && e.code) === "role-unknown" ? 404 : 400, { error: String((e && e.message) || e) });
       }
     }
-    // One assistant's own profile: the default role prompt it runs on, and the two optional whitelists that decide
-    // which projects it is shown and where it may spawn. One route for the three fields because they are one file
+    // One assistant's own profile: the default role prompt it runs on, the two optional whitelists that decide
+    // which projects it is shown and where it may spawn, and the escalation list it would hand a subject to (stored;
+    // nothing acts on it yet). One route for the four fields because they are one file
     // beside that assistant's charter — a save of any of them writes that file whole, and a field left out of the
     // body keeps what the file already holds. `assistantId` defaults to #1, whose file carries only these two keys
     // (its knobs stay in assistant.json).
@@ -2137,6 +2138,9 @@ const server = createServer(async (req, res) => {
           prompt: body.prompt,
           projects: body.projects,
           worktrees: body.worktrees,
+          // The ordered escalation list. Stored and inert: the route carries it because it is one field of the same
+          // per-assistant file, and nothing in the wake path reads it yet.
+          escalateTo: body.escalateTo,
         });
         return sendJson(res, 200, { ...out, assistant: assistant.state() });
       } catch (e) {

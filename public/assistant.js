@@ -22,7 +22,7 @@
   // The lists that are the assistant's own. The SESSIONS are deliberately NOT in here: they come from the assistant
   // records the server sends (`state.assistant.assistants`), so "Assistant #2" is one more record and no new branch
   // anywhere — the button, the pane and the sub-row are all built from that list, on every paint.
-  const LISTS = ["alerts", "watches", "messages", "pad", "role"];
+  const LISTS = ["alerts", "watches", "messages", "pad", "role", "watchdog"];
   // What a session holds: the card you talk to, and how it behaves.
   const SUBTABS = ["chat", "settings"];
   const FIRST_ASSISTANT = "assistant-1";
@@ -813,6 +813,7 @@
     else if (view.assistant === "messages") renderAssistantMessages();
     else if (view.assistant === "pad") renderAssistantPad();
     else if (view.assistant === "role") renderAssistantRole();
+    else if (view.assistant === "watchdog") renderWatchdog();
   }
 
   // ---- chat: the assistant as one of the agents -------------------------------------------------
@@ -1571,6 +1572,14 @@
 
   // ---- settings -------------------------------------------------------------------------------
 
+  // WHICH PANE OWNS A KNOB is the SERVER's answer (`state.assistant.settingScope`, from
+  // lib/assistant/config.js's SETTINGS_SCOPE), never a copy kept here. A second opinion on the page would drift
+  // from the store the first time a knob was added, and a key drawn in both panes is two controls for one value.
+  // An unknown key falls to the watchdog pane — the panel-wide side — so a stale page can never draw an
+  // assistant's key twice.
+  const scopeOfKey = (key) => (state.assistant && state.assistant.settingScope && state.assistant.settingScope[key]) || "watchdog";
+  const ownsWatchdog = (key) => scopeOfKey(key) === "watchdog";
+
   // The assistant's select is built by the board's own option builder (public/app.js), over the shared
   // picker's rows and the one price table: same ids, same order, same price and rating text as the spawn
   // form. Nothing about models is decided here. A saved model the catalogue no longer lists is handed in
@@ -1593,21 +1602,13 @@
     return known ? [] : [{ id, name: `${id} (not in the catalogue)` }];
   }
 
-  // A saved model the catalogue no longer lists still gets a row in the shared picker — checked, so the list
-  // never reads as "nothing is chosen" while a model is in force.
-  function assistantModelExtra(value) {
-    const id = String(value || "");
-    if (!id) return [];
-    const d = typeof modelsState === "undefined" ? null : modelsState;
-    const known = (d?.providers || []).some((p) => (p.models || []).includes(id));
-    return known ? [] : [{ id, name: `${id} (not in the catalogue)` }];
-  }
-
   // Which threshold feeds which rule, and the words the disclosure uses for it: the RULE id is the row that
   // consumes the knob, so a bar cannot be drawn under a rule that does not read it. A rule with no entry has
   // nothing to tune — question, noevidence, collision, interrupted, settle, watch, spawnidle, spawnlost and
   // errorloop are judgement calls, and errorloop shares the loop's "same call" bar rather than owning one.
   // The bounds are the config module's (`pickSettings`), repeated here because the input has to carry them.
+  // Two of them (`quietSeconds`, `childQuietSeconds`) are an ASSISTANT's quiet windows rather than the pass's,
+  // so the watchdog pane filters them out of the rule it would otherwise draw them under.
   const RULE_THRESHOLDS = {
     loop: [{ key: "repeatLimit", min: 2, max: 12, before: "same call ×", after: "" }],
     quiet: [{ key: "quietSeconds", min: 30, max: 3600, before: "silent for", after: "s" }],
@@ -1660,47 +1661,223 @@
     return `${list.length} threshold${list.length === 1 ? "" : "s"} · ${values}`;
   }
 
-  // A second assistant's Settings: ITS OWN knobs, not a pointer at Assistant #1's.
+  // Aggressive mode holds keys on BOTH sides of the split — the pass clock and the wake budget as well as the
+  // rules — so each pane answers for the keys it draws: disabled, marked, and explained in the control's title.
+  // The switch-off button lives on the watchdog pane only; two buttons under one id would be a second control
+  // for one action, and the assistant pane already names where it is.
+  function heldSets(a) {
+    const agg = a.aggressive || {};
+    return {
+      agg,
+      knobs: new Set(agg.on ? (agg.holds && agg.holds.settings) || [] : []),
+      rules: new Set(agg.on ? (agg.holds && agg.holds.rules) || [] : []),
+    };
+  }
+
+  function heldBanner(agg, owned, { button = false } = {}) {
+    if (!agg.on) return "";
+    const held = ((agg.holds && agg.holds.settings) || []).filter((k) => owned.has(k));
+    if (!held.length && !button) return "";
+    const savedLine = agg.restore
+      ? `${agg.restore.present} of your own value${agg.restore.present === 1 ? "" : "s"} come back when it is switched off; ${agg.restore.absent} key${agg.restore.absent === 1 ? "" : "s"} that were absent will be deleted again so they follow their default.`
+      : "";
+    return `<div class="as-group as-held">
+        <h4>⚡ Aggressive mode is holding these</h4>
+        <div class="as-help">The settings and rules marked <b>held</b> ${button ? "below" : "in this tab"} are set to the aggressive profile and cannot be changed${
+          button
+            ? ` from this tab. Switch aggressive mode off with the <b>⚡ Aggressive</b> button in the header (Alt+Shift+A) and they are put back exactly as you had them — ${esc(savedLine)}`
+            : `. Switch it off with the <b>⚡ Aggressive</b> button in the header (Alt+Shift+A), or from the <b>Watchdog</b> tab`
+        }</div>
+        ${button ? `<div class="as-line"><button type="button" id="btn-as-aggressive-off" title="switch aggressive mode off and put your own settings back">Switch aggressive mode off</button></div>` : ""}
+      </div>`;
+  }
+
+  // THE WATCHDOG: the panel's one sentry.
   //
-  // Every control drawn here is read by that assistant's own turns through `settingsFor(id)` in lib/assistant.js —
-  // its switch, its autonomy (what it may send without a click), its spawn mode, its model, its working directory and
-  // its command audit. What is deliberately NOT drawn is the sentry's clock, the wake budget and the per-rule
-  // escalation table: the panel runs ONE sentry and it is Assistant #1's, so a second copy of those controls would be
-  // two controls for one value — which is exactly what the reader reported as "#2's settings are really #1's".
-  function renderAssistantRules(id, host) {
-    const rec = sessionById(id);
-    const n = String(id).replace(/^assistant-/, "");
-    const rules = Array.isArray(rec?.rules) ? rec.rules : [];
+  // One value for the whole panel, which is why it is a tab of the float rather than a sub-tab of an assistant:
+  // one pass over the board, one journal, one escalation table. A copy under each assistant would be several
+  // controls for one value — the defect the per-assistant split exists to remove. What it draws is exactly the
+  // keys lib/assistant/config.js marks `watchdog`; an assistant's own settings are in that assistant's Settings.
+  function renderWatchdog(force = false) {
+    const host = as$("as-watchdog");
+    if (!host || !state.assistant) return;
+    if (!force && typingInside("#as-watchdog")) return;
     const a = state.assistant;
-    // This assistant's own settings, from the map the server resolves out of its profile file. Never #1's: a pane
-    // that silently borrows #1's values is the bug this pane replaces.
-    const s = (a.assistantSettings || {})[id] || {};
+    const s = a.settings;
+    const defs = a.ruleDefs || {};
+    const levels = a.escalations || ["log", "alert", "wake", "act"];
+    const health = a.health || {};
+    const hs = sentryState(health);
+    const lastPass = health.lastTickAt ? `${Math.max(0, Math.round((Date.now() - health.lastTickAt) / 1000))}s ago` : "not yet";
+    const { agg, knobs, rules: heldRules } = heldSets(a);
+    const dis = (key) => (knobs.has(key) ? ' disabled title="aggressive mode holds this setting — switch it off in the header to change it"' : "");
+    const disRule = (id) => (heldRules.has(id) ? ' disabled title="aggressive mode holds this rule — switch it off in the header to change it"' : "");
+    // Read once per paint: a repaint recreates every disclosure, so the remembered ones are reopened from here
+    // rather than from a class left behind on an element that no longer exists.
+    const openThresholds = thresholdsOpen();
+    const owned = new Set(Object.keys(a.settingScope || {}).filter((k) => ownsWatchdog(k)));
+    host.innerHTML = `
+      ${heldBanner(agg, owned, { button: true })}
+      <div class="as-group">
+        <h4>The watchdog</h4>
+        <div class="as-help">This panel runs ONE watchdog: one pass over the board, one journal and one escalation
+        table, whichever assistants exist. Everything in this tab is the panel's, so it is set once. What belongs to
+        one assistant — its model, its autonomy, its spawn mode, its wake budget and quiet windows — is in that
+        assistant's <b>Settings</b> tab; its role prompt and its two whitelists are in its <b>Role</b> tab.</div>
+        <div class="as-line">
+          <label${knobs.has("enabled") ? ' class="as-held-label"' : ""}>watching <input type="checkbox" data-as-set="enabled"${s.enabled ? " checked" : ""}${dis("enabled")}></label>
+          <label${knobs.has("commandAudit") ? ' class="as-held-label"' : ""} title="every command line an assistant turn writes is counted against what the panel did with it: the eight kinds, one ledger per turn. report raises a red card naming the turn, the kind and how many lines were read and never carried out, and writes that to the journal the digest reads. enforce does the same and then carries those lines out once on the next pass — never a line that already ran. A near-miss line (a known prefix that misses its shape) is journalled as unparsed instead of vanishing.">command audit <select data-as-set="commandAudit"${dis("commandAudit")}>${(a.commandAuditModes || ["off", "report", "enforce"]).map((v) => `<option value="${v}"${s.commandAudit === v ? " selected" : ""}>${v === "off" ? "off — nothing is checked" : v === "report" ? "report — red card and journal" : "enforce — also replay once"}</option>`).join("")}</select></label>
+        </div>
+        <div class="as-line"><label${knobs.has("spawnAutoStart") ? ' class="as-held-label"' : ""} title="a spawn card with no run behind it is always named after about two minutes. With this on, the panel starts that card once by itself instead of only telling you — it never retries a card it has already tried, and a card you discarded is never started">auto-start a stuck card <input type="checkbox" data-as-set="spawnAutoStart"${s.spawnAutoStart ? " checked" : ""}${dis("spawnAutoStart")}></label><span class="as-hint">one attempt, never a retry — off by default</span></div>
+        <div class="as-help"><b>watching</b> is the alert switch: while it is off no rule is evaluated at all, so nothing is noticed and nothing is journalled. <b>command audit</b> is the journal's other half: off reads nothing, report raises a red card and a journal line, enforce also carries out the lines nothing accounted for. With auto-start on, a card nobody clicked is started once by the panel rather than only being named.</div>
+        <div class="as-help">sentry: ${hs ? `<b>${esc(hs)}</b> — the server watchdog restarts the clock and runs a missed pass` : "clock running"} · last pass ${esc(lastPass)} · every ${esc(String(health.everySeconds || s.seconds))}s${health.resumed ? " · resumed after a restart" : ""}</div>
+      </div>
+      <div class="as-group">
+        <h4>Every pass</h4>
+        <div class="as-line"><label${knobs.has("seconds") ? ' class="as-held-label"' : ""} title="how often the sentry looks at the board">pass every <input type="number" min="2" max="120" data-as-set="seconds" value="${s.seconds}"${dis("seconds")}> s</label></div>
+        <div class="as-help">One pass is one look at every card, approval and watch. The bar each rule fires on sits
+        under the rule itself below, except the two quiet windows, which are an assistant's rather than the pass's.</div>
+      </div>
+      <div class="as-group">
+        <h4>Per-rule escalation</h4>
+        ${Object.entries(defs)
+          .map(([id, def]) => {
+            const all = RULE_THRESHOLDS[id] || [];
+            // Only the bars the PASS owns are drawn here; the two quiet windows are the assistant's own numbers,
+            // and drawing them here as well is the duplicate this split removes.
+            const thresholds = all.filter((t) => ownsWatchdog(t.key));
+            const elsewhere = all.filter((t) => !ownsWatchdog(t.key));
+            // The disclosure sits directly under the row it feeds, closed unless the reader left it open. Its
+            // summary names the value in force, so a rule row and its bar read as one thing even folded.
+            const disclosure = thresholds.length
+              ? `<details class="as-rule-thresholds" data-as-rule-thresholds="${esc(id)}"${openThresholds.has(id) ? " open" : ""}>
+              <summary title="the bar this rule fires on — open to change it">${esc(thresholdSummary(thresholds, s))}</summary>
+              <div class="as-line">${thresholds
+                .map(
+                  (t) => `<label${t.title ? ` title="${esc(t.title)}"` : ""}>${esc(t.before)} <input type="number" min="${t.min}" max="${t.max}" data-as-set="${t.key}" value="${s[t.key]}"${dis(t.key)}>${t.after ? ` ${esc(t.after)}` : ""}</label>`,
+                )
+                .join("")}</div>
+              ${id === "loop" ? `<div class="as-help">Raise this if “same call” is noisy on your agents — an identical error repeating is judged on the same bar.</div>` : ""}
+            </details>`
+              : "";
+            const movedHelp = elsewhere.length
+              ? `<div class="as-help">Its bar — ${esc(elsewhere.map((t) => `${t.before} ${s[t.key]}${t.after ? ` ${t.after}` : ""}`).join(" · "))} — is a quiet window of an assistant's, set in that assistant's <b>Settings</b> tab.</div>`
+              : "";
+            return `<div class="as-rule-row">
+              <span class="as-rule-name"><b>${esc(def.label)}</b><i>${esc(def.hint)}</i></span>
+              <select data-as-rule="${esc(id)}"${disRule(id)}>${levels.map((v) => `<option value="${v}"${s.rules[id] === v ? " selected" : ""}>${v}</option>`).join("")}</select>
+            </div>${disclosure}${movedHelp}`;
+          })
+          .join("")}
+        <div class="as-help">log keeps it in the journal · alert shows it under Alerts · wake asks the assistant about it (rate limited) · act wakes it and lets it send a reply when autonomy allows.</div>
+        <div class="as-help">Leftover work and a silent child are judged from what the board and the gateway already know — no extra git or sqlite pass.</div>
+      </div>
+      <div class="as-group">
+        <h4>Now</h4>
+        <div class="as-line">
+          <button type="button" id="btn-as-check" title="one sentry pass, no waiting for the clock">Check the board now</button>
+          <button type="button" id="btn-as-wake" title="ask the assistant what it sees — one turn">Ask what it sees</button>
+          <span class="as-err" id="as-watchdog-err"></span>
+        </div>
+        <div class="as-help">${a.wakes.lastHour}/${a.wakes.limit} wakes in the last hour${a.wakePending ? ` · ${a.wakePending} queued behind the running turn` : ""} · scratchpad at ${esc(a.settings.model || "(gateway default model)")}</div>
+      </div>`;
+    // Each threshold disclosure remembers itself. `toggle` does not bubble, and this repaint replaces the
+    // elements rather than mutating them, so the listener goes on the new element every time.
+    for (const d of host.querySelectorAll?.("details.as-rule-thresholds") || []) {
+      d.addEventListener("toggle", () => rememberThresholdOpen(d));
+    }
+  }
+
+  // ONE ASSISTANT'S OWN SETTINGS.
+  //
+  // Every control drawn here is read through `settingsFor(id)` in lib/assistant.js out of that assistant's own
+  // file. Assistant #1's are the live settings object the panel booted with; a second assistant's come from the
+  // server's per-assistant map, so a pane can never silently borrow #1's values — the bug this tab replaces.
+  // What is deliberately NOT drawn: the pass clock, the command audit and the per-rule escalation table. The panel
+  // runs ONE sentry, so those are the Watchdog tab's, and a second copy here would be two controls for one value.
+  function renderAssistantSettings(id = activeSessionId(), force = false) {
+    const host = hostFor(id, "settings");
+    if (!host || !state.assistant) return;
+    if (!force && typingInside(`#${paneIdFor(id, "settings")}`)) return;
+    const a = state.assistant;
+    const first = id === FIRST_ASSISTANT;
+    const rec = sessionById(id);
+    const s = first ? a.settings : (a.assistantSettings || {})[id] || {};
     const autonomy = a.autonomy || ["draft", "auto-safe", "auto"];
     const autonomyLabel = {
       draft: "draft only — nothing is sent without my click",
       "auto-safe": "auto-safe — send what the assistant writes",
       auto: "auto — send any draft it has text for",
     };
+    const { agg, knobs } = heldSets(a);
+    const dis = (key) => (knobs.has(key) ? ' disabled title="aggressive mode holds this setting — switch it off in the header to change it"' : "");
+    const owned = new Set(Object.keys(a.settingScope || {}).filter((k) => !ownsWatchdog(k)));
+    const n = String(id).replace(/^assistant-/, "");
+    const nameOf = (x) => sessionById(x)?.name || String(x);
+    // The escalation list, in the order the reader put it, minus this assistant itself (it can never hand a subject
+    // to itself) and minus the assistants this one already names.
+    const escList = ((a.escalateTo || {})[id] || []).filter((x) => x !== id);
+    const escOthers = assistantIds().filter((x) => x !== id && !escList.includes(x));
+    const rules = Array.isArray(rec?.rules) ? rec.rules : [];
     host.innerHTML = `
+      ${heldBanner(agg, owned)}
       <div class="as-group">
-        <h4>${esc(rec?.name || "Assistant")}'s settings — its own, not Assistant #1's</h4>
-        <div class="as-help">Every knob here is read by THIS assistant's own turns, from its own file
+        <h4>${first ? "How it behaves" : `${esc(rec?.name || "Assistant")}'s settings — its own, not Assistant #1's`}</h4>
+        ${first
+          ? `<div class="as-help">What THIS assistant's own turns do: what it may send without a click, whether it may
+        start a worker, the model it runs on and the directory it runs in. Nothing here changes another assistant.</div>`
+          : `<div class="as-help">Every knob here is read by THIS assistant's own turns, from its own file
         <code>${esc(String(rec?.profile?.path || `assistants/${id}/settings.json`))}</code>. Changing one never
-        changes Assistant #1's settings, and changing #1's never changes these.</div>
+        changes Assistant #1's settings, and changing #1's never changes these.</div>`}
         <div class="as-line">
-          <label>watching <input type="checkbox" data-as-set="enabled" data-as-for="${esc(id)}"${s.enabled !== false ? " checked" : ""}></label>
-          <label>autonomy <select data-as-set="autonomy" data-as-for="${esc(id)}">${autonomy.map((v) => `<option value="${esc(v)}"${s.autonomy === v ? " selected" : ""}>${esc(autonomyLabel[v] || v)}</option>`).join("")}</select></label>
+          <label${knobs.has("autonomy") ? ' class="as-held-label"' : ""}>autonomy <select data-as-set="autonomy"${first ? "" : ` data-as-for="${esc(id)}"`}${dis("autonomy")}>${autonomy.map((v) => `<option value="${v}"${s.autonomy === v ? " selected" : ""}>${esc(autonomyLabel[v] || v)}</option>`).join("")}</select></label>
         </div>
-        <div class="as-line"><label>create worktrees <select data-as-set="spawn" data-as-for="${esc(id)}" title="whether THIS assistant may cut a worktree and start a worker — ask keeps a one-click card between it and git">${(a.spawnModes || ["off", "ask", "auto"]).map((v) => `<option value="${esc(v)}"${s.spawn === v ? " selected" : ""}>${v === "off" ? "off — it may not start workers" : v === "ask" ? "ask me first" : "start immediately"}</option>`).join("")}</select></label></div>
-        <div class="as-line"><label>command audit <select data-as-set="commandAudit" data-as-for="${esc(id)}" title="what this assistant's written command lines are checked against — off reads nothing, report raises a red card and a journal line, enforce also replays the lines nothing accounted for, once">${(a.commandAuditModes || ["off", "report", "enforce"]).map((v) => `<option value="${esc(v)}"${s.commandAudit === v ? " selected" : ""}>${v === "off" ? "off — nothing is checked" : v === "report" ? "report — red card and journal" : "enforce — also replay once"}</option>`).join("")}</select></label></div>
-        <div class="as-line"><label>model <select data-as-set="model" data-as-for="${esc(id)}" title="the model THIS assistant's turns run on">${modelOptionsHtml(s.model || "")}</select></label></div>
-        <div class="as-line"><label title="the assistant does no work here — the gateway just refuses a run without an existing cwd. It is created if missing; leave empty for a folder beside the job store.">working dir <input type="text" spellcheck="false" data-as-set="cwd" data-as-for="${esc(id)}" value="${esc(s.cwd || "")}" placeholder="default: beside the job store"></label></div>
-        <div class="as-help">The sentry's clock, the wake budget and the per-rule escalation table belong to the panel's one
-        sentry, which is Assistant #1's — so they are not repeated here, where they would be a second control for one
-        value. Its role, its default role prompt and its two whitelists are in the <b>Role</b> tab. Its thread is
-        <code>${esc(rec?.threadId || "")}</code>.</div>
+        <div class="as-line"><label${knobs.has("spawn") ? ' class="as-held-label"' : ""}>create worktrees <select data-as-set="spawn"${first ? "" : ` data-as-for="${esc(id)}"`}${dis("spawn")} title="whether THIS assistant may cut a worktree and start a worker — ask keeps a one-click card between it and git">${(a.spawnModes || ["off", "ask", "auto"]).map((v) => `<option value="${v}"${s.spawn === v ? " selected" : ""}>${v === "off" ? "off — it may not start workers" : v === "ask" ? "ask me first" : "start immediately"}</option>`).join("")}</select></label></div>
+        <div class="as-line"><label${knobs.has("model") ? ' class="as-held-label"' : ""}>model <select data-as-set="model"${first ? "" : ` data-as-for="${esc(id)}"`}${dis("model")} title="the model THIS assistant's turns run on — pick something small and fast; the board digest is the whole input">${modelOptionsHtml(s.model || "")}</select></label></div>
+        <div class="as-line"><label${knobs.has("cwd") ? ' class="as-held-label"' : ""} title="the assistant does no work here — the gateway just refuses a run without an existing cwd. It is created if missing; leave empty for a folder beside the job store.">working dir <input type="text" spellcheck="false" data-as-set="cwd"${first ? "" : ` data-as-for="${esc(id)}"`} value="${esc(s.cwd || "")}" placeholder="default: beside the job store"${dis("cwd")}></label></div>
+        <div class="as-help">Draft-only is the default: a reply reaches a worker only when you press Send on it. Auto-safe
+        sends a reply the assistant itself wrote with a TO line; auto also sends anything a standing rule drafted.
+        Creating a worktree has its own switch — nothing runs until the card is clicked. An approval is never answered
+        from here at any setting.</div>
       </div>
       <div class="as-group">
+        <h4>Its wake budget and quiet windows</h4>
+        <div class="as-line">
+          <label${knobs.has("maxWakesPerHour") ? ' class="as-held-label"' : ""} title="the ceiling on how many times an hour a rule at wake or act may ask THIS assistant">wakes / hour <input type="number" min="0" max="60" data-as-set="maxWakesPerHour"${first ? "" : ` data-as-for="${esc(id)}"`} value="${s.maxWakesPerHour}"${dis("maxWakesPerHour")}></label>
+          <label${knobs.has("quietSeconds") ? ' class="as-held-label"' : ""} title="a running turn that has produced nothing for this long is quiet — the bar the no-new-output rule fires on">quiet after <input type="number" min="30" max="3600" data-as-set="quietSeconds"${first ? "" : ` data-as-for="${esc(id)}"`} value="${s.quietSeconds}"${dis("quietSeconds")}> s</label>
+          <label${knobs.has("childQuietSeconds") ? ' class="as-held-label"' : ""} title="a delegated subagent that writes nothing for this long is worth flagging">child silent <input type="number" min="60" max="3600" data-as-set="childQuietSeconds"${first ? "" : ` data-as-for="${esc(id)}"`} value="${s.childQuietSeconds}"${dis("childQuietSeconds")}> s</label>
+        </div>
+        <div class="as-help">The budget and the two windows are this assistant's own numbers, saved in the same file as
+        its model. The panel runs ONE sentry today and it is Assistant #1's, so it is #1's copies that are read every
+        pass; a second assistant's are stored here and become live when a sentry of its own exists.</div>
+        <div class="as-help">A long build is silent too, which is why “no new output” only journals by default.</div>
+      </div>
+      <div class="as-group">
+        <h4>Escalate to — the assistants this one would hand a subject to</h4>
+        <div class="as-help">An ordered list of this panel's assistants, saved in this assistant's own settings file
+        beside its charter. <b>Nothing acts on it yet</b>: a list here changes no wake and hands nothing over — it is
+        the place a later branch will read the order from, and this pane says so rather than implying a hand-over that
+        never happens.</div>
+        <div class="as-line">
+          <label>add <select id="as-esc-pick-${esc(n)}" data-as-escpick="${esc(id)}"${escOthers.length ? "" : " disabled"}>${escOthers.length ? escOthers.map((x) => `<option value="${esc(x)}">${esc(nameOf(x))}</option>`).join("") : `<option value="">(no other assistant yet)</option>`}</select></label>
+          <button type="button" data-as-escadd="${esc(id)}"${escOthers.length ? "" : " disabled"}>Add</button>
+          <span class="as-hint">first on the list is the one it would try first</span>
+        </div>
+        ${escList.length
+          ? escList
+              .map(
+                (x, i) => `<div class="as-rule-row"><span class="as-rule-name">${i + 1}. ${esc(nameOf(x))} <i>${esc(x)}</i></span>
+                <button type="button" data-as-escmove="up" data-as-escid="${esc(x)}" data-as-escown="${esc(id)}"${i === 0 ? " disabled" : ""} title="move earlier">↑</button>
+                <button type="button" data-as-escmove="down" data-as-escid="${esc(x)}" data-as-escown="${esc(id)}"${i === escList.length - 1 ? " disabled" : ""} title="move later">↓</button>
+                <button type="button" data-as-escdel="${esc(x)}" data-as-escown="${esc(id)}" title="remove from the list">✕</button></div>`,
+              )
+              .join("")
+          : `<div class="as-help">(empty — this assistant hands nothing to another one)</div>`}
+        <div class="as-err" id="as-set-err"></div>
+      </div>
+      ${first
+        ? ""
+        : `<div class="as-group">
         <h4>${esc(rec?.name || "Assistant")}'s rules — its own, not Assistant #1's</h4>
         <div class="as-help">These ride in THIS assistant's preamble, clipped the way every rule is. Adding or
         removing one here never changes Assistant #1's standing rules.</div>
@@ -1717,122 +1894,19 @@
               )
               .join("")
           : `<div class="as-help">(none written down yet)</div>`}
-        <div class="as-err" id="as-set-err"></div>
-      </div>`;
-  }
-
-  function renderAssistantSettings(id = activeSessionId(), force = false) {
-    const host = hostFor(id, "settings");
-    if (!host || !state.assistant) return;
-    if (!force && typingInside(`#${paneIdFor(id, "settings")}`)) return;
-    // A second assistant has ITS OWN rules and nothing else of its own: the knobs below (autonomy, spawn mode, model,
-    // the cwd, the sentry clock) belong to the panel's one sentry, which is Assistant #1's. Drawing them again under
-    // #2 would be two controls for one value, and the reader would be right to think they were #2's.
-    if (id !== FIRST_ASSISTANT) return renderAssistantRules(id, host);
-    const a = state.assistant;
-    const s = a.settings;
-    const defs = a.ruleDefs || {};
-    const levels = a.escalations || ["log", "alert", "wake", "act"];
-    const autonomy = a.autonomy || ["draft", "auto-safe", "auto"];
-    const autonomyLabel = {
-      draft: "draft only — nothing is sent without my click",
-      "auto-safe": "auto-safe — send what the assistant writes",
-      auto: "auto — send any draft it has text for",
-    };
-    const health = a.health || {};
-    const hs = sentryState(health);
-    const lastPass = health.lastTickAt ? `${Math.max(0, Math.round((Date.now() - health.lastTickAt) / 1000))}s ago` : "not yet";
-    // Aggressive mode: while it is on, the controls whose knobs or rules it holds are disabled here and marked,
-    // so the reader can see which values are the mode's and where to switch it off. Controls the profile does
-    // not touch (model, working dir, and anything else outside its list) stay usable.
-    const agg = a.aggressive || {};
-    const heldKnobs = new Set(agg.on ? (agg.holds && agg.holds.settings) || [] : []);
-    const heldRules = new Set(agg.on ? (agg.holds && agg.holds.rules) || [] : []);
-    const dis = (key) => (heldKnobs.has(key) ? ' disabled title="aggressive mode holds this setting — switch it off in the header to change it"' : "");
-    const disRule = (id) => (heldRules.has(id) ? ' disabled title="aggressive mode holds this rule — switch it off in the header to change it"' : "");
-    const savedLine = agg.restore
-      ? `${agg.restore.present} of your own value${agg.restore.present === 1 ? "" : "s"} come back when it is switched off; ${agg.restore.absent} key${agg.restore.absent === 1 ? "" : "s"} that were absent will be deleted again so they follow their default.`
-      : "";
-    // Read once per paint: a repaint recreates every disclosure, so the remembered ones are reopened from here
-    // rather than from a class left behind on an element that no longer exists.
-    const openThresholds = thresholdsOpen();
-    host.innerHTML = `
-      ${agg.on
-        ? `<div class="as-group as-held">
-        <h4>⚡ Aggressive mode is holding these</h4>
-        <div class="as-help">The settings and rules marked <b>held</b> below are set to the aggressive profile and cannot be changed from this tab. Switch aggressive mode off with the <b>⚡ Aggressive</b> button in the header (Alt+Shift+A) and they are put back exactly as you had them — ${esc(savedLine)}</div>
-        <div class="as-line"><button type="button" id="btn-as-aggressive-off" title="switch aggressive mode off and put your own settings back">Switch aggressive mode off</button></div>
-      </div>`
-        : ""}
-      <div class="as-group">
-        <h4>How it behaves</h4>
-        <div class="as-line">
-          <label${heldKnobs.has("enabled") ? ' class="as-held-label"' : ""}>watching <input type="checkbox" data-as-set="enabled"${s.enabled ? " checked" : ""}${dis("enabled")}></label>
-          <label${heldKnobs.has("autonomy") ? ' class="as-held-label"' : ""}>autonomy <select data-as-set="autonomy"${dis("autonomy")}>${autonomy.map((v) => `<option value="${v}"${s.autonomy === v ? " selected" : ""}>${esc(autonomyLabel[v] || v)}</option>`).join("")}</select></label>
-        </div>
-        <div class="as-line"><label${heldKnobs.has("spawn") ? ' class="as-held-label"' : ""}>create worktrees <select data-as-set="spawn"${dis("spawn")} title="whether the assistant may cut a worktree and start a worker — ask keeps a one-click card between it and git">${(a.spawnModes || ["off", "ask", "auto"]).map((v) => `<option value="${v}"${s.spawn === v ? " selected" : ""}>${v === "off" ? "off — it may not start workers" : v === "ask" ? "ask me first" : "start immediately"}</option>`).join("")}</select></label></div>
-        <div class="as-line"><label title="a spawn card with no run behind it is always named after about two minutes. With this on, the panel starts that card once by itself instead of only telling you — it never retries a card it has already tried, and a card you discarded is never started">auto-start a stuck card <input type="checkbox" data-as-set="spawnAutoStart"${s.spawnAutoStart ? " checked" : ""}></label><span class="as-hint">one attempt, never a retry — off by default</span></div>
-        <div class="as-line"><label title="every command line an assistant turn writes is counted against what the panel did with it: the eight kinds, one ledger per turn. report raises a red card naming the turn, the kind and how many lines were read and never carried out, and writes that to the journal the digest reads. enforce does the same and then carries those lines out once on the next pass — never a line that already ran. A near-miss line (a known prefix that misses its shape) is journalled as unparsed instead of vanishing.">command audit <select data-as-set="commandAudit">${(a.commandAuditModes || ["off", "report", "enforce"]).map((v) => `<option value="${v}"${s.commandAudit === v ? " selected" : ""}>${v === "off" ? "off — nothing is checked" : v === "report" ? "report — red card and journal" : "enforce — also replay once"}</option>`).join("")}</select></label><span class="as-hint">off by default</span></div>
-        <div class="as-line"><label>model <select data-as-set="model" title="the assistant's own model — pick something small and fast; the board digest is the whole input">${modelOptionsHtml(s.model || "")}</select></label></div>
-        <div class="as-line"><label title="the assistant does no work here — the gateway just refuses a run without an existing cwd. It is created if missing; leave empty for a folder beside the job store.">working dir <input type="text" spellcheck="false" data-as-set="cwd" value="${esc(s.cwd || "")}" placeholder="default: beside the job store"></label></div>
-        <div class="as-help">Draft-only is the default: a reply reaches a worker only when you press Send on it. Auto-safe sends a reply the assistant itself wrote with a TO line; auto also sends anything a standing rule drafted. Creating a worktree has its own switch: <b>ask me first</b> turns a SPAWN line into a card, and nothing runs until you press it — the panel checks that card again after about two minutes, names it on its own header badge if no run exists, and (with auto-start on) starts it once rather than leaving it sitting. An approval is never answered from here at any setting.</div>
-        <div class="as-help">sentry: ${hs ? `<b>${esc(hs)}</b> — the server watchdog restarts the clock and runs a missed pass` : "clock running"} · last pass ${esc(lastPass)} · every ${esc(String(health.everySeconds || s.seconds))}s${health.resumed ? " · resumed after a restart" : ""}</div>
-      </div>
-      <div class="as-group">
-        <h4>Global</h4>
-        <div class="as-line"><label title="how often the sentry looks at the board">pass every <input type="number" min="2" max="120" data-as-set="seconds" value="${s.seconds}"${dis("seconds")}> s</label>
-          <label title="the ceiling on how many times an hour a rule at wake or act may ask the assistant">wakes / hour <input type="number" min="0" max="60" data-as-set="maxWakesPerHour" value="${s.maxWakesPerHour}"${dis("maxWakesPerHour")}></label></div>
-        <div class="as-help">The two knobs no single rule owns: how often the sentry looks at the board, and how many wakes an hour it may spend. Every other bar lives under the rule that reads it.</div>
-      </div>
-      <div class="as-group">
-        <h4>Per-rule escalation</h4>
-        ${Object.entries(defs)
-          .map(([id, def]) => {
-            const thresholds = RULE_THRESHOLDS[id] || [];
-            // The disclosure sits directly under the row it feeds, closed unless the reader left it open. Its
-            // summary names the value in force, so a rule row and its bar read as one thing even folded.
-            const disclosure = thresholds.length
-              ? `<details class="as-rule-thresholds" data-as-rule-thresholds="${esc(id)}"${openThresholds.has(id) ? " open" : ""}>
-              <summary title="the bar this rule fires on — open to change it">${esc(thresholdSummary(thresholds, s))}</summary>
-              <div class="as-line">${thresholds
-                .map(
-                  (t) => `<label${t.title ? ` title="${esc(t.title)}"` : ""}>${esc(t.before)} <input type="number" min="${t.min}" max="${t.max}" data-as-set="${t.key}" value="${s[t.key]}"${dis(t.key)}>${t.after ? ` ${esc(t.after)}` : ""}</label>`,
-                )
-                .join("")}</div>
-              ${id === "quiet" ? `<div class="as-help">A long build is silent too, which is why “no new output” only journals by default.</div>` : ""}
-              ${id === "loop" ? `<div class="as-help">Raise this if “same call” is noisy on your agents — an identical error repeating is judged on the same bar.</div>` : ""}
-            </details>`
-              : "";
-            return `<div class="as-rule-row">
-              <span class="as-rule-name"><b>${esc(def.label)}</b><i>${esc(def.hint)}</i></span>
-              <select data-as-rule="${esc(id)}"${disRule(id)}>${levels.map((v) => `<option value="${v}"${s.rules[id] === v ? " selected" : ""}>${v}</option>`).join("")}</select>
-            </div>${disclosure}`;
-          })
-          .join("")}
-        <div class="as-help">log keeps it in the journal · alert shows it under Alerts · wake asks the assistant about it (rate limited) · act wakes it and lets it send a reply when autonomy allows.</div>
-        <div class="as-help">Leftover work and a silent child are judged from what the board and the gateway already know — no extra git or sqlite pass.</div>
-      </div>
-      <div class="as-group">
-        <h4>Now</h4>
-        <div class="as-line">
-          <button type="button" id="btn-as-check" title="one sentry pass, no waiting for the clock">Check the board now</button>
-          <button type="button" id="btn-as-wake" title="ask the assistant what it sees — one turn">Ask what it sees</button>
-          <span class="as-err" id="as-set-err"></span>
-        </div>
-        <div class="as-help">${a.wakes.lastHour}/${a.wakes.limit} wakes in the last hour${a.wakePending ? ` · ${a.wakePending} queued behind the running turn` : ""} · scratchpad at ${esc(a.settings.model || "(gateway default model)")}</div>
-      </div>`;
+      </div>`}
+      <div class="as-help">The pass clock, the command audit and the per-rule escalation table belong to the panel's
+      one watchdog — they are in the <b>Watchdog</b> tab. This assistant's default role prompt and its two whitelists
+      are in the <b>Role</b> tab. Its thread is <code>${esc(rec?.threadId || "")}</code>.</div>`;
     // The model field is the shared picker (core/model-menu.js), not a native select: a select can only print
     // text, so it can never show a row's price, coding rating or context window — and a popup opened inside this
     // float would be clipped by its overflow instead of painting over it. The select stays in the DOM as the
     // control whose `change` the delegated [data-as-set] handler below answers.
-    ModelMenu.attach(host.querySelector('select[data-as-set="model"]'), {
-      models: () => (typeof modelsState === "undefined" ? null : modelsState),
-      extra: assistantModelExtra,
-    });
-    // Each threshold disclosure remembers itself. `toggle` does not bubble, and this repaint replaces the
-    // elements rather than mutating them, so the listener goes on the new element every time.
-    for (const d of host.querySelectorAll?.("details.as-rule-thresholds") || []) {
-      d.addEventListener("toggle", () => rememberThresholdOpen(d));
+    if (first) {
+      ModelMenu.attach(host.querySelector('select[data-as-set="model"]'), {
+        models: () => (typeof modelsState === "undefined" ? null : modelsState),
+        extra: assistantModelExtra,
+      });
     }
   }
 
@@ -2067,6 +2141,38 @@
         else renderAssistantPad(true);
       } catch (err) {
         setErr(forId ? `as-rules-err-${String(forId).replace(/^assistant-/, "")}` : "as-pad-err", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    // The escalation list: add, remove, and move one place. One POST of the whole ordered list — the file holds an
+    // ORDER, so a move is a list rather than a field. Nothing reads it yet, and the pane says so.
+    if (t.dataset.asEscadd || t.dataset.asEscdel || t.dataset.asEscmove) {
+      const own = t.dataset.asEscown || t.dataset.asEscadd || FIRST_ASSISTANT;
+      const cur = [...((state.assistant?.escalateTo || {})[own] || [])];
+      if (t.dataset.asEscadd) {
+        const pick = as$(`as-esc-pick-${String(own).replace(/^assistant-/, "")}`);
+        const id = String(pick?.value || "").trim();
+        if (!id || cur.includes(id)) return;
+        cur.push(id);
+      } else if (t.dataset.asEscdel) {
+        const i = cur.indexOf(t.dataset.asEscdel);
+        if (i < 0) return;
+        cur.splice(i, 1);
+      } else {
+        const i = cur.indexOf(t.dataset.asEscid);
+        const j = t.dataset.asEscmove === "up" ? i - 1 : i + 1;
+        if (i < 0 || j < 0 || j >= cur.length) return;
+        [cur[i], cur[j]] = [cur[j], cur[i]];
+      }
+      t.disabled = true;
+      try {
+        await asPost("/api/assistant/profile", { assistantId: own, escalateTo: cur });
+        renderAssistantSettings(own, true);
+      } catch (err) {
+        setErr("as-set-err", err.message);
       } finally {
         t.disabled = false;
       }
@@ -2401,18 +2507,22 @@
       try {
         await asPost("/api/assistant/settings", { [key]: value, ...(forId ? { assistantId: forId } : {}) });
         // asPost already applied the assistant state its answer carried, so this repaint reads the stored value.
-        renderAssistantSettings(forId || FIRST_ASSISTANT, true);
+        // The pane that OWNS the key is the one repainted: the watchdog's keys are the panel's, an assistant's are its
+        // own — and a key is never drawn in both, so one repaint is always enough.
+        if (ownsWatchdog(key)) renderWatchdog(true);
+        else renderAssistantSettings(forId || FIRST_ASSISTANT, true);
       } catch (err) {
-        setErr("as-set-err", err.message);
+        setErr(ownsWatchdog(key) ? "as-watchdog-err" : "as-set-err", err.message);
       }
       return;
     }
     if (el.dataset.asRule) {
       try {
+        // The escalation table is the panel's one watchdog's (one value for the board), so its repaint is that pane's.
         await asPost("/api/assistant/settings", { rules: { [el.dataset.asRule]: el.value } });
-        renderAssistantSettings(FIRST_ASSISTANT, true);
+        renderWatchdog(true);
       } catch (err) {
-        setErr("as-set-err", err.message);
+        setErr("as-watchdog-err", err.message);
       }
     }
   });
