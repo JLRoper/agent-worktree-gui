@@ -2124,6 +2124,26 @@ const server = createServer(async (req, res) => {
         return sendJson(res, (e && e.code) === "role-unknown" ? 404 : 400, { error: String((e && e.message) || e) });
       }
     }
+    // One assistant's own profile: the default role prompt it runs on, and the two optional whitelists that decide
+    // which projects it is shown and where it may spawn. One route for the three fields because they are one file
+    // beside that assistant's charter — a save of any of them writes that file whole, and a field left out of the
+    // body keeps what the file already holds. `assistantId` defaults to #1, whose file carries only these two keys
+    // (its knobs stay in assistant.json).
+    if (route === "/api/assistant/profile" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const out = assistant.saveProfile(body.assistantId || undefined, {
+          prompt: body.prompt,
+          projects: body.projects,
+          worktrees: body.worktrees,
+        });
+        return sendJson(res, 200, { ...out, assistant: assistant.state() });
+      } catch (e) {
+        const code = (e && e.code) === "assistant-unknown" ? 404 : (e && e.code) === "profile-write-failed" ? 500 : 400;
+        return sendJson(res, code, { error: String((e && e.message) || e) });
+      }
+    }
     if (route === "/api/assistant/roles" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
@@ -2166,7 +2186,17 @@ const server = createServer(async (req, res) => {
     if (route === "/api/assistant/settings" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
-      return sendJson(res, 200, { settings: assistant.setSettings(body), assistant: assistant.state() });
+      // Which assistant these knobs belong to. No `assistantId` means Assistant #1 — the route, the file and the
+      // answer the page's own Settings pane has always posted to, unchanged; any other id is that assistant's own
+      // profile file, beside its charter.
+      const { assistantId, id, ...patch } = body || {};
+      try {
+        const settings = assistant.setSettingsFor(assistantId || id || undefined, patch);
+        return sendJson(res, 200, { settings, assistant: assistant.state() });
+      } catch (e) {
+        const code = (e && e.code) === "assistant-unknown" ? 404 : (e && e.code) === "profile-write-failed" ? 500 : 400;
+        return sendJson(res, code, { error: String((e && e.message) || e) });
+      }
     }
 
     // The header's aggressive-mode toggle. One route for one button: `on` is the requested state and the answer
