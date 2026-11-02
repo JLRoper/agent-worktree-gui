@@ -170,13 +170,14 @@ test("the whitelists are gone from the profile, the payloads, the page and the r
   for (const key of ["whitelistMatches", "parseWhitelist", "whitelistText", "describeList", "WHITELIST_ALL", "WHITELIST_MAX"]) {
     assert.ok(!(key in profile), `${key} is not exported any more`);
   }
-  assert.deepEqual(EMPTY_PROFILE, { settings: {}, rules: {}, prompt: "", escalateTo: [] });
+  assert.deepEqual(EMPTY_PROFILE, { settings: {}, rules: {}, prompt: "", escalateTo: [], dock: "docked" });
   // A profile file written by the older build still reads: the retired key is dropped, not carried.
   assert.deepEqual(pickProfile({ prompt: "hello", whitelists: { projects: ["alpha"], worktrees: ["*"] } }), {
     settings: {},
     rules: {},
     prompt: "hello",
     escalateTo: [],
+    dock: "docked",
   });
   // The route's body no longer carries them: a caller that posts them anyway writes no such key.
   assistant.saveProfile(id, { prompt: "kept", projects: ["alpha"], worktrees: ["wtgui-x-1a2b3c"] });

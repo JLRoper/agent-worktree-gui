@@ -85,10 +85,13 @@ test("every key has exactly one owner, and the two panes' key lists never inters
     Object.keys(DEFAULTS).sort(),
     "and the table declares no knob the store lacks",
   );
-  // The two profile fields are an assistant's, and they are the only non-knobs in the table.
+  // The profile fields are an assistant's, and they are the only non-knobs in the table.
   const notKnobs = [...WATCHDOG_KEYS, ...ASSISTANT_KEYS].filter((k) => !(k in DEFAULTS));
-  assert.deepEqual(notKnobs.sort(), ["escalateTo", "prompt"]);
+  assert.deepEqual(notKnobs.sort(), ["dock", "escalateTo", "prompt"]);
   for (const key of notKnobs) assert.equal(scopeOf(key), "assistant");
+  // The frame is the third kind of field in an assistant's own file: per assistant, and not a knob a turn reads.
+  assert.equal(scopeOf("dock"), "assistant");
+  assert.ok(!("dock" in DEFAULTS), "the frame is not in the settings object a turn runs on");
   // A key nobody declared has NO owner: a new knob must be placed before a pane can draw it.
   assert.equal(scopeOf("aKeyNobodyDeclared"), null);
   // The panel-wide half is the sentry's own: the switch, the table, the journal and the per-pass bars.
