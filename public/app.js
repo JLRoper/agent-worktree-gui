@@ -14271,12 +14271,69 @@ function placeBanner() {
   layer.style.right = `${Math.max(0, vw - col.right / z)}px`;
 }
 
+// ---- how long a red failure stays before it takes itself away -----------------------------------
+// A failure used to sit there until its ✕ was pressed, so on a board that polls every few seconds it could outlive
+// the condition it described and still be read minutes later. A red message now hides itself after the seconds in
+// Settings → Board (0 keeps it until the ✕), the clock pauses while the pointer or the keyboard focus is inside the
+// bar, and the ✕ is still an instant dismissal. The green confirmation is not a failure: it keeps its own four
+// seconds whatever this is set to.
+const BANNER_SECONDS_KEY = "wtgui.bannerSeconds";
+const BANNER_SECONDS_DEFAULT = 5;
+const BANNER_SECONDS_MAX = 30;
+const BANNER_NOTE_MS = 4000;
+
+function bannerSeconds() {
+  let raw = null;
+  try {
+    raw = localStorage.getItem(BANNER_SECONDS_KEY);
+  } catch {
+    // A browser that refuses storage still gets the panel's default; the setting just will not persist.
+    return BANNER_SECONDS_DEFAULT;
+  }
+  if (raw === null) return BANNER_SECONDS_DEFAULT;
+  const text = String(raw).trim();
+  if (text === "") return BANNER_SECONDS_DEFAULT;
+  const n = Number(text);
+  if (!Number.isFinite(n)) return BANNER_SECONDS_DEFAULT;
+  return Math.max(0, Math.min(BANNER_SECONDS_MAX, Math.round(n)));
+}
+
 let noteTimer = 0;
+let bannerTimer = 0;
+
+function stopBannerTimer() {
+  clearTimeout(bannerTimer);
+  bannerTimer = 0;
+}
+
+// Is the bar being held? Asked of the DOM rather than kept in a flag: a flag set on pointerenter survives the bar
+// being hidden under the pointer and would silence the next failure's clock.
+function bannerHeld() {
+  const b = $("banner");
+  if (!b) return false;
+  return b.matches(":hover") || b.contains(document.activeElement);
+}
+
+// (Re)start the red banner's clock. Called when a message goes up and when a hold ends, so a failure gets the full
+// delay from the moment the reader stops reading it — not the remainder of the old one.
+function armBannerTimer() {
+  stopBannerTimer();
+  if (bannerHeld()) return;
+  const ms = bannerSeconds() * 1000;
+  if (ms <= 0) return;
+  bannerTimer = setTimeout(() => {
+    bannerTimer = 0;
+    if (bannerHeld()) return armBannerTimer();
+    hideBanner();
+  }, ms);
+}
+
 function hideBanner() {
   const b = $("banner");
   if (!b) return;
   clearTimeout(noteTimer);
   noteTimer = 0;
+  stopBannerTimer();
   b.classList.add("hidden");
   b.classList.remove("ok");
 }
@@ -14290,17 +14347,75 @@ function showBanner(msg) {
   else b.textContent = msg;
   const x = b.querySelector(".banner-x");
   if (x) x.hidden = false;
-  // A red failure stays until its ✕ is pressed: a green note's pending timer must not take it away.
+  // The green note's pending timer must not take a failure away, and a second failure restarts the clock: the
+  // message the reader is looking at now is the one that gets the full delay.
   clearTimeout(noteTimer);
   noteTimer = 0;
   b.classList.remove("ok");
   placeBanner();
   b.classList.remove("hidden");
+  armBannerTimer();
 }
+
+// The Board tab's seconds row: the number the bar's clock reads. A typed value is clamped on change (and Enter),
+// like the other numeric rows.
+function paintBannerSetting(note = "") {
+  const input = $("banner-seconds");
+  const seconds = bannerSeconds();
+  if (input && document.activeElement !== input) input.value = String(seconds);
+  const preview = $("banner-preview");
+  if (preview) {
+    const what = seconds
+      ? `a red failure hides itself after ${seconds} s`
+      : "a red failure stays until its ✕ (0 = never hides itself)";
+    preview.textContent = note ? `${note} — ${what}` : `${what}, unless you hover or focus it (a green note still goes after 4 s)`;
+  }
+}
+
+function saveBannerSetting(value) {
+  const raw = Number(value);
+  if (!Number.isFinite(raw)) {
+    paintBannerSetting("NOT SAVED — give a number of seconds, 0 to keep failures until ✕");
+    return;
+  }
+  const clamped = Math.max(0, Math.min(BANNER_SECONDS_MAX, Math.round(raw)));
+  try {
+    localStorage.setItem(BANNER_SECONDS_KEY, String(clamped));
+  } catch {
+    paintBannerSetting("NOT SAVED — this browser refused to store the setting");
+    return;
+  }
+  // A failure already on screen follows the new number at once: 0 leaves it alone, a number gives it the full new
+  // delay rather than whatever was left of the old one.
+  const b = $("banner");
+  if (b && !b.classList.contains("hidden") && !b.classList.contains("ok")) armBannerTimer();
+  paintBannerSetting(clamped === Math.round(raw) ? "saved" : `saved, clamped to ${BANNER_SECONDS_MAX} s`);
+}
+
+// Holding the bar pauses the clock; letting go starts the full delay again. Pointer and keyboard are separate
+// entries because the ✕ is a real focus target: tabbing to it and reading is the same pause as pointing at it.
+$("banner")?.addEventListener("pointerenter", stopBannerTimer);
+$("banner")?.addEventListener("pointerleave", armBannerTimer);
+$("banner")?.addEventListener("focusin", stopBannerTimer);
+$("banner")?.addEventListener("focusout", (e) => {
+  const b = $("banner");
+  if (b && e.relatedTarget && b.contains(e.relatedTarget)) return;
+  armBannerTimer();
+});
+$("banner-seconds")?.addEventListener("change", (e) => saveBannerSetting(e.target.value));
+$("banner-seconds")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    saveBannerSetting(e.target.value);
+    e.target.blur();
+  }
+});
+paintBannerSetting();
 
 // A short green confirmation (the red banner is for failures): used when a gesture did what it said
 // without opening a dialog, e.g. an agent attaching itself to the worktree it was already sitting in.
-// It is not a failure to dismiss, so it carries no ✕ and takes itself away after four seconds.
+// It is not a failure to dismiss, so it carries no ✕ and takes itself away after four seconds — its own
+// fixed number, not the Board tab's, which is about failures.
 function showNote(msg) {
   const b = $("banner");
   if (!b) return;
@@ -14313,7 +14428,7 @@ function showNote(msg) {
   placeBanner();
   b.classList.remove("hidden");
   clearTimeout(noteTimer);
-  noteTimer = setTimeout(hideBanner, 4000);
+  noteTimer = setTimeout(hideBanner, BANNER_NOTE_MS);
 }
 
 $("banner")?.querySelector(".banner-x")?.addEventListener("click", () => hideBanner());

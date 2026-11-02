@@ -188,7 +188,7 @@ button.primary:hover { background: #24466a; }
   to { opacity: 1; }
 }
 .banner-text { flex: 1 1 auto; min-width: 0; }
-/* The ✕ is the red banner's own: a failure is the reader's to dismiss, so it does not time out. */
+/* The ✕ is the red banner's own: it dismisses a failure at once, whatever Settings → Board's banner timeout says. */
 .banner .banner-x {
   flex: none;
   margin: -2px -4px -2px 0;

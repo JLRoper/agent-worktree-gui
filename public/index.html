@@ -309,6 +309,13 @@
           <input id="event-flash" type="checkbox" checked>
         </label>
 
+        <label class="settings-row settings-gap" for="banner-seconds" title="How long a red failure banner stays before it takes itself away. The message is shown for this many seconds and then hides on its own; while the pointer is over the bar, or one of its controls has the keyboard focus, the clock is paused so a failure can be read at the reader's pace — and its ✕ always hides it at once. 0 keeps every failure until you press that ✕. A green confirmation is not a failure and keeps its own four seconds. Saved in this browser.">
+          <span>Banner timeout <span class="settings-info">ⓘ</span></span>
+          <input id="banner-seconds" type="number" inputmode="numeric" step="1" min="0" max="30">
+          <span class="settings-unit mono">s</span>
+        </label>
+        <div class="settings-preview mono" id="banner-preview">…</div>
+
         <label class="settings-row settings-gap" for="scan-mode" title="Which projects the panel re-reads. &quot;Everything&quot; keeps all of them fresh whether or not you are looking. &quot;On screen&quot; reads only the projects in the window (plus half a screen either side) — with a hundred repos the board stops spawning git for projects you cannot see, and scrolling to a stale one reads it at once. With no page open in that mode nothing is read at all. Saved in this panel's config.json, so it survives a restart and applies to every browser.">
           <span>Refresh <span class="settings-info">ⓘ</span></span>
           <select id="scan-mode">
