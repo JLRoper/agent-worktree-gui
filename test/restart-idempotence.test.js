@@ -9,13 +9,16 @@
 // never "ahead by N".
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { Assistant } from "../lib/assistant.js";
 import { RestartController } from "../lib/restart.js";
 import { judgeLanded, pickBase } from "../lib/assistant/landed.js";
+import { resolveExistingTarget } from "../lib/spawn-target.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const dir = mkdtempSync(path.join(tmpdir(), "wtgui-restart-idem-"));
@@ -193,4 +196,158 @@ test("a merged PR is the last authority when git cannot see the landing (a squas
   assert.equal(withPr.landed, true);
   assert.equal(withPr.evidence, "pr");
   assert.match(withPr.why, /#12/);
+});
+
+// ---- the replay itself: a debt whose tree is not there -------------------------------------------
+//
+// `judgeLanded` answers `gone` for a tree that is missing or that is only a SHELL — an empty `.worktrees/`
+// directory the removal left behind, where every `git -C` call walks up and answers for the primary checkout.
+// skipLandedReplays used to read that verdict and then drop it (`if (!verdict.landed) continue;`), so the debt
+// stayed owed, the digest kept advertising it, and every boot re-issued it. These drive the pass itself.
+const replayBoard = async (t, project) => {
+  const store = await mkdtemp(path.join(tmpdir(), "wtgui-replay-"));
+  const started = [];
+  const assistant = new Assistant({
+    config: {
+      jobsFile: path.join(store, "jobs.json"),
+      defaultCwd: store,
+      assistantFile: path.join(store, "assistant.json"),
+      charterFile: path.join(store, "assistant-charter.md"),
+    },
+    jobs: {
+      list: () => [],
+      get: () => null,
+      firstOfThread: () => null,
+      busyFor: () => ({ held: false, where: null, by: [] }),
+    },
+    getProjects: () => [{ name: path.basename(project), path: project, mainBranch: "main", remote: "origin" }],
+    spawner: async (spec) => {
+      started.push(spec);
+      return null;
+    },
+    onEvent: () => {},
+    onLog: () => {},
+  });
+  t.after(async () => {
+    clearTimeout(assistant.persistTimer);
+    if (assistant.timer) clearInterval(assistant.timer);
+    await rm(store, { recursive: true, force: true });
+  });
+  return { assistant, started };
+};
+const debt = (over = {}) => ({
+  id: "debt0001",
+  turnId: "turn-debt",
+  thread: "wtgui-landed-brief",
+  at: Date.now() - 10 * 60_000,
+  target: "(none)",
+  existing: true,
+  prompt: "the brief whose tree is not there",
+  outcome: "lost",
+  tree: null,
+  branch: null,
+  ...over,
+});
+
+test("an EMPTY leftover directory is not a tree: the verdict is `gone`, not the primary checkout's branch", async () => {
+  // The shape that made the 0.58.2 boot read a dead tree as landed: the worktree was removed and the empty
+  // directory stayed behind, so `existsSync` said yes and `git rev-parse --abbrev-ref HEAD` inside it said `main`
+  // — the PRIMARY checkout's branch, already in origin/main.
+  const p = repo("replay-husk");
+  const husk = path.join(p, ".worktrees", "landed-brief-bdf617");
+  mkdirSync(husk, { recursive: true });
+  assert.deepEqual(readdirSync(husk), [], "the fixture is an EMPTY directory that still exists");
+  assert.equal(git(husk, "rev-parse", "--abbrev-ref", "HEAD"), "main", "…and git inside it answers for the primary checkout");
+
+  const verdict = await judgeLanded({ tree: husk, branch: "wtgui/landed-brief-bdf617" });
+  assert.equal(verdict.gone, true, "an empty directory where a tree used to be is GONE");
+  assert.equal(verdict.landed, false);
+  assert.match(verdict.why, /leftover directory/);
+  assert.match(verdict.why, /replay-husk/, "the reason names the checkout git would answer for");
+});
+
+test("a debt whose tree is a leftover directory is SETTLED, journalled and not started", async (t) => {
+  const p = repo("replay-settle-husk");
+  const husk = path.join(p, ".worktrees", "landed-brief-da6402");
+  mkdirSync(husk, { recursive: true });
+  const { assistant, started } = await replayBoard(t, p);
+  assistant.spawnIntents = [debt({ target: husk, tree: husk, branch: "wtgui/landed-brief-da6402" })];
+
+  const out = await assistant.skipLandedReplays();
+  assert.equal(out.length, 1, "the debt is settled rather than left owed");
+  assert.equal(assistant.spawnIntents[0].outcome, "landed");
+  assert.match(String(assistant.spawnIntents[0].landedWhy), /leftover directory/);
+  assert.equal(started.length, 0, "no replay was started");
+
+  const line = assistant.journal.find((j) => j.kind === "replay-skipped");
+  assert.ok(line, "the skip is journalled");
+  assert.match(String(line.text), /replay skipped: already landed/);
+  assert.match(String(line.text), /leftover directory/);
+  assert.match(String(line.text), /nothing was started/);
+  assert.doesNotMatch(assistant.digest(), /the brief whose tree is not there/, "the digest stops advertising the debt");
+});
+
+test("a debt written before the tree and branch were recorded is settled too", async (t) => {
+  // Every SPAWN recorded before #213 carries no tree at all, and `tree = ""` fell through the same
+  // `!verdict.landed` continue — so those debts were re-advertised on every boot as well.
+  const p = repo("replay-bare");
+  const { assistant, started } = await replayBoard(t, p);
+  assistant.spawnIntents = [debt({ target: path.basename(p), existing: false })];
+
+  const out = await assistant.skipLandedReplays();
+  assert.equal(out.length, 1);
+  assert.equal(assistant.spawnIntents[0].outcome, "landed");
+  assert.match(String(assistant.spawnIntents[0].landedWhy), /names no tree/);
+  assert.equal(started.length, 0);
+  assert.match(String(assistant.journal.find((j) => j.kind === "replay-skipped")?.text || ""), /names no tree at all/);
+});
+
+test("a debt whose tree is missing outright is settled as gone", async (t) => {
+  const p = repo("replay-missing");
+  const gone = path.join(p, ".worktrees", "vanished-brief-9bfebb");
+  const { assistant, started } = await replayBoard(t, p);
+  assistant.spawnIntents = [debt({ target: gone, tree: gone, branch: "wtgui/vanished-brief-9bfebb" })];
+
+  const out = await assistant.skipLandedReplays();
+  assert.equal(out.length, 1);
+  assert.equal(assistant.spawnIntents[0].outcome, "landed");
+  assert.match(String(assistant.spawnIntents[0].landedWhy), /tree is gone/);
+  assert.equal(started.length, 0);
+});
+
+test("a live tree holding work main does not have is NOT settled — the skip must not over-reach", async (t) => {
+  const p = repo("replay-live");
+  const wt = path.join(p, ".worktrees", "live-brief-abc123");
+  git(p, "checkout", "-q", "-b", "wtgui/live-brief-abc123");
+  writeFileSync(path.join(p, "live.txt"), "not on main\n", "utf8");
+  git(p, "add", ".");
+  git(p, "commit", "-q", "-m", "the brief main does not hold");
+  git(p, "checkout", "-q", "main");
+  git(p, "worktree", "add", "-q", wt, "wtgui/live-brief-abc123");
+  const { assistant, started } = await replayBoard(t, p);
+  assistant.spawnIntents = [debt({ target: wt, tree: wt, branch: "wtgui/live-brief-abc123" })];
+
+  const out = await assistant.skipLandedReplays();
+  assert.equal(out.length, 0, "work main does not hold is not a landing");
+  assert.equal(assistant.spawnIntents[0].outcome, "lost");
+  assert.equal(started.length, 0);
+  assert.match(assistant.digest(), /the brief whose tree is not there/, "…and it stays on the digest as owed");
+});
+
+test("a SPAWN IN a leftover directory is refused, and the refusal names the checkout it would have run in", async () => {
+  // The other end of the same bug: the route accepted the husk (`isDir` was true), so the replay's run got the
+  // husk as its cwd and every git call in it answered for the primary checkout.
+  const p = repo("resolve-husk");
+  const husk = path.join(p, ".worktrees", "gone-brief-da6402");
+  mkdirSync(husk, { recursive: true });
+  const projects = [{ name: "resolve-husk", path: p }];
+
+  const refused = await resolveExistingTarget({ target: husk, projects });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.reason, "leftover");
+  assert.match(refused.error, /not a tree any more/);
+  assert.match(refused.error, /resolve-husk/, "the refusal says which checkout would have run it");
+
+  const own = await resolveExistingTarget({ target: p, projects });
+  assert.equal(own.ok, true, "a project's own checkout is still a tree to start in");
 });

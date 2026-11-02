@@ -8,7 +8,9 @@
 // gateway, on a port and a state dir of its own, and proves each one from the outside:
 //
 //   1. a boot with a landed brief starts nothing — the debt is settled as "landed", the journal says
-//      "replay skipped: already landed", the digest stops advertising it and NO run is POSTed;
+//      "replay skipped: already landed", the digest stops advertising it and NO run is POSTed — for a debt whose
+//      tree is GONE too (missing, or an EMPTY leftover directory whose git answers for the primary checkout).
+//      See 1b, which proves no replay can be aimed into the primary checkout either;
 //   2. a reasonless POST /api/restart is refused with 400 and leaves nothing queued;
 //   3. a waiting entry can be cancelled (200, queue empty) and no restart happens even once the turn it was
 //      waiting for has ended — the case a cancel has to win.
@@ -233,6 +235,15 @@ try {
       branch: "feature/landed-brief",
     },
   ];
+  // A tree the removal left as an EMPTY directory, and one that is missing outright: the two shapes the 0.58.2
+  // boot replayed. Neither can host a run, and each must settle on its own evidence.
+  const husk = path.join(repo, ".worktrees", "gone-brief-9bfebb");
+  mkdirSync(husk, { recursive: true });
+  const vanished = path.join(repo, ".worktrees", "vanished-brief-da6402");
+  store.spawnIntents.push(
+    { id: "husk0001", turnId: "turn-husk", thread: "wtgui-gone-brief", at: Date.now() - 9 * 60_000, target: husk, existing: true, prompt: "the brief whose tree is gone", outcome: "lost", alertId: null, jobThread: null, reportedAt: null, tree: husk, branch: "wtgui/gone-brief-9bfebb", landedAt: null, landedWhy: null },
+    { id: "gone0001", turnId: "turn-gone", thread: "wtgui-vanished-brief", at: Date.now() - 8 * 60_000, target: vanished, existing: true, prompt: "the brief whose tree vanished", outcome: "lost", alertId: null, jobThread: null, reportedAt: null, tree: vanished, branch: "wtgui/vanished-brief-da6402", landedAt: null, landedWhy: null },
+  );
   mkdirSync(path.dirname(asstFile), { recursive: true });
   writeFileSync(asstFile, JSON.stringify(store, null, 1), "utf8");
 
@@ -260,6 +271,40 @@ try {
   ok("the digest no longer advertises the debt", !/already landed/.test(digest), digest.slice(0, 300));
   const reloaded = JSON.parse(readFileSync(asstFile, "utf8")).spawnIntents?.[0] || {};
   eq("…and the skip is on disk, so the next boot does not re-owe it", [reloaded.outcome, Boolean(reloaded.landedAt)], ["landed", true]);
+
+  // The other two shapes the 0.58.2 boot replayed: a tree that is MISSING, and a tree the removal left behind as
+  // an EMPTY directory (git inside it answers for the primary checkout — which is how a dead brief's debt was read
+  // as "main is already in origin/main"). Each has to be settled on its OWN evidence.
+  const settles = ((await assistantOf(panel.base)).journal || []).filter((j) => /^replay skipped: already landed/.test(String(j.text || "")));
+  ok("the boot settles every owed line whose tree is not there", settles.length >= 3, `${settles.length} skip line(s): ${JSON.stringify(settles.map((j) => String(j.text || "").slice(0, 160)))}`);
+  const huskLine = settles.find((j) => /leftover directory/.test(String(j.text || "")));
+  ok("…the leftover directory is skipped as a leftover, not read through the primary checkout", Boolean(huskLine), JSON.stringify(settles.map((j) => String(j.text || "").slice(0, 200))));
+  const goneLine = settles.find((j) => /tree is gone/.test(String(j.text || "")));
+  ok("…and the missing tree is skipped as gone", Boolean(goneLine), JSON.stringify(settles.map((j) => String(j.text || "").slice(0, 200))));
+  const allDebts = JSON.parse(readFileSync(asstFile, "utf8")).spawnIntents || [];
+  eq("…and all three debts are settled on disk", allDebts.map((x) => x.outcome), ["landed", "landed", "landed"]);
+  const digestAfter = String((await assistantOf(panel.base)).digest || "");
+  ok("…and the digest advertises none of them", !/the brief that already landed|the brief whose tree is gone|the brief whose tree vanished/.test(digestAfter), digestAfter.slice(0, 400));
+
+  // ============================================================================================
+  console.log("\n1b. no replay may ever start with its cwd in the primary checkout");
+  // The run's cwd is what the gateway is handed and what decides the directory the shell works in. A leftover
+  // directory resolves to the PROJECT's checkout for every git call in it, which is how a replay's shell ended up
+  // in the reader's own tree on the 0.58.2 boot. Checked two ways: what the boot POSTed (nothing), and what a
+  // replay aimed at the husk does when it is driven by hand (refused).
+  const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  const primary = norm(repo);
+  eq("no run was POSTed with the primary checkout as its cwd", stub.state.posts.filter((p) => norm(p.cwd) === primary).length, 0);
+  eq("…and none was POSTed with a cwd that is not on disk", stub.state.posts.filter((p) => p.cwd && !existsSync(p.cwd)).length, 0);
+
+  const postsBeforeReplay = stub.state.posts.length;
+  const replay = await api(panel.base, "/api/agents", { method: "POST", body: JSON.stringify({ prompt: "the brief whose tree is gone", cwd: husk, existing: true }) });
+  eq("a replay aimed at the leftover directory is refused", replay.status, 400);
+  ok("…and the refusal says the tree is not there", /not a tree any more|leftover/i.test(String(replay.body?.error || "")), String(replay.body?.error || ""));
+  eq("…and nothing of it reached the gateway", stub.state.posts.length, postsBeforeReplay);
+  const jobsNow = ((await api(panel.base, "/api/jobs")).body || {}).jobs || [];
+  eq("…and no job of any kind sits in the primary checkout", jobsNow.filter((j) => norm(j.cwd) === primary).length, 0);
+
 
   // ============================================================================================
   console.log("\n2. a reasonless restart is refused with 400");
