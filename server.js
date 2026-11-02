@@ -22,6 +22,9 @@ import { ProjectRegistry } from "./lib/projects.js";
 // server.js has no use for the name any more — the import keeps their new name and drops the moved one.
 import { Jobs, RELEASE_BRIEF, hermesHome, isLiveJobStatus, makeThreadName } from "./lib/jobs.js";
 import { gitIn, scanWorktree } from "./lib/scan.js";
+// "Is this directory a tree of its own?" — asked before a reply is started, because a released tree's leftover
+// folder answers every `git` call from the project's primary checkout.
+import { replyTree } from "./lib/own-tree.js";
 import { mergeLabel, mergePrompt } from "./lib/merge-prompt.js";
 import { verifyLabel, verifyPrompt } from "./lib/verify-prompt.js";
 import { answerDeletes, answerLine, answeredChecks } from "./lib/verify-landed.js";
@@ -3410,16 +3413,21 @@ const server = createServer(async (req, res) => {
       const first = jobs.firstOfThread(String(body.thread || ""));
       if (!first) return sendJson(res, 404, { error: `unknown thread: ${body.thread}` });
 
-      // Run where the agent actually is: its worktree while that still exists, otherwise the
-      // project it was started from — Hermes must not cd into a directory cleanup removed.
-      let dir = first.cwd || config.defaultCwd;
-      if (first.worktreePath) {
-        try {
-          if ((await stat(first.worktreePath)).isDirectory()) dir = first.worktreePath;
-        } catch {
-          /* gone: fall back to the project */
-        }
+      // Run where the agent actually is: the tree that agent was created for, and only while that is still a tree of
+      // its own. This used to be a `stat(…).isDirectory()` test with a fall back to `first.cwd` — the same dead path
+      // — which is how a reply started a run in a released tree whose shell then worked in the PRIMARY checkout
+      // (0.62.1 boot: job 5ba56bf1). 409 is the shape the busy-thread refusal already uses: the request is well
+      // formed, it just cannot run in that tree. See lib/own-tree.js.
+      const tree = await replyTree(first);
+      if (!tree.ok) {
+        return sendJson(res, 409, {
+          error: `${first.thread}: ${tree.refusal} — nothing was sent and no run was started. A resume is not a new tree.`,
+          code: "tree_released",
+          tree: tree.named,
+          checkout: tree.instead || tree.outer || null,
+        });
       }
+      const dir = tree.dir;
       const origin = body.origin && typeof body.origin === "object" ? body.origin : null;
       const home = projectOfTree(dir);
       const job = await jobs.create({
