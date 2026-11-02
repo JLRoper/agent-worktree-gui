@@ -23,7 +23,7 @@ is `rev-parse`, `rev-list`, `merge-base`, `cherry`, `diff`, `status` and `log`.
 | **Unattached agents** | Agent cards whose directory is not a worktree on the board — or none at all. |
 | **Spawn cards waiting** | A strip above **New agent**, only while the assistant has proposed workers nobody has clicked yet (see *Spawn cards*). |
 | Folders → projects → worktrees | One accordion per scan root, every git repo under it, a table row per worktree. |
-| Agent cards | Inside an expanded worktree row: the conversation, its console, its reply box. |
+| Cards | Inside an expanded worktree row: the conversation, its console, its reply box. |
 | Approvals dock | Bottom-right, over the board, only while something is waiting on you outside a card. |
 | Footer | The cadences the board is running at, what each gesture does to git, and any directories skipped. |
 
@@ -807,19 +807,32 @@ restart.
 ## Settings
 
 `⚙ Settings`, the title, or `Ctrl+,`. `Esc`, the `✕`, or a click outside closes it. The head is fixed and the body
-scrolls; every explanation is the row's own tooltip on the `ⓘ`. Every group **starts folded**, so the panel opens as
-seven headings: click one — or press `Enter`/`Space` on it — and its rows appear, the caret turning from `▸` to
-`▾`. What this browser remembers is which groups you opened: the panel reopens with exactly those open and every
-other group folded, and a group you never opened stays folded.
+scrolls; every explanation is the row's own tooltip on the `ⓘ`. The panel is a **strip of eight tabs** — Display,
+Cards, Board, Branches, Data, Gateway, Skills, Updates — and one panel is on screen at a time: click a tab (or press
+`Enter`/`Space` on it) and its rows appear. The strip is one Tab stop, and `←`/`→` walk it (wrapping), `Home`/`End`
+take the ends. What this browser remembers is the **tab** you chose, so the panel reopens where you left it; a stored
+tab this build no longer carries falls back to Display rather than to an empty window.
 
-The **search box** in the fixed head narrows the panel to the rows that answer it. It reads each row's own words and
-its tooltip, so `zoom out` finds Page zoom through the `−` button's explanation as readily as `Panel font` finds
-itself. A row with no match goes away, a group left with no row goes away with it, and a group that has one is shown
-open while you type. The matched text is highlighted, and nothing in the panel is rebuilt as you type — a select
-keeps its value and a half-typed number keeps its caret. `Esc`, or the `✕` beside the box, clears the search and puts
-every group back exactly as you had it; on an empty box `Esc` closes the panel as usual.
+The **search box** in the fixed head narrows the panel to the rows that answer it — on every tab, not only the one
+you are looking at. It reads each row's own words and its tooltip, so `zoom out` finds Page zoom through the `−`
+button's explanation as readily as `Panel font` finds itself. A row with no match goes away, each tab carries the
+count of the rows that answer it, and a match on a tab you are not on switches the window to that tab while you
+type. The matched text is highlighted, and nothing in the panel is rebuilt as you type — a select keeps its value
+and a half-typed number keeps its caret. `Esc`, or the `✕` beside the box, clears the search and puts you back on the
+tab you had chosen; on an empty box `Esc` closes the panel as usual.
 
-The **Board** group opens with **Read now**, the two gestures that read the board at once instead of on the clock:
+The **Skills** tab is the one tab with nothing to set: it is a read-only inventory of what an agent started from this
+panel can load. Every place a skill is absorbed from is a heading — the profile's own `skills/` folder, a
+**junctioned** folder as a source of its own with the target it points at (so the same skills are never listed
+twice), `skills.create_dir`, `skills.external_dirs`, and a trusted project's `.hermes/skills` — and under each heading
+is one row per `SKILL.md` carrying its name, description, category and path. The `link` chip marks a row reached
+through a junction, and a source that is not there, or that Hermes is told not to read, says why on its own heading
+line. The line under the summary is the gateway's `GET /v1/skills` — what a run is actually **served**, with shadowed,
+disabled and platform-gated names resolved: a row it does not serve says `not served`, a name it serves that no folder
+carries (a plugin's `plugin:skill`) gets its own Gateway row, and a gateway that cannot answer leaves every row
+`unverified` with its reason. Nothing in the tab edits a skill.
+
+The **Board** tab opens with **Read now**, the two gestures that read the board at once instead of on the clock:
 **Refresh now** re-reads every worktree row of the projects in view (the same cheap pass the board runs every few
 seconds, so a row that already matches stays as it is, and a row whose verdict is stale is read in full), and
 **Fetch remotes** runs `git fetch <remote> --prune` in every project and then re-reads the rows — the only routine
@@ -830,7 +843,7 @@ covers, and the rows repaint as the reads land.
 `config.json` — **Refresh**, **Hide stale worktrees** and **Chart columns** — which apply to every browser and survive
 a restart):
 
-| Group | Row | Meaning |
+| Tab | Row | Meaning |
 | --- | --- | --- |
 | Display | Page zoom | `Ctrl+` / `Ctrl-` / `Ctrl+0` (reset), or the `−`/`+` buttons here. `Ctrl+wheel` zooms the page too, except over a card's console text, where it sizes that card's console — its words, a tool's output and the reasoning together. |
 | Display | Panel font | Headings, labels, buttons and the text you type. |
@@ -846,11 +859,11 @@ a restart):
 | Display | Question size | Type size of the question and its choices, 11–18px (the choices are half a point smaller). A typed value is clamped when you leave the field. |
 | Display | Compact answers | Tighter padding and gaps between the answer rows, so a question takes less room in a card. The type size is separate. |
 | Display | Typed answer box | Shows the free-text row under the choices. An open-ended question keeps it whatever this says, or there would be nothing to answer with. |
-| Agent cards | Show thinking | The default for cards' `🧠`; a card's own toggle wins. |
-| Agent cards | Combined output | The default for cards' `🌊`: on, a session that never pressed the button comes up as one stream (reasoning while `🧠` is on, the calls, and the agent's words, in the order they happened); off — the default — it is the separate thinking block and the condensed tool bursts. A card's own `🌊` wins. Saved in this browser. |
-| Agent cards | Jump to an opened result | Off by default: opening a folded tool output holds the console where it is, so the box unfolds under the header you pressed. On restores the old follow-the-growth behaviour, where the console slides down to the end of what was just opened. Saved in this browser. |
-| Agent cards | Collect subagent results | Hand a parent the results of children that outlived its turn, once per turn. |
-| Agent cards | Previous turn on send | What the turn you were reading becomes when you send a reply: **freeze a snippet** (the default — the last tool line, the answer it ended on, and what folded), **leave as is** (its console stays open above the new turn), or **minimize it** (folded to its one-line peek first). Saved in this browser. |
+| Cards | Show thinking | The default for cards' `🧠`; a card's own toggle wins. |
+| Cards | Combined output | The default for cards' `🌊`: on, a session that never pressed the button comes up as one stream (reasoning while `🧠` is on, the calls, and the agent's words, in the order they happened); off — the default — it is the separate thinking block and the condensed tool bursts. A card's own `🌊` wins. Saved in this browser. |
+| Cards | Jump to an opened result | Off by default: opening a folded tool output holds the console where it is, so the box unfolds under the header you pressed. On restores the old follow-the-growth behaviour, where the console slides down to the end of what was just opened. Saved in this browser. |
+| Cards | Collect subagent results | Hand a parent the results of children that outlived its turn, once per turn. |
+| Cards | Previous turn on send | What the turn you were reading becomes when you send a reply: **freeze a snippet** (the default — the last tool line, the answer it ended on, and what folded), **leave as is** (its console stays open above the new turn), or **minimize it** (folded to its one-line peek first). Saved in this browser. |
 | Board | Board reorder | Seconds between re-sorts of closed folders and projects (`off`/5/15/30/60 presets). A project you have open keeps its slot. |
 | Board | Hover anchor | The card the pointer moves over keeps its screen position while others grow; the seconds are how long it lingers after the pointer stops. Off falls through to the next rule. |
 | Board | Touched anchor | The card you last clicked, focused or typed in keeps its position for its own number of seconds. Off clears that signal. |

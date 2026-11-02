@@ -17088,7 +17088,7 @@ function applyGreyFlash(on) {
 }
 
 // ---- settings tabs ---------------------------------------------------------------------------------------
-// Seven groups of rows is a tall panel, and the reader is nearly always here for one of them. Each group is a
+// Eight groups of rows is a tall panel, and the reader is nearly always here for one of them. Each group is a
 // tab now, keyed by `data-settings-group` and drawn in the order the markup carries them: one panel is on
 // screen at a time, and the tab the reader chose is remembered in this browser (Display is a first visit's).
 // The strip is the panel's heading, so the panels carry no heading of their own — `aria-labelledby` points each
@@ -17215,7 +17215,7 @@ function initSettingsTabs() {
 // ---- end settings tabs
 
 // ---- settings search -------------------------------------------------------------------------------------
-// The panel is a long list of rows spread over seven tabs, so the way to a setting is the search box the panel's
+// The panel is a long list of rows spread over eight tabs, so the way to a setting is the search box the panel's
 // fixed head keeps on screen. What it searches is the row itself: its text, its own `title`, and the `title` of
 // any control inside it (`zoom out` lives only in a button's tooltip, and it is exactly the word a reader would
 // try). A row that does not answer goes away, in every tab — the search is GLOBAL, not a filter on the tab the
@@ -17340,6 +17340,172 @@ function initSettingsSearch() {
 }
 
 // ---- end settings search
+
+// ---- the Skills tab -------------------------------------------------------------------------------------
+// What an agent started from this panel can actually load, and where each of those skills came from. This tab is an
+// INVENTORY, so every row is read-only — there is no switch, no editor and no delete, because a skill is a file in
+// somebody's repository and a settings window is the wrong place to rewrite one. The shape is the answer to four
+// facts that were each a trap:
+//
+//   * a skill has FOUR fields a reader needs and one of them is not a word: name, description, category, and the
+//     PATH it was read from — the path is how "same name, different file" is settled by hand.
+//   * a junctioned directory (`%LOCALAPPDATA%\hermes\skills\sefl` -> the team's own repo) is its OWN source. A
+//     naive walk lists those skills under the profile as well, with nothing to say which copy a row is, so the
+//     server hands over a source per link — with the target — and dedupes by realpath. The row says `link` when
+//     the file it read was reached through one.
+//   * the disk is only half the truth: the gateway's `GET /v1/skills` is what a run is actually SERVED (shadowing,
+//     disabled names and platform gates resolved). A row the gateway does not serve says so; a name it serves that
+//     no root carries — a plugin's `plugin:skill` — is its own row under Gateway; and a gateway that cannot answer
+//     leaves every row UNVERIFIED rather than pretending either way.
+//   * the settings search is global, and it filters the DIRECT CHILDREN of a panel: a pack of rows hidden inside one
+//     container would hide or show as one block on any query. So every row and every source heading is a direct
+//     child of the panel, and the description+path line under each row is a `.settings-preview` — the class the
+//     search already treats as belonging to the row above it.
+const SKILLS_PANEL_ID = "settings-panel-skills";
+const SKILLS_KIND_LABEL = {
+  profile: "profile",
+  link: "link",
+  "create-dir": "create dir",
+  external: "external",
+  project: "project",
+  gateway: "gateway",
+};
+
+let skillsIndex = null;
+let skillsLoadedAt = 0;
+let skillsLoading = null;
+
+const skillsKind = (source) => SKILLS_KIND_LABEL[source.kind] || source.kind || "root";
+const skillsMany = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+// One skill: the identity line (name, source, category, link, whether the gateway serves it) and the detail line
+// under it (description, then the path). Both lines carry the same words in their `title`, so a search for a word
+// in a description finds the row even though the description is drawn on the line below it.
+function skillsRowHtml(skill) {
+  const where = skill.path || "no SKILL.md — the gateway serves this name and no root this panel reads carries it";
+  const title = [skill.description || "(no description)", where, `source: ${skill.sourceLabel || skill.source}`]
+    .concat(skill.category ? [`category: ${skill.category}`] : [])
+    .join(" · ");
+  const chips = [];
+  if (skill.sourceLabel) chips.push(`<span class="skills-chip src">${esc(skill.sourceLabel)}</span>`);
+  if (skill.category) chips.push(`<span class="skills-chip cat" title="category ${esc(skill.category)}">${esc(skill.category)}</span>`);
+  if (skill.isLink) chips.push(`<span class="skills-chip link" title="reached through a link — the source above names its target">link</span>`);
+  if (skill.served === false) {
+    chips.push(
+      `<span class="skills-chip unsent" title="the gateway does not serve this name: shadowed by a higher-precedence copy, disabled in the profile, gated to another platform, or quarantined by the project scan">not served</span>`,
+    );
+  }
+  return (
+    `<div class="settings-row skills-skill" data-skills-block="1" data-skill="${esc(skill.name)}" data-skills-source="${esc(skill.source)}" title="${esc(title)}">` +
+    `<span class="skills-name">${esc(skill.name)}</span>${chips.join("")}</div>` +
+    `<div class="settings-preview mono skills-detail" data-skills-block="1" data-skill="${esc(skill.name)}" data-skills-source="${esc(skill.source)}" title="${esc(title)}">` +
+    `<span class="skills-desc">${esc(skill.description || "(no description)")}</span>` +
+    `<span class="skills-path">${esc(where)}</span></div>`
+  );
+}
+
+// One source: its own heading (label, kind, count) and the line under it — the path it reads, the target when it is
+// a link, or the reason it holds nothing. An unreadable source is a heading with a reason, never a silent gap.
+function skillsSourceHtml(source, rows) {
+  const count = rows.length;
+  const bits = [source.path];
+  if (source.isLink && source.target) bits.push(`→ ${source.target}`);
+  if (source.status !== "ok" && source.reason) bits.push(`— ${source.reason}`);
+  const bad = source.status === "error" || source.status === "missing" || source.status === "ignored";
+  const title = [bits.join(" "), `${skillsMany(count, "skill", "skills")} read from here`].join(" · ");
+  // The kind is a chip only when it says something the label does not: "Profile · PROFILE" is noise, while
+  // "sefl · LINK" is the whole point of the source.
+  const kind = skillsKind(source);
+  const kindChip = kind.toLowerCase() === String(source.label || "").toLowerCase() ? "" : `<span class="skills-chip kind">${esc(kind)}</span>`;
+  return (
+    `<div class="settings-row skills-source${count ? "" : " empty"}" data-skills-block="1" data-skills-source="${esc(source.key)}" title="${esc(title)}">` +
+    `<span class="skills-source-name">${esc(source.label)}</span>` +
+    kindChip +
+    `<span class="skills-source-count mono">${count}</span></div>` +
+    `<div class="settings-preview mono skills-source-path${bad ? " bad" : ""}" data-skills-block="1" data-skills-source="${esc(source.key)}">${esc(bits.join(" "))}</div>`
+  );
+}
+
+// The whole tab, from one payload. Called on boot and whenever the panel opens on a stale read; a failure says why
+// in the summary line instead of leaving `reading…` up for ever.
+function paintSkills(error = null) {
+  const panel = document.getElementById(SKILLS_PANEL_ID);
+  if (!panel) return;
+  for (const node of [...panel.querySelectorAll("[data-skills-block]")]) node.remove();
+  const summary = document.getElementById("skills-summary");
+  const gateway = document.getElementById("skills-gateway");
+  const data = skillsIndex;
+  if (error || !data) {
+    if (summary) summary.textContent = `could not read the skills — ${error || "no answer"}`;
+    if (gateway) {
+      gateway.textContent = "nothing was read, so this tab knows nothing about the gateway either";
+      gateway.classList.add("bad");
+    }
+    return;
+  }
+  const counts = data.counts || {};
+  const bits = [skillsMany(counts.rows || 0, "skill", "skills"), skillsMany(counts.sources || 0, "source", "sources")];
+  if (counts.duplicates) bits.push(`${skillsMany(counts.duplicates, "duplicate copy", "duplicate copies")} skipped`);
+  bits.push(data.gateway?.ok ? `${counts.served || 0} served` : `${counts.rows || 0} unverified`);
+  if (data.gateway?.ok && counts.unserved) bits.push(`${counts.unserved} not served`);
+  if (data.gateway?.ok && counts.gatewayOnly) bits.push(`${counts.gatewayOnly} gateway-only`);
+  if (summary) summary.textContent = bits.join(" · ");
+  if (gateway) {
+    const ok = Boolean(data.gateway?.ok);
+    gateway.textContent = ok
+      ? `${data.gateway.url} · /v1/skills answers ${data.gateway.count} skills · read ${new Date(data.checkedAt).toLocaleTimeString()}`
+      : `gateway ${data.gateway?.url || "(none)"} · ${data.gateway?.reason || "no answer"} — every row above is unverified`;
+    gateway.classList.toggle("bad", !ok);
+  }
+  let html = "";
+  for (const source of data.sources || []) {
+    const rows = (data.skills || []).filter((s) => s.source === source.key);
+    html += skillsSourceHtml(source, rows);
+    for (const row of rows) html += skillsRowHtml(row);
+  }
+  const served = (data.skills || []).filter((s) => s.source === "gateway");
+  if (served.length) {
+    html += skillsSourceHtml(
+      {
+        key: "gateway",
+        label: "Gateway",
+        kind: "gateway",
+        path: data.gateway?.url || "",
+        status: "ok",
+        target: null,
+        isLink: false,
+      },
+      served,
+    );
+    for (const row of served) html += skillsRowHtml(row);
+  }
+  panel.insertAdjacentHTML("beforeend", html);
+  // A query typed before this answer landed must still hide what it does not match: the new rows are in the DOM
+  // now, and the search paints from the DOM rather than from a cached list.
+  const box = document.getElementById("settings-search");
+  if (box && box.value) paintSettingsSearch();
+}
+
+async function loadSkills() {
+  if (skillsLoading) return skillsLoading;
+  skillsLoading = (async () => {
+    try {
+      const r = await apiFetch("/api/settings/skills");
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+      skillsIndex = data;
+      skillsLoadedAt = Date.now();
+      paintSkills();
+    } catch (e) {
+      paintSkills(e.message || String(e));
+    } finally {
+      skillsLoading = null;
+    }
+  })();
+  return skillsLoading;
+}
+
+// ---- end the Skills tab
 
 // ---- settings window: move it, size it ------------------------------------------------------------
 // The panel used to be a popover pinned under the top bar: `position: fixed; right: 16px; top: 74px` and no way to
@@ -17557,6 +17723,9 @@ function toggleSettings(open = null) {
   void loadSessionSetting();
   void loadProviderSetting();
   void loadModelsSetting();
+  // The skills inventory is a filesystem walk plus a gateway call, so it is read at boot and then only re-read when
+  // the answer is old: a reader opening Settings twice in a minute is not asking the disk the same question again.
+  if (Date.now() - skillsLoadedAt > 15000) void loadSkills();
   // The remote-write setting is the panel's own (config.json), but which trees carry the push guard is a file on
   // disk that another instance or a hand edit can change, so it is re-read every time the panel opens.
   void refreshRemoteGuards();
@@ -18082,6 +18251,10 @@ $("btn-settings-close")?.addEventListener("click", () => toggleSettings(false));
 // panel is never filtered by a query left in the DOM.
 initSettingsTabs();
 initSettingsSearch();
+// The skills inventory is filled before the tab is ever opened: the settings search counts the rows on EVERY tab, so
+// a Skills tab that only reads when it is selected would answer "no matches" for a skill the reader can plainly see
+// after one press. It is a filesystem walk on the server, not a page render.
+void loadSkills();
 // The window's own gestures: the head drags it, the corner grip sizes it, and the rect is remembered in this browser.
 initSettingsWindow();
 // A second way in that is always on screen at the top left: the title opens Settings.
