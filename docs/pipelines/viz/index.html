@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline renders — newest first</title>
+<meta name="generator" content="tools/render-pipelines.mjs">
+<meta name="wtgui-generated-at" content="2026-11-02T21:42:42Z">
+<meta name="wtgui-pipelines-version" content="0.68.3">
+<style>
+:root {
+  --bg: #0f1115; --panel: #161a21; --panel-2: #1b2029; --line: #262c37; --line-soft: #1f242e;
+  --text: #e6e9ef; --dim: #9aa4b2; --dimmer: #6b7482;
+  --green: #2ea043; --green-bg: #12261a; --red: #e5534b; --red-bg: #2a1618;
+  --amber: #d29922; --amber-bg: #2a2312; --blue: #4a90d9; --blue-bg: #141f2c; --violet: #a371f7; --violet-bg: #1e1730;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body { margin: 0; padding: 32px 28px 64px; background: var(--bg); color: var(--text); font: 14px/1.55 var(--ui); max-width: 1240px; }
+h1 { font-size: 26px; line-height: 1.15; margin: 0 0 6px; letter-spacing: -0.01em; }
+h2 { font-size: 17px; margin: 0 0 4px; letter-spacing: -0.01em; }
+h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dim); margin: 26px 0 8px; font-weight: 600; }
+p { margin: 0 0 10px; }
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, .mono { font-family: var(--mono); font-size: 12px; }
+code { background: var(--panel-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 5px; color: #cfd6e2; }
+.lede { color: var(--dim); max-width: 78ch; }
+.masthead { border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 26px; }
+.facts { display: flex; flex-wrap: wrap; gap: 10px 34px; margin: 16px 0 0; padding: 0; }
+.facts div { min-width: 150px; }
+.facts dt { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dimmer); }
+.facts dd { margin: 2px 0 0; font-family: var(--mono); font-size: 12.5px; color: var(--text); }
+section { margin: 0 0 34px; }
+.caption { color: var(--dim); font-size: 12.5px; max-width: 96ch; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0 0; font-size: 12.5px; }
+th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dimmer); font-weight: 600; border-bottom: 1px solid var(--line); padding: 6px 10px 6px 0; white-space: nowrap; }
+td { border-bottom: 1px solid var(--line-soft); padding: 7px 10px 7px 0; vertical-align: top; color: #cfd6e2; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; padding-right: 16px; font-family: var(--mono); color: var(--dim); }
+.hash { font-family: var(--mono); font-size: 11.5px; color: var(--dim); word-break: break-all; }
+.note { border-left: 2px solid var(--line); padding: 2px 0 2px 12px; color: var(--dim); font-size: 12.5px; }
+.callout { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 12px 14px; margin: 14px 0 0; font-size: 12.5px; color: var(--dim); }
+.callout.warn { border-color: #4a3a12; background: var(--amber-bg); color: #f0d9a8; }
+.callout.bad { border-color: #5a2424; background: var(--red-bg); color: #ffc9c4; }
+.callout.ok { border-color: #1d3a26; background: var(--green-bg); color: #c9e9d2; }
+.chip { display: inline-block; border-radius: 999px; padding: 1px 9px; font-size: 11px; font-family: var(--mono); vertical-align: 2px; margin-left: 8px; border: 1px solid; }
+.kind-local { background: var(--blue-bg); border-color: #24466b; color: #a8cdf2; }
+.kind-investigation { background: var(--amber-bg); border-color: #4a3a12; color: #f0d9a8; }
+.kind-turnover { background: var(--green-bg); border-color: #1d3a26; color: #c9e9d2; }
+.rung { background: var(--violet-bg); border-color: #3b2a5e; color: #d3c2fb; }
+.pipeline { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 18px 20px 20px; margin: 0 0 26px; }
+.pipeline .desc { color: var(--dim); margin: 6px 0 0; max-width: 92ch; }
+.pipeline .chain { color: var(--dim); font-size: 12.5px; margin: 10px 0 0; }
+.graph { margin: 16px 0 0; overflow-x: auto; background: var(--bg); border: 1px solid var(--line-soft); border-radius: 10px; padding: 10px 6px; }
+.graph pre.mermaid { margin: 0; background: transparent; color: var(--dim); font-family: var(--mono); font-size: 11.5px; white-space: pre; }
+.graph svg { max-width: none !important; height: auto; }
+#contents ol { margin: 6px 0 0; padding-left: 22px; columns: 2; column-gap: 40px; }
+#contents li { margin: 0 0 3px; }
+#contents .k { color: var(--dimmer); font-size: 11.5px; font-family: var(--mono); }
+footer { border-top: 1px solid var(--line); margin-top: 40px; padding-top: 14px; color: var(--dimmer); font-size: 12px; }
+.status { font-family: var(--mono); font-size: 12px; color: var(--dim); margin: 10px 0 0; }
+.status.bad { color: #ffb4ab; }
+</style>
+</head>
+<body>
+<header class="masthead">
+  <h1>Pipeline renders</h1>
+  <p class="lede">One file per version, newest first: each is a snapshot of the catalogue that version shipped with, with its source files' sha256s inside it. The folder is the history — a later render never overwrites an earlier one, so an old picture still explains an old release.</p>
+  <dl class="facts">
+    <div><dt>index written at</dt><dd><time datetime="2026-11-02T21:42:42Z">2026-11-02T21:42:42Z</time></dd></div>
+    <div><dt>newest panel version</dt><dd>v0.68.3</dd></div>
+    <div><dt>renders in folder</dt><dd>1</dd></div>
+  </dl>
+</header>
+<section>
+  <h2>Renders</h2>
+  <p class="caption">Sorted by version, then by generation time. Every row is a self-contained page: mermaid is inlined, so each one opens offline.</p>
+  <table>
+        <thead><tr><th>render</th><th>generated (UTC)</th><th class="num">definitions</th><th class="num">size</th><th>sha256</th><th>catalogue sources</th><th></th></tr></thead>
+        <tbody><tr>
+        <td><a href="pipelines-0.68.3.html"><code>v0.68.3</code></a></td>
+        <td class="mono">2026-11-02T21:42:42Z</td>
+        <td class="num">7</td>
+        <td class="num">2.49 MB</td>
+        <td class="hash">c2c78453b72a0503…</td>
+        <td><span class="hash">seed 06c394500ac7…</span></td>
+        <td><a href="pipelines-0.68.3.html">open</a></td>
+      </tr></tbody>
+      </table>
+</section>
+<footer>
+  <p>Written by <code>tools/render-pipelines.mjs</code>; the render itself is <code>pipelines-&lt;version&gt;.html</code>. Re-run <code>npm run render:pipelines</code> after a catalogue change, and after a version bump, so the newest release has its own picture.</p>
+</footer>
+</body>
+</html>
