@@ -831,7 +831,7 @@
           ? `<span class="chip warn" title="aggressive mode is on — the assistant wakes on everything, checks every live card and keeps pushing until the fleet is waiting on something outside. Switch it off in the header (Alt+Shift+A)">⚡ aggressive</span>`
           : "",
         sentryState(a?.health) ? `<span class="chip warn" title="the sentry's clock is not running or has not ticked — the server watchdog restarts it, and this goes green again">sentry ${sentryState(a?.health)}</span>` : "",
-        a ? `<span class="chip" title="self-wakes in the last hour (a rule set to wake, or an alert handed to it)">${a.wakes?.lastHour ?? 0}/${a.wakes?.limit ?? 0} wakes</span>` : "",
+        a ? `<span class="chip" title="sweep wakes in the last hour — the budgeted class (a polled condition like quiet or loop). An event — a settle, an exit, a question, a watch finishing — is never refused">${a.sweeps?.lastHour ?? 0}/${a.sweeps?.limit ?? 0} sweeps</span>` : "",
       ].join("");
     }
     paintAssistantTabs();
@@ -1831,7 +1831,7 @@
           <button type="button" id="btn-as-wake" title="ask the assistant what it sees — one turn">Ask what it sees</button>
           <span class="as-err" id="as-watchdog-err"></span>
         </div>
-        <div class="as-help">${a.wakes.lastHour}/${a.wakes.limit} wakes in the last hour${a.wakePending ? ` · ${a.wakePending} queued behind the running turn` : ""} · scratchpad at ${esc(a.settings.model || "(gateway default model)")}</div>
+        <div class="as-help">${a.sweeps.lastHour}/${a.sweeps.limit} sweep wakes in the last hour — events are never budgeted${a.wakePending ? ` · ${a.wakePending} queued behind the running turn` : ""} · scratchpad at ${esc(a.settings.model || "(gateway default model)")}</div>
       </div>`;
     // Each threshold disclosure remembers itself. `toggle` does not bubble, and this repaint replaces the
     // elements rather than mutating them, so the listener goes on the new element every time.
@@ -1912,7 +1912,7 @@
       <div class="as-group">
         <h4>Its wake budget and quiet windows</h4>
         <div class="as-line">
-          <label${knobs.has("maxWakesPerHour") ? ' class="as-held-label"' : ""} title="the ceiling on how many times an hour a rule at wake or act may ask THIS assistant">wakes / hour <input type="number" min="0" max="60" data-as-set="maxWakesPerHour"${first ? "" : ` data-as-for="${esc(id)}"`} value="${s.maxWakesPerHour}"${dis("maxWakesPerHour")}></label>
+          <label${knobs.has("maxWakesPerHour") ? ' class="as-held-label"' : ""} title="the ceiling on sweep wakes an hour — the conditions the sentry polls for (quiet, loop, leftover, child…). An event (a settle, an exit, a question, an approval, a finished watch) is never refused">sweep wakes / hour <input type="number" min="0" max="60" data-as-set="maxWakesPerHour"${first ? "" : ` data-as-for="${esc(id)}"`} value="${s.maxWakesPerHour}"${dis("maxWakesPerHour")}></label>
           <label${knobs.has("quietSeconds") ? ' class="as-held-label"' : ""} title="a running turn that has produced nothing for this long is quiet — the bar the no-new-output rule fires on">quiet after <input type="number" min="30" max="3600" data-as-set="quietSeconds"${first ? "" : ` data-as-for="${esc(id)}"`} value="${s.quietSeconds}"${dis("quietSeconds")}> s</label>
           <label${knobs.has("childQuietSeconds") ? ' class="as-held-label"' : ""} title="a delegated subagent that writes nothing for this long is worth flagging">child silent <input type="number" min="60" max="3600" data-as-set="childQuietSeconds"${first ? "" : ` data-as-for="${esc(id)}"`} value="${s.childQuietSeconds}"${dis("childQuietSeconds")}> s</label>
         </div>

@@ -109,7 +109,7 @@ function page({ settings: own = {}, aggressive = null, open = null, second = fal
       commandAuditModes: ["off", "report", "enforce"],
       health: {},
       aggressive: aggressive || { on: false, restore: null, holds: { settings: [], rules: [] } },
-      wakes: { lastHour: 0, limit: DEFAULTS.maxWakesPerHour },
+      sweeps: { lastHour: 0, limit: DEFAULTS.maxWakesPerHour },
       wakePending: 0,
       assistants: records,
     },

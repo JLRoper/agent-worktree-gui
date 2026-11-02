@@ -288,15 +288,15 @@ test("a spent wake budget still refuses a quiet wake, but a settle goes out", as
     1,
     "the settle added no second suppression — the budget did not touch it",
   );
-  // The exemption is the settle's alone: the next quiet sweep of the same silence is one key and re-arms later, so
-  // prove the general case directly, with a rule that is not the settle.
+  // Sweeps stay budgeted: the next quiet sweep of the same silence is one key and re-arms later, so prove the
+  // general case directly, with a sweep rule.
   const refused = assistant.wake("a quiet thing", null, "quiet");
-  assert.equal(refused?.refused, "budget", "every other rule is still budgeted");
+  assert.equal(refused?.refused, "budget", "a sweep is still budgeted");
 });
 
-// The other arm of the spent budget: the settle above goes out, and this one proves — the part worth pinning — that
-// it spends what it is allowed to ignore without refilling the hour for the quiet rule behind it. (The failed run's
-// own exemption is `checkExit`'s, and test/exited-wake.test.js drives that one.)
+// The other arm of the spent budget: the settle above goes out, and this one proves — the part worth pinning — that an
+// EVENT neither is refused nor spends the hour. (The failed run's own arm is `checkExit`'s, and
+// test/assistant-event-wakes.test.js drives every event class together.)
 test("a completion still wakes with the hour's budget spent, and the budget stays spent", async (t) => {
   const { assistant, said } = await board(t);
   const limit = assistant.settings.maxWakesPerHour;
@@ -319,16 +319,17 @@ test("a completion still wakes with the hour's budget spent, and the budget stay
   assert.equal(assistant.pendingWake.length, 0, "the settle's wake was taken off the queue and sent");
   assert.equal(said.length, 1, "one wake left the panel: the completion's");
   assert.match(said[0].text, /\[settle\] wtgui-wake-the-panel-aaa111 ended normal/);
-  assert.equal(assistant.wakes.length, limit + 1, "and the settle spent what it was allowed to ignore");
+  assert.equal(assistant.wakes.length, limit, "and the settle spent nothing — an event is not a sweep");
   assert.equal(
     assistant.journal.filter((j) => j.kind === "wake-suppressed").length,
     1,
     "no second suppression — the budget did not touch the settle",
   );
 
-  // The exemption is the settle's alone: with the list now one past the limit, the next quiet wake is still refused.
+  // The exemption is every event's, not the settle's alone: with the list still at the limit, the next sweep is refused
+  // and the counter it is refused against has not moved.
   const again = assistant.wake("quiet: still nothing", null, "quiet");
-  assert.equal(again.refused, "budget", "every other rule is still budgeted");
+  assert.equal(again.refused, "budget", "a sweep is still budgeted");
 });
 
 // The unit cases above prove the judgement. This one proves the WIRING, with the real store: `jobs.settle` is where
