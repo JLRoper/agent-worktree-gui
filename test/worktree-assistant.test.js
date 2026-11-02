@@ -1,4 +1,5 @@
-// Which assistant owns a worktree — the detail's "Controlled by: Manager 1" bullet and the optional chart column.
+// Which assistant owns a worktree — the detail's "Controlled by: Assistant #1 — Manager" bullet and the optional
+// chart column, whose cell reads the assistant's NAME and whose tooltip carries its numbered role label.
 //
 // The owner is stored beside the lock (lib/locks.js `owners`) because it is the same kind of fact: the panel's own
 // answer about a directory git knows nothing about. Three properties are asserted here, each driven through the real
@@ -86,6 +87,8 @@ test("a tree nobody moved reports Assistant #1, labelled by its role", { timeout
   const row = await waitForRow(panel.base, "proj", board.trees["tree-one-1a2b3c"]);
   assert.equal(row.assistant.id, "assistant-1", "the default owner is Assistant #1");
   assert.equal(row.assistant.label, "Manager 1", "its label is the role's, not its id");
+  assert.equal(row.assistant.name, "Assistant #1", "the cell's text is the assistant's own name");
+  assert.equal(row.assistant.role, "Manager", "the bullet's second half is the role, without its number");
   assert.notEqual(row.assistant.label, row.assistant.id, "the label is never the raw id");
   assert.equal(row.assistant.fallback, undefined, "a default owner has nothing to explain");
   assert.deepEqual(await ownersOnDisk(panel), {}, "nothing is written for a tree nobody moved");
@@ -110,7 +113,9 @@ test("the setter stores an id, answers with the updated row, and survives a rest
   // The next read agrees, and the store holds the id under the tree's tag — never the path, never the label.
   const row = await waitForRow(panel.base, "proj", tree);
   assert.equal(row.assistant.id, "assistant-2");
+  assert.equal(row.assistant.name, "Assistant #2", "the cell names the assistant, not the role");
   assert.equal(row.assistant.label, "Manager 2");
+  assert.equal(row.assistant.role, "Manager");
   assert.deepEqual(await ownersOnDisk(panel), { "proj::1a2b3c": "assistant-2" });
 
   // …and a restart proves it is the panel's, not the tab's.
@@ -240,6 +245,8 @@ test("the label is the role's, read at read time: two roles read as two labels a
   const renamedRow = await waitForRow(again.base, "proj", two);
   assert.equal(renamedRow.assistant.id, "assistant-2", "the id in the store did not move");
   assert.equal(renamedRow.assistant.label, "Auditor 1", "the label follows the role's new name");
+  assert.equal(renamedRow.assistant.role, "Auditor", "…and so does the bullet's unnumbered role");
+  assert.equal(renamedRow.assistant.name, "Assistant #2", "the assistant's own name did not move");
   assert.equal(sha(await readFile(locksFile(again), "utf8")), before, "renaming a role writes nothing to the owner store");
 });
 
@@ -265,7 +272,9 @@ test("an owner whose assistant is gone falls back to Assistant #1 and says so", 
   t.after(() => again.stop());
   const row = await waitForRow(again.base, "proj", tree);
   assert.equal(row.assistant.id, "assistant-1", "the tree falls back to the default owner");
+  assert.equal(row.assistant.name, "Assistant #1", "the cell names who ACTUALLY owns it now");
   assert.equal(row.assistant.label, "Manager 1");
+  assert.equal(row.assistant.role, "Manager");
   assert.equal(row.assistant.stored, "assistant-2", "the row keeps the id the reader gave it");
   assert.match(row.assistant.fallback, /assistant-2 is not on the board any more/);
   assert.match(row.assistant.fallback, /Assistant #1 controls this worktree/);
@@ -316,11 +325,14 @@ test("the store's key is the tree's tag, so neither the path nor the branch spel
   assert.match(ownerKey({ project: "proj", path: "C:/p/.worktrees/plain" }), /^proj::path:/);
 });
 
-test("the owner is display-only, and the page draws the label the server resolved", async () => {
+test("the owner is display-only, and the page draws the name and role the server resolved", async () => {
   const src = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
-  // The two surfaces read the SERVER's label; neither maps an id to a sentence of its own.
-  assert.match(src, /Controlled by: \$\{esc\(row\.assistant\?\.label \|\| "Assistant #1"\)\}/);
-  assert.match(src, /row\.assistant\?\.label \|\| "Assistant #1"/);
+  // Both surfaces come from the owner-cell region, which reads the SERVER's name, label and role; neither maps an id
+  // to a sentence of its own, and neither falls back to the role label.
+  assert.match(src, /assistant: ownerCellHtml\(row\)/, "the owner column draws the owner cell");
+  assert.match(src, /\$\{ownerDetailHtml\(row\)\}/, "the merge-state list draws the owner bullet");
+  assert.doesNotMatch(src, /row\.assistant\?\.label \|\| "Assistant #1"/, "neither surface falls back to the role label");
+  assert.doesNotMatch(src, /Controlled by: \$\{esc\(row\.assistant/, "the bullet no longer reads the label");
   assert.doesNotMatch(src, /assistant-2["'`]\s*=>/, "the page never hard-codes an id-to-label table");
 
   // Nothing in the module that fires wakes reads the owner: this PR stores and draws it, and the routing PR is the

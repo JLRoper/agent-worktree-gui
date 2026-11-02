@@ -1653,13 +1653,15 @@ function withLocks(snap) {
 // a directory git knows nothing about — and overlaid here for the same reason the lock is: the scanner reads git, this
 // reads the panel's store.
 //
-// Three rules, all of them readable from this one function:
+// Three rules, all of them readable from these two functions:
 //
 //   * the STORE holds an id and nothing else, and the ID is `<project>::<the tree's six-hex tag>` — not the path and
 //     not the branch, both of which the panel itself rewrites when it renames a tree (lib/locks.js `ownerKey`);
-//   * the LABEL is resolved here, on every read, from the role the owner runs. Renaming a role therefore renames the
-//     bullet on every row that shows it without touching one byte of the store, and two assistants on two roles read
-//     as two labels ("Manager 1" / "Reviewer 1") rather than one;
+//   * the NAME, the numbered LABEL and the ROLE are all resolved here, on every read, from the records the board
+//     holds: the cell's text is the assistant's own name ("Assistant #1"), its tooltip carries the numbered role
+//     label ("Manager 1") and the detail's bullet reads "<name> — <role>" ("Assistant #1 — Manager"). Renaming a
+//     role therefore renames every surface without touching one byte of the store, and a role label can never be
+//     mistaken for the assistant's name;
 //   * ABSENCE is Assistant #1, so a tree nobody moved carries no record and a store written before owners existed
 //     needs no migration. An owner that is no longer on the board falls back to #1 TOO, and says so: the row keeps
 //     `stored` (the id the reader gave it) and a `fallback` sentence, because a silent fallback is the reader's
@@ -1667,21 +1669,29 @@ function withLocks(snap) {
 //
 // DISPLAY ONLY: nothing in fired()/wake()/noteSettle reads `row.assistant`. It is here so the routing PR that follows
 // has one place to read the owner from — not wired into who wakes or runs in this one.
+function ownerFields(rec) {
+  // A record missing entirely still answers with the default owner's name rather than an empty string: a row is
+  // never drawn from nothing, and the cell must not be the one place a dash appears. The label and the role stay
+  // empty there — inventing "Manager 1" for a board that has no records would state a role nothing answered for.
+  if (!rec) return { id: DEFAULT_OWNER, name: "Assistant #1", label: "", role: "" };
+  return { id: rec.id, name: rec.name, label: assistant.roleLabelOf(rec) || "", role: assistant.roleNameOf(rec) || "" };
+}
+
 function assistantForRow(projectName, row) {
   const stored = locks.owner({ project: projectName, path: row.path, branch: row.branch });
   const wanted = stored || DEFAULT_OWNER;
   const rec = assistant.assistants.find((a) => a.id === wanted) || null;
-  if (rec) return { id: rec.id, name: rec.name, label: assistant.roleLabelOf(rec) };
+  if (rec) return ownerFields(rec);
   // The default owner itself must always answer; a store that has lost #1 (a hand-edited file) still draws a name
   // rather than an empty cell.
   const first = assistant.assistants.find((a) => a.id === DEFAULT_OWNER) || null;
-  if (!stored) return { id: first?.id || DEFAULT_OWNER, name: first?.name || "", label: first ? assistant.roleLabelOf(first) : "" };
+  if (!stored) return ownerFields(first);
+  // The stored owner is gone: the row keeps the id the reader gave it AND the sentence that says who owns the tree
+  // now, so the fallback is explained on the surfaces rather than silently reading like the reader's own choice.
   return {
-    id: first?.id || DEFAULT_OWNER,
-    name: first?.name || "",
-    label: first ? assistant.roleLabelOf(first) : "",
+    ...ownerFields(first),
     stored,
-    fallback: `${stored} is not on the board any more, so Assistant #1 controls this worktree until you set an owner again`,
+    fallback: `${stored} is not on the board any more, so ${first?.name || "Assistant #1"} controls this worktree until you set an owner again`,
   };
 }
 
@@ -2431,8 +2441,9 @@ const server = createServer(async (req, res) => {
       });
     }
 
-    // Who owns a worktree: the assistant whose ROLE LABEL the row's bullet list draws and whose optional chart
-    // column says "Manager 1". Same shape as the two settings routes above — the reader names a row and one value,
+    // Who owns a worktree: the assistant whose NAME the optional chart column draws ("Assistant #1"), whose role
+    // label rides in that cell's tooltip and whose bullet list reads "Controlled by: Assistant #1 — Manager". Same
+    // shape as the two settings routes above — the reader names a row and one value,
     // and the answer carries the stored result back — because this is the same kind of fact: the panel's own,
     // per-tree, persisted beside the lock (lib/locks.js) and DISPLAY ONLY. Nothing in fired()/wake()/noteSettle
     // reads it in this PR.
@@ -2471,14 +2482,14 @@ const server = createServer(async (req, res) => {
       if (!rec) return sendJson(res, 404, { error: `no such assistant: ${id}` });
       const out = locks.setOwner({ project: projectName, path: row.path, branch: row.branch }, id === DEFAULT_OWNER ? null : id);
       if (!out || !out.ok) return sendJson(res, 400, { error: "the owner could not be changed" });
-      const label = assistant.roleLabelOf(rec);
+      const fields = ownerFields(rec);
       const what = row.name || path.basename(String(row.path || ""));
-      log(`owner ${projectName}: ${what} -> ${label} (${rec.id})`);
+      log(`owner ${projectName}: ${what} -> ${fields.name} (${fields.label || "no role label"}, ${rec.id})`);
       // A settings-like write: every open board redraws the row's bullet list and column from this snapshot.
       broadcast({ type: "snapshot", data: snapshot() });
       return sendJson(res, 200, {
         ok: true,
-        assistant: { id: rec.id, name: rec.name, label },
+        assistant: fields,
         // The SAME shape the snapshot carries, fallback sentence included, so a caller that paints the answer and a
         // board that paints the next snapshot cannot disagree about the row.
         row: { ...row, assistant: assistantForRow(projectName, row) },
