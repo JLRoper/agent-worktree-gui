@@ -276,6 +276,7 @@ If none of them fired, the row is not live — whatever processes may be running
 | `ON MAIN` | This is the primary checkout of the main branch. |
 | `UNMERGED (N commits)` | Carries `N` commits that are not on remote main. On a clean tree the badge **is a button** (`⇥` on its face): it opens five outcomes for that row — roll it into its parent, **rebase it onto its parent's newest commit**, open a PR, have an agent **check whether the change is already on main** (which deletes the tree when it is), or ask where it should go. See [Merging a branch from the board](#merging-a-branch-from-the-board), [Rebasing a branch onto its parent](#rebasing-a-branch-onto-its-parent) and [Checking whether a branch already landed](#checking-whether-a-branch-already-landed). |
 | `EMPTY REPO` / `NO BASE REF` | There is nothing to judge against: the repo has no commits yet, or its remote base ref does not exist here. |
+| `RELEASED` | The row's path is not a worktree of its own any more. A release can leave the folder behind, and `git -C` in it does not fail: it walks up and answers for the project's own checkout — its branch, its head, *the reader's* dirty files. So the row carries **no counts at all** (the dirty cell shows `—`, never `clean`), and its tooltip says which checkout git would have answered for. It is not counted as unmerged work: nothing is there to merge. |
 | *(empty, grey)* | Not computed yet. A dashed grey badge is a verdict being reclassified after a change. |
 
 `MERGED` + clean + not live is what the project's **safe to remove** chip counts.

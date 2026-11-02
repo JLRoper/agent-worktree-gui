@@ -2525,6 +2525,9 @@ td.branch .branch-plain { color: #9aa6b4; }
 .badge.onmain { color: #9ecbff; background: var(--blue-bg); border-color: #1c3a56; }
 .badge.nocommits { color: var(--dim); background: #20242c; border-color: var(--line); }
 .badge.error { color: var(--dim); background: #20242c; border-color: var(--line); }
+/* A row whose path is no longer a tree of its own: nothing is being claimed about work, so it reads as inert — the
+   same grey as a no-commits badge, and its tooltip carries the reason lib/own-tree.js gave. */
+.badge.released { color: var(--dim); background: #20242c; border-color: var(--line); border-style: dashed; }
 .badge.stale { opacity: .65; border-style: dashed; }
 
 /* The UNMERGED chip is a control, not a statement: it starts the merge agent for its row. It keeps the badge's own
