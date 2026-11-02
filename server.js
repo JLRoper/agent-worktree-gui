@@ -2744,7 +2744,11 @@ const server = createServer(async (req, res) => {
       if (!target) return sendJson(res, 404, { error: `unknown project: ${name || "(none)"}` });
       const t0 = Date.now();
       try {
-        const audit = await auditRepo(target.path, { config, force: url.searchParams.get("fresh") === "1" });
+        // The job store decides what is LIVE, whatever git says about the tree: a run's own cwd (and the tree the
+        // panel cut for it) is handed to the audit so a working agent's tree can never be offered as deletable. It
+        // is read here, per request, and never cached with the audit — a run that started a second ago counts.
+        const liveCwds = jobs.runningJobs().flatMap((j) => [j.cwd, j.worktreePath, j.ownerPath]).filter(Boolean);
+        const audit = await auditRepo(target.path, { config, force: url.searchParams.get("fresh") === "1", liveCwds });
         return sendJson(res, 200, { project: target.name, path: target.path, tookMs: Date.now() - t0, ...audit });
       } catch (e) {
         return sendJson(res, 502, { project: target.name, path: target.path, tookMs: Date.now() - t0, error: String((e && e.message) || e) });
