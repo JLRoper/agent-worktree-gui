@@ -14,7 +14,12 @@
 //   7. the digest: the top N queued, every running task with its thread, every stale one, and nothing at all when the
 //      queue is empty.
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { Assistant } from "../lib/assistant.js";
 import {
   addTask,
   deleteTask,
@@ -313,4 +318,35 @@ test("pickTask drops a row with no id or no title, and falls an unknown state ba
   assert.equal(pickTask({ title: "no id" }), null);
   assert.equal(pickTask({ id: 1 }), null);
   assert.equal(pickTask({ id: 1, title: "x", state: "bogus" }).state, "queued");
+});
+
+// ---- the store every assistant has, including one created while the panel is running ----------------------
+test("a queue file is seeded for Assistant #1 at boot and for a new assistant at creation", async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-queue-seed-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const assistantFile = path.join(dir, "assistant.json");
+  await writeFile(assistantFile, JSON.stringify({ version: 2, settings: {}, notes: "", rules: [], watches: [], alerts: [], journal: [] }));
+  const assistant = new Assistant({
+    config: { jobsFile: path.join(dir, "jobs.json"), assistantFile },
+    jobs: { list: () => [], firstOfThread: () => null, create: async (body) => ({ id: "job-1", ...body }) },
+    getProjects: () => [],
+    onLog: () => {},
+  });
+
+  // Boot seeded #1: the file is on disk before anything has ever been added, and the route reads it as FOUND.
+  const first = path.join(dir, "assistants", "assistant-1", "queue.json");
+  assert.ok(existsSync(first), "Assistant #1's queue exists at boot");
+  assert.deepEqual(JSON.parse(readFileSync(first, "utf8")).tasks, []);
+  assert.equal(assistant.queueView("assistant-1").found, true);
+
+  // …and a second assistant gets its own at the moment it is created, not at its first write: `state/assistants/<id>/
+  // queue.json`, the same shape and the same path rule, so "every assistant has a store" is true while the panel runs.
+  const second = assistant.createAssistant({ name: "Reviewer" }).created;
+  const file = path.join(dir, "assistants", second.id, "queue.json");
+  assert.ok(existsSync(file), `${second.id}'s queue exists at creation`);
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8")), { version: 1, nextId: 1, tasks: [] });
+  const view = assistant.queueView(second.id);
+  assert.equal(view.found, true);
+  assert.equal(view.assistantId, second.id);
+  assert.equal(view.counts.total, 0);
 });
