@@ -23,6 +23,8 @@
   "jobMaxRuntimeSeconds": 3600,
   "hermesBin": null,
   "remoteBranchPolicy": "local-only",
+  "defaultTurnover": null,
+  "defaultInvestigation": null,
   "projects": [
     {
       "name": "heroes-js",
@@ -31,6 +33,8 @@
       "mainBranch": "main",
       "prRepo": "JLRoper/vigilant-palm-tree",
       "remoteBranchPolicy": "allow",
+      "defaultTurnover": "github-force-merge",
+      "defaultInvestigation": "github-investigate",
       "worktrees": null
     },
     {
@@ -40,6 +44,8 @@
       "mainBranch": "main",
       "prRepo": "JLRoper/agent-worktree-gui",
       "remoteBranchPolicy": "allow",
+      "defaultTurnover": "github-force-merge",
+      "defaultInvestigation": "github-investigate",
       "releaseWorktrees": true,
       "worktrees": null
     }

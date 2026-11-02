@@ -221,8 +221,8 @@ const codeLines = (file) =>
 test("every *File / *Dir / *Log config key the panel reads is derived by lib/paths.js, or is source rather than state", () => {
   const derived = new Set(Object.keys(statePaths({ dataDir: "X" })));
   // Read from config but not a state file: the scratch directory is resolved beside the data directory (resolveDirs), and
-  // the host SEED ships with the code, next to server.js, by design.
-  const notState = new Set(["scratchDir", "hostsSeedFile", "dataDirSource", "scratchDirSource"]);
+  // the two SEEDS ship with the code, next to server.js, by design (hosts.seed.json, pipelines.seed.json).
+  const notState = new Set(["scratchDir", "hostsSeedFile", "pipelinesSeedFile", "dataDirSource", "scratchDirSource"]);
   const missing = new Map();
   for (const file of sourceFiles()) {
     for (const { text, n } of codeLines(file)) {
