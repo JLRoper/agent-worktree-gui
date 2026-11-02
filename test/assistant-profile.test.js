@@ -1,4 +1,4 @@
-// One assistant's own settings, its own default role prompt and its two optional whitelists.
+// One assistant's own settings and its own default role prompt. There is no whitelist any more.
 //
 // What this file is the contract for:
 //
@@ -13,12 +13,10 @@
 //      the "use for if they need to restart" half of the request, and it is the reason the prompt is a file rather
 //      than a field in the page.
 //
-//   3. WHITELIST MATCHING — "*", an exact name, an empty list and a name nothing matches, all four, on the matcher
-//      itself and through `spawnAllowed` (which is what a SPAWN line and a pressed card actually ask).
-//
-//   4. ENFORCEMENT — a SPAWN outside the project list is refused where the line is read (journaled, no card, no
-//      run), a SPAWN IN outside the worktree list likewise, and a card pressed AFTER the list was tightened is
-//      refused too: a card is not a way around the list it was made under.
+//   3. THE WHITELISTS ARE GONE — the two lists that decided which projects an assistant was shown and where a
+//      SPAWN might cut a tree are removed from the profile, the store, the Role pane, the route and the spawn check.
+//      A profile file written by the older build still parses (the key is dropped); a SPAWN is judged by that
+//      assistant's own spawn switch and by nothing else; and every project is offered to every assistant.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
@@ -28,13 +26,14 @@ import test from "node:test";
 import { Assistant } from "../lib/assistant.js";
 import { parseActions } from "../lib/assistant/actions.js";
 import { PRIMARY_ASSISTANT, threadFor } from "../lib/assistants.js";
-import { EMPTY_PROFILE, describeList, parseWhitelist, profileRelFor, readProfileFile, whitelistMatches } from "../lib/assistant/profile.js";
+import { EMPTY_PROFILE, pickProfile, profileRelFor, readProfileFile, writeProfileFile } from "../lib/assistant/profile.js";
 
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
 const slash = (p) => String(p || "").replace(/\\/g, "/");
 
-// Two projects on the board, so a whitelist has something to include and something to leave out. The paths are
-// fabricated on purpose: nothing here reads the filesystem for a project, and the card/refusal paths do not either.
+// Two projects on the board: one to spawn in, and one more to prove that a second project is offered just the same
+// now that no list decides what an assistant may see. The paths are fabricated on purpose: nothing here reads the
+// filesystem for a project, and the card paths do not either.
 const PROJECTS = [
   { name: "alpha", path: "C:/work/alpha" },
   { name: "beta", path: "C:/work/beta" },
@@ -107,8 +106,7 @@ test("a second assistant's knobs are its own, and Assistant #1's file is not tou
   // A rule level is per assistant too.
   assistant.setSettingsFor(id, { rules: { quiet: "wake" } });
   assert.equal(assistant.settingsFor(id).rules.quiet, "wake");
-  assert.equal(assistant.settings.rules.quiet, "debug" in assistant.settings.rules ? assistant.settings.rules.quiet : "log", "#1's quiet rule is still its default");
-  assert.equal(assistant.settings.rules.quiet, "log");
+  assert.equal(assistant.settings.rules.quiet, "log", "#1's quiet rule is still its default");
   // The wake knobs ride in the profile as well: they are pickSettings keys, so #2's file can carry its own budget
   // and its own quiet windows instead of answering with Assistant #1's numbers. Only #2's move.
   const WAKE = { maxWakesPerHour: 3, quietSeconds: 90, childQuietSeconds: 120 };
@@ -144,8 +142,8 @@ test("the default role prompt is saved by the Role tab's route and read back aft
   assert.ok(booted.preamble(id).includes(PROMPT), "and the first turn after it runs on the prompt");
   assert.equal(booted.rolePayload(id).prompt, PROMPT, "the Role tab opens showing it");
 
-  // #1's own prompt: an optional file it never had, holding ONLY the two new fields — its knobs stay in
-  // assistant.json. Written only when the reader actually uses the field.
+  // #1's own prompt: an optional file it never had, holding ONLY the new field — its knobs stay in assistant.json.
+  // Written only when the reader actually uses the field.
   assert.equal(assistant.profileMetaOf(PRIMARY_ASSISTANT).exists, false, "nothing was created for #1 by merely existing");
   assistant.saveProfile(PRIMARY_ASSISTANT, { prompt: "Be brief." });
   const own = JSON.parse(await readFile(profileFile(PRIMARY_ASSISTANT), "utf8"));
@@ -164,114 +162,79 @@ test("clearing the prompt clears it in the file and in the next turn", async (t)
   assert.ok(!assistant.preamble(id).includes("Your default role prompt"), "an empty prompt adds nothing to the turn");
 });
 
-test("whitelist matching: *, an exact name, an empty list, and a name nothing matches", () => {
-  // Empty means ALL — neither list is required, so a blank box must not hide the whole board.
-  assert.equal(whitelistMatches([], ["alpha"]), true);
-  assert.equal(whitelistMatches(parseWhitelist(""), ["alpha"]), true);
-  // "*" means all, alone or beside real entries.
-  assert.equal(whitelistMatches(["*"], ["anything", "C:/x"]), true);
-  assert.equal(whitelistMatches(parseWhitelist("*, alpha"), ["beta"]), true);
-  // An exact name matches, case- and separator-insensitively, and WHOLE — never as a prefix.
-  assert.equal(whitelistMatches(["alpha"], ["alpha"]), true);
-  assert.equal(whitelistMatches(["alpha"], ["Alpha"]), true);
-  assert.equal(whitelistMatches(["C:/work/alpha"], ["c:\\work\\alpha\\"]), true);
-  assert.equal(whitelistMatches(["agent"], ["agent-worktree-gui"]), false, "a name is whole, not a prefix");
-  // An unknown name simply matches nothing: it is not an error, and it is not the same as "*".
-  assert.equal(whitelistMatches(["gamma"], ["alpha", "beta"]), false);
-  // Separators: commas AND newlines, blanks dropped, duplicates folded.
-  assert.deepEqual(parseWhitelist("alpha, beta\ngamma\n\n"), ["alpha", "beta", "gamma"]);
-  assert.deepEqual(parseWhitelist("alpha, Alpha , alpha"), ["alpha"], "deduped case-insensitively, the first spelling kept");
-  assert.deepEqual(parseWhitelist([]), []);
-  // The sentence the journal and the refusal carry.
-  assert.equal(describeList([]), "all (no list — every one)");
-  assert.equal(describeList(["*"]), "all (*)");
-  assert.match(describeList(["alpha", "beta"]), /^2 entries \(alpha, beta\)$/);
-});
-
-test("spawnAllowed asks the project list for a SPAWN and the worktree list for a SPAWN IN", async (t) => {
-  const { assistant } = await panel(t);
+test("the whitelists are gone from the profile, the payloads, the page and the route", async (t) => {
+  const { assistant, profileFile } = await panel(t);
   const id = assistant.createAssistant({ roleId: "agent-manager" }).created.id;
-  // Open by default: everything is allowed until the reader types.
-  assert.equal(assistant.spawnAllowed(id, { target: "beta" }).ok, true, "no list = all");
-  assistant.saveProfile(id, { projects: ["alpha"] });
-  assert.equal(assistant.spawnAllowed(id, { target: "alpha" }).ok, true);
-  assert.equal(assistant.spawnAllowed(id, { target: "C:/work/alpha/.worktrees/x" }).ok, true, "a path inside a whitelisted project");
-  const refused = assistant.spawnAllowed(id, { target: "beta" });
-  assert.equal(refused.ok, false);
-  assert.equal(refused.list, "projects");
-  assert.match(refused.reason, /whitelisted projects \(1 entry \(alpha\)\)/);
-  // "*" opens it again.
-  assistant.saveProfile(id, { projects: "*" });
-  assert.equal(assistant.spawnAllowed(id, { target: "beta" }).ok, true, "* means all");
-  // SPAWN IN is the WORKTREE list, and a project name counts as one of that tree's names.
-  assistant.saveProfile(id, { worktrees: ["wtgui-fix-the-thing-abc123"] });
-  assert.equal(assistant.spawnAllowed(id, { target: "wtgui-fix-the-thing-abc123", existing: true }).ok, true);
-  assert.equal(assistant.spawnAllowed(id, { target: "C:/work/alpha/.worktrees/wtgui-fix-the-thing-abc123", existing: true }).ok, true, "the directory name matches the path");
-  const inRefused = assistant.spawnAllowed(id, { target: "C:/work/beta/.worktrees/other", existing: true });
-  assert.equal(inRefused.ok, false);
-  assert.equal(inRefused.list, "worktrees");
-  // Assistant #1 keeps its own behaviour: no lists, everything allowed.
-  assert.equal(assistant.spawnAllowed(PRIMARY_ASSISTANT, { target: "beta" }).ok, true);
-  assert.equal(assistant.spawnAllowed(PRIMARY_ASSISTANT, { target: "whatever", existing: true }).ok, true);
+  // The module exports nothing to match a list against, and the profile it hands back has no key for one.
+  const profile = await import("../lib/assistant/profile.js");
+  for (const key of ["whitelistMatches", "parseWhitelist", "whitelistText", "describeList", "WHITELIST_ALL", "WHITELIST_MAX"]) {
+    assert.ok(!(key in profile), `${key} is not exported any more`);
+  }
+  assert.deepEqual(EMPTY_PROFILE, { settings: {}, rules: {}, prompt: "", escalateTo: [] });
+  // A profile file written by the older build still reads: the retired key is dropped, not carried.
+  assert.deepEqual(pickProfile({ prompt: "hello", whitelists: { projects: ["alpha"], worktrees: ["*"] } }), {
+    settings: {},
+    rules: {},
+    prompt: "hello",
+    escalateTo: [],
+  });
+  // The route's body no longer carries them: a caller that posts them anyway writes no such key.
+  assistant.saveProfile(id, { prompt: "kept", projects: ["alpha"], worktrees: ["wtgui-x-1a2b3c"] });
+  const stored = JSON.parse(await readFile(profileFile(id), "utf8"));
+  // An extra assistant's file carries its own knobs beside the prompt (that is main's saveProfile design — a Role
+  // save must not wipe the settings a reader chose on the Settings tab). What must NOT be there is the two lists
+  // the posted body still names, or the retired key.
+  assert.deepEqual(Object.keys(stored).sort(), ["prompt", "rules", "savedAt", "settings", "version"], "the posted lists are not written");
+  assert.ok(!("whitelists" in stored), "and neither is the retired key");
+  assert.ok(!("projects" in stored) && !("worktrees" in stored), "nor either posted list");
+  // The payloads the page reads carry no list either.
+  assert.ok(!("whitelists" in assistant.rolePayload(id)));
+  assert.ok(!("whitelists" in assistant.profileMetaOf(id)));
+  // The page's Role pane offers no whitelist control at all.
+  const page = await readFile(new URL("../public/assistant.js", import.meta.url), "utf8");
+  for (const control of ["as-projects", "as-worktrees", "btn-as-whitelists", "as-whitelist-err"]) {
+    assert.ok(!page.includes(`"${control}"`), `${control} is gone from the page`);
+  }
+  // And the server's profile route does not read the two fields out of the body.
+  const server = await readFile(new URL("../server.js", import.meta.url), "utf8");
+  assert.doesNotMatch(server, /projects: body\.projects|worktrees: body\.worktrees/);
 });
 
-test("a SPAWN outside the project list is refused where the line is read — no card, no run", async (t) => {
+test("a SPAWN is judged by the assistant's own spawn switch and by nothing else", async (t) => {
   const { assistant, spawned } = await panel(t);
   const id = assistant.createAssistant({ roleId: "agent-manager" }).created.id;
-  assistant.saveProfile(id, { projects: ["alpha"] });
-  // `ask` mode: an allowed line becomes a card, a refused one becomes nothing at all.
+  // `ask`: the line becomes a card, whichever project it names — there is no list to fall outside of.
   assistant.setSettingsFor(id, { spawn: "ask" });
   const job = turnOf(assistant, id, "SPAWN beta | do something in beta");
   await assistant.applyActions(job, parseActions(job.lines[0].text));
-  const refusal = assistant.journal.find((j) => j.kind === "spawn-refused");
-  assert.ok(refusal, "the refusal is in the journal the digest reads");
-  assert.match(refusal.text, /SPAWN beta/);
-  assert.match(refusal.text, /whitelisted projects/);
-  assert.equal(assistant.alerts.filter((a) => a.spawn).length, 0, "no card was made for a line it may not write");
-  assert.equal(spawned.length, 0, "and nothing started");
-
-  const ok = turnOf(assistant, id, "SPAWN alpha | do something in alpha");
-  await assistant.applyActions(ok, parseActions(ok.lines[0].text));
   const card = assistant.alerts.find((a) => a.spawn && a.status === "open");
-  assert.ok(card, "an allowed line still becomes a card");
+  assert.ok(card, "the line became a card");
   assert.equal(card.spawn.assistantId, id, "the card says whose card it is");
+  assert.equal(assistant.journal.filter((j) => j.kind === "spawn-refused").length, 0, "nothing was refused");
+  assert.equal(spawned.length, 0, "a card starts nothing");
 
-  // The press path re-checks: a card made while the list was open must not start after the reader narrows it.
-  assistant.saveProfile(id, { projects: ["gamma"] });
-  await assert.rejects(() => assistant.startSpawn(card.spawn, { alertId: card.id }), (e) => e.code === "spawn-not-allowed");
-  assert.equal(spawned.length, 0, "the press did not start a run either");
-  // Assistant #1's own card path is unaffected: no stamp, no list, allowed.
-  assert.equal(assistant.spawnAllowed(PRIMARY_ASSISTANT, { target: "beta" }).ok, true);
-  assert.equal(assistant.spawnAllowed(PRIMARY_ASSISTANT, { target: "beta" }).entries.length, 0);
+  // `off`: nothing exists behind the line, and the journal says why.
+  assistant.setSettingsFor(id, { spawn: "off" });
+  const off = turnOf(assistant, id, "SPAWN alpha | never mind");
+  await assistant.applyActions(off, parseActions(off.lines[0].text));
+  const skipped = assistant.journal.find((j) => j.kind === "spawn-skipped");
+  assert.ok(skipped, "the switch is what refuses it");
+  assert.match(skipped.text, /switched off/);
+  assert.equal(assistant.alerts.filter((a) => a.spawn && a.status === "open").length, 1, "no second card");
+
+  // Assistant #1's own settings are untouched by either turn.
+  assert.equal(assistant.settings.spawn, "ask");
 });
 
-test("a SPAWN IN outside the worktree list is refused the same way", async (t) => {
+test("the preamble offers every project on the panel, to every assistant", async (t) => {
   const { assistant } = await panel(t);
   const id = assistant.createAssistant({ roleId: "agent-manager" }).created.id;
-  assistant.saveProfile(id, { worktrees: ["wtgui-mine-abc123"] });
-  assistant.setSettingsFor(id, { spawn: "ask" });
-  const job = turnOf(assistant, id, "SPAWN IN C:/work/alpha/.worktrees/wtgui-theirs-def456 | look at it");
-  await assistant.applyActions(job, parseActions(job.lines[0].text));
-  const refusal = assistant.journal.find((j) => j.kind === "spawn-refused");
-  assert.ok(refusal);
-  assert.match(refusal.text, /whitelisted worktrees/);
-  assert.equal(assistant.alerts.filter((a) => a.spawn).length, 0);
-});
-
-test("the preamble shows only the whitelisted projects, and says how many it is hiding", async (t) => {
-  const { assistant } = await panel(t);
-  const id = assistant.createAssistant({ roleId: "agent-manager" }).created.id;
-  assistant.saveProfile(id, { projects: ["alpha"] });
-  const own = assistant.preamble(id);
-  assert.match(own, /- alpha · C:\/work\/alpha/);
-  assert.ok(!own.includes("beta"), "#2 is not shown the project it may not use");
-  assert.match(own, /1 more project exists on this panel and are hidden by your project whitelist/);
-  // Assistant #1's preamble is what it always was: both projects, no hidden line, no prompt block.
-  const first = assistant.preamble(PRIMARY_ASSISTANT);
-  assert.match(first, /- alpha · C:\/work\/alpha/);
-  assert.match(first, /- beta · C:\/work\/beta/);
-  assert.ok(!/hidden by your project whitelist/.test(first));
-  assert.ok(!first.includes("Your default role prompt"));
+  for (const who of [PRIMARY_ASSISTANT, id]) {
+    const text = assistant.preamble(who);
+    assert.match(text, /- alpha · C:\/work\/alpha/, `${who} is shown alpha`);
+    assert.match(text, /- beta · C:\/work\/beta/, `${who} is shown beta`);
+    assert.ok(!/whitelist|hidden by your/i.test(text), "and nothing claims a project is hidden");
+  }
 });
 
 test("Assistant #1 with no profile file answers the same payload it always did", async (t) => {
@@ -285,10 +248,10 @@ test("Assistant #1 with no profile file answers the same payload it always did",
   // Booting and reading wrote nothing: the store, the charter and #1's own directory are untouched.
   assert.equal(sha(await readFile(assistantFile)), before);
   await assert.rejects(() => stat(path.join(dir, "assistants", PRIMARY_ASSISTANT, "settings.json")));
-  // Its role payload is the one the tab has always read, with the two new fields EMPTY rather than missing.
+  // Its role payload is the one the tab has always read, with the new field EMPTY rather than missing.
   const role = assistant.rolePayload(PRIMARY_ASSISTANT);
   assert.equal(role.prompt, "");
-  assert.deepEqual(role.whitelists, { projects: [], worktrees: [] });
+  assert.ok(!("whitelists" in role), "and no list on it");
   assert.equal(role.target.id, PRIMARY_ASSISTANT);
 });
 
@@ -299,4 +262,12 @@ test("the profile file's own shape: one path per assistant, beside its charter",
   // The thread of an extra assistant is its own, which is how a finished turn is traced back to whose settings
   // judged it.
   assert.equal(threadFor("assistant-2"), "panel-assistant-2");
+});
+
+test("the writer never puts a whitelist back on disk", async (t) => {
+  const { dir } = await panel(t);
+  const file = path.join(dir, "assistants", "assistant-2", "settings.json");
+  assert.deepEqual(writeProfileFile(file, { prompt: "p", whitelists: { projects: ["alpha"], worktrees: [] } }), { error: null });
+  const body = JSON.parse(await readFile(file, "utf8"));
+  assert.deepEqual(Object.keys(body).sort(), ["prompt", "savedAt", "version"]);
 });

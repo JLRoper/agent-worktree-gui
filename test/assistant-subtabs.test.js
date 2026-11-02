@@ -242,8 +242,8 @@ test("the top row is the assistant and its lists, and the session's row is the v
   assert.ok(!topRow.some((t) => t.key === "charter"), "the Charter tab is gone from the row");
   assert.match(topRow[5].label, /^Role$/, "and the tab that replaced it is the Role tab");
   assert.match(float, /data-as-tab="role" title="the role this assistant runs/, "whose tooltip says what it edits");
-  assert.deepEqual(subRow.map((t) => t.key), ["chat", "settings", "queue"], "the session's row holds both");
-  assert.deepEqual(subRow.map((t) => t.label), ["Chat", "Settings", "Queue"]);
+  assert.deepEqual(subRow.map((t) => t.key), ["chat", "settings", "queue", "worktrees"], "the session's row holds all four");
+  assert.deepEqual(subRow.map((t) => t.label), ["Chat", "Settings", "Queue", "Worktrees"]);
   // Beneath it in the document, with nothing but a comment in between: the row is the session's, not a second strip
   // somewhere else in the panel.
   assert.match(
@@ -363,7 +363,7 @@ test("a second assistant is one more record and one more pane — no new branch"
   assert.deepEqual(p.tabs().map((t) => t.dataset.asTab).slice(0, 2), ["assistant-1", "assistant-2"], "at the head, beside #1");
   const pane = p.body.children.find((x) => x.dataset.pane === "assistant-2");
   assert.ok(pane, "and its own pane");
-  assert.deepEqual(pane.children.map((s) => s.dataset.subpane), ["chat", "settings", "queue"], "with its own three sub-panes");
+  assert.deepEqual(pane.children.map((s) => s.dataset.subpane), ["chat", "settings", "queue", "worktrees"], "with its own four sub-panes");
 
   p.pressSub("settings");
   p.pressTab("assistant-2");

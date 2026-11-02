@@ -31,7 +31,7 @@
   // What a session holds: the card you talk to, how it behaves, and the work it is carrying. "queue" is a session's
   // OWN list — one per assistant, in its own file — so it belongs on the session's row beside Chat and Settings and
   // not in LISTS, which are the float's one panel-wide panes.
-  const SUBTABS = ["chat", "settings", "queue"];
+  const SUBTABS = ["chat", "settings", "queue", "worktrees"];
   const FIRST_ASSISTANT = "assistant-1";
   const DEFAULT_VIEW = { assistant: FIRST_ASSISTANT, subTab: SUBTABS[0] };
   // Every session the page knows about. Before the first /api/assistant answer there is still Assistant #1 — the
@@ -720,6 +720,7 @@
     if (isAssistant(view.assistant)) {
       if (view.subTab === "settings") renderAssistantSettings(view.assistant);
       else if (view.subTab === "queue") renderAssistantQueue(view.assistant);
+      else if (view.subTab === "worktrees") renderAssistantWorktrees(view.assistant);
       else pinChatToBottom();
     } else if (view.assistant === "alerts") renderAssistantAlerts();
     else if (view.assistant === "watches") renderAssistantWatches();
@@ -1331,12 +1332,10 @@
   // Which assistant the Role tab is editing. A role belongs to ONE assistant, and the tab is a list tab (it sits
   // beside Alerts), so it carries its own selector and remembers the last session the reader was on.
   let roleTarget = "";
-  // The two fields on this tab that are NOT the charter: the default role prompt the assistant runs on and its two
-  // optional whitelists. They come in with the same read that brings the charter text — one request, one answer —
-  // and every one of them is keyed by the assistant being edited, never by "the" assistant.
+  // The one field on this tab that is NOT the charter: the default role prompt the assistant runs on. It comes in
+  // with the same read that brings the charter text — one request, one answer — and it is keyed by the assistant
+  // being edited, never by "the" assistant.
   let rolePrompt = "";
-  let roleProjects = "";
-  let roleWorktrees = "";
   const roleTargetSession = () => (isAssistant(roleTarget) ? roleTarget : lastSession);
 
   function loadRole(id = roleTargetSession()) {
@@ -1353,11 +1352,8 @@
         roleInfo = { role: d.role, sameAsRole: Boolean(d.sameAsRole), charter: d.charter, target: d.target };
         roleRoles = Array.isArray(d.roles) ? d.roles : [];
         rolePick = d.role?.id || rolePick;
-        // The two non-charter fields ride in the same answer. A list is shown as the reader typed it — comma
-        // separated — so a save round-trips what is on disk rather than re-inventing the punctuation.
+        // The non-charter field rides in the same answer, so the box opens showing what is on disk.
         rolePrompt = String(d.prompt ?? "");
-        roleProjects = Array.isArray(d.whitelists?.projects) ? d.whitelists.projects.join(", ") : "";
-        roleWorktrees = Array.isArray(d.whitelists?.worktrees) ? d.whitelists.worktrees.join(", ") : "";
         roleLoaded = true;
         roleLoadedAt = Date.now();
         roleErr = "";
@@ -1385,11 +1381,9 @@
       roleErr = "";
       roleInfo = null;
       rolePick = "";
-      // The prompt and the two lists are per assistant as well: painting #1's saved prompt under #2's name would
-      // offer the reader a box that saves #2's file with #1's words in it.
+      // The prompt is per assistant as well: painting #1's saved prompt under #2's name would offer the reader a
+      // box that saves #2's file with #1's words in it.
       rolePrompt = "";
-      roleProjects = "";
-      roleWorktrees = "";
     }
     if (roleTriedFor !== target) void loadRole(target);
     const rec = sessionById(target);
@@ -1461,26 +1455,10 @@
           <span class="as-err" id="as-prompt-err"></span>
         </div>
       </div>
-      <div class="as-group">
-        <h4>Its whitelists — which projects it is shown, and where it may spawn</h4>
-        <div class="as-help">Neither is required. A blank box means <b>all</b>, and so does <code>*</code>. Separate
-        names with commas or newlines. The <b>projects</b> list decides which projects this assistant is shown and
-        where a SPAWN may cut a new worktree; the <b>worktrees</b> list decides which existing trees a SPAWN IN may
-        target. A name that matches nothing is allowed and simply matches nothing — it is not an error.</div>
-        <div class="as-line">
-          <label title="project names as the board shows them, or full paths — blank or * means every project">projects
-            <input type="text" class="as-grow" id="as-projects" spellcheck="false"${roleLoaded ? "" : " readonly"} value="${esc(roleProjects)}" placeholder="* — all projects"></label>
-        </div>
-        <div class="as-line">
-          <label title="worktree directory names, branches or full paths — blank or * means every worktree">worktrees
-            <input type="text" class="as-grow" id="as-worktrees" spellcheck="false"${roleLoaded ? "" : " readonly"} value="${esc(roleWorktrees)}" placeholder="* — all worktrees"></label>
-        </div>
-        <div class="as-actions">
-          <button id="btn-as-whitelists" type="button" class="primary"${roleLoaded ? "" : " disabled"}>Save whitelists</button>
-          <span class="as-hint">projects: ${roleProjects.trim() ? esc(roleProjects) : "all"} · worktrees: ${roleWorktrees.trim() ? esc(roleWorktrees) : "all"}</span>
-          <span class="as-err" id="as-whitelist-err"></span>
-        </div>
-      </div>`;
+      <div class="as-help">Which projects this assistant may spawn in, and which trees a SPAWN IN may target, are no
+      longer lists on this tab: the SPAWN switch in its Settings is the only gate, and a tree the assistant cuts is
+      <b>its own</b> — the watchdog wakes the assistant whose turn wrote the SPAWN, and the reader still sets an
+      owner by hand from the board's row. Both are shown under this assistant's <b>Worktrees</b> tab.</div>`;
   }
 
   // ---- settings -------------------------------------------------------------------------------
@@ -1636,7 +1614,8 @@
         <div class="as-help">This panel runs ONE watchdog: one pass over the board, one journal and one escalation
         table, whichever assistants exist. Everything in this tab is the panel's, so it is set once. What belongs to
         one assistant — its model, its autonomy, its spawn mode, its wake budget and quiet windows — is in that
-        assistant's <b>Settings</b> tab; its role prompt and its two whitelists are in its <b>Role</b> tab.</div>
+        assistant's <b>Settings</b> tab; its role prompt is in its <b>Role</b> tab and the trees it owns are in its
+        <b>Worktrees</b> tab.</div>
         <div class="as-line">
           <label${knobs.has("enabled") ? ' class="as-held-label"' : ""}>watching <input type="checkbox" data-as-set="enabled"${s.enabled ? " checked" : ""}${dis("enabled")}></label>
           <label${knobs.has("commandAudit") ? ' class="as-held-label"' : ""} title="every command line an assistant turn writes is counted against what the panel did with it: the eight kinds, one ledger per turn. report raises a red card naming the turn, the kind and how many lines were read and never carried out, and writes that to the journal the digest reads. enforce does the same and then carries those lines out once on the next pass — never a line that already ran. A near-miss line (a known prefix that misses its shape) is journalled as unparsed instead of vanishing.">command audit <select data-as-set="commandAudit"${dis("commandAudit")}>${(a.commandAuditModes || ["off", "report", "enforce"]).map((v) => `<option value="${v}"${s.commandAudit === v ? " selected" : ""}>${v === "off" ? "off — nothing is checked" : v === "report" ? "report — red card and journal" : "enforce — also replay once"}</option>`).join("")}</select></label>
@@ -1809,8 +1788,9 @@
           : `<div class="as-help">(none written down yet)</div>`}
       </div>`}
       <div class="as-help">The pass clock, the command audit and the per-rule escalation table belong to the panel's
-      one watchdog — they are in the <b>Watchdog</b> tab. This assistant's default role prompt and its two whitelists
-      are in the <b>Role</b> tab. Its thread is <code>${esc(rec?.threadId || "")}</code>.</div>`;
+      one watchdog — they are in the <b>Watchdog</b> tab. This assistant's default role prompt is in the <b>Role</b> tab
+      and the worktrees it owns are in its <b>Worktrees</b> tab. Its thread is
+      <code>${esc(rec?.threadId || "")}</code>.</div>`;
     // The model field is the shared picker (core/model-menu.js), not a native select: a select can only print
     // text, so it can never show a row's price, coding rating or context window — and a popup opened inside this
     // float would be clipped by its overflow instead of painting over it. The select stays in the DOM as the
@@ -1916,6 +1896,31 @@
     if (pane.kind === "loading") return `<div class="as-help" ${at}>reading its queue…</div>`;
     if (pane.kind === "idle") return `<div class="as-help" ${at}>not read yet</div>`;
     return rows.length ? "" : `<div class="as-help" ${at}>(empty — this assistant is carrying nothing)</div>`;
+  }
+
+  // The board's own table, over the trees THIS assistant owns. It is not a second table: the header and every row
+  // come from app.js's own `chartHeaderHtml`/`rowHtml`, so a column the reader hides on the board is hidden here too,
+  // the row's actions (⟳, ✕, lock, rename) are the board's actions, and the cells cannot drift from the board's.
+  // The owner column is FORCED on here: this tab exists to say "these trees are mine", and a table that dropped the
+  // column would say it only in its title. A filtered row set means what it says — the rows whose resolved owner is
+  // this assistant, in project-then-name order so the table does not reshuffle itself on every scan.
+  function renderAssistantWorktrees(id = activeSessionId(), force = false) {
+    const host = hostFor(id, "worktrees");
+    if (!host || !state.assistant) return;
+    const rec = sessionById(id);
+    const rows = [...state.rows.values()]
+      .filter((r) => r && String(r.assistant?.id || "") === String(id))
+      .sort((a, b) => String(a.project || "").localeCompare(String(b.project || "")) || String(a.name || "").localeCompare(String(b.name || "")));
+    const table = rows.length
+      ? `<div class="wt-scroll as-worktrees-table"><table><thead><tr>${chartHeaderHtml(true)}</tr></thead><tbody>${rows.map((r) => rowHtml(r, true)).join("")}</tbody></table></div>`
+      : `<div class="as-help">No worktrees are owned by ${esc(rec?.name || "this assistant")} yet. A tree a SPAWN by this assistant cuts is stamped its own; the reader can also set an owner by hand from the board's row.</div>`;
+    const locked = rows.filter((r) => r.lock?.locked).length;
+    host.innerHTML = `
+      <div class="as-group">
+        <h4>Its worktrees — ${esc(rec?.name || "this assistant")}'s own</h4>
+        <div class="as-help">The board's own table over the rows this assistant owns, owner column included. ${rows.length} tree${rows.length === 1 ? "" : "s"}${locked ? ` · ${locked} locked` : ""}. Every action is the board's own: ⟳ reconciles the row, ✕ removes the tree, the padlocks lock it. A SPAWN Assistant #2 wrote stamps the tree it cut as #2's; a tree the reader cut stays Assistant #1's.</div>
+        ${table}
+      </div>`;
   }
 
   function renderAssistantQueue(id = activeSessionId(), force = false) {
@@ -2427,30 +2432,6 @@
         renderAssistantRole(true);
       } catch (err) {
         setErr("as-prompt-err", err.message);
-      } finally {
-        t.disabled = false;
-      }
-      return;
-    }
-
-    // The two whitelists, saved together: they are two fields of one file, and saving them in one press is what makes
-    // "the box says what the file holds" true for both at once.
-    if (t.id === "btn-as-whitelists") {
-      const target = roleTargetSession();
-      const projects = String(as$("as-projects")?.value ?? "");
-      const worktrees = String(as$("as-worktrees")?.value ?? "");
-      t.disabled = true;
-      try {
-        const d = await asPost("/api/assistant/profile", { assistantId: target, projects, worktrees });
-        if (d.assistant) applyAssistant(d.assistant);
-        // Read back what the server STORED (comma separated, duplicates folded, blanks dropped) rather than what was
-        // typed: a box that keeps showing a duplicate the file no longer has is a box that lies about the list.
-        roleProjects = Array.isArray(d.profile?.whitelists?.projects) ? d.profile.whitelists.projects.join(", ") : projects;
-        roleWorktrees = Array.isArray(d.profile?.whitelists?.worktrees) ? d.profile.whitelists.worktrees.join(", ") : worktrees;
-        setErr("as-whitelist-err", "");
-        renderAssistantRole(true);
-      } catch (err) {
-        setErr("as-whitelist-err", err.message);
       } finally {
         t.disabled = false;
       }

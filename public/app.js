@@ -10397,7 +10397,7 @@ function ownerDetailHtml(row) {
 }
 // ---- end owner cell
 
-function rowHtml(row) {
+function rowHtml(row, forceOwner = false) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
   const dirty =
     row.dirty || row.untracked
@@ -10486,7 +10486,7 @@ function rowHtml(row) {
     actions: `<td class="row-actions">${isProjectRoot ? "" : `${childBtn}<button class="btn-refresh-tree" data-refresh-tree="${esc(delKey)}" type="button" title="reconcile this one worktree — re-read its git state (dirty, ahead/behind, cherry, verdict, PR), then check its TODO list against what the tree now contains (a proposal, nothing closed) and its description, re-derived only if it has gone stale; every action is journalled under the row">\u27f3</button><button class="btn-del-tree${delDirect ? " is-direct" : ""}" data-del-tree="${esc(delKey)}" title="${delDirect ? "this worktree is merged and clean — deletes it straight away, its files go to the Recycle Bin and git's record is pruned" : "remove this worktree — asks first; its files go to the Recycle Bin and git's record of it is pruned"}">✕</button>`}</td>`,
   };
   return `<tr class="row${isOpen ? " expanded" : ""}${lock ? " is-locked" : ""}" data-key="${esc(keyOf(row.project, row.path))}">
-    ${shownColumns().map((i) => cells[CHART_COLUMNS[i].id]).join("\n    ")}
+    ${shownColumns(forceOwner).map((i) => cells[CHART_COLUMNS[i].id]).join("\n    ")}
   </tr>`;
 }
 
@@ -13018,11 +13018,11 @@ function ownerMatters(rows = state.rows, assistants = state.assistant?.assistant
 
 const OWNER_COLUMN_ID = "assistant";
 
-function shownColumns() {
+function shownColumns(forceOwner = false) {
   const hidden = hiddenColumnIds();
   const shown = CHART_COLUMNS.map((_, i) => i).filter((i) => !hidden.has(CHART_COLUMNS[i].id));
   const ownerAt = shown.findIndex((i) => CHART_COLUMNS[i].id === OWNER_COLUMN_ID);
-  if (ownerAt >= 0 && !ownerMatters()) shown.splice(ownerAt, 1);
+  if (ownerAt >= 0 && !forceOwner && !ownerMatters()) shown.splice(ownerAt, 1);
   return shown.length ? shown : [WT_COLS - 1];
 }
 
@@ -13033,8 +13033,8 @@ function wtColspan() {
   return shownColumns().length;
 }
 
-function chartHeaderHtml() {
-  return shownColumns()
+function chartHeaderHtml(forceOwner = false) {
+  return shownColumns(forceOwner)
     .map((i) => {
       const c = CHART_COLUMNS[i];
       const attrs = `data-col-id="${esc(c.id)}"${c.title ? ` title="${esc(c.title)}"` : ""}`;

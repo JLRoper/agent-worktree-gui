@@ -85,9 +85,9 @@ test("every key has exactly one owner, and the two panes' key lists never inters
     Object.keys(DEFAULTS).sort(),
     "and the table declares no knob the store lacks",
   );
-  // The three profile fields are an assistant's, and they are the only non-knobs in the table.
+  // The two profile fields are an assistant's, and they are the only non-knobs in the table.
   const notKnobs = [...WATCHDOG_KEYS, ...ASSISTANT_KEYS].filter((k) => !(k in DEFAULTS));
-  assert.deepEqual(notKnobs.sort(), ["escalateTo", "prompt", "whitelists"]);
+  assert.deepEqual(notKnobs.sort(), ["escalateTo", "prompt"]);
   for (const key of notKnobs) assert.equal(scopeOf(key), "assistant");
   // A key nobody declared has NO owner: a new knob must be placed before a pane can draw it.
   assert.equal(scopeOf("aKeyNobodyDeclared"), null);

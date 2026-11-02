@@ -177,9 +177,9 @@ test("the ownership table is a partition: every knob has exactly one pane, and t
   assert.deepEqual(warned.sort(), WATCHDOG_DRAWN, "the watchdog tab draws exactly the pass's knobs");
   assert.deepEqual(mine.sort(), ASSISTANT_DRAWN, "the session tab draws exactly that assistant's knobs");
   // The keys that are profile fields rather than knobs are that assistant's, and the session's pane does not draw a
-  // second control for the Role tab's two.
-  for (const key of ["prompt", "whitelists", "escalateTo"]) assert.equal(SETTINGS_SCOPE[key], "assistant");
-  assert.ok(!mine.includes("prompt") && !mine.includes("whitelists"), "the prompt and the lists stay in the Role tab");
+  // second control for the Role tab's prompt.
+  for (const key of ["prompt", "escalateTo"]) assert.equal(SETTINGS_SCOPE[key], "assistant");
+  assert.ok(!mine.includes("prompt"), "the prompt stays in the Role tab");
 });
 
 test("each bar the pass owns sits inside the details of the rule that consumes it", () => {
