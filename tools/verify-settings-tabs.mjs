@@ -91,6 +91,45 @@ const read = (page) =>
       grip: g ? { width: +g.width.toFixed(1), height: +g.height.toFixed(1), cursor: grip ? getComputedStyle(grip).cursor : "" } : null,
       inlineLeft: panel ? panel.style.left : "",
       storedRect: localStorage.getItem("wtgui.settingsRect"),
+      // The strip's own size numbers. The labels were 9.5px in a 3px 3px 4px box: readable only if you lean in,
+      // and a 20px click target. These are read on every snapshot so the size cases below are statements about
+      // the same pixels the interaction cases just pressed.
+      tabStyle: (() => {
+        if (!tabs.length || !strip) return null;
+        const cs = getComputedStyle(tabs[0]);
+        const badgeEl = badge(tabs[0]);
+        const sr = strip.getBoundingClientRect();
+        const boxes = tabs.map((t) => {
+          const r = t.getBoundingClientRect();
+          return {
+            key: t.dataset.settingsTab,
+            text: t.querySelector(".settings-tab-label")?.textContent || "",
+            left: +r.left.toFixed(2),
+            top: +r.top.toFixed(2),
+            width: +r.width.toFixed(2),
+            height: +r.height.toFixed(2),
+            right: +r.right.toFixed(2),
+            scrollWidth: t.scrollWidth,
+            clientWidth: t.clientWidth,
+            drawn: t.getClientRects().length > 0,
+          };
+        });
+        return {
+          font: parseFloat(cs.fontSize),
+          fontRaw: cs.fontSize,
+          height: +boxes[0].height.toFixed(2),
+          padding: [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].join(" "),
+          letterSpacing: cs.letterSpacing,
+          textTransform: cs.textTransform,
+          badgeFont: badgeEl ? parseFloat(getComputedStyle(badgeEl).fontSize) : null,
+          stripWidth: +sr.width.toFixed(2),
+          stripHeight: +sr.height.toFixed(2),
+          stripScrollsX: strip.scrollWidth > strip.clientWidth + 1,
+          rows: new Set(boxes.map((b) => Math.round(b.top))).size,
+          boxes,
+          clipped: boxes.filter((b) => !b.drawn || b.width < 1 || b.right > sr.right + 0.5 || b.scrollWidth > b.clientWidth + 1).map((b) => b.key),
+        };
+      })(),
     };
   }, TAB_KEY);
 
@@ -159,6 +198,21 @@ async function main() {
         check(first.tabindex.filter((t) => t === "0").length === 1 && first.tabindex[0] === "0",
           "the strip is ONE Tab stop: the selected tab is the only tabindex=0", first.tabindex.join(","));
         check(JSON.stringify(first.shown) === JSON.stringify(["display"]), "one panel on screen, and it is Display's", first.shown.join(","));
+
+        // ---- A2. the strip is a comfortable size, not a 9.5px eyebrow ------------------------------------------
+        // The eight labels were 9.5px in a 3px 3px 4px box: the reader had to lean in to read DISPLAY ... UPDATES,
+        // and the click target was 20px tall. A tab strip still reads as a tab strip at 11.5-12px in the same mono
+        // face with the uppercase and the letter-spacing kept — the size was the only thing that made it an eyebrow.
+        // Read AFTER the panel opens: a hidden tab has no box, so a boot-time measurement would answer 0px tall.
+        const style = first.tabStyle;
+        check(style && style.font >= 11, "the tab label renders at 11px or larger", style ? style.fontRaw : "no tab");
+        check(style && style.height >= 26, "each tab is at least a 26px-tall click target", style ? `${style.height}px tall` : "no tab");
+        check(style && style.padding === "4px 8px 5px 8px", "each tab carries 4px 8px 5px horizontal padding", style ? style.padding : "no tab");
+        check(style && style.textTransform === "uppercase" && style.letterSpacing !== "normal",
+          "the labels keep the uppercase and the letter-spacing", style ? `${style.textTransform} / ${style.letterSpacing}` : "no tab");
+        check(style && style.badgeFont !== null && style.badgeFont <= style.font - 1 + 0.01,
+          "the count badge is a step smaller than the label", style ? `badge ${style.badgeFont}px vs label ${style.font}px` : "no badge");
+        if (style && style.font < 11) note(`old numbers: font ${style.fontRaw}, height ${style.height}px, padding ${style.padding}, badge ${style.badgeFont}px`);
 
         // ---- B. a press selects, shows that panel only, and remembers ------------------------------------------
         await page.click('[data-settings-tab="gateway"]');
@@ -309,6 +363,58 @@ async function main() {
         await page.waitForTimeout(120);
         const afterClose = await read(page);
         check(!afterClose.open, "and so does its ✕");
+
+        // ---- I. a narrower window keeps the strip whole and the first row on screen ---------------------------
+        // The strip WRAPS (it has since the tabs replaced the folds) — the bigger label must not turn it into a
+        // scroller or a clipped row of stubs. And the taller strip must not push the first field row under the
+        // fold of a 700px-tall window, at the default width or at 640px.
+        const firstRowState = () =>
+          page.evaluate(() => {
+            const body = document.querySelector("#settings .settings-body");
+            const shown = [...document.querySelectorAll("#settings .settings-group")].find((g) => !g.hidden);
+            const row = shown?.querySelector(".settings-row");
+            if (!body || !row) return null;
+            const br = body.getBoundingClientRect();
+            const rr = row.getBoundingClientRect();
+            return {
+              visible: rr.top >= br.top - 0.5 && rr.bottom <= br.bottom + 0.5,
+              row: { top: +rr.top.toFixed(1), bottom: +rr.bottom.toFixed(1) },
+              body: { top: +br.top.toFixed(1), bottom: +br.bottom.toFixed(1) },
+            };
+          });
+        // The earlier drag left the window 390px wide; a first visit opens it in its default 340px box. Forget the
+        // dragged rect so this section measures the strip in the width the reader actually opens, not the width a
+        // gesture happened to leave behind (a 390px window fits the old 9.5px labels on one row and proves nothing).
+        await page.evaluate(() => localStorage.removeItem("wtgui.settingsRect"));
+        await page.setViewportSize({ width: 640, height: 900 });
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await page.waitForSelector("#btn-settings", { timeout: 30_000 });
+        await page.waitForTimeout(250);
+        await openSettings(page);
+        await page.click('[data-settings-tab="updates"]');
+        await page.waitForTimeout(200);
+        const narrow = await read(page);
+        check(narrow.tabStyle && narrow.tabStyle.boxes.length === 8 && JSON.stringify(narrow.labels) === JSON.stringify(LABELS),
+          "all eight labels are still on the strip at 640px", narrow.labels.join(" / "));
+        check(narrow.tabStyle && narrow.tabStyle.clipped.length === 0, "and none of them is clipped at 640px",
+          narrow.tabStyle ? narrow.tabStyle.clipped.join(",") || "none clipped" : "no tab");
+        check(narrow.tabStyle && narrow.tabStyle.rows >= 2, "the strip wraps to more than one row rather than scrolling",
+          narrow.tabStyle ? `${narrow.tabStyle.rows} rows` : "no strip");
+        check(narrow.tabStyle && !narrow.tabStyle.stripScrollsX, "and the strip itself does not scroll sideways",
+          narrow.tabStyle ? String(narrow.tabStyle.stripScrollsX) : "no strip");
+        const at640 = await firstRowState();
+        check(at640 && at640.visible, "the first field row is still on screen in a 640px-wide window",
+          at640 ? `row ${at640.row.top}..${at640.row.bottom} in body ${at640.body.top}..${at640.body.bottom}` : "no row");
+        await page.setViewportSize({ width: 1400, height: 700 });
+        await page.waitForTimeout(220);
+        const tall = await firstRowState();
+        check(tall && tall.visible, "the first field row survives a 700px-tall window",
+          tall ? `row ${tall.row.top}..${tall.row.bottom} in body ${tall.body.top}..${tall.body.bottom}` : "no row");
+        await page.setViewportSize({ width: 640, height: 700 });
+        await page.waitForTimeout(220);
+        const tallNarrow = await firstRowState();
+        check(tallNarrow && tallNarrow.visible, "and at 640px wide in the same 700px-tall window",
+          tallNarrow ? `row ${tallNarrow.row.top}..${tallNarrow.row.bottom} in body ${tallNarrow.body.top}..${tallNarrow.body.bottom}` : "no row");
 
         check(pageErrors.length === 0, "no uncaught page errors", pageErrors.join(" | "));
       },
