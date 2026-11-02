@@ -86,6 +86,7 @@ test("the red path arms the clock, the green path keeps its four seconds, and hi
   assert.match(showBanner, /armBannerTimer\(\);/, "showBanner (re)starts the red bar's clock on every message");
   const showNote = grab("showNote");
   assert.match(showNote, /setTimeout\(hideBanner, BANNER_NOTE_MS\)/, "showNote's four seconds are unchanged by the setting");
+  assert.match(showNote, /stopBannerTimer\(\)/, "a note that replaces a red bar stops the red bar's clock, or it is cut short");
   const hideBanner = grab("hideBanner");
   assert.match(hideBanner, /clearTimeout\(noteTimer\)/, "hiding clears the green timer");
   assert.match(hideBanner, /stopBannerTimer\(\)/, "hiding clears the red timer too");
