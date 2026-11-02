@@ -2913,6 +2913,18 @@ const server = createServer(async (req, res) => {
       } catch {
         /* the landing paragraph falls back to git's upstream for this tree; nothing about the cut depends on it */
       }
+      // The rung. §3 is unconditional — every tree is `local` at cut time, whichever cut path made it — so the second
+      // cut path writes the same record `makeWorktree` writes, through the same writer, at the same moment the landing
+      // parent goes down. It cannot fail a cut that has already happened, and it must not claim one either: a book
+      // that refused the write (unreadable, full, locked) answers null here, the log says the tree has no rung, and
+      // the answer carries that null rather than a record nobody could read back.
+      let pipeline = null;
+      try {
+        pipeline = jobs.recordCutPipeline(out.path);
+      } catch (e) {
+        log(`child: ${out.branch} was cut but its pipeline record failed (${String((e && e.message) || e)})`);
+      }
+      if (!pipeline) log(`child: ${out.branch} was cut but its pipeline record was refused — the tree has no rung, and this answer does not claim one`);
       try {
         treeNames.settle(treeKey({ project: project.name, path: out.path, branch: out.branch }), {
           name: out.name,
@@ -2933,6 +2945,7 @@ const server = createServer(async (req, res) => {
       broadcast({ type: "snapshot", data: snapshot() });
       return sendJson(res, 200, {
         ...out,
+        pipeline,
         project: project.name,
         row: store.rowsFor(project.name).find((r) => normPathKey(r.path) === normPathKey(out.path)) || null,
       });
