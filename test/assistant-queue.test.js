@@ -6,7 +6,9 @@
 //   1. add: a title is the only requirement; the task starts queued with an id and a creator;
 //   2. each state: queued → running stamps startedAt, done stamps doneAt/doneBy, parked keeps its reason, and a
 //      transition to the state it is already in reports `changed: false` rather than pretending to work;
-//   3. reassign: the owner changes and the move is recorded on the task as movedFrom;
+//   3. reassign and the Move: the owner changes and the move is recorded on the task as movedFrom, and the record
+//      LEAVES the source queue file for the target's under an id of its own (`adoptTask`) — a task handed to Assistant
+//      #2 that still sits in Assistant #1's file is the defect this pins;
 //   4. stale: a running task whose thread has no live run reads stale, with the sentence that says why;
 //   5. conflict: a queued task whose files intersect a running task's files is skipped, and the reason names the blocker;
 //   6. panel-completed: a settled thread whose PR reads MERGED is marked done by "panel"; a failed settle goes back to
@@ -23,6 +25,7 @@ import test from "node:test";
 import { Assistant } from "../lib/assistant.js";
 import {
   addTask,
+  adoptTask,
   deleteTask,
   decorateTasks,
   intersectingFiles,
@@ -128,6 +131,27 @@ test("reassignTask records the move on the task and refuses a move to nobody", (
     () => reassignTask(moved.tasks, 1, "  "),
     (err) => err.code === "queue-owner" && /needs an owner/.test(err.message),
   );
+});
+
+test("adoptTask moves the record into another queue under that queue's own next id, keeping its state", () => {
+  const { tasks: added } = addTask([], { title: "hand it over", thread: "T-moved", files: ["lib/a.js"], owner: "assistant-1" }, { by: "reader", at: at("2024-05-01T10:00:00Z") });
+  const running = setTaskState(added, 1, "running", { by: "assistant-1", at: at("2024-05-01T10:01:00Z") });
+  const handed = reassignTask(running.tasks, 1, "assistant-2", { by: "reader", at: at("2024-05-01T10:10:00Z") });
+  // The target already carries two rows, so its next id is 3 — the moved task must not collide with either of them.
+  let target = addTask([], { title: "theirs one" }).tasks;
+  target = addTask(target, { title: "theirs two" }, { nextId: 2 }).tasks;
+  const adopted = adoptTask(target, handed.task, { nextId: 3 });
+  assert.equal(adopted.fromId, 1, "the id it had in the queue it left travels back to the caller");
+  assert.equal(adopted.task.id, 3, "it enters under the target's next id, not its old one");
+  assert.equal(adopted.nextId, 4);
+  assert.equal(adopted.task.owner, "assistant-2");
+  assert.equal(adopted.task.state, "running", "a running task handed over is still running — the move is not a restart");
+  assert.equal(adopted.task.thread, "T-moved");
+  assert.deepEqual(adopted.task.files, ["lib/a.js"]);
+  assert.deepEqual(adopted.task.movedFrom, [{ from: "assistant-1", to: "assistant-2", by: "reader", at: "2024-05-01T10:10:00.000Z" }]);
+  assert.deepEqual(adopted.tasks.map((t) => t.id), [1, 2, 3], "and nothing already in the target moved");
+  assert.equal(target.length, 2, "the target array the caller handed in is untouched");
+  assert.equal(adoptTask(target, { title: "" }), null, "a record with no title is not a task");
 });
 
 // ---- delete ----------------------------------------------------------------------------------------------
@@ -335,6 +359,57 @@ test("pickTask drops a row with no id or no title, and falls an unknown state ba
   assert.equal(pickTask({ title: "no id" }), null);
   assert.equal(pickTask({ id: 1 }), null);
   assert.equal(pickTask({ id: 1, title: "x", state: "bogus" }).state, "queued");
+});
+
+// ---- a Move writes BOTH files ------------------------------------------------------------------------------
+test("the Move action takes the task out of one assistant's file and puts it in the other's", async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-queue-move-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const assistantFile = path.join(dir, "assistant.json");
+  await writeFile(assistantFile, JSON.stringify({ version: 2, settings: {}, notes: "", rules: [], watches: [], alerts: [], journal: [] }));
+  const assistant = new Assistant({
+    config: { jobsFile: path.join(dir, "jobs.json"), assistantFile },
+    jobs: { list: () => [], firstOfThread: () => null, create: async (body) => ({ id: "job-1", ...body }) },
+    getProjects: () => [],
+    onLog: () => {},
+  });
+  const second = assistant.createAssistant({ name: "Reviewer" }).created;
+  assistant.queueMutate("assistant-1", "add", { title: "stay here", owner: "assistant-1" }, { by: "reader" });
+  assistant.queueMutate("assistant-1", "add", { title: "hand this over", owner: "assistant-1", thread: "T-move", files: ["public/x.js"] }, { by: "reader" });
+
+  const moved = assistant.queueMutate("assistant-1", "reassign", { id: 2, owner: second.id }, { by: "reader" });
+  assert.equal(moved.ok, true);
+  assert.equal(moved.task.id, 1, "the target's first id");
+  assert.deepEqual(moved.task.movedFrom.map((m) => [m.from, m.to, m.by]), [["assistant-1", second.id, "reader"]]);
+  assert.deepEqual(moved.queue.tasks.map((t) => t.title), ["stay here"], "it left Assistant #1's queue");
+  assert.deepEqual(moved.movedTo.tasks.map((t) => t.title), ["hand this over"], "and arrived in Assistant #2's");
+  assert.equal(moved.movedTo.assistantId, second.id);
+
+  // …and the FILES agree, not just the answer: a restart reads these two documents and nothing else.
+  const oneFile = path.join(dir, "assistants", "assistant-1", "queue.json");
+  const twoFile = path.join(dir, "assistants", second.id, "queue.json");
+  const one = JSON.parse(readFileSync(oneFile, "utf8"));
+  const two = JSON.parse(readFileSync(twoFile, "utf8"));
+  assert.deepEqual(one.tasks.map((x) => x.id), [1]);
+  assert.deepEqual(two.tasks.map((x) => [x.id, x.title]), [[1, "hand this over"]]);
+  assert.equal(two.tasks[0].thread, "T-move", "the thread that carries it travels with the task");
+  assert.equal(assistant.queueView("assistant-1").counts.total, 1);
+  assert.equal(assistant.queueView(second.id).counts.total, 1, "the target's own read sees it, with no restart");
+
+  // Both journals say what happened: the assistant that lost the work and the one that gained it.
+  const lines = assistant.journal.map((j) => j.text).filter((x) => /moved to Reviewer|arrived from/.test(x));
+  assert.equal(lines.length, 2, JSON.stringify(assistant.journal.map((j) => j.text)));
+  assert.match(lines.join("\n"), /moved to Reviewer as #1/);
+  assert.match(lines.join("\n"), /arrived from Assistant #1/);
+
+  // A Move to the assistant that already carries it is refused, and so is one to an assistant that does not exist.
+  const same = assistant.queueMutate("assistant-1", "reassign", { id: 1, owner: "assistant-1" }, { by: "reader" });
+  assert.equal(same.ok, false);
+  assert.match(same.error, /already carries #1/);
+  const ghost = assistant.queueMutate("assistant-1", "reassign", { id: 1, owner: "assistant-9" }, { by: "reader" });
+  assert.equal(ghost.ok, false);
+  assert.match(ghost.error, /no such assistant/);
+  assert.deepEqual(assistant.queueView("assistant-1").tasks.map((t) => t.id), [1], "neither refusal moved anything");
 });
 
 // ---- the store every assistant has, including one created while the panel is running ----------------------

@@ -10,7 +10,8 @@
 //   1. the STORE: a booted panel seeds `assistants/assistant-1/queue.json` beside its charter, the route reports that
 //      file and it is really on disk; creating Assistant #2 seeds its own file at the same path shape (item 1);
 //   2. the ROUTES: GET one assistant's queue and the list form, POST add / edit / state / reassign / delete — the
-//      reassign records `movedFrom`, the delete really removes the row (item 2);
+//      reassign records `movedFrom` AND moves the record into the other assistant's file, the delete really removes
+//      the row (item 2);
 //   3. the WAKE DIGEST the same route answers with: the top of the queue, every running task with its thread, the
 //      stale flag and the conflict's skip reason (items 3, 4, 6);
 //   4. the PANE, in headless Chromium: the session's third sub-tab exists, pressing it paints one row per task with
@@ -240,10 +241,21 @@ try {
   ok("…at the same path shape", /\/assistants\/assistant-2\/queue\.json$/.test(slash(two.file)), slash(two.file));
   ok("…and on disk", Boolean(two.file) && existsSync(two.file), slash(two.file));
   const moved = await POST("/api/assistant/queue", { assistantId: "assistant-1", action: "reassign", id: 1, owner: "assistant-2" });
-  ok("reassign moves the owner", moved.body.task?.owner === "assistant-2", JSON.stringify(moved.body.task?.owner));
+  ok("Move hands the task to Assistant #2", moved.body.task?.owner === "assistant-2", JSON.stringify(moved.body.task?.owner));
   check("…and records where it came from", (moved.body.task?.movedFrom || []).map((m) => [m.from, m.to]), [["assistant-1", "assistant-2"]]);
+  // A Move is a move between QUEUES: the record leaves #1's file and enters #2's under an id of its own. Asserting only
+  // the owner let the task sit in the queue whose page it was created on while the assistant it was "moved to" never
+  // saw it — the defect this shipped check certified.
   const afterMove = await queueOf();
-  ok("the task stays in #1's queue (owner moved, list did not)", afterMove.tasks.some((t) => t.id === 1 && t.owner === "assistant-2"), JSON.stringify(afterMove.tasks.map((t) => [t.id, t.owner])));
+  ok("…so it leaves Assistant #1's queue", !afterMove.tasks.some((t) => t.id === 1), JSON.stringify(afterMove.tasks.map((t) => t.id)));
+  check("…which now counts three", [afterMove.counts.total, afterMove.counts.queued], [3, 0]);
+  const arrived = await queueOf("assistant-2");
+  const landed = arrived.tasks.find((t) => t.title === "land the queue sub-tab's copy") || null;
+  ok("…and arrives in Assistant #2's with its own id", Boolean(landed) && landed.id === 1 && landed.owner === "assistant-2", JSON.stringify(arrived.tasks.map((t) => [t.id, t.title, t.owner])));
+  check("…carrying the move record", (landed?.movedFrom || []).map((m) => [m.from, m.to]), [["assistant-1", "assistant-2"]]);
+  check("…its title and files intact", [landed?.title, landed?.files], ["land the queue sub-tab's copy", ["public/assistant.js"]]);
+  const sameOwner = await POST("/api/assistant/queue", { assistantId: "assistant-1", action: "reassign", id: 2, owner: "assistant-1" });
+  ok("a Move to the assistant that already carries the task is refused", sameOwner.status === 400 && /already carries #2/.test(sameOwner.body.error || ""), JSON.stringify(sameOwner.body.error));
 
   // ---- 5/7/8. the pane, in a browser -------------------------------------------------------------
   // The boot's branch-parents pass is a synchronous git walk that can block the panel's event loop for ~20 s on a
@@ -317,12 +329,14 @@ try {
     ok("the pane is named for this assistant's own queue", /task queue — assistant #1's own/i.test(head), head);
     ok("…with the add form live", (await page.locator('#as-queue [data-as-qact="add"]').count()) === 1);
 
-    const rowsReady = await waitFor(() => page.locator("#as-queue .as-task").count().then((n) => n === 4), {
+    // Three, not four: the route section already moved task 1 to Assistant #2, so it must NOT be painted here. The
+    // count is the first assertion that the Move really took the row out of this queue.
+    const rowsReady = await waitFor(() => page.locator("#as-queue .as-task").count().then((n) => n === 3), {
       timeoutMs: 20_000,
       stepMs: 200,
-      what: "the four queue rows to paint",
+      what: "the three queue rows to paint",
     });
-    ok("the pane paints one row per task", rowsReady, `${await page.locator("#as-queue .as-task").count()} row(s)`);
+    ok("the pane paints one row per task it still carries", rowsReady, `${await page.locator("#as-queue .as-task").count()} row(s)`);
     if (!rowsReady) {
       // A pane that painted no rows says why somewhere — the error line, the empty-state line, or a page error. Print
       // all three rather than leaving a bare count in the log.
@@ -361,18 +375,16 @@ try {
       })),
     );
     // The pane's order is running, queued, parked, done — the table above is built in that order on purpose.
-    check("the rows are the four tasks, in state order", rows.map((r) => r.id), ["2", "1", "3", "4"]);
-    check("THE FOUR MARKERS: ● running, ○ queued, ⏸ parked, ✓ done", rows.map((r) => r.mark), ["●", "○", "⏸", "✓"]);
-    check("…each marker carrying its own state class", rows.map((r) => r.markClass.replace("as-task-mark ", "")), ["is-running", "is-queued", "is-parked", "is-done"]);
-    ok("the done row is greyed in place, not removed", rows[3]?.done === true && Number(rows[3]?.opacity) < 1, `opacity ${rows[3]?.opacity}`);
-    ok("…and no other row is", rows.slice(0, 3).every((r) => !r.done && Number(r.opacity) === 1), JSON.stringify(rows.map((r) => r.opacity)));
-    check("each row shows its id and title", rows.map((r) => r.title), ["rewrite the queue's file claims", "land the queue sub-tab's copy", "SQL verify for the queue store", "land the per-assistant queue"]);
+    check("the rows are the three tasks #1 still carries, in state order", rows.map((r) => r.id), ["2", "3", "4"]);
+    check("THE THREE MARKERS LEFT: ● running, ⏸ parked, ✓ done", rows.map((r) => r.mark), ["●", "⏸", "✓"]);
+    check("…each marker carrying its own state class", rows.map((r) => r.markClass.replace("as-task-mark ", "")), ["is-running", "is-parked", "is-done"]);
+    ok("the done row is greyed in place, not removed", rows[2]?.done === true && Number(rows[2]?.opacity) < 1, `opacity ${rows[2]?.opacity}`);
+    ok("…and no other row is", rows.slice(0, 2).every((r) => !r.done && Number(r.opacity) === 1), JSON.stringify(rows.map((r) => r.opacity)));
+    check("each row shows its id and title", rows.map((r) => r.title), ["rewrite the queue's file claims", "SQL verify for the queue store", "land the per-assistant queue"]);
     ok("the running row names its thread", (rows[0]?.meta || "").includes("thread queue-gate-thread-2"), rows[0]?.meta);
     ok("…says STALE instead of showing phantom progress", /^STALE — that thread has no live run/.test(rows[0]?.note || ""), rows[0]?.note);
-    ok("the queued row shows the files it claims", (rows[1]?.meta || "").includes("files public/assistant.js"), rows[1]?.meta);
-    ok("…and is SKIPPED with the blocking task named", /^SKIPPED — files in use by #2 \(stale\)/.test(rows[1]?.note || ""), rows[1]?.note);
-    ok("the parked row carries its reason", /^parked — waiting on the DBA's verify$/.test(rows[2]?.note || ""), rows[2]?.note);
-    ok("the reassigned task shows its new owner on the tab", rows[1]?.owner === "assistant-2", rows[1]?.owner);
+    ok("the parked row carries its reason", /^parked — waiting on the DBA's verify$/.test(rows[1]?.note || ""), rows[1]?.note);
+    ok("every row names the assistant that carries it", rows.every((r) => r.owner === "assistant-1"), JSON.stringify(rows.map((r) => r.owner)));
     ok("every row offers a delete", rows.every((r) => r.hasDelete));
     ok("every row offers the move control (a second assistant exists)", rows.every((r) => r.hasMove));
 
@@ -383,27 +395,31 @@ try {
     const readsAfter = queueReqs.length - readsBefore;
     ok("the pane does not re-read its queue in a loop", readsAfter <= 1, `${readsAfter} read(s) in 1.5 s after the paint`);
 
-    // Reassign through the pane: choose Assistant #2, press Move, wait for the owner to change.
+    // Move through the pane: choose Assistant #2, press Move, wait for the ROW to leave this queue.
     await page.selectOption('[data-as-qmove="3"]', "assistant-2");
     await page.click('[data-as-qact="reassign"][data-as-qid="3"]');
-    const ownerMoved = await waitFor(
-      () => page.locator('[data-as-qrow="3"] .as-task-owner').innerText().then((t) => t.trim() === "assistant-2"),
-      { timeoutMs: 10_000, stepMs: 200, what: "the row's owner to read assistant-2" },
-    );
-    ok("pressing Move hands the task to the chosen assistant", ownerMoved, await page.locator('[data-as-qrow="3"] .as-task-owner').innerText());
-    ok("…and the route agrees", (await queueOf()).tasks.find((t) => t.id === 3)?.owner === "assistant-2");
+    const rowLeft = await waitFor(() => page.locator("#as-queue .as-task").count().then((n) => n === 2), {
+      timeoutMs: 10_000,
+      stepMs: 200,
+      what: "the moved row to leave this pane",
+    });
+    ok("pressing Move takes the row out of this assistant's list", rowLeft, `${await page.locator("#as-queue .as-task").count()} row(s) left`);
+    ok("…and the row is really gone, not just repainted", (await page.locator('[data-as-qrow="3"]').count()) === 0);
+    ok("…the route agrees it left", (await queueOf()).tasks.every((t) => t.id !== 3));
+    const inTwo = (await queueOf("assistant-2")).tasks.find((t) => t.title === "SQL verify for the queue store");
+    ok("…and Assistant #2 carries it, with the move recorded", Boolean(inTwo) && inTwo.movedFrom?.some((m) => m.from === "assistant-1" && m.to === "assistant-2"), JSON.stringify(inTwo || null));
 
-    // Delete through the pane: press ✕ on the parked task and watch its row go.
-    await page.click('[data-as-qact="delete"][data-as-qid="3"]');
-    const gone = await waitFor(() => page.locator("#as-queue .as-task").count().then((n) => n === 3), {
+    // Delete through the pane: press ✕ on the running task and watch its row go.
+    await page.click('[data-as-qact="delete"][data-as-qid="2"]');
+    const gone = await waitFor(() => page.locator("#as-queue .as-task").count().then((n) => n === 1), {
       timeoutMs: 10_000,
       stepMs: 200,
       what: "the row to be removed",
     });
     ok("pressing ✕ removes the row from the pane", gone, `${await page.locator("#as-queue .as-task").count()} row(s) left`);
-    ok("…and the row is gone from the store too", (await queueOf()).tasks.every((t) => t.id !== 3));
+    ok("…and the row is gone from the store too", (await queueOf()).tasks.every((t) => t.id !== 2));
     const after = await page.$$eval("#as-queue .as-task .as-task-mark", (els) => els.map((el) => el.textContent.trim()));
-    check("the remaining markers are still the ones their states own", after, ["●", "○", "✓"]);
+    check("the remaining marker is the one its state owns", after, ["✓"]);
 
     await page.screenshot({ path: path.join(dir, "queue-subtab.png") }).catch(() => {});
     check("no page errors", pageErrors, []);
@@ -414,8 +430,8 @@ try {
   console.log("\nWHAT WAS DRIVEN: a real panel process booted by tools/panel-testkit.mjs over its own data directory and a");
   console.log("scanned repo (no gateway, no spawned run, the live 7331 listener count identical across the run) — its seeded");
   console.log("queue files for Assistant #1 and a created Assistant #2, the queue route's GET/POST verbs, the digest with");
-  console.log("its stale and skipped lines — and headless Chromium over that panel: the third sub-tab, four painted rows");
-  console.log("with ○ ● ⏸ ✓, the greyed done row, the stale thread, the skipped conflict, and a real Move and ✕.");
+  console.log("its stale and skipped lines — and headless Chromium over that panel: the third sub-tab, the rows #1 still");
+  console.log("carries with ● ⏸ ✓, the greyed done row, the stale thread, and a real Move that leaves the queue plus a ✕.");
   if (!failures) console.log("ASSISTANT-QUEUE-OK");
 } catch (err) {
   failures += 1;

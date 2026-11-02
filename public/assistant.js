@@ -1876,7 +1876,7 @@
     const move = others.length
       ? `<select data-as-qmove="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="hand this task to another assistant — the move is recorded on the task">${others
           .map((x) => `<option value="${esc(x)}">→ ${esc(sessionById(x)?.name || x)}</option>`)
-          .join("")}</select><button type="button" data-as-qact="reassign" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="move the task to the assistant chosen beside this button">Move</button>`
+          .join("")}</select><button type="button" data-as-qact="reassign" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="move the task to the assistant chosen beside this button — it leaves this queue, arrives in that one's with an id of its own, and the move is recorded on the task">Move</button>`
       : `<span class="as-hint">no other assistant to move it to</span>`;
     return `<div class="as-task${t.state === "done" ? " is-done" : ""}" data-as-qrow="${esc(String(t.id))}">
         <div class="as-task-head">
@@ -1946,7 +1946,8 @@
         <div class="as-help">What THIS assistant is carrying: queued work it has not started, what is running (with its
         thread), what it has parked, and what has finished. <b>Add task</b> files work into THIS assistant's queue — the
         one this page belongs to — so a task cannot be created into a queue nobody is looking at; handing a task to
-        another assistant is the <b>Move</b> control on an existing row, and that move is recorded on the task. A queued
+        another assistant is the <b>Move</b> control on an existing row: the task leaves this queue, arrives in that
+        assistant's with an id of its own, and the move is recorded on it as movedFrom. A queued
         task whose files touch a running task's files is shown as skipped with the reason; a running task whose thread
         has no live run reads STALE rather than showing phantom work in progress.</div>
         <div class="as-line"><b>${esc(head)}</b>${view?.file ? `<code>${esc(view.file)}</code>` : ""}<button type="button" class="primary" data-as-qact="reload" data-as-qown="${esc(id)}">Refresh</button></div>
@@ -2014,6 +2015,13 @@
       // this write supersedes it rather than letting it repaint the old list over the new one.
       queueSeq.set(id, (queueSeq.get(id) || 0) + 1);
       if (d.queue) queueCache.set(id, { view: d.queue, error: null, loading: false, at: Date.now() });
+      // A Move answers with the queue the task landed in as well. Caching it keeps the OTHER assistant's pane honest
+      // without a second request — and a read of that pane already in flight describes the queue before the move, so it
+      // is superseded rather than allowed to repaint the target's list without the row that just arrived.
+      if (d.movedTo?.assistantId) {
+        queueSeq.set(d.movedTo.assistantId, (queueSeq.get(d.movedTo.assistantId) || 0) + 1);
+        queueCache.set(d.movedTo.assistantId, { view: d.movedTo, error: null, loading: false, at: Date.now() });
+      }
       renderAssistantQueue(id, true);
       return d;
     } catch (err) {
