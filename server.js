@@ -4,7 +4,7 @@
 import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 // The push-guard record is a few hundred bytes read at boot and written on an install: sync is the honest shape
 // for it, and it is the same file the Settings row reports from.
 import { existsSync, mkdirSync, readFileSync, writeFileSync, writeSync } from "node:fs";
@@ -4463,6 +4463,66 @@ const server = createServer(async (req, res) => {
         .then(() => broadcast({ type: "snapshot", data: snapshot() }))
         .catch(() => {});
       return sendJson(res, 200, { ok: true, url, dest, tookMs: Date.now() - t0 });
+    }
+
+    // Create a NEW local git project inside ONE of the configured scan roots — the second action in
+    // the folder accordion's "+" row, beside the clone. Nothing is fetched, cloned or pushed: `git
+    // init` on `main` plus ONE commit, because a repo with an unborn HEAD scans as NO BASE REF and
+    // every spawn off it is refused until something is committed.
+    if (route === "/api/project/new" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      const norm = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "");
+      const rootNorm = norm(body.root);
+      const roots = (config.scanRoots || []).map(norm).filter(Boolean);
+      if (!rootNorm || !roots.some((r) => r.toLowerCase() === rootNorm.toLowerCase())) {
+        return sendJson(res, 400, { error: `root must be one of scanRoots: ${rootNorm || "(none)"}` });
+      }
+      // ONE path segment with the same charset /api/clone accepts for a repo — no `owner/`, no
+      // separators, no URL. A leading dot is refused too, which is what keeps `.` and `..` from
+      // resolving the destination out of the scan root.
+      const name = String(body.name || "").trim();
+      if (!/^[A-Za-z0-9._-]+$/.test(name) || name.startsWith(".")) {
+        return sendJson(res, 400, { error: `not a project name: ${name || "(none)"}` });
+      }
+      const dest = path.join(rootNorm, name);
+      try {
+        await stat(dest);
+        return sendJson(res, 409, { error: `${dest} already exists`, dest });
+      } catch {
+        /* good: nothing there yet */
+      }
+      const t0 = Date.now();
+      const made = await gitIn(rootNorm, ["init", "-q", "-b", "main", dest], 30000);
+      if (!made.ok) {
+        return sendJson(res, 502, { error: String(made.err || made.out || "git init failed").split("\n").slice(-4).join(" "), dest });
+      }
+      // ONE commit, written here rather than left to the reader: HEAD and refs/heads/main both have
+      // to exist, or the board reads NO BASE REF and the project's first spawn is refused.
+      try {
+        await writeFile(path.join(dest, "README.md"), `# ${name}\n\nA new local git project, created from the panel's folder **+**.\n`, "utf8");
+        await gitIn(dest, ["add", "README.md"], 15000);
+        const args = ["commit", "-q", "--no-gpg-sign", "-m", `Initial commit — ${name}`];
+        let commit = await gitIn(dest, args, 30000);
+        if (!commit.ok && /tell me who you are|unable to auto-detect email|empty ident|Please tell me who/i.test(String(commit.err || commit.out || ""))) {
+          // No identity on this machine: a local bot identity keeps the commit attributable instead
+          // of failing on a prompt no one can answer (the /api/repo/first-commit fallback).
+          commit = await gitIn(dest, ["-c", "user.name=Hermes Panel", "-c", "user.email=panel@localhost", ...args], 30000);
+        }
+        if (!commit.ok) throw new Error(String(commit.err || commit.out || "git commit failed").split("\n").slice(-4).join(" "));
+      } catch (e) {
+        // Never leave a half-made project behind: an inited folder with no commit is exactly the
+        // NO BASE REF state this route exists to avoid, so it goes before the refusal does.
+        await rm(dest, { recursive: true, force: true }).catch(() => {});
+        return sendJson(res, 502, { error: `could not make the first commit: ${String(e.message || e)}`, dest });
+      }
+      const sha = String((await gitIn(dest, ["rev-parse", "--short", "HEAD"], 10000)).out || "").trim();
+      log(`new project ${dest} on main (${sha}) — local only, nothing pushed`);
+      void registry
+        .refresh()
+        .then(() => broadcast({ type: "snapshot", data: snapshot() }))
+        .catch(() => {});
+      return sendJson(res, 201, { ok: true, dest, branch: "main", sha, tookMs: Date.now() - t0 });
     }
 
     if (route === "/api/fetch" && req.method === "POST") {

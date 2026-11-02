@@ -173,9 +173,13 @@ is showing only the last seven days.
 - **All / 7d** — toggles between every project and only those touched in the last seven days (a commit, a file edit,
   or any liveness evidence). The chip count then says how many are hidden.
 - **Collapse all / Expand all** — folds or opens every project inside that folder, not the whole board.
-- **+** — clone a GitHub repo over SSH into that folder. Type `name` or `owner/name` and press `Enter` (or click
-  **Clone via ssh**); `Escape` closes the row. The owner defaults to `cloneOwner` in `config.json`. The new repo
-  shows up on the next discovery pass.
+- **+** — the folder's own row, with two actions. **Clone via ssh** clones a GitHub repo over SSH into that folder:
+  type `name` or `owner/name` and press `Enter` (or click the button); `Escape` closes the row. The owner defaults to
+  `cloneOwner` in `config.json`. **New local project** makes a brand-new repository in that folder instead: `git init`
+  on `main` plus one `README.md` commit, so the folder is a project the board can read and spawn from — an empty
+  repository with an unborn HEAD scans as `NO BASE REF` and refuses every spawn. Refusals (a name that is not one path
+  segment, a folder that already exists, a folder that is no longer a scan root) print in the row and leave the cursor
+  in the name box. Either action shows up on the board from the snapshot the panel broadcasts, with no reload.
 
 ### Projects
 

@@ -867,6 +867,20 @@ function showCloneForm(root, show = true) {
   if (show) form.querySelector("[data-clone-input]")?.focus();
 }
 
+// Status lives in state, not only in the DOM: a snapshot re-renders every folder section, and an
+// inline-only message was wiped a couple of seconds after the clone finished. ONE writer for both
+// actions in the row (clone, and the new local project beside it), so each reports into the same
+// `data-clone-msg` span the reader is already looking at. The span is found from the FORM, not by the
+// root's spelling: a stale page can press a button whose root no longer matches the folder it holds.
+function setCloneStatus(form, root, text, kind = "busy") {
+  state.cloneStatus[root] = { text, kind };
+  const span = form?.querySelector("[data-clone-msg]");
+  if (span) {
+    span.textContent = text;
+    span.classList.toggle("clone-err", kind === "err");
+  }
+}
+
 async function cloneIntoRoot(root) {
   const form = document.querySelector(`[data-clone-form="${CSS.escape(root)}"]`);
   if (!form) return;
@@ -874,16 +888,7 @@ async function cloneIntoRoot(root) {
   const btn = form.querySelector("[data-clone-go]");
   const name = String(input?.value || "").trim();
 
-  // Status lives in state, not only in the DOM: a snapshot re-renders every folder section, and
-  // an inline-only message was wiped a couple of seconds after the clone finished.
-  const setStatus = (text, kind = "busy") => {
-    state.cloneStatus[root] = { text, kind };
-    const span = document.querySelector(`[data-clone-form="${CSS.escape(root)}"] [data-clone-msg]`);
-    if (span) {
-      span.textContent = text;
-      span.classList.toggle("clone-err", kind === "err");
-    }
-  };
+  const setStatus = (text, kind = "busy") => setCloneStatus(form, root, text, kind);
 
   if (!name) {
     input?.focus();
@@ -909,6 +914,47 @@ async function cloneIntoRoot(root) {
     setTimeout(() => void resync(), 2000);
   } catch (e) {
     setStatus(`failed: ${e.message}`, "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// The row's second action: a brand-new LOCAL git project, inited on `main` with one commit so the
+// board has a base ref to read. Same name field and same status line as the clone beside it — a
+// refusal lands where the reader is already looking, and the box keeps the cursor for the fix. It is
+// handed the BUTTON, so the form and the root it posts are the ones that button belongs to.
+async function newProjectInRoot(btn) {
+  const form = btn?.closest("[data-clone-form]");
+  const root = btn?.dataset.projectNew;
+  if (!form || !root) return;
+  const input = form.querySelector("[data-clone-input]");
+  const name = String(input?.value || "").trim();
+  if (!name) {
+    input?.focus();
+    return;
+  }
+  btn.disabled = true;
+  setCloneStatus(form, root, "creating…");
+  try {
+    const res = await apiFetch("/api/project/new", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ root, name }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setCloneStatus(form, root, j.error || `HTTP ${res.status}`, "err");
+      input?.focus();
+      return;
+    }
+    setCloneStatus(form, root, `created → ${j.dest} (${j.branch}, ${j.sha})`, "ok");
+    if (input) input.value = "";
+    // Discovery re-runs server-side and broadcasts a snapshot; this second resync covers a missed
+    // event so the new project appears without waiting for the timer.
+    setTimeout(() => void resync(), 2000);
+  } catch (e) {
+    setCloneStatus(form, root, `failed: ${e.message}`, "err");
+    input?.focus();
   } finally {
     btn.disabled = false;
   }
@@ -12744,6 +12790,7 @@ function rootSection(root, allProjects) {
     <div class="root-clone" data-clone-form="${esc(root)}"${state.cloneStatus[root] ? "" : " hidden"}>
       <input type="text" data-clone-input="${esc(root)}" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" placeholder="repo name — e.g. agent-worktree-gui, or owner/repo" spellcheck="false">
       <button type="button" data-clone-go="${esc(root)}">Clone via ssh</button>
+      <button type="button" data-project-new="${esc(root)}" title="create a new local git project in ${esc(labelRoot(root))} — inited on main with one commit, nothing fetched or pushed">New local project</button>
       <span class="mono dim${state.cloneStatus[root]?.kind === "err" ? " clone-err" : ""}" data-clone-msg="${esc(root)}">${esc(state.cloneStatus[root]?.text || "")}</span>
     </div>
     <div class="root-body">
@@ -14873,6 +14920,13 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     e.preventDefault();
     void cloneIntoRoot(rgo.dataset.cloneGo);
+    return;
+  }
+  const rnew = e.target.closest("[data-project-new]");
+  if (rnew) {
+    e.stopPropagation();
+    e.preventDefault();
+    void newProjectInRoot(rnew);
     return;
   }
   // The host chip and its Discover strip. The chip sits inside the project header, whose click toggles the section,
