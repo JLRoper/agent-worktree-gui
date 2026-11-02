@@ -28,6 +28,14 @@
 // scroll position, whether the page still considers it pinned, and `gap` — the pointer-to-bottom-edge distance. A
 // handle that tracks the pointer keeps `gap` at the gap the gesture opened with (4 px, or 4.9 px when the corner
 // lands on a fractional layout row); the largest |gap - that gap| over a gesture is the case's drift, in px.
+//
+// ALSO MEASURED: what the gesture RECORDS. The pointerup that already tells a press from a drag is the one place that
+// stores a height the reader chose (`state.outHeights`, keyed by `pre.dataset.out`, persisted under `wm.outHeights`),
+// and every rebuild that replaces or builds a card puts it back. The grab owns that number, so the cases read it: a
+// press that moved nothing records nothing (case 1), a gesture that closes on its opening height records nothing
+// (case 2), and a drag that ends somewhere records exactly where it ended (4a, 4b). A stored height coming back on a
+// REPLACED node is a different claim and a different harness (tools/verify-console-height.mjs, its rebuild triggers);
+// this one proves the number the grab writes is right.
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -191,6 +199,8 @@ const measure = (page, thread) =>
       dist: +(pre.scrollHeight - pre.scrollTop - pre.clientHeight).toFixed(1),
       pinned: typeof state !== "undefined" && state.outPinned ? state.outPinned[id] !== false : null,
       id, rows: pre.children.length,
+      // The height this console's last drag recorded (`state.outHeights`, written by the drag's own pointerup).
+      stored: typeof state !== "undefined" && state.outHeights ? (state.outHeights[id] ?? null) : null,
     };
   }, thread);
 
@@ -354,15 +364,16 @@ async function main() {
             const before = await measure(page, thread);
             const g = await grab(page, thread);
             const pressed = g.after;
-            rows.push({ thread, before: before.h, after: pressed.h, delta: +(pressed.h - before.h).toFixed(1), pin: pressed.inlineH, max: pressed.max, content: pressed.scroll, box: pressed.client });
-            const pass = near(pressed.h, before.h, 0.01) && pressed.inlineH === `${before.h}px` && pressed.max === "none";
+            rows.push({ thread, before: before.h, after: pressed.h, delta: +(pressed.h - before.h).toFixed(1), pin: pressed.inlineH, max: pressed.max, content: pressed.scroll, box: pressed.client, stored: pressed.stored, storedAfter: null });
+            const pass = near(pressed.h, before.h, 0.01) && pressed.inlineH === `${before.h}px` && pressed.max === "none" && pressed.stored === null;
             if (!pass) ok = false;
             console.log(`      ${thread}: h ${before.h} px -> ${pressed.h} px (delta ${(pressed.h - before.h).toFixed(1)}), content ${pressed.scroll} px in a ${pressed.client} px box, inline ${JSON.stringify(pressed.inlineH)}, max ${pressed.max}`);
             await page.mouse.up();
             await page.waitForTimeout(80);
             const after = await measure(page, thread);
-            const clean = after.inlineH === "" && near(after.max === null ? NaN : parseFloat(after.max), cap, 0.01);
-            if (!clean) { ok = false; console.log(`      FAIL  ${thread}: the press left ${after.inlineH || "no height"} / ${after.max} behind`); }
+            const clean = after.inlineH === "" && near(after.max === null ? NaN : parseFloat(after.max), cap, 0.01) && after.stored === null;
+            rows[rows.length - 1].storedAfter = after.stored;
+            if (!clean) { ok = false; console.log(`      FAIL  ${thread}: the press left ${after.inlineH || "no height"} / ${after.max} / stored ${after.stored} behind`); }
           }
           record("1", "pointerdown on the corner changes no console height", ok, rows);
         }
@@ -391,12 +402,15 @@ async function main() {
           const okSteps = down.every((s, i) => near(s.h, edge.h + (i + 1) * STEP, 1));
           const okBack = up.every((s, i) => near(s.h, edge.h + (7 - i) * STEP, 1));
           const okClose = near(end.h, edge.h, 1);
-          record("2", "drag down then up in one gesture: the corner tracks the pointer", okDrift && okSteps && okBack && okClose, {
-            startHeight: edge.h, baseGap: base, steps: trail.length, maxDrift: drift(trail, base), gaps: gaps(trail), heights: heights(trail), endHeight: end.h,
+          // The gesture came back to the height it opened on, so the reader chose nothing: no record.
+          const okRecord = end.stored === null;
+          record("2", "drag down then up in one gesture: the corner tracks the pointer", okDrift && okSteps && okBack && okClose && okRecord, {
+            startHeight: edge.h, baseGap: base, steps: trail.length, maxDrift: drift(trail, base), gaps: gaps(trail), heights: heights(trail), endHeight: end.h, storedAfter: end.stored,
           }, `max drift ${drift(trail, base)} px over ${trail.length} steps`);
           check(okSteps, "each 20 px down is 20 px of console", `heights ${heights(down).join(",")}`);
           check(okBack, "each 20 px back up is 20 px less console", `heights ${heights(up).join(",")}`);
           check(okClose, "the gesture closes on the height it opened with", `${edge.h} -> ${end.h}`);
+          check(okRecord, "and a gesture that ends where it began records no height", `stored ${JSON.stringify(end.stored)}`);
         }
 
         // ---- case 3: a following console, a parked console, a console streaming while it is dragged ---------
@@ -419,9 +433,9 @@ async function main() {
             const trail = [...down, ...up];
             const maxDist = Math.max(...trail.map((s) => s.dist));
             detail.follow = { before, trail, after, base, maxDrift: drift(trail, base), maxDist };
-            const ok = drift(trail, base) <= GAP_TOL && after.pinned === true && after.dist <= 8 && maxDist <= FOLLOW_BAND;
+            const ok = drift(trail, base) <= GAP_TOL && after.pinned === true && after.dist <= 8 && maxDist <= FOLLOW_BAND && after.stored === null;
             console.log(`      following: dist ${before.dist} -> ${after.dist} px from its tail (worst mid-drag ${maxDist} px), pinned ${before.pinned} -> ${after.pinned}, base gap ${base} px, max drift ${drift(trail, base)} px`);
-            check(ok, "a following console tracks the pointer and is still on its newest line after", `dist ${after.dist}, worst ${maxDist}, drift ${drift(trail, base)}`);
+            check(ok, "a following console tracks the pointer and is still on its newest line after", `dist ${after.dist}, worst ${maxDist}, drift ${drift(trail, base)}, stored ${JSON.stringify(after.stored)}`);
           }
 
           // 3b. parked: the reader's line is the top of the box, so a resize must leave scrollTop where it was.
@@ -442,9 +456,9 @@ async function main() {
             const trail = [...down, ...up];
             const midMoved = Math.max(...trail.map((s) => Math.abs(s.top - before.top)));
             detail.parked = { before, trail, after, base, maxDrift: drift(trail, base), scrollMoved, midMoved };
-            const ok = drift(trail, base) <= GAP_TOL && Math.abs(scrollMoved) <= 2 && midMoved <= 2;
+            const ok = drift(trail, base) <= GAP_TOL && Math.abs(scrollMoved) <= 2 && midMoved <= 2 && after.stored === null;
             console.log(`      parked: ${before.dist} px from the tail, scrollTop ${before.top} -> ${after.top} (moved ${scrollMoved} px, worst mid-drag ${midMoved} px), base gap ${base} px, max drift ${drift(trail, base)} px`);
-            check(ok, "a parked console tracks the pointer and holds the reader's line", `scrollTop moved ${scrollMoved} px, worst ${midMoved}`);
+            check(ok, "a parked console tracks the pointer and holds the reader's line", `scrollTop moved ${scrollMoved} px, worst ${midMoved}, stored ${JSON.stringify(after.stored)}`);
           }
 
           // 3c. streaming: the console writes while the pointer is down. Growth of the transcript (scrollHeight, not
@@ -466,9 +480,9 @@ async function main() {
             const trail = [...down, ...up];
             const grew = +(after.scroll - before.scroll).toFixed(1);
             detail.stream = { before, mid, atRelease, after, trail, base, maxDrift: drift(trail, base), grew };
-            const ok = drift(trail, base) <= GAP_TOL && grew >= 20;
+            const ok = drift(trail, base) <= GAP_TOL && grew >= 20 && after.stored === null;
             console.log(`      streaming: transcript grew ${grew} px during the gesture (${before.scroll} -> ${after.scroll}), base gap ${base} px, max drift ${drift(trail, base)} px, pinned ${after.pinned}`);
-            check(ok, "a console writing while it is dragged still tracks the pointer", `drift ${drift(trail, base)} px, transcript +${grew} px`);
+            check(ok, "a console writing while it is dragged still tracks the pointer", `drift ${drift(trail, base)} px, transcript +${grew} px, stored ${JSON.stringify(after.stored)}`);
           }
 
           const ok = detail.follow.maxDrift <= GAP_TOL && detail.parked.maxDrift <= GAP_TOL && detail.stream.maxDrift <= GAP_TOL;
@@ -500,12 +514,13 @@ async function main() {
           results.trails.push({ case: "4a", base, points: [down, away].map((s) => ({ x: s.mx, y: s.my, gap: s.gap, h: s.h })) });
           console.log(`      start h ${start.h} px, base gap ${base} px; 60 px down h ${down.h} (gap ${down.gap}); pointer left of the card x=${away.mx} h ${away.h} (gap ${away.gap})`);
           console.log(`      released outside the card: h ${atRelease.h} -> ${after.h} px, inline ${after.inlineH}, max ${after.max}; unbuttoned move -> h ${ghost.h}`);
-          const ok = near(down.h, start.h + 60, 1) && near(away.h, down.h, 1) && near(after.h, atRelease.h, 1) && still;
+          const ok = near(down.h, start.h + 60, 1) && near(away.h, down.h, 1) && near(after.h, atRelease.h, 1) && still && near(after.stored ?? NaN, after.h, 1);
           record("4a", "a drag that ends outside the card keeps its height and ends the gesture", ok, {
             startHeight: start.h, cardLeft: start.l, baseGap: base, down60: { h: down.h, gap: down.gap }, outside: { x: away.mx, h: away.h, gap: away.gap },
             atRelease: atRelease.h, afterRelease: after.h, afterGhostMove: ghost.h,
           }, `h ${start.h} -> ${atRelease.h} px, release moved ${(after.h - atRelease.h).toFixed(1)} px`);
           check(still, "the release outside the card ended the drag (an unbuttoned move changes nothing)", `h ${after.h} -> ${ghost.h}`);
+          check(near(after.stored ?? NaN, after.h, 1), "and the height it ended on is recorded against the console", `stored ${after.stored} px, box ${after.h} px`);
         }
 
         // ---- case 4b: a drag past the bottom edge of the viewport --------------------------------------------
@@ -527,12 +542,14 @@ async function main() {
           console.log(`      at release h ${atRelease.h} px, after release h ${after.h} px, inline ${after.inlineH}, max ${after.max}`);
           const maxDrift = drift(trail, base);
           const okHeld = near(after.h, atRelease.h, 1);
-          record("4b", "a drag past the bottom of the viewport still follows the pointer", maxDrift <= GAP_TOL && okHeld, {
+          const okRecord = near(after.stored ?? NaN, after.h, 1);
+          record("4b", "a drag past the bottom of the viewport still follows the pointer", maxDrift <= GAP_TOL && okHeld && okRecord, {
             viewportHeight: vh, baseGap: base, inside: { y: inside.my, gap: inside.gap, h: inside.h },
             outside: [{ y: outside1.my, gap: outside1.gap, h: outside1.h }, { y: outside2.my, gap: outside2.gap, h: outside2.h }],
             maxDrift, atRelease: atRelease.h, afterRelease: after.h,
           }, `max drift ${maxDrift} px, ${outside2.my - vh} px below the viewport edge`);
           check(okHeld, "the release past the edge leaves the height it was dragged to", `${atRelease.h} -> ${after.h}`);
+          check(okRecord, "and the height it reached is recorded against the console", `stored ${after.stored} px, box ${after.h} px`);
         }
 
         check(pageErrors.length === 0, "the page threw nothing", pageErrors.slice(0, 3).join(" | "));
