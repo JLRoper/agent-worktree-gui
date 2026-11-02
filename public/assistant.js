@@ -11,9 +11,14 @@
   "use strict";
 
   const OPEN_KEY = "wm.assistantOpen";
-  const RECT_KEY = "wm.assistantRect";
+  // The dock's width, in LAYOUT px — the unit a CSS width is written in — so it means the same thing at every page
+  // zoom. The rect this replaced remembered a position and a size for a window that could be dragged anywhere.
+  const DOCK_KEY = "wm.assistantWidth";
+  const DOCK_MIN = 340;
+  const DOCK_MAX = 640;
+  const DOCK_SHARE = 0.6;
+  const DOCK_DEFAULT = 480;
   const SEEN_KEY = "wm.assistantSeenAt";
-  const PIN_KEY = "wm.assistantPinned";
   // ---- the float's two rows: what it remembers, and how it is painted -----------------------------
   const VIEW_KEY = "wm.assistantView";
   // The one-tab record this replaced: a reader who left the float on "chat" or "settings" is moved onto the new
@@ -193,18 +198,17 @@
       /* a browser with storage off still gets the panel; it just forgets where it was */
     }
   }
-  function readRect() {
+  function readDockWidth() {
     try {
-      const r = JSON.parse(localStorage.getItem(RECT_KEY) || "null");
-      if (!r || !["x", "y", "w", "h"].every((k) => Number.isFinite(Number(r[k])))) return null;
-      return { x: Number(r.x), y: Number(r.y), w: Number(r.w), h: Number(r.h) };
+      const w = Number(localStorage.getItem(DOCK_KEY));
+      return Number.isFinite(w) && w > 0 ? w : null;
     } catch {
       return null;
     }
   }
-  function writeRect(r) {
+  function writeDockWidth(w) {
     try {
-      localStorage.setItem(RECT_KEY, JSON.stringify(r));
+      localStorage.setItem(DOCK_KEY, String(Math.round(w)));
     } catch {
       /* not fatal */
     }
@@ -231,62 +235,53 @@
   state.assistantOpen = state.assistantOpen ?? readFlag(OPEN_KEY, false);
   state.assistantView = state.assistantView || readView();
   state.assistantSeenAt = state.assistantSeenAt ?? seenAt();
-  state.assistantPinned = state.assistantPinned ?? readFlag(PIN_KEY, false);
-  // Maximized is a mode of the float, not a saved position: a reload puts the panel back to the window it
-  // remembered rather than covering the board after a refresh (Esc is the way out, not F5).
-  state.assistantFull = false;
+  // The width the reader last dragged the rail to. Nothing else about the frame is remembered: it is docked, so
+  // there is no position to restore and no size but the column's width.
+  state.assistantWidth = state.assistantWidth ?? readDockWidth();
 
-  let dragState = null;
+  // ---- the rail's frame -----------------------------------------------------------------------
 
-  // ---- the panel's own frame ------------------------------------------------------------------
+  // The width the rail is drawn at: the remembered one, clamped. The 60% cap is measured in the same layout px the
+  // width is stored in, so a zoomed page cannot hand the rail more of the window than it would at 100% — and on a
+  // window too narrow for the 340px floor the cap wins, because the board keeping the majority of the row is the
+  // rule the floor serves.
+  // ---- dock width: the one clamp ---------------------------------------------------------------
+  function clampDockWidth(want, vw, z) {
+    const cap = Math.min(DOCK_MAX, Math.floor((vw / (z || 1)) * DOCK_SHARE));
+    const lo = Math.min(DOCK_MIN, cap);
+    return Math.max(lo, Math.min(Number(want) || DOCK_DEFAULT, cap));
+  }
+  // ---- end dock width --------------------------------------------------------------------------
 
-  function placeAssistant() {
+  function dockWidth() {
+    const { vw } = viewportBox();
+    return clampDockWidth(state.assistantWidth, vw, zoomScale());
+  }
+
+  // The rail's geometry, written here and nowhere else: its width, and the height of the window below the topbar.
+  // The topbar is MEASURED rather than assumed — it wraps to a second row on a narrow window — and the rail is
+  // pinned under it with `position: sticky`, so the board scrolls while the rail stays put.
+  function paintDock() {
     const el = as$("assistant");
     if (!el) return;
-    // Maximized, the frame is the viewport: `inset: 0` in CSS owns it, and any remembered rect written here
-    // would fight it.
-    if (state.assistantFull) return;
-    const { vw, vh } = viewportBox();
-    let r = state.assistantRect || readRect();
-    if (!r) {
-      // Nothing remembered: the stylesheet's own frame is the starting point, measured rather than assumed.
-      // The stylesheet's lengths are LAYOUT px and so render `zoom`× larger, while the window is not zoomed at
-      // all — at 130% the default `min(72vh, 780px)` is 842px on screen and the float's bottom edge, with its
-      // bottom-right grab, opened 38px below the window. It fits at 100%, and there the stylesheet keeps
-      // owning the frame (the float follows the window's right edge); only an overhanging frame is clamped.
-      const b = el.getBoundingClientRect();
-      if (!b.width || !b.height) return; // closed: a hidden frame measures nothing
-      if (b.left >= EDGE && b.top >= EDGE && b.right <= vw - EDGE && b.bottom <= vh - EDGE) return;
-      r = { x: b.left, y: b.top, w: b.width, h: b.height };
-    }
-    const w = Math.max(320, Math.min(r.w, vw - 2 * EDGE));
-    const h = Math.max(320, Math.min(r.h, vh - 2 * EDGE));
-    const x = Math.max(EDGE, Math.min(r.x, vw - w - EDGE));
-    const y = Math.max(EDGE, Math.min(r.y, vh - h - EDGE));
     const z = zoomScale();
-    el.style.width = cssPx(w, z);
+    const { vh } = viewportBox();
+    const top = document.querySelector(".topbar")?.getBoundingClientRect().height || 0;
+    const h = Math.max(240, vh - top);
+    el.style.width = `${dockWidth()}px`;
+    el.style.top = cssPx(top, z);
     el.style.height = cssPx(h, z);
-    el.style.left = cssPx(x, z);
-    el.style.top = cssPx(y, z);
-    el.style.right = "auto";
-    el.style.bottom = "auto";
+    // The row the rail is docked in has to be at least as tall as the rail, or `position: sticky` runs out of
+    // containing block at the end of a short board and the rail slides up under the topbar. A board taller than
+    // the window is unaffected: this is a floor, not a height.
+    const shell = el.parentElement;
+    if (shell) shell.style.minHeight = cssPx(h, z);
   }
 
-  function currentRect() {
-    const el = as$("assistant");
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
-  }
-
-  // Air kept between the float and every viewport edge, and the box it is kept inside.
-  //
-  // That box is the LAYOUT viewport — `documentElement.clientWidth/Height`, the rectangle a `position: fixed`
-  // element is laid out in, which already excludes the classic scrollbar. It is deliberately not `visualViewport`:
-  // a classic scrollbar shrinks the visual viewport by its own width (11px on this machine), so a float sitting on
-  // the layout viewport's 8px edge is already 3px outside the visual one, and the first pixel of a drag snapped the
-  // whole frame 11px inward — the window jumped the instant it was grabbed instead of just stopping at the edge.
-  const EDGE = 8;
+  // The box the rail is measured against: the LAYOUT viewport — `documentElement.clientWidth/Height`, which
+  // already excludes the classic scrollbar. It is deliberately not `visualViewport`: a classic scrollbar shrinks
+  // the visual viewport by its own width (11px on this machine), so a rail sized against it would be narrower
+  // than the row it is docked in.
   function viewportBox() {
     const doc = document.documentElement;
     return {
@@ -386,54 +381,6 @@
     requestAnimationFrame(toFoot);
   }
 
-  // Maximize/restore. An explicit control beside a resize gesture that is a pointer drag: a double-click in the head
-  // already does this, and the button is the visible way in for a reader who never discovers the gesture.
-  function paintAssistantMax() {
-    const btn = as$("btn-as-max");
-    const el = as$("assistant");
-    const on = Boolean(state.assistantFull);
-    if (btn) {
-      btn.classList.toggle("is-on", on);
-      btn.setAttribute("aria-pressed", on ? "true" : "false");
-      btn.textContent = on ? "\u2921" : "\u2922";
-      btn.title = on
-        ? "restore the assistant to a floating window (Esc, or double-click the header)"
-        : "maximize the assistant to the whole window (double-click the header; Esc restores)";
-    }
-    if (el) el.classList.toggle("as-full", on);
-    const close = as$("btn-as-close");
-    if (close) close.title = on ? "close — Esc puts the float back first" : "close (Esc) — it keeps watching while closed";
-  }
-
-  function setAssistantFull(on) {
-    const el = as$("assistant");
-    if (!el) return;
-    const next = Boolean(on);
-    if (next === Boolean(state.assistantFull)) return;
-    if (next) {
-      // Remember the frame to come back to, then hand the geometry to the stylesheet.
-      const r = currentRect();
-      if (r) {
-        state.assistantRect = r;
-        writeRect(r);
-      }
-      state.assistantFull = true;
-      el.style.width = "";
-      el.style.height = "";
-      el.style.left = "";
-      el.style.top = "";
-      el.style.right = "";
-      el.style.bottom = "";
-      paintAssistantMax();
-      pinChatToBottom(true);
-      return;
-    }
-    state.assistantFull = false;
-    paintAssistantMax();
-    placeAssistant();
-    pinChatToBottom(true);
-  }
-
   function toggleAssistant(open = !state.assistantOpen) {
     state.assistantOpen = Boolean(open);
     writeFlag(OPEN_KEY, state.assistantOpen);
@@ -442,58 +389,21 @@
     if (el) el.hidden = !state.assistantOpen;
     if (btn) btn.classList.toggle("is-on", state.assistantOpen);
     if (state.assistantOpen) {
-      placeAssistant();
+      paintDock();
       state.assistantSeenAt = Date.now();
       markSeen();
       renderAssistant();
       paintAssistantBadge();
       pinChatToBottom(true);
-      queueSlackPaint();
-    } else if (state.assistantFull) {
-      // A closed panel reopens as the float, not as the whole window.
-      setAssistantFull(false);
     }
-  }
-
-  // Pinning: while it is on, the float ignores the press that would otherwise dismiss it, and it is remembered
-  // across reloads beside the open flag. The button reads as pressed (is-on, aria-pressed) and so does the frame.
-  function paintAssistantPin() {
-    const btn = as$("btn-as-pin");
-    const el = as$("assistant");
-    const on = Boolean(state.assistantPinned);
-    if (btn) {
-      btn.classList.toggle("is-on", on);
-      btn.setAttribute("aria-pressed", on ? "true" : "false");
-      btn.title = on
-        ? "pinned open — a click elsewhere on the board leaves the assistant up (click to unpin)"
-        : "pin the assistant open — unpinned, a click elsewhere on the board closes it (click to pin)";
+    else {
+      // Closed, the rail takes no room: the row goes back to the board's own height.
+      const shell = el?.parentElement;
+      if (shell) shell.style.minHeight = "";
     }
-    if (el) el.classList.toggle("is-pinned", on);
-  }
-
-  function setAssistantPinned(on) {
-    state.assistantPinned = Boolean(on);
-    writeFlag(PIN_KEY, state.assistantPinned);
-    paintAssistantPin();
-  }
-
-  // Unpinned, a press anywhere off the float closes it through the SAME toggle the ✕ calls — one close path.
-  // It listens on pointerdown rather than click on purpose: a drag of the frame starts on the head (inside) and
-  // ends wherever the pointer got to, and the click that follows lands on the nearest common ancestor of press
-  // and release, which is outside the panel — a click listener would close the float every time it was dragged.
-  function onOutsidePress(e) {
-    const el = as$("assistant");
-    if (!el || el.hidden || e.button !== 0) return;
-    if (el.contains(e.target)) return;
-    // The two header buttons toggle for themselves: closing here first would make their own click reopen (or,
-    // for the aggressive switch, dismiss the panel the reader is reading while it changes how it behaves).
-    if (e.target?.closest?.("#btn-assistant, #btn-aggressive")) return;
-    // The shared model picker is portaled onto <body> on purpose — it has to paint over this float — so a press
-    // on its rows is "outside" by containment while still belonging to the panel: it picks a model, it does not
-    // dismiss the panel that pick is being made in.
-    if (e.target?.closest?.(".model-pop")) return;
-    if (state.assistantPinned) return;
-    toggleAssistant(false);
+    // The board's row just gained or lost the rail's width: the room goes to the open turn's console, not to the
+    // spacer above it.
+    queueSlackPaint();
   }
 
   // Is the caret sitting in a field the reader is typing into? A shortcut that eats a letter out of a prompt box
@@ -2193,10 +2103,6 @@
   // the assistant behaves. The server answers whether anything changed, and the note beside it says so.
   as$("btn-aggressive")?.addEventListener("click", () => setAggressiveMode(!state.assistant?.aggressive?.on));
   as$("btn-as-close")?.addEventListener("click", () => toggleAssistant(false));
-  as$("btn-as-pin")?.addEventListener("click", () => setAssistantPinned(!state.assistantPinned));
-  // Capture phase, so a handler on the thing being pressed cannot keep the press from dismissing the float.
-  document.addEventListener("pointerdown", onOutsidePress, true);
-
   as$("as-tabs")?.addEventListener("click", (e) => {
     const b = e.target.closest("[data-as-tab]");
     if (!b) return;
@@ -2829,188 +2735,69 @@
     void loadMessages(true);
   }, MSG_REFRESH_MS);
 
-  // ---- drag and resize -------------------------------------------------------------------------
+  // ---- the rail's one grab: its left edge ------------------------------------------------------
 
   (() => {
     const el = as$("assistant");
-    const head = as$("as-drag");
-    const grips = as$("as-grips");
-    if (!el || !head || !grips) return;
+    const split = as$("as-split");
+    if (!el || !split) return;
 
-    const MIN_W = 340;
-    const MIN_H = 320;
-
-    // A press that never travels this far is a click, not a drag. Clicking a grab is what
-    // readers do to focus or dismiss something, and it must leave the frame exactly as it was.
+    // A press that never travels this far is a click, not a drag: clicking the edge is what readers do to focus
+    // something, and it must leave the width exactly as it was.
     const DRAG_THRESHOLD = 3;
 
-    const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
+    let press = null;
 
-    // The press that may still become a gesture. It is only recorded, never applied:
-    // no pinned geometry and no console opened until the pointer actually travels.
-    let pressState = null;
-
-    // The frame is sized against the LAYOUT viewport (see `viewportBox`), never against `visualViewport`: the visual
-    // one excludes the classic scrollbar, so clamping to it snapped a frame parked on the layout viewport's edge
-    // inward by the scrollbar's width the instant a grab started.
-    const viewport = () => viewportBox();
-
-    // Anchor the frame with left/top before any gesture. The stylesheet right-anchors it (`right: 16px`), and a float
-    // anchored by `right` grows its LEFT edge: with no remembered rect the first resize drag could travel 8px before
-    // its own clamp froze it, while the pointer walked on. `getBoundingClientRect` is the state it actually has.
-    const pinFrame = (z) => {
-      const r = el.getBoundingClientRect();
-      el.style.left = cssPx(r.left, z);
-      el.style.top = cssPx(r.top, z);
-      el.style.width = cssPx(r.width, z);
-      el.style.height = cssPx(r.height, z);
-      el.style.right = "auto";
-      el.style.bottom = "auto";
-      return r;
-    };
-
-    const onDown = (mode, dir, captureEl) => (e) => {
+    const onDown = (e) => {
       if (e.button !== 0) return;
-      if (state.assistantFull) return; // maximized, the frame is the viewport: Esc or a double-click restores
-      if (mode === "move" && e.target.closest("button,input,select,textarea")) return;
-      // Record the press only. The first move that actually travels pins the geometry
-      // and opens the newest turn; a plain click leaves all of that untouched.
-      pressState = { mode, dir, captureEl, px: e.clientX, py: e.clientY };
-      // Hold the pointer for the length of the gesture: without capture it leaves the float (and the window) and the
-      // moves stop arriving, so a release out there never ends the drag we started in here.
+      // The width the gesture starts from, and the pointer it starts at. Nothing is written until the press
+      // actually travels.
+      press = { px: e.clientX, w: dockWidth(), moved: false };
+      // Hold the pointer for the length of the gesture: without capture it leaves the rail (and the window) and
+      // the moves stop arriving, so a release out there never ends the drag we started in here.
       try {
-        (captureEl || el).setPointerCapture(e.pointerId);
+        split.setPointerCapture(e.pointerId);
       } catch {
         /* older pointer stacks: the window listeners below still carry the gesture */
       }
       e.preventDefault();
     };
 
-    // Promote the pending press into a gesture the first time it travels DRAG_THRESHOLD.
-    // The origin stays the press point, so the edge follows the pointer with no dead band.
-    const beginGesture = () => {
-      const p = pressState;
-      pressState = null;
-      if (!p) return false;
-      // The zoom is read once per gesture: it cannot change mid-drag, and every length written below is a
-      // client-pixel measurement that has to be handed back to CSS in layout px (see `zoomScale`).
-      const z = zoomScale();
-      const r = pinFrame(z);
-      dragState = { mode: p.mode, dir: p.dir, px: p.px, py: p.py, x: r.left, y: r.top, w: r.width, h: r.height, z };
-      el.classList.add("is-dragging");
-      // Growing the panel hands the room to a turn's console, so a resize with everything folded opens the newest
-      // turn first: a folded turn has no console on the page for the room to land in.
-      if (p.mode === "size") openNewestTurn();
-      return true;
-    };
-
     const onMove = (e) => {
-      // Nothing happens until the press travels: the first real move starts the gesture.
-      if (!dragState) {
-        const p = pressState;
-        if (!p) return;
-        const mdx = e.clientX - p.px;
-        const mdy = e.clientY - p.py;
-        if (mdx * mdx + mdy * mdy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
-        if (!beginGesture()) return;
+      if (!press) return;
+      const dx = e.clientX - press.px;
+      if (!press.moved) {
+        if (Math.abs(dx) < DRAG_THRESHOLD) return;
+        press.moved = true;
+        el.classList.add("is-splitting");
+        // Growing the rail hands the room to a turn's console, so a drag with everything folded opens the newest
+        // turn first: a folded turn has no console on the page for the room to land in.
+        openNewestTurn();
       }
-      const d = dragState;
-      // Client px in, layout px out: `d.x/y/w/h`, the pointer and `vw/vh` are all client measurements, while
-      // the style lengths are layout ones that the page zoom scales (see `zoomScale`).
-      const z = d.z || 1;
-      const { vw, vh } = viewport();
-      const dx = e.clientX - d.px;
-      const dy = e.clientY - d.py;
-      if (d.mode === "move") {
-        // Keep the whole float inside the window. The old clamp allowed `8 - width + 120`, which let the left
-        // edge sit ~160px off-screen — the tabs and the first characters of every transcript row went with it.
-        const maxX = Math.max(EDGE, vw - Math.min(d.w, vw - 2 * EDGE) - EDGE);
-        const maxY = Math.max(EDGE, vh - Math.min(d.h, vh - 2 * EDGE) - EDGE);
-        // A frame already outside the box (a rect remembered on a bigger screen) is left where it is until the drag
-        // pulls it back in — clamping it to `EDGE` here would snap it to the top-left corner on the grab itself.
-        const x = clamp(d.x + dx, Math.min(EDGE, d.x), Math.max(maxX, d.x));
-        const y = clamp(d.y + dy, Math.min(EDGE, d.y), Math.max(maxY, d.y));
-        el.style.left = cssPx(x, z);
-        el.style.top = cssPx(y, z);
-        el.style.right = "auto";
-        el.style.bottom = "auto";
-        // Absorb what the clamp ate into the drag's own origin. Otherwise the pointer has to walk the whole overshoot
-        // back before the frame stirs, which is what "the cursor came off the window" feels like.
-        d.px += d.x + dx - x;
-        d.py += d.y + dy - y;
-        return;
-      }
-
-      const dir = d.dir || "se";
-      let x = d.x, y = d.y, w = d.w, h = d.h;
-
-      // The limits below never ask for LESS than the size the frame already has. A frame wider or taller than the
-      // room left — from an older build's clamp, a rotated screen, a narrower window, a zoom change — would otherwise
-      // be snapped down to the limit on the first pixel of the drag, which is the grab that "jumps".
-      if (dir.includes("e")) {
-        const want = d.w + dx;
-        w = clamp(want, MIN_W, Math.max(d.w, vw - EDGE - d.x));
-        d.px += want - w;
-      } else if (dir.includes("w")) {
-        const wantX = d.x + dx;
-        x = clamp(wantX, EDGE, d.x + d.w - MIN_W);
-        w = d.x + d.w - x;
-        d.px += wantX - x;
-      }
-
-      if (dir.includes("s")) {
-        const want = d.h + dy;
-        h = clamp(want, MIN_H, Math.max(d.h, vh - EDGE - d.y));
-        d.py += want - h;
-      } else if (dir.includes("n")) {
-        const wantY = d.y + dy;
-        y = clamp(wantY, EDGE, d.y + d.h - MIN_H);
-        h = d.y + d.h - y;
-        d.py += wantY - y;
-      }
-
-      el.style.left = cssPx(x, z);
-      el.style.top = cssPx(y, z);
-      el.style.width = cssPx(w, z);
-      el.style.height = cssPx(h, z);
-      el.style.right = "auto";
-      el.style.bottom = "auto";
-      // The console that takes the room has to be told again: a repaint between two moves may have dropped the class.
+      // The pointer travels in client px; the width is a layout length, so the page zoom divides it. Dragging the
+      // edge LEFT widens the rail, which is the direction the pointer is moving.
+      const z = zoomScale();
+      state.assistantWidth = press.w - dx / z;
+      paintDock();
       queueSlackPaint();
     };
 
     const onUp = () => {
-      pressState = null;
-      if (!dragState) return; // a click: no gesture started, so nothing is remembered
-      dragState = null;
-      el.classList.remove("is-dragging");
-      const r = currentRect();
-      if (r) {
-        state.assistantRect = r;
-        writeRect(r);
-      }
+      if (!press) return;
+      const moved = press.moved;
+      press = null;
+      el.classList.remove("is-splitting");
+      if (!moved) return; // a click: nothing was resized, so nothing is remembered
+      // Store what the clamp actually drew, not the raw pointer position: a drag past the cap must not remember a
+      // width the rail can never have.
+      state.assistantWidth = dockWidth();
+      writeDockWidth(state.assistantWidth);
     };
 
-    head.addEventListener("pointerdown", onDown("move", null, head));
-    grips.addEventListener("pointerdown", (e) => {
-      const grip = e.target.closest("[data-dir]");
-      if (!grip) return;
-      onDown("size", grip.dataset.dir, grip)(e);
-    });
+    split.addEventListener("pointerdown", onDown);
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
-
-    // Double-click the header: the gesture the reader already makes on a window's title bar. Buttons in the
-    // head (pin / maximize / close) keep their own clicks.
-    head.addEventListener("dblclick", (e) => {
-      if (e.target.closest("button,input,select,textarea")) return;
-      e.preventDefault();
-      setAssistantFull(!state.assistantFull);
-    });
-
-    const maxBtn = as$("btn-as-max");
-    if (maxBtn) maxBtn.addEventListener("click", () => setAssistantFull(!state.assistantFull));
   })();
 
   // Which way the chat is being read: the reader's own scroll decides whether a repaint lands on the newest
@@ -3025,22 +2812,21 @@
     true,
   );
 
-  // Keep the panel on screen when the window shrinks: a remembered position from a 4K screen must not open
-  // half outside a laptop screen.
+  // The rail is sized against the window, so a resize re-measures it: a narrower window caps the width at 60% of
+  // it, and a topbar that wrapped to a second row moves the rail's top edge down with it.
   window.addEventListener("resize", () => {
     if (!state.assistantOpen) return;
-    // Maximized, the frame follows the viewport through CSS — writing the measured rect here would overwrite
-    // the window the reader comes back to with the fullscreen size.
-    if (state.assistantFull) return;
-    placeAssistant();
-    const r = currentRect();
-    if (r) {
-      state.assistantRect = r;
-      writeRect(r);
-    }
-    // The panel just changed height: the room goes to the open turn's console, not to the spacer above it.
+    paintDock();
+    // The rail just changed height: the room goes to the open turn's console, not to the spacer above it.
     queueSlackPaint();
   });
+
+  // The topbar's height is not a constant — it wraps — and the rail is pinned under it. Follow it rather than
+  // assume it, and only while the rail is on screen.
+  if (typeof ResizeObserver === "function") {
+    const bar = document.querySelector(".topbar");
+    if (bar) new ResizeObserver(() => { if (state.assistantOpen) paintDock(); }).observe(bar);
+  }
 
   // ---- keys ------------------------------------------------------------------------------------
 
@@ -3076,15 +2862,8 @@
     if (e.key !== "Escape") return;
     const el = as$("assistant");
     if (!el || el.hidden) return;
-    // Maximized, Esc puts the float back — wherever the caret is, since the panel is the whole window and the
-    // reader is almost always typing in its composer.
-    if (state.assistantFull) {
-      e.preventDefault();
-      setAssistantFull(false);
-      return;
-    }
-    // Otherwise Esc closes the float only when the caret is in it: a reader dismissing something on the
-    // board, or a model popup, must not lose the panel.
+    // Esc closes the rail only when the caret is in it: a reader dismissing something on the board, or a model
+    // popup, must not lose the panel.
     if (document.activeElement && el.contains(document.activeElement)) {
       e.preventDefault();
       toggleAssistant(false);
@@ -3100,9 +2879,7 @@
     if (!el) return;
     el.hidden = !state.assistantOpen;
     as$("btn-assistant")?.classList.toggle("is-on", state.assistantOpen);
-    placeAssistant();
-    paintAssistantPin();
-    paintAssistantMax();
+    paintDock();
     paintAssistantBadge();
     paintAggressive();
     if (state.assistantOpen) renderAssistant();
