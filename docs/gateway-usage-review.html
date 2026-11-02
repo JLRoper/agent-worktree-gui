@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hermes gateway usage: what the measurements show</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a21; --panel2: #1b212a; --line: #2a3340; --text: #e6e9ef; --dim: #9aa5b4;
+    --dimmer: #6f7a89; --green: #7ee787; --red: #ff9c94; --amber: #f0c674; --blue: #9ecbff; --purple: #c8a6ff;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 15px/1.6 var(--ui); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 24px 64px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; }
+  h2 { font-size: 19px; margin: 40px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+  h3 { font-size: 15.5px; margin: 24px 0 6px; color: var(--blue); }
+  p { margin: 8px 0; }
+  a { color: var(--blue); }
+  code, .mono { font-family: var(--mono); font-size: 12.5px; }
+  code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  code.cmd { display: block; white-space: pre-wrap; word-break: break-word; padding: 5px 7px; margin-top: 4px; color: var(--dim); background: #0b0e13; }
+  .meta { color: var(--dim); font-size: 13px; }
+  .verdict { background: #13261a; border: 1px solid #2f5f38; border-left: 4px solid var(--green); border-radius: 8px; padding: 14px 18px; margin: 20px 0; }
+  .verdict h2 { border: 0; margin: 0 0 6px; padding: 0; font-size: 17px; color: var(--green); }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+  .warn { background: #2a2414; border: 1px solid #5c4d22; border-left: 4px solid var(--amber); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+  .not { background: #1f1a26; border: 1px solid #44395a; border-left: 4px solid var(--purple); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+  .tw { overflow-x: auto; margin: 10px 0 14px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; min-width: 860px; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--panel2); color: var(--dim); font-weight: 600; font-size: 12.5px; position: sticky; top: 0; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bad { color: var(--red); font-weight: 600; }
+  .good { color: var(--green); font-weight: 600; }
+  .same { color: var(--amber); }
+  pre { background: #0b0e13; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font: 12.5px/1.5 var(--mono); margin: 10px 0; }
+  ol.steps li, ul li { margin: 4px 0; }
+  .toc { columns: 2; font-size: 14px; }
+  .toc a { text-decoration: none; }
+  .bar { display: flex; height: 26px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; margin: 8px 0 4px; font: 11px/26px var(--mono); color: #0b0e13; }
+  .bar span { display: block; text-align: center; overflow: hidden; white-space: nowrap; }
+  .b1 { background: #7ee787; } .b2 { background: #9ecbff; } .b3 { background: #f0c674; } .b4 { background: #c8a6ff; } .b5 { background: #6f7a89; color: #e6e9ef; }
+  .legend { color: var(--dim); font-size: 12.5px; }
+  .tag { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; font: 11px/18px var(--mono); color: var(--dim); }
+  @media (max-width: 720px) { .toc { columns: 1; } }
+  @media print {
+    html, body { background: #fff; color: #000; }
+    .verdict, .box, .warn, .not, pre, th, code { background: #fff !important; color: #000; }
+    a { color: #000; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Hermes gateway usage: what the measurements show</h1>
+<p class="meta">Measured on the live board, 2026-11-02 17:29–17:48 EST (22:29–22:48Z): panel <code>127.0.0.1:7331</code>,
+gateway <code>127.0.0.1:8642</code> (Hermes 0.22.5, <code>code_sha bf0203a</code>), branch
+<code>wtgui/research-whether-our-her-f16888</code> at <code>9d4e9b8</code>. Every figure below was produced by the
+command printed beside it; nothing is estimated. Memory figures are MiB (Get-Process bytes ÷ 1,048,576); byte counts
+and character counts are exact. Anything I could not measure is listed as <b>unmeasured</b> in
+<a href="#unmeasured">§8</a>.</p>
+
+<div class="verdict" id="verdict">
+  <h2>Verdict</h2>
+  <p><b>More RAM would not help.</b> The gateway's working set was 747.7–786.8 MiB while 8, 12 and 18 runs were live,
+  and it does not rise with the number of live runs (18 runs: 786.8 MiB · 12 runs: 747.7–769.7 MiB · 8 runs: 786.5 MiB).
+  Private bytes stayed at 944.6–980.7 MiB. This is a 32,213 MiB host with 2,185–3,381 MiB free; the gateway is about
+  2.4% of RAM. The resources actually being spent are <b>CPU</b> (1.15–1.30 of the machine's cores) and <b>tokens</b>
+  (43 assistant wakes in the last hour; $30.71 across the two assistant threads).</p>
+  <p><b>What is actually wasteful is what the panel sends on every wake.</b> One measured wake was
+  <b>36,434 characters of preamble wrapped around an 81-character question</b> — 99.8% of the message the model reads
+  is the standing context, and 53% of that context is a charter file re-sent in full (19,720 bytes) plus a board
+  digest (7,975 bytes, 22%). It repeats 43 times an hour: 1,794,889 characters of preamble in the last 60 minutes.</p>
+  <p><b>The three changes worth making, in order:</b> cap assistant wakes at the rate the board needs
+  (<span class="tag">30/h/assistant today</span> → 10), stop re-sending the unchanged charter on every turn
+  (<span class="tag">−19,720 B/turn</span>), and send the board digest only when it is due
+  (<span class="tag">−7,975 B/turn</span>). Together they remove roughly three quarters of the per-turn preamble
+  and about half the turns.</p>
+</div>
+
+<div class="toc">
+  <a href="#running">1. What is actually running</a><br>
+  <a href="#concurrency">2. How many runs are live, and what each is doing</a><br>
+  <a href="#findings">3. Findings, with evidence and source</a><br>
+  <a href="#turn">4. The per-turn bill</a><br>
+  <a href="#memory">5. Where the memory is</a><br>
+  <a href="#ram">6. Would more RAM help?</a><br>
+  <a href="#recommend">7. What the panel could do differently</a><br>
+  <a href="#unmeasured">8. What I could not measure</a><br>
+  <a href="#reproduce">9. Reproduce it</a>
+</div>
+
+<h2 id="running">1. What is actually running</h2>
+<p>The brief said "the node PID listening on 8642". There is no node process on 8642. The listener is a Python
+process running the Hermes gateway; the panel is the only Node process in this picture.</p>
+
+<div class="tw"><table>
+  <thead><tr><th>Role</th><th class="num">PID</th><th>Image</th><th>Command line / evidence</th></tr></thead>
+  <tbody>
+    <tr><td>Gateway on <code>:8642</code></td><td class="num">49656</td><td><code>python.exe</code></td>
+      <td><code>…\python.exe -m hermes_cli.main --profile default gateway run --quiet</code>
+      <code class="cmd">netstat -ano | grep -E ':8642\s' | head -5
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter 'ProcessId=49656' | Select-Object Name,CommandLine | Format-List"</code></td></tr>
+    <tr><td>Panel on <code>:7331</code></td><td class="num">13768</td><td><code>node.exe</code></td>
+      <td><code>node server.js</code> — the only V8 process measured
+      <code class="cmd">netstat -ano | grep -E ':7331\s' | head -3</code></td></tr>
+    <tr><td>Host</td><td class="num">—</td><td>Windows 11</td>
+      <td>32,213 MiB visible RAM; 2,185–3,381 MiB free during the samples
+      <code class="cmd">Get-CimInstance Win32_OperatingSystem | Select-Object TotalVisibleMemorySize,FreePhysicalMemory</code></td></tr>
+  </tbody>
+</table></div>
+
+<div class="warn"><b>Consequence for the question.</b> "V8 heap" cannot describe the gateway: it is not Node.
+The gateway's heap is CPython's, and CPython exposes no heap figure externally. The panel is the V8 process and it
+exposes no heap figure either (<code>grep -rn "memoryUsage\|heapUsed" server.js lib</code> returned nothing), so
+both heaps are marked <b>unmeasured</b>; only RSS and private bytes are measured. That distinction does not weaken the
+RAM answer — the process's resident and private totals are the figures a RAM increase would change.</div>
+
+<h2 id="concurrency">2. How many runs are live, and what each is doing</h2>
+<p>Nineteen runs were live at the first <code>/api/jobs</code> read (22:28Z); they drained to 8 by 22:47Z. The table is
+the 19 that were live at once, with the gateway's own event sequence per run and the context each had accumulated.
+The gateway reported <code>active_runs: 11</code> at 22:44:57Z in <code>gateway_state.json</code>, which is its own
+count of runs holding a turn lease; <code>session_turn_leases</code> held 11 rows in the same minute.</p>
+
+<div class="tw"><table>
+  <thead><tr><th>Job</th><th class="num">live.seq</th><th class="num">startedAt</th><th class="num">turn</th><th class="num">context tokens</th><th>Title</th></tr></thead>
+  <tbody>
+<tr><td><code>f7ee26de</code></td><td class="num">312</td><td class="num">21:50Z</td><td class="num">1</td><td class="num">251,481</td><td>Task #49 analysis B: agent-stage coupling</td></tr>
+<tr><td><code>aa2e8815</code></td><td class="num">172</td><td class="num">21:52Z</td><td class="num">1</td><td class="num">173,729</td><td>Resume turnover branch 20260928_2105_jvmMemoryLogging</td></tr>
+<tr><td><code>093a17c7</code></td><td class="num">186</td><td class="num">21:53Z</td><td class="num">1</td><td class="num">203,716</td><td>Task #48 retry analysis A stage contract</td></tr>
+<tr><td><code>45471c82</code></td><td class="num">261</td><td class="num">21:57Z</td><td class="num">1</td><td class="num">328,262</td><td>Code review C of 3 for task #53</td></tr>
+<tr><td><code>d4324092</code></td><td class="num">120</td><td class="num">21:58Z</td><td class="num">1</td><td class="num">117,487</td><td>Audit event-multi branches for safe cleanup</td></tr>
+<tr><td><code>ba38b1e6</code></td><td class="num">177</td><td class="num">21:59Z</td><td class="num">1</td><td class="num">147,128</td><td>Increase Settings tab strip font size</td></tr>
+<tr><td><code>bba39034</code></td><td class="num">268</td><td class="num">22:03Z</td><td class="num">2</td><td class="num">395,666</td><td>Assess pipeline integration cost and order</td></tr>
+<tr><td><code>51b39d84</code></td><td class="num">167</td><td class="num">22:06Z</td><td class="num">1</td><td class="num">223,471</td><td>Research workflow definition languages against stage contract</td></tr>
+<tr><td><code>5961feb1</code></td><td class="num">103</td><td class="num">22:06Z</td><td class="num">1</td><td class="num">207,497</td><td>Research agent-to-agent protocols and role definitions</td></tr>
+<tr><td><code>d6206bc8</code></td><td class="num">183</td><td class="num">22:06Z</td><td class="num">1</td><td class="num">213,469</td><td>Research prompt, artifact, telemetry specs</td></tr>
+<tr><td><code>612bd067</code></td><td class="num">93</td><td class="num">22:08Z</td><td class="num">1</td><td class="num">112,822</td><td>Stand up relational database for semantic layer</td></tr>
+<tr><td><code>072d695a</code></td><td class="num">137</td><td class="num">22:11Z</td><td class="num">1</td><td class="num">194,265</td><td>Build interactive pipeline studio GUI</td></tr>
+<tr><td><code>f9d0d186</code></td><td class="num">155</td><td class="num">22:13Z</td><td class="num">1</td><td class="num">101,413</td><td>Create ai-pipeline-factory Node.js service submodule</td></tr>
+<tr><td><code>578cebfb</code></td><td class="num">174</td><td class="num">22:14Z</td><td class="num">1</td><td class="num">207,935</td><td>Research pipeline run state display design study</td></tr>
+<tr><td><code>94032a58</code></td><td class="num">202</td><td class="num">22:14Z</td><td class="num">1</td><td class="num">292,669</td><td>Research IA for editing stage definitions</td></tr>
+<tr><td><code>6ba0fec0</code></td><td class="num">108</td><td class="num">22:14Z</td><td class="num">1</td><td class="num">65,384</td><td>Node-graph and pipeline canvas design study</td></tr>
+<tr><td><code>cd2ea1f2</code></td><td class="num">29</td><td class="num">22:27Z</td><td class="num">1</td><td class="num">51,504</td><td>Write semantic layer reference HTML page</td></tr>
+<tr><td><code>49975389</code></td><td class="num">23</td><td class="num">22:27Z</td><td class="num">1</td><td class="num">45,763</td><td>Research Hermes gateway usage and write HTML review</td></tr>
+<tr><td><code>086313ca</code></td><td class="num">10</td><td class="num">22:27Z</td><td class="num">23</td><td class="num">338,272</td><td>Read assistant-2 queue and manage agent board</td></tr>
+  </tbody>
+</table></div>
+<p class="legend">Sources: <code>curl -s http://127.0.0.1:7331/api/jobs</code> → <code>jq -r '.jobs[]|select(.status=="running")|"\(.id) seq=\(.live.seq) started=\(.startedAt) turn=\(.turn) ctx=\(.stats.context_used)"'</code>;
+gateway count from <code>cat ~/AppData/Local/hermes/gateway_state.json</code>. Concurrency over the session:
+19 (22:28Z) → 18 (22:29Z) → 14 (22:33Z) → 12 (22:41–22:42Z) → 10 (22:44Z) → 8 (22:47Z), each read with the same
+<code>/api/jobs</code> command. Peak observed: <b>19</b>.</p>
+
+<h2 id="findings">3. Findings, with evidence and source</h2>
+<p>Each row is a claim, the measurement behind it with the command that produced it, and where the code or file lives.
+Figures are bytes unless marked; "per turn" means one <code>POST /v1/runs</code>.</p>
+
+<div class="tw"><table>
+  <thead><tr><th style="width:24%">Claim</th><th style="width:50%">Evidence (command in the block)</th><th style="width:26%">Source</th></tr></thead>
+  <tbody>
+
+  <tr><td><b>The gateway is Python, not Node.</b></td>
+    <td>PID 49656 owns <code>127.0.0.1:8642</code>; <code>Win32_Process.Name</code> = <code>python.exe</code>, command line
+    <code>… -m hermes_cli.main --profile default gateway run --quiet</code>.
+    <code class="cmd">netstat -ano | grep ':8642 ' ; powershell Get-CimInstance Win32_Process -Filter 'ProcessId=49656'</code></td>
+    <td>Process table, §1. Hermes 0.22.5.</td></tr>
+
+  <tr><td><b>RSS does not grow with live runs.</b> 747.7–786.8 MiB at 8–18 runs; 786.8 MiB at 18.</td>
+    <td>Three samples 30 s apart at 12 live runs: WS 769.7 → 747.7 → 762.7 MiB; private 967.2 → 944.6 → 959.4 MiB;
+    handles 918 → 909 → 904. One later sample at 8 runs: WS 786.5 MiB, private 980.7 MiB — <i>higher</i> than at 12 runs.
+    <code class="cmd">powershell -File sample2.ps1   # Get-CimInstance Win32_Process + Get-Process, Start-Sleep 30</code></td>
+    <td>§5 table; <code>generated from Get-Process WorkingSet64 / PrivateMemorySize64</code>.</td></tr>
+
+  <tr><td><b>The gateway uses ~1.3 cores while 12 runs are live.</b></td>
+    <td>CPU 15,854.56 → 15,901.36 → 15,941.31 s: +86.75 s of CPU over 66.92 s of wall time = <b>1.30 cores</b>.
+    At 8 runs over 312 s: +359.02 s = <b>1.15 cores</b>.
+    <code class="cmd">Get-Process -Id 49656 | Select-Object CPU ; timestamps from the same script</code></td>
+    <td>§5; arithmetic shown.</td></tr>
+
+  <tr><td><b>The panel sends 36,974 B of preamble per assistant turn.</b></td>
+    <td>Assistant #2, queue digest on: 36,487 chars / <b>36,974 bytes</b>, 294 lines. Assistant #1: 39,911 chars /
+    40,509 bytes. Reconstructed by running the panel's own <code>Assistant.preamble()</code> against a copy of the
+    live state (so nothing on the board was touched).
+    <code class="cmd">node measure-preamble.mjs   # imports lib/assistant.js, config.dataDir = copy of ~/.wag/state</code></td>
+    <td><code>lib/assistant.js:2626</code> <code>preamble()</code>; <code>:511</code> <code>charterBriefing()</code>;
+    <code>:2540</code> <code>digest()</code>.</td></tr>
+
+  <tr><td><b>The charter is 53% of that preamble.</b></td>
+    <td>Charter section: 19,550 chars / <b>19,720 bytes</b> (53.3%). The file on disk is 20,189 bytes (19,955 chars),
+    sent in full, clipped only at 20,000 chars.
+    <code class="cmd">wc -c ~/.wag/state/assistant-charter.md   # 20189
+node sections.mjs  # section split of the dumped preamble</code></td>
+    <td><code>lib/assistant.js:511-527</code>; cap <code>lib/charter.js:22</code> (20,000).</td></tr>
+
+  <tr><td><b>The board digest is 22% of the preamble and changes every turn.</b></td>
+    <td>Digest: 7,791 chars / <b>7,975 bytes</b> (21.6%), 34 lines. Two dumps 10 minutes apart differed on 23 lines —
+    mostly <code>running 10m</code> ticking to <code>running 21m</code> and runs moving to <code>done</code>.
+    <code class="cmd">node dump-preamble.mjs ; diff <(sed -n '/The board right now:/,/The charter above/p' pre-A.txt) (…pre-B.txt)</code></td>
+    <td><code>lib/assistant.js:2540-2617</code>, appended at <code>:2713-2714</code>.</td></tr>
+
+  <tr><td><b>A real wake is 36,434 chars of preamble + an 81-char question.</b></td>
+    <td>The last user message on <code>panel-assistant-2</code> is 36,522 chars: 36,434 before the
+    <code>---</code> separator, 81 after it ("I can 't even tell what you're working on right now by lookign at your
+    task queue"). <b>99.8% of what the model received was preamble.</b>
+    <code class="cmd">node db-inputs.js   # node:sqlite on ~/AppData/Local/hermes/state.db, messages.content</code></td>
+    <td><code>lib/jobs.js:2151</code> (<code>pre = preamble + "\n\n---\n\n"</code>), <code>:2158</code> (<code>body.input</code>).</td></tr>
+
+  <tr><td><b>43 assistant wakes in the last hour, 1.79 MB of preamble.</b></td>
+    <td>panel-assistant: 33 user messages, average 43,436 chars, 1,433,375 total. panel-assistant-2: 10 messages,
+    average 36,151 chars, 361,514 total. <b>43 wakes · 1,794,889 chars</b> in 60 minutes.
+    <code class="cmd">node db-inputs.js   # count(*) where role='user' and timestamp > now-3600</code></td>
+    <td><code>state.db</code> <code>messages</code>; each turn is one POST → <code>lib/jobs.js:2218</code>.</td></tr>
+
+  <tr><td><b>The same preamble has been sent 1,440 times all-time.</b></td>
+    <td>1,379 preamble-bearing user messages on <code>panel-assistant</code> (avg 29,937 chars) and 61 on
+    <code>panel-assistant-2</code> (avg 33,599), matched by the preamble's opening line.
+    <code class="cmd">node db-inputs.js   # content like 'You are %assistant watching this panel%'</code></td>
+    <td><code>state.db</code> <code>messages</code>.</td></tr>
+
+  <tr><td><b>assistant.json is 300,531 B; the preamble uses 3,814 B of it.</b></td>
+    <td>The file is 300,531 B. Its largest fields: journal 86,437 B, alerts 85,584, spawnIntents 38,452,
+    rules 18,487, terminalWakes 12,355, watches 12,193, notes 8,109. What rides in the preamble is the last 12 rules
+    (2,582 B, clipped) plus 1,214 chars of the scratchpad (1,232 B) — not the journal or the alerts. The brief's
+    <code>logs/assistant.json</code> moved to <code>state/assistant.json</code> when the panel's state left the
+    checkout.
+    <code class="cmd">wc -c ~/.wag/state/assistant.json   # and node analyse-store.mjs for the field split</code></td>
+    <td><code>lib/paths.js:STATE_FILE_NAMES</code> (migration); <code>lib/assistant.js:2688-2691</code> (what rides).</td></tr>
+
+  <tr><td><b>Only 12 of the 40 rules ride; the scratchpad is clipped to 1,200 chars.</b></td>
+    <td>Rules file: 40 rules / 18,487 B; preamble carries the last 12 at ≤200 chars each — 2,582 B for Assistant #1,
+    123 B (the "(none written down yet)" line) for Assistant #2. Scratchpad: 8,109 B in the file, 1,214 chars in the
+    preamble. <code class="cmd">node measure-preamble.mjs   # rules_count / notes_bytes</code></td>
+    <td><code>lib/assistant.js:2688</code> (slice −12, clip 200); <code>:2691</code> (<code>clip(notes, 1200)</code>).</td></tr>
+
+  <tr><td><b>The gateway's state is 2.0 GiB on disk; 52 MB is the board assistant's own thread.</b></td>
+    <td><code>state.db</code> 2,133,688,320 B (+32.7 MB WAL); 2,353 sessions; 160,093 messages; 330,415,336 B of
+    message text. <code>panel-assistant</code>: 9,080 messages, <b>117 active</b>, 51,936,736 B, 8,341 compacted.
+    <code class="cmd">node db-stats.js   # node:sqlite aggregates on the live db, read-only</code></td>
+    <td><code>~/AppData/Local/hermes/state.db</code>; compaction by the gateway.</td></tr>
+
+  <tr><td><b>The panel retains 776 KB of job transcript in memory.</b></td>
+    <td>80 jobs, 4,154 retained <code>lines</code>, 776,331 B of line text (9,704 B per job); <code>jobs.json</code>
+    1,565,438 B. The panel's whole process is 229–243 MiB WS.
+    <code class="cmd">node analyse-store.mjs   # sums JSON.stringify(line) over ~/.wag/state/jobs.json</code></td>
+    <td><code>lib/jobs.js</code> job store; <code>~/.wag/state/jobs.json</code>.</td></tr>
+
+  <tr><td><b>The two assistant threads have cost $30.71.</b></td>
+    <td>panel-assistant: 4,108 calls / 95.8M input / 1,099.6M cache-read / $23.11; background_review 1,429 calls /
+    $4.74; compression 33 / $0.77; gemini titles $0.75. panel-assistant-2: 187 calls / $1.03; background_review 80 /
+    $0.26; compression 1 / $0.01. <b>Total $30.71.</b>
+    <code class="cmd">node db-cost.js   # select * from session_model_usage where session_id like 'panel-assistant%'</code></td>
+    <td><code>state.db</code> <code>session_model_usage</code>, provider-estimated costs.</td></tr>
+
+  <tr><td><b>35% of the board assistant's API calls are <code>background_review</code>, not turns.</b></td>
+    <td>1,429 background_review calls against 4,108 turn calls on panel-assistant (and 80 against 187 on #2). The panel
+    itself only asks for turns; the gateway records the review spend separately.
+    <code class="cmd">node db-cost.js</code></td>
+    <td><code>state.db</code> <code>session_model_usage.task</code>; the panel knows the task list —
+    <code>lib/session-usage.js:142</code>.</td></tr>
+
+  <tr><td><b>There is no concurrency cap anywhere in the path.</b></td>
+    <td>Gateway <code>api_server.max_concurrent_runs: 0</code> (0 = unlimited) and an empty
+    <code>max_concurrent_sessions</code> (also unlimited). The panel only reacts after the gateway answers 429, by
+    holding the turn and retrying.
+    <code class="cmd">grep -n "max_concurrent" ~/AppData/Local/hermes/config.yaml   # 1029, 1387</code></td>
+    <td><code>config.yaml:1029</code>, <code>:1387</code>; <code>lib/jobs.js:142</code>, <code>:2246</code>.</td></tr>
+
+  <tr><td><b>Each live run costs one SSE socket plus a 15 s status poll and a 4 s stats read.</b></td>
+    <td>20 established sockets to 8642 at 10 live runs. Per job: <code>poll()</code> every 15,000 ms; a stats timer
+    every 4,000 ms that queries <code>state.db</code>. At 12 runs that is 2,880 status GETs/h and 10,800 SQLite
+    reads/h (12 × 240 and 12 × 900). <code class="cmd">netstat -ano | grep -c ':8642 .*ESTABLISHED' ; grep -n "setInterval" lib/jobs.js</code></td>
+    <td><code>lib/jobs.js:2328</code> (poll), <code>:2311</code> (stats); <code>:767</code> <code>refreshStats</code>.</td></tr>
+
+  <tr><td><b>The wake budget is 30/hour/assistant, and 14 of 15 rules wake.</b></td>
+    <td>Live settings: <code>seconds: 5</code> sentry tick, <code>maxWakesPerHour: 30</code>; rules
+    <code>loop, errorloop, quiet, approval, question, noevidence, repeat, leftover, child, interrupted, watch,
+    spawnlost, spawnidle</code> = wake; <code>collision</code> = alert, <code>context</code> = log.
+    <code class="cmd">node -e "console.log(JSON.stringify(require('C:/Users/roper/.wag/state/assistant.json').settings.rules))"</code></td>
+    <td><code>lib/assistant.js:1476-1477</code> (tick), <code>:2817</code> (budget);
+    <code>lib/assistant/config.js:150</code> (default 6), <code>:317</code> (ceiling 60).</td></tr>
+
+  <tr><td><b>The panel's own state endpoint is 2.93 MB and up to 1.47 s.</b></td>
+    <td><code>GET /api/jobs</code>: 2,928,624 bytes; 1.470 s cold, 0.104 s and 0.148 s warm.
+    <code class="cmd">curl -s -o /dev/null -w "bytes=%{size_download} time=%{time_total}\n" http://127.0.0.1:7331/api/jobs</code></td>
+    <td><code>server.js:3223</code> (<code>/api/jobs</code> route).</td></tr>
+
+  </tbody>
+</table></div>
+
+<h3>The panel's clocks</h3>
+<p>Every periodic timer found by <code>grep -rn "setInterval(" server.js lib --include=*.js</code>. These are the
+timescales the gateway is asked to answer on: one wake decision every 5 s, one status poll per run every 15 s, one
+stats read per run every 4 s.</p>
+<div class="tw"><table>
+  <thead><tr><th class="num">interval</th><th>what it does</th><th>file:line</th></tr></thead>
+  <tbody>
+    <tr><td class="num">1 s</td><td>board scheduler tick</td><td><code>lib/scheduler.js:169</code></td></tr>
+    <tr><td class="num">4 s</td><td>per-running-job stats read of <code>state.db</code></td><td><code>lib/jobs.js:2311</code> → <code>:767</code></td></tr>
+    <tr><td class="num">5 s</td><td>assistant sentry pass (the wake decision)</td><td><code>lib/assistant.js:1477</code>, <code>settings.seconds</code></td></tr>
+    <tr><td class="num">5 s</td><td>approval sweep</td><td><code>lib/jobs.js:461</code></td></tr>
+    <tr><td class="num">5 s</td><td>remote-write sweep</td><td><code>lib/remote-writes.js:90</code></td></tr>
+    <tr><td class="num">5 s</td><td>approvals map sweep</td><td><code>lib/approvals.js:16</code></td></tr>
+    <tr><td class="num">5 s</td><td>SSE heartbeat to browser clients</td><td><code>server.js:1917</code></td></tr>
+    <tr><td class="num">10 s</td><td>Hermes titles sweep</td><td><code>lib/jobs.js:456</code></td></tr>
+    <tr><td class="num">10 s</td><td>assistant watchdog (timer repair)</td><td><code>server.js:783</code></td></tr>
+    <tr><td class="num">10 s</td><td>checked-landing sweep</td><td><code>server.js:5030</code></td></tr>
+    <tr><td class="num">15 s</td><td>per-running-job status poll <code>GET /v1/runs/{id}</code></td><td><code>lib/jobs.js:2328</code>, <code>:2848</code></td></tr>
+    <tr><td class="num">15 s</td><td>orphaned-run sweep (gateway restart detection)</td><td><code>server.js:806</code></td></tr>
+    <tr><td class="num">30 s+</td><td>parents cache warm</td><td><code>server.js:5034</code></td></tr>
+    <tr><td class="num">60 s</td><td>release-request sweep</td><td><code>server.js:5042</code></td></tr>
+    <tr><td class="num">1 s → 15 s</td><td>SSE reconnect backoff (doubles, capped)</td><td><code>lib/jobs.js:66-67</code>, <code>:2361-2372</code></td></tr>
+  </tbody>
+</table></div>
+<p class="legend">SSE is the primary read path (<code>lib/jobs.js:2350</code> <code>follow()</code> →
+<code>:2382</code> <code>streamOnce()</code>, resuming with <code>Last-Event-ID</code> at <code>:2390</code>); the
+15 s poll is the backstop. A run whose gateway does not advertise <code>run_events_sse</code> is polled only
+(<code>lib/jobs.js:2334-2338</code>).</p>
+
+<h2 id="turn">4. The per-turn bill</h2>
+<p>This is the composition of Assistant #2's preamble, measured from the dumped text. The command that produced it is
+<code>node measure-preamble.mjs</code> (which imports <code>lib/assistant.js</code> and points it at a copy of
+<code>~/.wag/state</code>), then <code>node sections.mjs</code> for the split. The digest moves by a few hundred bytes
+between turns because it says how long each run has been going.</p>
+
+<div class="bar">
+  <span class="b1" style="width:53.3%">charter 53%</span>
+  <span class="b2" style="width:21.6%">digest 22%</span>
+  <span class="b3" style="width:16.0%">intro+projects 16%</span>
+  <span class="b4" style="width:7.5%">watches+pad 7%</span>
+  <span class="b5" style="width:1.6%">rest 2%</span>
+</div>
+
+<div class="tw"><table>
+  <thead><tr><th>Section</th><th class="num">chars</th><th class="num">bytes</th><th class="num">% of preamble</th></tr></thead>
+  <tbody>
+<tr><td>Charter (the long tier)</td><td class="num">19,550</td><td class="num">19,720</td><td class="num">53.3%</td></tr>
+<tr><td>Board digest</td><td class="num">7,791</td><td class="num">7,975</td><td class="num">21.6%</td></tr>
+<tr><td>Intro + queue directive</td><td class="num">3,325</td><td class="num">3,372</td><td class="num">9.1%</td></tr>
+<tr><td>Projects you can SPAWN in</td><td class="num">2,508</td><td class="num">2,551</td><td class="num">6.9%</td></tr>
+<tr><td>Watches</td><td class="num">1,509</td><td class="num">1,530</td><td class="num">4.1%</td></tr>
+<tr><td>Scratchpad</td><td class="num">1,214</td><td class="num">1,232</td><td class="num">3.3%</td></tr>
+<tr><td>Action grammar</td><td class="num">469</td><td class="num">471</td><td class="num">1.3%</td></tr>
+<tr><td>Standing rules</td><td class="num">121</td><td class="num">123</td><td class="num">0.3%</td></tr>
+    <tr><td><b>WHOLE preamble (Assistant #2)</b></td><td class="num"><b>36,487</b></td><td class="num"><b>36,974</b></td><td class="num"><b>100.0%</b></td></tr>
+    <tr><td>Assistant #1's whole preamble (12 rules instead of none)</td><td class="num">39,911</td><td class="num">40,509</td><td class="num">—</td></tr>
+  </tbody>
+</table></div>
+
+<div class="box">
+  <p><b>Static vs repeated.</b> 28,696 of the 36,487 characters are the same text on every wake (charter, projects,
+  rules, scratchpad, watches, grammar, intro). The remaining 7,791 are the digest. The measured hour:
+  <b>43 wakes → 1,794,889 chars of preamble</b> (1,433,375 + 361,514 from <code>db-inputs.js</code>).</p>
+  <p><b>What a change would save, at the measured rate.</b>
+  Sending the charter only when it changes: 43 × 19,720 B = <b>847,960 B/hour</b>.
+  Sending the digest every third wake: 43 × 7,975 × 2/3 = <b>228,617 B/hour</b>.
+  Both: about <b>1,076,577 B/hour</b> of the
+  1,794,889 measured — roughly three quarters of it.</p>
+</div>
+
+<h2 id="memory">5. Where the memory is</h2>
+
+<div class="tw"><table>
+  <thead><tr><th class="num">Sample</th><th class="num">live runs</th><th class="num">WS64 (MiB)</th><th class="num">Private (MiB)</th><th class="num">Handles</th><th class="num">Threads</th><th class="num">CPU (s)</th></tr></thead>
+  <tbody>
+<tr><td class="num">17:41:29</td><td class="num">12</td><td class="num">769.7</td><td class="num">967.2</td><td class="num">918</td><td class="num">144</td><td class="num">15,854.56</td></tr>
+<tr><td class="num">17:42:03</td><td class="num">12</td><td class="num">747.7</td><td class="num">944.6</td><td class="num">909</td><td class="num">133</td><td class="num">15,901.36</td></tr>
+<tr><td class="num">17:42:36</td><td class="num">12</td><td class="num">762.7</td><td class="num">959.4</td><td class="num">904</td><td class="num">135</td><td class="num">15,941.31</td></tr>
+    <tr><td class="num">17:47:48</td><td class="num">8</td><td class="num">786.5</td><td class="num">980.7</td><td class="num">844</td><td class="num">112</td><td class="num">16,300.33</td></tr>
+    <tr><td class="num">17:29:25</td><td class="num">18</td><td class="num">786.8</td><td class="num">963.3</td><td class="num">998</td><td class="num">164</td><td class="num">15,015.30</td></tr>
+  </tbody>
+</table></div>
+<p class="legend">All rows: <code>powershell Get-CimInstance Win32_Process -Filter 'ProcessId=49656'</code> plus
+<code>Get-Process -Id 49656</code>. The 30 s spacing is the script's <code>Start-Sleep -Seconds 30</code>; the
+17:42:03→17:42:36 gap is 33.3 s because PowerShell startup is outside the sleep.</p>
+
+<div class="tw"><table>
+  <thead><tr><th>Where the bytes are</th><th class="num">Measured</th><th>Command / source</th></tr></thead>
+  <tbody>
+    <tr><td>Gateway process (Python) working set</td><td class="num">747.7–786.8 MiB</td><td><code>Get-Process -Id 49656</code></td></tr>
+    <tr><td>Gateway private / committed</td><td class="num">944.6–980.7 MiB</td><td><code>Get-Process PrivateMemorySize64</code></td></tr>
+    <tr><td>Panel process (Node) working set</td><td class="num">229.2–243.0 MiB</td><td><code>Get-Process -Id 13768</code></td></tr>
+    <tr><td>Panel's retained job lines</td><td class="num">776,331 B</td><td><code>node analyse-store.mjs</code></td></tr>
+    <tr><td>Whole job store on disk</td><td class="num">1,565,438 B</td><td><code>wc -c ~/.wag/state/jobs.json</code></td></tr>
+    <tr><td>Gateway state.db</td><td class="num">2,133,688,320 B</td><td><code>ls -la ~/AppData/Local/hermes/state.db</code></td></tr>
+    <tr><td>Message text the gateway retains</td><td class="num">330,415,336 B</td><td><code>node db-stats.js</code> — <code>sum(length(content))</code></td></tr>
+    <tr><td>One assistant thread's retained history</td><td class="num">51,936,736 B (117 active msgs)</td><td><code>node db-active.js</code></td></tr>
+    <tr><td>V8 / CPython heap figures</td><td class="num">unmeasured</td><td>no route or flag exposes them; see §8</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="ram">6. Would more RAM help?</h2>
+<div class="verdict">
+  <h2>No — and the measurements say why in three ways.</h2>
+  <ol class="steps">
+    <li><b>Memory does not track the work.</b> 18 live runs: 786.8 MiB. 12 live runs: 747.7–769.7 MiB. 8 live runs:
+    786.5 MiB. The 8-run figure is higher than the 12-run figures. If live run contexts were the cost, the direction
+    would be monotone. It is not.</li>
+    <li><b>Nothing is near a limit.</b> The gateway's private bytes peak at 980.7 MiB on a 32,213 MiB host with
+    2,185–3,381 MiB free; it is ~2.4% of RAM. There is no evidence of the working set being trimmed to fit (WS64 and
+    private move together within ~200 MiB).</li>
+    <li><b>The pressure is elsewhere.</b> CPU: 1.15–1.30 cores busy. Tokens: 43 wakes/hour, each carrying 36–44 KB of
+    preamble, $30.71 already spent on the two assistant threads (1.58 billion cache-read tokens). A RAM upgrade
+    changes none of those numbers.</li>
+  </ol>
+  <p>Where the memory actually goes: a fixed Python interpreter plus gateway machinery (about 748–787 MiB, stable),
+  the panel (about 230–243 MiB, of which 776 KB is retained transcript lines), and a 2.0 GiB on-disk
+  <code>state.db</code> that is streamed from disk rather than held whole. The live run contexts are visible as
+  <code>context_used</code> per run — 100,714 to 310,154 tokens in §2 — but they do not translate into a working-set
+  curve.</p>
+</div>
+
+<div class="warn"><b>What would change if RAM were raised:</b> nothing measurable in this data. The only honest
+statement is the converse: the gateway's RSS is already under 1 GB, so a machine with more free memory has nothing
+to give it. If someone wants a memory-shaped answer, the target is the panel's 2.93 MB <code>/api/jobs</code>
+serialization and the 2.0 GiB store, not the resident set.</div>
+
+<h2 id="recommend">7. What the panel could do differently</h2>
+<p>Ranked by measured impact against effort. "Number that moves" is the measurement from §3–§5 that would change;
+each row names the line that would change it. Effort is XS (a setting), S (a local edit), M (a small refactor).</p>
+
+<div class="tw"><table>
+  <thead><tr><th class="num">#</th><th>Change</th><th>File:line</th><th>Number that moves</th><th class="num">Effort</th></tr></thead>
+  <tbody>
+
+  <tr><td class="num">1</td>
+    <td><b>Cap assistant wakes at the rate the board needs.</b> <code>maxWakesPerHour</code> is 30 per assistant, so
+    two assistants can produce 60 turns/h. Set 10, and turn the noisiest rules from <code>wake</code> to
+    <code>alert</code>.</td>
+    <td><code>~/.wag/state/assistant.json</code> settings (UI);
+    defaults <code>lib/assistant/config.js:150</code>; budget check <code>lib/assistant.js:2817</code></td>
+    <td><b>43 wakes/h → ≤20/h</b> (−53%); at the measured <b>$0.00562 per turn-call</b>
+    (($23.11 + $1.03) ÷ (4,108 + 187)) that is <b>$0.24/h → $0.11/h</b>. Every other row is multiplied by this one.</td>
+    <td class="num">XS</td></tr>
+
+  <tr><td class="num">2</td>
+    <td><b>Stop re-sending the unchanged charter.</b> Send <code>charterBriefing()</code> on the first turn of a
+    thread, or when the file's mtime/sha changes, and send a one-line "charter unchanged" marker otherwise.</td>
+    <td><code>lib/assistant.js:2695</code> (call), <code>:511-527</code> (builder)</td>
+    <td><b>−19,720 B/turn</b> (−53.3% of the preamble; 36,974 → 17,254 B). At 43 wakes/h:
+    <b>−847,960 B/h</b>.</td>
+    <td class="num">M</td></tr>
+
+  <tr><td class="num">3</td>
+    <td><b>Put the board digest on a wake counter like the queue.</b> <code>queueSweepEveryNWakes</code> already
+    exists for the queue; give the digest the same knob (or drop the volatile <code>running Nm</code> text, which is
+    what changed on 23 of 34 lines in 10 minutes).</td>
+    <td><code>lib/assistant.js:2713-2714</code> (append), <code>:2540</code> (builder);
+    knob pattern <code>:708-714</code>, <code>lib/assistant/config.js:149</code></td>
+    <td><b>−7,975 B/turn</b> (−21.6%). Every third wake: <b>−228,617 B/h</b>; every wake without the volatile
+    minutes would also stop the digest from changing at all.</td>
+    <td class="num">S</td></tr>
+
+  <tr><td class="num">4</td>
+    <td><b>Poll only when the stream is not open.</b> A healthy SSE subscription already carries every event; the
+    15 s status poll runs anyway. Skip it while <code>j.streamOpen</code> and the last event is recent.</td>
+    <td><code>lib/jobs.js:2328</code> and <code>:2848</code> (the two <code>j.poller</code> timers);
+    <code>poll()</code> <code>:2727</code></td>
+    <td><b>12 runs × 240 = 2,880 GET /v1/runs per hour → ~0.</b> 20 sockets were open at 10 runs, so this is
+    request volume the gateway does not need to answer.</td>
+    <td class="num">S</td></tr>
+
+  <tr><td class="num">5</td>
+    <td><b>Ask whether <code>background_review</code> is wanted.</b> It accounted for 1,429 of panel-assistant's 5,570
+    API calls (35%) and $4.74; the panel never requests it.</td>
+    <td>Gateway setting (not this repo); the panel records the spend at
+    <code>lib/session-usage.js:142</code></td>
+    <td><b>−1,429 API calls / −$4.74</b> on assistant #1; <b>−80 calls / −$0.26</b> on #2 — if it is not wanted.
+    If it is, it is correctly measured and nothing moves.</td>
+    <td class="num">XS</td></tr>
+
+  <tr><td class="num">6</td>
+    <td><b>Batch the 4 s stats reads.</b> One shared timer that does a single <code>GROUP BY session_id</code> over
+    <code>state.db</code>, instead of one query per running job every 4 s.</td>
+    <td><code>lib/jobs.js:2311</code> (timer), <code>:767</code> <code>refreshStats</code>,
+    <code>:773</code> <code>fillStats</code></td>
+    <td><b>12 × 900 = 10,800 SQLite reads/h → ~720/h</b> (−93%). This is panel CPU and lock contention on the same
+    2.0 GiB database the gateway writes.</td>
+    <td class="num">M</td></tr>
+
+  <tr><td class="num">7</td>
+    <td><b>Bound concurrency at the gateway.</b> <code>max_concurrent_runs: 0</code> means unlimited; 19 runs were
+    live at once. Set a number the machine is measured to sustain.</td>
+    <td><code>~/AppData/Local/hermes/config.yaml:1387</code> (and <code>:1029</code> for sessions);
+    the panel's 429 hold is <code>lib/jobs.js:2246</code></td>
+    <td><b>Peak 19 live runs → the configured cap</b>; gateway CPU was 1.29 cores at 12 runs and 1.15 at 8, so the
+    cap is what bounds the top of that curve.</td>
+    <td class="num">XS</td></tr>
+
+  <tr><td class="num">8</td>
+    <td><b>Do not rebuild 2.93 MB of JSON per board read.</b> <code>/api/jobs</code> is 2,928,624 B and took 1.47 s
+    cold; a slim list for the poll and the detail on demand would cut that.</td>
+    <td><code>server.js:3223</code> (route)</td>
+    <td><b>2,928,624 B → a payload without the per-job <code>lines</code></b> (776,331 B of transcript, plus
+    per-job stats) and <b>1.47 s → sub-0.15 s</b> warm-read time.</td>
+    <td class="num">M</td></tr>
+
+  </tbody>
+</table></div>
+
+<div class="not"><b>Why not #2 first, if it removes the most bytes?</b> It does remove the most per turn, but #1 removes
+turns, and every turn is multiplied by the preamble, the history replay and the provider call. 43 wakes/h × 19,720 B
+is the same 848 KB/h as #2 at half the wakes — but #1 also removes the provider calls those turns make
+(43 × $0.00562 = $0.24/h) and the history each one replays. Change #1 is a setting; #2 needs a change-detection path. Do #1 and #3 now, #2 next.</div>
+
+<h2 id="unmeasured">8. What I could not measure</h2>
+<div class="tw"><table>
+  <thead><tr><th>Thing</th><th>Why it is unmeasured</th></tr></thead>
+  <tbody>
+    <tr><td>CPython heap of the gateway</td><td>Not exposed; the process is Python (not Node), and no route reports
+      <code>gc</code>/arena totals. Only RSS/private (measured) are available.</td></tr>
+    <tr><td>V8 heap of the panel</td><td><code>grep -rn "memoryUsage\|heapUsed" server.js lib</code> returns nothing;
+      no inspector is listening. Only the panel's RSS/private (measured) are available.</td></tr>
+    <tr><td>Gateway CPU split by subsystem (SSE fan-out vs. provider calls vs. HTTP)</td><td>No per-subsystem counters
+      are published; the total CPU is measured, the split is not.</td></tr>
+    <tr><td>The gateway's <code>latency_p95_ms</code> unit</td><td><code>gateway_state.json</code> says
+      <code>1,640,054.66</code>; read as ms that is 27 minutes, read as µs it is 1.64 s. The field is quoted verbatim
+      and not interpreted.</td></tr>
+    <tr><td>Provider-side cache hit rate for a single wake</td><td>The session counters are cumulative; the panel
+      reports <code>cache_hit_pct</code>, but I did not isolate one wake from the cumulative record.</td></tr>
+    <tr><td>Whether the 2.93 MB <code>/api/jobs</code> is polled by the browser on a timer</td><td>I measured the
+      endpoint, not the browser's request schedule.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="reproduce">9. Reproduce it</h2>
+<pre># the gateway process and three 30 s samples (the script is in the scratch dir, not the repo)
+netstat -ano | grep -E ':8642\s'
+powershell -NoProfile -ExecutionPolicy Bypass -File sample2.ps1
+
+# live runs
+curl -s http://127.0.0.1:7331/api/jobs | jq -r '[.jobs[]|select(.status=="running")]|length'
+curl -s http://127.0.0.1:8642/health
+
+# the per-turn preamble, built by the panel's own code against a COPY of ~/.wag/state
+node measure-preamble.mjs
+node sections.mjs
+wc -c ~/.wag/state/assistant.json ~/.wag/state/assistant-charter.md
+
+# what the gateway actually received
+node db-inputs.js          # node:sqlite, read-only, on state.db
+node db-stats.js
+node db-cost.js
+
+# the call path
+grep -rn "/v1/runs\|text/event-stream" lib/jobs.js server.js
+grep -rn "setInterval(" server.js lib --include=*.js</pre>
+
+<details><summary>The preamble script, as it ran (<code>measure-preamble.mjs</code>)</summary>
+<pre>import { cpSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import path from "node:path";
+const REPO = "C:/ProjectDevelopment/agent-worktree-gui/.worktrees/research-whether-our-her-f16888";
+const LIVE = "C:/Users/roper/.wag/state";
+const COPY = "C:/Users/roper/AppData/Local/Temp/wag/49975389/state-copy";
+rmSync(COPY, { recursive: true, force: true });
+mkdirSync(path.join(COPY, "state"), { recursive: true });
+for (const f of ["assistant.json","assistant-charter.md","assistants.json","roles.json","jobs.json","projects.json","todos.json"])
+  cpSync(path.join(LIVE, f), path.join(COPY, "state", f));
+cpSync(path.join(LIVE, "assistants"), path.join(COPY, "state", "assistants"), { recursive: true });
+const { Assistant } = await import("file:///" + REPO + "/lib/assistant.js");
+const jobs = JSON.parse(readFileSync(path.join(COPY, "state", "jobs.json"), "utf8")).jobs;
+let projects = [];
+try { const p = JSON.parse(readFileSync(path.join(COPY, "state", "projects.json"), "utf8")); projects = Array.isArray(p) ? p : p.projects || []; } catch {}
+const a = new Assistant({ config: { dataDir: COPY }, jobs: { list: () => jobs },
+  getProjects: () => projects, getRows: () => [], getChildren: () => ({}) });
+a.load(); a.loadCharter(); a.loadRoles(); a.loadAssistants(); a.loadProfiles();
+const t = a.preamble("assistant-2", { queue: true });
+console.log(t.length, Buffer.byteLength(t, "utf8"));</pre>
+<p class="legend">The copy is what makes this safe: the assistant's constructor and charter reader write seeds when a
+file is missing, and pointed at the live directory that would have touched the board. The PREAMBLE is deterministic
+apart from the digest's elapsed minutes.</p></details>
+
+<details><summary>The sampling script, as it ran (<code>sample2.ps1</code>)</summary>
+<pre>$gw = 49656; $panel = 13768
+function Snap($id) {
+  $c = Get-CimInstance Win32_Process -Filter "ProcessId=$id"
+  $p = Get-Process -Id $id
+  [pscustomobject]@{ pid=$id; ws=$p.WorkingSet64; priv=$p.PrivateMemorySize64;
+    handles=$p.Handles; threads=$c.ThreadCount; cpu=$p.CPU }
+}
+for ($i=1; $i -le 3; $i++) {
+  $live = @((Invoke-RestMethod 'http://127.0.0.1:7331/api/jobs' -TimeoutSec 30).jobs |
+    Where-Object { $_.status -eq 'running' })
+  Snap $gw | Select-Object *, @{n='live';e={$live.Count}} | ConvertTo-Json -Compress
+  if ($i -lt 3) { Start-Sleep -Seconds 30 }
+}</pre></details>
+
+<p class="meta">Scratch scripts were written under
+<code>C:/Users/roper/AppData/Local/Temp/wag/49975389</code> (outside this repo). The page is self-contained: no
+external CSS, JS or fonts. Branch <code>wtgui/research-whether-our-her-f16888</code>, base <code>main</code>.</p>
+
+</div>
+</body>
+</html>
