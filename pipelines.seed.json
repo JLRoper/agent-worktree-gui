@@ -6,12 +6,12 @@
       "id": "local",
       "kind": "local",
       "title": "Local work",
-      "description": "Work in this tree and stop. No push, no pull request — the panel's behaviour before pipelines existed.",
+      "description": "Work in this tree and stop. The LANDING paragraph composed into the prompt decides whether that includes a push and a pull request.",
       "stages": [
         {
           "id": "work",
           "title": "Work in this tree",
-          "prompt": "Do the work in this tree and stop there. {{desc}}\n\nCommit what you changed in one revertable commit on {{branch}}, then report what you did: the files you touched, the commands you ran and their real results. Do not push, do not open a pull request, and do not merge anything.",
+          "prompt": "Do the work in this tree and stop there. {{desc}}\n\nCommit what you changed in one revertable commit on {{branch}}, then report what you did: the files you touched, the commands you ran and their real results. Where this prompt carries a LANDING paragraph, that paragraph is the only instruction about pushing and opening a pull request: follow it exactly.",
           "exit": { "check": "commits", "min": 1 }
         }
       ],

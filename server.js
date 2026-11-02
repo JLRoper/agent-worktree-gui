@@ -33,7 +33,7 @@ import { ReleaseRequests, agentCleanupFrom, releaseWorktree, releasesEnabled } f
 import { Hosts, proposeMapping } from "./lib/hosts.js";
 // What a worktree is FOR: the definition catalogue (reader-edited over the shipped seed), where each tree stands in
 // one, and the ladder that is the only way a tree's kind may change (docs/pipelines.md §1–§3).
-import { Pipelines, PipelineRecords, presumedPipeline, changePipeline } from "./lib/pipelines.js";
+import { Pipelines, PipelineRecords, presumedPipeline, changePipeline, storeSwitch } from "./lib/pipelines.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
 import { WorktreeNaming } from "./lib/worktree-naming.js";
@@ -353,6 +353,12 @@ const pipelines = new Pipelines({
 });
 pipelines.ensure();
 const pipelineRecords = new PipelineRecords({ file: config.pipelineRecordsFile, log: (line) => log(line) });
+// The switch's missing half: §4.1 says the route also starts the new pipeline's first stage as a turn in the same tree
+// on the same thread. That needs the prompt renderer and the exit-check evaluator (later tasks), and until it exists a
+// switch may NOT write the record: the ladder only climbs, so a rung written with no run behind it is spent forever —
+// `since` clocks a stage that never began and no later POST can undo it. Flipped to true in the change that wires the
+// turn start, together with a test that a real turn exists.
+const PIPELINE_SWITCH_STARTS_TURN = false;
 for (const warning of pipelines.doc().warnings) log(`pipelines: ${warning}`);
 const registry = new ProjectRegistry({
   getConfig: () => config,
@@ -3091,9 +3097,10 @@ const server = createServer(async (req, res) => {
     // upwards: a downgrade or a sideways swap is a 409 with the sentence and nothing is written. The record's schema
     // is §3's — `{id, stage, since, history[]}` — and the history entry records the transition, not just the position.
     //
-    // NOT here, deliberately: starting the new pipeline's first stage as a turn. That is the switching surface's job
-    // (§4.1) and it needs the prompt renderer and the exit-check evaluator, which are later tasks; this route changes
-    // the record the board reads and nothing about a run.
+    // NOT here yet: starting the new pipeline's first stage as a turn (§4.1). It needs the prompt renderer and the
+    // exit-check evaluator, which are later tasks — and because the ladder only climbs, writing the rung without
+    // starting the run would spend a tree's one upward move on a stage that never began. So until the turn start
+    // exists the route refuses the switch (501) BEFORE the record is written, and the ladder stays honest.
     if (route === "/api/worktree/pipeline" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
@@ -3141,9 +3148,32 @@ const server = createServer(async (req, res) => {
         log(`pipeline: refused ${tree} ${current.id || "(none)"} -> ${id}: ${out.error}`);
         return sendJson(res, 409, { error: out.error, code: out.code, from: current.id || null, fromKind, to: id, toKind, pipeline: current });
       }
-      pipelineRecords.set(tree, out.pipeline);
+      // The switch cannot start the work it would record, so it is refused and NOTHING is written: a rung on the
+      // one-way ladder with no run behind it is a tree that is permanently a turnover, clocking a stage that never
+      // began, and a second POST cannot undo it. 501 rather than 409: the request is valid and the climb is allowed
+      // by the ladder — the missing piece is the turn start this route does not yet have. 500 is the same refusal for
+      // a book that cannot be written: either answer means the record did not move, so neither is a 200 with a record.
+      const answer = storeSwitch(pipelineRecords, tree, out.pipeline, { turnStart: PIPELINE_SWITCH_STARTS_TURN });
+      if (answer.status !== 200) {
+        const error =
+          answer.code === "no-turn-start"
+            ? "the pipeline switch is not yet wired to a turn start, so nothing was recorded and this tree is unchanged — the record will only move when the switch can start the pipeline's first stage"
+            : `the switch to "${id}" was not stored: the pipeline record for this tree could not be written, so nothing changed and the tree is still ${current.id || "local"}`;
+        log(`pipeline: ${answer.status} for ${tree} ${current.id || "(none)"} -> ${id}: ${answer.code} — nothing was recorded`);
+        return sendJson(res, answer.status, {
+          error,
+          code: answer.code,
+          path: tree,
+          from: current.id || null,
+          fromKind,
+          id,
+          toKind,
+          stage,
+          pipeline: current,
+        });
+      }
       // The durable file first, then every live card in that tree: a card can never disagree with the record.
-      const touched = jobs.applyPipeline(tree, out.pipeline);
+      const touched = jobs.applyPipeline(tree, answer.pipeline);
       log(`pipeline: ${tree} ${current.id || "(none)"} ${fromKind} -> ${id} ${toKind} (stage ${stage || "?"}) — ${touched.cards.length} card(s) updated`);
       return sendJson(res, 200, {
         ok: true,
@@ -3153,7 +3183,7 @@ const server = createServer(async (req, res) => {
         id,
         toKind,
         stage,
-        pipeline: out.pipeline,
+        pipeline: answer.pipeline,
         cards: touched.cards,
       });
     }
