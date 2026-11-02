@@ -11,9 +11,12 @@
 //   4. the ladder — local → investigation → turnover only ever climbs, and a downgrade is refused with the document's
 //      own sentence rather than applied quietly;
 //   5. the record — `{id, stage, since, history[]}` written at the cut (lib/jobs.js `makeWorktree`) always as local,
-//      durable on the tree, copied onto the job, read back on /api/jobs and changed through POST /api/worktree/pipeline.
+//      durable on the tree, copied onto the job, read back on /api/jobs and changed through POST /api/worktree/pipeline;
+//   6. the four P0 findings in docs/pipelines-audit.md — an unreadable book is never rewritten from the empty document,
+//      a write that fails is a null (and a 500), the seed's `local` prompt agrees with the landing paragraph every run
+//      is handed, and a switch that cannot start its run is refused instead of spending the one-way ladder.
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -40,9 +43,11 @@ import {
   rankOf,
   readPipelinesFile,
   resetPipelinesCache,
+  storeSwitch,
   unknownPlaceholders,
   validatePipeline,
 } from "../lib/pipelines.js";
+import { branchLandingLine } from "../lib/branch-policy.js";
 import { ROOT, configureRepo, git as runGit, post, startPanel } from "../tools/panel-testkit.mjs";
 
 // Jobs reads this box's Hermes session store for counters; a suite about records must not read the developer's own.
@@ -420,14 +425,95 @@ test("makeWorktree writes the pipeline at the cut, always as local, onto the tre
   assert.equal(jobs.pipelineForJob({ ownerPath: made.path }).id, "local");
 });
 
+// ---- P0-1 (docs/pipelines-audit.md): an unreadable book is never rewritten ----------------------------------------
+test("P0-1: an unreadable pipeline-records.json is never rewritten from the empty document", () =>
+  withDir((dir) => {
+    const file = path.join(dir, "pipeline-records.json");
+    const a = { id: "local", stage: "work", since: "2026-11-01T00:00:00.000Z", history: [] };
+    const b = { id: "github-force-merge", stage: "commit", since: "2026-11-01T01:00:00.000Z", history: [] };
+    // A book that exists and parses, truncated the way a panel killed mid-write leaves one: two trees are in it.
+    const book = `${JSON.stringify({ version: 1, trees: { "c:/a": a, "c:/b": b } }, null, 2)}\n`;
+    const truncated = book.slice(0, 43);
+    writeFileSync(file, truncated, "utf8");
+    const lines = [];
+    const records = new PipelineRecords({ file, log: (line) => lines.push(line) });
+
+    assert.equal(records.doc({ fresh: true }).loaded, false, "a book that threw is not a loaded book");
+    assert.equal(records.set("c:/c", a), null, "set refuses to write over a book it could not read");
+    assert.equal(readFileSync(file, "utf8"), truncated, "the unreadable book is left byte-for-byte as it was");
+    assert.match(lines.join("\n"), /could not read/);
+    assert.match(lines.join("\n"), /refusing to write/);
+    assert.equal(records.get("c:/c"), null, "nothing is in force for the tree that tried");
+
+    // A book that CAN be read is still written, and the tree already in it survives the write.
+    writeFileSync(file, `${JSON.stringify({ version: 1, trees: { "c:/b": b } }, null, 2)}\n`, "utf8");
+    assert.deepEqual(records.set("c:/c", a), a);
+    assert.deepEqual(Object.keys(JSON.parse(readFileSync(file, "utf8")).trees).sort(), ["c:/b", "c:/c"]);
+  }));
+
+// ---- P0-2 (docs/pipelines-audit.md): a write that fails is never reported as a record ------------------------------
+test("P0-2: a write that fails returns null, and the switch answers 500 with no record", () =>
+  withDir((dir) => {
+    const file = path.join(dir, "pipeline-records.json");
+    const b = { id: "local", stage: "work", since: "2026-11-01T00:00:00.000Z", history: [] };
+    const book = `${JSON.stringify({ version: 1, trees: { "c:/b": b } }, null, 2)}\n`;
+    writeFileSync(file, book, "utf8");
+    // The book reads fine, and the write still fails: `set` writes through `<file>.tmp` and a directory sits there.
+    mkdirSync(`${file}.tmp`, { recursive: true });
+    const lines = [];
+    const records = new PipelineRecords({ file, log: (line) => lines.push(line) });
+    const rec = { id: "github-force-merge", stage: "commit", since: "2026-11-02T00:00:00.000Z", history: [] };
+
+    assert.equal(records.set("c:/tree", rec), null, "set returns the record only when the write happened");
+    assert.equal(readFileSync(file, "utf8"), book, "the book on disk was not touched, and no other tree was dropped");
+    assert.match(lines.join("\n"), /is not durable and nothing was changed/);
+
+    // The route's own step: a ladder-approved switch whose write fails is a 500 carrying no record, so a card can
+    // never be told a switch was stored. While the turn start is missing it is the 501 refusal — never a 200.
+    const failed = storeSwitch(records, "c:/tree", rec, { turnStart: true });
+    assert.equal(failed.status, 500);
+    assert.equal(failed.code, "not-durable");
+    assert.equal(failed.pipeline, null, "there is no record to hand a card");
+    assert.equal(storeSwitch(records, "c:/tree", rec).status, 501, "the turn-start gate answers first, and never 200");
+  }));
+
+// ---- P0-3 (docs/pipelines-audit.md): one landing instruction, not three -------------------------------------------
+test("P0-3: the seed's local prompt and the landing paragraph a run is handed agree", () => {
+  const doc = readPipelinesFile(SEED);
+  const local = doc.pipelines.local;
+  const prompt = local.stages[0].prompt;
+  // What a local run on a tree cut from main is actually handed (lib/jobs.js composes this ahead of the prompt).
+  const landing = branchLandingLine({ parent: "main", branch: "wtgui/x", policy: "allow", remote: "origin" }, "C:/tree");
+  assert.match(landing, /git push -u origin HEAD/, "a tree cut from main is told to push");
+  assert.match(landing, /gh pr create --fill/);
+
+  // The seed must not contradict that paragraph...
+  assert.doesNotMatch(prompt, /do not push/i);
+  assert.doesNotMatch(prompt, /do not open a pull request/i);
+  assert.doesNotMatch(local.description, /no push/i);
+  // ...it must name the one paragraph that decides, and the document must say the same.
+  assert.match(prompt, /LANDING paragraph/);
+  assert.match(prompt, /only instruction about pushing and opening a pull request/);
+  const design = readFileSync(path.join(ROOT, "docs/pipelines.md"), "utf8");
+  assert.match(design, /\*\*One landing instruction\.\*\*/);
+  assert.match(design, /branchLandingLine` renders is the authoritative/);
+});
+
 // ---- §3 + §4.1: the record read on /api/jobs, changed only through the one route --------------------------------
-test("POST /api/worktree/pipeline climbs the ladder, /api/jobs reads it back, and a downgrade writes nothing", async (t) => {
+test("the switching route reads the tree's record back on /api/jobs and refuses every non-climb without writing", async (t) => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "wtgui-pipelines-route-"));
   const logs = path.join(dir, "logs");
   mkdirSync(logs, { recursive: true });
-  const tree = path.join(dir, "repos", "tree-local");
+  const tree = path.join(dir, "repos", "tree-turnover");
   const ghostTree = path.join(dir, "repos", "tree-ghost");
   const jobsFile = path.join(logs, "jobs.json");
+  const since = "2026-11-01T12:00:00.000Z";
+  const turnoverRecord = {
+    id: "github-force-merge",
+    stage: "commit",
+    since,
+    history: [{ from: "local", to: "turnover", stage: "commit", at: since, by: "reader", why: "seeded" }],
+  };
   const card = (id, ownerPath) => ({
     id,
     thread: `wtgui-pipeline-${id}`,
@@ -446,11 +532,15 @@ test("POST /api/worktree/pipeline climbs the ladder, /api/jobs reads it back, an
     ownerPath,
     lines: [],
   });
-  writeJson(jobsFile, { savedAt: new Date().toISOString(), jobs: [card("in-tree", tree), card("on-ghost", ghostTree)] });
-  // A record naming a definition the catalogue does not hold: the route must refuse to guess its rung.
+  writeJson(jobsFile, { savedAt: new Date().toISOString(), jobs: [card("on-turnover", tree), card("on-ghost", ghostTree)] });
+  // A turnover record for one tree, and a record naming a definition the catalogue does not hold for the other: the
+  // route must read the first back and must refuse to guess the second's rung.
   writeJson(path.join(logs, "pipeline-records.json"), {
     version: 1,
-    trees: { [KEY(ghostTree)]: { id: "ghost-pipeline", stage: "probe", since: new Date().toISOString(), history: [] } },
+    trees: {
+      [KEY(tree)]: turnoverRecord,
+      [KEY(ghostTree)]: { id: "ghost-pipeline", stage: "probe", since: new Date().toISOString(), history: [] },
+    },
   });
 
   const panel = await startPanel({ dir, config: { jobsFile, assistant: { enabled: false }, projects: [] } });
@@ -462,43 +552,16 @@ test("POST /api/worktree/pipeline climbs the ladder, /api/jobs reads it back, an
   const cards = async () => (await (await fetch(`${panel.base}/api/jobs`)).json()).jobs;
   const call = (body) => post(panel.base, "/api/worktree/pipeline", { body });
 
-  // Before any change, the tree has no record: the card says so rather than inventing one.
-  const before = (await cards()).find((c) => c.id === "in-tree");
-  assert.ok(before, "the seeded card is on /api/jobs");
-  assert.equal(before.pipeline, null);
+  // The read side: the card carries the record the book holds, stage and all.
+  const onBoard = (await cards()).find((c) => c.id === "on-turnover");
+  assert.ok(onBoard, "the seeded card is on /api/jobs");
+  assert.equal(onBoard.pipeline.id, "github-force-merge");
+  assert.equal(onBoard.pipeline.stage, "commit");
 
   // The catalogue live file is created beside hosts.json, with the version stamp.
   const live = JSON.parse(readFileSync(path.join(logs, "pipelines.json"), "utf8"));
   assert.equal(live.version, PIPELINES_VERSION);
   assert.deepEqual(live.pipelines, [], "the live file starts empty: the defaults are the seed's");
-
-  // local → turnover.
-  const up = await call({ path: tree, id: "github-force-merge" });
-  assert.equal(up.status, 200, up.text);
-  assert.equal(up.json.ok, true);
-  assert.equal(up.json.from, "local");
-  assert.equal(up.json.fromKind, "local");
-  assert.equal(up.json.id, "github-force-merge");
-  assert.equal(up.json.toKind, "turnover");
-  assert.equal(up.json.stage, "commit", "the first stage of the definition is where the tree now stands");
-  assert.deepEqual(up.json.pipeline, {
-    id: "github-force-merge",
-    stage: "commit",
-    since: up.json.pipeline.since,
-    history: [
-      { from: "local", to: "turnover", stage: "commit", at: up.json.pipeline.since, by: "reader", why: "the reader chose github-force-merge" },
-    ],
-  });
-  assert.ok(up.json.cards.includes("in-tree"), "the live card in that tree was handed the record");
-
-  // The read side: /api/jobs carries the record, stage and all.
-  const after = (await cards()).find((c) => c.id === "in-tree");
-  assert.equal(after.pipeline.id, "github-force-merge");
-  assert.equal(after.pipeline.stage, "commit");
-
-  // The durable record is on disk, keyed by the tree.
-  const onDisk = JSON.parse(readFileSync(path.join(logs, "pipeline-records.json"), "utf8"));
-  assert.equal(onDisk.trees[KEY(tree)].id, "github-force-merge");
 
   // turnover → investigation: a 409 with the sentence, and the file is untouched.
   const down = await call({ path: tree, id: "sefl-investigate" });
@@ -506,7 +569,7 @@ test("POST /api/worktree/pipeline climbs the ladder, /api/jobs reads it back, an
   assert.equal(down.json.code, "downgrade");
   assert.equal(down.json.error, "this tree is already a turnover; a turnover branch reported as an investigation would be reported as not landing");
   assert.equal(JSON.parse(readFileSync(path.join(logs, "pipeline-records.json"), "utf8")).trees[KEY(tree)].id, "github-force-merge");
-  assert.equal((await cards()).find((c) => c.id === "in-tree").pipeline.id, "github-force-merge");
+  assert.equal((await cards()).find((c) => c.id === "on-turnover").pipeline.id, "github-force-merge");
 
   // A sideways swap is refused too: only a strictly higher rung is a change.
   const sideways = await call({ path: tree, id: "sefl-review-loop" });
@@ -528,4 +591,56 @@ test("POST /api/worktree/pipeline climbs the ladder, /api/jobs reads it back, an
   // The two 400s: a request the route cannot act on at all.
   assert.equal((await call({ id: "turnover" })).status, 400);
   assert.equal((await call({ path: tree })).status, 400);
+});
+
+// ---- P0-4 (docs/pipelines-audit.md): a switch that cannot start its run is refused ---------------------------------
+test("P0-4: a switch that cannot start its run is refused and the record is unchanged", async (t) => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "wtgui-pipelines-refuse-"));
+  const logs = path.join(dir, "logs");
+  mkdirSync(logs, { recursive: true });
+  const tree = path.join(dir, "repos", "tree-local");
+  const jobsFile = path.join(logs, "jobs.json");
+  const card = {
+    id: "in-tree",
+    thread: "wtgui-pipeline-in-tree",
+    turn: 1,
+    prompt: "work",
+    cwd: tree,
+    sessionId: "wtgui-pipeline-in-tree",
+    status: "interrupted",
+    exitCode: null,
+    fatal: null,
+    startedAt: new Date(Date.now() - 60_000).toISOString(),
+    endedAt: new Date(Date.now() - 30_000).toISOString(),
+    error: "the panel restarted while this was running",
+    worktree: path.basename(tree),
+    worktreePath: tree,
+    ownerPath: tree,
+    lines: [],
+  };
+  writeJson(jobsFile, { savedAt: new Date().toISOString(), jobs: [card] });
+
+  const panel = await startPanel({ dir, config: { jobsFile, assistant: { enabled: false }, projects: [] } });
+  t.after(async () => {
+    await panel.stop();
+    rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  });
+
+  const cards = async () => (await (await fetch(`${panel.base}/api/jobs`)).json()).jobs;
+  assert.equal((await cards()).find((c) => c.id === "in-tree").pipeline, null, "the tree has no record to begin with");
+
+  // local → turnover is a legal climb, and it is still refused: the route cannot start the turnover's first stage, and
+  // the ladder only climbs, so writing `{stage: "commit", since: now}` would spend the tree's one move on a run that
+  // never began.
+  const res = await post(panel.base, "/api/worktree/pipeline", { body: { path: tree, id: "github-force-merge" } });
+  assert.equal(res.status, 501, res.text);
+  assert.equal(res.json.code, "no-turn-start");
+  assert.match(res.json.error, /not yet wired to a turn start/);
+  assert.equal(res.json.pipeline.id, "local", "the answer describes the record that is still in force");
+
+  // Nothing was recorded: no rung, no `since` clocking a stage, no history entry.
+  const bookFile = path.join(logs, "pipeline-records.json");
+  const onDisk = existsSync(bookFile) ? JSON.parse(readFileSync(bookFile, "utf8")) : { trees: {} };
+  assert.equal(onDisk.trees[KEY(tree)], undefined);
+  assert.equal((await cards()).find((c) => c.id === "in-tree").pipeline, null, "and the live card was not handed a record");
 });

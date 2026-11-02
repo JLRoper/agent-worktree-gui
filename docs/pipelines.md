@@ -63,13 +63,22 @@ patch to `server.js`.
 
 | kind | what it means | what it may do |
 |---|---|---|
-| `local` | work in this tree and stop. The panel's behaviour today. | commit; report. No push, no PR. Its prompt is the existing LANDING paragraph (`lib/branch-policy.js` `branchLandingLine`) and nothing else. |
+| `local` | work in this tree and stop. The panel's default. | commit; report. Whether that includes a push and a pull request is decided by the LANDING paragraph (`branchLandingLine`) — see "One landing instruction" below. |
 | `investigation` | find out something and write it down, in this tree. | read, probe, run things, commit notes and scripts, open a draft PR if the project allows it. Ends by concluding. |
 | `turnover` | this work is going to land. | push, open the PR, answer review, merge when the host's rule says it is merged. |
 
 The ladder is `local → investigation → turnover` and it only climbs (§3). The point of naming three and not five is
 that each rung changes one thing — whether a remote branch exists, and whether a human has to answer before main
 moves — and a reader can hold three in their head while judging a card.
+
+**One landing instruction.** The paragraph `lib/branch-policy.js` `branchLandingLine` renders is the authoritative
+instruction about where a run's branch goes, and `lib/jobs.js` composes it ahead of every worker's prompt. It is not
+silent about pushing: for a tree cut from `main` it says "commit on …, push it and open a pull request", and for a
+tree cut from a turnover branch it says "merge into … locally and do not push". A pipeline's prompt carries the
+WORK and defers to that paragraph; it never restates the landing rule. `local`'s seed prompt used to end "do not
+push, do not open a pull request", which contradicted the paragraph every landing-parent run actually receives, so
+it now names the LANDING paragraph as the only instruction about pushing and a PR. When no paragraph can be
+rendered (the tree's parent is unknown), the panel's blanket local-only line stands.
 
 ### 1.3 An exit condition is machine-checkable, or it is not an exit
 
@@ -260,8 +269,9 @@ work is turnover, or when an investigation's last stage chains into it (§5).
 **Upgrade-only.** The kinds are ranked `local: 0, investigation: 1, turnover: 2`, and a change is applied only when
 `rank(to) > rank(from)`. A downgrade request is refused with a 409 and the reason ("this tree is already a
 turnover; a turnover branch reported as an investigation would be reported as not landing"), never applied quietly.
-The rule is not cosmetic: the three kinds have different landing rules — `turnover` may push and merge, `local` may
-not push at all — so a silent downgrade is a tree whose brief stops matching what the panel will let it do.
+The rule is not cosmetic: the rungs have different landing rules — `turnover` may push and merge — and the landing
+paragraph is what decides a `local` or investigation run's push; a silent downgrade is a tree whose brief stops
+matching what the panel will let it do. §1.2's "One landing instruction" says which paragraph is authoritative.
 
 **Where it lives, and why not only on the job.** The job store keeps 80 conversations (`KEEP_JOBS`) and marks
 in-flight runs `interrupted` on restart (`lib/jobs.js` `load()`). A review loop runs for days. So the durable record
@@ -296,7 +306,10 @@ Choosing posts `POST /api/worktree/pipeline` with `{path, id}`. The route re-rea
 chip's menu is a claim, not a fact), validates the ladder, appends the history entry with `by: "reader"`, and starts
 the new pipeline's first stage as a turn in the SAME tree on the SAME thread — the shape `POST /api/agents/reply`
 already uses (`lib/jobs.js` `firstOfThread`, `replyTree`, `reply: true`). A downgrade is a 409 with the sentence, and
-nothing is written.
+nothing is written. Until that turn start exists the route refuses every switch it would otherwise store — `501`
+with "the pipeline switch is not yet wired to a turn start" — because a rung written without a run behind it spends
+the ladder's one-way move on a stage that never began; `lib/pipelines.js` `storeSwitch` holds that gate. A switch
+whose record cannot be written is a `500`, never a `200` with a record.
 
 ### 4.2 The Pipeline tab is the catalogue editor, never the switch
 
@@ -413,7 +426,7 @@ quiet, one short turn when they answer, and never a run that has to stay alive t
 | a per-project override, resolved the same way everywhere | `policyForProject` — project's own value, then global, then the closed default; unreadable falls back rather than inventing | `lib/remote-writes.js` |
 | the permission a push needs | `remoteWrites.decision(worktree, policyForProject(project, config.remoteBranchPolicy))` — a pipeline never grants itself a write; `local-only` parks the stage's push on the permission box | `lib/remote-writes.js`, `lib/push-guard.js`, `<git-common-dir>/wtgui-hooks/pre-push` |
 | a merge flow that re-reads every fact before a run exists | `POST /api/worktree/merge`: refuses a dirty tree, refuses a base-branch tree, refuses a second merge agent in the same tree, parks on the box under `local-only` | `server.js` (the `/api/worktree/merge` route), `lib/merge-prompt.js` |
-| the paragraph a worker is handed about where its branch goes | `branchLandingLine` — the `local` pipeline's prompt is this, and a pipeline composes with it rather than replacing it | `lib/branch-policy.js` |
+| the paragraph a worker is handed about where its branch goes | `branchLandingLine` — the one landing instruction, composed ahead of every run's prompt and authoritative for a `local` run too; a pipeline's prompt defers to it rather than restating it | `lib/branch-policy.js`, `lib/jobs.js` |
 | the host's own landing steps, per host | `hosts.landing(project)` — the PR title, reviewer group and description sections are already data | `lib/hosts.js`, `hosts.seed.json` |
 | a settings panel and its tab | `data-settings-group` panels; `test/settings-tabs.test.js` already asserts one tab per group in the markup's order | `public/index.html`, `public/app.js`, `test/settings-tabs.test.js` |
 | a settings write route's shape | validate → write → return the whole `settings` object; `POST /api/settings/remote-branches` is the model | `server.js` |
