@@ -20,7 +20,7 @@
 //     panel stops at 320 x 240
 //   * a drag aimed outside the window leaves the whole rect inside the viewport, on all four sides
 //   * the rect survives a reload, and a window that got smaller clamps it back inside on the way in
-//   * Esc closes, an outside press closes, the ✕ closes, and a group still folds
+//   * Esc closes, an outside press closes, the ✕ closes, and a tab still switches the panel
 //
 // The browser half needs a Playwright install. Point the script at one with PANEL_PLAYWRIGHT_ROOT (a directory
 // holding node_modules/playwright, or the package itself); without one it says BROWSER-HALF-NOT-RUN and exits 2
@@ -78,7 +78,9 @@ const read = (page) =>
       pageSelection: String(window.getSelection() || ""),
       vw: document.documentElement.clientWidth,
       vh: document.documentElement.clientHeight,
-      folded: [...document.querySelectorAll("#settings .settings-group-head")].map((h) => h.getAttribute("aria-expanded")),
+      tabs: [...document.querySelectorAll("#settings [role='tab']")].map((t) => t.dataset.settingsTab),
+      selected: [...document.querySelectorAll("#settings [role='tab']")].map((t) => t.getAttribute("aria-selected")),
+      shownPanels: [...document.querySelectorAll("#settings .settings-group")].filter((p) => p.getClientRects().length > 0).map((p) => p.dataset.settingsGroup),
     };
   }, KEY);
 
@@ -172,8 +174,7 @@ async function main() {
         const filtered = await read(page);
         check(filtered.query === "font", "typing in the box filters the panel", `query ${JSON.stringify(filtered.query)}`);
         check(filtered.shownRows > 0 && filtered.shownRows < filtered.rows, "some rows match and the rest are hidden", `${filtered.shownRows}/${filtered.rows} rows`);
-        const lowFold = filtered.folded.filter((v) => v === "true").length;
-        note(`groups open with a match: ${lowFold}/7`);
+        note(`tabs: ${filtered.tabs.join(" / ")} — selected ${filtered.tabs.filter((k, i) => filtered.selected[i] === "true").join(",")}`);
         // A drag ACROSS the query selects it: the box is selectable, and that drag still does not move the window.
         const textBox = await page.evaluate(() => {
           const b = document.getElementById("settings-search").getBoundingClientRect();
@@ -187,7 +188,7 @@ async function main() {
         await page.waitForTimeout(150);
         const cleared = await read(page);
         check(cleared.query === "" && cleared.open, "Esc clears the box and leaves the panel open", `query ${JSON.stringify(cleared.query)}, open ${cleared.open}`);
-        check(cleared.folded.every((v) => v === "false"), "and every group goes back to the reader's fold", cleared.folded.join(","));
+        check(cleared.selected.filter((v) => v === "true").length === 1, "and exactly one tab is still selected", cleared.selected.join(","));
 
         // A drag that starts on a head BUTTON is the button's: the ✕ must not drag the panel. The rect is read while
         // the press is still held — a release away from the button is an outside press, which closes the panel by
@@ -282,23 +283,19 @@ async function main() {
         check(!afterClose.open, "and so does its ✕");
         await openSettings(page);
 
-        // ---- J. the groups still fold -------------------------------------------------------------------------
-        const foldedBefore = await read(page);
-        const displayHead = await page.evaluate(() => {
-          const h = document.querySelector('[data-settings-group="display"]');
-          return { expanded: h.getAttribute("aria-expanded"), top: h.getBoundingClientRect().top, height: h.getBoundingClientRect().height };
-        });
-        await page.click('[data-settings-group="display"]');
+        // ---- J. the tab strip still switches -------------------------------------------------------------
+        const tabbedBefore = await read(page);
+        await page.click('[data-settings-tab="gateway"]');
+        await page.waitForTimeout(180);
+        const onGateway = await read(page);
+        check(onGateway.shownPanels.length === 1 && onGateway.shownPanels[0] === "gateway",
+          "a tab press shows that tab's panel, and only it", onGateway.shownPanels.join(","));
+        check(onGateway.selected.filter((v) => v === "true").length === 1 && onGateway.selected[onGateway.tabs.indexOf("gateway")] === "true",
+          "and marks that tab selected", onGateway.selected.join(","));
+        check(onGateway.open, "while the panel stays open on the tab it switched to");
+        await page.click('[data-settings-tab="display"]');
         await page.waitForTimeout(150);
-        const opened = await read(page);
-        const displayAfter = await page.evaluate(() => document.querySelector('[data-settings-group="display"]').getAttribute("aria-expanded"));
-        check(foldedBefore.folded[0] === "false" && displayAfter === "true", "a group heading still opens its group", `aria-expanded ${foldedBefore.folded[0]} -> ${displayAfter}`);
-        check(opened.open, "and the panel is still open while it does");
-        await page.click('[data-settings-group="display"]');
-        await page.waitForTimeout(150);
-        const refolded = await page.evaluate(() => document.querySelector('[data-settings-group="display"]').getAttribute("aria-expanded"));
-        check(refolded === "false", "and a second press folds it away again", `aria-expanded ${refolded}`);
-        note(`display head at ${displayHead.top.toFixed(0)}px, ${displayHead.height.toFixed(0)}px tall`);
+        note(`the strip: ${tabbedBefore.tabs.length} tabs in markup order, ${tabbedBefore.shownPanels.length} panel shown`);
 
         // ---- K. the page zoom does not skew the gesture ---------------------------------------------------------
         // `getBoundingClientRect` and `clientX` are VISUAL px while a style length is LAYOUT px; a gesture that mixes

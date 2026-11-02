@@ -223,8 +223,11 @@ button.primary:hover { background: #24466a; }
 .update-chip button:disabled { color: var(--dimmer); cursor: default; }
 /* settings panel: a small popover under the top bar */
 /* A fixed panel with a scrolling body: the head stays put (and the close button with it) however far down the
-   reader is. The body owns the scrollbar so the rounded border is never clipped by it. */
-.settings { position: fixed; right: 16px; top: 74px; z-index: 120; width: 340px; max-height: calc(100vh - 90px); display: flex; flex-direction: column; padding: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 14px 34px #0009; overflow: hidden; }
+   reader is. The body owns the scrollbar so the rounded border is never clipped by it. One tab's rows can be 18
+   rows deep, so the window opens at a fixed box (520px, or the room there is) instead of growing to the tallest
+   tab's content and covering the board; the body scrolls what does not fit, and the corner grip is how the reader
+   asks for more. */
+.settings { position: fixed; right: 16px; top: 74px; z-index: 120; width: 340px; height: min(520px, calc(100vh - 90px)); max-height: calc(100vh - 90px); display: flex; flex-direction: column; padding: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 9px; box-shadow: 0 14px 34px #0009; overflow: hidden; }
 /* The body owns the scrollbar. Both spellings are set: Chrome 121+ honours scrollbar-width/color and ignores the
    ::-webkit- rules, older Chromium is the other way round, and Firefox only knows the standard pair. */
 /* Its own scroll pane: nothing in Settings grows under the reader the way the board does, and native anchoring
@@ -244,31 +247,33 @@ button.primary:hover { background: #24466a; }
 .settings-grip:hover { color: var(--dim); background: var(--surface); }
 .settings.is-moving, .settings.is-sizing { user-select: none; }
 .settings.is-moving .settings-head { cursor: grabbing; }
-.settings-group { padding-top: 10px; }
-.settings-group + .settings-group { margin-top: 10px; border-top: 1px solid var(--line); }
-/* A group folds from its heading. The head is the control (role="button" in the markup): the caret says which way
-   it points, the hover lights the whole head rather than only the word so the target is the row, and `.folded` on
-   the group hides every row of it — the head is then the group's only child. */
-.settings-group-head { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; padding: 3px 5px; border-radius: 5px; font: 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dimmer); cursor: pointer; user-select: none; }
-.settings-group-head::before { content: "▾"; flex: none; font-size: 9px; line-height: 1; color: #46505f; }
-.settings-group.folded .settings-group-head::before { content: "▸"; }
-.settings-group-head:hover { color: var(--dim); background: var(--surface); }
-.settings-group-head:hover::before { color: var(--dim); }
-.settings-group-head:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
-.settings-group.folded > :not(.settings-group-head) { display: none; }
-.settings-group.folded { padding-top: 6px; padding-bottom: 2px; }
-.settings-group.folded .settings-group-head { margin-bottom: 0; }
-/* The search box sits in the fixed head, so it is on screen whichever group is open — and with every group folded
-   it is the panel's first control (it takes the focus when the panel opens). */
+/* The strip: one tab per group, in the markup's own order. It WRAPS rather than scrolls, so every section is
+   reachable without a horizontal gesture in a window the reader may have narrowed; the selected tab is the one
+   Tab stop (roving tabindex), and the arrows walk the strip. */
+.settings-tabs { display: flex; flex-wrap: wrap; gap: 1px; flex: none; padding: 6px 9px 0; border-bottom: 1px solid var(--line); background: var(--panel); }
+.settings-tab { display: inline-flex; align-items: center; gap: 4px; padding: 3px 3px 4px; border: 0; border-bottom: 2px solid transparent; border-radius: 5px 5px 0 0; background: transparent; color: var(--dimmer); font: 9.5px var(--mono); letter-spacing: .02em; text-transform: uppercase; cursor: pointer; user-select: none; }
+.settings-tab:hover { color: var(--dim); background: var(--surface); }
+.settings-tab:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
+.settings-tab[aria-selected="true"] { color: var(--text); border-bottom-color: #4a90d9; }
+/* The per-tab match count the search hangs on the tab: the number of rows on THAT tab that answer the query. */
+.settings-tab-count { font-size: 9.5px; letter-spacing: 0; color: #46505f; }
+.settings-tab[aria-selected="true"] .settings-tab-count { color: var(--dim); }
+.settings-tab-count[hidden] { display: none; }
+/* One panel at a time, and the attribute is the whole state: the markup ships the six other tabs `hidden`, so a
+   frame the script has not reached yet still shows the Display panel rather than all seven. */
+.settings-group { padding-top: 12px; }
+.settings-group[hidden] { display: none; }
+/* The search box sits in the fixed head, so it is on screen whichever tab is open — and it is the panel's first
+   control (it takes the focus when the panel opens). */
 .settings-head input[type="search"] { flex: 0 1 240px; min-width: 76px; margin-left: 4px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font: 11.5px var(--mono); cursor: text; }
 .settings-head input[type="search"]::placeholder { color: var(--dimmer); }
 /* One clear control, not two: the panel's own ✕ answers Esc, so the browser's built-in one is hidden. */
 .settings-head input[type="search"]::-webkit-search-cancel-button { display: none; }
 .settings-head input[type="search"]:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
 .settings-head #btn-settings-search-clear[hidden] { display: none; }
-/* A search hides what does not answer it by class alone — the same rule as the fold, so no markup is swapped out
-   from under a click or a keypress while the reader is typing. */
-.settings-group.search-hidden, .settings-group .search-hidden { display: none; }
+/* A search hides what does not answer it by class alone — on every tab, so no markup is swapped out from under a
+   click or a keypress while the reader is typing. */
+.settings-group .search-hidden { display: none; }
 /* Matched text is painted by the CSS Custom Highlight API over the row's own text nodes, so a keystroke costs no
    re-render: every control in a matching row keeps its value, its focus and its half-typed number. */
 ::highlight(settings-search-match) { background: #3d5372; color: #f2f6fb; }

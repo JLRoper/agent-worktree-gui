@@ -16970,81 +16970,141 @@ function applyGreyFlash(on) {
   }
 }
 
-// ---- settings group folds --------------------------------------------------------------------------------
-// Seven groups of rows is a tall panel, and none of them is a number a reader checks on every visit — so every
-// group STARTS FOLDED, and its heading is the control: click it, or press Enter/Space on it, to open that one
-// group. What is remembered per browser is therefore the UNFOLDS, not the folds: an absent key, a cleared store
-// and a first visit all read the same way — "nothing has been opened" — which is exactly the default. A key
-// holding the fold list could not say that, because "absent" and "empty" would have to mean different things,
-// and a group the reader had opened would look like one they had never touched.
+// ---- settings tabs ---------------------------------------------------------------------------------------
+// Seven groups of rows is a tall panel, and the reader is nearly always here for one of them. Each group is a
+// tab now, keyed by `data-settings-group` and drawn in the order the markup carries them: one panel is on
+// screen at a time, and the tab the reader chose is remembered in this browser (Display is a first visit's).
+// The strip is the panel's heading, so the panels carry no heading of their own — `aria-labelledby` points each
+// one at its tab, and the tab carries the tooltip that used to sit on the group's <h3>.
 //
-// The older `wtgui.settingsFolded` list is deliberately neither read nor rewritten. It recorded the opposite
-// fact: reading it as an unfold list would open the groups a reader had closed and close the ones they had
-// opened, and rewriting it would turn their own saved choice into its reverse. It is left where it is, inert.
-//
-// The markup ships `class="folded"` with `aria-expanded="false"` for the same reason, so the panel never paints
-// an open group for the instant before this runs. The panel is static (no repaint rebuilds it), so the class on
-// the group is the whole state.
-const SETTINGS_FOLD_KEY = "wtgui.settingsUnfolded";
+// The older fold stores are deliberately neither read nor rewritten, the way each earlier one was left inert:
+// `wtgui.settingsFolded` and `wtgui.settingsUnfolded` record which GROUPS were open, which is not a tab. Reading
+// either as one would land the reader on whichever group they happened to open last, and rewriting it would turn
+// their own saved choice into its reverse. Both stay where they are, unused.
+const SETTINGS_TAB_KEY = "wtgui.settingsTab";
+const SETTINGS_TABS_ID = "settings-tabs";
 
-function settingsUnfolds() {
+function settingsTabButtons() {
+  return [...document.querySelectorAll(`#${SETTINGS_TABS_ID} [role="tab"]`)];
+}
+
+// The panels in the order the markup gives them — the same order the strip is in, so the key is the whole link
+// between a tab and the panel it shows.
+function settingsTabPanels() {
+  return [...document.querySelectorAll("#settings .settings-group[data-settings-group]")];
+}
+
+// The reader's tab, or the first one: a stored key that no longer names a panel (a tab renamed or removed) must
+// not leave the window with nothing on screen.
+function settingsTabKey() {
+  const keys = settingsTabPanels().map((panel) => panel.dataset.settingsGroup);
   try {
-    const raw = JSON.parse(localStorage.getItem(SETTINGS_FOLD_KEY) || "null");
-    return new Set(Array.isArray(raw) ? raw.filter((n) => typeof n === "string") : []);
+    const raw = localStorage.getItem(SETTINGS_TAB_KEY);
+    if (raw && keys.includes(raw)) return raw;
   } catch {
-    return new Set();
+    /* private mode */
+  }
+  return keys[0] || null;
+}
+
+function saveSettingsTab(key) {
+  try {
+    localStorage.setItem(SETTINGS_TAB_KEY, key);
+  } catch {
+    /* private mode: the tab just will not persist */
   }
 }
 
-// One painter for both halves of the fact, because they are one fact: the class the stylesheet hides the rows
-// with, and the state a keyboard or screen-reader user is told.
-function paintSettingsFold(group, unfolded) {
-  group.classList.toggle("folded", !unfolded);
-  const head = group.querySelector(":scope > .settings-group-head");
-  if (head) head.setAttribute("aria-expanded", unfolded ? "true" : "false");
-}
-
-function saveSettingsUnfolds(open) {
-  try {
-    localStorage.setItem(SETTINGS_FOLD_KEY, JSON.stringify([...open]));
-  } catch {
-    /* private mode: the open group lasts for this visit */
+// One painter for both halves of the fact — which tab is selected and which panel is on screen — because they
+// are one fact. The roving tabindex makes the strip a single Tab stop: the selected tab is the reachable one,
+// and the arrows inside the strip move the selection.
+function paintSettingsTab(key, { save = true, focus = false, scroll = false } = {}) {
+  const tabs = settingsTabButtons();
+  const chosen = tabs.some((tab) => tab.dataset.settingsTab === key) ? key : tabs[0]?.dataset.settingsTab;
+  if (!chosen) return;
+  for (const tab of tabs) {
+    const on = tab.dataset.settingsTab === chosen;
+    tab.setAttribute("aria-selected", on ? "true" : "false");
+    tab.tabIndex = on ? 0 : -1;
+  }
+  for (const panel of settingsTabPanels()) panel.hidden = panel.dataset.settingsGroup !== chosen;
+  if (save) saveSettingsTab(chosen);
+  if (focus) tabs.find((tab) => tab.dataset.settingsTab === chosen)?.focus();
+  // Opening a tab starts it at its own top, not wherever the last one was scrolled to.
+  if (scroll) {
+    const body = document.querySelector("#settings .settings-body");
+    if (body) body.scrollTop = 0;
   }
 }
 
-function initSettingsGroups() {
-  const open = settingsUnfolds();
-  for (const group of document.querySelectorAll("#settings .settings-group")) {
-    const head = group.querySelector(":scope > .settings-group-head");
-    if (!head || !head.dataset.settingsGroup) continue;
-    paintSettingsFold(group, open.has(head.dataset.settingsGroup));
-    const toggle = () => {
-      const unfolded = group.classList.contains("folded");
-      paintSettingsFold(group, unfolded);
-      const next = settingsUnfolds();
-      if (unfolded) next.add(head.dataset.settingsGroup);
-      else next.delete(head.dataset.settingsGroup);
-      saveSettingsUnfolds(next);
-    };
-    head.addEventListener("click", toggle);
-    // A heading is not a button, so nothing else answers these keys here — and Space would scroll the panel.
-    head.addEventListener("keydown", (e) => {
-      if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
+function selectSettingsTab(key) {
+  paintSettingsTab(key, { save: true, scroll: true });
+}
+
+// The per-tab counts the search hands over: a badge on the tab's chrome, and the same number in the tab's own
+// name for a screen reader (the badge itself is decoration, so it is not read twice).
+function paintSettingsTabCounts(counts, query) {
+  for (const tab of settingsTabButtons()) {
+    const n = counts.get(tab.dataset.settingsTab) || 0;
+    const badge = tab.querySelector(".settings-tab-count");
+    if (badge) {
+      badge.textContent = String(n);
+      badge.hidden = !query;
+    }
+    const label = tab.querySelector(".settings-tab-label");
+    if (query) {
+      const name = `${label ? label.textContent : tab.dataset.settingsTab} — ${n ? `${n} match${n === 1 ? "" : "es"}` : "no matches"}`;
+      tab.setAttribute("aria-label", name);
+    } else {
+      tab.removeAttribute("aria-label");
+    }
+  }
+}
+
+// The WAI-ARIA tabs pattern's keys: Left/Right wrap around the strip, Home/End take the ends, and Enter/Space
+// select the tab that has the focus (the arrows already selected it; this is for the reader who Tabbed to the
+// strip and pressed Enter). Space would scroll the panel, so it is swallowed.
+function initSettingsTabs() {
+  const strip = document.getElementById(SETTINGS_TABS_ID);
+  const tabs = settingsTabButtons();
+  if (!strip || !tabs.length) return;
+  paintSettingsTab(settingsTabKey(), { save: false });
+  const at = (key) => tabs.findIndex((tab) => tab.dataset.settingsTab === key);
+  strip.addEventListener("click", (e) => {
+    const tab = e.target.closest("[role='tab']");
+    if (tab) selectSettingsTab(tab.dataset.settingsTab);
+  });
+  strip.addEventListener("keydown", (e) => {
+    const tab = e.target.closest("[role='tab']");
+    if (!tab) return;
+    const last = tabs.length - 1;
+    const here = at(tab.dataset.settingsTab);
+    let next = null;
+    if (e.key === "ArrowRight") next = tabs[(here + 1) % tabs.length];
+    else if (e.key === "ArrowLeft") next = tabs[(here - 1 + tabs.length) % tabs.length];
+    else if (e.key === "Home") next = tabs[0];
+    else if (e.key === "End") next = tabs[last];
+    else if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
       e.preventDefault();
-      toggle();
-    });
-  }
+      selectSettingsTab(tab.dataset.settingsTab);
+      return;
+    }
+    if (!next) return;
+    e.preventDefault();
+    paintSettingsTab(next.dataset.settingsTab, { save: true, focus: true, scroll: true });
+  });
 }
 
-// ---- end settings group folds
+// ---- end settings tabs
 
 // ---- settings search -------------------------------------------------------------------------------------
-// The panel is a long list of rows and every group now starts folded, so the way to a setting is the search box
-// the panel's fixed head keeps on screen. What it searches is the row itself: its text, its own `title`, and the
-// `title` of any control inside it (`zoom out` lives only in a button's tooltip, and it is exactly the word a
-// reader would try). A row that does not answer goes away, a group left with no row goes away with it, and a
-// group that does answer is shown OPEN for the search — the reader's own fold is read from storage and never
-// written here, so clearing the box puts every group back exactly as they left it.
+// The panel is a long list of rows spread over seven tabs, so the way to a setting is the search box the panel's
+// fixed head keeps on screen. What it searches is the row itself: its text, its own `title`, and the `title` of
+// any control inside it (`zoom out` lives only in a button's tooltip, and it is exactly the word a reader would
+// try). A row that does not answer goes away, in every tab — the search is GLOBAL, not a filter on the tab the
+// reader happens to be looking at: each tab carries the count of rows that answer it, and the first tab that
+// answers is the one shown, so a match in a tab nobody selected is still revealed. The reader's own tab is never
+// written by the search, so clearing the box goes back to it exactly as they left it.
 //
 // The match is painted with the CSS Custom Highlight API: one Range per hit over the row's own text nodes.
 // Nothing is re-rendered, so a keystroke cannot take the focus ring, a select's value or a half-typed number with
@@ -17065,33 +17125,34 @@ function settingsRowText(row) {
 function paintSettingsSearch() {
   const box = document.getElementById(SETTINGS_SEARCH_ID);
   const query = String((box && box.value) || "").trim().toLowerCase();
-  const open = settingsUnfolds(); // the reader's state: read, never written — a search must not rewrite a fold
   const matched = [];
-  for (const group of document.querySelectorAll("#settings .settings-group")) {
-    const head = group.querySelector(":scope > .settings-group-head");
+  const counts = new Map(); // per tab key: how many of ITS rows answer — the global answer, tab by tab
+  for (const panel of settingsTabPanels()) {
     let hits = 0;
     let follows = true; // a preview strip or a preset row belongs to the row above it
-    for (const child of [...group.children]) {
-      if (child === head) continue;
+    for (const child of [...panel.children]) {
       if (child.classList && child.classList.contains("settings-row")) {
         const hit = !query || settingsRowText(child).includes(query);
         child.classList.toggle("search-hidden", !hit);
         follows = hit;
         if (hit) {
           hits += 1;
-          matched.push(child);
+          if (query) matched.push(child);
         }
       } else if (child.classList) {
         child.classList.toggle("search-hidden", Boolean(query) && !follows);
       }
     }
-    group.classList.toggle("search-hidden", Boolean(query) && hits === 0);
-    // A group with a match is opened for the search only. With no query every group goes back to what the reader
-    // left it as — storage is the only owner of that, and this function never writes to it.
-    if (query && hits > 0) paintSettingsFold(group, true);
-    else if (!query && head && head.dataset.settingsGroup) {
-      paintSettingsFold(group, open.has(head.dataset.settingsGroup));
-    }
+    counts.set(panel.dataset.settingsGroup, hits);
+  }
+  paintSettingsTabCounts(counts, query);
+  // A match in a tab the reader is not looking at is revealed: the first tab that answers is the one shown while
+  // the query is on, and the reader's own tab — never written by the search — comes back when the box clears.
+  const active = settingsTabButtons().find((tab) => tab.getAttribute("aria-selected") === "true");
+  const first = [...counts].find(([, n]) => n > 0)?.[0] || null;
+  if (!query) paintSettingsTab(settingsTabKey(), { save: false });
+  else if (first && (!active || !(counts.get(active.dataset.settingsTab) > 0))) {
+    paintSettingsTab(first, { save: false });
   }
   const clear = document.getElementById(SETTINGS_SEARCH_CLEAR_ID);
   if (clear) clear.hidden = !query;
@@ -17352,8 +17413,12 @@ function toggleSettings(open = null) {
   // The window goes back where the reader left it — and inside a window that may have shrunk since — before the
   // focus lands in it, so a restored rect never scrolls the body under the caret.
   placeSettingsWindow();
-  // The groups start folded, so the first control is the search box the fixed head keeps on screen. Focus used to
-  // land on the font select — which is now inside a folded (display:none) group, where focus() does nothing at all.
+  // The tab the reader chose is read again on every open (another browser tab can have moved it), so the window
+  // opens on the panel they left, not on the one this tab last painted.
+  paintSettingsTab(settingsTabKey(), { save: false });
+  // The search box is the first control the fixed head keeps on screen and the way to a row on any tab — including
+  // the tabs the reader is not on — so it takes the focus. (The font select it used to focus is now inside the
+  // Display panel, which is not necessarily the visible one.)
   const searchBox = $("settings-search");
   if (searchBox) searchBox.focus();
   const sel = $("font-select");
@@ -17895,10 +17960,10 @@ $("btn-settings")?.addEventListener("click", (e) => {
   toggleSettings();
 });
 $("btn-settings-close")?.addEventListener("click", () => toggleSettings(false));
-// The groups' folds are painted at load, not when the panel opens: a reader who opened Board last time should not
-// see it folded for the instant the panel takes to open. The search box is wired here too, on an empty box, so the
+// The tab strip is painted at load, not when the panel opens: the panel the reader chose last time must be the one
+// in the DOM before anything can flash the wrong tab. The search box is wired here too, on an empty box, so the
 // panel is never filtered by a query left in the DOM.
-initSettingsGroups();
+initSettingsTabs();
 initSettingsSearch();
 // The window's own gestures: the head drags it, the corner grip sizes it, and the rect is remembered in this browser.
 initSettingsWindow();

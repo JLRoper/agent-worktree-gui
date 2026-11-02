@@ -377,11 +377,11 @@ async function browserPhase(pw) {
   });
   ok("the row is in the drawer and names the behaviour", /Jump to an opened result/.test(rowText), rowText);
   check("it ships unchecked — the hold is the default", await page.evaluate(() => document.querySelector("#follow-opened").checked), false);
-  // The groups start folded, so the row is display:none until the reader opens Agent cards — the same two presses a
+  // The groups are a tab strip, so the row is display:none until the reader selects Agent cards — the same press a
   // reader makes. Both are scrolls of the drawer's own scroller, never of a console.
-  await page.locator('[data-settings-group="cards"]').scrollIntoViewIfNeeded().catch(() => {});
+  await page.locator('[data-settings-tab="cards"]').scrollIntoViewIfNeeded().catch(() => {});
   await sleep(150);
-  ok("the Agent cards group is opened", await press('[data-settings-group="cards"]', 40), "a real click on the group's heading");
+  ok("the Agent cards tab is selected", await press('[data-settings-tab="cards"]', 40), "a real click on the tab");
   await sleep(250);
   await page.locator('label[for="follow-opened"]').scrollIntoViewIfNeeded().catch(() => {});
   await sleep(200);

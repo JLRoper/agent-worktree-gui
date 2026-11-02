@@ -126,7 +126,7 @@ test("the switch saves the global key and repaints only the cards with no answer
 });
 
 test("the row sits beside Show thinking, in the Agent cards group, with the same ⓘ shape", () => {
-  const start = html.indexOf('<h3 class="settings-group-head" data-settings-group="cards"');
+  const start = html.indexOf('data-settings-group="cards"');
   const end = html.indexOf('<div class="settings-group', start + 10);
   const group = html.slice(start, end > start ? end : undefined);
   const think = group.indexOf('for="show-thinking"');

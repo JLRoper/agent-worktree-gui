@@ -210,8 +210,9 @@ export async function openPage(page, base, { pathname = "/", waitUntil = "domcon
   return page;
 }
 
-// Open the Settings drawer and, when `group` is named, unfold that `<h3 data-settings-group="...">` section
-// (since PR #118 every settings group starts folded by default).
+// Open the Settings drawer and, when `group` is named, select that tab. The seven groups are a tab strip now —
+// one panel on screen at a time, keyed by `data-settings-group` and selected through `[data-settings-tab]` — so a
+// reader (or a harness) reaches a group's rows by pressing its tab, not by unfolding a heading.
 export async function openSettingsGroup(page, group = null) {
   const open = await page.evaluate(() => {
     const panel = document.getElementById("settings");
@@ -220,10 +221,11 @@ export async function openSettingsGroup(page, group = null) {
   if (!open) await page.click("#btn-settings");
   await page.waitForSelector("#settings:not(.hidden)", { timeout: 10_000 });
   if (group) {
-    const sel = `[data-settings-group="${group}"]`;
-    await page.waitForSelector(sel, { state: "attached", timeout: 10_000 });
-    const folded = await page.evaluate((s) => document.querySelector(s)?.getAttribute("aria-expanded") === "false", sel);
-    if (folded) await page.click(sel);
+    const tab = `[data-settings-tab="${group}"]`;
+    await page.waitForSelector(tab, { state: "visible", timeout: 10_000 });
+    const selected = await page.evaluate((s) => document.querySelector(s)?.getAttribute("aria-selected") === "true", tab);
+    if (!selected) await page.click(tab);
+    await page.waitForSelector(`[data-settings-group="${group}"]:not([hidden])`, { timeout: 10_000 });
   }
 }
 
