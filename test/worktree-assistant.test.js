@@ -358,7 +358,7 @@ test("the store's key is the tree's tag, so neither the path nor the branch spel
   assert.match(ownerKey({ project: "proj", path: "C:/p/.worktrees/plain" }), /^proj::path:/);
 });
 
-test("the owner is display-only, and the page draws the name and role the server resolved", async () => {
+test("the owner is drawn from the server's answer, and the wake path consults the same store", async () => {
   const src = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
   // Both surfaces come from the owner-cell region, which reads the SERVER's name, label and role; neither maps an id
   // to a sentence of its own, and neither falls back to the role label.
@@ -368,11 +368,15 @@ test("the owner is display-only, and the page draws the name and role the server
   assert.doesNotMatch(src, /Controlled by: \$\{esc\(row\.assistant/, "the bullet no longer reads the label");
   assert.doesNotMatch(src, /assistant-2["'`]\s*=>/, "the page never hard-codes an id-to-label table");
 
-  // Nothing in the module that fires wakes reads the owner: this PR stores and draws it, and the routing PR is the
-  // one that gets to consult it.
+  // The routing half: the module that fires wakes reads the same store the row draws, through the port the server
+  // hands it (`this.locks`), and never imports the store itself — where the answer lives stays the server's business,
+  // and a unit test can hand in a stub. `row.assistant` is still never read here: the page's field is not the store.
   const assistant = await readFile(new URL("../lib/assistant.js", import.meta.url), "utf8");
   assert.doesNotMatch(assistant, /row\.assistant/);
-  assert.doesNotMatch(assistant, /locks\.js|setOwner/);
+  assert.match(assistant, /this\.locks\.owner\(/, "the wake path asks the injected owner store");
+  assert.match(assistant, /assistantIdForJob\(/, "one resolver decides which assistant a run belongs to");
+  assert.match(assistant, /this\.locks\.setOwner\(/, "a tree an assistant started in is claimed through the store");
+  assert.doesNotMatch(assistant, /^import[^\n]*locks\.js/m, "the module does not import the store itself");
 });
 
 test("a tree's FIRST row event carries the owner, before any snapshot has overlaid it", { timeout: 150_000 }, async (t) => {
