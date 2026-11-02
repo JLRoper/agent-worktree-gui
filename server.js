@@ -670,6 +670,12 @@ const spawnFeature = createSpawn({
   jobs,
 });
 
+// ---- the reader's locks ---------------------------------------------------------------------------------------
+// A worktree or a branch the reader has locked (lib/locks.js): the one record here that is the reader's and not
+// git's, persisted under logs/ so it survives a restart, and consulted before ANY delete touches a tree. The row
+// wears it as an emoji, so an agent reading the board sees the lock without opening anything.
+const locks = new Locks({ file: config.locksFile, log });
+
 // The sentry + the assistant's own thread. It reads the same job summaries the page does, so nothing
 // here can see more than the board shows; its own clock is `settings.seconds`. `spawner` is the one act it
 // can perform beyond talk: a worker, in a worktree the panel cuts, exactly the way the New-agent card does.
@@ -682,6 +688,9 @@ assistant = new Assistant({
   getRows: () => [...store.rows.values()],
   getChildren: () => subagentRoster({ dbPath: path.join(hermesHome(), "state.db") }),
   spawner: spawnFeature.assistantSpawnRun,
+  // The reader's per-tree owner store: WHO wakes on a tree is decided from this same record the row's owner cell
+  // draws (lib/assistant.js `assistantIdForJob`), so the two cannot disagree.
+  locks,
   // The one act this module cannot perform itself: a RESTART line's gateway/panel restart, queued by
   // the controller and run only once the turn that asked for it has ended.
   onRestart: (spec) => restart.request(spec),
@@ -888,12 +897,6 @@ async function seedTreeNamesAtBoot({ timeoutMs = 30_000, width = 4 } = {}) {
 // Started here, before the job store is constructed: a restored run's event can name a tree the moment the store
 // loads, and that must not beat the seeding. WorktreeNaming awaits this before it decides anything.
 const treeNamesReady = seedTreeNamesAtBoot();
-
-// ---- the reader's locks ---------------------------------------------------------------------------------------
-// A worktree or a branch the reader has locked (lib/locks.js): the one record here that is the reader's and not
-// git's, persisted under logs/ so it survives a restart, and consulted before ANY delete touches a tree. The row
-// wears it as an emoji, so an agent reading the board sees the lock without opening anything.
-const locks = new Locks({ file: config.locksFile, log });
 
 // Where every tree the panel cuts was cut from (lib/parents.js), and the ledger of trees nobody can place. Both are
 // read by the /api/state row through the scheduler's scan context, so the board and the steward never disagree.
@@ -1672,8 +1675,9 @@ function withLocks(snap) {
 //     `stored` (the id the reader gave it) and a `fallback` sentence, because a silent fallback is the reader's
 //     setting appearing to have been ignored.
 //
-// DISPLAY ONLY: nothing in fired()/wake()/noteSettle reads `row.assistant`. It is here so the routing PR that follows
-// has one place to read the owner from — not wired into who wakes or runs in this one.
+// THE ROUTING ANSWER, not just the cell's: `locks` is injected into the Assistant, and `assistantIdForJob` reads this
+// same store to decide whose wake a settled run is and whose settings judge it (`lib/assistant.js`). One store, one
+// answer — a row that says "Assistant #2" and a wake that lands on #1 is the defect this wiring closes.
 function ownerFields(rec) {
   // A record missing entirely still answers with the default owner's name rather than an empty string: a row is
   // never drawn from nothing, and the cell must not be the one place a dash appears. The label and the role stay
@@ -2505,6 +2509,81 @@ const server = createServer(async (req, res) => {
         assistant: fields,
         // The SAME shape the snapshot carries, fallback sentence included, so a caller that paints the answer and a
         // board that paints the next snapshot cannot disagree about the row.
+        row: { ...row, assistant: assistantForRow(projectName, row) },
+      });
+    }
+
+    // Handing a WORKTREE from one assistant to another. The same store as the row's owner control, with the two
+    // things a hand-over needs and a plain set does not: it names the owner it is taking the tree FROM (so a stale
+    // press cannot move a tree that has already changed hands), and it answers with both ends and the routing that
+    // follows the flip — the wake a run in that tree now raises, and the row's own new owner cell.
+    //
+    // The reader's press is the only caller, for the reason the row's control gives: an agent must never be able to
+    // reassign the tree it is working in. `from` is how a reader's board that has gone stale is told so instead of
+    // overwriting somebody else's answer; omitting it is the deliberate "whatever it is now" move.
+    if (route === "/api/worktree/transfer" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!pageCaller(req)) {
+        return sendJson(res, 403, {
+          error:
+            "a worktree changes hands only from the board page: this write is the reader's, and a request with no same-origin Origin is refused",
+        });
+      }
+      const body = await readBody(req).catch(() => ({}));
+      const projectName = String(body.project || "").trim();
+      const project = scheduler.getProjects().find((p) => p.name === projectName);
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${projectName}` });
+      const asked = body.path ? normPathKey(body.path) : null;
+      const row = asked ? scheduler.store.rowsFor(projectName).find((r) => normPathKey(r.path) === asked) : null;
+      if (!row) return sendJson(res, 404, { error: `not a worktree row of ${projectName}: ${body.path || "(none)"}` });
+      const to = String(body.to ?? body.assistant ?? body.assistantId ?? "").trim();
+      if (!to) return sendJson(res, 400, { error: "an assistant id is required in `to` — one of the ids /api/assistant lists" });
+      const rec = assistant.assistants.find((a) => a.id === to);
+      if (!rec) return sendJson(res, 404, { error: `no such assistant: ${to}` });
+      const before = assistantForRow(projectName, row);
+      const from = String(body.from ?? "").trim();
+      // The stale press is refused rather than obeyed: the answer carries whose tree it actually is.
+      if (from && from !== before.id) {
+        return sendJson(res, 409, {
+          error: `${row.name || path.basename(String(row.path || ""))} is ${before.name}'s, not ${from}'s — nothing was changed`,
+          from: before.id,
+          to: rec.id,
+          owner: before,
+        });
+      }
+      const what = row.name || path.basename(String(row.path || ""));
+      if (before.id === rec.id) {
+        // Already theirs. A second press is an answer, not an error, and the routing it describes is the same one.
+        return sendJson(res, 200, {
+          ok: true,
+          changed: false,
+          from: before.id,
+          to: rec.id,
+          owner: ownerFields(rec),
+          row: { ...row, assistant: assistantForRow(projectName, row) },
+        });
+      }
+      // The id is written EXACTLY as asked, Assistant #1 included. The row's own control keeps "absence is #1" (it is
+      // a preference, and the default needs no record); a hand-over is the routing DECISION, and a decision that hands
+      // a tree back must be able to say so — left absent, the next run started in the tree by the assistant that had it
+      // would still carry its stamp and route to it, and the hand-back would be invisible to every wake.
+      const out = locks.setOwner({ project: projectName, path: row.path, branch: row.branch }, rec.id);
+      if (!out || !out.ok) return sendJson(res, 400, { error: "the owner could not be changed" });
+      const fields = ownerFields(rec);
+      log(`handover ${projectName}: ${what} ${before.name} (${before.id}) -> ${fields.name} (${rec.id})`);
+      // A settings-like write: every open board redraws the row's owner cell and its bullet list from this snapshot.
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, {
+        ok: true,
+        changed: true,
+        from: before.id,
+        fromOwner: before,
+        to: rec.id,
+        owner: fields,
+        // What the flip means for the work already in that tree: the runs it holds are this assistant's now, so the
+        // next settle raises a wake on ITS thread and its settings judge them. Said here so a caller does not have to
+        // know `assistantIdForJob`'s order to know what it just did.
+        wake: { assistantId: rec.id, thread: rec.threadId },
         row: { ...row, assistant: assistantForRow(projectName, row) },
       });
     }
