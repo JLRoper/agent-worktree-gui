@@ -20,7 +20,10 @@
 //      earlier, and its shell worked in the primary checkout);
 //   2. a reasonless POST /api/restart is refused with 400 and leaves nothing queued;
 //   3. a waiting entry can be cancelled (200, queue empty) and no restart happens even once the turn it was
-//      waiting for has ended — the case a cancel has to win.
+//      waiting for has ended — the case a cancel has to win;
+//   4. the request itself: a target-less ask, a reason that begins with the grammar's pipe, and a reason naming
+//      the version this boot already serves are each refused by name; a second queued ask names the entry that
+//      blocks it; and a boot drops a queued entry recorded for a version already served instead of firing it.
 //
 // Nothing here can bounce the live gateway: the controller's `hermes` binary is this Node process (so `gateway
 // restart` exits without doing anything), and $HERMES_HOME is the sandbox's own, with no gateway_state.json in it.
@@ -33,6 +36,9 @@ import { freePort, git, slash, startPanel, waitFor } from "./panel-testkit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, "..");
+// What this boot of the sandbox panel serves. The server reads package.json once at boot, so the gate reads the
+// same file: a reason naming this version is the "already served" case, not a version bumped on disk since.
+const SERVED = JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
 const SCRATCH = path.join(process.env.LOCALAPPDATA || process.env.TEMP || ".", "Temp", "wag", "f4594c2d");
 
 let failures = 0;
@@ -538,6 +544,21 @@ try {
   const emptyId = await api(panel.base, "/api/restart/cancel", { method: "POST", body: JSON.stringify({}) });
   eq("…and a cancel with no id is a 400, not a silent success", emptyId.status, 400);
 
+  // The three request shapes the storm produced. Each refusal names what was wrong AND the shape it wants, so a
+  // caller that guessed is told how to write it, not just "no".
+  const noTarget = await api(panel.base, "/api/restart", { method: "POST", body: JSON.stringify({ reason: `serve ${SERVED}` }) });
+  eq("a restart with no target is a 400", noTarget.status, 400);
+  ok("…naming the target and the required shape", /needs a target/.test(String(noTarget.body?.error || "")) && /RESTART <gateway\|panel>/.test(String(noTarget.body?.error || "")), String(noTarget.body?.error || ""));
+
+  const piped = await api(panel.base, "/api/restart", { method: "POST", body: JSON.stringify({ target: "panel", reason: `| serve ${SERVED}` }) });
+  eq("a reason that begins with the pipe is a 400", piped.status, 400);
+  ok("…naming the pipe and the required shape", /must not start with a pipe/.test(String(piped.body?.error || "")) && /RESTART <gateway\|panel>/.test(String(piped.body?.error || "")), String(piped.body?.error || ""));
+
+  const stale = await api(panel.base, "/api/restart", { method: "POST", body: JSON.stringify({ target: "panel", reason: `serve ${SERVED} after the approvals dock landed` }) });
+  eq("a reason naming the version this panel serves is a 409", stale.status, 409);
+  ok("…quoting the version it already serves", new RegExp(`"${SERVED.replace(/\./g, "\\.")}"`).test(String(stale.body?.error || "")) && /already serves/.test(String(stale.body?.error || "")), String(stale.body?.error || ""));
+  eq("…and none of the three left a wait behind", ((await restartOf(panel.base)).queued || []).length, 0);
+
   // ============================================================================================
   console.log("\n3. a waiting entry can be cancelled, and then no restart happens");
   // A live turn on a thread of its own: the restart waits for it, which is the only state a cancel may drop.
@@ -559,6 +580,7 @@ try {
   eq("…holding the one slot a queued restart may take", String(held?.id || ""), String(id));
   const dup = await api(panel.base, "/api/restart", { method: "POST", body: JSON.stringify({ target: "gateway", reason: "a second ask", waitFor: thread }) });
   eq("…so a second ask is a 409 while it waits", dup.status, 409);
+  ok("…naming the entry that blocks it", String(dup.body?.error || "").includes(String(held?.id || "(no id)")) && String(dup.body?.error || "").includes("restart to pick up the sandbox config"), String(dup.body?.error || ""));
 
   const missing = await api(panel.base, "/api/restart/cancel", { method: "POST", body: JSON.stringify({ id: "nosuchid" }) });
   eq("cancelling an unknown id is a 404", missing.status, 404);
@@ -592,6 +614,37 @@ try {
   eq("…and nothing is running", after.running, null);
   ok("…and the journal never says it started", !(after.journal || []).some((j) => /the queued restart starts now|ran `/.test(String(j.text || ""))), JSON.stringify(after.journal || []));
   ok("…and the gateway was never bounced (the restart log was never even opened)", !existsSync(path.join(dir, "logs", "gateway-restart.log")), "gateway-restart.log exists");
+
+  // ============================================================================================
+  console.log("\n4. a boot drops a queued entry recorded for a version it already serves");
+  // The storm's wait: a queued gateway restart recorded against a version the panel has already moved past. It is
+  // written into the panel's own restart.json, so the next boot reads it exactly as it would after a death — and
+  // must drop it, not fire it when some later turn ends.
+  const restartFile = path.join(dir, "logs", "restart.json");
+  const existingRecord = existsSync(restartFile) ? JSON.parse(readFileSync(restartFile, "utf8")) : {};
+  writeFileSync(
+    restartFile,
+    JSON.stringify(
+      { ...existingRecord, queued: [{ id: "stale0001", target: "gateway", reason: "serve 0.0.1 after the old bump", waitFor: "panel-assistant", version: "0.0.1", queuedAt: new Date().toISOString() }] },
+      null,
+      1,
+    ),
+    "utf8",
+  );
+  await panel.stop();
+  panel = await boot();
+  const droppedLine = await waitFor(
+    async () => ((await restartOf(panel.base)).journal || []).find((j) => /dropped queued gateway restart stale0001/.test(String(j.text || ""))),
+    { what: "the boot to drop the stale queue entry", timeoutMs: 20_000 },
+  );
+  ok("the next boot drops the stale queued entry", Boolean(droppedLine), JSON.stringify((await restartOf(panel.base)).journal || []));
+  ok("…naming the version it recorded and the one now served", /0\.0\.1/.test(String(droppedLine?.text || "")) && String(droppedLine?.text || "").includes(SERVED), String(droppedLine?.text || ""));
+  eq("…and the queue is empty", ((await restartOf(panel.base)).queued || []).length, 0);
+  await sleep(2_500);
+  const afterDrop = await restartOf(panel.base);
+  eq("…and nothing restarted", afterDrop.last, null);
+  eq("…and nothing is running", afterDrop.running, null);
+  ok("…and no wait line ever says it started", !(afterDrop.journal || []).some((j) => /the queued restart starts now|ran `/.test(String(j.text || ""))), JSON.stringify(afterDrop.journal || []));
 } catch (e) {
   failures += 1;
   console.log(`FAIL  the gate threw: ${String((e && e.stack) || e)}`);
