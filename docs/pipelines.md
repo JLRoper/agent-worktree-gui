@@ -120,6 +120,9 @@ closed:
 
 `{{tree}} {{branch}} {{main}} {{project}} {{remote}} {{host}} {{ticket}} {{desc}} {{pr}} {{sha}} {{lastSeen}}`
 
+- **Whitespace inside the braces is the same hole.** A person writes `{{ ticket }}`; it is read as `{{ticket}}` and
+  judged by the bare name, so the padded unknown hole `{{ nope }}` is refused exactly as `{{nope}}` is. The name is
+  still the closed name: `{{TICKET}}` and `{{ticketId}}` are not in the list above and are refused.
 - **An unknown placeholder is refused when the definition is saved.** Not rendered empty at run time: a prompt with
   a silently missing `{{ticket}}` is the brief that produces a branch called `_`.
 - **A placeholder that resolves to nothing at render time refuses to start the stage**, and the card says which hole

@@ -48,7 +48,8 @@ import {
   validatePipeline,
 } from "../lib/pipelines.js";
 import { branchLandingLine } from "../lib/branch-policy.js";
-import { ROOT, configureRepo, git as runGit, post, startPanel } from "../tools/panel-testkit.mjs";
+import { ROOT, configureRepo, git as runGit, post, startPanel, waitFor, waitForRow } from "../tools/panel-testkit.mjs";
+import { statePaths } from "../lib/paths.js";
 
 // Jobs reads this box's Hermes session store for counters; a suite about records must not read the developer's own.
 process.env.HERMES_HOME = mkdtempSync(path.join(os.tmpdir(), "wtgui-pipelines-home-"));
@@ -643,4 +644,125 @@ test("P0-4: a switch that cannot start its run is refused and the record is unch
   const onDisk = existsSync(bookFile) ? JSON.parse(readFileSync(bookFile, "utf8")) : { trees: {} };
   assert.equal(onDisk.trees[KEY(tree)], undefined);
   assert.equal((await cards()).find((c) => c.id === "in-tree").pipeline, null, "and the live card was not handed a record");
+});
+
+// ---- P0-5 (docs/pipelines-audit.md): the second cut path writes the tree's rung -----------------------------------
+// A real parent worktree on its own branch, and the real server on a throwaway store: the claim is about what
+// `POST /api/worktree/child` writes to disk, so a unit stub that calls the writer proves nothing.
+async function childCutFixture(t) {
+  const base = mkdtempSync(path.join(os.tmpdir(), "wtgui-pipelines-child-"));
+  const scanRoot = path.join(base, "repos");
+  const repo = path.join(scanRoot, "proj");
+  mkdirSync(repo, { recursive: true });
+  git(repo, ["init", "-q", "-b", "main"]);
+  configureRepo(repo);
+  writeFileSync(path.join(repo, "base.txt"), "base\n", "utf8");
+  git(repo, ["add", "."]);
+  git(repo, ["commit", "-q", "-m", "main: base"]);
+
+  const parentTree = path.join(repo, ".worktrees", "feat-parent");
+  git(repo, ["worktree", "add", "-q", "-b", "feat/parent", parentTree]);
+  writeFileSync(path.join(parentTree, "parent.txt"), "the parent's work\n", "utf8");
+  git(parentTree, ["add", "."]);
+  git(parentTree, ["commit", "-q", "-m", "parent: its own commit"]);
+
+  const panel = await startPanel({ config: { scanRoots: [scanRoot] } });
+  t.after(async () => {
+    await panel.stop();
+    rmSync(base, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+  });
+  const reload = await post(panel.base, "/api/reload", { body: {} });
+  assert.equal(reload.status, 200, `reload must succeed: ${reload.text.slice(0, 200)}`);
+  const parentRow = await waitForRow(panel.base, "proj", parentTree);
+  const cfg = JSON.parse(readFileSync(panel.configPath, "utf8"));
+  return { panel, parentRow, recordsFile: statePaths(cfg).pipelineRecordsFile };
+}
+
+test("P0-5: POST /api/worktree/child writes the child's local record, and a later switch keeps it", async (t) => {
+  const { panel, parentRow, recordsFile } = await childCutFixture(t);
+
+  const cut = await post(panel.base, "/api/worktree/child", { body: { project: "proj", path: parentRow.path } });
+  assert.equal(cut.status, 200, `the cut must answer 200: ${cut.text.slice(0, 400)}`);
+  const made = cut.json;
+  assert.equal(made.pipeline?.id, "local", "the cut answers with the rung it just wrote");
+  assert.equal(made.pipeline?.stage, "work");
+
+  // The book on disk, at the path statePaths() resolves for this sandbox — what a restart, a wake or a second panel
+  // reads, not the in-memory copy the route happened to hand back.
+  const book = JSON.parse(readFileSync(recordsFile, "utf8"));
+  const rec = book.trees[KEY(made.path)];
+  assert.ok(rec, `the child tree has a record: ${JSON.stringify(book.trees)}`);
+  assert.equal(rec.id, "local");
+  assert.equal(rec.stage, "work");
+  assert.equal(rec.history.length, 1);
+  assert.equal(rec.history[0].by, "cut", "§3's history starts at the cut, not at the first switch");
+  assert.equal(rec.history[0].why, "every tree is cut local");
+  assert.equal(rec.since, rec.history[0].at, "`since` is when the first rung began, which at the cut is the cut");
+
+  // A later switch keeps that entry: the route reads the same record and (with no turn start yet) writes nothing.
+  const switched = await post(panel.base, "/api/worktree/pipeline", { body: { path: made.path, id: "sefl-investigate" } });
+  assert.equal(switched.status, 501, switched.text);
+  const after = JSON.parse(readFileSync(recordsFile, "utf8"));
+  assert.deepEqual(after.trees[KEY(made.path)], rec, "the cut entry is exactly the record the switch read back");
+});
+
+test("P0-5: a cut whose pipeline record is refused still cuts, says so, and never claims the rung", async (t) => {
+  const { panel, parentRow, recordsFile } = await childCutFixture(t);
+
+  // A book that exists and cannot be parsed, the shape a kill mid-write leaves. 0195d75's `set` refuses to write over
+  // it; this route must pass that refusal on rather than replace the book or report a rung that is not there.
+  const truncated = `${JSON.stringify({ version: 1, trees: { "c:/a": { id: "github-force-merge", stage: "commit", since: "2026-11-01T00:00:00.000Z", history: [] } } }, null, 2)}\n`.slice(0, 47);
+  mkdirSync(path.dirname(recordsFile), { recursive: true });
+  writeFileSync(recordsFile, truncated, "utf8");
+
+  const cut = await post(panel.base, "/api/worktree/child", { body: { project: "proj", path: parentRow.path } });
+  assert.equal(cut.status, 200, `the tree exists, so the cut itself stands: ${cut.text.slice(0, 400)}`);
+  assert.equal(cut.json.ok, true);
+  assert.equal(cut.json.pipeline, null, "the answer never claims a rung the book refused to store");
+  assert.equal(readFileSync(recordsFile, "utf8"), truncated, "the unreadable book is left byte-for-byte, not replaced with an empty one");
+
+  // The refusal is in the cut's own log, not only in a corner of the record book.
+  const said = await waitFor(() => /(was not recorded as local|pipeline record was refused)/.test(panel.log()), {
+    timeoutMs: 5_000,
+    what: "the cut's log to say the rung was refused",
+    silent: true,
+  });
+  assert.equal(said, true, `the refusal is said where the cut reports:\n${panel.log().slice(-2_000)}`);
+});
+
+// ---- P0-6 (docs/pipelines-audit.md): a hole written with spaces is still a hole -----------------------------------
+test("P0-6: the five hole spellings are judged by the name inside the braces, padding included", () => {
+  const shape = (hole) => ({
+    id: "shapes",
+    kind: "investigation",
+    title: "shapes",
+    description: "a fixture",
+    stages: [{ id: "probe", title: "Probe", prompt: `Read ${hole} before you start.`, exit: { check: "clean" } }],
+    next: null,
+  });
+  // The audit's table, all five spellings: two are refused because the name is unknown, one is accepted because the
+  // name is known — with the padding that used to make the scanner blind to it — and the last two keep their answers.
+  const cases = [
+    { hole: "{{nope}}", name: "nope", accepted: false },
+    { hole: "{{ nope }}", name: "nope", accepted: false },
+    { hole: "{{ ticket }}", name: "ticket", accepted: true },
+    { hole: "{{TICKET}}", name: "TICKET", accepted: false },
+    { hole: "{{ticketId}}", name: "ticketId", accepted: false },
+  ];
+  for (const { hole, name, accepted } of cases) {
+    const prompt = `Read ${hole} before you start.`;
+    assert.deepEqual(promptPlaceholders(prompt), [name], `${hole} is scanned as the bare name ${name}`);
+    const errors = validatePipeline("shapes", shape(hole));
+    if (accepted) {
+      assert.deepEqual(errors, [], `${hole} is a known hole, so the definition is saved`);
+      assert.deepEqual(unknownPlaceholders(prompt), [], `${hole} is not unknown`);
+    } else {
+      assert.equal(errors.length, 1, `${hole} is refused: ${errors.join("; ")}`);
+      assert.match(errors[0], new RegExp(`uses unknown placeholder \\{\\{${name}\\}\\}`), `${hole} is refused by name`);
+    }
+  }
+  // A padded known placeholder resolves to its parameter, including the mixed-case name in the closed list.
+  assert.deepEqual(promptPlaceholders("{{ ticket }} and {{ lastSeen }} and {{tree}}"), ["ticket", "lastSeen", "tree"]);
+  assert.deepEqual(unknownPlaceholders("{{ ticket }} and {{ lastSeen }}"), []);
+  assert.deepEqual(validatePipeline("shapes", shape("{{ ticket }}")), []);
 });
