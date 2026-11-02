@@ -38,7 +38,7 @@ is `rev-parse`, `rev-list`, `merge-base`, `cherry`, `diff`, `status` and `log`.
 | Config line | Version, how many projects are being watched, the two main cadences, scan threads, bind host — and `refresh on screen only` when that refresh mode is on. |
 | Stream readout | `pool 1/3 · 3 conversations · 29 events · 2.4/s`: scan workers busy, how many conversations, and the event rate arriving over SSE. |
 | **NOT-RUNNING** | Steps through the agents that are not running and are waiting on you. See below. |
-| **✧ Assistant** | Opens the floating assistant panel (`A` or `Ctrl+Shift+A`). Its purple badge counts the open alerts; the `⧗` pill beside it counts the **spawn cards** waiting for a click, amber once the oldest has waited over two minutes. |
+| **✧ Assistant** | Opens the assistant panel beside the board (`A` or `Ctrl+Shift+A`) — a rail by default, and a floating window for an assistant whose own **Settings** says `floating`. Its purple badge counts the open alerts; the `⧗` pill beside it counts the **spawn cards** waiting for a click, amber once the oldest has waited over two minutes. |
 | **Collapse all** | Folds the whole tree — every folder, project, worktree row, card and turn. The button then reads **Expand all**. Same as `Ctrl+[` / `Ctrl+]`. |
 | **⚡ Aggressive** | Switches the assistant's aggressive profile on or off. Its pill reads `on`/`off`, so the state does not depend on colour. |
 | **Pause** | Freezes the page: closes the live stream, so nothing updates. The button reads **Resume**, which reconnects and resyncs. |

@@ -2234,6 +2234,9 @@ const server = createServer(async (req, res) => {
           // The ordered escalation list. Stored and inert: the route carries it because it is one field of the same
           // per-assistant file, and nothing in the wake path reads it yet.
           escalateTo: body.escalateTo,
+          // The frame that assistant's pane is drawn in, saved in the same file. The page reads it back from the
+          // state this answer carries and re-frames the open panel, so the switch needs no reload.
+          dock: body.dock,
         });
         return sendJson(res, 200, { ...out, assistant: assistant.state() });
       } catch (e) {

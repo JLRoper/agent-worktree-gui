@@ -2917,6 +2917,36 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
   overflow: hidden;
 }
 #assistant[hidden] { display: none; }
+/* The FLOAT: one assistant's own frame, and never the default. The rule above is the rail every reader has; this class
+   is written only when that assistant's `dock` setting is `floating` (`applyFrame` in assistant.js). `fixed`, not
+   sticky: it is a window OVER the board and takes no layout width, which is why the board's column widens while it is
+   on. Its rect is inline — the geometry has one authority, and the stylesheet owns only the chrome a window needs.
+   90 is the layer the model popup's own comment names for "the assistant float": over the board and the approvals
+   dock (45), under Settings and the banner layer (120). */
+#assistant.is-floating {
+  position: fixed; z-index: 90;
+  border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 18px 48px #000a;
+}
+/* The bar is the float's handle. It is not the rail's: a pinned column has nowhere to be dragged to, so its title row
+   stays a label and the buttons in it stay buttons. */
+#assistant.is-floating .as-bar { cursor: move; }
+#assistant.is-floating .as-bar button { cursor: pointer; }
+/* One grab, and in the float it is the corner opposite the bar: the same element the rail sizes itself on, moved to
+   where a window's resize corner is. */
+#assistant.is-floating .as-split {
+  left: auto; right: 0; top: auto; bottom: 0;
+  width: 16px; height: 16px; cursor: nwse-resize;
+  border-radius: 0 0 9px 0;
+}
+#assistant.is-floating .as-split::after {
+  content: ""; position: absolute; right: 3px; bottom: 3px; width: 7px; height: 7px;
+  border-right: 2px solid var(--dim); border-bottom: 2px solid var(--dim); border-radius: 0 0 2px 0;
+}
+/* A gesture owns the pointer: text under it must not be selected while the window is dragged or sized. */
+#assistant.is-moving { user-select: none; }
+#assistant.is-moving .as-bar { cursor: grabbing; }
+#assistant.is-moving .as-split { background: #3d6ea8; }
 /* The rail's rows never share its height with the transcript: they keep their natural height and the body takes
    what is left, at every width. */
 #assistant .as-bar, #assistant .as-tabs, #assistant .as-subtabs { flex: none; }

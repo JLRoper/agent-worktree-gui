@@ -18,6 +18,17 @@
   const DOCK_MAX = 640;
   const DOCK_SHARE = 0.6;
   const DOCK_DEFAULT = 480;
+  // ---- the frame's other mode: the float ----------------------------------------------------------
+  // Which one is on screen is the ASSISTANT's setting (`dock`, in that assistant's own settings file), not a panel
+  // switch: #2 can float while #1 stays docked, and the page re-frames on a tab change. What the float remembers is
+  // its rect, kept beside the rail's width rather than replacing it — switching back to the rail must not lose the
+  // width the reader dragged, and switching to the float must not lose the place they left it at.
+  const FLOAT_KEY = "wm.assistantFloat";
+  const FLOAT_MIN_W = 320;
+  const FLOAT_MIN_H = 320;
+  // Air kept between the float and every viewport edge, in client px. The float is laid out in the LAYOUT viewport
+  // (`documentElement.clientWidth/Height`, which already excludes the classic scrollbar) — see `viewportBox`.
+  const FLOAT_EDGE = 8;
   const SEEN_KEY = "wm.assistantSeenAt";
   // ---- the float's two rows: what it remembers, and how it is painted -----------------------------
   const VIEW_KEY = "wm.assistantView";
@@ -213,6 +224,25 @@
       /* not fatal */
     }
   }
+  // The float's rect, remembered per browser beside the rail's width. A record with any of the four numbers missing is
+  // not a rect: it reads as nothing remembered, and the float opens at its default place rather than at half a frame.
+  function readFloatRect() {
+    try {
+      const r = JSON.parse(localStorage.getItem(FLOAT_KEY) || "null");
+      if (!r || typeof r !== "object") return null;
+      if (!["x", "y", "w", "h"].every((k) => Number.isFinite(Number(r[k])))) return null;
+      return { x: Number(r.x), y: Number(r.y), w: Number(r.w), h: Number(r.h) };
+    } catch {
+      return null;
+    }
+  }
+  function writeFloatRect(r) {
+    try {
+      localStorage.setItem(FLOAT_KEY, JSON.stringify(r));
+    } catch {
+      /* not fatal */
+    }
+  }
   function seenAt() {
     try {
       return Number(localStorage.getItem(SEEN_KEY) || 0) || 0;
@@ -235,11 +265,13 @@
   state.assistantOpen = state.assistantOpen ?? readFlag(OPEN_KEY, false);
   state.assistantView = state.assistantView || readView();
   state.assistantSeenAt = state.assistantSeenAt ?? seenAt();
-  // The width the reader last dragged the rail to. Nothing else about the frame is remembered: it is docked, so
-  // there is no position to restore and no size but the column's width.
+  // The width the reader last dragged the rail to. Nothing else about the rail is remembered: it is docked, so there
+  // is no position to restore and no size but the column's width. The float has its own record, `assistantFloat`, and
+  // the two are kept apart on purpose — a mode switch is not a reason to lose either one.
   state.assistantWidth = state.assistantWidth ?? readDockWidth();
+  state.assistantFloat = state.assistantFloat ?? readFloatRect();
 
-  // ---- the rail's frame -----------------------------------------------------------------------
+  // ---- the frame: the docked rail and the floating window -------------------------------------
 
   // The width the rail is drawn at: the remembered one, clamped. The 60% cap is measured in the same layout px the
   // width is stored in, so a zoomed page cannot hand the rail more of the window than it would at 100% — and on a
@@ -258,7 +290,9 @@
     return clampDockWidth(state.assistantWidth, vw, zoomScale());
   }
 
-  // The rail's geometry, written here and nowhere else: its width, and the height of the window below the topbar.
+  // The rail's geometry: its width, and the height of the window below the topbar. It is ONE of the frame's two
+  // painters — `applyFrame` is the entry point that decides which one runs — and it is the default one: the rail is
+  // what a reader who never touches the setting keeps.
   // The topbar is MEASURED rather than assumed — it wraps to a second row on a narrow window — and the rail is
   // pinned under it with `position: sticky`, so the board scrolls while the rail stays put.
   function paintDock() {
@@ -276,6 +310,91 @@
     // the window is unaffected: this is a floor, not a height.
     const shell = el.parentElement;
     if (shell) shell.style.minHeight = cssPx(h, z);
+  }
+
+  // ---- which frame is on screen: the rail, or the float -------------------------------------------
+  //
+  // The frame is ONE ASSISTANT'S OWN setting, not the panel's: `state.assistant.dock` is the server's map of
+  // assistant id -> "docked" | "floating", read from that assistant's settings file. `docked` is the default and the
+  // absence of the key, so a panel that has never been touched draws exactly the rail it always did.
+  //
+  // The tab the reader is on decides whose frame is drawn. A list tab (Alerts, Watchdog, …) belongs to no session, so
+  // it falls back to the last session tab — the same fallback the Role pane and the intro boxes use — which keeps the
+  // frame still while the reader walks the lists.
+  const frameSessionId = () => (isAssistant(state.assistantView?.assistant) ? state.assistantView.assistant : lastSession);
+  const dockModeOf = (id) => ((state.assistant && state.assistant.dock ? state.assistant.dock[id] : "") === "floating" ? "floating" : "docked");
+  const floating = () => dockModeOf(frameSessionId()) === "floating";
+  // A remembered number, or the fallback for anything that is not one: a style length must never be `NaNpx`.
+  const finite = (v, fallback) => (Number.isFinite(Number(v)) ? Number(v) : fallback);
+
+  // The float's geometry: the rect the reader left it at, clamped to the window. A measured client rect is VISUAL px
+  // while a length written to `style` is LAYOUT px, so every length is divided by the page zoom (see `cssPx`); the box
+  // is the same LAYOUT viewport the dock measures its column against, so the two modes agree about where the edges are.
+  // The minimum is the float's own (320) rather than the rail's floor: a window may be narrower than the rail's band.
+  function placeFloat() {
+    const el = as$("assistant");
+    if (!el) return;
+    const { vw, vh } = viewportBox();
+    const z = zoomScale();
+    const r = state.assistantFloat || null;
+    const maxW = Math.max(FLOAT_MIN_W, vw - 2 * FLOAT_EDGE);
+    const maxH = Math.max(FLOAT_MIN_H, vh - 2 * FLOAT_EDGE);
+    const w = Math.max(FLOAT_MIN_W, Math.min(finite(r?.w, Math.round(vw * 0.42)), maxW));
+    const h = Math.max(FLOAT_MIN_H, Math.min(finite(r?.h, Math.round(vh * 0.8)), maxH));
+    const x = Math.max(FLOAT_EDGE, Math.min(finite(r?.x, vw - w - FLOAT_EDGE), vw - w - FLOAT_EDGE));
+    const y = Math.max(FLOAT_EDGE, Math.min(finite(r?.y, Math.round(vh * 0.1)), vh - h - FLOAT_EDGE));
+    el.style.left = cssPx(x, z);
+    el.style.top = cssPx(y, z);
+    el.style.width = cssPx(w, z);
+    el.style.height = cssPx(h, z);
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+  }
+
+  // The frame, written here and nowhere else. `docked` hands the geometry to the rail (the stylesheet's sticky column
+  // and `paintDock`); `floating` takes the pane out of the row and gives it the rect. Two modes, one entry point: a
+  // load, a tab change, a resize and the settings row all land here, so the geometry cannot outlive the setting that
+  // chose it. `force` re-lays a mode that has not changed (an open, a resize); the class and the titles are written
+  // either way, because they are what the stylesheet and the reader's cursor read.
+  let frameMode = null;
+  let frameId = null;
+  function applyFrame(force = false) {
+    const el = as$("assistant");
+    if (!el) return;
+    const id = frameSessionId();
+    const mode = dockModeOf(id) === "floating" ? "floating" : "docked";
+    const moved = mode !== frameMode || id !== frameId;
+    frameMode = mode;
+    frameId = id;
+    el.classList.toggle("is-floating", mode === "floating");
+    const split = as$("as-split");
+    if (split) split.title = mode === "floating" ? "drag to resize the floating assistant (320 px minimum)" : "drag to resize the assistant's column (340–640 px, at most 60% of the window)";
+    // The bar is the float's handle and nothing in the rail: a title says so where the cursor turns into a move.
+    const bar = el.querySelector(".as-bar");
+    if (bar) bar.title = mode === "floating" ? "drag to move the floating assistant" : "";
+    if (!moved && !force) return;
+    const shell = el.parentElement;
+    // A closed pane measures nothing: the class is what it opens with, and the geometry is written on the way in
+    // (`toggleAssistant` -> here, forced).
+    if (el.hidden) {
+      if (shell) shell.style.minHeight = "";
+      return;
+    }
+    if (mode === "floating") {
+      // The row is the board's again: the float is out of flow, so nothing may hold the rail's height for it.
+      if (shell) shell.style.minHeight = "";
+      placeFloat();
+    } else {
+      // The float's lengths must not survive into a sticky column: `left` on a sticky element is a sticky OFFSET, so
+      // a rail carrying the last float's x would sit a few hundred pixels in from its own edge — the frame disagreeing
+      // with the setting it was drawn from.
+      el.style.left = "";
+      el.style.right = "auto";
+      el.style.bottom = "auto";
+      paintDock();
+    }
+    // The pane's box just changed shape: the room goes to the open turn's console, not to the space above it.
+    queueSlackPaint();
   }
 
   // The box the rail is measured against: the LAYOUT viewport — `documentElement.clientWidth/Height`, which
@@ -389,7 +508,7 @@
     if (el) el.hidden = !state.assistantOpen;
     if (btn) btn.classList.toggle("is-on", state.assistantOpen);
     if (state.assistantOpen) {
-      paintDock();
+      applyFrame(true);
       state.assistantSeenAt = Date.now();
       markSeen();
       renderAssistant();
@@ -680,6 +799,9 @@
 
   function renderAssistant() {
     const a = state.assistant;
+    // Which frame this assistant is drawn in is a setting, and this is the one painter every path already calls: a
+    // save, a tab change and the first snapshot all land here, so the panel re-frames without a reload.
+    applyFrame();
     const mode = a?.settings?.autonomy || "draft";
     const modeEl = as$("as-mode");
     if (modeEl) {
@@ -1733,6 +1855,9 @@
     const first = id === FIRST_ASSISTANT;
     const rec = sessionById(id);
     const s = first ? a.settings : (a.assistantSettings || {})[id] || {};
+    // The frame this assistant's pane is drawn in, from the server's per-assistant map — not from `s`: it is one of
+    // the file's non-knob fields, so it is never part of the settings object a turn reads.
+    const dockMode = (a.dock || {})[id] === "floating" ? "floating" : "docked";
     const autonomy = a.autonomy || ["draft", "auto-safe", "auto"];
     const autonomyLabel = {
       draft: "draft only — nothing is sent without my click",
@@ -1769,6 +1894,20 @@
         sends a reply the assistant itself wrote with a TO line; auto also sends anything a standing rule drafted.
         Creating a worktree has its own switch — nothing runs until the card is clicked. An approval is never answered
         from here at any setting.</div>
+      </div>
+      <div class="as-group">
+        <h4>How this assistant's pane is drawn</h4>
+        <div class="as-help">This is THIS assistant's frame, not the panel's: another assistant can float while this
+        one stays docked, and the panel re-frames when you switch tabs. <b>docked</b> is the rail beside the board;
+        <b>floating</b> is a window over it, at the size and place you last left it. The switch takes effect at once —
+        nothing reloads — and it is saved in this assistant's own settings file with the rest of its fields.</div>
+        <div class="as-line">
+          <label title="which frame THIS assistant's pane is drawn in — saved in this assistant's own settings file, and never applied to another assistant">pane <select data-as-dock="${esc(id)}" title="docked: the rail beside the board · floating: a window over the board, which you can move by its title row and size from its corner">${(a.dockModes || ["docked", "floating"])
+            .map((v) => `<option value="${esc(v)}"${dockMode === v ? " selected" : ""}>${v === "docked" ? "docked — a rail beside the board" : "floating — a window over the board"}</option>`)
+            .join("")}</select></label>
+          <span class="as-hint">switches as soon as you pick it</span>
+          <span class="as-err" id="as-dock-err-${esc(n)}"></span>
+        </div>
       </div>
       <div class="as-group">
         <h4>Its wake budget and quiet windows</h4>
@@ -2841,6 +2980,23 @@
       }
       return;
     }
+    if (el.dataset.asDock) {
+      // The FRAME: one assistant's own field, saved through the profile route beside its prompt and its escalation
+      // list — the same per-assistant file, not assistant.json and not the panel. The answer carries the whole state,
+      // so the panel re-frames through `applyFrame` before this repaint draws the row's new value.
+      const own = el.dataset.asDock;
+      const n = String(own).replace(/^assistant-/, "");
+      try {
+        await asPost("/api/assistant/profile", { assistantId: own, dock: el.value });
+        setErr(`as-dock-err-${n}`, "");
+      } catch (err) {
+        setErr(`as-dock-err-${n}`, err.message);
+      }
+      // Either way the pane is repainted from the stored value: a failed save puts the select back rather than
+      // leaving the control claiming a mode the file never took.
+      renderAssistantSettings(own, true);
+      return;
+    }
     if (el.dataset.asSet) {
       const key = el.dataset.asSet;
       // WHICH assistant this knob belongs to: #1's pane carries no id and posts exactly as it always has; a second
@@ -2969,28 +3125,36 @@
     void loadMessages(true);
   }, MSG_REFRESH_MS);
 
-  // ---- the rail's one grab: its left edge ------------------------------------------------------
-
+  // ---- the frame's gestures: the rail's edge, and the float's bar and corner ---------------------
+  //
+  // One listener set for both modes, because they are one thing — the reader sizing and placing the pane they are
+  // reading. Which gesture a press starts is decided by the FRAME the pane is in at that moment, so a setting that
+  // changed under the pointer cannot leave the wrong drag half-finished.
   (() => {
     const el = as$("assistant");
     const split = as$("as-split");
+    const bar = el?.querySelector(".as-bar");
     if (!el || !split) return;
 
     // A press that never travels this far is a click, not a drag: clicking the edge is what readers do to focus
-    // something, and it must leave the width exactly as it was.
+    // something, and it must leave the frame exactly as it was.
     const DRAG_THRESHOLD = 3;
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
     let press = null;
 
-    const onDown = (e) => {
+    // `kind` is the gesture, not the element: the rail has one (its width) and the float has two (its bar and its
+    // corner). Every length below starts as a CLIENT measurement — the unit a pointer arrives in — and is written back
+    // through `cssPx`, because a style length is a layout one the page zoom scales.
+    const onDown = (e, kind, captureEl) => {
       if (e.button !== 0) return;
-      // The width the gesture starts from, and the pointer it starts at. Nothing is written until the press
-      // actually travels.
-      press = { px: e.clientX, w: dockWidth(), moved: false };
-      // Hold the pointer for the length of the gesture: without capture it leaves the rail (and the window) and
-      // the moves stop arriving, so a release out there never ends the drag we started in here.
+      // The bar is a row of buttons too: a press on one of them is that button's, not the pane's.
+      if (kind === "float-move" && e.target.closest("button,input,select,textarea,a")) return;
+      press = { kind, px: e.clientX, py: e.clientY, moved: false, z: zoomScale(), box: el.getBoundingClientRect(), w: dockWidth() };
+      // Hold the pointer for the length of the gesture: without capture it leaves the pane (and the window) and the
+      // moves stop arriving, so a release out there never ends the drag we started in here.
       try {
-        split.setPointerCapture(e.pointerId);
+        captureEl.setPointerCapture(e.pointerId);
       } catch {
         /* older pointer stacks: the window listeners below still carry the gesture */
       }
@@ -2999,36 +3163,77 @@
 
     const onMove = (e) => {
       if (!press) return;
-      const dx = e.clientX - press.px;
-      if (!press.moved) {
-        if (Math.abs(dx) < DRAG_THRESHOLD) return;
-        press.moved = true;
-        el.classList.add("is-splitting");
-        // Growing the rail hands the room to a turn's console, so a drag with everything folded opens the newest
+      const d = press;
+      const dx = e.clientX - d.px;
+      const dy = e.clientY - d.py;
+      if (!d.moved) {
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        d.moved = true;
+        el.classList.add(d.kind === "dock-width" ? "is-splitting" : "is-moving");
+        // Growing the pane hands the room to a turn's console, so a drag with everything folded opens the newest
         // turn first: a folded turn has no console on the page for the room to land in.
-        openNewestTurn();
+        if (d.kind !== "float-move") openNewestTurn();
       }
-      // The pointer travels in client px; the width is a layout length, so the page zoom divides it. Dragging the
-      // edge LEFT widens the rail, which is the direction the pointer is moving.
-      const z = zoomScale();
-      state.assistantWidth = press.w - dx / z;
-      paintDock();
+      const { vw, vh } = viewportBox();
+      const z = d.z || 1;
+      // The rail: the pointer travels in client px and the width is a layout length, so the zoom divides it. Dragging
+      // the edge LEFT widens the rail, which is the direction the pointer is moving.
+      if (d.kind === "dock-width") {
+        state.assistantWidth = d.w - dx / z;
+        paintDock();
+        queueSlackPaint();
+        return;
+      }
+      // The float's bar: keep the whole window inside the layout viewport. A frame already outside the box (a rect
+      // remembered on a bigger screen) is left where it is until the drag pulls it back in — snapping it to the edge
+      // here would jump the window on the grab itself — and the clamp's overshoot is absorbed into the gesture's own
+      // origin, or the pointer has to walk it back before the window stirs.
+      if (d.kind === "float-move") {
+        const w = Math.min(d.box.width, vw - 2 * FLOAT_EDGE);
+        const h = Math.min(d.box.height, vh - 2 * FLOAT_EDGE);
+        const maxX = Math.max(FLOAT_EDGE, vw - w - FLOAT_EDGE);
+        const maxY = Math.max(FLOAT_EDGE, vh - h - FLOAT_EDGE);
+        const x = clamp(d.box.left + dx, Math.min(FLOAT_EDGE, d.box.left), Math.max(maxX, d.box.left));
+        const y = clamp(d.box.top + dy, Math.min(FLOAT_EDGE, d.box.top), Math.max(maxY, d.box.top));
+        el.style.left = cssPx(x, z);
+        el.style.top = cssPx(y, z);
+        el.style.right = "auto";
+        el.style.bottom = "auto";
+        d.px += d.box.left + dx - x;
+        d.py += d.box.top + dy - y;
+        return;
+      }
+      // The float's bottom-right corner: the left and top edges stay where they are, and neither dimension is ever
+      // asked for LESS than the frame already has — a frame taller than the room left would otherwise snap down on
+      // the first pixel of the drag.
+      const w = clamp(d.box.width + dx, FLOAT_MIN_W, Math.max(d.box.width, vw - FLOAT_EDGE - d.box.left));
+      const h = clamp(d.box.height + dy, FLOAT_MIN_H, Math.max(d.box.height, vh - FLOAT_EDGE - d.box.top));
+      el.style.width = cssPx(w, z);
+      el.style.height = cssPx(h, z);
       queueSlackPaint();
     };
 
     const onUp = () => {
       if (!press) return;
-      const moved = press.moved;
+      const d = press;
       press = null;
-      el.classList.remove("is-splitting");
-      if (!moved) return; // a click: nothing was resized, so nothing is remembered
-      // Store what the clamp actually drew, not the raw pointer position: a drag past the cap must not remember a
-      // width the rail can never have.
-      state.assistantWidth = dockWidth();
-      writeDockWidth(state.assistantWidth);
+      el.classList.remove("is-splitting", "is-moving");
+      if (!d.moved) return; // a click: nothing was dragged, so nothing is remembered
+      if (d.kind === "dock-width") {
+        // Store what the clamp actually drew, not the raw pointer position: a drag past the cap must not remember a
+        // width the rail can never have.
+        state.assistantWidth = dockWidth();
+        writeDockWidth(state.assistantWidth);
+        return;
+      }
+      // The float is remembered where the reader left it: the drawn rect, measured back after the clamp.
+      const r = el.getBoundingClientRect();
+      state.assistantFloat = { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+      writeFloatRect(state.assistantFloat);
     };
 
-    split.addEventListener("pointerdown", onDown);
+    split.addEventListener("pointerdown", (e) => onDown(e, floating() ? "float-size" : "dock-width", split));
+    if (bar) bar.addEventListener("pointerdown", (e) => { if (floating()) onDown(e, "float-move", bar); });
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
@@ -3050,16 +3255,16 @@
   // it, and a topbar that wrapped to a second row moves the rail's top edge down with it.
   window.addEventListener("resize", () => {
     if (!state.assistantOpen) return;
-    paintDock();
-    // The rail just changed height: the room goes to the open turn's console, not to the spacer above it.
+    applyFrame(true);
+    // The pane just changed height: the room goes to the open turn's console, not to the spacer above it.
     queueSlackPaint();
   });
 
   // The topbar's height is not a constant — it wraps — and the rail is pinned under it. Follow it rather than
-  // assume it, and only while the rail is on screen.
+  // assume it, and only while the pane is on screen.
   if (typeof ResizeObserver === "function") {
     const bar = document.querySelector(".topbar");
-    if (bar) new ResizeObserver(() => { if (state.assistantOpen) paintDock(); }).observe(bar);
+    if (bar) new ResizeObserver(() => { if (state.assistantOpen) applyFrame(true); }).observe(bar);
   }
 
   // ---- keys ------------------------------------------------------------------------------------
@@ -3107,13 +3312,13 @@
   // ---- boot ------------------------------------------------------------------------------------
 
   // app.js's boot fills state from the first snapshot and connects the stream; this restores the frame in the
-  // same breath, so a reload opens on the panel the reader left open.
+  // same breath, so a reload opens on the panel the reader left open — in the mode that assistant's file asked for.
   (function restoreFrame() {
     const el = as$("assistant");
     if (!el) return;
     el.hidden = !state.assistantOpen;
     as$("btn-assistant")?.classList.toggle("is-on", state.assistantOpen);
-    paintDock();
+    applyFrame(true);
     paintAssistantBadge();
     paintAggressive();
     if (state.assistantOpen) renderAssistant();

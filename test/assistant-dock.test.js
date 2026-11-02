@@ -9,11 +9,13 @@ const css = cssRaw.replace(/\/\*[\s\S]*?\*\//g, ""); // the prose explains the r
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 const code = assistant.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 
-// The assistant is a docked column, not a floating window: it takes layout width beside the board, so there is no
-// overlay left to cover anything with. These guard the three properties that makes true — the frame, the chrome
-// that went with the window, and the one number it remembers — plus the clamp, which is the only arithmetic in it.
+// The assistant is DOCKED BY DEFAULT: a column that takes layout width beside the board, so there is no overlay left
+// to cover anything with. A floating window is an opt-in mode of one assistant (`dock` in its own settings file,
+// `#assistant.is-floating` in the stylesheet) and never the rule the page boots with. These guard what makes that
+// true — the frame, the chrome that went with the old always-floating window, and the one number the rail remembers
+// — plus the clamp, which is the only arithmetic in it.
 
-test("the assistant is a docked column, not a floating window", () => {
+test("the assistant is docked by default, and the float is a class the setting turns on", () => {
   // `#assistant`, not `.assistant`: the rule is scoped to the rail's id because the chart's owner cell used to carry
   // `class="assistant"` and inherited the whole dock — a 480px sticky flex column in the middle of the table.
   const rule = css.match(/\n#assistant \{([^}]*)\}/);
@@ -23,6 +25,12 @@ test("the assistant is a docked column, not a floating window", () => {
   assert.match(rule[1], /flex:\s*0 0 auto/, "the rail must take layout width, not overlay the board");
   assert.doesNotMatch(rule[1], /min-width|max-width/,
     "a CSS cap smaller than the JS clamp makes the rail stop while the pointer keeps moving — the measured bug");
+  // The other mode: fixed, and reachable only through the class `applyFrame` writes from an assistant's setting. A
+  // reader who never touched the row never gets this rule, which is what "docked by default" has to mean.
+  const floatRule = css.match(/\n#assistant\.is-floating \{([^}]*)\}/);
+  assert.ok(floatRule, "the floating mode has no rule");
+  assert.match(floatRule[1], /position:\s*fixed/, "the float is the window");
+  assert.match(assistant, /el\.classList\.toggle\("is-floating", mode === "floating"\)/, "and the setting is what puts it there");
   // The board is laid out BESIDE it, in one row, and the row wraps so the footer can be its last line.
   assert.match(css, /\.shell \{ display: flex; flex-wrap: wrap; align-items: flex-start; \}/);
   assert.match(css, /\.shell > main \{ flex: 1 1 0; min-width: 0; \}/,
@@ -35,7 +43,7 @@ test("the assistant is a docked column, not a floating window", () => {
   assert.ok(shell.indexOf("<main>") < shell.indexOf('<aside id="assistant"'), "the board comes first, the rail after it");
 });
 
-test("the window chrome is gone: no drag head, no grips, no maximize, no pin", () => {
+test("the always-floating window's chrome is gone: no second drag head, no grips, no maximize, no pin", () => {
   assert.doesNotMatch(html, /id="as-drag"/, "the drag head is gone");
   assert.doesNotMatch(html, /as-grips|data-dir=/, "the eight grabs are gone");
   assert.doesNotMatch(html, /btn-as-max|btn-as-pin/, "maximize and pin are gone");
