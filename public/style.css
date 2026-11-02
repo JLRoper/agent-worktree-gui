@@ -331,29 +331,53 @@ button.primary:hover { background: #24466a; }
 .settings-presets button:hover { color: var(--text); border-color: #3b4757; }
 .settings-presets button.on { border-color: var(--q-line); color: var(--q-head); background: var(--surface); }
 .settings-preview.bad { border-color: #57262a; color: #ff9c94; }
-/* ---- the Skills tab: a read-only inventory ---------------------------------------------------------------
-   One heading per source (label, what kind of place it is, how many skills it holds), one line under it with the
-   path and — for a junction — the target it points at, then one row per skill. The rows are direct children of the
-   panel on purpose (the settings search filters exactly those), and each skill's second line is a
-   `.settings-preview`, which is the class the search already treats as belonging to the row above it. Nothing in
-   here is a control: a skill is a file, and this window only reads it. */
-.skills-source { margin-top: 14px; gap: 6px; }
+/* ---- the Skills tab: a read-only inventory, grouped source -> category ------------------------------------
+   Two levels of folding: a source's heading (label, what kind of place it is, how many skills it holds) with the
+   path it reads and — for a junction — the target it points at, then one heading per category the skill's own
+   directory gives it, then a row per skill. The rows are no longer direct children of the panel (the settings
+   search's flat walk could only hide a whole pack at once), so the tab paints its own filter and its own counts:
+   every heading's number is the rows under it, filtered or not. Each skill's second line stays a
+   `.settings-preview`, the class the search treats as belonging to the row above it. The only controls in here are
+   the fold headings themselves — a skill is a file, and this window only reads it. */
+.skills-srcgroup { margin-top: 16px; }
+.skills-fold { display: flex; align-items: center; gap: 6px; width: 100%; margin: 0; padding: 1px 0; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; user-select: none; }
+.skills-fold:hover .skills-source-name, .skills-fold:hover .skills-cat-name { color: #e6e9ef; }
+.skills-fold:focus-visible { outline: 1px solid #3b4757; outline-offset: 1px; }
+/* The caret is drawn from the state the element already carries, so the markup holds no glyph that can go stale. */
+.skills-caret { flex: none; width: 9px; font-size: 9px; line-height: 1; color: #46505f; }
+.skills-caret::before { content: "▸"; }
+.skills-fold[aria-expanded="true"] .skills-caret::before { content: "▾"; }
+/* A source starts open and its heading is the loudest thing in the group; its categories indent under it, and the
+   quiet rule down their left edge is what says "these belong to the heading above". */
 .skills-source.empty { color: var(--dim); }
 .skills-source-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px var(--mono); letter-spacing: .03em; text-transform: uppercase; color: var(--text); }
 .skills-source-count { flex: none; font-size: 10.5px; color: var(--dim); }
 .skills-source-path { margin-top: 3px; padding: 3px 6px; border-style: solid; border-color: var(--line); border-radius: 5px; font-size: 10px; line-height: 1.35; color: var(--dimmer); overflow-wrap: anywhere; }
 .skills-source-path.bad { border-color: #57262a; color: #ff9c94; }
+.skills-srcbody { margin-top: 4px; }
+.skills-srcbody[hidden], .skills-catbody[hidden] { display: none; }
+.skills-catgroup { margin-top: 6px; }
+.skills-cathead { padding-left: 10px; }
+.skills-cat-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 10.5px var(--mono); letter-spacing: .02em; color: #9fb6cf; }
+.skills-cat-count { flex: none; font-size: 10px; color: var(--dimmer); }
+.skills-catbody { margin: 2px 0 0 10px; padding-left: 9px; border-left: 1px solid #1c2230; }
+.skills-empty { margin: 2px 0 0 10px; font: 10.5px var(--mono); color: var(--dimmer); }
 .skills-skill { margin-top: 7px; gap: 5px; align-items: baseline; }
 .skills-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text); }
 .skills-chip { flex: none; padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; font: 9px/1.6 var(--mono); letter-spacing: .01em; color: var(--dim); }
 .skills-chip.kind { color: var(--dimmer); text-transform: uppercase; }
-.skills-chip.cat { color: #9fb6cf; border-color: #2b3a4b; }
 .skills-chip.link { color: #8fb8ea; border-color: #2c4a6e; }
 .skills-chip.unsent { color: #ff9c94; border-color: #57262a; }
+/* The gateway did not answer: the banner at the top of the tab is the sentence, and this is the whole of what a row
+   says about it — a mark, not the word "unverified" repeated down the list. */
+.skills-mark { flex: none; font: 9px/1 var(--mono); color: #46505f; cursor: help; }
 .skills-detail { margin-top: 1px; padding: 0 0 0 2px; border: 0; display: block; font-size: 10px; line-height: 1.4; }
 .skills-desc, .skills-path { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .skills-desc { color: var(--dim); }
 .skills-path { color: #46505f; }
+/* The gateway's answer is ONE line at the top of the tab, whatever it is: a failure must not push the inventory
+   down the panel with a wrapped paragraph. The whole sentence stays in the tooltip and in textContent. */
+#skills-gateway { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hidden { display: none; }
 
 /* The board is the page's ONE horizontal scroll container. It is also the element whose box is the chart's width, so

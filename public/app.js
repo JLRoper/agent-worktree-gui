@@ -17603,27 +17603,42 @@ function settingsRowText(row) {
   return parts.join(" ").toLowerCase();
 }
 
+// One flat stretch of a panel: a row answers or it does not, and a preview strip (or a preset row) belongs to the
+// row above it. Extracted so a panel with its own grouping can hand its rows through the same rule.
+function paintSettingsRows(nodes, query, matched) {
+  let hits = 0;
+  let follows = true;
+  for (const child of nodes) {
+    if (child.classList && child.classList.contains("settings-row")) {
+      const hit = !query || settingsRowText(child).includes(query);
+      child.classList.toggle("search-hidden", !hit);
+      follows = hit;
+      if (hit) {
+        hits += 1;
+        if (query) matched.push(child);
+      }
+    } else if (child.classList) {
+      child.classList.toggle("search-hidden", Boolean(query) && !follows);
+    }
+  }
+  return hits;
+}
+
 function paintSettingsSearch() {
   const box = document.getElementById(SETTINGS_SEARCH_ID);
   const query = String((box && box.value) || "").trim().toLowerCase();
   const matched = [];
   const counts = new Map(); // per tab key: how many of ITS rows answer — the global answer, tab by tab
   for (const panel of settingsTabPanels()) {
-    let hits = 0;
-    let follows = true; // a preview strip or a preset row belongs to the row above it
-    for (const child of [...panel.children]) {
-      if (child.classList && child.classList.contains("settings-row")) {
-        const hit = !query || settingsRowText(child).includes(query);
-        child.classList.toggle("search-hidden", !hit);
-        follows = hit;
-        if (hit) {
-          hits += 1;
-          if (query) matched.push(child);
-        }
-      } else if (child.classList) {
-        child.classList.toggle("search-hidden", Boolean(query) && !follows);
-      }
-    }
+    // The Skills panel is grouped two levels deep and paints its own rows (and its own heading counts); every other
+    // tab is the flat list this loop has always walked. Either way the count is the rows that answer, per tab.
+    // The key is written as a string rather than SKILLS_PANEL_ID because test/settings-tabs.test.js slices THIS
+    // region out of app.js and runs it without the Skills tab's constants: a bare identifier here is a
+    // ReferenceError in that harness, not a wrong answer.
+    const hits =
+      panel.dataset.settingsGroup === "skills"
+        ? paintSkillsSearch(query, matched)
+        : paintSettingsRows([...panel.children], query, matched);
     counts.set(panel.dataset.settingsGroup, hits);
   }
   paintSettingsTabCounts(counts, query);
@@ -17708,11 +17723,13 @@ function initSettingsSearch() {
 // ---- the Skills tab -------------------------------------------------------------------------------------
 // What an agent started from this panel can actually load, and where each of those skills came from. This tab is an
 // INVENTORY, so every row is read-only — there is no switch, no editor and no delete, because a skill is a file in
-// somebody's repository and a settings window is the wrong place to rewrite one. The shape is the answer to four
+// somebody's repository and a settings window is the wrong place to rewrite one. The shape is the answer to five
 // facts that were each a trap:
 //
 //   * a skill has FOUR fields a reader needs and one of them is not a word: name, description, category, and the
-//     PATH it was read from — the path is how "same name, different file" is settled by hand.
+//     PATH it was read from — the path is how "same name, different file" is settled by hand. The path is DRAWN
+//     relative to the source that holds it (the base the heading above prints) and the whole absolute path rides in
+//     the row's tooltip, so a long row reads as a skill instead of as a drive letter.
 //   * a junctioned directory (`%LOCALAPPDATA%\hermes\skills\sefl` -> the team's own repo) is its OWN source. A
 //     naive walk lists those skills under the profile as well, with nothing to say which copy a row is, so the
 //     server hands over a source per link — with the target — and dedupes by realpath. The row says `link` when
@@ -17720,12 +17737,23 @@ function initSettingsSearch() {
 //   * the disk is only half the truth: the gateway's `GET /v1/skills` is what a run is actually SERVED (shadowing,
 //     disabled names and platform gates resolved). A row the gateway does not serve says so; a name it serves that
 //     no root carries — a plugin's `plugin:skill` — is its own row under Gateway; and a gateway that cannot answer
-//     leaves every row UNVERIFIED rather than pretending either way.
-//   * the settings search is global, and it filters the DIRECT CHILDREN of a panel: a pack of rows hidden inside one
-//     container would hide or show as one block on any query. So every row and every source heading is a direct
-//     child of the panel, and the description+path line under each row is a `.settings-preview` — the class the
-//     search already treats as belonging to the row above it.
+//     leaves every row UNKNOWN — one banner says why, and each row carries a quiet mark instead of the same word
+//     stamped onto every skill in the list.
+//   * the list has TWO levels of grouping — the source it was read from, then the category the skill's own
+//     directory gives it — because that is the tree on disk and a flat list of ninety rows hides it. Both levels
+//     fold, the count on every heading is the number of rows under it, and the fold the reader chooses is
+//     remembered in this browser under `wtgui.skillsGroups`. A source starts OPEN; its categories start open only
+//     while the source has six or fewer of them, so a team repo's twenty-five categories arrive folded.
+//   * the settings search is global and it filters the DIRECT CHILDREN of a panel. A grouped list therefore paints
+//     its own filter (`paintSkillsSearch`) and hands the same per-tab count back: a category that answers nothing
+//     and a source that answers nothing are hidden, every heading's count is repainted against the filtered set,
+//     and a group that DOES answer is opened for the duration of the query — a match must never be hidden behind a
+//     fold the reader closed earlier.
 const SKILLS_PANEL_ID = "settings-panel-skills";
+const SKILLS_GROUPS_KEY = "wtgui.skillsGroups";
+// A source with more category groups than this starts with them CLOSED: a 25-category team repo is a wall of rows
+// to scroll past before the next source, while six still reads as one screen.
+const SKILLS_OPEN_CATEGORIES = 6;
 const SKILLS_KIND_LABEL = {
   profile: "profile",
   link: "link",
@@ -17742,52 +17770,242 @@ let skillsLoading = null;
 const skillsKind = (source) => SKILLS_KIND_LABEL[source.kind] || source.kind || "root";
 const skillsMany = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
-// One skill: the identity line (name, source, category, link, whether the gateway serves it) and the detail line
-// under it (description, then the path). Both lines carry the same words in their `title`, so a search for a word
-// in a description finds the row even though the description is drawn on the line below it.
+// ---- the fold state: one record in this browser, per source and per category ------------------------------
+// `{ "<source key>": { open, cats: { "<category or empty>": open } } }`. A key that is absent means the reader
+// never decided it, so the defaults below answer — a skill added tomorrow opens or closes with its own source
+// instead of being stranded in whatever the last read happened to hold. A storage that cannot be read (private
+// mode, a value written by an older build) is an empty record, never a crash.
+function readSkillsFolds() {
+  try {
+    const raw = localStorage.getItem(SKILLS_GROUPS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSkillsFolds(folds) {
+  try {
+    localStorage.setItem(SKILLS_GROUPS_KEY, JSON.stringify(folds));
+  } catch {
+    /* private mode: the fold just will not persist */
+  }
+}
+
+const skillsFoldRecord = (folds, key) => (folds[key] && typeof folds[key] === "object" ? folds[key] : null);
+
+// A source starts OPEN — it is the top level, and a reader looking for a source wants to see what it holds.
+function skillsSourceOpen(folds, key) {
+  const rec = skillsFoldRecord(folds, key);
+  return !rec || rec.open !== false;
+}
+
+// Six or fewer category groups → open; more → closed. `count` is the number of groups the source will DRAW (the
+// uncategorised bucket is one of them), because the threshold is about how much fits on a screen, not about how
+// the directories happen to be named.
+function skillsCategoryOpen(folds, key, category, count) {
+  const rec = skillsFoldRecord(folds, key);
+  const chosen = rec && rec.cats ? rec.cats[category || ""] : undefined;
+  if (typeof chosen === "boolean") return chosen;
+  return count <= SKILLS_OPEN_CATEGORIES;
+}
+
+function setSkillsFold(folds, key, category, open) {
+  const rec = { ...(skillsFoldRecord(folds, key) || {}) };
+  if (category === null) rec.open = open;
+  else rec.cats = { ...(rec.cats || {}), [category]: open };
+  folds[key] = rec;
+  saveSkillsFolds(folds);
+}
+
+const skillsFoldTitle = (open, label) => `${open ? "collapse" : "expand"} ${label}`;
+
+// The whole of a group's open state is these two writes: the attribute the caret and a screen reader read, and the
+// body's own `hidden`. Nothing else is stored here, so the search can open a group for the duration of a query
+// without touching what the reader chose.
+function applySkillsFold(head, body, open) {
+  if (head) {
+    head.setAttribute("aria-expanded", String(open));
+    if (head.dataset.skillsFoldLabel) head.title = skillsFoldTitle(open, head.dataset.skillsFoldLabel);
+  }
+  if (body) body.hidden = !open;
+}
+
+// ---- grouping -------------------------------------------------------------------------------------------
+// The rows of one source, split by the category their own directory gives them ("" is the bucket for skills that
+// sit at the top of the source; a gateway row keeps whatever category the gateway answered). The uncategorised
+// bucket comes first, then categories A→Z case-insensitively, and each bucket is name-sorted the same way, so the
+// same disk always reads the same list.
+function skillsByName(rows) {
+  return [...rows].sort(
+    (a, b) =>
+      String(a.name || "").toLowerCase().localeCompare(String(b.name || "").toLowerCase()) ||
+      String(a.name || "").localeCompare(String(b.name || "")),
+  );
+}
+
+function skillsCategories(rows) {
+  const buckets = new Map();
+  for (const row of rows) {
+    const key = row.category || "";
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(row);
+  }
+  return [...buckets.entries()]
+    .sort(([a], [b]) => {
+      if (a === "" || b === "") return a === b ? 0 : a === "" ? -1 : 1;
+      return a.toLowerCase().localeCompare(b.toLowerCase()) || a.localeCompare(b);
+    })
+    .map(([key, list]) => ({ key, label: key || "(no category)", rows: skillsByName(list) }));
+}
+
+// One skill: the identity line (name, the link and gateway marks) and the detail line under it (description, then
+// the path RELATIVE to the source it came from). Both lines carry the same words in their `title`, so a search for
+// a word in a description finds the row even though the description is drawn on the line below it — and that
+// tooltip carries the whole absolute path, which is what settles "same name, different file" by hand.
 function skillsRowHtml(skill) {
-  const where = skill.path || "no SKILL.md — the gateway serves this name and no root this panel reads carries it";
-  const title = [skill.description || "(no description)", where, `source: ${skill.sourceLabel || skill.source}`]
+  const absolute = skill.path || "";
+  const where = skill.rel || absolute || "no SKILL.md — the gateway serves this name and no root this panel reads carries it";
+  const title = [
+    skill.description || "(no description)",
+    absolute ? `path: ${absolute}` : where,
+    `source: ${skill.sourceLabel || skill.source}`,
+  ]
     .concat(skill.category ? [`category: ${skill.category}`] : [])
     .join(" · ");
   const chips = [];
-  if (skill.sourceLabel) chips.push(`<span class="skills-chip src">${esc(skill.sourceLabel)}</span>`);
-  if (skill.category) chips.push(`<span class="skills-chip cat" title="category ${esc(skill.category)}">${esc(skill.category)}</span>`);
-  if (skill.isLink) chips.push(`<span class="skills-chip link" title="reached through a link — the source above names its target">link</span>`);
+  if (skill.isLink) {
+    chips.push(`<span class="skills-chip link" title="reached through a link — the source above names its target">link</span>`);
+  }
   if (skill.served === false) {
     chips.push(
       `<span class="skills-chip unsent" title="the gateway does not serve this name: shadowed by a higher-precedence copy, disabled in the profile, gated to another platform, or quarantined by the project scan">not served</span>`,
     );
   }
+  // The gateway did not answer: one quiet mark per row, and the ONE banner at the top of the tab explains it. The
+  // word "unverified" is deliberately not repeated down the list — a row that cannot be judged must not out-shout
+  // the rows that can.
+  const unknown =
+    skill.served === null
+      ? `<span class="skills-mark" data-skills-mark="unknown" aria-hidden="true" title="the gateway did not answer, so whether this skill is served is unknown — the line at the top of this tab says why">?</span>`
+      : "";
+  const attrs =
+    `data-skills-block="1" data-skill="${esc(skill.name)}" data-skills-source="${esc(skill.source)}" data-skills-cat="${esc(skill.category || "")}"`;
   return (
-    `<div class="settings-row skills-skill" data-skills-block="1" data-skill="${esc(skill.name)}" data-skills-source="${esc(skill.source)}" title="${esc(title)}">` +
-    `<span class="skills-name">${esc(skill.name)}</span>${chips.join("")}</div>` +
-    `<div class="settings-preview mono skills-detail" data-skills-block="1" data-skill="${esc(skill.name)}" data-skills-source="${esc(skill.source)}" title="${esc(title)}">` +
+    `<div class="settings-row skills-skill" ${attrs} title="${esc(title)}">` +
+    `<span class="skills-name">${esc(skill.name)}</span>${chips.join("")}${unknown}</div>` +
+    `<div class="settings-preview mono skills-detail" ${attrs} title="${esc(title)}">` +
     `<span class="skills-desc">${esc(skill.description || "(no description)")}</span>` +
-    `<span class="skills-path">${esc(where)}</span></div>`
+    `<span class="skills-path" title="${esc(absolute || title)}">${esc(where)}</span></div>`
   );
 }
 
-// One source: its own heading (label, kind, count) and the line under it — the path it reads, the target when it is
-// a link, or the reason it holds nothing. An unreadable source is a heading with a reason, never a silent gap.
-function skillsSourceHtml(source, rows) {
-  const count = rows.length;
+// One category inside a source: its own foldable heading and the skills under it.
+function skillsCategoryHtml(source, cat, folds, count) {
+  const open = skillsCategoryOpen(folds, source.key, cat.key, count);
+  const label = `${cat.label} — ${skillsMany(cat.rows.length, "skill", "skills")}`;
+  return (
+    `<div class="skills-catgroup" data-skills-cat-group="${esc(cat.key)}">` +
+    `<button type="button" class="skills-fold skills-fold-cat skills-cathead" data-skills-fold-source="${esc(source.key)}" data-skills-fold-cat="${esc(cat.key)}" data-skills-fold-label="${esc(label)}" aria-expanded="${open}" title="${esc(skillsFoldTitle(open, label))}">` +
+    `<span class="skills-caret" aria-hidden="true"></span>` +
+    `<span class="skills-cat-name">${esc(cat.label)}</span>` +
+    `<span class="skills-cat-count mono">${cat.rows.length}</span></button>` +
+    `<div class="skills-catbody" data-skills-body-source="${esc(source.key)}" data-skills-body-cat="${esc(cat.key)}"${open ? "" : " hidden"}>` +
+    cat.rows.map(skillsRowHtml).join("") +
+    `</div></div>`
+  );
+}
+
+// One source: a foldable heading (label, kind when it says something the label does not, and the count of rows
+// under it) and the line under it — the path it reads, the target when it is a link, or the reason it holds
+// nothing. An unreadable source is a heading with a reason, never a silent gap. Its categories are the second
+// level, and a source with no rows still says so instead of leaving an empty box under its heading.
+function skillsSourceHtml(source, rows, folds) {
+  const cats = skillsCategories(rows);
+  const open = skillsSourceOpen(folds, source.key);
   const bits = [source.path];
   if (source.isLink && source.target) bits.push(`→ ${source.target}`);
   if (source.status !== "ok" && source.reason) bits.push(`— ${source.reason}`);
+  const where = bits.filter(Boolean).join(" ");
   const bad = source.status === "error" || source.status === "missing" || source.status === "ignored";
-  const title = [bits.join(" "), `${skillsMany(count, "skill", "skills")} read from here`].join(" · ");
   // The kind is a chip only when it says something the label does not: "Profile · PROFILE" is noise, while
   // "sefl · LINK" is the whole point of the source.
   const kind = skillsKind(source);
   const kindChip = kind.toLowerCase() === String(source.label || "").toLowerCase() ? "" : `<span class="skills-chip kind">${esc(kind)}</span>`;
+  const label = `${source.label || source.key} — ${skillsMany(rows.length, "skill", "skills")}${where ? ` · ${where}` : ""}`;
+  const body = cats.length
+    ? cats.map((cat) => skillsCategoryHtml(source, cat, folds, cats.length)).join("")
+    : `<div class="skills-empty">no skill is read from here</div>`;
   return (
-    `<div class="settings-row skills-source${count ? "" : " empty"}" data-skills-block="1" data-skills-source="${esc(source.key)}" title="${esc(title)}">` +
+    `<div class="skills-srcgroup" data-skills-block="1" data-skills-source-group="${esc(source.key)}">` +
+    `<button type="button" class="skills-fold skills-fold-source skills-source${rows.length ? "" : " empty"}" data-skills-fold-source="${esc(source.key)}" data-skills-fold-label="${esc(label)}" aria-expanded="${open}" title="${esc(skillsFoldTitle(open, label))}">` +
+    `<span class="skills-caret" aria-hidden="true"></span>` +
     `<span class="skills-source-name">${esc(source.label)}</span>` +
     kindChip +
-    `<span class="skills-source-count mono">${count}</span></div>` +
-    `<div class="settings-preview mono skills-source-path${bad ? " bad" : ""}" data-skills-block="1" data-skills-source="${esc(source.key)}">${esc(bits.join(" "))}</div>`
+    `<span class="skills-source-count mono">${rows.length}</span></button>` +
+    `<div class="settings-preview mono skills-source-path${bad ? " bad" : ""}" title="${esc(where)}">${esc(where)}</div>` +
+    `<div class="skills-srcbody" data-skills-body-source="${esc(source.key)}"${open ? "" : " hidden"}>${body}</div>` +
+    `</div>`
   );
+}
+
+// One delegated press for every heading: the headings are drawn again on every read, so a listener per heading
+// would be a listener per paint. What it writes is the reader's own choice, in this browser.
+function initSkillsGroups() {
+  const panel = document.getElementById(SKILLS_PANEL_ID);
+  if (!panel || panel.dataset.skillsFoldWired === "1") return;
+  panel.dataset.skillsFoldWired = "1";
+  panel.addEventListener("click", (e) => {
+    const head = e.target.closest ? e.target.closest("[data-skills-fold-source]") : null;
+    if (!head || head.tagName !== "BUTTON" || !panel.contains(head)) return;
+    const key = head.dataset.skillsFoldSource;
+    const isCategory = head.hasAttribute("data-skills-fold-cat");
+    const category = isCategory ? head.dataset.skillsFoldCat : null;
+    const scope = head.closest(isCategory ? ".skills-catgroup" : ".skills-srcgroup");
+    const body = isCategory ? scope?.querySelector("[data-skills-body-cat]") : scope?.querySelector(".skills-srcbody");
+    const folds = readSkillsFolds();
+    const next = head.getAttribute("aria-expanded") !== "true";
+    setSkillsFold(folds, key, category, next);
+    applySkillsFold(head, body, next);
+  });
+}
+
+const skillsSetCount = (scope, selector, n) => {
+  const node = scope ? scope.querySelector(selector) : null;
+  if (node) node.textContent = String(n);
+};
+
+// The Skills panel's own filter. The global search walks a panel's DIRECT children and this list is two levels
+// deep, so it gets this painter and the same per-tab count comes back. Every heading's count is repainted against
+// the filtered set, a group that answers nothing is hidden outright, and a group that does answer is opened for the
+// duration of the query — then the reader's own fold choices are put back when the box clears.
+function paintSkillsSearch(query, matched) {
+  const panel = document.getElementById(SKILLS_PANEL_ID);
+  if (!panel) return 0;
+  const flat = [...panel.children].filter((node) => !node.classList || !node.classList.contains("skills-srcgroup"));
+  let hits = paintSettingsRows(flat, query, matched);
+  const folds = readSkillsFolds();
+  for (const group of panel.querySelectorAll(".skills-srcgroup")) {
+    const key = group.dataset.skillsSourceGroup;
+    const cats = [...group.querySelectorAll(".skills-catgroup")];
+    let sourceHits = 0;
+    for (const cat of cats) {
+      const catBody = cat.querySelector("[data-skills-body-cat]");
+      const catHits = paintSettingsRows(catBody ? [...catBody.children] : [], query, matched);
+      sourceHits += catHits;
+      skillsSetCount(cat, ".skills-cat-count", catHits);
+      cat.classList.toggle("search-hidden", Boolean(query) && !catHits);
+      const open = query ? catHits > 0 : skillsCategoryOpen(folds, key, cat.dataset.skillsCatGroup, cats.length);
+      applySkillsFold(cat.querySelector(".skills-cathead"), catBody, open);
+    }
+    skillsSetCount(group, ".skills-source-count", sourceHits);
+    group.classList.toggle("search-hidden", Boolean(query) && !sourceHits);
+    const open = query ? sourceHits > 0 : skillsSourceOpen(folds, key);
+    applySkillsFold(group.querySelector(".skills-source"), group.querySelector(".skills-srcbody"), open);
+    hits += sourceHits;
+  }
+  return hits;
 }
 
 // The whole tab, from one payload. Called on boot and whenever the panel opens on a stale read; a failure says why
@@ -17803,6 +18021,7 @@ function paintSkills(error = null) {
     if (summary) summary.textContent = `could not read the skills — ${error || "no answer"}`;
     if (gateway) {
       gateway.textContent = "nothing was read, so this tab knows nothing about the gateway either";
+      gateway.title = gateway.textContent;
       gateway.classList.add("bad");
     }
     return;
@@ -17816,16 +18035,19 @@ function paintSkills(error = null) {
   if (summary) summary.textContent = bits.join(" · ");
   if (gateway) {
     const ok = Boolean(data.gateway?.ok);
+    // ONE line, whatever the answer: the gateway's own words are the reason a run's served set is unknown, and the
+    // rows below carry only a quiet mark — no row repeats the banner in its own words.
     gateway.textContent = ok
       ? `${data.gateway.url} · /v1/skills answers ${data.gateway.count} skills · read ${new Date(data.checkedAt).toLocaleTimeString()}`
-      : `gateway ${data.gateway?.url || "(none)"} · ${data.gateway?.reason || "no answer"} — every row above is unverified`;
+      : `gateway ${data.gateway?.url || "(none)"} · ${data.gateway?.reason || "no answer"} — no row below can be said to be served`;
+    gateway.title = gateway.textContent;
     gateway.classList.toggle("bad", !ok);
   }
+  const folds = readSkillsFolds();
   let html = "";
   for (const source of data.sources || []) {
     const rows = (data.skills || []).filter((s) => s.source === source.key);
-    html += skillsSourceHtml(source, rows);
-    for (const row of rows) html += skillsRowHtml(row);
+    html += skillsSourceHtml(source, rows, folds);
   }
   const served = (data.skills || []).filter((s) => s.source === "gateway");
   if (served.length) {
@@ -17840,10 +18062,11 @@ function paintSkills(error = null) {
         isLink: false,
       },
       served,
+      folds,
     );
-    for (const row of served) html += skillsRowHtml(row);
   }
   panel.insertAdjacentHTML("beforeend", html);
+  initSkillsGroups();
   // A query typed before this answer landed must still hide what it does not match: the new rows are in the DOM
   // now, and the search paints from the DOM rather than from a cached list.
   const box = document.getElementById("settings-search");
@@ -17868,8 +18091,6 @@ async function loadSkills() {
   })();
   return skillsLoading;
 }
-
-// ---- end the Skills tab
 
 // ---- settings window: move it, size it ------------------------------------------------------------
 // The panel used to be a popover pinned under the top bar: `position: fixed; right: 16px; top: 74px` and no way to
