@@ -3,12 +3,15 @@
 Audited: `804ed4e` (the pipeline catalogue, its ladder, and the record a cut writes), against `docs/pipelines.md` as the
 spec. Files read: `lib/pipelines.js`, `pipelines.seed.json`, the `POST /api/worktree/pipeline` route
 (`server.js:3088-3159`), the cut record in `lib/jobs.js` (`recordCutPipeline` / `pipelineForJob` / `applyPipeline`,
-`lib/jobs.js:1521-1567`, `lib/jobs.js:1607-1611`, `lib/jobs.js:2027-2029`), the two defaults in `config.json`, and
-`test/pipelines.test.js`.
+`lib/jobs.js:1521-1567`, `lib/jobs.js:1607-1611`, `lib/jobs.js:2027-2029`), both cut paths — `makeWorktree` and the
+child route (`server.js:2869-2933`, `lib/child-worktree.js:52-97`) — the two defaults in `config.json`,
+`test/pipelines.test.js` and `test/child-route.test.js`.
 
 Every claim below was checked by reading the cited lines and, where behaviour is in question, by running a probe
 against the module. The probes are quoted where they matter; each is a throwaway Node script against `lib/pipelines.js`
-and needs no git tree.
+and needs no git tree. The exception is P0-5: it boots the real `server.js` on a throwaway store
+(`tools/panel-testkit.mjs`) and presses the child-cut route over HTTP, because "this route writes no record" is a claim
+about the route and not about a function.
 
 Ranks: **P0** is wrong today, on main, with no unbuilt component in the path. **P1** is wrong the moment a reader lands
 on it — the chip, the tab, the #40 evaluator or the §6 timer. **P2** is fragile: it survives the happy
@@ -97,6 +100,9 @@ cannot stay is the doc saying one thing, the seed another, and `jobs.js` a third
 
 ### P0-4. A switch burns the one-way ladder without starting the work it records
 
+*The abandoned draft of this audit numbered this same defect P0-5; it is P0-4 here. The numbering did not carry
+over — do not re-file it.*
+
 §4.1 says the route "re-reads the tree's record from disk …, validates the ladder, appends the history entry with
 `by: "reader"`, and starts the new pipeline's first stage as a turn in the SAME tree on the SAME thread"
 (`docs/pipelines.md:295-299`). The route does everything except the last clause, and says so in a comment: "NOT here,
@@ -112,6 +118,93 @@ began. A second POST cannot undo it.
 **Smallest fix:** until the turn start exists, refuse the switch (409/501 with "the pipeline switch is not wired to a
 turn yet") *before* writing the record. One guard, and the ladder stays honest. The alternative — move the record
 write behind the turn start — is the real fix but is not small.
+
+### P0-5. The panel's own child cut writes no pipeline record, so the tree it just made has no rung
+
+`POST /api/worktree/child` is the panel's second cut path, added for the roll-up. It cuts the tree
+(`server.js:2883-2888`, `cutChildWorktree` at `lib/child-worktree.js:52-97`), writes the parent down in both books
+(`server.js:2894`, `server.js:2906`), settles the naming ledger (`server.js:2911`), boards the row
+(`server.js:2925`) — and never writes the pipeline record.
+
+The write has exactly one call site in the repo. `recordCutPipeline` is defined at `lib/jobs.js:1523` and called once,
+from `makeWorktree` at `lib/jobs.js:1611`; `pipelineRecords` appears in `server.js` only at the constructor (`:355`),
+the injection into Jobs (`:1008`), and the two lines of the switch route (`:3120`, `:3144`). Nothing backfills it:
+`cutChildWorktree` says in its own header that it "knows nothing about the panel's books"
+(`lib/child-worktree.js:10-11`), and `scheduler.adoptWorktree` writes a row and scans it (`lib/scheduler.js:826-859`),
+no record.
+
+§3 is unconditional and names `makeWorktree` as the only writer: "**Always `local` at cut time.** … `makeWorktree`
+writes `{id: "local", stage: "work", since: <cut>, history: [one entry]}` before the first turn exists"
+(`docs/pipelines.md:255-258`). The document has one cut path; the code grew a second, and the rule did not cross.
+
+Probe — the real server on a throwaway store, a parent worktree cut by hand, then the ＋ route over HTTP:
+
+```
+A2 pipeline-records.json before any cut: (absent)
+B1 child cut status: 200   branch wtgui/probe-child-6ac469   parent feat/parent
+B3 pipeline-records.json immediately after the child cut: (absent — no record was written)
+C2 the switch route's read of that tree: { from: "local", fromKind: "local" }
+C3 history the route then wrote: [ { from: "local", to: "investigation", stage: "probe", by: "reader" } ]
+```
+
+C2 is the read side: the card for such a tree reads `pipeline: null` (`lib/jobs.js:1548`, P1-12) until a switch writes
+one, and the route presumes `local` (`server.js:3120`). C3 is the second half: §3's history starts at the cut
+(`docs/pipelines.md:240-253`), so the record such a tree does eventually get begins mid-air — no `by: "cut"` entry, no
+`since` for its first rung, and the first climb recorded as if the tree had been `local` by choice.
+
+**Smallest fix:** one line beside the landing parent at `server.js:2906`:
+
+```js
+jobs.recordCutPipeline(out.path);
+```
+
+`recordCutPipeline` logs and swallows a write failure (`lib/jobs.js:1523-1533`), so it cannot fail a cut that has
+already happened, and `jobs.pipelineRecords` is injected at `server.js:1008`. Writing it inside `cutChildWorktree`
+would break that module's own contract — it deliberately knows no books. The record is stamped milliseconds after git
+made the tree, at the moment of the write; `recordCutPipeline` takes `at` if the exact cut time is ever wanted, which
+would need `cutChildWorktree` to return one. The record is what matters here, not the millisecond.
+
+### P0-6. A hole written with spaces inside the braces is invisible to the validator, so `{{ nope }}` is accepted
+
+`PLACEHOLDER_RE = /\{\{([A-Za-z][A-Za-z0-9]*)\}\}/g` (`lib/pipelines.js:85`) allows no whitespace between the braces
+and the name. `promptPlaceholders` therefore returns `[]` for `{{ nope }}`, `unknownPlaceholders` filters an empty list
+(`lib/pipelines.js:90-98`), and `validatePipeline` reads the prompt as prose with no hole in it
+(`lib/pipelines.js:194-198`; the same pair guards every `text` exit parameter through `checkTextParam`,
+`lib/pipelines.js:104-112`).
+
+Probe, the five spellings through `validatePipeline` (one stage, prompt `Read <hole> before you start.`):
+
+| hole | `promptPlaceholders` | `unknownPlaceholders` | `validatePipeline` |
+|---|---|---|---|
+| `{{nope}}` | `["nope"]` | `["nope"]` | refused |
+| `{{ nope }}` | `[]` | `[]` | **accepted — wrong** |
+| `{{ ticket }}` | `[]` | `[]` | **accepted — wrong** |
+| `{{TICKET}}` | `["TICKET"]` | `["TICKET"]` | refused |
+| `{{ticketId}}` | `["ticketId"]` | `["ticketId"]` | refused |
+
+The two wrongly accepted are the two a person types. `{{ nope }}` is exactly the unknown hole §1.4 promises to refuse
+— "An unknown placeholder is **refused** when the definition is saved" (`docs/pipelines.md:114-118`) — and the
+definition is saved with the literal text `{{ nope }}` in the worker's brief. `{{ ticket }}` is the mirror image: a
+known name the scanner pretends is not there, so a definition carrying it is blessed and no renderer is obliged to
+resolve it; the closed list prints `{{ticket}}` (`lib/pipelines.js:83`), not this. The two refusals are correct
+outcomes from a scanner that only sees its own spelling — `{{TICKET}}` and `{{ticketId}}` match the expression and are
+then rejected by name — which isolates the scanner as the only thing deciding, and it is blind to whitespace.
+
+This is P2-8's regex seen from the P0 side: P2-8 records the non-identifier holes (`{{ticket-id}}`, `{{}}`) that slip
+through the same expression. The spaced hole is the one a reader editing a prompt will actually produce, so it is
+ranked here and not there.
+
+**Smallest fix:** one pair of characters, in one line:
+
+```js
+const PLACEHOLDER_RE = /\{\{\s*([A-Za-z][A-Za-z0-9]*)\s*\}\}/g;
+```
+
+The capture stays the bare name, so `promptPlaceholders`, `unknownPlaceholders` and the two error messages that print
+`{{${name}}}` are all fixed at once: `{{ nope }}` is refused by name, and `{{ ticket }}` validates as `ticket` — at
+which point the renderer must tolerate the padding as well (or normalise the name before replacing it), or the hole is
+validated and still rendered literally. Widening the capture to `([^{}]*?)` in the same line also catches
+`{{ticket-id}}` and `{{}}` (P2-8); the narrower one is the smallest change that makes the hole visible at all.
 
 ---
 
@@ -410,7 +503,8 @@ key.
 `{{ project }}` and `{{}}` are not matched, so they pass validation (`lib/pipelines.js:195-197`) and render literally —
 the exact failure §1.4 refuses ("a prompt with a silently missing `{{ticket}}` is the brief that produces a branch
 called `_`", `docs/pipelines.md:114-115`). **Fix:** after the known-hole scan, refuse any remaining `{{` or `}}` in a
-prompt.
+prompt. The spaced hole — `{{ nope }}`, which this scanner also cannot see — is carved out as P0-6 above; the one-line
+regex change there fixes this entry too, so do not file it twice.
 
 ---
 
@@ -466,7 +560,7 @@ is either a hand-written record or absent.
 
 ## Would the suite have caught the P0s?
 
-`node --test test/pipelines.test.js` → 10 passed, 0 failed (1.8s). `npm test` → 908 passed, 0 failed (123s).
+`node --test test/pipelines.test.js` → 10 passed, 0 failed (2.4s). `npm test` → 908 passed, 0 failed (112s).
 
 | P0 | caught? | why not |
 |---|---|---|
@@ -474,6 +568,8 @@ is either a hand-written record or absent.
 | P0-2 `200` on a failed write | **no** | no test makes the book unwritable; the `PipelineRecords` in `:398` and the one the panel builds both sit in a writable temp dir. `set`'s catch (`lib/pipelines.js:603-605`) is never executed. |
 | P0-3 `local`'s prompt vs the landing line | **no** | `:94-120` asserts the seed's checks and placeholders only. The suite never imports `lib/branch-policy.js` and never compares `pipelines.seed.json`'s `local` prompt to `branchLandingLine`. |
 | P0-4 a switch starts no turn | **no — encoded** | `:476-492` asserts the 200, the record, the stage and `cards`, and never looks for a job or a run. It passes *because* the route does no turn. |
+| P0-5 the child cut writes no record | **no** | `test/child-route.test.js:87-96` drives that route and asserts the parent book and the row; it never reads `pipeline-records.json`. `test/pipelines.test.js:387-421` drives `makeWorktree`, the path that does write it. |
+| P0-6 `{{ nope }}` passes validation | **no** | the only unknown-hole case is `{{ticketId}}`, with no spaces (`test/pipelines.test.js:195-197`). No test writes a spaced hole, so the regex gap is never exercised. |
 
 Two tests encode wrong behaviour as expected: `:465-468` asserts `before.pipeline === null` for a pre-pipeline card
 (P1-12), and `:492` treats "the live card was handed the record" as the whole of a switch (P0-4). A restart test for
@@ -499,7 +595,9 @@ local rather than a redesign:
   that a restart can empty (P0-1). The clock is right; the storage is not.
 
 Fix P0-1 and P0-2 first — they are the difference between "a record" and "a record that survives a restart", which is
-the premise of the whole page. Then P0-4, because the route currently spends the ladder's one-way move for nothing.
-P0-3 and P1-5/P1-9 are the model's semantic debts: until they are settled, the chip would be a truthful view of a
-record that does not describe the work. With those done, the chip, the tab and the timer are three readers of a
-record that can be trusted; without them, each would be a new surface over the same four lies.
+the premise of the whole page. P0-5 and P0-6 are one line each and belong in that same first pass: the second cut path
+must write the record the first one writes, and the validator must see the hole it is supposed to refuse. Then P0-4,
+because the route currently spends the ladder's one-way move for nothing. P0-3 and P1-5/P1-9 are the model's semantic
+debts: until they are settled, the chip would be a truthful view of a record that does not describe the work. With
+those done, the chip, the tab and the timer are three readers of a record that can be trusted; without them, each
+would be a new surface over the same six lies.
