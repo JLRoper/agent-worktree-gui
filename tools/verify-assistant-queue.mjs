@@ -222,10 +222,10 @@ try {
   check("counts after the four states", view.counts, { total: 4, queued: 1, running: 1, parked: 1, done: 1, stale: 1, conflict: 1 });
   const digest = view.digest || [];
   ok("the header counts every state and names the stale one", /^Your task queue \(1 queued · 1 running, 1 stale · 1 parked · 1 done\):$/.test(digest[0] || ""), digest[0]);
-  ok("the queued task is listed with its owner, files and the SKIP reason", digest.some((l) => /^- ○ #1 land the queue sub-tab's copy · owner assistant-1 · files public\/assistant\.js · SKIP: files in use by #2 \(stale\)/.test(l)), digest.find((l) => l.includes("#1")));
-  ok("the running task is listed with its thread", digest.some((l) => /^- ● #2 .* · thread queue-gate-thread-2/.test(l)), digest.find((l) => l.includes("#2")));
+  ok("the queued task is listed with its state, thread, tree, PR, owner, files and the SKIP reason", digest.some((l) => /^- ○ #1 queued · land the queue sub-tab's copy · thread \(none\) · tree \(none\) · PR none · owner assistant-1 · files public\/assistant\.js · SKIP: files in use by #2 \(stale\)/.test(l)), digest.find((l) => l.includes("#1")));
+  ok("the running task is listed with its state, thread, tree and PR", digest.some((l) => /^- ● #2 running · .* · thread queue-gate-thread-2 · tree \(none\) · PR none/.test(l)), digest.find((l) => l.includes("#2")));
   ok("…and marked STALE, with why", digest.some((l) => /STALE: that thread has no live run/.test(l)), digest.find((l) => l.includes("STALE")));
-  ok("the parked task is listed with its reason", digest.some((l) => /^- ⏸ #3 SQL verify for the queue store · waiting on the DBA's verify$/.test(l)), digest.find((l) => l.includes("#3")));
+  ok("the parked task is listed with its state, thread, tree, PR and reason", digest.some((l) => /^- ⏸ #3 parked · SQL verify for the queue store · thread \(none\) · tree \(none\) · PR none · PARKED: waiting on the DBA's verify$/.test(l)), digest.find((l) => l.includes("#3")));
   ok("done work is a count, not a line", !digest.some((l) => l.includes("#4 ")), digest.find((l) => l.includes("#4")) || "(absent)");
   const stale = view.tasks.find((t) => t.id === 2);
   ok("the running task carries stale + staleWhy", stale?.stale === true && /no live run/.test(stale?.staleWhy || ""), JSON.stringify({ stale: stale?.stale, why: stale?.staleWhy }));
