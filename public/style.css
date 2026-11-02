@@ -828,13 +828,26 @@ button.chip:active { transform: translateY(1px); }
    the hairlines between cards, so the group reads as closed rather than cut off. */
 .job:last-child { border-bottom: none; }
 .agents-block .job:last-child { border-bottom: 1px solid #2f3947; }
-.job-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding-bottom: 6px; }
+.job-head { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; min-width: 0; padding-bottom: 6px; }
 .job-head .spacer { flex: 1; }
+/* The card's six controls — pin, think, stream, rename, max, clear — are ONE block at the head's right edge. `flex:
+   0 0 auto` keeps every control at its own width, `flex-wrap: nowrap` inside means the cluster cannot break across
+   lines, and `margin-left: auto` pins it to the edge. The head itself is `nowrap` too, so a long title or a long meta
+   line trims instead of pushing the controls onto a second row — which is what a long session name did while it was
+   the head's last item, after the spacer. */
+.job-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; flex-wrap: nowrap; margin-left: auto; }
+/* …and with the head unable to wrap, no control may be squeezed into two lines either: a pill's word and the
+   attach button's word stay on one line at their own width, so the head trims its TEXT (title, meta) instead of
+   its buttons. */
+.job-head > button, .job-head > .pill { flex: none; white-space: nowrap; }
+/* The head's text gives up width rather than growing the row: the title has its own
+   ellipsis rule, and the meta line gets one here so a long project/tree name cannot make the head two lines tall. */
+.job-head > span.mono.dim { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Where the agent runs: one dim line under the card's head, on every card. It answers "which tree is
    this one in" at a glance, so it must stay legible but never compete with the head — smallest size,
    dimmest ink, one line, the tail of the path only, and the full path in the tooltip. */
 .job-cwd {
-  display: flex; align-items: baseline; gap: 6px;
+  display: flex; align-items: center; gap: 8px;
   margin: 0 0 5px 26px;
   min-width: 0;
   font-size: 10.5px;
@@ -843,25 +856,21 @@ button.chip:active { transform: translateY(1px); }
   overflow: hidden;
 }
 .job-cwd .cwd-label { flex: none; letter-spacing: .04em; color: var(--dimmer); }
-.job-cwd .cwd-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
+.job-cwd .cwd-path { flex: 0 1 auto; min-width: 96px; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
 .job-cwd .cwd-row { flex: none; color: var(--dimmer); border: 1px solid #2b3240; border-radius: 4px; padding: 0 5px; }
 /* The run id rides the cwd line, right of the path: bookkeeping, so it stays as quiet as the label and never
    costs a line of its own. */
 .job-cwd .cwd-run { flex: none; color: var(--dimmer); }
 .job-cwd:hover .cwd-path, .job-cwd:hover .cwd-row, .job-cwd:hover .cwd-run { color: var(--text); }
 .job.collapsed .job-cwd { margin-bottom: 3px; }
-/* A minimized card's cwd line is the row's identity line: the path, then the session's name, then the card's own
-   buttons — left to right, in that order. The name used to sit at the right end of the head, where the spacer
-   pushed it hard against these buttons and its tail was cut off under them. Here the name is the only item that
-   gives up width: it ellipsizes, the path keeps a readable floor, and the buttons never shrink. */
-.job.collapsed .job-cwd { align-items: center; gap: 8px; }
-.job.collapsed .job-cwd .cwd-path { flex: 0 1 auto; min-width: 96px; }
-/* The name takes the room the path does not need and gives it back first, but never below a third of the line: a
-   name cut to a few characters says nothing, and the path has its own floor. Both floors together still fit the
-   narrowest card the board draws (1280px with the rail open), so the buttons are never pushed out of the row. */
-.job.collapsed .job-cwd .thread-name { flex: 1 1 auto; min-width: 30%; max-width: none; margin-left: 6px; }
-.job.collapsed .job-cwd > button { flex: none; }
-.job.collapsed .job-cwd input.rename-input { flex: 1 1 auto; min-width: 0; width: auto; }
+/* The cwd line is the card's SECOND row in both states, and the session's name is its right-hand item: the path and
+   the run/row chips read from the left margin, then the name sits flush with the card's right edge, in the column
+   under the controls. `margin-left: auto` is what right-justifies it now that no buttons follow it, `max-width: none`
+   lifts the head's 320px cap so a wide card gives it the room, and the ellipsis trims its tail. The path keeps its
+   own 96px floor, so neither item squeezes the other to nothing. */
+.job-cwd .thread-name { flex: 0 1 auto; min-width: 0; max-width: none; margin-left: auto; }
+/* The rename box replaces the name in place, on this line too — the head's 200px width would overflow the row. */
+.job-cwd input.rename-input { flex: 1 1 auto; min-width: 0; width: auto; }
 /* Subagents a run delegated, under the card's head. The parent's own stream carries a single delegate_task call;
    these rows are what the children are actually doing, read from their own sessions in the store. */
 /* Under the console of the turn that delegated, aligned with it rather than with the card's head. */
