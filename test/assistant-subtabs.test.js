@@ -31,8 +31,11 @@ const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8"
 const assistant = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 
 // ---- the markup ----------------------------------------------------------------------------------------
-const float = html.slice(html.indexOf('<aside id="assistant"'), html.indexOf('<div id="settings"'));
-assert.ok(float.length > 1000, "index.html must carry the assistant float");
+// The rail is docked in the board's row now, so its markup ends at its own `</aside>` — not at the Settings panel,
+// which sits above the board.
+const railAt = html.indexOf('<aside id="assistant"');
+const float = html.slice(railAt, html.indexOf("</aside>", railAt));
+assert.ok(float.length > 1000, "index.html must carry the assistant rail");
 
 const rowOf = (id, attr) => {
   const start = float.indexOf(`id="${id}"`);

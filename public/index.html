@@ -25,70 +25,6 @@
     </div>
   </header>
 
-  <!-- The assistant: a sentry over this board plus one real agent thread, in a floating panel that can be
-       dragged, resized and closed. It is deliberately not modal — the reader keeps reading the board while
-       it is open, and its alerts are a badge and a list, never a window that steals the caret. -->
-  <aside id="assistant" class="assistant" hidden aria-label="assistant">
-    <div class="as-head" id="as-drag" title="drag to move — double-click to maximize, double-click again (or Esc) to restore">
-      <span class="as-glyph">✧</span>
-      <strong>Assistant</strong>
-      <span class="as-mode mono" id="as-mode">draft-only</span>
-      <span class="spacer"></span>
-      <span class="chips" id="as-chips"></span>
-      <button id="btn-as-pin" type="button" class="as-pin" aria-pressed="false" title="pin the assistant open — while it is pinned a click elsewhere on the board leaves it up; unpinned, that click closes it like the ✕">📌</button>
-      <button id="btn-as-max" type="button" class="as-max" aria-pressed="false" title="maximize the assistant to the whole window (double-click the header; Esc restores)">⤢</button>
-      <button id="btn-as-close" type="button" title="close (Esc) — it keeps watching while closed">✕</button>
-    </div>
-    <!-- The float's own row: the assistant sessions first — each one a real agent thread of its own — then the
-         lists that are the assistant's: what it noticed, what it watches, what it said to the agents, its
-         scratchpad, and the ROLE it runs. Only Assistant #1 is in this markup: the rest come from the assistant
-         records the server sends, and the painter adds a button and a pane for each — so a second assistant is a
-         record, not an edit here. -->
-    <div class="as-tabs" id="as-tabs">
-      <button type="button" data-as-tab="assistant-1" class="is-on" title="Assistant #1 — the assistant itself: a normal agent card with its own thread. Its Chat and Settings are the quiet row under this one">Assistant #1</button>
-      <button type="button" data-as-tab="alerts" title="what it noticed and what is waiting on you — spawn cards waiting for a click sit at the top">Alerts <span class="as-n" id="as-alert-n">0</span><span class="as-n is-spawn" id="as-spawn-n" hidden>0</span></button>
-      <button type="button" data-as-tab="watches" title="what it is keeping an eye on, and until when">Watches <span class="as-n" id="as-watch-n">0</span></button>
-      <button type="button" data-as-tab="messages" title="the message board between it and the agents — what it sent them and what they sent back, thread by thread, over the last 7 days">Messages</button>
-      <button type="button" data-as-tab="pad" title="the server-side scratchpad: notes, standing rules and the journal">Scratchpad</button>
-      <button type="button" data-as-tab="role" title="the role this assistant runs — the job title, the charter it carries (its own copy, injected in full on every turn), and a new assistant made from the same role">Role</button>
-      <button type="button" data-as-tab="watchdog" title="the panel's watchdog — the sentry's own switches (watching, the command audit's journal), the pass clock, every rule's escalation level and the bar it fires on. ONE value for the whole panel: an assistant's own settings are in that assistant's Settings tab">Watchdog</button>
-    </div>
-    <!-- The session's own row, under the assistant's tabs: what the assistant is showing (Chat) and how it behaves
-         (Settings). It belongs to a session, so it is hidden while one of the lists is on, and it holds the
-         reader's place — Chat comes back to the foot of the thread, Settings to the rules they were reading. -->
-    <div class="as-subtabs" id="as-subtabs">
-      <button type="button" data-as-subtab="chat" class="is-on" title="the assistant's own thread — the card, its console and the box you type in">Chat</button>
-      <button type="button" data-as-subtab="settings" title="this assistant's own settings — what its turns run on, its wake budget and quiet windows, and the assistants it would escalate to. The panel's per-rule escalation table and the sentry's clock are in the Watchdog tab">Settings</button>
-      <button type="button" data-as-subtab="queue" title="this assistant's own task queue — the work it is carrying: what is queued, what is running (with its thread), what is parked and what has finished. Work added here goes into THIS assistant's queue; a task changes hands only by the Move control on an existing row">Queue</button>
-    </div>
-    <div class="as-body">
-      <section class="as-pane" data-pane="assistant-1" id="as-assistant-1">
-        <section class="as-subpane" data-subpane="chat" id="as-chat"></section>
-        <section class="as-subpane hidden" data-subpane="settings" id="as-settings"></section>
-        <section class="as-subpane hidden" data-subpane="queue" id="as-queue"></section>
-      </section>
-      <section class="as-pane hidden" data-pane="alerts" id="as-alerts"></section>
-      <section class="as-pane hidden" data-pane="watches" id="as-watches"></section>
-      <section class="as-pane hidden" data-pane="messages" id="as-messages"></section>
-      <section class="as-pane hidden" data-pane="pad" id="as-pad"></section>
-      <section class="as-pane hidden" data-pane="role" id="as-role"></section>
-      <section class="as-pane hidden" data-pane="watchdog" id="as-watchdog"></section>
-    </div>
-    <!-- Eight grabs, one per edge and corner. The single bottom-right grip could only grow the float toward that
-         corner, and it walked away from the pointer once the frame hit the viewport: a band is where a reader
-         aims without having to hit a 16px square. -->
-    <div class="as-grips" id="as-grips">
-      <div class="as-grip" data-dir="n" title="drag to resize"></div>
-      <div class="as-grip" data-dir="s" title="drag to resize"></div>
-      <div class="as-grip" data-dir="w" title="drag to resize"></div>
-      <div class="as-grip" data-dir="e" title="drag to resize"></div>
-      <div class="as-grip" data-dir="nw" title="drag to resize"></div>
-      <div class="as-grip" data-dir="ne" title="drag to resize"></div>
-      <div class="as-grip" data-dir="sw" title="drag to resize"></div>
-      <div class="as-grip" data-dir="se" title="drag to resize"></div>
-    </div>
-  </aside>
-
   <div id="settings" class="settings hidden">
     <div class="settings-head">
       <h2>Settings</h2>
@@ -524,99 +460,157 @@
 
   <div id="banner" class="banner hidden"></div>
 
-  <main>
-    <!-- Spawn cards waiting for a click: a worker the assistant proposed and nothing has started yet. It sits
-         at the top of the board on purpose — an unclicked card used to exist only as a number on the header
-         badge, inside an 80-deep Alerts list, and four of them read as "the agents never spawned". -->
-    <div id="spawn-strip" class="spawn-strip" hidden aria-live="polite"></div>
+  <div class="shell">
+    <main>
+      <!-- Spawn cards waiting for a click: a worker the assistant proposed and nothing has started yet. It sits
+           at the top of the board on purpose — an unclicked card used to exist only as a number on the header
+           badge, inside an 80-deep Alerts list, and four of them read as "the agents never spawned". -->
+      <div id="spawn-strip" class="spawn-strip" hidden aria-live="polite"></div>
 
-    <section class="project" id="newagent">
-      <div class="project-head" data-toggle-fixed="newagent" title="minimize this card">
-        <span class="chev">▾</span>
-        <h2>New agent</h2>
-        <span class="path" id="spawn-note">panel-made worktree under .worktrees/ · the gateway runs the turn in it (steerable while it runs)</span>
-        <span class="spacer"></span>
-        <div class="chips"><span class="chip" id="chip-key">key: —</span><span class="chip" id="chip-bin">—</span></div>
-      </div>
-      <div class="form">
-        <div class="attach-chips" id="spawn-chips"></div>
-        <!-- A chip needs an inline atom, so this is contenteditable like the reply box: a long paste collapses
-             in place, a short one is still plain text, and readBox(box) is how every reader of it gets the
-             text back (the placeholder is drawn from data-ph by :empty). -->
-        <div id="job-prompt" class="chipbox" contenteditable="true" role="textbox" aria-multiline="true" data-single="0" data-chipbox="spawn" data-rows="3" spellcheck="false" data-ph="What should the agent do? (this becomes the first turn)"></div>
-        <div class="row">
-          <label class="cwd">start in <input id="job-cwd" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" list="project-paths" spellcheck="false" placeholder="(project path — the green + on a project fills this in)" /></label>
-          <label class="proj">project <select id="job-project" title="which project the agent starts in"></select></label>
-        </div>
-        <datalist id="project-paths"></datalist>
-        <div class="row">
-          <button id="btn-spawn" type="button" class="primary">Spawn agent</button>
-          <label class="model">model <select id="job-model" title="which model this run uses — (default) is the gateway's configured model"></select></label>
-          <label>reasoning <select id="job-reasoning" disabled title="Per-agent reasoning effort; replies keep this choice. Default uses Hermes settings. Models may map unsupported levels to their nearest supported level.">
-            <option value="">(Hermes default)</option>
-            <option value="none">Off</option>
-            <option value="minimal">Minimal</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="xhigh">Extra high</option>
-            <option value="max">Maximum</option>
-            <option value="ultra">Ultra</option>
-          </select></label>
-          <label>budget s <input id="job-budget" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" value="1800" min="30" /></label>
-          <label>max turns <input id="job-maxTurns" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" placeholder="(default)" /></label>
-          <label>skills <input id="job-skills" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" placeholder="(not supported by a run yet)" disabled /></label>
-          <label class="chk" title="Create a workspace: a new worktree and branch under .worktrees/, so the agent's edits land there and never in the folder itself. Untick to run in the 'start in' folder as it is — that is how you aim an agent at an existing worktree.">
-            <input id="job-create" type="checkbox" checked /> create workspace
-          </label>
-          <label class="chk" title="Unticked (the default): this worktree is LOCAL ONLY. Its brief says so in the first line, and the panel's pre-push guard refuses a `git push` out of it and asks you through the permission box instead — so research and browser-testing trees never add a branch to a shared remote. Ticked: the work is meant to land, so the brief names the landing step (push + open a pull request) and the tree is allowed to push.">
-            <input id="job-landing" type="checkbox" /> may land on the remote
-          </label>
+      <section class="project" id="newagent">
+        <div class="project-head" data-toggle-fixed="newagent" title="minimize this card">
+          <span class="chev">▾</span>
+          <h2>New agent</h2>
+          <span class="path" id="spawn-note">panel-made worktree under .worktrees/ · the gateway runs the turn in it (steerable while it runs)</span>
           <span class="spacer"></span>
+          <div class="chips"><span class="chip" id="chip-key">key: —</span><span class="chip" id="chip-bin">—</span></div>
         </div>
-        <div id="spawn-warn" class="warnline"></div>
-        <div id="spawn-msg" class="dimmer mono"></div>
-      </div>
-    </section>
+        <div class="form">
+          <div class="attach-chips" id="spawn-chips"></div>
+          <!-- A chip needs an inline atom, so this is contenteditable like the reply box: a long paste collapses
+               in place, a short one is still plain text, and readBox(box) is how every reader of it gets the
+               text back (the placeholder is drawn from data-ph by :empty). -->
+          <div id="job-prompt" class="chipbox" contenteditable="true" role="textbox" aria-multiline="true" data-single="0" data-chipbox="spawn" data-rows="3" spellcheck="false" data-ph="What should the agent do? (this becomes the first turn)"></div>
+          <div class="row">
+            <label class="cwd">start in <input id="job-cwd" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" list="project-paths" spellcheck="false" placeholder="(project path — the green + on a project fills this in)" /></label>
+            <label class="proj">project <select id="job-project" title="which project the agent starts in"></select></label>
+          </div>
+          <datalist id="project-paths"></datalist>
+          <div class="row">
+            <button id="btn-spawn" type="button" class="primary">Spawn agent</button>
+            <label class="model">model <select id="job-model" title="which model this run uses — (default) is the gateway's configured model"></select></label>
+            <label>reasoning <select id="job-reasoning" disabled title="Per-agent reasoning effort; replies keep this choice. Default uses Hermes settings. Models may map unsupported levels to their nearest supported level.">
+              <option value="">(Hermes default)</option>
+              <option value="none">Off</option>
+              <option value="minimal">Minimal</option>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="xhigh">Extra high</option>
+              <option value="max">Maximum</option>
+              <option value="ultra">Ultra</option>
+            </select></label>
+            <label>budget s <input id="job-budget" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" value="1800" min="30" /></label>
+            <label>max turns <input id="job-maxTurns" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" type="number" placeholder="(default)" /></label>
+            <label>skills <input id="job-skills" data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off" placeholder="(not supported by a run yet)" disabled /></label>
+            <label class="chk" title="Create a workspace: a new worktree and branch under .worktrees/, so the agent's edits land there and never in the folder itself. Untick to run in the 'start in' folder as it is — that is how you aim an agent at an existing worktree.">
+              <input id="job-create" type="checkbox" checked /> create workspace
+            </label>
+            <label class="chk" title="Unticked (the default): this worktree is LOCAL ONLY. Its brief says so in the first line, and the panel's pre-push guard refuses a `git push` out of it and asks you through the permission box instead — so research and browser-testing trees never add a branch to a shared remote. Ticked: the work is meant to land, so the brief names the landing step (push + open a pull request) and the tree is allowed to push.">
+              <input id="job-landing" type="checkbox" /> may land on the remote
+            </label>
+            <span class="spacer"></span>
+          </div>
+          <div id="spawn-warn" class="warnline"></div>
+          <div id="spawn-msg" class="dimmer mono"></div>
+        </div>
+      </section>
 
-    <section class="project" id="agents">
-      <div class="project-head" data-toggle-fixed="agents" title="minimize this card">
-        <span class="chev">▾</span>
-        <h2>Unattached agents</h2>
-        <span class="path">agents with no worktree of their own — agents started in a worktree are listed under that worktree's row</span>
+      <section class="project" id="agents">
+        <div class="project-head" data-toggle-fixed="agents" title="minimize this card">
+          <span class="chev">▾</span>
+          <h2>Unattached agents</h2>
+          <span class="path">agents with no worktree of their own — agents started in a worktree are listed under that worktree's row</span>
+          <span class="spacer"></span>
+          <div class="chips" id="agents-chips"></div>
+          <button id="btn-fold-jobs" type="button">Minimize all</button>
+          <button id="btn-clear-jobs" type="button">Clear finished</button>
+        </div>
+        <div id="jobs"><p class="empty">No agents started from here yet.</p></div>
+      </section>
+
+      <div id="projects">
+        <p class="empty">Scanning worktrees…</p>
+      </div>
+
+      <!-- Approvals dock: a floating stack pinned bottom-right, over the board. It takes no page height and stays
+           reachable wherever the reader has scrolled; each card names the agent it belongs to. -->
+      <aside id="approvals" class="approval-dock" hidden aria-label="approvals waiting on you">
+        <div class="ap-dock-head">
+          <span class="mono">⚠ waiting on you</span>
+          <div class="chips" id="approval-chips"></div>
+          <span class="spacer"></span>
+          <button id="btn-dock-approvals" type="button" title="fold or unfold this stack">▾</button>
+        </div>
+        <div id="approval-list"></div>
+      </aside>
+    </main>
+
+    <!-- The assistant: a sentry over this board plus one real agent thread, docked as the board's right rail. It
+         takes layout width, so the board is never covered; it is deliberately not modal, and its alerts are a
+         badge and a list, never a window that steals the caret. One close toggle, and the topbar's Assistant
+         button is the other way in. -->
+    <aside id="assistant" class="assistant" hidden aria-label="assistant">
+      <div class="as-bar">
+        <span class="as-glyph">✧</span>
+        <strong>Assistant</strong>
+        <span class="as-mode mono" id="as-mode">draft-only</span>
         <span class="spacer"></span>
-        <div class="chips" id="agents-chips"></div>
-        <button id="btn-fold-jobs" type="button">Minimize all</button>
-        <button id="btn-clear-jobs" type="button">Clear finished</button>
+        <span class="chips" id="as-chips"></span>
+        <button id="btn-as-close" type="button" title="close (Esc) — it keeps watching while closed">✕</button>
       </div>
-      <div id="jobs"><p class="empty">No agents started from here yet.</p></div>
-    </section>
-
-    <div id="projects">
-      <p class="empty">Scanning worktrees…</p>
-    </div>
-
-    <!-- Approvals dock: a floating stack pinned bottom-right, over the board. It takes no page height and stays
-         reachable wherever the reader has scrolled; each card names the agent it belongs to. -->
-    <aside id="approvals" class="approval-dock" hidden aria-label="approvals waiting on you">
-      <div class="ap-dock-head">
-        <span class="mono">⚠ waiting on you</span>
-        <div class="chips" id="approval-chips"></div>
-        <span class="spacer"></span>
-        <button id="btn-dock-approvals" type="button" title="fold or unfold this stack">▾</button>
+      <!-- The float's own row: the assistant sessions first — each one a real agent thread of its own — then the
+           lists that are the assistant's: what it noticed, what it watches, what it said to the agents, its
+           scratchpad, and the ROLE it runs. Only Assistant #1 is in this markup: the rest come from the assistant
+           records the server sends, and the painter adds a button and a pane for each — so a second assistant is a
+           record, not an edit here. -->
+      <div class="as-tabs" id="as-tabs">
+        <button type="button" data-as-tab="assistant-1" class="is-on" title="Assistant #1 — the assistant itself: a normal agent card with its own thread. Its Chat and Settings are the quiet row under this one">Assistant #1</button>
+        <button type="button" data-as-tab="alerts" title="what it noticed and what is waiting on you — spawn cards waiting for a click sit at the top">Alerts <span class="as-n" id="as-alert-n">0</span><span class="as-n is-spawn" id="as-spawn-n" hidden>0</span></button>
+        <button type="button" data-as-tab="watches" title="what it is keeping an eye on, and until when">Watches <span class="as-n" id="as-watch-n">0</span></button>
+        <button type="button" data-as-tab="messages" title="the message board between it and the agents — what it sent them and what they sent back, thread by thread, over the last 7 days">Messages</button>
+        <button type="button" data-as-tab="pad" title="the server-side scratchpad: notes, standing rules and the journal">Scratchpad</button>
+        <button type="button" data-as-tab="role" title="the role this assistant runs — the job title, the charter it carries (its own copy, injected in full on every turn), and a new assistant made from the same role">Role</button>
+        <button type="button" data-as-tab="watchdog" title="the panel's watchdog — the sentry's own switches (watching, the command audit's journal), the pass clock, every rule's escalation level and the bar it fires on. ONE value for the whole panel: an assistant's own settings are in that assistant's Settings tab">Watchdog</button>
       </div>
-      <div id="approval-list"></div>
+      <!-- The session's own row, under the assistant's tabs: what the assistant is showing (Chat) and how it behaves
+           (Settings). It belongs to a session, so it is hidden while one of the lists is on, and it holds the
+           reader's place — Chat comes back to the foot of the thread, Settings to the rules they were reading. -->
+      <div class="as-subtabs" id="as-subtabs">
+        <button type="button" data-as-subtab="chat" class="is-on" title="the assistant's own thread — the card, its console and the box you type in">Chat</button>
+        <button type="button" data-as-subtab="settings" title="this assistant's own settings — what its turns run on, its wake budget and quiet windows, and the assistants it would escalate to. The panel's per-rule escalation table and the sentry's clock are in the Watchdog tab">Settings</button>
+        <button type="button" data-as-subtab="queue" title="this assistant's own task queue — the work it is carrying: what is queued, what is running (with its thread), what is parked and what has finished. Work added here goes into THIS assistant's queue; a task changes hands only by the Move control on an existing row">Queue</button>
+      </div>
+      <div class="as-body">
+        <section class="as-pane" data-pane="assistant-1" id="as-assistant-1">
+          <section class="as-subpane" data-subpane="chat" id="as-chat"></section>
+          <section class="as-subpane hidden" data-subpane="settings" id="as-settings"></section>
+          <section class="as-subpane hidden" data-subpane="queue" id="as-queue"></section>
+        </section>
+        <section class="as-pane hidden" data-pane="alerts" id="as-alerts"></section>
+        <section class="as-pane hidden" data-pane="watches" id="as-watches"></section>
+        <section class="as-pane hidden" data-pane="messages" id="as-messages"></section>
+        <section class="as-pane hidden" data-pane="pad" id="as-pad"></section>
+        <section class="as-pane hidden" data-pane="role" id="as-role"></section>
+        <section class="as-pane hidden" data-pane="watchdog" id="as-watchdog"></section>
+      </div>
+      <!-- The rail's one grab: the edge it shares with the board. A docked column is sized on that edge, so there
+           is one band here rather than the eight a floating window needed. -->
+      <div class="as-split" id="as-split" title="drag to resize the assistant's column (340–640 px, at most 60% of the window)"></div>
     </aside>
-  </main>
 
-  <footer class="foot">
-    <span>Live over SSE: each worktree refreshes on its own cadence — cheap fields every <span id="f-worktree">5</span>s, merge verdict / PR / commit detail every <span id="f-slow">60</span>s. Rows flash when something changed.</span>
-    <span>Read-only for git: every scan is an inspect (rev-parse / rev-list / merge-base / cherry / diff / status / log). Only <code>fetch</code> touches refs.</span>
-    <span>Spawning writes: a new worktree + branch under <code>.worktrees/</code> (<code>git worktree add -b wtgui/…</code>), and the agent runs in that tree through the Hermes gateway — no child process, no API key handed to one. Every tree it cuts is <b>local only</b>: a <code>git push</code> out of one is refused by the pre-push hook the panel installs (inside <code>.git</code>, never a tracked file) and asks you through the permission box instead. Settings · Branches on the remote.</span>
-    <span>Projects: every git repo under <code>scanRoots</code> in <code>config.json</code>, grouped in a folder accordion per root (a project outside every root gets its own sibling folder), ordered by most recent activity. The green <b>+</b> beside a project name aims the spawn card at that project.</span>
-    <span id="skipped-note" class="dimmer"></span>
-    <span>Config: <code>config.json</code> — scanRoots, projects, cadences, <code>dormantSeconds</code>, <code>host</code> (loopback by default).</span>
-  </footer>
+    <!-- The footer is inside the row on purpose: it is the last thing on the page, and the rail's sticky
+         containing block has to reach the bottom of the page or the rail slides up under the topbar at the end
+         of a scroll. It wraps onto a line of its own (`.shell > .foot`). -->
+    <footer class="foot">
+      <span>Live over SSE: each worktree refreshes on its own cadence — cheap fields every <span id="f-worktree">5</span>s, merge verdict / PR / commit detail every <span id="f-slow">60</span>s. Rows flash when something changed.</span>
+      <span>Read-only for git: every scan is an inspect (rev-parse / rev-list / merge-base / cherry / diff / status / log). Only <code>fetch</code> touches refs.</span>
+      <span>Spawning writes: a new worktree + branch under <code>.worktrees/</code> (<code>git worktree add -b wtgui/…</code>), and the agent runs in that tree through the Hermes gateway — no child process, no API key handed to one. Every tree it cuts is <b>local only</b>: a <code>git push</code> out of one is refused by the pre-push hook the panel installs (inside <code>.git</code>, never a tracked file) and asks you through the permission box instead. Settings · Branches on the remote.</span>
+      <span>Projects: every git repo under <code>scanRoots</code> in <code>config.json</code>, grouped in a folder accordion per root (a project outside every root gets its own sibling folder), ordered by most recent activity. The green <b>+</b> beside a project name aims the spawn card at that project.</span>
+      <span id="skipped-note" class="dimmer"></span>
+      <span>Config: <code>config.json</code> — scanRoots, projects, cadences, <code>dormantSeconds</code>, <code>host</code> (loopback by default).</span>
+    </footer>
+  </div>
 
   <!-- The client is a set of classic scripts, not modules: there is no bundler in this repo, and
        public/assistant.js reads app.js's own globals by name (esc, conversations, conversationHtml), so an
