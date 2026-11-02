@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gateway usage: the changes to make</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a21; --panel2: #1b212a; --line: #2a3340; --text: #e6e9ef; --dim: #9aa5b4;
+    --dimmer: #6f7a89; --green: #7ee787; --red: #ff9c94; --amber: #f0c674; --blue: #9ecbff; --purple: #c8a6ff;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 15px/1.6 var(--ui); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 24px 64px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; }
+  h2 { font-size: 19px; margin: 40px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+  h3 { font-size: 15.5px; margin: 22px 0 6px; color: var(--blue); }
+  p { margin: 8px 0; }
+  a { color: var(--blue); }
+  code, .mono { font-family: var(--mono); font-size: 12.5px; }
+  code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  code.cmd { display: block; white-space: pre-wrap; word-break: break-word; padding: 5px 7px; margin-top: 4px; color: var(--dim); background: #0b0e13; }
+  .meta { color: var(--dim); font-size: 13px; }
+  .verdict { background: #13261a; border: 1px solid #2f5f38; border-left: 4px solid var(--green); border-radius: 8px; padding: 14px 18px; margin: 20px 0; }
+  .verdict h2 { border: 0; margin: 0 0 6px; padding: 0; font-size: 17px; color: var(--green); }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+  .warn { background: #2a2414; border: 1px solid #5c4d22; border-left: 4px solid var(--amber); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+  .not { background: #1f1a26; border: 1px solid #44395a; border-left: 4px solid var(--purple); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+  .tw { overflow-x: auto; margin: 10px 0 14px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; min-width: 820px; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--panel2); color: var(--dim); font-weight: 600; font-size: 12.5px; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bad { color: var(--red); font-weight: 600; }
+  .good { color: var(--green); font-weight: 600; }
+  pre { background: #0b0e13; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font: 12.5px/1.55 var(--mono); margin: 10px 0; }
+  ol.steps li, ul li { margin: 5px 0; }
+  .toc { columns: 2; font-size: 14px; }
+  .toc a { text-decoration: none; }
+  .tag { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 0 7px; font: 11px/18px var(--mono); color: var(--dim); }
+  .check li { list-style: none; margin-left: -18px; }
+  .check li:before { content: "\2610  "; color: var(--dimmer); }
+  .del { color: var(--red); } .add { color: var(--green); } .cm { color: var(--dimmer); }
+  @media (max-width: 720px) { .toc { columns: 1; } }
+  @media print {
+    html, body { background: #fff; color: #000; }
+    .verdict, .box, .warn, .not, pre, th, code { background: #fff !important; color: #000; }
+    a { color: #000; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Gateway usage: the changes to make</h1>
+<p class="meta">Implementation handoff. Baseline measured on the live board, 2026-11-02 17:29–17:48 EST, on
+<code>wtgui/research-whether-our-her-f16888</code> at <code>9d4e9b8</code> (Hermes 0.22.5). The full measurements are in
+<code>docs/gateway-usage-review.html</code> on the same branch. Written for the agent that will implement this: every
+change names its <code>file:line</code>, the number that should move, and the test that proves it.</p>
+
+<div class="verdict" id="constraint">
+  <h2>The constraint that shapes everything below</h2>
+  <p><b>Every turn must be able to handle an event from an agent this assistant manages. There is no rate cap on
+  events.</b> The original recommendation — "cap wakes at 10/hour" — is withdrawn: at 10/hour the assistant answers
+  at most once every six minutes, which is the failure the reader objected to. The evidence says the cap is already
+  dropping real events today: seven <code>watch finished</code> wakes were refused by the budget between 22:32 and
+  22:54 (journal <code>wake-suppressed</code>, "rate limit reached (6/h)"), because Assistant #2 runs on the default
+  6/hour and only <code>settle</code> and <code>exited</code> are exempt.</p>
+  <p><b>So the three changes are:</b> (1) make the wake budget cover only the sentry's speculative <i>sweeps</i>, never
+  an <i>event</i>; (2) stop re-sending the unchanged charter on every turn; (3) put the board digest on a wake counter
+  for sweeps — an event turn always sees the board. With the charter and digest gone from the hot path there is room
+  to wake <b>twice as often as today and still send fewer bytes</b> (§5).</p>
+</div>
+
+<div class="toc">
+  <a href="#baseline">1. Baseline, measured</a><br>
+  <a href="#eventcap">2. Change 1 — event wakes are never budgeted</a><br>
+  <a href="#digest">3. Change 2 — the board digest on a sweep counter</a><br>
+  <a href="#charter">4. Change 3 — the charter sent when it changes</a><br>
+  <a href="#result">5. What the three changes add up to</a><br>
+  <a href="#order">6. Order, tests, rollback</a><br>
+  <a href="#out">7. Out of scope</a><br>
+  <a href="#handoff">8. Handoff checklist</a>
+</div>
+
+<h2 id="baseline">1. Baseline, measured</h2>
+<div class="tw"><table>
+  <thead><tr><th>Figure</th><th class="num">Measured</th><th>How</th></tr></thead>
+  <tbody>
+    <tr><td>One assistant turn's preamble (Assistant #2)</td><td class="num">36,974 B / 36,487 chars</td>
+      <td><code>node measure-preamble.mjs</code> — imports <code>lib/assistant.js</code> against a copy of <code>~/.wag/state</code></td></tr>
+    <tr><td>— of which the charter</td><td class="num">19,720 B (53.3%)</td><td>same, split by <code>node sections.mjs</code></td></tr>
+    <tr><td>— of which the board digest</td><td class="num">7,975 B (21.6%)</td><td>same</td></tr>
+    <tr><td>Everything else (intro, queue line, projects, rules, pad, watches, grammar)</td><td class="num">9,279 B</td><td>same</td></tr>
+    <tr><td>Assistant wakes in the last 60 minutes</td><td class="num">43 (33 on #1, 10 on #2)</td><td><code>node db-inputs.js</code> on <code>state.db</code></td></tr>
+    <tr><td>Preamble sent in that hour</td><td class="num">1,794,889 chars</td><td>same</td></tr>
+    <tr><td>Wake attempts refused by the hourly budget in that hour</td><td class="num">7</td>
+      <td><code>node -e "…assistant.json.journal.filter(j=&gt;j.kind==='wake-suppressed'…)"</code> — all seven are <code>[watch] watch finished</code></td></tr>
+    <tr><td>Rules that can wake, and their live levels</td><td class="num">15 of 17 at <code>wake</code></td>
+      <td><code>~/.wag/state/assistant.json</code> <code>settings.rules</code>; defaults <code>lib/assistant/config.js:17-56</code></td></tr>
+    <tr><td>Only two rules bypass the budget today</td><td class="num">settle, exited</td>
+      <td><code>lib/assistant.js:2454</code>, <code>:2522</code> (<code>forceWake: true</code>)</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="eventcap">2. Change 1 — event wakes are never budgeted</h2>
+<p><b>What it does.</b> Split the 17 rules into two classes. A <i>sweep</i> is a condition the 5 s sentry polls:
+<code>quiet</code>, <code>loop</code>, <code>errorloop</code>, <code>leftover</code>, <code>repeat</code>,
+<code>child</code>, <code>noevidence</code>, <code>context</code>, <code>collision</code>, <code>spawnidle</code>,
+<code>spawnlost</code>. Everything else is an <i>event</i>: something happened to a run the assistant manages
+(<code>approval</code>, <code>question</code>, <code>settle</code>, <code>exited</code>, <code>watch</code>,
+<code>interrupted</code>) or the reader/restart asked for a turn (<code>complete</code>, <code>resume</code>,
+<code>restart</code>, or no rule at all). The hourly budget applies to sweeps only; <b>an event is never refused</b>.
+The list is written as the sweeps on purpose: a rule added later defaults to event, so it cannot silently become
+droppable.</p>
+
+<div class="box"><b>Why this is safe from a storm.</b> Four guards already exist and stay: wakes coalesce for 150 ms
+(<code>lib/assistant.js:2826-2829</code>), one terminal wake per finished run (<code>:1728</code>,
+<code>terminalClaim</code>), a rule does not re-fire for the same subject inside <code>rearmSeconds</code> (default
+900 s, <code>:1694</code>), and one assistant cannot have two live turns at once (<code>assistantLive</code>,
+<code>:2764</code>/<code>:2848</code>). A hundred settles in one pass are still one turn.</div>
+
+<h3>The edits</h3>
+<pre><span class="cm">// lib/assistant/config.js — after RULE_DEFS (line 56)</span>
+<span class="add">+// Which rules are SWEEPS — conditions the 5 s sentry polls, and the only wakes the hourly budget may
++// refuse. Everything else (approval, question, settle, exited, watch, interrupted, complete, resume,
++// restart, or no rule at all) is an EVENT and is never refused. Written as the sweeps on purpose: a new
++// rule defaults to event, so a rule added later cannot silently become droppable.
++export const SWEEP_WAKE_RULES = new Set([
++  "quiet", "loop", "errorloop", "leftover", "repeat", "child",
++  "noevidence", "context", "collision", "spawnidle", "spawnlost",
++]);</span>
+
+<span class="cm">// lib/assistant.js — import it beside RULE_DEFS (line 44)</span>
+<span class="add">+  SWEEP_WAKE_RULES,</span>
+
+<span class="cm">// lib/assistant.js:2815 wake() — the budget check</span>
+<span class="del">-    if (!force &amp;&amp; this.wakes.length &gt;= s.maxWakesPerHour) {</span>
+<span class="add">+    const isSweep = Boolean(rule) &amp;&amp; SWEEP_WAKE_RULES.has(rule);
++    if (!force &amp;&amp; isSweep &amp;&amp; this.wakes.length &gt;= s.maxWakesPerHour) {</span>
+
+<span class="cm">// lib/assistant.js:2852 flushWake() — only a sweep spends the budget</span>
+<span class="del">-      this.wakes.push(Date.now());</span>
+<span class="add">+      const sweep = batch.every((b) =&gt; b.rule &amp;&amp; SWEEP_WAKE_RULES.has(b.rule));
++      if (sweep) this.wakes.push(Date.now());
++      // and hand the class to the turn, so the digest gate can treat an event differently (Change 2)
++      const event = !sweep;
++      await this.say(text, { origin: { kind: "assistant-wake", event, ... }, ... });</span>
+</pre>
+
+<p><b>Also:</b> rename the state field the page reads from <code>wakes: {lastHour, limit}</code> to
+<code>sweeps: {lastHour, limit}</code> (<code>lib/assistant.js:1417</code>, and the Settings line that prints it), and
+relabel the knob "Sweep wakes per hour" so nobody thinks it caps events. The default stays 6; the measured live value
+on #1 is 30 and on #2 it is absent (so 6). <b>Do not lower either value as part of this change.</b></p>
+
+<h3>The number that moves</h3>
+<div class="tw"><table>
+  <thead><tr><th>Number</th><th class="num">Before</th><th class="num">After</th></tr></thead>
+  <tbody>
+    <tr><td>Event wakes refused by the budget, per hour</td><td class="num bad">7</td><td class="num good">0</td></tr>
+    <tr><td>Assistant #2's effective wake rate</td><td class="num">6/h (default)</td><td class="num">the real event rate; sweeps stay at 6/h</td></tr>
+    <tr><td>Assistant turns per hour (whole board)</td><td class="num">43</td><td class="num">whatever the events are — measure it; the guards above bound it, not a cap</td></tr>
+  </tbody>
+</table></div>
+
+<h3>Acceptance test</h3>
+<pre>// test/assistant-event-wakes.test.js — budget 1, three events, then a sweep
+const s = store.settingsFor(PRIMARY_ASSISTANT);
+s.maxWakesPerHour = 1;
+s.rules = { ...s.rules, approval: "wake", question: "wake", watch: "wake", quiet: "wake" };
+assistant.fired("approval", "a", { title: "parked", thread: "t1" });
+assistant.fired("question", "b", { title: "asked", thread: "t2" });
+assistant.fired("watch", "c", { title: "finished", thread: "t3" });
+await assistant.flushWake();
+assert.equal(jobs.list().filter((j) =&gt; j.assistant).length, 3, "three events, three turns, budget 1");
+assert.equal(assistant.wake("x", null, "quiet").refused, "budget", "a sweep is still budgeted");
+assert.ok(!assistant.journal.some((j) =&gt; j.kind === "wake-suppressed" &amp;&amp; j.text.includes("[watch]")),
+  "no event is ever logged as suppressed");</pre>
+<p class="meta">Model the fixture on <code>test/assistant-queue-directive.test.js</code>. Run
+<code>node --test test/assistant-event-wakes.test.js</code>.</p>
+
+<h2 id="digest">3. Change 2 — the board digest on a sweep counter</h2>
+<p><b>What it does.</b> The board digest (7,975 B) is rebuilt every turn and mostly restates runs that have not moved.
+Give it the same knob the queue digest already has: <code>digestSweepEveryNWakes</code>. A <b>sweep</b> carries it one
+wake in N; an <b>event</b> turn and a reader's own message <b>always</b> carry it. This is why Change 1 goes first: the
+gate needs to know which kind of wake it is.</p>
+
+<h3>The edits</h3>
+<pre><span class="cm">// lib/assistant/config.js — DEFAULTS beside queueSweepEveryNWakes (line 149)</span>
+<span class="add">+  digestSweepEveryNWakes: 1,   // 1 keeps today's behaviour; 3 is the recommended setting</span>
+<span class="cm">// and in the clamp table beside it (line 271):</span>
+<span class="add">+    ["digestSweepEveryNWakes", 1, 20],</span>
+
+<span class="cm">// lib/assistant.js:2626 preamble() — take the flag</span>
+<span class="del">-  preamble(assistantId = PRIMARY_ASSISTANT, { queue = true } = {}) {</span>
+<span class="add">+  preamble(assistantId = PRIMARY_ASSISTANT, { queue = true, digest = true, turn = 0 } = {}) {</span>
+
+<span class="cm">// lib/assistant.js:2713-2715 — the digest block</span>
+<span class="del">-      "The board right now:",
+-      this.digest(),
+-      "",</span>
+<span class="add">+      ...(digest
++        ? ["The board right now:", this.digest(), ""]
++        : ["The board right now: (not due on this sweep \u2014 the last digest is still the board's state; an event wake always carries a fresh one.)", ""]),</span>
+
+<span class="cm">// lib/assistant.js:702-719 — copy the queue gate, one counter each</span>
+<span class="add">+  digestForTurn(id = PRIMARY_ASSISTANT, origin = null) {
++    if (origin?.kind !== "assistant-wake") return true;   // the reader's own message
++    if (origin.event) return true;                        // an event always sees the board
++    const n = Math.max(1, Math.min(20, Number(this.settingsFor(id).digestSweepEveryNWakes) || 1));
++    const key = String(this.assistantRecord(id)?.id || id);
++    const tick = (this.digestWakeTicks.get(key) || 0) + 1;
++    this.digestWakeTicks.set(key, tick);
++    return n === 1 || tick % n === 0;
++  }</span>
+
+<span class="cm">// lib/assistant.js:2775 — pass it</span>
+<span class="del">-      preamble: this.preamble(rec?.id, { queue: this.queueDigestForTurn(rec?.id, origin) }),</span>
+<span class="add">+      preamble: this.preamble(rec?.id, {
++        queue: this.queueDigestForTurn(rec?.id, origin),
++        digest: this.digestForTurn(rec?.id, origin),
++        turn,
++      }),</span>
+
+<span class="cm">// and in flushWake's say() origin (line 2862), carry the class computed there:</span>
+<span class="add">+          origin: { kind: "assistant-wake", event, reason: ... },</span>
+</pre>
+
+<h3>The number that moves</h3>
+<div class="tw"><table>
+  <thead><tr><th>Number</th><th class="num">Before</th><th class="num">After (N = 3)</th></tr></thead>
+  <tbody>
+    <tr><td>Digest bytes on a sweep turn</td><td class="num">7,975</td><td class="num">0 on two of three sweeps; 7,975 on the third</td></tr>
+    <tr><td>Digest bytes on an event turn</td><td class="num">7,975</td><td class="num bad">7,975 — unchanged by design</td></tr>
+    <tr><td>Average over a 50/50 event/sweep mix</td><td class="num">7,975</td><td class="num good">≈ 5,317</td></tr>
+    <tr><td>Digest bytes/hour at today's 43 wakes, half of them sweeps</td><td class="num">342,925 B</td><td class="num good">≈ 228,617 B</td></tr>
+  </tbody>
+</table></div>
+
+<h3>Acceptance test</h3>
+<pre>// three sweep wakes with the knob at 3: the digest is due once, on the third
+s.digestSweepEveryNWakes = 3;
+const sweep = { kind: "assistant-wake", event: false };
+const due = [1, 2, 3].map(() =&gt; assistant.digestForTurn(PRIMARY_ASSISTANT, sweep));
+assert.deepEqual(due, [false, false, true], "one sweep in three");
+// an event turn always carries it, and does not advance the sweep counter
+assert.equal(assistant.digestForTurn(PRIMARY_ASSISTANT, { kind: "assistant-wake", event: true }), true);
+// the reader's own message always carries it
+assert.equal(assistant.digestForTurn(PRIMARY_ASSISTANT, null), true);
+// and the text says why it is missing, rather than looking like an empty board
+const t = assistant.preamble(PRIMARY_ASSISTANT, { digest: false });
+assert.ok(t.includes("not due on this sweep"));</pre>
+
+<h2 id="charter">4. Change 3 — the charter sent when it changes</h2>
+<p><b>What it does.</b> The charter is 19,720 B — 53% of every turn — and it is the same text turn after turn. Send it
+in full on the first turn of a thread, whenever the file's sha changes, and every <code>charterRefreshTurns</code>
+turns (default 20) as a compaction safety net; on every other turn send a one-line marker that names the sha and says
+the long tier is still in force.</p>
+
+<div class="warn"><b>Why the refresh exists.</b> The gateway compacts long threads: <code>panel-assistant</code> holds
+9,080 messages, of which only <b>117 are active</b>, with 8,341 compacted. A compaction is a summary, and a summary can
+drop charter detail. Re-sending every 20 turns bounds that exposure to at most 20 turns, and costs 986 B/turn
+amortised. The memo lives in memory, so a panel restart re-sends on the first turn for free.</div>
+
+<h3>The edits</h3>
+<pre><span class="cm">// lib/assistant.js — constructor, beside this.harvested (line 277)</span>
+<span class="add">+    // What each assistant's thread has already been told, so the long tier is not re-sent every turn.
++    this.charterSent = new Map();   // assistantId -&gt; { sha, turn }</span>
+
+<span class="cm">// lib/assistant.js:511 charterBriefing() — take the turn and decide</span>
+<span class="del">-  charterBriefing(id = PRIMARY_ASSISTANT) {</span>
+<span class="add">+  charterBriefing(id = PRIMARY_ASSISTANT, { turn = 0 } = {}) {</span>
+   ...
+   const text = String(this.charterTextFor(rec?.id) || "").trim();
+   if (!text) return [`Charter (the long tier — nothing written down yet; ${label}):`];
+<span class="add">+    const sha = createHash("sha256").update(text).digest("hex").slice(0, 12);
++    const key = String(rec?.id || PRIMARY_ASSISTANT);
++    const memo = this.charterSent.get(key);
++    const every = Math.max(1, Number(this.settingsFor(rec?.id).charterRefreshTurns) || 20);
++    const send = !memo || memo.sha !== sha || turn &lt;= 0 || turn - memo.turn &gt;= every;
++    if (!send) {
++      return [`Charter — unchanged since turn ${memo.turn} (sha ${sha}, ${text.length} chars; role ${role ? role.name : "(none)"}). The long tier is still in force; its text arrived in an earlier turn of this session. An entry that changes it is sent in full on the next turn.`];
++    }
++    this.charterSent.set(key, { sha, turn });</span>
+
+<span class="cm">// lib/assistant.js:2695 — pass the turn in</span>
+<span class="del">-      ...this.charterBriefing(rec?.id),</span>
+<span class="add">+      ...this.charterBriefing(rec?.id, { turn }),</span>
+
+<span class="cm">// lib/assistant.js:2765-2775 — say() already counts the turn; hand it to preamble()</span>
+   const turn = this.jobs.list().filter((j) =&gt; j.thread === thread).length;
+   ...
+<span class="del">-      preamble: this.preamble(rec?.id, { queue: ... }),</span>
+<span class="add">+      preamble: this.preamble(rec?.id, { queue: ..., digest: ..., turn }),</span>
+</pre>
+
+<h3>The number that moves</h3>
+<div class="tw"><table>
+  <thead><tr><th>Number</th><th class="num">Before</th><th class="num">After</th></tr></thead>
+  <tbody>
+    <tr><td>Charter bytes on an ordinary turn</td><td class="num">19,720</td><td class="num good">0 (a ~300 B marker instead)</td></tr>
+    <tr><td>Charter bytes on turn 0 / after an edit / every 20th</td><td class="num">19,720</td><td class="num">19,720 — full text, unchanged</td></tr>
+    <tr><td>Amortised charter cost per turn</td><td class="num">19,720</td><td class="num good">≈ 986</td></tr>
+    <tr><td>One turn's preamble (Assistant #2, digest still in)</td><td class="num">36,974 B</td><td class="num good">17,254 B (−53%)</td></tr>
+  </tbody>
+</table></div>
+
+<h3>Acceptance test</h3>
+<pre>const t0 = assistant.preamble(PRIMARY_ASSISTANT, { turn: 0 });
+const t1 = assistant.preamble(PRIMARY_ASSISTANT, { turn: 1 });
+assert.ok(t0.includes("Charter — the long tier, read in full"), "turn 0 carries it");
+assert.ok(t1.includes("Charter — unchanged since turn"), "turn 1 does not");
+assert.ok(Buffer.byteLength(t0) - Buffer.byteLength(t1) &gt; 19000, "the difference is the charter");
+writeFileSync(charterPath, readFileSync(charterPath, "utf8") + "\n## 2026-11-02\nnew entry\n");
+assert.ok(assistant.preamble(PRIMARY_ASSISTANT, { turn: 2 }).includes("read in full"), "an edit re-sends it");
+assert.ok(assistant.charterBriefing(PRIMARY_ASSISTANT, { turn: 30 }).join("\n").includes("read in full"),
+  "20 turns after the last send, the refresh is due");</pre>
+<p class="meta">The memo must be set in <b>both</b> branches that return the full text (the ≤20,000-char branch and the clipped
+one), or the next turn re-sends it. Import <code>createHash</code> from <code>node:crypto</code> in <code>lib/assistant.js</code>; it has no
+other use. Existing tests that assert the charter text is in <code>preamble()</code> must pass
+<code>{ turn: 0 }</code> — <code>test/assistant-profile.test.js</code>, <code>test/assistant-queue-directive.test.js</code>,
+<code>test/roles.test.js</code> and <code>test/assistant-settings-split.test.js</code> call it without options today.</p>
+
+<h2 id="result">5. What the three changes add up to</h2>
+<p>At the measured 43 turns/hour, with the digest on every turn and the charter amortised. The last three rows are the
+point: twice as often as today (86 turns) still sends <b>13% fewer</b> bytes; three times as often costs 31% more, and
+buys three times the responsiveness. The per-turn payload falls by more than half either way.</p>
+<div class="tw"><table>
+  <thead><tr><th>Scenario</th><th class="num">turns/h</th><th class="num">bytes/turn</th><th class="num">bytes/h</th><th class="num">vs today</th></tr></thead>
+  <tbody>
+<tr><td>today (charter + digest every turn)</td><td class="num">43</td><td class="num">36,974</td><td class="num">1,794,889</td><td class="num good">—</td></tr>
+<tr><td>after: 43 turns, digest every turn, charter memoized</td><td class="num">43</td><td class="num">18,240</td><td class="num">784,320</td><td class="num good">−56%</td></tr>
+<tr><td>after: 86 turns (2&times; the events), same</td><td class="num">86</td><td class="num">18,240</td><td class="num">1,568,640</td><td class="num good">−13%</td></tr>
+<tr><td>after: 129 turns (3&times; the events), same</td><td class="num">129</td><td class="num">18,240</td><td class="num">2,352,960</td><td class="num bad">+31%</td></tr>
+<tr><td>after: 86 turns, half of them gated sweeps</td><td class="num">86</td><td class="num">14,253</td><td class="num">1,225,715</td><td class="num good">−32%</td></tr>
+  </tbody>
+</table></div>
+<p class="meta">Bytes/turn after = 9,279 (everything but charter and digest) + 7,975 (digest) + 986 (charter amortised
+over 20 turns). Gated sweep turns average 5,317 for the digest, which is the "half gated sweeps" row. The baseline row
+is the measured 1,794,889 chars from <code>db-inputs.js</code>; the others are arithmetic on that baseline.</p>
+
+<div class="box"><b>The exchange rate.</b> Today's budget has to choose between answering events and saving bytes — that
+is why seven watches were dropped. After these changes an event turn costs 17,254 B instead of 36,974 B, so the panel
+can answer <b>2.3× as many events for the same bytes</b>, or 2× the events at 13% fewer bytes. Responsiveness stops
+being the thing that gets traded away.</div>
+
+<h2 id="order">6. Order, tests, rollback</h2>
+<ol class="steps">
+  <li><b>Change 1 first</b> (event/sweep classes). It is the correctness fix and Change 2 depends on the
+  <code>event</code> flag it computes in <code>flushWake</code>. Ship it alone if the rest slips: it stops the budget
+  from dropping events.</li>
+  <li><b>Change 2 (digest)</b> second: smallest diff, and the knob is a copy of an existing one.</li>
+  <li><b>Change 3 (charter)</b> last: it changes what a turn is told, so it wants a live read of a few turns before it
+  is trusted.</li>
+</ol>
+<p><b>Tests.</b> <code>node --test test/assistant-event-wakes.test.js</code> (new),
+<code>node --test test/assistant-profile.test.js test/assistant-queue-directive.test.js test/roles.test.js
+test/assistant-settings-split.test.js</code> (existing callers of <code>preamble()</code>), then <code>npm test</code>
+(<code>node --test --test-concurrency=4 test/*.test.js</code>).</p>
+<p><b>Measure the result on the live board</b> with the same commands as the baseline:</p>
+<pre># per-turn bytes actually received (the real message, not a reconstruction)
+node db-inputs.js
+
+# events refused by the budget: must be zero for event rules
+node -e "const a=require('C:/Users/roper/.wag/state/assistant.json');const n=Date.now();
+console.log(a.journal.filter(j=&gt;j.kind==='wake-suppressed'&amp;&amp;n-Date.parse(j.at)&lt;3600000).map(j=&gt;j.text))"</pre>
+<p><b>Rollback.</b> Change 2 is a knob: <code>digestSweepEveryNWakes: 1</code> restores the digest every wake. Change 3
+is a knob: <code>charterRefreshTurns: 1</code> restores the charter every turn (a setting, no code). Change 1 has no
+knob by design; reverting it is the two-line budget check. No state migration: <code>this.wakes</code> becomes the
+sweep ledger, and its meaning is only displayed.</p>
+
+<h2 id="out">7. Out of scope</h2>
+<p>These were measured in the review and are deliberately <b>not</b> part of this handoff. Do not fold them in.</p>
+<div class="tw"><table>
+  <thead><tr><th>Item</th><th>Why not here</th></tr></thead>
+  <tbody>
+    <tr><td>SSE-only polling (<code>lib/jobs.js:2328</code>, <code>:2848</code>)</td><td>Removes 2,880 status GETs/h at 12
+      runs; it is a transport change and wants its own test of a dropped stream.</td></tr>
+    <tr><td>Batching the 4 s stats reads (<code>lib/jobs.js:2311</code>)</td><td>Panel CPU, not gateway usage; it
+      touches the stats strip every card reads.</td></tr>
+    <tr><td>Concurrency cap (<code>config.yaml:1387</code>)</td><td>A gateway setting, not this repo; the reader may
+      want 19 runs.</td></tr>
+    <tr><td>The 2.93 MB <code>/api/jobs</code> payload (<code>server.js:3223</code>)</td><td>A page-load change with its
+      own UI surface.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="handoff">8. Handoff checklist</h2>
+<ul class="check">
+  <li>Read the constraint at the top. No change may gate an event wake.</li>
+  <li>Change 1: <code>SWEEP_WAKE_RULES</code>, the budget check at <code>lib/assistant.js:2817</code>, the ledger at
+    <code>:2852</code>, the <code>event</code> flag on the wake origin, the state rename and the Settings label.</li>
+  <li>Change 2: <code>digestSweepEveryNWakes</code> (default 1), <code>digestForTurn()</code>, the preamble block at
+    <code>:2713</code>, the flag through <code>:2775</code> and <code>:2862</code>.</li>
+  <li>Change 3: <code>charterBriefing(id, { turn })</code>, the memo in the constructor, <code>createHash</code>, the
+    <code>turn</code> through <code>say()</code>.</li>
+  <li>Update the four existing tests that call <code>preamble()</code> without <code>{ turn: 0 }</code>.</li>
+  <li>Run <code>npm test</code> and paste the pass/fail line into the PR.</li>
+  <li>After deploy, run <code>node db-inputs.js</code> and the <code>wake-suppressed</code> query above; the first
+    should show ~17 KB per turn, the second no event rule.</li>
+  <li>Report the wake count for the first hour. If it is far above 43, say so — that is the design working (events
+    are being answered), not a regression, and §5 says what it costs.</li>
+</ul>
+
+<p class="meta">Source of every figure: <code>docs/gateway-usage-review.html</code> on this branch (commit
+<code>28df9df</code>), measured 2026-11-02 17:29–17:48 EST. This page contains no measurements of its own; the
+scenario table in §5 is arithmetic on the measured baseline and is labelled as such.</p>
+
+</div>
+</body>
+</html>
