@@ -14,6 +14,10 @@
 //   1c. the debt in section 1 was SEEDED by this file; 1c records one the way the panel does — its own
 //      `noteSpawnIntent` + `checkSpawns`, its own digest advertises it, the next boot settles it and nothing is
 //      started — and then reads the same turn again to prove the settled line is refused instead of cut again;
+//   1d. a TO line at a RELEASED tree starts no run — the assistant's own TO and the reader's Send are both refused
+//      by name, with the tree and the checkout the run would have worked in — while a legitimate reply in a real
+//      tree still starts its run there (0.62.1, job 5ba56bf1: a boot re-issued a TO at a tree released hours
+//      earlier, and its shell worked in the primary checkout);
 //   2. a reasonless POST /api/restart is refused with 400 and leaves nothing queued;
 //   3. a waiting entry can be cancelled (200, queue empty) and no restart happens even once the turn it was
 //      waiting for has ended — the case a cancel has to win.
@@ -24,7 +28,7 @@ import { createServer } from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Assistant } from "../lib/assistant.js";
+import { ASSISTANT_THREAD, Assistant } from "../lib/assistant.js";
 import { freePort, git, slash, startPanel, waitFor } from "./panel-testkit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -402,6 +406,124 @@ try {
     (JSON.parse(readFileSync(asstFile, "utf8")).spawnIntents || []).find((x) => x.turnId === "turn-real-debt")?.outcome,
     "landed",
   );
+
+  // ============================================================================================
+  console.log("\n1d. a TO line at a RELEASED tree starts no run");
+  // The 0.62.1 boot's shape, with the panel's own records: a worker run in a REAL worktree, ended, and then the tree
+  // released the way a removal releases one — the registration goes, the empty folder stays, and `git` inside that
+  // folder answers for the PRIMARY checkout. The assistant's turn then writes `TO <thread>`, which is what started
+  // job 5ba56bf1 at a tree released hours earlier.
+  const released = path.join(repo, ".worktrees", "two-assistants-run-da6402");
+
+  // One panel-started run, ended at the gateway, so the thread is idle and the board holds its real record.
+  const runOnce = async (label, cwd) => {
+    const started = await api(panel.base, "/api/agents", { method: "POST", body: JSON.stringify({ prompt: label, cwd, existing: true }) });
+    eq(`a worker was started for "${label}"`, started.status, 202);
+    const id = started.body?.job?.id || null;
+    const live = await waitFor(async () => (await api(panel.base, "/api/jobs")).body?.jobs?.find((j) => j.id === id && j.runId), {
+      what: `${label} to have a run id`,
+      timeoutMs: 15_000,
+    });
+    const run = stub.state.runs.get(live?.runId);
+    if (run) {
+      run.status = "completed";
+      run.output = "held";
+    }
+    const ended = await waitFor(
+      async () => {
+        const j = (await api(panel.base, "/api/jobs")).body?.jobs?.find((x) => x.id === id);
+        return j && !["running", "starting", "waiting"].includes(String(j.status)) ? j : null;
+      },
+      { what: `${label} to end on the board`, timeoutMs: 15_000 },
+    );
+    ok(`…and the board reads "${label}" as ended`, Boolean(ended), String(ended?.status || "still live"));
+    return { id, thread: started.body?.job?.thread || null, record: ended };
+  };
+
+  git(repo, ["worktree", "add", "-q", "-b", "wtgui/two-assistants-run-da6402", slash(released)]);
+  const dead = await runOnce("hold the thread whose tree is released", released);
+  // Release it: no registration and no worktree-list entry, and (the shape the removal leaves) the folder still there.
+  git(repo, ["worktree", "remove", "--force", "--force", slash(released)]);
+  mkdirSync(released, { recursive: true });
+  const deadRecord = (await api(panel.base, "/api/jobs")).body?.jobs?.find((x) => x.id === dead.id) || null;
+  ok(
+    "the thread's record is the panel's own, with its cwd in the tree that is now released",
+    Boolean(deadRecord) && norm(deadRecord.cwd) === norm(released) && !existsSync(path.join(released, ".git")),
+    String(deadRecord?.cwd || "none"),
+  );
+  eq("…and git in that folder answers for the PRIMARY checkout", norm(git(released, ["rev-parse", "--show-toplevel"])), primary);
+
+  // The same worker shape in a tree that STILL STANDS: the legitimate resume this refusal must not cost.
+  const standing = await runOnce("hold the thread in a real tree", wt);
+  const liveRecord = standing.record || null;
+  ok("the second thread's tree is a real worktree", Boolean(liveRecord) && norm(git(wt, ["rev-parse", "--show-toplevel"])) === norm(wt), String(liveRecord?.cwd || "none"));
+
+  // The assistant's own path — `TO <thread>` — with a recorder in place of jobs.create, so "started a run" is exactly
+  // "create was called, and with what cwd". The job records are the PANEL's own, from /api/jobs above.
+  const createdTo = [];
+  const records = [deadRecord, liveRecord].filter(Boolean);
+  const toBot = new Assistant({
+    config: {
+      jobsFile: path.join(dir, "logs", "jobs.json"),
+      defaultCwd: repo,
+      // Its own file: the live panel's assistant store belongs to the panel, and this bot only needs the TO path.
+      assistantFile: path.join(dir, "logs", "assistant-to.json"),
+      charterFile: path.join(dir, "logs", "assistant-charter-to.md"),
+    },
+    jobs: {
+      list: () => records,
+      get: (id) => records.find((j) => j.id === id) || null,
+      firstOfThread: (t) => records.find((j) => j.thread === t) || null,
+      busyFor: () => ({ held: false, where: null, by: [] }),
+      modelFor: () => null,
+      create: async (opts) => {
+        createdTo.push(opts);
+        return { id: "to-job", thread: opts.thread, status: "starting" };
+      },
+    },
+    getProjects: () => [{ name: "sandbox-repo", path: repo, mainBranch: "main", remote: "origin" }],
+    onEvent: () => {},
+    onLog: () => {},
+  });
+  toBot.setSettings({ autonomy: "auto" });
+  const toTurn = (id, thread) => ({
+    id,
+    thread: ASSISTANT_THREAD,
+    status: "done",
+    startedAt: new Date(Date.now() - 60_000).toISOString(),
+    endedAt: new Date().toISOString(),
+    lines: [{ kind: "text", text: `That worker's tree is finished. Letting it know.\nTO ${thread}: are you still there?\n`, at: Date.now() }],
+  });
+  await toBot.harvest(toTurn("turn-to-released", dead.thread));
+  clearTimeout(toBot.persistTimer);
+  if (toBot.timer) clearInterval(toBot.timer);
+  eq("the assistant's TO line at the released tree created no run", createdTo.length, 0);
+  const toRefused = (toBot.journal || []).find((j) => j.kind === "reply-tree-refused") || null;
+  ok("…and the refusal is journalled by name", Boolean(toRefused), JSON.stringify((toBot.journal || []).map((j) => j.kind)));
+  ok("…naming the released tree", String(toRefused?.text || "").toLowerCase().includes(norm(released)), String(toRefused?.text || ""));
+  ok("…and the primary checkout it would have worked in", String(toRefused?.text || "").toLowerCase().includes(primary), String(toRefused?.text || ""));
+  eq("…as one refusal, not a second send-failed", (toBot.journal || []).filter((j) => j.kind === "send-failed").length, 0);
+
+  await toBot.harvest(toTurn("turn-to-live", standing.thread));
+  eq("a TO line at a tree that still stands still starts its run", createdTo.length, 1, JSON.stringify((toBot.journal || []).map((j) => `${j.kind}: ${j.text}`)));
+  eq("…in that thread's own tree", norm(createdTo[0]?.cwd || ""), norm(wt));
+  eq("…and it is the thread it was written for", createdTo[0]?.thread, standing.thread);
+
+  // The reader's Send takes the same route in server.js: a reply into the released tree is a 409 with the reason, and
+  // nothing is handed to the gateway.
+  const deadPosts = stub.state.posts.filter((p) => p.session === dead.thread).length;
+  const deadReply = await api(panel.base, "/api/agents/reply", { method: "POST", body: JSON.stringify({ thread: dead.thread, text: "are you still there?" }) });
+  eq("the reader's Send into the released tree is refused (409)", deadReply.status, 409);
+  eq("…with the code the panel can name it by", String(deadReply.body?.code || ""), "tree_released");
+  ok("…naming the tree", String(deadReply.body?.error || "").toLowerCase().includes(norm(released)), String(deadReply.body?.error || ""));
+  eq("…and the checkout it would have worked in", norm(deadReply.body?.checkout || ""), primary);
+  eq("…and nothing reached the gateway for that thread", stub.state.posts.filter((p) => p.session === dead.thread).length, deadPosts);
+  eq("…and no second job sits on that thread", ((await api(panel.base, "/api/jobs")).body?.jobs || []).filter((j) => j.thread === dead.thread).length, 1);
+
+  const liveReply = await api(panel.base, "/api/agents/reply", { method: "POST", body: JSON.stringify({ thread: standing.thread, text: "thanks — one more thing" }) });
+  eq("a reply in a real worktree still starts its run (202)", liveReply.status, 202);
+  const livePost = stub.state.posts.filter((p) => p.session === standing.thread).at(-1) || null;
+  eq("…with the thread's own tree as its cwd", norm(livePost?.cwd || ""), norm(wt));
 
   // ============================================================================================
   console.log("\n2. a reasonless restart is refused with 400");
