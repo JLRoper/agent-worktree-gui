@@ -12,8 +12,11 @@
 // NOW. The banner is a fixed layer under the topbar. Its top is the topbar's MEASURED height (the header wraps to a
 // second row on a narrow window, so a constant would be wrong at one of the two widths this gate drives) and its
 // sides are the board's own column, which is what keeps the docked rail uncovered. The layer takes no press at all
-// and the bar inside it takes its own, so a floating bar never eats a click meant for the board. A red failure stays
-// until its ✕; a green confirmation carries no ✕ and takes itself away after four seconds; both fade in.
+// and the bar inside it takes its own, so a floating bar never eats a click meant for the board. A red failure waits
+// for its ✕ — this gate sets the Board tab's banner timeout to 0, because with its default 5 s the bar hides itself
+// and the survival below would be measuring the clock instead of the layer (that clock has its own gate,
+// tools/verify-banner-timeout.mjs). A green confirmation carries no ✕ and takes itself away after four seconds; both
+// fade in.
 //
 // WHAT IS DRIVEN, on a panel of this checkout (throwaway config, store, HERMES_HOME and port) in a real Chromium:
 //   * at 1954px with the rail closed: the layer is fixed, its top is the topbar's bottom edge, the bar sits inside
@@ -124,6 +127,16 @@ async function main() {
         // the board itself is painted by the boot `resync()` from the real server.
         await openPage(page, panel.base, { selector: "#btn-assistant" });
         await page.addInitScript(stubEventSourceInit);
+        // The Board tab's clock at 0: this gate is about where the bar sits and what dismisses it, not about the
+        // timeout (tools/verify-banner-timeout.mjs owns that). With the default 5 s the "still there at 4.6s" check
+        // below would be racing the clock instead of proving the bar waits for its ✕.
+        await page.addInitScript(() => {
+          try {
+            localStorage.setItem("wtgui.bannerSeconds", "0");
+          } catch {
+            /* a context that refuses storage keeps the default 5 s; the checks below say so if one fails */
+          }
+        });
         await page.reload({ waitUntil: "domcontentloaded" });
         await page.waitForSelector("#health.ok", { timeout: 30_000 });
         await page.waitForSelector("#projects > *", { timeout: 30_000 });
