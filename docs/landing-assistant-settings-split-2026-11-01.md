@@ -13,7 +13,7 @@ one value is the defect this removes.
 
 ## What owns what
 
-The ownership table lives in one place, `SETTING_SCOPE` in `lib/assistant/config.js`, next to `DEFAULTS`, so a key
+The ownership table lives in one place, `SETTINGS_SCOPE` in `lib/assistant/config.js`, next to `DEFAULTS`, so a key
 added later cannot be owned by nobody or by both. `scopeOf(key)` answers from that table and nothing else; the page
 and the server both read it.
 
@@ -78,6 +78,35 @@ carries all of them.
   `seconds` set to 7 in the browser reached `/api/assistant` as 7 and came back as 7 in the input after the reload,
   while the assistant's own `maxWakesPerHour`/`quietSeconds` did not move.
 
+## Re-verification on 0.52.0 (2026-11-02)
+
+This brief was re-issued after the split landed, so this section is a re-check rather than a second
+implementation. The split is PR #189, merge commit `65f1e8e` (2026-11-02T02:48:34Z), version 0.51.0.
+`git diff --stat 65f1e8e origin/main -- lib/assistant/config.js lib/assistant/profile.js public/assistant.js
+public/index.html test/assistant-settings-split.test.js test/assistant-thresholds.test.js` is empty: the code
+this document describes is byte for byte what main carries, so nothing below needed re-doing.
+
+| the brief's item | where it lives | the read on 0.52.0 |
+| --- | --- | --- |
+| the Watchdog tab holds exactly the watchdog-scope keys | `SETTINGS_SCOPE` (`lib/assistant/config.js:159`), `WATCHDOG_KEYS`/`ASSISTANT_KEYS` derived at `:189-190`, served as `state.settingScope` (`lib/assistant.js:1016`), drawn by `renderWatchdog` (`public/assistant.js:1701`) | 12 keys: `enabled`, `rules`, `commandAudit`, `spawnAutoStart`, `seconds`, `repeatLimit`, `approvalSeconds`, `exitedSeconds`, `contextPercent`, `leftoverMinutes`, `repeatTurns`, `rearmSeconds` — 10 `data-as-set` inputs plus the 17-rule escalation table |
+| an assistant's tab holds only assistant-scope keys | `renderAssistantSettings` (`public/assistant.js:1814`) | 10 keys: `autonomy`, `spawn`, `model`, `cwd`, `maxWakesPerHour`, `quietSeconds`, `childQuietSeconds`, `prompt`, `whitelists`, `escalateTo` — 7 `data-as-set` inputs, with the role prompt and the two whitelists still edited in the Role tab and named in the pane's help |
+| an empty-but-rendered per-assistant escalation list | `escalateTo` in `lib/assistant/profile.js` (`pickEscalation`, `ESCALATION_MAX` 8), served at `lib/assistant.js:1019` | drawn under *Escalate to*, empty and ordered, with the pane saying nothing acts on it yet |
+| Assistant #1 byte-identical | `settingsFor(1)` returns `this.settings` (`lib/assistant.js:579`); the legacy routes carry no `assistantId` | `test/assistant-settings-split.test.js` pins the 19-key payload literally and hashes the store |
+| unit tests for the split | `test/assistant-settings-split.test.js` (7), `test/assistant-thresholds.test.js` (8) | 15 tests, 15 pass |
+| `npm test` green | `node --test --test-concurrency=4 test/*.test.js` | 752 tests, 752 pass, 0 fail |
+| both tabs render, a Watchdog value round-trips a reload | `tools/verify-assistant-subtabs.mjs` plus a probe | 110 checks, 0 failed; the probe 14/14 |
+
+The probe booted a sandbox panel of its own and drove headless Chromium over it. It measured: the Watchdog
+pane draws *The watchdog*, *Every pass* and *Per-rule escalation* with 10 `data-as-set` keys and 17
+`data-as-rule` selects; the session's Settings pane draws 7 `data-as-set` keys and the empty *Escalate to*
+list; no `data-as-set` key appears in both panes; `seconds` set to 7 in the browser reached `/api/assistant`
+as 7 and came back as 7 in the input after a page reload, while `maxWakesPerHour` (0) and `quietSeconds`
+(240) did not move; no page errors.
+
 ## Version
 
 `0.50.2 → 0.51.0`, minor: two new panes and a new stored field, with the old routes and payloads still answering.
+
+The re-verification record above is `0.52.0 → 0.52.1`, patch: a doc and nothing a reader can use, per
+`docs/versioning.md`'s "a doc". The brief that asked for this work named 0.51.0, but that number was spent by
+the merge that landed the split itself, so a fresh minor here would inflate main's number for a re-check.
