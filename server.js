@@ -663,6 +663,25 @@ const remoteWrites = new RemoteWrites({
   onGrant: () => void refreshGuards(),
 });
 
+// The proof an AUTO-ALLOWED write really went through: the branch is on the remote. `git ls-remote` is asked a few
+// times because the guard reports as it STARTS the push, not after it finishes — the first read can be a second too
+// early. A push the chained version gate refused never shows up, so it never becomes a review card.
+remoteWrites.setVerifier(async ({ worktree, remote, branch }) => {
+  const name = String(branch || "").replace(/^refs\/heads\//, "");
+  if (!worktree || !name) return { found: false };
+  const rem = String(remote || "origin");
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const out = await gitIn(worktree, ["ls-remote", "--heads", rem, `refs/heads/${name}`], 12_000);
+    if (out.ok && out.out) {
+      const sha = out.out.split(String.fromCharCode(10))[0].split(String.fromCharCode(9))[0].trim();
+      if (sha) return { found: true, sha };
+    }
+    if (Date.now() > deadline) return { found: false };
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+});
+
 // ---- spawning ---------------------------------------------------------------------------
 // The New-agent card, its preview and the assistant's spawner all ask the same question, so they
 // ask it in one place (lib/features/spawn.js), named `spawnFeature` because node:child_process
@@ -3149,6 +3168,31 @@ const server = createServer(async (req, res) => {
       });
     }
 
+    // THE GUARD REPORTING A WRITE IT ALREADY ALLOWED. When the guard's own policy file says `allow` (or the tree is
+    // marked landing) the hook returns before /request, so this is the only way the panel hears about a push nobody
+    // was asked about. Best effort on the hook's side — 2 s and a swallowed exit status — because a panel that is
+    // down must never hold up a push its policy already permits. Nothing is drawn here: the record is confirmed
+    // against the remote and only then broadcast as a review card.
+    if (route === "/api/remote-write/report" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const worktree = String(body.worktree || "");
+      const branch = String(body.branch || "");
+      const found = spawnFeature.projectForPath(worktree);
+      const remote = String(body.remote || "") || found?.remote || "";
+      const rec = remoteWrites.review({
+        kind: "push",
+        worktree,
+        project: found?.name || "",
+        branch,
+        remote,
+        refs: String(body.refs || ""),
+        why: String(body.why || "the policy in this tree allows remote writes without asking"),
+        command: `git push ${remote || "<remote>"} ${branch || "<branch>"}   — from ${cleanPath(worktree)} (allowed without asking)`,
+      });
+      return sendJson(res, 200, { ok: true, id: rec.id });
+    }
+
     // THE GUARD ASKING. A local-only worktree's `git push` reaches here (lib/push-guard.js writes the hook that
     // calls it) and this is what draws the permission box. Three answers, and the hook reads them off the body:
     //   allowed:true          — go ahead (the setting allows it, the tree was started to land, or a grant stands)
@@ -3166,6 +3210,19 @@ const server = createServer(async (req, res) => {
       if (decision.allowed) {
         // A one-shot grant is spent by the write it was given for.
         if (decision.consume) remoteWrites.spend(worktree);
+        // A write NOBODY WAS ASKED ABOUT is still a write somebody made. It comes back as a review card once the
+        // remote confirms it (remoteWrites.setVerifier), with Keep and one named Unwind: the reader's stated
+        // preference is to see what a standing permission did, not only what it was asked about.
+        remoteWrites.review({
+          kind: "push",
+          worktree,
+          project: found?.name || "",
+          branch: String(body.branch || ""),
+          remote: String(body.remote || "") || found?.remote || "",
+          refs: String(body.refs || ""),
+          why: decision.why,
+          command: `git push ${String(body.remote || "origin")} ${String(body.branch || "<branch>")}   — from ${cleanPath(worktree)}`,
+        });
         return sendJson(res, 200, { allowed: true, why: decision.why, policy });
       }
       if (!decision.ask) {
@@ -3228,6 +3285,72 @@ const server = createServer(async (req, res) => {
         }
       }
       return sendJson(res, 200, { ...out, resumed, state: remoteWrites.state() });
+    }
+
+    // KEEP an auto-allowed write: the record goes, the write stands. Nothing is run.
+    if (route === "/api/remote-write/review" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const out = remoteWrites.keepReview(String(body.id || ""));
+      return sendJson(res, out.ok ? 200 : 404, out);
+    }
+
+    // UNWIND an auto-allowed write, and the only place an inverse is ever run. The page sends the record's ID and
+    // nothing else: the command is the record's own (`unwindFor` built it when the remote confirmed the write), so a
+    // client cannot name a command here. A remote branch delete is its own confirmation — the button the reader
+    // pressed spelled it out — and nothing else is runnable: a write with no safe inverse only ever offers a drafted
+    // message, which the reader sends (or does not). Nothing auto-executes.
+    if (route === "/api/remote-write/unwind" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const id = String(body.id || "");
+      const rec = remoteWrites.reviewFor(id);
+      if (!rec) return sendJson(res, 404, { error: "unknown review — nothing to unwind" });
+      const plan = rec.unwind || remoteWrites.unwindFor(rec);
+      if (!plan || plan.type !== "delete-branch") {
+        return sendJson(res, 409, { error: "that write has no safe inverse — the card offers a message to the agent instead", unwind: plan });
+      }
+      const worktree = String(rec.worktree || "");
+      const remote = String(rec.remote || "");
+      const branch = String(rec.branch || "").replace(/^refs\/heads\//, "");
+      const tree = await stat(worktree).catch(() => null);
+      if (!tree || !tree.isDirectory()) {
+        return sendJson(res, 409, { error: `cannot unwind: ${worktree || "(no tree)"} is not a directory any more` });
+      }
+      const remotes = await gitIn(worktree, ["remote"], 10000);
+      const names = remotes.ok ? remotes.out.split("\n").map((s) => s.trim()).filter(Boolean) : [];
+      if (!names.includes(remote)) {
+        return sendJson(res, 409, { error: `cannot unwind: ${remote || "(no remote)"} is not a remote of that tree (${names.join(", ") || "none"})` });
+      }
+      // The record's own `unwindFor` already refused a protected or unshaped branch; this is the second fence, on the
+      // value that is about to be passed to git, so a hand-edited record cannot turn the delete into something else.
+      if (!branch.includes("/") || /^(main|master|trunk|develop|development|release|head|next)$/i.test(branch)) {
+        return sendJson(res, 409, { error: `refusing to delete ${remote}/${branch}: that is not a feature branch` });
+      }
+      try {
+        // WTGUI_PUSH_GRANT is the guard's own documented bypass, used deliberately: the reader pressed a button that
+        // named this delete, and a permission box asking the panel to allow the panel would be a loop, not a check.
+        // The delete is the ONLY command this route runs, from the record's branch and remote and nothing in the body.
+        const run = await execP("git", ["-C", worktree, "push", remote, "--delete", branch], {
+          timeout: 60_000,
+          windowsHide: true,
+          env: { ...process.env, WTGUI_PUSH_GRANT: "1", GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never", GIT_ASKPASS: "echo" },
+        });
+        const text = `${run.stdout || ""}\n${run.stderr || ""}`.split(String.fromCharCode(10)).map((s) => s.trim()).filter(Boolean).join(" · ");
+        const out = remoteWrites.markUnwound(id, { did: plan.label });
+        log(`remote-write review ${id}: unwound — ${plan.command}: ${text || "no output"}`);
+        return sendJson(res, 200, { ok: true, review: out ? remoteWrites.publicReview(out) : null, did: plan.label });
+      } catch (e) {
+        const text = `${e.stdout || ""}\n${e.stderr || ""}`.split(String.fromCharCode(10)).map((s) => s.trim()).filter(Boolean).join(" · ");
+        // A branch that is already gone is the outcome the reader asked for, not a failure to dress up as one.
+        if (/remote ref does not exist|does not exist|unable to delete/i.test(text)) {
+          const out = remoteWrites.markUnwound(id, { did: plan.label, alreadyGone: true });
+          log(`remote-write review ${id}: ${remote}/${branch} was already gone — nothing to delete`);
+          return sendJson(res, 200, { ok: true, alreadyGone: true, review: out ? remoteWrites.publicReview(out) : null, did: plan.label });
+        }
+        log(`remote-write review ${id}: the delete of ${remote}/${branch} failed — ${text || String((e && e.message) || e)}`);
+        return sendJson(res, 502, { error: `the delete failed: ${text || String((e && e.message) || e)}` });
+      }
     }
 
     // The setting itself. Written into this panel's config.json (with every other key left exactly as it was),
