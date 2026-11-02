@@ -110,3 +110,66 @@ as 7 and came back as 7 in the input after a page reload, while `maxWakesPerHour
 The re-verification record above is `0.52.0 → 0.52.1`, patch: a doc and nothing a reader can use, per
 `docs/versioning.md`'s "a doc". The brief that asked for this work named 0.51.0, but that number was spent by
 the merge that landed the split itself, so a fresh minor here would inflate main's number for a re-check.
+
+## Re-verification on 0.53.2 (2026-11-02, at `622940f`)
+
+The brief was issued a second time with its list all `todo` and its number `0.51.0`, and the branch arrived carrying
+none of its own commits: `git rev-list --left-right --count origin/main...HEAD` printed `1 0` (one behind origin,
+none ahead), and fast-forwarding onto `origin/main` made that `0 0`. `package.json` reads **0.53.2**. The split
+landed as PR #189 (`65f1e8e`, 0.51.0) and a first re-check recorded 0.52.1, so this pass is a re-read at a moved
+base, not a second implementation.
+
+The split's own table is unchanged; later landings added to the files around it. `git diff --stat 65f1e8e origin/main
+-- lib/assistant/config.js lib/assistant/profile.js public/assistant.js test/assistant-settings-split.test.js
+test/assistant-thresholds.test.js` is 3 files, 252 insertions, 2 deletions: the queue's two knobs
+(`queueDigestSize`, `queueSweepEveryNWakes`) in the assistant half of the table, the escalation list's editor in
+`public/assistant.js`, and their tests. No key changed owner.
+
+| anchor | at `65f1e8e` (0.51.0) | at `622940f` (0.53.2) |
+| --- | --- | --- |
+| `SETTINGS_SCOPE` | `lib/assistant/config.js:159` | `lib/assistant/config.js:165` |
+| `WATCHDOG_KEYS` / `ASSISTANT_KEYS` | `lib/assistant/config.js:189` / `:190` | `lib/assistant/config.js:199` / `:200` |
+| `settingsFor` | `lib/assistant.js:578` | `lib/assistant.js:827` |
+| `state()` | `lib/assistant.js:959` | `lib/assistant.js:1238` |
+| …its `settingScope` | `lib/assistant.js:994` | `lib/assistant.js:1273` |
+| `renderWatchdog` | `public/assistant.js:1701` | `public/assistant.js:1704` |
+| `renderAssistantSettings` | `public/assistant.js:1798` | `public/assistant.js:1801` |
+
+(THEN read with `git show 65f1e8e:<path> | grep -n`; the 0.52.0 section above quoted a render line rather than the
+declaration for two of these, which is why its numbers differ by a few.)
+
+| the brief's item | the read at `622940f` |
+| --- | --- |
+| the Watchdog tab holds exactly the watchdog-scope keys | 12 keys in the table — `enabled`, `rules`, `commandAudit`, `spawnAutoStart`, `seconds`, `repeatLimit`, `approvalSeconds`, `exitedSeconds`, `contextPercent`, `leftoverMinutes`, `repeatTurns`, `rearmSeconds`. The pane draws 10 `data-as-set` inputs plus the 17-rule table; `rearmSeconds` is a knob with no control and always has been (`test/assistant-thresholds.test.js:73-75`) |
+| an assistant's tab holds only assistant-scope keys | 12 keys — `autonomy`, `spawn`, `model`, `cwd`, `maxWakesPerHour`, `quietSeconds`, `childQuietSeconds`, `queueDigestSize`, `queueSweepEveryNWakes`, `prompt`, `whitelists`, `escalateTo`. The pane draws 7 inputs; the role prompt and the two whitelists stay in the Role tab, the escalation list has its own editor, and the queue's two knobs have no control yet |
+| an empty-but-rendered per-assistant escalation list | drawn under *Escalate to — the assistants this one would hand a subject to*, reading `(empty — this assistant hands nothing to another one)`, with the pane saying nothing acts on it yet |
+| Assistant #1 byte-identical | `settingsFor(1)` returns `this.settings` (`lib/assistant.js:827-829`); the 21-key payload is pinned literally and the store hashed by `test/assistant-settings-split.test.js`; its scratchpad and journal are still the one `assistant.json` beside the job store, with no `assistants/assistant-1/` file |
+| legacy routes carry no `assistantId` | the page sends `assistantId` only when the control carries `data-as-for` (`public/assistant.js:2657-2661`), which #1's pane never sets; `POST /api/assistant/settings` with no id calls `setSettingsFor(undefined, …)` (`server.js:2268-2282`) |
+| unit tests for the split | `test/assistant-settings-split.test.js` 6 + `test/assistant-thresholds.test.js` 9 = 15, 15 pass |
+| `npm test` green | `node --test --test-concurrency=4 test/*.test.js` — 787 tests, 787 pass, 0 fail (74.6 s), `EXIT=0` |
+| both tabs render, a Watchdog value round-trips a reload | `tools/verify-assistant-subtabs.mjs` 110 checks, 0 failed; a probe of its own 22 checks, 0 failed |
+
+The probe (`%TEMP%/wag/a79d4c1e/watchdog-split-probe3.mjs`, booting this tree's own `server.js` through
+`tools/panel-testkit.mjs` on a sandbox port) measured: the float's row is `Assistant #1, Alerts, Watches, Messages,
+Scratchpad, Role, Watchdog` with no Settings among them; the Watchdog pane draws *THE WATCHDOG*, *EVERY PASS*,
+*PER-RULE ESCALATION* and *NOW*, its 10 inputs all `scopeOf === "watchdog"`, and 17 rule selects; the session's
+Settings pane draws its 7 inputs, all `scopeOf === "assistant"`; the two drawn sets do not intersect; `seconds` set
+to 7 in the browser reached `/api/assistant` as 7 and came back as 7 in the input after a reload, while
+`maxWakesPerHour` (0) and `quietSeconds` (240) did not move; no page errors. A `seconds: 3600` in the sandbox config
+clamps to the knob's own 120 s bound on the way in, which is the bound doing its job, not a moved default.
+
+### The gate this pass had to correct
+
+`tools/verify-assistant-subtabs.mjs` deep-equalled the session's sub-tab row to `["chat", "settings"]`. Commit
+`935bfc4` (the per-assistant task queue) added a third sub-tab, `queue`, and updated
+`test/assistant-subtabs.test.js:242` to expect `["chat", "settings", "queue"]` — but left the shipped gate asserting
+two, so the gate was red on main: 110 checks, 2 failed, on `the session's own row` and `…labelled`. That is stale copy
+from a later landing, not a defect in the split and not this branch's regression; the assertion is corrected here to
+the three-tab list (the header comment with it) and the gate then reads 110 checks, 0 failed. No product code is
+touched by this pass.
+
+### Version (`0.53.2 → 0.53.3`)
+
+Patch: a doc and a stale assertion in a verification script, nothing a reader can use — `docs/versioning.md`'s "a
+doc". The brief named 0.51.0, but that number was spent by the merge that landed the split itself, and main has since
+moved to 0.53.2, so this branch takes the next patch over main rather than re-spending a minor.
