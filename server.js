@@ -740,6 +740,9 @@ restart = new RestartController({
   jobs,
   assistant,
   home: hermesHome(),
+  // The version THIS boot serves. It is read once above, before the file could be bumped on disk: a restart's
+  // reason naming this version is a restart that would change nothing.
+  version: VERSION,
   hermesBin: config.hermesBin || null,
   credentials: () => jobs.api,
   log,

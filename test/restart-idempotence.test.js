@@ -35,8 +35,9 @@ const fakeJobs = (jobs = []) => {
 };
 const makeController = (over = {}) => {
   const runs = [];
+  const file = over.restartFile || path.join(dir, `restart-${++seq}.json`);
   const controller = new RestartController({
-    config: { restartFile: path.join(dir, `restart-${++seq}.json`), pythonBin: "node" },
+    config: { restartFile: file, pythonBin: "node" },
     jobs: over.jobs || fakeJobs(),
     assistant: null,
     home,
@@ -56,7 +57,7 @@ const makeController = (over = {}) => {
     identityPollMs: 20,
     ...over,
   });
-  return { controller, runs };
+  return { controller, runs, file };
 };
 
 test("a restart with no reason is a 400, and nothing is queued", async () => {
@@ -80,6 +81,162 @@ test("a reason is kept, trimmed, and the request is still accepted at once", asy
   assert.equal(rec.reason, "pick up the new config");
   assert.equal(controller.state().queued[0].waitFor, "held");
   controller.cancel(rec.id);
+});
+
+// ---- the request table: five shapes the storm produced ---------------------------------------------
+// One row per failure, and each test's name states the failure it prevents rather than repeating the input.
+// The controller is real; the only substitution is the restart command, so a queued entry can never bounce
+// anything here. Every row also asserts the queue is exactly what the rule allows, because "refused" that still
+// left a wait behind is the defect twice over.
+const runCase = async (row) => {
+  const ctx = await row.setup();
+  let error = null;
+  if (row.boot) {
+    await ctx.controller.resumePending();
+  } else {
+    try {
+      ctx.entry = ctx.controller.request(row.request);
+    } catch (e) {
+      error = e;
+    }
+  }
+  return { ...ctx, error };
+};
+const REQUEST_CASES = [
+  {
+    label: "missing target",
+    prevents: "a restart request with nothing named to restart",
+    setup: async () => makeController({ version: "0.67.0" }),
+    request: { reason: "serve the new build" },
+    status: 400,
+    patterns: [/needs a target/, /RESTART <gateway\|panel>/, /reason/],
+    queue: 0,
+  },
+  {
+    label: "leading pipe",
+    prevents: "the grammar's separator being stored as the reason",
+    setup: async () => makeController({ version: "0.67.0" }),
+    request: { target: "panel", reason: "| serve 0.68.0" },
+    status: 400,
+    patterns: [/must not start with a pipe/, /RESTART <gateway\|panel>/, /reason itself after the pipe/],
+    queue: 0,
+  },
+  {
+    label: "stale version",
+    prevents: "a second bounce for a version the panel already serves",
+    setup: async () => makeController({ version: "0.67.0" }),
+    request: { target: "panel", reason: "serve 0.67.0 to pick up the approvals dock" },
+    status: 409,
+    patterns: [/already serves/, /"0\.67\.0"/, /bounce it for nothing/],
+    queue: 0,
+  },
+  {
+    label: "second queued restart",
+    prevents: "a second wait holding the slot without naming the entry that blocks it",
+    setup: async () => {
+      const ctx = makeController({ version: "0.67.0", jobs: fakeJobs([{ thread: "held", status: "running" }]) });
+      ctx.first = ctx.controller.request({ target: "gateway", reason: "pick up the new config", waitFor: "held" });
+      return ctx;
+    },
+    request: { target: "gateway", reason: "a second ask", waitFor: "held" },
+    status: 409,
+    patterns: (ctx) => [new RegExp(`already queued \\(${ctx.first.id}\\)`), /pick up the new config/, /cancel it before asking again/],
+    queue: 1,
+  },
+  {
+    label: "boot drop",
+    prevents: "a queued entry recorded for a version already served replaying on the next boot",
+    setup: async () => {
+      const file = path.join(dir, `restart-boot-${++seq}.json`);
+      writeFileSync(
+        file,
+        JSON.stringify({
+          queued: [
+            { id: "old00001", target: "gateway", reason: "serve the old build", waitFor: "held", version: "0.66.0", queuedAt: new Date().toISOString() },
+          ],
+        }),
+        "utf8",
+      );
+      return makeController({ restartFile: file, version: "0.67.0" });
+    },
+    boot: true,
+    status: null,
+    queue: 0,
+  },
+];
+
+for (const row of REQUEST_CASES) {
+  test(`${row.label} — ${row.prevents}`, async () => {
+    const ctx = await runCase(row);
+    if (row.status) {
+      assert.ok(ctx.error, `${row.label}: the request was refused`);
+      assert.equal(ctx.error.status, row.status);
+      const patterns = typeof row.patterns === "function" ? row.patterns(ctx) : row.patterns;
+      for (const re of patterns) assert.match(ctx.error.message, re);
+    }
+    assert.equal(ctx.controller.state().queued.length, row.queue, "the queue is exactly what the rule allows");
+    if (row.boot) {
+      const line = ctx.controller.state().journal.find((j) => /dropped queued/.test(j.text));
+      assert.ok(line, "the boot drop is in the journal");
+      assert.match(String(line.text), /old00001/);
+      assert.match(String(line.text), /0\.66\.0/);
+      assert.match(String(line.text), /0\.67\.0/);
+    }
+    await sleep(150);
+    assert.equal(ctx.runs.length, 0, "nothing restarted");
+    // The row's own wait (the duplicate case's first entry) must not outlive the test: a loop polling a thread
+    // that never ends is a test run that never exits.
+    if (ctx.first && ctx.controller.state().queued.some((e) => e.id === ctx.first.id)) ctx.controller.cancel(ctx.first.id);
+  });
+}
+
+test("a version this panel does not serve is still a reason to restart", async () => {
+  // The guard refuses the version ALREADY served, not every number in a reason: a bump on disk that this process
+  // has not picked up is exactly the restart worth queueing.
+  const { controller } = makeController({ version: "0.67.0", jobs: fakeJobs([{ thread: "held", status: "running" }]) });
+  const rec = controller.request({ target: "gateway", reason: "serve 0.68.0, which is on disk but not running", waitFor: "held" });
+  assert.equal(rec.accepted, true);
+  assert.equal(rec.version, "0.67.0");
+  assert.equal(controller.state().queued.length, 1);
+  controller.cancel(rec.id);
+});
+
+test("a boot keeps a queued entry for a version this panel does not serve yet", async () => {
+  // The other half of the drop rule: `<=` is a filter, not a policy against restoring the queue. A boot that
+  // dropped everything would make the version recorded on the entry meaningless.
+  const file = path.join(dir, `restart-boot-keep-${++seq}.json`);
+  writeFileSync(
+    file,
+    JSON.stringify({
+      queued: [
+        { id: "new00001", target: "gateway", reason: "serve 0.68.0 after the bump", waitFor: "held", version: "0.68.0" },
+      ],
+    }),
+    "utf8",
+  );
+  const jobs = fakeJobs([{ id: "job-hold", thread: "held", status: "running" }]);
+  const { controller, runs } = makeController({ restartFile: file, version: "0.67.0", jobs });
+  await controller.resumePending();
+  await sleep(30);
+  const queued = controller.state().queued;
+  assert.equal(queued.length, 1);
+  assert.equal(queued[0].reason, "serve 0.68.0 after the bump");
+  assert.equal(queued[0].version, "0.68.0");
+  assert.equal(queued[0].state, "waiting");
+  controller.cancel(queued[0].id);
+  await sleep(120);
+  assert.equal(runs.length, 0);
+});
+
+test("the grammar's pipe is a separator: RESTART panel | <why> keeps the reason, not the pipe", () => {
+  const parsed = parseActions("SPAWN-worthy summary follows.\nRESTART panel | serve 0.68.0 after the bump");
+  assert.equal(parsed.restart.length, 1);
+  assert.equal(parsed.restart[0].target, "panel");
+  assert.equal(parsed.restart[0].reason, "serve 0.68.0 after the bump");
+  const bare = parseActions("RESTART | serve 0.68.0");
+  assert.equal(bare.restart.length, 1, "a line with no target is still an attempt, not a silent drop");
+  assert.equal(bare.restart[0].target, "");
+  assert.equal(bare.restart[0].reason, "serve 0.68.0");
 });
 
 test("a waiting entry can be cancelled, and then the restart never runs", async () => {
