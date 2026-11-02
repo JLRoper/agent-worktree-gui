@@ -1,13 +1,14 @@
 # Splitting `public/app.js` — the plan
 
-**Measured on `622940f` (`package.json` 0.53.2); `public/app.js` is byte-identical at `28bad77`, the commit this
-document lands on top of.** Every count and range below is measured at that commit and drifts with each landing:
-re-locate a section by its marker text, never by the line. This document is a plan — the PR that carries it touches
-nothing under `public/`, no server file and no `lib/` file.
+**Measured on `622940f` (`package.json` 0.53.2); `public/app.js` is byte-identical at `1929e4d` (`package.json`
+0.56.1), the commit this revision lands on top of.** Every count and range below is measured at that commit and
+drifts with each landing: re-locate a section by its marker text, never by the line. This document is a plan — the
+PR that carries it touches nothing under `public/`, no server file and no `lib/` file.
 
-The plan first landed at 0.51.4 (`fb9e6eb`). §8 re-derives every number against this base: 43 of the 118 regions had
-moved, and four of the original §1 counts were wrong at the base they were measured on. Read §8 before quoting a
-range from that first version.
+The plan first landed at 0.51.4 (`fb9e6eb`) and was re-derived at 0.53.4 (`71e188f`). §8 records that first
+re-derivation — 43 of the 118 regions had moved, and four of the original §1 counts were wrong at the base they were
+measured on. §9 records this one: `public/app.js` had not moved at all, and `public/assistant.js` had been rewritten.
+Read both before quoting a range or a count from an earlier version.
 
 ## 1. The file, measured
 
@@ -25,14 +26,18 @@ range from that first version.
   lines of job renderers). §3 therefore names, where a section is split, the line or function where the next concern
   starts.
 - The sections are uneven: the five largest hold 5,837 lines and `stabilize reordering`@13316 alone is **2,977**; 38 of
-  the 118 marker-to-marker rows are under 50 lines, 14 of them a closing marker with nothing after it. Markers name
-  concepts, not boundaries.
+  the 118 marker-to-marker rows are under 50 lines, 14 of them a closing marker — 10 with nothing after it. Markers
+  name concepts, not boundaries.
 - **53 browser-stored keys** (`"wtgui.…"`/`"wm.…"` literals), **45 `click` listeners**, 8 of them on `document`.
-- **22 of the 26 test files** that read `public/app.js` cut a marker-delimited slice out of it — 11 through the kit's
-  `sliceRegion`/`sliceBetween`, 11 through their own `indexOf` pair — and **3 assistant tests** slice
-  `public/assistant.js` the same way. Those are the proofs that already run this code outside the page, and they are
-  what makes a move landable: the slice's marker text travels with the code and only the path changes.
-- `public/assistant.js` is **3,068 lines** in **18 sections** of its own (2-space-indented markers, 2 closers).
+- **22 of the 31 test files** that read `public/app.js` cut a marker-delimited slice out of it — 11 through the kit's
+  `sliceRegion`/`sliceBetween`, 11 through their own `indexOf` pair. Five more slice by function name
+  (`indexOf("function x(")`), two by a code string, one reads the whole file and one only names the path. **5 test
+  files** slice `public/assistant.js` by marker — all five through the kit's `sliceRegion`, one of them also by its
+  own `indexOf` pair — and a sixth only names the path. Those are the proofs that already run this code outside the
+  page, and they are what makes a move landable: the slice's marker text travels with the code and only the path
+  changes.
+- `public/assistant.js` is **2,897 lines** in **22 sections** of its own (2-space-indented markers, 3 closers); it
+  was 3,068 in 18 when the second version was measured, and the docked-rail landing (`75a89f4`) rewrote it.
 
 ## 2. The contract the nine `public/core/` modules already follow
 
@@ -75,7 +80,7 @@ test slices appears in both). `R` = mapped here, scheduled by the follow-on plan
 | `public/features/settings-rows.js` | feature | a run of tool calls@6454–6482<br>a fold the reader opens@6483–6510<br>how a run's output arrives@6511–6566 | 113 | `state`×3, `conversationSignature`, `renderConversation` ×1 | `toolGroupsOn`×6, `foldFollowsConsole`×3, `setToolGroups`×2 | S5 |
 | `public/features/settings-local.js` | feature | page zoom@16293–16375<br>fonts@16376–16517<br>text styles@16518–16613<br>panel contrast@16614–16667<br>the add-agent bar (green, then where it sits)@16668–16766<br>settings group folds@16767–16834<br>settings search@16835–16957<br>the pickers' start-up + the panel's own wiring@17471–17533 (the tail of the sessions section)<br>the question box's look@17534–17602<br>the anchor's two signals@18097–18339 | 1,040 | `state`×42, `reorder`×8, `applyQLook`×7 | `clearSettingsSearch`, `currentFontId`, `paintAnchorSettings` ×1 | S5 |
 | `public/features/settings-server.js` | feature | the provider endpoint@16998–17111<br>the model menu's prices and ratings@17112–17220<br>the approval window@17221–17319<br>how many sessions the CLI's picker lists@17381–17470 (the row only; its tail is S5's)<br>whether an agent may clean up after itself@17603–17664<br>which columns are drawn@17751–17844<br>may a branch exist on a REMOTE@17845–17950<br>the panel's own two folders@17951–18081 | 805 | `state`×39, `showBanner`×11, `CHART_COLUMNS`×9 | `paintPaths`×2, `paintAgentCleanup`×2, `refreshRemoteGuards`×2 | S6 |
-| `public/features/assistant/*.js` | feature | — no `app.js` sections: `public/assistant.js`, 18 sections@1–3068 | 3,068 | — | — | S7 |
+| `public/features/assistant/*.js` | feature | — no `app.js` sections: `public/assistant.js`, 22 sections@1–2897 | 2,897 | — | — | S7 |
 | `public/features/question-box.js` | feature | the question box's look (Settings > Display)@2620–3239 | 620 | `state`×13, `showBanner`×7, `questionSending`×5 | `turnKey`×11, `applyQLook`×7, `TURNS_PER_PAGE`×4 | R |
 | `public/features/conversation.js` | feature | conversations@1178–1871<br>collecting results@3799–4413<br>thinking@6374–6413<br>one stream@6414–6453<br>reasoning first@6567–6706 | 1,529 | `state`×145, `subagentFallback`×8, `turnLive`×7 | `conversations`×22, `captureTyping`×8, `conversationHtml`×7 | R |
 | `public/features/reply-box.js` | feature | the box grows with its draft@4414–4608<br>the row's own ⟳@4609–5246<br>New-agent prompt history@5247–5252<br>moving nodes without losing the caret@5726–5886<br>previous turn on send@5887–6118 | 1,232 | `state`×70, `renderConversation`×13, `showBanner`×9 | `restoreTyping`×13, `endDomMove`×9, `beginDomMove`×8 | R |
@@ -92,7 +97,8 @@ test slices appears in both). `R` = mapped here, scheduled by the follow-on plan
 | `public/features/visibility.js` | feature | what the page can see@18340–18426 | 87 | `state`×5, `paintConfigLine`, `startAnchorObserver` ×1 | `visibleProjects`, `reportVisibility` ×1 | R |
 
 **Totals: 118 regions, 18,426 lines — every one has a home.** 463 stay in the hub, **4,443** move in S1–S6, 13,520
-are `R`; S7 adds `public/assistant.js`'s 3,068 lines.
+are `R`; S7 adds `public/assistant.js`'s 2,897 lines. The 105 `app.js` spans were machine-checked at `1929e4d`: they
+sum to 18,426 with no gap and no overlap, and every row's declared line count equals the sum of its ranges.
 
 ## 4. The landing order — cheapest blast radius first
 
@@ -100,7 +106,7 @@ Cheapest means: no DOM, no state beyond one slice, and a proof that already runs
 page-slice tests are that proof — they execute these sections standalone — so the sections they name come first. The
 one renderer that owns DOM but takes its data as arguments comes next. The settings surface follows: it is the most
 read surface in the panel (a settings bug is visible to every reader) and it writes both the browser and
-`config.json`. The assistant float is last: it is a separate file that reads `app.js` by bare name and calls one
+`config.json`. The assistant rail is last: it is a separate file that reads `app.js` by bare name and calls one
 function back, so its landing is the one that replaces those reads with an init call.
 
 | Landing | Moves | Files | Lines | Why here |
@@ -111,7 +117,7 @@ function back, so its landing is the one that replaces those reads with an init 
 | S4 | the age cell and the age-collapse chart | `features/age-chart.js` | 304 | the one renderer that owns DOM but takes rows and settings in; one stored key; one verify harness |
 | S5 | settings values, the three Agent-cards/Display rows, the browser-stored settings surface | `core/settings-values.js`, `features/settings-rows.js`, `features/settings-local.js` | 1,300 | first settings landing: the browser-stored half only, no route changes |
 | S6 | the rows that write `config.json` / the gateway's config | `features/settings-server.js` | 805 | second settings landing: the server-stored half; no route moves |
-| S7 | the assistant float | `features/assistant/*.js` (from `public/assistant.js`) | 3,068 | last: replaces `app.js`'s bare reads with one init call |
+| S7 | the assistant rail | `features/assistant/*.js` (from `public/assistant.js`) | 2,897 | last: replaces `app.js`'s bare reads with one init call |
 
 One step per PR, in this order. S5 is the widest step and the only one that needs a comment-only PR first: §3's S5
 row takes one slice out of a section named for something else (`@17471–17533` sits under "how many sessions the
@@ -178,14 +184,14 @@ slice gets accessors and callbacks, not the `state` object.
 | How they talk | `WMApp.settingsServer.init({ apiFetch, showBanner, getSettings, mergeSettings, paintConfigLine, refreshRemoteGuards, paintChartColumns, renderAll })`; each row keeps calling its existing route and merges the answer through `mergeSettings` |
 | Harnesses | no page-slice test covers these rows, and no route moves; `test/agent-cleanup.test.js` slices the cleanup section out of `public/app.js` (path change), `test/chart-columns.test.js` covers the column route, `test/auth.test.js` the settings route's token; `npm test` |
 
-### S7 — the assistant float
+### S7 — the assistant rail
 
 | | |
 |---|---|
-| Keeps in app.js | nothing of the float except one init call and the two globals it publishes today (`applyAssistant`, `__assistantRenderChat`) |
-| Moves | the IIFE's 18 sections into eight files: `frame.js` (the float's two rows, the panel's own frame, drag and resize, keys), `chat.js` (the spawn strip, chat), `lists.js` (alerts, watches, scratchpad, the message board), `role.js` (role and charter), `settings.js` (settings), `queue.js` (the queue sub-tab, the queue's controls), `server.js` (what arrives from the server, talking to the server), `boot.js` (wiring, boot) |
-| How they talk | `WMApp.assistant.init({ state, $, esc, conversations, conversationHtml, renderConversation })` after the first snapshot; the module publishes `applyAssistant(thread)`, `renderChat(thread)`, `toggle(open)`, and app.js's SSE/snapshot path calls `WMApp.assistant.applyAssistant(thread)` instead of the bare global |
-| Harnesses | `test/assistant-subtabs`, `assistant-thresholds`, `assistant-queue-ui` slice `public/assistant.js` by marker; `assistant-resize` and `assistant-queue` read it; the browser verifies drive the same ids and need no change |
+| Keeps in app.js | nothing of the rail except one init call and the three globals it publishes today (`applyAssistant`, `__assistantRenderChat`, `__assistantToggle`) |
+| Moves | the IIFE's 22 sections into eight files: `frame.js` (the float's two rows — now the rail's view record — the rail's frame, dock width, the rail's one grab, keys), `chat.js` (the spawn strip, chat), `lists.js` (alerts, watches, scratchpad, the message board), `role.js` (role and charter), `settings.js` (settings), `queue.js` (the queue sub-tab, the queue's controls), `server.js` (what arrives from the server, talking to the server), `boot.js` (wiring, boot) |
+| How they talk | `WMApp.assistant.init({ state, $, esc, conversations, conversationHtml, renderConversation })` after the first snapshot; the module publishes `applyAssistant(data)`, `renderChat(thread)`, `toggle(open)`, and app.js's SSE/snapshot path calls `WMApp.assistant.applyAssistant(data)` instead of the bare global. `__assistantToggle` stays a page global because `tools/verify-assistant-dock.mjs` and `tools/verify-leftover-holder.mjs` reach it through `page.evaluate` |
+| Harnesses | `test/assistant-dock`, `assistant-queue-pane`, `assistant-queue-ui`, `assistant-subtabs` and `assistant-thresholds` slice `public/assistant.js` through the kit (thresholds also by its own `indexOf` pair); `assistant-queue` only names the path. `tools/verify-assistant.mjs`, `verify-assistant-dock.mjs`, `verify-assistant-hotkey.mjs`, `verify-assistant-queue.mjs` and `verify-assistant-subtabs.mjs` drive the same ids and need no change |
 
 ## 6. The invariant every landing carries
 
@@ -249,13 +255,41 @@ while `WMApp.core.domFormat.fmtBytes` stays the module's: two formats for one fa
 would carry the app.js copy into `settings-server.js` as a third one. Fix it before S6 — keep the module's, delete the
 app.js copy, and let the folders row call `fmtBytes` from `dom-format`, which already publishes it.
 
-## 9. Landing this document
+## 9. What moved since the second version
 
-This PR is a doc: **patch** per `docs/versioning.md`. At `0.53.3` the next free patch is **0.53.4** — `node
+The second version was measured at `622940f` (0.53.2) and landed as 0.53.4 (`71e188f`). Five commits have landed
+since; two of them touched `public/` and **neither touched `public/app.js`** — a `git diff --stat` from `622940f`
+to `1929e4d` over that one path is empty — so §1's `app.js` counts, §3's 105 `app.js` spans and §4's S1–S6 totals
+are unchanged, re-checked mechanically at `1929e4d` rather than re-derived. What moved is the file S7 owns:
+
+- **`public/assistant.js` is 2,897 lines in 22 sections, not 3,068 in 18.** The float became a docked right rail
+  (`75a89f4`) and the queue pane learned to drive its own assistant (`2a0a96f`). New sections: `the rail's
+  frame`@242, `dock width: the one clamp`@248, `the queue's controls`@2639, `the rail's one grab: its left
+  edge`@2738, `keys`@2831; `the float's two rows`@22 now holds the rail's view record and `boot`@2873 restores the
+  frame. S7's eight-file split still holds — the four frame sections fold into `frame.js`, the queue's controls into
+  `queue.js` — but its line count is 2,897 and its section count 22.
+- **The rail publishes three globals, not two.** `__assistantToggle` joined `applyAssistant` and
+  `__assistantRenderChat`; app.js still calls only the first two, and the third stays a page global because
+  `tools/verify-assistant-dock.mjs` and `tools/verify-leftover-holder.mjs` reach it through `page.evaluate`.
+- **The test coupling grew with the file.** 31 test files read `public/app.js` (the second version said 26) and 22
+  slice it by marker — 11 through the kit, 11 through their own `indexOf`; 5 slice by function name, 2 by a code
+  string, 1 reads the whole file and 1 only names the path. 5 test files slice `public/assistant.js` by marker (was
+  3), and `test/assistant-resize.test.js` is gone, replaced by `test/assistant-dock.test.js`.
+- **`index.html` moved; the script order did not.** The rail's markup was rewritten (290 lines) and `style.css` with
+  it, yet the nine `core/` scripts still load before `app.js` and `update-check` after it, so §2's contract stands.
+
+**What the second version got right.** Every `app.js` count in §1 re-ran at `1929e4d` and matched — 118 markers (98
+openers, 20 closers), 714 functions, 201 `const`/`let`, 53 stored keys, 45 `click` listeners (8 on `document`), 38
+regions under 50 lines, the five largest holding 5,837. Its one wrong number was the test-coupling denominator (26
+for 31); the 11/11 split inside it was right.
+
+## 10. Landing this document
+
+This PR is a doc: **patch** per `docs/versioning.md`. At `0.56.1` the next free patch is **0.56.2** — `node
 tools/version.mjs suggest` prints the floor and `git show origin/main:package.json` the number to beat; re-take it
-immediately before landing, because another landing can spend it while this branch waits. It already has: the plan was
-measured against 0.53.2 and a sibling doc landing took 0.53.3, so this branch was fast-forwarded before the bump
-rather than rebased after it. Bump in the commit that carries the plan, name the number, the level and the reason in
-the commit body and the PR body, then `git push -u origin HEAD` and `gh pr create --fill`. If main has moved,
-`git rebase origin/main` first and re-take the number; a rebase over a spent number leaves the branch equal to main
-and the pre-push gate refuses it.
+immediately before landing, because another landing can spend it while this branch waits. It already has twice: the
+plan was measured against 0.53.2 and a sibling doc landing took 0.53.3, and this revision was measured against 0.55.0
+before four more landings took main to 0.56.1. Bump in the commit that carries the plan, name the number, the
+level and the reason in the commit body and the PR body, then `git push -u origin HEAD` and `gh pr create --fill`. If
+main has moved, `git rebase origin/main` first and re-take the number; a rebase over a spent number leaves the branch
+equal to main and the pre-push gate refuses it.
