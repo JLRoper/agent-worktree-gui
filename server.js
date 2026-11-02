@@ -4511,6 +4511,24 @@ const server = createServer(async (req, res) => {
       }
     }
 
+    // A queued restart the reader has changed their mind about. Same page gate as the POST above, and the same
+    // shape of answer: 200 with the queue that remains, or 404 when the id is not one this panel is holding. A
+    // cancel is only ever about a WAIT — a restart already running answers 409 and is left alone.
+    if (route === "/api/restart/cancel" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      try {
+        const dropped = restart.cancel(body.id || body.restartId);
+        if (!dropped) {
+          return sendJson(res, 404, { ok: false, error: `no queued restart with id ${String(body.id || body.restartId || "(none)")}`, restart: restart.state() });
+        }
+        log(`restart cancelled: ${dropped.target} (${dropped.id}) — it was still waiting, and it will not run`);
+        return sendJson(res, 200, { ok: true, cancelled: { id: dropped.id, target: dropped.target }, queue: dropped.queue, restart: restart.state() });
+      } catch (e) {
+        return sendJson(res, Number(e.status) || 400, { ok: false, error: String((e && e.message) || e), restart: restart.state() });
+      }
+    }
+
     if (route === "/api/stream") return handleStream(req, res, { clients, snapshot });
 
     return serveStatic(req, res, route, build);

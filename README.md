@@ -945,6 +945,14 @@ stream can deliver the last paragraph after the turn is marked harvested), and a
 as settled is never reported twice. The digest handed to the assistant every turn carries the waiting cards and the
 lost lines outright, so it cannot read an empty board as "queued".
 
+Before a lost or still-owed line can be **replayed** — the next turn carrying it out again after a restart — its own
+tree answers whether the brief already landed (`skipLandedReplays`, `lib/assistant/landed.js`). The rule is patch-id
+(`git cherry`) and tree equality against the base branch, **never** "ahead by N": a branch whose commit was
+cherry-picked has landed while still counting as one ahead, and a branch that never committed is zero ahead and has
+not. A tree that is gone, a tree whose work is on main, or a branch whose PR reads MERGED all settle the debt as
+`landed` — journalled `replay skipped: already landed` with the branch and the evidence — so nothing is started and
+the next boot does not re-owe the line.
+
 The assistant acts by writing plain lines in a reply, and every such line in it is read — wherever it sits among the paragraphs, not only the one the reply ends on:
 
     TO <thread>: the reply to that worker
@@ -999,7 +1007,11 @@ instead of adding a second; the reader's rules are never merged or edited by it.
 **It can restart the thing that runs it.** `RESTART gateway` and `RESTART panel` map to `POST /api/restart`
 and neither runs inside the turn that wrote it: that turn *is* a run inside the gateway, so the request is
 queued and the action starts only once the assistant's thread has no turn running — a synchronous restart
-would kill the very answer that asked for it. Nothing is stopped before the provider key is verified in
+would kill the very answer that asked for it. The request must carry a **reason** — an entry with no reason is the
+one nothing on the board can explain later, and the next boot reads the interrupted turn as new work and asks for
+the same restart again — so a missing or blank one is refused with a 400 before anything is queued, and a queued
+wait can be withdrawn with `POST /api/restart/cancel` without bouncing the panel to do it. Nothing is stopped before
+the provider key is verified in
 `$HERMES_HOME/.env`: a gateway that comes up without one binds its port, answers `/health`, and then dies on
 every run with `No LLM provider configured`. A refusal is journaled, not thrown at the model. Everything the
 restart will interrupt is given ONE terminal status first — `interrupted`, with the restart recorded as what
@@ -1130,7 +1142,8 @@ Watches without a deadline, and finished ones, say so instead.
 | POST | `/api/assistant/check` | run one sentry pass now (used by the page after a change, and by probes instead of waiting for the clock) |
 | POST | `/api/jobs/cancel` | `{id}` → `POST /v1/runs/{id}/stop` (cooperative interrupt) |
 | POST | `/api/jobs/clear` | drop finished jobs from the list |
-| GET/POST | `/api/restart` | restart the gateway or this panel. GET reports the queue, the last action, the provider-key preflight (`$HERMES_HOME/.env`, or the `model.api_key` line of `config.yaml`) and where `restart.json` is written; POST `{target:"gateway"\|"panel", reason?, waitFor?}` **queues** the action and answers **202** at once. It runs when `waitFor` (default `panel-assistant`) has no turn running, gives every interrupted run one `interrupted` status, proves the new process with one real turn and wakes the assistant once with the payloads. **400** for another target, **409** when one is already queued/running or when no provider key is present |
+| GET/POST | `/api/restart` | restart the gateway or this panel. GET reports the queue, the last action, the provider-key preflight (`$HERMES_HOME/.env`, or the `model.api_key` line of `config.yaml`) and where `restart.json` is written; POST `{target:"gateway"\|"panel", reason, waitFor?}` **queues** the action and answers **202** at once. `reason` is **required** — an unreasoned entry is the one that re-harvests itself forever, so a missing or blank one is a **400** before anything is queued. It runs when `waitFor` (default `panel-assistant`) has no turn running, gives every interrupted run one `interrupted` status, proves the new process with one real turn and wakes the assistant once with the payloads. **400** for another target, **409** when one is already queued/running or when no provider key is present |
+| POST | `/api/restart/cancel` | `{id}` — withdraw a **waiting** restart before it runs, page-gated like the POST above. Answers **200** with the queue that remains, **404** when the id is not one this panel is holding, **409** when that restart is already running. The loop reads the withdrawal on every poll, so a wait that is dropped cannot fire when the turn it was waiting for ends |
 | POST | `/api/refresh` `/api/fetch` `/api/reload` | force a fast pass / fetch remotes / re-read config |
 | POST | `/api/settings/cleanup` | `{agentCleanup:boolean}` → whether an agent may take its own worktree off this disk once the work has landed (`config.json`'s `agentCleanup`). A VETO: `false` closes every project at once, `true` leaves each project's own `releaseWorktrees` grant deciding. A body that names no boolean writes OFF. Rewrites only that key, answers with the settings the page then redraws from, and broadcasts them to every open board |
 | POST | `/api/settings/age` | `{days}` → how old a worktree's last activity must be before the worktree chart holds its row back (`config.json`'s `hideOlderThanDays`; `0` shows everything). Rewrites only that key, answers with the settings the page then redraws from, and broadcasts the new snapshot to every open board |
