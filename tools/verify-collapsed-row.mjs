@@ -1,28 +1,26 @@
-// A minimized card's identity line reads LEFT TO RIGHT — cwd, then the session's name, then the card's buttons — and
-// the name gives up its tail instead of running under them.
+// A minimized card's identity line: the cwd path (and its run/row chips) read from the left margin, and the session's
+// name is the row's right-hand item, flush under the card's controls — the same arrangement the expanded card draws.
 //
 //   node tools/verify-collapsed-row.mjs [--shots <dir>]
 //
-// WHAT THIS GUARDS. The name used to be the last flex item in the head, after `<span class="spacer">`, so the
-// spacer right-justified it: it sat hard against the card's own buttons, capped at a fixed 320px, and a long name
-// was cut off under them with no way to read the tail. The head is `flex-wrap: wrap`, so at a narrow width the
-// name did not even stay on that line — it wrapped to a line of its own, left-aligned under the buttons.
-//
-// The fix draws the collapsed card's cwd line as the row's identity line: `cwd <path>`, then the name, then the
-// buttons, all in one nowrap flex row. The name is the only item that gives up width (it ellipsizes, the path keeps
-// a floor, the buttons never shrink), so the row reads in the order a person reads it and the buttons stay clickable.
+// WHAT THIS GUARDS. The name used to be the last flex item in the head, after `<span class="spacer">`, so the spacer
+// right-justified it: it sat hard against the card's own buttons, capped at a fixed 320px, and a long name was cut off
+// under them. The folded card then moved the name onto its cwd line — and the buttons came with it, so the two states
+// read the card differently and the name sat between the path and the cluster. Now the six controls live in the head
+// as one `.job-actions` block (both states) and the name is the cwd line's right-justified last item (both states);
+// this file pins the folded half: `cwd <path> [run] [row]` from the left, then the name at the right edge, with the
+// name the only item that gives up width.
 //
 // THE PROPERTIES, measured from the DOM at 1954px and at 1280px with the assistant rail open — the width the reader
 // reported it at — each with a deliberately long session name:
 //
-//   * the cwd line's children are the label, the path, the name, then the card's buttons — in that order;
-//   * the name's right edge is left of the first button's left edge, with a real gap;
-//   * the name is ONE line (no wrap) and no button's box intersects it;
-//   * the cwd path is not squeezed to nothing (a 96px floor) while the name is the one that truncates;
-//   * at the narrow width the name IS ellipsized, and its `title` still carries the whole name;
-//   * every button keeps a hit area: at least 15px tall and the topmost element at its centre;
-//   * a card with no cwd line has nowhere to put them, so it keeps the name and the buttons in its head;
-//   * expanding the card puts both back in the head and takes the buttons off the cwd line.
+//   * the name is on the cwd line and NOT in the head, and it is that line's last child;
+//   * no control is drawn on the cwd line (they are the head's, one row above);
+//   * the name's right edge is the cwd line's right edge — it is right-justified, not left after the path;
+//   * the name is ONE line (no wrap), no control's box intersects it, and its `title` still carries the whole name;
+//   * at 1280px the long name IS ellipsized while the cwd path keeps a readable share;
+//   * a card with no cwd line has nowhere to put the name, so it keeps name and all six controls in its head;
+//   * expanding the card does NOT move either: the name stays on the cwd line and the controls stay in the head.
 //
 // Sandbox only: its own PANEL_CONFIG, port and job store, a dead apiServer so nothing here can reach the live
 // gateway, and assistant off. The reader's panel and gateway are never touched.
@@ -145,6 +143,7 @@ const frame = (page, thread) =>
       path: path_ ? { ...R(path_), scrollW: path_.scrollWidth, text: path_.textContent } : null,
       cwdButtons: inCwd.map(R),
       headButtons: inHead.map(R),
+      controls: inHead.filter((b) => ["btn-pin", "btn-think", "btn-stream", "btn-rename", "btn-max", "btn-clear-thread"].includes(b.className.split(" ")[0])).length,
       firstButton: first ? R(first) : null,
       firstButtonClass: first ? first.className.split(" ")[0] : null,
       overlaps: nameR ? [...inCwd, ...inHead].map(R).filter((b) => !(nameR.r <= b.l || b.r <= nameR.l || nameR.b <= b.t || b.b <= nameR.t)).length : null,
@@ -158,14 +157,13 @@ const lineFails = (f) => {
   if (!f.collapsed) out.push("the card is not collapsed");
   if (!f.nameInCwd) out.push("the name is not on the cwd line");
   if (f.nameInHead) out.push("the name is still in the head");
+  if (f.cwdButtons.length) out.push(`${f.cwdButtons.length} button(s) still on the cwd line`);
   const order = f.cwdOrder;
-  const iName = order.indexOf("thread-name");
-  const iBtn = order.indexOf("button");
-  if (!(order[0] === "cwd-label" && order[1] === "cwd-path" && iName === 2 && iBtn === 3)) {
-    out.push(`cwd line order is ${order.join(" · ")}`);
+  if (order.length && order[order.length - 1] !== "thread-name") {
+    out.push(`the cwd line ends with ${order[order.length - 1]}, not the name — order ${order.join(" · ")}`);
   }
-  if (!f.name || !f.firstButton) out.push("no name or no button to measure");
-  else if (!(f.name.r <= f.firstButton.l - 4)) out.push(`name ends at ${f.name.r}, first button starts at ${f.firstButton.l}`);
+  if (!f.name || !f.cwd) out.push("no name or no cwd line to measure");
+  else if (f.cwd.r - f.name.r > 4) out.push(`name ends at ${f.name.r}, the cwd line at ${f.cwd.r} — not right-justified`);
   if (f.name && !f.nameOneLine) out.push(`the name is ${f.name.h}px tall — it wrapped`);
   if (f.overlaps) out.push(`${f.overlaps} button box(es) intersect the name`);
   if (!f.path || f.path.w < 96) out.push(`cwd path is ${f.path ? f.path.w : "absent"}px wide`);
@@ -218,7 +216,7 @@ try {
       // ---- 1954px, the width the reader reported it at ----
       const wide = await at(1954, false);
       const wideBad = lineFails(wide);
-      check(wideBad.length === 0, "1954px: cwd, then the name, then the buttons — on one line, clear of each other", wideBad.join(" · ") || `name ${wide.name.w}px ends ${wide.firstButton.l - wide.name.r}px before ${wide.firstButtonClass}`);
+      check(wideBad.length === 0, "1954px: the cwd line reads left to right and the name is its right-hand item", wideBad.join(" · ") || `order ${wide.cwdOrder.join(" · ")} · name ends at ${wide.name.r}, the line at ${wide.cwd.r}`);
       check(wide.name && wide.name.w > 320, "1954px: the name uses the room it has instead of a fixed 320px cap", `${wide.name ? wide.name.w : "?"}px`);
       check(wide.name && !wide.nameEllipsized, "1954px: a name that fits is not truncated", wide.name ? `${wide.nameText}` : "");
       check(wide.path && wide.path.text && wide.path.w >= wide.path.scrollW, "1954px: the whole cwd path is drawn", wide.path ? `${wide.path.w}px of ${wide.path.scrollW}px` : "absent");
@@ -227,32 +225,46 @@ try {
       // ---- 1280px with the rail open: the reported narrow width ----
       const narrow = await at(1280, true);
       const narrowBad = lineFails(narrow);
-      check(narrowBad.length === 0, "1280px, rail open: cwd, then the name, then the buttons — on one line, clear of each other", narrowBad.join(" · ") || `name ${narrow.name.w}px ends ${narrow.firstButton.l - narrow.name.r}px before ${narrow.firstButtonClass}`);
+      check(narrowBad.length === 0, "1280px, rail open: the same row, still one line, the name still right-justified", narrowBad.join(" · ") || `order ${narrow.cwdOrder.join(" · ")} · name ${narrow.name.w}px ending at ${narrow.name.r} of ${narrow.cwd.r}`);
       check(narrow.nameEllipsized === true, "1280px, rail open: the long name truncates with an ellipsis rather than being pushed right", narrow.nameScroll ? `${narrow.nameScroll.cw}px of ${narrow.nameScroll.sw}px of text` : "no name");
       check(narrow.nameTitle === `${NAME} — Hermes thread ${WITH_CWD}`, "1280px, rail open: the tooltip still carries the whole name and the thread", String(narrow.nameTitle));
       check(narrow.path && narrow.path.w >= 150, "1280px, rail open: the cwd path keeps a readable share next to the long name", `path ${narrow.path ? narrow.path.w : "?"}px · name ${narrow.name ? narrow.name.w : "?"}px`);
       await shot("1280-rail-open-collapsed");
 
-      // ---- a card with no cwd line has nowhere to put them, so it keeps them in the head ----
+      // ---- a card with no cwd line has nowhere to put the name, so it keeps name and controls in the head ----
       const noCwd = await page.evaluate((t) => {
         const j = document.querySelector(`.job[data-thread="${CSS.escape(t)}"]`);
         if (!j) return { error: "no card" };
+        const head = j.querySelector(".job-head");
         const name = j.querySelector(".thread-name");
         return {
           collapsed: j.classList.contains("collapsed"),
           cwdLine: Boolean(j.querySelector(".job-cwd")),
-          nameInHead: Boolean(name && j.querySelector(".job-head").contains(name)),
-          headButtons: j.querySelectorAll(".job-head > button").length,
+          nameInHead: Boolean(name && head.contains(name)),
+          clusterInHead: Boolean(j.querySelector(".job-actions") && head.contains(j.querySelector(".job-actions"))),
+          controls: head.querySelectorAll("button[data-pin-thread], button[data-think-thread], button[data-stream-thread], button[data-rename-thread], button[data-max-thread], button[data-clear-thread]").length,
         };
       }, NO_CWD);
-      check(noCwd.error === undefined && noCwd.collapsed && !noCwd.cwdLine && noCwd.nameInHead && noCwd.headButtons >= 6, "a collapsed card with no cwd line keeps the name and its buttons in the head", JSON.stringify(noCwd));
+      check(
+        noCwd.error === undefined && noCwd.collapsed && !noCwd.cwdLine && noCwd.nameInHead && noCwd.clusterInHead && noCwd.controls === 6,
+        "a collapsed card with no cwd line keeps the name and all six controls in the head",
+        JSON.stringify(noCwd),
+      );
 
-      // ---- expanding puts the name and the buttons back in the head ----
+      // ---- expanding does not move either: the name stays on the cwd line, the controls stay in the head ----
       await page.locator(`.job[data-thread="${WITH_CWD}"] .job-head`).click();
       await page.waitForTimeout(700);
       const open = await frame(page, WITH_CWD);
-      check(!open.collapsed && open.nameInHead && !open.nameInCwd && open.cwdButtons.length === 0, "expanding the card puts the name and the buttons back in the head", `collapsed ${open.collapsed} · cwd buttons ${open.cwdButtons.length}`);
-      check(open.headButtons.length >= 6, "...where the card's controls are all present", `${open.headButtons.length} buttons in the head`);
+      check(
+        !open.collapsed && open.nameInCwd && !open.nameInHead && open.cwdButtons.length === 0 && open.controls === 6,
+        "expanding the card keeps the name on the cwd line and the controls in the head",
+        `collapsed ${open.collapsed} · name in cwd ${open.nameInCwd} · cwd buttons ${open.cwdButtons.length} · controls ${open.controls}`,
+      );
+      check(
+        Boolean(open.name && open.cwd) && open.cwd.r - open.name.r <= 4,
+        "...with the name still right-justified, so both states read the same",
+        open.name && open.cwd ? `cwd right ${open.cwd.r} · name right ${open.name.r}` : "no name or no cwd line",
+      );
 
       for (const e of pageErrors || []) check(false, "no page error along the way", e);
     },
