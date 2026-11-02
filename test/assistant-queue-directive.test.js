@@ -115,3 +115,51 @@ test("the turn the panel creates is the one that carries it", async (t) => {
     assert.ok(job.preamble.includes(`/assistants/${id}/queue.json`), `${job.thread} is handed its own path`);
   }
 });
+
+// ---- the restart case ---------------------------------------------------------------------------
+// A restart is the case the queue block exists for: the panel comes back with its runs still going in the gateway and
+// re-attaches them, so a thread the queue names may be live even though this turn has never seen it start. The
+// preamble must therefore LEAD with the queue — before the board, before the rest of the standing instructions — and
+// a live thread must read LIVE rather than STALE, because a turn that reads a live thread as stale starts a second
+// run on the same files.
+test("a preamble built after a restart leads with the queue, and a live thread reads live", async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-queue-restart-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const assistantFile = path.join(dir, "assistant.json");
+  await writeFile(assistantFile, JSON.stringify({ version: 2, settings: {}, notes: "", rules: [], watches: [], alerts: [], journal: [] }));
+  const config = { jobsFile: path.join(dir, "jobs.json"), assistantFile };
+  const boot = (jobs) =>
+    new Assistant({
+      config,
+      jobs: { list: () => jobs, firstOfThread: () => jobs[0] || null, create: async (body) => ({ id: "job-1", ...body }) },
+      getProjects: () => [],
+      onLog: () => {},
+    });
+
+  // Before the restart: the reader files two tasks and starts one of them.
+  const before = boot([]);
+  before.queueMutate(PRIMARY_ASSISTANT, "add", { title: "land the queue block", thread: "T-live", worktree: "C:/wt/live", files: ["lib/assistant.js"] });
+  before.queueMutate(PRIMARY_ASSISTANT, "state", { id: 1, state: "running" });
+  before.queueMutate(PRIMARY_ASSISTANT, "add", { title: "then the docs", files: ["docs/x.md"] });
+
+  // The restart: a NEW Assistant over the same state directory, and the job store still holds the run — which is
+  // exactly what the panel's boot reconcile re-attaches.
+  const after = boot([{ id: "job-1", thread: "T-live", status: "running", startedAt: "2026-11-02T10:00:00.000Z" }]);
+  const text = after.preamble(PRIMARY_ASSISTANT);
+
+  const lead = text.indexOf("Read your queue first");
+  const digest = text.indexOf("Your task queue (");
+  const board = text.indexOf("The board right now:");
+  assert.ok(lead >= 0, "the preamble says to read the queue first");
+  assert.ok(digest > lead, "the digest follows that line");
+  assert.ok(board > digest, "and both come before the board summary");
+  assert.ok(text.indexOf("Autonomy:") > digest, "the queue leads the rest of the standing instructions too");
+  assert.equal(text.split("Your task queue (").length - 1, 1, "the digest is carried once, not twice");
+
+  assert.match(text, /- ● #1 running · land the queue block · thread T-live · tree C:\/wt\/live · PR none · files lib\/assistant\.js · LIVE/);
+  assert.ok(!/STALE/.test(text), "a live thread is never called stale");
+  assert.match(text, /- ○ #2 queued · then the docs · thread \(none\) · tree \(none\) · PR none · files docs\/x\.md/);
+
+  assert.ok(text.includes("A restart re-attaches runs"), "the block names the restart case out loud");
+  assert.ok(text.includes("/api/jobs"), "and names the route to check the threads against");
+});

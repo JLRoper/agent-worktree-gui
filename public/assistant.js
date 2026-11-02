@@ -1959,8 +1959,9 @@
         ${queueStateHtml(pane, { id, n, view, rows: sorted })}
         ${sorted.map((t) => queueTaskHtml(id, t)).join("")}
         <div class="as-help">The queue lives in <code>state/assistants/${esc(id)}/queue.json</code> beside this assistant's charter.
-        It is read on every wake: the digest names the top of the queue, every running task with its thread and every stale
-        one, so a turn can start whatever can be parallelised. A finished task stays here greyed — the record, not a ghost.</div>
+        It is read on every wake, before the board: the digest names every task's state, thread, worktree and PR, and why
+        it is not going (LIVE, STALE or PARKED), so a turn can start whatever can be parallelised. A finished task stays
+        here greyed — the record, not a ghost.</div>
       </div>`;
   }
 
