@@ -2198,7 +2198,10 @@ td.row-actions { padding-left: 4px; padding-right: 4px; }
    mid-word. Truncate the badge itself, and keep the age cell's chips from spilling past their column. */
 td:nth-child(8) { overflow: hidden; }
 td:nth-child(9) .badge { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
-td.name, td.branch, td:nth-child(6), td:nth-child(9) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.name, td.branch, td.assistant, td:nth-child(6), td:nth-child(9) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The owner bullet's fallback sentence: the reader's stored owner is gone, so Assistant #1 has the tree. Dimmer
+   than the line it follows, because the label is the answer and this is only why it is not the answer they set. */
+.git-owner .owner-fallback { color: var(--dimmer); }
 /* The worktree cell is the only cell whose content competes for its own width: a name that can run long, the rename
    ✎, and the agent chips. Laid out as inline content the name took the whole cell, and the chips were the part that
    got clipped - the row showed "…" where its agents were. As a flex row the name ellipsizes instead, and the

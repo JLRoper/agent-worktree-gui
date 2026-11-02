@@ -10416,6 +10416,18 @@ function rowHtml(row) {
     name: `<td class="name"><div class="name-line"><button class="btn-row-agent" data-agent-path="${esc(row.path)}" data-agent-name="${esc(row.name)}" data-agent-project="${esc(row.project)}"
       title="probe every NOT-RUNNING agent in this worktree — sends 'Continue if you can, exit if you are done' to each of them (the + under the agents starts a new one)">\u25b6</button><span class="row-name" title="${esc(row.path)}">${esc(shownName)}</span>${treeLockBtn}${renameBtn}${nameFromWorkBtn}${agentBadgeHtml(row)}</div></td>`,
     branch: `<td class="mono branch">${branchCellHtml(row)}${branchLockBtn}</td>`,
+    // The owner column: the ROLE LABEL ("Manager 1"), never the raw id — the label is resolved by the server from
+    // the role the owner runs, on every read, so a role rename renames this cell without a write anywhere. A row
+    // whose stored owner is gone says so in the tooltip (the cell keeps the fallback's label; the detail's bullet
+    // carries the sentence, because a cell is one word wide). Display only — nothing in the wake path reads it.
+    // OFF by default: lib/chart-columns.js `DEFAULT_HIDDEN_COLUMNS`, applied when the reader has no stored list.
+    assistant: `<td class="assistant nowrap" title="${esc(
+      row.assistant?.fallback
+        ? `${row.assistant.label} owns this worktree — ${row.assistant.fallback}`
+        : row.assistant?.label
+          ? `${row.assistant.label}${row.assistant.name ? ` — ${row.assistant.name}` : ""} owns this worktree. Display only: it does not change who wakes or runs.`
+          : "no owner recorded — Assistant #1 owns this worktree",
+    )}">${esc(row.assistant?.label || "Assistant #1")}</td>`,
     tip: `<td class="mono dim nowrap">${esc(row.head || "—")}</td>`,
     ahead: `<td class="mono nowrap">${aheadBehindCellHtml(row)}</td>`,
     cherry: `<td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>`,
@@ -12299,6 +12311,9 @@ function detailHtml(row) {
       <div class="git-body">
         <ul class="git-list">
           <li class="git-summary-line">${esc(gitSummary)}</li>
+          <li class="git-owner" title="the assistant whose role label owns this worktree — display only: it does not change who wakes or runs">Controlled by: ${esc(row.assistant?.label || "Assistant #1")}${
+            row.assistant?.fallback ? `<span class="owner-fallback"> — ${esc(row.assistant.fallback)}</span>` : ""
+          }</li>
           ${metaItems.map((m) => `<li>${m}</li>`).join("")}
         </ul>
         ${commitsBlock}
@@ -12863,10 +12878,10 @@ function projectNode(attr, name) {
   return found;
 }
 
-// ---- chart columns: which of the table's ten the reader keeps ---------------------------------------------
-// Ten columns on every row is a lot of chart, and a reader chasing one fact (which trees are merged, which are
-// behind) does not need the other nine on screen. Hiding a column is a settings choice stored in this panel's
-// config.json (`hiddenColumns`, POST /api/settings/columns), and the column set is DATA here rather than ten
+// ---- chart columns: which of the table's eleven the reader keeps ------------------------------------------
+// Eleven columns on every row is a lot of chart, and a reader chasing one fact (which trees are merged, which are
+// behind) does not need the other ten on screen. Hiding a column is a settings choice stored in this panel's
+// config.json (`hiddenColumns`, POST /api/settings/columns), and the column set is DATA here rather than eleven
 // hand-written cells: the header, every row, the two column-spanning rows and the width measurement all read this
 // list, so a hidden column is one absent <td> everywhere instead of a table whose cells disagree with its headers.
 // The ids are the server's too (lib/chart-columns.js validates them); test/chart-columns.test.js asserts the two
@@ -12884,6 +12899,14 @@ function projectNode(attr, name) {
 const CHART_COLUMNS = [
   { id: "name", label: "Worktree", min: 170, give: 0.35 },
   { id: "branch", label: "Branch", min: 110, give: 0.45 },
+  {
+    id: "assistant",
+    label: "Assistant",
+    min: 92,
+    give: 0.8,
+    title:
+      "the assistant whose role label owns this worktree — \"Manager 1\" for the first assistant on the Agent Manager role. Stored per tree and DISPLAY ONLY: it does not change who wakes, who runs, or who answers. OFF by default; switch it on in Settings → Display → Chart columns.",
+  },
   { id: "tip", label: "Tip", min: 70, give: 1 },
   {
     id: "ahead",
