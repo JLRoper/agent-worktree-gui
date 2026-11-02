@@ -117,3 +117,134 @@ onto that tip and re-bumped one patch above it. Nothing under `public/`, `test/`
 between the two tips (`git diff --stat 65f1e8e 14c27c3 -- public test tools` is empty), so the
 measurements above describe the code this commit lands. `node tools/version.mjs check` passes against
 `origin/main` (`14c27c3`, `0.51.1`).
+
+## Re-checked again on this tree, at `origin/main` `935bfc4` (0.53.0), 2026-11-01 23:44–23:58 EST
+
+The same brief was re-issued against a newer `main`, and this tree
+(`.worktrees/unify-console-text-sizin-40a5a0`, branch `wtgui/unify-console-text-sizin-40a5a0`) was
+cut from `635404b` (0.52.0) with no commits of its own. Nothing in the feature was re-implemented:
+what is on `main` was re-run, and the one copy defect left in the settings pane was fixed here (next
+section).
+
+The base moved three times while this branch was open, so the numbers were re-taken at the tip it
+actually lands on. It was fast-forwarded to `3d17063` (0.52.1) and measured there first
+(`git rev-list --left-right --count origin/main...HEAD` read `0 0` before and after); `e317798`
+(0.52.2) was another record (`git diff --stat 3d17063 e317798 -- public test tools` empty); `935bfc4`
+(0.53.0, the assistant task queue) is the tip this branch is rebased onto and the one every number
+below was re-read at. That landing touches `public/assistant.js`, two sub-tab lines of
+`public/index.html` and the queue pane's rules at the end of `public/style.css`; `git diff --stat
+3d17063 935bfc4 -- public/app.js` is empty and no console selector moved.
+
+Run 2026-11-01 23:44–23:58 EST (`date` read `Sun, Nov  1, 2026 11:44:15 PM` at the start and
+`Sun, Nov  1, 2026 11:58:29 PM` at the end; `date -u` `Mon, Nov  2, 2026  4:44:15 AM`), node
+`v26.3.0`, from
+`C:/ProjectDevelopment/agent-worktree-gui/.worktrees/unify-console-text-sizin-40a5a0`:
+
+- `node --test test/text-styles.test.js` → **13 tests, 13 pass, 0 fail** on this tip: the landing's 12
+  plus the one this branch adds. The case at `:142` is still the one that reads the shipped
+  declarations for `.job-out`, `.jl-think` and `.jl-tool-out` plus the 🧠 block's two rules, asserts
+  each asks for `var(--term-size)`, and resolves them over `11.5px` and over a card's `14px` to one
+  size (those cases read `:131`, `:128` and `:143` before this branch inserted its own 11 lines above
+  them); `:139` still asserts no retired size variable survives, and `:154` that Ctrl+wheel writes
+  that one variable on the card.
+- `npm test` → **780 tests, 780 pass, 0 fail, 0 cancelled, 0 skipped** in 83.7 s at `935bfc4` — 779
+  of them the base's plus this branch's one new case. The same command read 753 on `3d17063`; the
+  landings between those tips added 27.
+- `node tools/verify-console-zoom.mjs` → **14/14 checks per mode, both modes (28 PASS), exit 0**,
+  re-run on this tip and with the same measured series as the table above: default
+  `11.5 · 11.5 · 11.5` on both cards, `11.5 → 12.5 → 13.5 → 14.5` over console, reasoning and tool
+  output alike, wheel-down back to 13.5, card B pinned at 11.5 at every step, the repaint re-emitting
+  `card var 13.5px`, Console size 13 moving only the never-zoomed card, the Thinking row at
+  `hasThinkSize: false`, the reload landing every card and every kind on the stored 13, the page
+  throwing nothing. `git diff --stat 3d17063 935bfc4 -- public/app.js` is empty and this branch's only
+  product edit is one `title` attribute in `public/index.html`, so the declarations the gate measured
+  are the ones this tip ships.
+- `node tools/verify-text-styles.mjs` → **51 PASS, 0 FAIL, exit 0** at `935bfc4` too. Its first run,
+  issued straight after the zoom gate, died `SQLITE_ERROR: database is locked` (two sandbox panels
+  sharing one store); the re-run alone was green, which is the harness collision this repo already
+  documents, not a check that failed.
+
+## The red proof, re-taken at the parent commit
+
+`git archive 8237843^` (that is `c063405`, version `0.49.3`) extracted to
+`%TEMP%/wag/b3a0f0c4/base-c063405`, this branch's `tools/verify-console-zoom.mjs` copied in, `git init`
+run so the tool's own `rev-parse` works: **13 FAIL + 1 PASS per mode — 27 FAIL and 2 PASS over both
+modes — exit 1.** The one PASS is `the page threw nothing`. Measured there:
+
+| step | normal | reasoning | tool |
+| --- | --- | --- | --- |
+| default | 11.5 | **12** | 11.5 |
+| wheel over the console | 12.5 | **12** | 12.5 |
+| wheel over the reasoning | 13.5 | **12** | 13.5 |
+| wheel over a tool's output | 14.5 | **12** | 14.5 |
+| repainted card | 13.5 | **12** | 13.5 (`card var null`) |
+
+The reasoning is pinned at 12px by `.think-block.mono` while the console and the tool output move, and
+the card carries no `--term-size` at all — the defect the brief describes, still red on the commit
+before the fix. Logs: `%TEMP%/wag/b3a0f0c4/zoom-red-c063405.log` (red) and `zoom-0.52.0.log` (green).
+
+## The one product change this branch carries: Display's own tooltip
+
+`public/index.html:101` — the heading of the **Display** group — still said *"Thinking text, Skill
+output and Console text each set a colour and a size for their own part of it"*. That is the wording
+from before the unification, and it promised the second knob the Thinking text row no longer has: the
+row carries `id="think-color"` and nothing else, and its own tooltip points at Console size. A reader
+who opened Display was told to look for a size that is not there.
+
+It now reads *"Thinking text, Skill output and Console text each set a colour for their own part of
+it; the console also carries the one size its words, a tool's output and the reasoning all read, and a
+skill's box has a size of its own"* — true of the three rows and of the skill box, which does keep
+`--skill-font-size` (`style.css:1221`) because a skill's output is a fourth kind the brief does not
+name. No size, colour, selector or gate moved with it.
+
+`test/text-styles.test.js:116` pins the copy to the controls: it reads the heading's `title`
+attribute, refuses `each set a colour and a size`, and requires the console's one size and the skill
+box's own size to be named. `test/settings-groups.test.js` was the only test reading these headings
+and it parses `data-settings-group`/`role`/`tabindex`/`aria-expanded` only, so no gate asserted the old
+sentence.
+
+## Where the code is now: the stylesheet held, the script moved
+
+The citations in the sections above were read at `65f1e8e`/`14c27c3`. Between that tip and this one,
+the assistant-settings split (`65f1e8e`) and the worktree owner column (`635404b`) added lines above
+`public/app.js`'s wheel handler, so its anchors moved. Read on this tip:
+
+| what | then | now |
+| --- | --- | --- |
+| `:root` `--term-size` | `style.css:39` | `style.css:39` |
+| `.job-out` | `style.css:992` | `style.css:992` |
+| `.think-block` | `style.css:707` | `style.css:707` |
+| `.think-block.mono` | `style.css:711` | `style.css:711` |
+| `.jl-think` | `style.css:1020` | `style.css:1020` |
+| `.jl-tool-out` | `style.css:1125` | `style.css:1125` |
+| `state.consoleZoom` | `app.js:56` | `app.js:59` |
+| the card re-emits its zoom | `app.js:4263` | `app.js:4263` |
+| `cardConsoleSize` | `app.js:14205` | `app.js:14228` |
+| `zoomConsole` | `app.js:14210` | `app.js:14233` |
+| `onConsoleWheel` | `app.js:14228` | `app.js:14251` |
+| the capture listener | `app.js:14237` | `app.js:14260` |
+| `applyTermStyle`'s `setProperty` | `app.js:16454` | `app.js:16477` |
+| `retireTextStyleSize` | `app.js:16497` | `app.js:16520` |
+
+`public/style.css`'s changes since `8237843` are the owner column's ellipsis rule with its `.git-owner`
+fallback and the queue pane's block appended for `935bfc4`; no console rule moved, and the six
+stylesheet anchors above are the same lines they were.
+
+## The brief's seven items, on this tip
+
+The shape recorded above stands for items 1–6: one `--term-size`, the Thinking row folded onto it with
+its retired key removed, one capture-phase Ctrl+wheel that writes that variable on the card, the unit
+case at `test/text-styles.test.js:142` asserting the three selectors compute one size, the browser gate
+with its red proof above, the minor (`0.49.3 → 0.50.0`) that travelled with `8237843`, and
+`docs/using-the-board.md:661-675`/`:825`/`:892` for the row's meaning. What this branch adds is the
+tooltip that still described the old shape, the pin on that copy, and this re-measurement.
+
+## Version of this record
+
+`0.53.1`. Patch over `main`'s `0.53.0` — `docs/versioning.md` files a fix that only changes copy, and
+a record, under patch. The number moved twice while the PR was open: the branch first read `0.52.2`
+on `3d17063`; a sibling landing (`e317798`, the owner-label record) took `0.52.2`, so it was rebased
+onto that and re-bumped `0.52.3`; then the assistant task queue (`935bfc4`) took `0.53.0`, so it was
+rebased again and re-bumped `0.53.1`. The minor the brief names was already spent by the landing
+that carries the feature: `8237843` took `0.49.3` → `0.50.0`. `node tools/version.mjs check` passes
+against `origin/main` (`935bfc4`, `0.53.0`).
