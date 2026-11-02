@@ -18,6 +18,7 @@ is `rev-parse`, `rev-list`, `merge-base`, `cherry`, `diff`, `status` and `log`.
 | Region | What it is |
 | --- | --- |
 | Top bar | Liveness dot, stream state and rate, and the page's own controls. Sticky: it stays on screen while you scroll. |
+| Banner | A message floats under the top bar, over the board, and never moves it — the board's rows stay where they were. A **red** one is a failure and stays until you press its `✕`; a **green** one is a confirmation and goes by itself after four seconds. It is bounded by the board's column, so a docked assistant rail is never covered. |
 | **New agent** | The spawn form. Its header line always says what a spawn will do (a new worktree, or a run in a directory as it is). |
 | **Unattached agents** | Agent cards whose directory is not a worktree on the board — or none at all. |
 | **Spawn cards waiting** | A strip above **New agent**, only while the assistant has proposed workers nobody has clicked yet (see *Spawn cards*). |

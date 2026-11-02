@@ -151,7 +151,57 @@ button:disabled { opacity: .5; cursor: default; }
 button.primary { background: #1d3a57; border-color: #2b5480; color: #cfe6ff; }
 button.primary:hover { background: #24466a; }
 
-.banner { margin: 10px 16px 0; padding: 8px 12px; border-radius: 6px; background: var(--red-bg); border: 1px solid #57262a; color: #ffb4ae; font-size: 13px; }
+/* The banner FLOATS under the sticky topbar instead of sitting in the page. A message that appears must not move
+   the board under the reader's hands, so the layer is `position: fixed` and takes no height from the flow. Its top
+   is the topbar's MEASURED height (the header wraps to a second row on a narrow window, so it is never a constant)
+   and its sides are the board's own column — written by placeBanner() in app.js — because a full-width bar would
+   sit over the docked rail. The layer takes no press; only the bar inside it does. */
+.banner-layer {
+  position: fixed;
+  top: 0; /* written by placeBanner() from the topbar's measured height before the bar is ever shown */
+  left: 0;
+  right: 0;
+  z-index: 9; /* under the topbar (10), over the board */
+  display: flex;
+  pointer-events: none;
+}
+.banner {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 10px 16px 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--red-bg);
+  border: 1px solid #57262a;
+  color: #ffb4ae;
+  font-size: 13px;
+  box-shadow: 0 8px 20px #0007;
+  pointer-events: auto;
+  animation: banner-in 140ms ease-out;
+}
+/* It fades in where it lands: the bar is fixed, so a slide would read as movement that never happened. */
+@keyframes banner-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.banner-text { flex: 1 1 auto; min-width: 0; }
+/* The ✕ is the red banner's own: a failure is the reader's to dismiss, so it does not time out. */
+.banner .banner-x {
+  flex: none;
+  margin: -2px -4px -2px 0;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: .7;
+  cursor: pointer;
+}
+.banner .banner-x:hover { background: transparent; opacity: 1; }
 .banner.ok { background: var(--green-bg); border-color: #1f4a2a; color: #b7f7c1; }
 /* ---- the update chip ----
    A different build than the one this tab loaded is an interruption the reader can decline, so it

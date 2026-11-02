@@ -458,7 +458,18 @@
     </div>
   </div>
 
-  <div id="banner" class="banner hidden"></div>
+  <!-- The banner FLOATS under the sticky topbar: a message that appears must not shove the board down under the
+       reader's hands. The layer is the fixed box — its top is the topbar's MEASURED height (it wraps to a second
+       row on a narrow window) and its sides are the board's own column, so the docked rail is never covered;
+       placeBanner() in app.js writes all three. The layer takes no press at all and the bar inside it takes its
+       own, so a floating bar never eats a click meant for the board. A red failure stays until its ✕; a green
+       confirmation takes itself away. -->
+  <div id="banner-layer" class="banner-layer">
+    <div id="banner" class="banner hidden">
+      <span id="banner-text" class="banner-text"></span>
+      <button type="button" class="banner-x" title="dismiss this message" hidden>✕</button>
+    </div>
+  </div>
 
   <div class="shell">
     <main>

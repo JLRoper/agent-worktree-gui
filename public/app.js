@@ -14177,32 +14177,85 @@ function applySnapshot(data) {
   }
   reorderProjects();
   $("health").className = "dot ok";
-  $("banner").classList.add("hidden");
+  // A healthy snapshot clears a green confirmation (it was about one gesture, and the board is fine) but never a
+  // red one: a failure is the reader's to dismiss with its ✕, and a poll every few seconds would wipe it before it
+  // could be read.
+  const b = $("banner");
+  if (b && b.classList.contains("ok")) hideBanner();
+}
+
+// The banner FLOATS under the sticky topbar, so a message that appears moves nothing on the board. The layer is
+// the fixed box and its three sides are measured here: the topbar's height (it wraps to a second row on a narrow
+// window, so it is never a constant) and the board's own column, which is what keeps the docked rail uncovered.
+// A measured client rect is VISUAL px while a length written to `style` is LAYOUT px, so both are divided by the
+// page zoom — the same conversion assistant.js's `cssPx` makes for the rail.
+function placeBanner() {
+  const layer = $("banner-layer");
+  const topbar = document.querySelector(".topbar");
+  const main = document.querySelector(".shell > main");
+  if (!layer || !topbar || !main) return;
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const bar = topbar.getBoundingClientRect();
+  const col = main.getBoundingClientRect();
+  layer.style.top = `${Math.max(0, bar.height / z)}px`;
+  layer.style.left = `${Math.max(0, col.left / z)}px`;
+  layer.style.right = `${Math.max(0, vw - col.right / z)}px`;
+}
+
+let noteTimer = 0;
+function hideBanner() {
+  const b = $("banner");
+  if (!b) return;
+  clearTimeout(noteTimer);
+  noteTimer = 0;
+  b.classList.add("hidden");
+  b.classList.remove("ok");
 }
 
 function showBanner(msg) {
   const b = $("banner");
-  if (!msg) return b.classList.add("hidden");
+  if (!b) return;
+  if (!msg) return hideBanner();
+  const text = $("banner-text");
+  if (text) text.textContent = msg;
+  else b.textContent = msg;
+  const x = b.querySelector(".banner-x");
+  if (x) x.hidden = false;
+  // A red failure stays until its ✕ is pressed: a green note's pending timer must not take it away.
+  clearTimeout(noteTimer);
+  noteTimer = 0;
   b.classList.remove("ok");
-  b.textContent = msg;
+  placeBanner();
   b.classList.remove("hidden");
 }
 
 // A short green confirmation (the red banner is for failures): used when a gesture did what it said
 // without opening a dialog, e.g. an agent attaching itself to the worktree it was already sitting in.
-let noteTimer = 0;
+// It is not a failure to dismiss, so it carries no ✕ and takes itself away after four seconds.
 function showNote(msg) {
   const b = $("banner");
   if (!b) return;
-  b.textContent = msg;
+  const text = $("banner-text");
+  if (text) text.textContent = msg;
+  else b.textContent = msg;
+  const x = b.querySelector(".banner-x");
+  if (x) x.hidden = true;
   b.classList.add("ok");
+  placeBanner();
   b.classList.remove("hidden");
   clearTimeout(noteTimer);
-  noteTimer = setTimeout(() => {
-    b.classList.add("hidden");
-    b.classList.remove("ok");
-  }, 4000);
+  noteTimer = setTimeout(hideBanner, 4000);
 }
+
+$("banner")?.querySelector(".banner-x")?.addEventListener("click", () => hideBanner());
+// Two things the layer is measured against move without a window resize: the topbar (it wraps) and the board's
+// column (the rail opens, closes and is dragged). One observer on both keeps the bar where it belongs.
+if (typeof ResizeObserver === "function") {
+  const bannerResize = new ResizeObserver(() => placeBanner());
+  for (const el of [document.querySelector(".topbar"), document.querySelector(".shell > main")]) if (el) bannerResize.observe(el);
+}
+window.addEventListener("resize", placeBanner);
 
 // The two read-now gestures (Settings → Board → Read now). Both routes answer at once and do their work behind the
 // request — a fast pass re-reads the rows, a fetch spawns git and then re-reads — and neither moves anything on
@@ -16386,6 +16439,8 @@ function applyZoom(pct, { save = true } = {}) {
   // without this the chart kept a split measured for the previous scale (and, on a phone, the wrong idea of
   // whether it should be scrolling sideways).
   fitAllColumns();
+  // The banner's three sides are measured client lengths written back as layout lengths, so a zoom moves them too.
+  placeBanner();
   if (save) {
     try {
       localStorage.setItem(ZOOM_KEY, String(z));
