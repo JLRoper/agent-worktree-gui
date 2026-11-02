@@ -53,12 +53,10 @@ const RANK_EVENT_CAP = 400;        // hard cap on one row's ring, so an eight-ho
 const RANK_MARGIN_PER_MIN = 1;
 
 const state = {
-  // thread -> px. Ctrl+wheel over a console zooms that console only, like a terminal window; the Settings
-  // "Console size" stays the baseline for every card. Kept in memory so a repaint does not undo it.
+  // thread -> px. Ctrl+wheel anywhere over a card's console text sizes that card, all three kinds at once — its own
+  // words, a tool's output and the agent's reasoning — like a terminal window; the Settings "Console size" stays the
+  // baseline for every card. Kept in memory so a repaint does not undo it (the card re-emits it in its markup).
   consoleZoom: new Map(),
-  // Ctrl+wheel over a thinking body sizes it, the same way it sizes the console - per card, so one long reasoning
-  // block can be shrunk without touching the rest of the board.
-  thinkZoom: new Map(),
   // Hot Agent: the rotation through agents that are waiting for input. `stack` is the visit history (so
   // Alt+Left can walk back), `cursor` points at the one on screen.
   hot: { on: false, stack: [], cursor: -1 },
@@ -4262,8 +4260,7 @@ function conversationHtml(conv) {
     : "";
   const jumped = state.jumpThread && state.jumpThread.thread === thread && Date.now() < state.jumpThread.until ? " jump" : "";
   const zoom = state.consoleZoom.get(thread);
-  const thinkZoom = state.thinkZoom.get(thread);
-  const sizeVars = [zoom ? `--out-size:${zoom}px` : "", thinkZoom ? `--think-size:${thinkZoom}px` : ""].filter(Boolean).join(";");
+  const sizeVars = zoom ? `--term-size:${zoom}px` : "";
   // The pill the reader already knows, for a card this panel has no line to. It still reads "not-running" — that is
   // the state, and the press is the same press: pick this up. What differs is behind the click. This one asks the
   // gateway about the run it lost BEFORE starting anything: still live -> the card re-attaches to that run and
@@ -14194,55 +14191,48 @@ $("btn-fold-jobs").addEventListener("click", () => {
   foldAll(!allFolded);
 });
 $("job-prompt").addEventListener("input", () => updateSpawnNote());
-// Ctrl+wheel over a console resizes its text, the way a terminal does, instead of zooming the page. Scoped to
-// that card's output (`--out-size`), so one long transcript can be shrunk without touching the rest of the board;
-// the Settings "Console size" remains the baseline. Steps of 1px, clamped to what a monospace face still reads
-// at, and the page zoom is only suppressed while the pointer is actually over a console.
+// Ctrl+wheel over a card's console text resizes it, the way a terminal does, instead of zooming the page. ONE size
+// drives all of it — the agent's own words, a tool's output and its reasoning — so this writes the console's single
+// variable (`--term-size`) on the card, which is the same variable Settings' Console size sets on the root: a zoom is
+// a per-card override of that one baseline, and no second knob can drift out of step with it. Scoped to the card, so
+// one long transcript can be shrunk without touching the rest of the board. Steps of half a pixel, clamped to what a
+// monospace face still reads at; the page zoom is only suppressed while the pointer is over console text.
 const CONSOLE_ZOOM_MIN = 7;
 const CONSOLE_ZOOM_MAX = 24;
-const THINK_ZOOM_MIN = 8;
-const THINK_ZOOM_MAX = 22;
 
-function zoomConsole(out, step) {
-  const card = out.closest(".job");
+// The size in force on this card, read from the one variable rather than from whichever element the wheel was over
+// (a `.think-body` carries no font-size of its own — only the blocks inside it do).
+function cardConsoleSize(card) {
+  const css = parseFloat(getComputedStyle(card).getPropertyValue("--term-size"));
+  return Number.isFinite(css) ? css : 11.5;
+}
+
+function zoomConsole(zone, step) {
+  const card = zone.closest(".job");
   const thread = card && card.dataset.thread;
   if (!thread) return;
-  const base = Number(state.consoleZoom.get(thread)) || parseFloat(getComputedStyle(out).fontSize) || 11.5;
+  const base = Number(state.consoleZoom.get(thread)) || cardConsoleSize(card);
   // Half-pixel steps: the console's default size is 11.5px, and rounding to whole pixels made the first tick
   // jump 1.5px while every tick after it moved 1.
   const next = Math.min(CONSOLE_ZOOM_MAX, Math.max(CONSOLE_ZOOM_MIN, Math.round((base + step) * 2) / 2));
   state.consoleZoom.set(thread, next);
-  card.style.setProperty("--out-size", `${next}px`);
-  out.style.fontSize = `${next}px`;
-}
-
-// The same gesture over a thinking body: reasoning text has its own size (11.5px by default) and its own var, so
-// zooming it never moves the console's text.
-function zoomThink(body, step) {
-  const card = body.closest(".job");
-  const thread = card && card.dataset.thread;
-  if (!thread) return;
-  const block = body.querySelector(".think-block") || body;
-  const base = Number(state.thinkZoom.get(thread)) || parseFloat(getComputedStyle(block).fontSize) || 11.5;
-  const next = Math.min(THINK_ZOOM_MAX, Math.max(THINK_ZOOM_MIN, Math.round((base + step) * 2) / 2));
-  state.thinkZoom.set(thread, next);
-  card.style.setProperty("--think-size", `${next}px`);
+  card.style.setProperty("--term-size", `${next}px`);
 }
 
 // Ctrl+wheel over a console must not ALSO zoom the window. Cancel it at the earliest point in the event's path
 // (capture on window) and stop it there, so neither the page's own listeners nor anything above them sees a
 // cancellable wheel: a passive listener anywhere in the path - the panel has one on document for pendingFocus -
 // can otherwise leave the browser free to run its zoom gesture.
+// The zones are one selector's worth: `.job-out` holds the agent's words, a tool's output and (in 🌊) its reasoning;
+// `.think-body` is the 🧠 block above the console. Any of them sizes the whole card, the same single step.
 const onConsoleWheel = (e) => {
   if (!e.ctrlKey) return;
   const target = e.target && e.target.closest ? e.target : null;
-  const out = target ? target.closest(".job-out") : null;
-  const think = !out && target ? target.closest(".think-body") : null;
-  if (!out && !think) return;
+  const zone = target ? target.closest(".job-out, .think-body") : null;
+  if (!zone) return;
   if (e.cancelable) e.preventDefault();
   e.stopPropagation();
-  if (out) zoomConsole(out, e.deltaY < 0 ? 1 : -1);
-  else zoomThink(think, e.deltaY < 0 ? 1 : -1);
+  zoomConsole(zone, e.deltaY < 0 ? 1 : -1);
 };
 window.addEventListener("wheel", onConsoleWheel, { passive: false, capture: true });
 // Trackpad pinch arrives as a gesture in Safari, not as a ctrl+wheel, and would zoom the page under the pointer.
@@ -14250,8 +14240,8 @@ for (const type of ["gesturestart", "gesturechange"]) {
   window.addEventListener(
     type,
     (e) => {
-      const out = e.target && e.target.closest ? e.target.closest(".job-out") : null;
-      if (!out) return;
+      const zone = e.target && e.target.closest ? e.target.closest(".job-out, .think-body") : null;
+      if (!zone) return;
       if (e.cancelable) e.preventDefault();
       e.stopPropagation();
     },
@@ -16484,21 +16474,35 @@ function applyTermStyle({ save = false, size = null, weight = null } = {}) {
 }
 
 // ---- text styles: thinking, skill output, console -------------------------------------------------
-// Three kinds of console text, each with its own colour and size (Settings > Display): the agent's REASONING, what a
-// SKILL prints (the result of skill_view / skills_list / skill_manage, inside its output box), and the rest of the
-// console's own words and tool output. They are set apart on purpose: reasoning is how the agent got there, a skill is
-// a document the reader reads rather than scans, and neither should have to share a size with a one-line `ls`.
+// Three kinds of console text (Settings > Display): the agent's REASONING, what a SKILL prints (the result of
+// skill_view / skills_list / skill_manage, inside its output box), and the rest of the console's own words and tool
+// output. Each has its own COLOUR — reasoning is how the agent got there, a skill is a document the reader reads
+// rather than scans — but there is only ONE size: the console's, `--term-size`, which normal output, a tool's output
+// and the reasoning all resolve to. Ctrl+wheel writes that same variable on a card, so a zoom moves all three
+// together, and there is no second knob here that could drift away from it.
 //
-// Each style is a CSS variable on :root that the stylesheet reads WITH a fallback to today's look, so an unset style
+// Each colour is a CSS variable on :root that the stylesheet reads WITH a fallback to today's look, so an unset style
 // costs nothing and "use defaults" is removing the property, not writing the old value back (reasoning has two defaults
 // — dim in the 🧠 block, lavender in the 🌊 stream — and a stored copy of either would flatten the other). The console's
-// size is not here: it is the existing Console size (--term-size, applyTermStyle), which this row now owns.
+// size is not here either: it is the existing Console size (--term-size, applyTermStyle), which this row now owns.
 const TEXT_STYLES = {
-  think: { colorKey: "wtgui.thinkColor", sizeKey: "wtgui.thinkSize", colorVar: "--think-color", sizeVar: "--think-font-size", color: "think-color", state: "think-color-state", size: "think-size-select", fallback: "#b3a8cc" },
+  think: { colorKey: "wtgui.thinkColor", colorVar: "--think-color", color: "think-color", state: "think-color-state", fallback: "#b3a8cc" },
   skill: { colorKey: "wtgui.skillColor", sizeKey: "wtgui.skillSize", colorVar: "--skill-color", sizeVar: "--skill-font-size", color: "skill-color", state: "skill-color-state", size: "skill-size-select", fallback: "#9aa4b2" },
   console: { colorKey: "wtgui.consoleColor", colorVar: "--con-color", color: "console-color", state: "console-color-state", fallback: "#e6e9ef" },
 };
 const TEXT_COLOR_RE = /^#[0-9a-f]{6}$/;
+// The Thinking text row carried a size of its own until the console's text was unified. Its stored value is retired
+// rather than left in the browser pretending to apply: reasoning now reads the console size, and a key nothing reads
+// is how "why is my reasoning still 14px?" gets asked six months from now.
+function retireTextStyleSize(kind) {
+  const set = TEXT_STYLES[kind];
+  if (!set || set.sizeKey) return;
+  try {
+    localStorage.removeItem(`wtgui.${kind}Size`);
+  } catch {
+    /* private mode: there was nothing to retire */
+  }
+}
 
 function textStyleColor(kind) {
   const set = TEXT_STYLES[kind];
@@ -17449,6 +17453,7 @@ function initFonts() {
     if (sel && !sel.options.length) {
       sel.innerHTML = `<option value="">Default</option>${TERM_SIZES.map((n) => `<option value="${n}">${n}px</option>`).join("")}`;
     }
+    retireTextStyleSize(kind);
     applyTextStyle(kind);
   }
 }

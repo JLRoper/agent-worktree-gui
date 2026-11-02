@@ -7,16 +7,16 @@
 //   node tools/verify-text-styles.mjs --keep           # leave the sandbox behind for inspection
 //
 // WHAT THIS ANSWERS
-//   Settings > Display carries a colour and a size for three kinds of console text — the agent's reasoning, what a
-//   skill prints, and the rest of the console — and every reasoning section stands an empty line below whatever came
-//   before it. The unit test (test/text-styles.test.js) proves the setting writes the right variables; this proves
-//   the stylesheet reads them where the reader is looking:
+//   Settings > Display carries a colour for three kinds of console text — the agent's reasoning, what a skill prints,
+//   and the rest of the console — plus ONE size, the console's, that all of the console's text resolves to — and every
+//   reasoning section stands an empty line below whatever came before it. The unit test (test/text-styles.test.js)
+//   proves the setting writes the right variables; this proves the stylesheet reads them where the reader is looking:
 //
 //     1. UNSET, the console is the console it always was: reasoning lavender (🌊) or dim (🧠), a skill's rows the
-//        console's tool-output grey, prose #e6e9ef, every size the console's own;
-//     2. SET through the real controls (the colour picker, the size select), each of the three changes its own text and
-//        nothing else — reasoning and skill output keep their own size while the console's moves, a diff row inside a
-//        skill box keeps its green;
+//        console's tool-output grey, prose #e6e9ef, reasoning at the console's own size;
+//     2. SET through the real controls (the colour pickers, the console's size select), each colour changes its own
+//        text and nothing else, while the one console size moves the console, its tool output and the reasoning
+//        together — a diff row inside a skill box keeps its green;
 //     3. an empty line stands above every reasoning section but the first line of a console, measured as the gap
 //        between the row above and the reasoning (not just the margin that was asked for);
 //     4. the choice survives a reload, and "use defaults" removes the property and the stored key.
@@ -289,10 +289,10 @@ async function runMode(ctx, work, mode) {
     // ---- set all three through the real controls -----------------------------------------------------------
     await openDisplay(page);
     await page.locator("#think-color").fill("#ff8800");
-    await page.selectOption("#think-size-select", "15");
     await page.locator("#skill-color").fill("#33cc99");
     await page.selectOption("#skill-size-select", "14");
     await page.locator("#console-color").fill("#ffffff");
+    // The console's one size: reasoning and tool output read it too, so there is no second size to set.
     await page.selectOption("#term-size-select", "13");
     out.panel = await page.evaluate(() => ({
       thinkState: document.getElementById("think-color-state").textContent,
@@ -318,7 +318,7 @@ async function runMode(ctx, work, mode) {
     out.reloaded = await page.evaluate(readStyles, THREAD);
     await openDisplay(page);
     out.reloadedControls = await page.evaluate(() => ({
-      think: [document.getElementById("think-color").value, document.getElementById("think-size-select").value],
+      think: [document.getElementById("think-color").value],
       skill: [document.getElementById("skill-color").value, document.getElementById("skill-size-select").value],
       console: [document.getElementById("console-color").value, document.getElementById("term-size-select").value],
     }));
@@ -349,22 +349,24 @@ function judge(cap) {
 
   // 1. unset: the look the console always had
   add("unset: reasoning keeps its own colour", b.think.map((t) => t.color), b.think.map(() => thinkDefault), b.think.every((t) => t.color === thinkDefault));
-  add("unset: reasoning size is the console's (🌊) or 12px (🧠)", b.think.map((t) => t.size), stream ? b.console.size : 12, b.think.every((t) => t.size === (stream ? b.console.size : 12)));
+  add("unset: reasoning is the console's size", b.think.map((t) => t.size), b.console.size, b.think.length > 0 && b.think.every((t) => t.size === b.console.size));
+  add("unset: a tool's output is the console's size too", b.termRows.map((t) => t.size), b.console.size, b.termRows.length > 0 && b.termRows.every((t) => t.size === b.console.size));
   add("unset: a skill's rows are the console's tool-output grey", b.skillRows.map((t) => t.color), "#9aa4b2", b.skillRows.length > 0 && b.skillRows.every((t) => t.color === "#9aa4b2"));
   add("unset: prose keeps #e6e9ef", b.prose.map((t) => t.color), "#e6e9ef", b.prose.every((t) => t.color === "#e6e9ef"));
   add("unset: no variable is set on the root", b.rootVars, "only --term-size (the console's own)", ["--think-color", "--think-font-size", "--skill-color", "--skill-font-size", "--con-color"].every((k) => b.rootVars[k] === null));
 
   // 2. set: each its own, nothing else
   add("set: reasoning is the picked colour", a.think.map((t) => t.color), "#ff8800", a.think.every((t) => t.color === "#ff8800"));
-  add("set: reasoning is the picked size", a.think.map((t) => t.size), 15, a.think.every((t) => t.size === 15));
+  add("set: reasoning follows the console's picked size", a.think.map((t) => t.size), 13, a.think.every((t) => t.size === 13));
   add("set: a skill's rows are the picked colour", a.skillRows.map((t) => t.color), "#33cc99", a.skillRows.length > 0 && a.skillRows.every((t) => t.color === "#33cc99"));
   add("set: a skill's box is the picked size", a.skillBodySize, 14, a.skillBodySize === 14);
   add("set: a diff row inside the skill box keeps its green", a.addRowColor, "#7ee787", a.addRowColor === "#7ee787");
   add("set: prose is the picked console colour", a.prose.map((t) => t.color), "#ffffff", a.prose.every((t) => t.color === "#ffffff"));
   add("set: the console is the picked size", a.console.size, 13, a.console.size === 13);
   add("set: prose follows the console's size", a.prose.map((t) => t.size), 13, a.prose.every((t) => t.size === 13));
+  add("set: a tool's output follows the console's size", a.termRows.map((t) => t.size), 13, a.termRows.length > 0 && a.termRows.every((t) => t.size === 13));
   add("set: a terminal result's rows take the console colour, and are not a skill box", { rows: a.termRows.map((t) => t.color), skill: a.otherBoxIsSkill }, { rows: "#ffffff", skill: false }, a.termRows.length > 0 && a.termRows.every((t) => t.color === "#ffffff") && a.otherBoxIsSkill === false);
-  add("set: the Settings previews are drawn from the same variables", cap.panel.previews, "think #ff8800/15px, skill #33cc99/14px, console #ffffff/13px", cap.panel.previews.every((p) => (p.k === "think" ? p.color === "rgb(255, 136, 0)" && p.size === "15px" : p.k === "skill" ? p.color === "rgb(51, 204, 153)" && p.size === "14px" : p.color === "rgb(255, 255, 255)" && p.size === "13px")));
+  add("set: the Settings previews are drawn from the same variables", cap.panel.previews, "think #ff8800/13px, skill #33cc99/14px, console #ffffff/13px", cap.panel.previews.every((p) => (p.k === "think" ? p.color === "rgb(255, 136, 0)" && p.size === "13px" : p.k === "skill" ? p.color === "rgb(51, 204, 153)" && p.size === "14px" : p.color === "rgb(255, 255, 255)" && p.size === "13px")));
   add("set: each row names the colour in force", [cap.panel.thinkState, cap.panel.skillState, cap.panel.consoleState], ["#ff8800", "#33cc99", "#ffffff"], cap.panel.thinkState === "#ff8800" && cap.panel.skillState === "#33cc99" && cap.panel.consoleState === "#ffffff");
 
   // 3. the empty line
@@ -380,9 +382,9 @@ function judge(cap) {
   add("the first line of a console has no empty line above it", above.filter((x) => x.first && x.inConsole).map((x) => x.t.marginTop), 0, above.filter((x) => x.first && x.inConsole).every((x) => x.t.marginTop === 0));
 
   // 4. persistence and defaults
-  add("a reload keeps all three", { think: r.think.map((t) => [t.color, t.size]), skill: r.skillRows.map((t) => [t.color, t.size]), prose: r.prose.map((t) => t.color), console: r.console.size }, "#ff8800/15, #33cc99, #ffffff, 13", r.think.every((t) => t.color === "#ff8800" && t.size === 15) && r.skillRows.every((t) => t.color === "#33cc99") && r.prose.every((t) => t.color === "#ffffff") && r.console.size === 13);
-  add("and the controls show what was chosen", cap.reloadedControls, "#ff8800/15, #33cc99/14, #ffffff/13", cap.reloadedControls.think.join() === "#ff8800,15" && cap.reloadedControls.skill.join() === "#33cc99,14" && cap.reloadedControls.console.join() === "#ffffff,13");
-  add("use defaults: the colours and sizes are back", { think: z.think.map((t) => [t.color, t.size]), skill: z.skillRows.map((t) => t.color), prose: z.prose.map((t) => t.color), console: z.console.size }, `${thinkDefault}, #9aa4b2, #e6e9ef, 11.5px`, z.think.every((t) => t.color === thinkDefault && t.size === (stream ? 11.5 : 12)) && z.skillRows.every((t) => t.color === "#9aa4b2") && z.prose.every((t) => t.color === "#e6e9ef") && z.console.size === 11.5);
+  add("a reload keeps all three", { think: r.think.map((t) => [t.color, t.size]), skill: r.skillRows.map((t) => [t.color, t.size]), prose: r.prose.map((t) => t.color), console: r.console.size }, "#ff8800/13, #33cc99, #ffffff, 13", r.think.every((t) => t.color === "#ff8800" && t.size === 13) && r.skillRows.every((t) => t.color === "#33cc99") && r.prose.every((t) => t.color === "#ffffff") && r.console.size === 13);
+  add("and the controls show what was chosen", cap.reloadedControls, "#ff8800, #33cc99/14, #ffffff/13", cap.reloadedControls.think.join() === "#ff8800" && cap.reloadedControls.skill.join() === "#33cc99,14" && cap.reloadedControls.console.join() === "#ffffff,13");
+  add("use defaults: the colours and sizes are back", { think: z.think.map((t) => [t.color, t.size]), skill: z.skillRows.map((t) => t.color), prose: z.prose.map((t) => t.color), console: z.console.size }, `${thinkDefault}, #9aa4b2, #e6e9ef, 11.5px`, z.think.every((t) => t.color === thinkDefault && t.size === 11.5) && z.skillRows.every((t) => t.color === "#9aa4b2") && z.prose.every((t) => t.color === "#e6e9ef") && z.console.size === 11.5);
   add("use defaults: the variables are removed and the keys forgotten", { vars: z.rootVars, stored: z.stored }, "no --think/--skill/--con vars, no stored colour or size", ["--think-color", "--think-font-size", "--skill-color", "--skill-font-size", "--con-color"].every((k) => z.rootVars[k] === null) && ["wtgui.thinkColor", "wtgui.thinkSize", "wtgui.skillColor", "wtgui.skillSize", "wtgui.consoleColor"].every((k) => z.stored[k] === null) && (z.stored["wtgui.termSize"] === "11.5"));
   add("the page threw nothing", cap.errors, [], cap.errors.length === 0);
   return { checks, driven: true };
