@@ -33,7 +33,9 @@
      an agent's terminal (transcript, prompt, reply box, command preview) can be chosen apart. */
   --ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --term: var(--mono);
-  /* Console text: the font comes from Settings; size and weight default to what this box always had. */
+  /* Console text: the font comes from Settings; size and weight default to what this box always had.
+     --term-size is the ONE console size: normal output, a tool's output and the agent's reasoning all resolve to
+     it, and a card overrides it in its own inline style when the reader Ctrl+wheel-zooms that card. */
   --term-size: 11.5px;
   --term-weight: 400;
 }
@@ -242,7 +244,7 @@ button.primary:hover { background: #24466a; }
 .settings-row input[type="color"] { flex: none; width: 34px; height: 26px; padding: 1px 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
 .settings-row select.settings-size { flex: 0 0 96px; }
 /* The three text styles' previews are drawn FROM the variables the console reads, so each one IS the setting. */
-.settings-preview.sample-think { font: italic var(--think-font-size, 12px)/1.5 var(--term); font-weight: var(--term-weight); color: var(--think-color, #b3a8cc); }
+.settings-preview.sample-think { font: italic var(--term-size)/1.5 var(--term); font-weight: var(--term-weight); color: var(--think-color, #b3a8cc); }
 .settings-preview.sample-skill { font: var(--skill-font-size, var(--term-size))/1.5 var(--term); font-weight: var(--term-weight); color: var(--skill-color, var(--con-color, var(--dim))); }
 .settings-preview.sample-console { font: var(--term-size)/1.5 var(--term); font-weight: var(--term-weight); color: var(--con-color, #e6e9ef); }
 .settings-row input[type="number"] { width: 74px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
@@ -702,11 +704,11 @@ button.chip:active { transform: translateY(1px); }
 .think-title { font-size: 10.5px; letter-spacing: .03em; color: #9db4d0; }
 .think-meta { font-size: 10.5px; color: var(--dimmer); }
 .think-body { margin: 6px 0 2px; max-height: 260px; overflow: auto; }
-.think-block { white-space: pre-wrap; word-break: break-word; font-size: var(--think-size, var(--think-font-size, 12px)); line-height: 1.5; font-style: italic; color: var(--think-color, var(--dim)); margin: 0 0 8px; }
+.think-block { white-space: pre-wrap; word-break: break-word; font-size: var(--term-size); line-height: 1.5; font-style: italic; color: var(--think-color, var(--dim)); margin: 0 0 8px; }
 /* The blocks also carry .mono, which sets a 12px size and would otherwise win on the var: this rule is two classes
-   deep so Ctrl+wheel can actually size the reasoning text. A card's own zoom (--think-size) is a gesture on that card
-   and beats the Settings size (--think-font-size), which is the reader's standing choice for every card. */
-.think-block.mono { font-size: var(--think-size, var(--think-font-size, 12px)); }
+   deep so the reasoning is the console's own size, the same one Ctrl+wheel writes on the card for all three kinds
+   of text. Reasoning has no size knob of its own — one size drives the console, its tool output and this. */
+.think-block.mono { font-size: var(--term-size); }
 /* An empty line before every reasoning section: a thought is not glued to the tool output or the thought above it. */
 .think-block + .think-block { margin-top: 1.5em; }
 .think-block:last-child { margin-bottom: 0; }
@@ -982,11 +984,12 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 8px 10px;
-  /* Size comes from the card's `--out-size` when Ctrl+wheel has zoomed this console, otherwise from Settings. */
+  /* ONE console size: the root's --term-size from Settings, overridden on a card the reader has Ctrl+wheel-zoomed.
+     Normal output, tool output and the reasoning below all resolve to this same variable, so they cannot drift. */
   font-weight: var(--term-weight);
   font-family: var(--term);
   line-height: 1.5;
-  font-size: var(--out-size, var(--term-size));
+  font-size: var(--term-size);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -1012,8 +1015,9 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
 .tgrp-call > .tgrp-row { padding: 0 2px; }
 .tgrp-call > .tgrp-out { margin: 2px 0 5px; padding-left: 21px; }
 /* The reasoning, drawn as a line of that stream rather than as a block above it. It keeps the block's own voice
-   (italic, dim) so it still reads as thought and not as something the agent said out loud. */
-.jl-think { color: var(--think-color, #b3a8cc); font-style: italic; font-size: var(--think-font-size, inherit); }
+   (italic, dim) so it still reads as thought and not as something the agent said out loud — and the console's one
+   size, so a Ctrl+wheel over any of a card's text moves this line with the rest of it. */
+.jl-think { color: var(--think-color, #b3a8cc); font-style: italic; font-size: var(--term-size); }
 /* ONE blank line sets every piece of the stream apart from the piece above it — a reasoning block, a group of tool
    output, a chunk of the agent's own words. The reasoning block had this rule first and everything else wears the same
    class (`jl-sep`, put on each piece by streamBodyHtml and by the live append), so the three cannot drift into three
@@ -1116,8 +1120,9 @@ button.btn-retry:disabled { color: var(--dimmer); border-color: var(--line); cur
 /* A document is being dragged over the box that will carry its path. */
 textarea.drop-target, .chipbox.drop-target { outline: 2px dashed var(--violet); outline-offset: 1px; }
 
-/* a tool's own output, shown under its call so the console says what actually happened */
-.jl-tool-out { color: var(--con-color, var(--dim)); padding-left: 14px; white-space: pre-wrap; }
+/* a tool's own output, shown under its call so the console says what actually happened. It states the console's one
+   size rather than inheriting it, so the size a Ctrl+wheel writes on the card reaches it whatever wraps it. */
+.jl-tool-out { color: var(--con-color, var(--dim)); padding-left: 14px; white-space: pre-wrap; font-size: var(--term-size); }
 .jl-cmd { color: var(--dimmer); }
 .jl-dim { color: var(--dimmer); font-style: italic; }
 .jl-raw { color: var(--dim); }

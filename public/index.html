@@ -124,14 +124,13 @@
           <select id="term-weight-select"></select>
         </label>
 
-        <div class="settings-row settings-gap" title="Thinking text — the colour and size of the agent's reasoning, set apart from what a skill prints and from the rest of the console. It applies wherever reasoning is drawn: the 🧠 block above a console and the reasoning lines of the 🌊 single stream. Default keeps today's look (a quiet italic lavender). A card's own Ctrl+wheel zoom on its 🧠 block still wins for that card. Saved in this browser.">
+        <div class="settings-row settings-gap" title="Thinking text — the colour of the agent's reasoning, set apart from what a skill prints and from the rest of the console. It applies wherever reasoning is drawn: the 🧠 block above a console and the reasoning lines of the 🌊 single stream. Default keeps today's look (a quiet italic lavender). Its SIZE is the console's own (Console size, below): one size drives the console's words, a tool's output and the reasoning together, so it has no size picker of its own — and a card's Ctrl+wheel zoom on any of its text moves all three at once. Saved in this browser.">
           <span>Thinking text <span class="settings-info">ⓘ</span></span>
           <input id="think-color" type="color" value="#b3a8cc" aria-label="Thinking text colour">
           <span class="settings-unit mono" id="think-color-state">default</span>
-          <select id="think-size-select" class="settings-size" aria-label="Thinking text size"></select>
         </div>
         <div class="settings-preview sample-think" id="think-preview">I'll read the file first, then patch the guard.</div>
-        <div class="settings-presets"><button type="button" data-text-reset="think" title="back to the default thinking colour and size">use defaults</button></div>
+        <div class="settings-presets"><button type="button" data-text-reset="think" title="back to the default thinking colour (its size is Console size)">use defaults</button></div>
 
         <div class="settings-row settings-gap" title="Skill output — the colour and size of what a skill prints into the console (the result of skill_view, skills_list and skill_manage, inside its output box). Default reads like the rest of the console. A diff inside the box keeps its green and red. Saved in this browser.">
           <span>Skill output <span class="settings-info">ⓘ</span></span>
@@ -142,7 +141,7 @@
         <div class="settings-preview sample-skill" id="skill-preview"># pdf — create, read, merge, fill and OCR PDF files</div>
         <div class="settings-presets"><button type="button" data-text-reset="skill" title="back to the default skill output colour and size">use defaults</button></div>
 
-        <div class="settings-row settings-gap" title="Console text — the colour and size (Console size) of the agent's own words and of a tool's output in the console. Tool-call lines, notes, errors and the results of skills keep their own colours, and Skill output above overrides this for a skill's box. Saved in this browser.">
+        <div class="settings-row settings-gap" title="Console text — the colour and the size (Console size) of the agent's own words, of a tool's output and of its reasoning in the console: one size drives all three. Tool-call lines, notes, errors and the results of skills keep their own colours, and Skill output above overrides this for a skill's box. Saved in this browser.">
           <span>Console text <span class="settings-info">ⓘ</span></span>
           <input id="console-color" type="color" value="#e6e9ef" aria-label="Console text colour">
           <span class="settings-unit mono" id="console-color-state">default</span>

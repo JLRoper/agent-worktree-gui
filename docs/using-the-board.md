@@ -652,18 +652,22 @@ switched off (🧠), a 🧠 block you have folded, a turn that is not running, o
 ending releases whatever is held. A call with no thought in front of it is at most one store read (~50 ms) late.
 `node tools/verify-reasoning-first.mjs` measures it on a sandbox panel, in both the 🌊 stream and the 🧠 block.
 
-**Reasoning, skill output and the console each have a colour and a size.** Settings → Display → **Thinking text**,
-**Skill output** and **Console text** each carry a colour picker and a size. They are separate on purpose: the
-agent's reasoning, what a skill prints (the box a `skill_view`, `skills_list` or `skill_manage` result is drawn in)
-and everything else the console says (the agent's own words and a tool's output). **Default** keeps the look the
-console always had — reasoning a quiet italic lavender in the 🌊 stream and dim grey in the 🧠 block, a skill's rows
-the console's tool-output grey — and **use defaults** under each row removes your choice rather than writing the
-old colour back. A skill's colour falls back to the console's, then to the line's own; a diff inside a skill's box
-keeps its green and red; the tool-call line, notes and errors keep theirs. The console's size is the **Console
-size** that used to have its own row (same saved choice). Ctrl+wheel on a card's 🧠 block still sizes that card's
-block alone and wins over the Settings size. Every reasoning section stands an empty line below whatever came before it —
-a thought is not glued to the tool output above it — except the first line of a console. `node
-tools/verify-text-styles.mjs` reads the computed colours and sizes off a real page, through the real controls.
+**Reasoning, skill output and the console each have a colour — and the console has ONE size for all of its text.**
+Settings → Display → **Thinking text**, **Skill output** and **Console text** each carry a colour picker. The colours
+are separate on purpose: the agent's reasoning, what a skill prints (the box a `skill_view`, `skills_list` or
+`skill_manage` result is drawn in) and everything else the console says (the agent's own words and a tool's output).
+**Default** keeps the look the console always had — reasoning a quiet italic lavender in the 🌊 stream and dim grey in
+the 🧠 block, a skill's rows the console's tool-output grey — and **use defaults** under each row removes your choice
+rather than writing the old colour back. A skill's colour falls back to the console's, then to the line's own; a diff
+inside a skill's box keeps its green and red; the tool-call line, notes and errors keep theirs. There is only one
+size: the **Console size** in the **Console text** row, which the console's own words, a tool's output *and* the
+reasoning all read, so the three can never drift apart. Thinking text has no size of its own any more (a size chosen
+there before this version now follows Console size). Ctrl+wheel over any of a card's console text — its words, a
+tool's output or the reasoning, in the 🧠 block or the 🌊 stream — sizes that card, all three kinds together. Every
+reasoning section stands an empty line below whatever came before it — a thought is not glued to the tool output above
+it — except the first line of a console. `node tools/verify-text-styles.mjs` reads the computed colours and sizes off
+a real page, through the real controls, and `node tools/verify-console-zoom.mjs` measures the Ctrl+wheel step on all
+three.
 
 **A run of tool calls is condensed.** Consecutive calls between two pieces of prose become one group, one row per
 tool name: `💻 terminal ×11 curl …` with the last input and either a duration or a live clock. Click a row to filter
@@ -810,10 +814,10 @@ a restart):
 
 | Group | Row | Meaning |
 | --- | --- | --- |
-| Display | Page zoom | `Ctrl+` / `Ctrl-` / `Ctrl+0` (reset), or the `−`/`+` buttons here. `Ctrl+wheel` zooms the page too, except over a console, where it sizes that console's text. |
+| Display | Page zoom | `Ctrl+` / `Ctrl-` / `Ctrl+0` (reset), or the `−`/`+` buttons here. `Ctrl+wheel` zooms the page too, except over a card's console text, where it sizes that card's console — its words, a tool's output and the reasoning together. |
 | Display | Panel font | Headings, labels, buttons and the text you type. |
 | Display | Terminal font · Console weight | The console and the tool lines inside it. |
-| Display | Thinking text · Skill output · Console text | A colour picker and a size for each of the agent's reasoning, what a skill prints, and the rest of the console (its words and a tool's output); **Console text**'s size is the console size. Unset is the default look; **use defaults** under each row puts it back. Saved in this browser. |
+| Display | Thinking text · Skill output · Console text | A colour picker for each of the agent's reasoning, what a skill prints, and the rest of the console (its words and a tool's output), plus the console's **size** — the one size its words, a tool's output and the reasoning all read. Unset is the default look; **use defaults** under each row puts it back. Saved in this browser. |
 | Display | Stream display speed | Words a second at which an agent's own prose, its reasoning blocks and the results of the skills it loads type out, 0–200 (`off`/10/20/40/80 presets, 40 by default — what a long answer here streams at). `0` is off — the console fills exactly as the run sent it. Whatever is still queued is released when the turn settles. While it is on, a tool call waits for the reasoning in front of it to finish typing. |
 | Display | Stream line rate | Lines a second at which whole new lines join a console, 0–40 (`off`/2/4/8/16 presets). A tool burst walks in instead of landing in one paint; a held line is not in the console's record yet, and a settled turn flushes what is left. `0` is off. |
 | Display | Panel contrast | How far apart the layered surfaces sit: 0% flattens them, 100% pushes the page to near-black and lifts the panels. The swatch strip below previews the layers. |
@@ -880,7 +884,7 @@ does not price; no press can re-fetch it — `python tools/openrouter-prices.py`
 | `Ctrl+,` | Anywhere | Settings. |
 | `Esc` | In the Settings search box | Clear the search and put every group back as you had it. On an empty box it closes Settings. |
 | `Esc` | Anywhere | Close what is open: an artifacts list, Settings, a maximized card, a clone row, or a folder filter. |
-| `Ctrl+wheel` | Over a console or a thinking block | Size that text for that card; anywhere else it zooms the page. |
+| `Ctrl+wheel` | Over a card's console text — its words, a tool's output or the reasoning | Size that card's console, all three kinds of text together; anywhere else it zooms the page. |
 | `Ctrl+` / `Ctrl-` / `Ctrl+0` | Anywhere | Page zoom in, out, reset. |
 | `Ctrl+[` / `Ctrl+]` | Anywhere | Collapse / expand the whole tree. |
 | Click | Worktree row | Open its detail (description, TODO, merge state, liveness, agents, sessions). |

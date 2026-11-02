@@ -90,7 +90,7 @@ whole bug in one sentence, because the panel *does* keep every other piece of pe
 | console state | where it lives | re-applied by |
 | --- | --- | --- |
 | scroll position | `state.outScrolls` (`app.js:150-152`), written at `13015-13019` | `applyStoredScrolls` (`7107-7114`), `restoreScrolls` (`7096`), `renderConversation` (`7656-7661`) |
-| text zoom (Ctrl+wheel) | `state.consoleZoom` (`app.js:58`) | `--out-size` re-emitted in the card markup (`4030-4032`) |
+| text zoom (Ctrl+wheel) | `state.consoleZoom` (`app.js:56`), written as the card's `--term-size` | re-emitted in the card's `style` attribute by the renderer |
 | open tool bursts, calls, result boxes | `state.toolGroupOpen`, `callFolded`, `codeBoxOpen` (`188-211`) | the console renderer reads them |
 | caret and selection | `captureTyping` / `captureCardSelection` | `renderConversation` (`7649-7651`), `renderJobs` (`7283-7286`) |
 | **the expanded size** | **the `style` attribute of one DOM node** | **nothing** |
@@ -212,7 +212,8 @@ card, the float), and those are already `none` on purpose.
 
 The two maps that hold console reader state are in memory alone (`app.js:58`, `152`), and the size has no store at
 all, so a reload always returns the cap (measured T6: 1070 → 320). Lower priority than the above because the same is
-true of `--out-size`, which is deliberate for a zoom; but a reader who drags a console open and comes back after a
+true of the card's `--term-size` (the Ctrl+wheel zoom, which one variable now drives for the console's words, a
+tool's output and the reasoning), which is deliberate for a zoom; but a reader who drags a console open and comes back after a
 page reload will report this one, so it belongs in the same fix.
 
 ### What survives, and why that makes the bug feel arbitrary
