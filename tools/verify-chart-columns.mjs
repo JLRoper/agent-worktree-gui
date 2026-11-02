@@ -11,14 +11,15 @@
 //
 // WHAT IS DRIVEN, AND WHAT IS ONLY INSPECTED
 //
-//   driven    at rest: ten of the eleven headers drawn — the OWNER column ("assistant") starts switched OFF, because
-//             a config that has never expressed a preference gets DEFAULT_HIDDEN_COLUMNS — ten cells per row, no key
-//             in config.json (the default lives in memory; the file stays keyless until the reader moves a switch),
-//             and ten of the eleven switches checked in Settings
-//   driven    switching the owner column on draws its header and its cell — the cell reads the assistant's NAME
-//             ("Assistant #1"), never `assistant-1`, never the role label and never a dash, while the tooltip carries
-//             the numbered label ("Manager 1") beside the display-only sentence — and the counter says 11/11;
-//             switching it off again stores exactly that one column
+//   driven    at rest: ten of the eleven headers drawn while every tree is on Assistant #1 and there is no second
+//             assistant — the OWNER column ("assistant") hides ITSELF there, with its switch ON and the Settings row
+//             saying why — ten cells per row, no hiddenColumns key in config.json (the page's own rule is not a
+//             stored default, and the file stays keyless until the reader moves a switch), eleven switches checked
+//   driven    a SECOND assistant brings the owner column back with no switch touched: its header, its cell — the
+//             compact TAG ("M1") the numbered role label resolves to, never `assistant-1`, never the name and never a
+//             dash, while the tooltip carries the tag, the name and the label ("M1 — Assistant #1 (Manager 1) owns
+//             this worktree") beside the display-only sentence — and the counter says 11/11; switching it off again
+//             stores exactly that one column, and hides it even with the second assistant there
 //   driven    an expanded worktree's detail carries its own line, "Controlled by: Assistant #1 — Manager", beside
 //             the branch and the verdict
 //   driven    unchecking Cherry and Tip rebuilds every project table to eight columns — the header loses those two
@@ -251,14 +252,16 @@ const run = async () => {
   // ---- at rest -----------------------------------------------------------------------------------
   const before = await chartState(page);
   const ALL_IDS = ["name", "branch", "assistant", "tip", "ahead", "cherry", "pr", "dirty", "life", "verdict", "actions"];
-  // The owner column is OFF by default: the sandbox's config.json carries no hiddenColumns key, so the read-time
-  // default hides exactly this one and the chart opens on the other ten.
+  // The owner column draws itself only while it has something to say. The sandbox's config.json carries no
+  // hiddenColumns key and the panel's default is empty, so the OWNER SWITCH is on — and the column is still absent,
+  // because every tree is on Assistant #1 and there is no second assistant. That self-hide is the column's own rule
+  // (public/app.js `ownerMatters`), not a default.
   const AT_REST = ALL_IDS.filter((id) => id !== "assistant");
   note(`chart: ${before.map((t) => `${t.project} ${t.ids.length} cols / ${t.rows} rows`).join(" · ")}`);
   ok("every project table starts with ten of its eleven columns", before.every((t) => t.ids.join(",") === AT_REST.join(",")), before[0]?.ids.join(","));
   ok("every row starts with ten cells", before.every((t) => t.rowCells.every((n) => n === 10)), JSON.stringify(before[0]?.rowCells));
-  ok("the owner column is not drawn until it is switched on", before.every((t) => !t.ids.includes("assistant")), before[0]?.ids.join(","));
-  check("no column key is written until the reader chooses", "hiddenColumns" in readConfig(), false);
+  ok("the owner column hides itself while every tree is on Assistant #1 and there is no second assistant", before.every((t) => !t.ids.includes("assistant")), before[0]?.ids.join(","));
+  check("no column key is written for that: it is the page's own rule, not a stored default", "hiddenColumns" in readConfig(), false);
 
   // The helper, not a bare press: it opens the drawer if it is closed AND unfolds the Board group the row lives in,
   // which a plain `#btn-settings` click does not (the switches are then attached but not visible).
@@ -268,58 +271,59 @@ const run = async () => {
     return { ids: boxes.map((b) => b.dataset.chartCol), checked: boxes.filter((b) => b.checked).length, count: document.querySelector("#chart-cols-count")?.textContent };
   });
   check("Settings carries one switch per column", switches.ids, ALL_IDS);
-  check("ten of the eleven start switched on", switches.checked, 10);
-  check("the row's counter reads the whole chart", switches.count, "10/11");
-  // The owner column starts OFF, so its switch is the one that is not checked.
+  check("all eleven start switched on — the owner column included, which is on and simply has nothing to say yet", switches.checked, 11);
+  check("the row's counter reads the whole chart", switches.count, "11/11");
   const offSwitch = await page.evaluate(() => {
     const box = document.querySelector('#chart-cols input[data-chart-col="assistant"]');
     return box ? { present: true, checked: box.checked } : { present: false };
   });
-  check("the owner switch is present and switched off", offSwitch, { present: true, checked: false });
+  check("the owner switch is present and switched on", offSwitch, { present: true, checked: true });
+  // The counter and the missing column disagree on purpose, so the row itself has to say why.
+  const preview = await page.evaluate(() => document.querySelector("#chart-cols-preview")?.textContent || "");
+  ok("the Settings row explains the self-hide instead of leaving a ticked box over a missing column", /hides itself while every tree is on Assistant #1/.test(preview), preview.slice(0, 160));
   // The row lives in the Board group, below Display: the screenshot has to LOOK at it, not at the top of the drawer.
   await page.evaluate(() => document.getElementById("chart-cols-row")?.scrollIntoView({ block: "center" }));
   await sleep(250);
   await shot(page, "all-columns");
 
-  // ---- the owner column, switched ON --------------------------------------------------------------
-  // The whole point of the column: one press draws it in every table, its header sits where the chart's list puts it,
-  // and the cell reads the assistant's NAME the SERVER resolved — with the role label the server also resolved in its
-  // tooltip — rather than the id the store holds.
-  const ownerBox = page.locator('#chart-cols input[data-chart-col="assistant"]');
-  await ownerBox.click();
+  // ---- the owner column, drawn: a second assistant brings it back on its own -----------------------
+  // The whole point of the column: it appears without anyone moving a switch, its header sits where the chart's list
+  // puts it, and the cell is the COMPACT TAG the server's numbered role label resolves to (M1), not the id the store
+  // holds and not the assistant's name.
+  const made = await fetch(`${base}/api/assistant/assistants`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ roleId: "agent-manager" }),
+  });
+  check("a second assistant can be created on the sandbox panel", made.status, 201);
   const ownerOn = await waitFor(
     async () => (await chartState(page)).every((t) => t.ids.length === 11 && t.ids.includes("assistant")),
-    { timeoutMs: 15_000, what: "eleven columns with the owner column on" },
+    { timeoutMs: 20_000, what: "eleven columns with the owner column back" },
   );
-  ok("switching the owner column on draws it in every project table", ownerOn);
+  ok("a second assistant brings the owner column back in every project table, with no switch touched", ownerOn);
   const withOwner = await chartState(page);
   check("the owner header sits between Branch and Tip, in the chart's own order", withOwner.every((t) => t.ids.join(",") === ALL_IDS.join(",")), true);
   ok("every row gains its cell", withOwner.every((t) => t.rowCells.every((n) => n === 11)), JSON.stringify(withOwner[0]?.rowCells));
-  const ownerCells = await page.evaluate(() =>
-    [...document.querySelectorAll("section.project tbody tr.row td.assistant")].map((td) => td.textContent.trim()),
-  );
-  ok(
-    "the cell reads the assistant's name, never the raw id or the role label",
-    ownerCells.length > 0 && ownerCells.every((x) => x === "Assistant #1"),
-    JSON.stringify(ownerCells.slice(0, 3)),
-  );
+  const ownerCells = await page.evaluate(() => [...document.querySelectorAll("section.project tbody tr.row td.owner")].map((td) => td.textContent.trim()));
+  ok("the cell is the compact tag, never the name or the role label", ownerCells.length > 0 && ownerCells.every((x) => x === "M1"), JSON.stringify(ownerCells.slice(0, 3)));
   ok("…and never draws a bare dash", ownerCells.length > 0 && ownerCells.every((x) => !/^[—–-]+$/.test(x)), JSON.stringify(ownerCells.slice(0, 3)));
-  const ownerTitles = await page.evaluate(() =>
-    [...document.querySelectorAll("section.project tbody tr.row td.assistant")].map((td) => td.getAttribute("title") || ""),
-  );
+  ok("the cell no longer carries the rail's own class", await page.evaluate(() => !document.querySelector("section.project tbody tr.row td.assistant")), "");
+  const ownerTitles = await page.evaluate(() => [...document.querySelectorAll("section.project tbody tr.row td.owner")].map((td) => td.getAttribute("title") || ""));
   ok(
-    "the tooltip carries the owner's numbered role label beside the display-only sentence",
+    "the tooltip carries the tag, the owner's name and its numbered role label beside the display-only sentence",
     ownerTitles.length > 0 &&
-      ownerTitles.every((t) => /^Assistant #1 \(Manager 1\) owns this worktree\. Display only: it does not change who wakes or runs\.$/.test(t)),
+      ownerTitles.every((t) => /^M1 — Assistant #1 \(Manager 1\) owns this worktree\. Display only: it does not change who wakes or runs\.$/.test(t)),
     JSON.stringify(ownerTitles.slice(0, 2)),
   );
-  check("the counter counts the column now drawn", await page.evaluate(() => document.querySelector("#chart-cols-count")?.textContent), "11/11");
+  check("the counter reads the whole chart", await page.evaluate(() => document.querySelector("#chart-cols-count")?.textContent), "11/11");
   await page.evaluate(() => document.getElementById("chart-cols-row")?.scrollIntoView({ block: "center" }));
   await sleep(250);
   await shot(page, "owner-column-on");
 
-  // …and off again: the stored list is now the owner column alone, which is the state the next step's arithmetic
-  // starts from (two more switches off = eight columns).
+  // …and off again: the reader's switch hides it even with a second assistant on the board, and the stored list is
+  // now the owner column alone, which is the state the next step's arithmetic starts from (two more switches off =
+  // eight columns).
+  const ownerBox = page.locator('#chart-cols input[data-chart-col="assistant"]');
   await ownerBox.click();
   const ownerOff = await waitFor(
     async () => (await chartState(page)).every((t) => t.ids.length === 10 && !t.ids.includes("assistant")),

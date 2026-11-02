@@ -8,9 +8,10 @@
 //      nothing and reports success, which is indistinguishable from a switch that does not work;
 //   3. the header and the column-spanning rows are built from the shown set, so hiding a column leaves a table whose
 //      header and every row still agree (colspan 11 → 8, not a bare strip of panel at the right edge);
-//   4. a config that has NEVER expressed a preference omits `hiddenColumns`, and the panel serves the owner column
-//      switched OFF (`DEFAULT_HIDDEN_COLUMNS`) for it — the one column this chart starts without. The file stays
-//      keyless until the reader moves a switch, so the default is a read-time answer rather than a written record;
+//   4. the OWNER column is the one the page decides for itself: it hides while every row is on Assistant #1 and no
+//      second assistant exists — a column of identical tags — and comes back on its own for a reassigned tree or a
+//      second assistant, without the reader moving a switch. `DEFAULT_HIDDEN_COLUMNS` is empty because of it: a
+//      default that hid the column would hide the one thing that makes it useful;
 //   5. POST /api/settings/columns writes the panel's own config.json, the answer carries the stored list back, and the
 //      choice survives a restart of the process that never saw the browser.
 import assert from "node:assert/strict";
@@ -25,10 +26,23 @@ const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const esc = (s) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-// The page's own region, run with a stub `state`: the same function the browser calls, with no board under it.
+// The page's own region, run with a stub `state`: the same function the browser calls, with no board under it. The
+// owner column is decided from `state.rows` and `state.assistant.assistants`, so both are part of the stub.
 const region = sliceRegion(src, "chart columns");
-const page = (settings = {}) =>
-  new Function("state", "esc", `${region}; return { CHART_COLUMNS, shownColumns, wtColspan, chartHeaderHtml };`)({ settings }, esc);
+const page = (settings = {}, extra = {}) =>
+  new Function("state", "esc", `${region}; return { CHART_COLUMNS, shownColumns, wtColspan, chartHeaderHtml, ownerMatters };`)(
+    { settings, rows: new Map(), assistant: null, ...extra },
+    esc,
+  );
+// A board with one assistant and every tree on it: the owner column has nothing to say.
+const idle = () => ({ rows: new Map([["a::C:/x", { assistant: { id: "assistant-1", name: "Assistant #1", label: "Manager 1" } }]]), assistant: { assistants: [{ id: "assistant-1" }] } });
+// The same board after the reader cut a second assistant: the column has something to say on every row.
+const second = () => ({ rows: new Map(), assistant: { assistants: [{ id: "assistant-1" }, { id: "assistant-2" }] } });
+// A tree moved to the second assistant: the column has something to say on THAT row.
+const reassigned = () => ({
+  rows: new Map([["a::C:/x", { assistant: { id: "assistant-2", name: "Assistant #2", label: "Manager 2" } }]]),
+  assistant: { assistants: [{ id: "assistant-1" }] },
+});
 
 test("the server keeps only the ids it knows, in the chart's own order", () => {
   assert.deepEqual(chartColumnsFrom(["cherry", "tip"]), ["tip", "cherry"]);
@@ -57,13 +71,13 @@ test("the page's columns are the server's columns, in the same order", () => {
   for (const c of CHART_COLUMNS) assert.equal(typeof c.label, "string", `${c.id} carries a label`);
 });
 
-test("nothing hidden draws every header, each tagged with its column id", () => {
-  const { chartHeaderHtml, shownColumns, wtColspan } = page({});
-  assert.equal(shownColumns().length, CHART_COLUMN_IDS.length);
-  assert.equal(wtColspan(), CHART_COLUMN_IDS.length);
+test("nothing hidden draws every header the column can speak for — and the owner column is silent on an idle board", () => {
+  const { chartHeaderHtml, shownColumns, wtColspan } = page({}, idle());
+  assert.equal(shownColumns().length, CHART_COLUMN_IDS.length - 1, "ten of eleven: the owner column hides itself");
+  assert.equal(wtColspan(), CHART_COLUMN_IDS.length - 1);
+  assert.doesNotMatch(chartHeaderHtml(), /data-col-id="assistant"/);
   const html = chartHeaderHtml();
-  assert.equal((html.match(/<th /g) || []).length, CHART_COLUMN_IDS.length);
-  for (const id of CHART_COLUMN_IDS) assert.match(html, new RegExp(`data-col-id="${id}"`));
+  for (const id of CHART_COLUMN_IDS.filter((x) => x !== "assistant")) assert.match(html, new RegExp(`data-col-id="${id}"`));
   assert.match(html, /Ahead \/ Behind/);
   assert.match(html, /Life \/ next read/);
   // The two long explanations stay on their own headers rather than being lost with the hand-written markup.
@@ -71,11 +85,36 @@ test("nothing hidden draws every header, each tagged with its column id", () => 
   assert.match(html, /data-col-id="life" title="/);
 });
 
+test("the owner column comes back on its own for a second assistant, or for one reassigned tree", () => {
+  for (const [why, board] of [
+    ["a second assistant exists", second()],
+    ["a tree was moved to another assistant", reassigned()],
+  ]) {
+    const { chartHeaderHtml, shownColumns } = page({}, board);
+    assert.equal(shownColumns().length, CHART_COLUMN_IDS.length, `all eleven with ${why}`);
+    assert.match(chartHeaderHtml(), /data-col-id="assistant"/, `the header returns with ${why}`);
+  }
+  // A stored owner that is gone still says something: the cell draws the fallback's owner, and the tooltip why.
+  const gone = { rows: new Map([["a::C:/x", { assistant: { id: "assistant-1", stored: "assistant-9" } }]]), assistant: { assistants: [{ id: "assistant-1" }] } };
+  assert.equal(page({}, gone).shownColumns().length, CHART_COLUMN_IDS.length, "a stored owner keeps the column up");
+});
+
+test("the reader's own switch still wins over the column's self-hide", () => {
+  const { shownColumns, chartHeaderHtml } = page({ hiddenColumns: ["assistant"] }, second());
+  assert.equal(shownColumns().length, CHART_COLUMN_IDS.length - 1);
+  assert.doesNotMatch(chartHeaderHtml(), /data-col-id="assistant"/);
+  // …and the reader hiding everything else leaves the owner column alone on the chart — not an empty table, and not
+  // the actions cell, which is the survivor only when EVERY column (the owner's included) is hidden.
+  const only = page({ hiddenColumns: CHART_COLUMN_IDS.filter((id) => id !== "assistant") }, second());
+  assert.deepEqual(only.shownColumns(), [CHART_COLUMN_IDS.indexOf("assistant")]);
+  const none = page({ hiddenColumns: [...CHART_COLUMN_IDS] }, second());
+  assert.deepEqual(none.shownColumns(), [CHART_COLUMN_IDS.length - 1]);
+});
+
 test("a hidden column leaves the header, the colspan and the order consistent", () => {
-  const { chartHeaderHtml, shownColumns, wtColspan } = page({ hiddenColumns: ["tip", "cherry", "life"] });
-  // Eleven columns less the three hidden ones. The owner column is NOT hidden here because this settings object IS a
-  // preference: a config that has moved a switch takes the convention that a later column arrives visible (the reason
-  // the stored value is what to hide). The OFF-by-default answer is the ABSENT key, asserted in the next test.
+  // The owner column is drawn here because a second assistant exists (see the tests above); the three named columns
+  // are the reader's own hidden list.
+  const { chartHeaderHtml, shownColumns, wtColspan } = page({ hiddenColumns: ["tip", "cherry", "life"] }, second());
   assert.equal(wtColspan(), 8);
   assert.deepEqual(
     shownColumns().map((i) => CHART_COLUMN_IDS[i]),
@@ -90,7 +129,7 @@ test("a hidden column leaves the header, the colspan and the order consistent", 
 });
 
 test("a config that hides every column still draws one, and it is the actions cell", () => {
-  const { shownColumns, wtColspan, chartHeaderHtml } = page({ hiddenColumns: [...CHART_COLUMN_IDS] });
+  const { shownColumns, wtColspan, chartHeaderHtml } = page({ hiddenColumns: [...CHART_COLUMN_IDS] }, second());
   assert.deepEqual(shownColumns(), [CHART_COLUMN_IDS.length - 1]);
   assert.equal(wtColspan(), 1);
   assert.match(chartHeaderHtml(), /data-col-id="actions"/);
@@ -105,11 +144,12 @@ test("every column-spanning row asks for the shown count, never a literal 10", (
 
 test("POST /api/settings/columns stores the choice in config.json and survives a restart", async (t) => {
   const panel = await startPanel({ keep: true });
-  // A sandbox config carries no `hiddenColumns` key: no preference has ever been expressed, so the owner column —
-  // the chart's one OFF-by-default column — is what the panel serves, and NOTHING was written to the file for it.
+  // A sandbox config carries no `hiddenColumns` key: no preference has ever been expressed, so the panel serves the
+  // read-time default — EMPTY, because the owner column hides itself from the rows rather than from a config — and
+  // NOTHING was written to the file for it.
   const fresh = await (await fetch(`${panel.base}/api/config`)).json();
   assert.deepEqual(fresh.hiddenColumns, DEFAULT_HIDDEN_COLUMNS);
-  assert.deepEqual(DEFAULT_HIDDEN_COLUMNS, ["assistant"], "the owner column is the one that starts hidden");
+  assert.deepEqual(DEFAULT_HIDDEN_COLUMNS, [], "no column starts hidden: the owner column hides itself from the rows");
   assert.equal("hiddenColumns" in JSON.parse(readFileSync(path.join(panel.dir, "config.json"), "utf8")), false, "the default is not a written record");
 
   const first = await post(panel.base, "/api/settings/columns", { body: { hidden: ["cherry", "tip", "nonsense"] } });

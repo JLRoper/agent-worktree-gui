@@ -269,16 +269,26 @@ button.primary:hover { background: #24466a; }
 .settings-preview.bad { border-color: #57262a; color: #ff9c94; }
 .hidden { display: none; }
 
-main { padding: 14px 16px 40px; }
+/* The board is the page's ONE horizontal scroll container. It is also the element whose box is the chart's width, so
+   anything that ever did grow past it (a table planned before the assistant rail opened, a console line that cannot
+   wrap) is reachable by scrolling HERE instead of being clipped at the rail's left edge with no way to reach it. In
+   practice nothing overflows: `fitColumns` plans every table to this box, and `columnPlan` normalises the sum of the
+   columns to it exactly. */
+main { padding: 14px 16px 40px; overflow-x: auto; }
 .empty { color: var(--dim); padding: 10px 14px; }
 
+/* `overflow: visible`, not `hidden`: a card that clips is a card that can hide the far end of a row with no scrollbar
+   to reach it — which is exactly how the chart ran under the docked assistant rail. The rounded corners the clip used
+   to cut for the two head rows are drawn onto those rows instead (below and on `.root-head`). */
 .project {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
   margin-bottom: 18px;
-  overflow: hidden;
+  overflow: visible;
 }
+/* The head paints its own background, so it carries the top corners the card's clip used to cut for it. */
+.project > .project-head:first-child { border-radius: 9px 9px 0 0; }
 
 /* ---- a themed project box (Ctrl+click its title row) -----------------------------------------
    One hue, applied to the surfaces that belong to the project and nothing else: the box outline, its
@@ -339,8 +349,11 @@ section.project.collapsed .legend { display: none; }
   border-radius: 12px;
   margin-bottom: 22px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 120px);
-  overflow: hidden;
+  /* Not clipped, for the same reason `.project` is not: the card is the page's folder, and a clip here would swallow a
+     table that outgrew main instead of letting main scroll it. The head carries the folder's top corners. */
+  overflow: visible;
 }
+.root-group > .root-head { border-radius: 11px 11px 0 0; }
 .root-head {
   display: flex;
   align-items: center;
@@ -2196,9 +2209,33 @@ thead th:nth-child(10) { width: 5%; }
 td.row-actions { padding-left: 4px; padding-right: 4px; }
 /* A verdict badge is an inline-block with its own width, so the cell's ellipsis never reached it: it was cut
    mid-word. Truncate the badge itself, and keep the age cell's chips from spilling past their column. */
-td:nth-child(8) { overflow: hidden; }
-td:nth-child(9) .badge { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
-td.name, td.branch, td.assistant, td:nth-child(6), td:nth-child(9) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.age { overflow: hidden; }
+td.verdict .badge { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+/* By CLASS, not by position: the chart draws between ten and twelve cells per row (the owner column comes and goes by
+   itself, and any column can be hidden in Settings), so `nth-child(9)` pointed at a different column on almost every
+   board. A cell that ellipsizes its own text is what keeps the table inside the card at any width. */
+td.name, td.branch, td.owner, td.pr, td.verdict { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The owner cell's compact tag: "M1" for Manager 1, "M2" for the second Manager, "A1" for a row the server could not
+   label. A tag and not a word, because the column that answers "whose tree is this" has to fit beside ten others —
+   the long form ("Assistant #2 — Manager") is the cell's tooltip and the row's detail bullet. It is a chip so it reads
+   as a value rather than as text that happens to be short, and it is deliberately not `.assistant`: that class is the
+   rail's (a sticky 480px flex column), and a cell that carried it inherited the whole rail. */
+td.owner { overflow: hidden; }
+.owner-tag {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 5px;
+  border: 1px solid #2f3b4c;
+  border-radius: 5px;
+  background: #1a212b;
+  color: #a9c0dd;
+  font: 600 10px/15px var(--mono);
+  letter-spacing: .04em;
+  vertical-align: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* The owner bullet's fallback sentence: the reader's stored owner is gone, so Assistant #1 has the tree. Dimmer
    than the line it follows, because the label is the answer and this is only why it is not the answer they set. */
 .git-owner .owner-fallback { color: var(--dimmer); }
@@ -2237,6 +2274,11 @@ thead th {
   padding: 7px 10px;
   border-bottom: 1px solid var(--line);
   z-index: 5;
+  /* A header is a label, not a paragraph: squeezed below its own width it ellipsizes ("AHEAD…") instead of stacking
+     "AHEA / D / BEHIND", which is what a wrapped label does to a row of 40px columns at 1280px with the rail open. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: top; }
 
@@ -2255,31 +2297,13 @@ tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: 
   border-left: 1px solid #2b3644;
 }
 
-/* ---- the chart scrolls sideways when the card cannot hold ten readable columns ------------------------------
-   `fitColumns` (app.js) adds `is-scroll` and the table's own min-width once the card is narrower than the columns'
-   measured floors (846px in total). Nothing below is on for a desktop card: there the table fits its wrapper
-   exactly, so the wrapper never becomes a scroller and the column header keeps following the page down. */
-.wt-scroll.is-scroll {
-  overflow-x: auto;
-  /* The sideways swipe belongs to the chart, not to the browser's back gesture. */
-  overscroll-behavior-x: contain;
-  -webkit-overflow-scrolling: touch;
-}
-/* Inside a scroller the column header's `position: sticky` is against the scroller, which does not scroll
-   vertically, so the header stops following the page. That is the price of the sideways scroll and it costs the
-   phone nothing: there the topbar wraps to several lines and already covers the line the header stuck to. */
-/* The two rows that span every column must NOT follow the columns sideways. One holds a transcript, which wraps
-   to whatever width it is given - at the table's floor width that is a console read through a letterbox - and the
-   other holds the row's Delete button at its right end. Both are pinned to the visible width instead, at their own
-   cell's left padding so that nothing shifts at rest. */
-.wt-scroll.is-scroll tr.detail > td > .detail-inner {
-  position: sticky; left: 14px;
-  width: calc(var(--wt-visible, 100%) - 28px);
-}
-.wt-scroll.is-scroll tr.row-confirm > td > .row-confirm-cell {
-  position: sticky; left: 10px;
-  width: calc(var(--wt-visible, 100%) - 20px);
-}
+/* ---- the chart no longer scrolls sideways itself --------------------------------------------------------------
+   `fitColumns` (app.js) plans every column to the CARD's width and `columnPlan` normalises the sum to it exactly, so
+   the table always fits and the wrapper is a wrapper: the chart's horizontal scroll — if anything ever escapes it —
+   belongs to `main`, the page's one horizontal scroll container. The old `.wt-scroll.is-scroll` mode (a floor-width
+   table scrolling inside the card, with its spanning rows pinned under a scroller) is gone: with the assistant rail
+   open the card is 480px narrower, that mode kept the pre-rail floor, and the card clipped the overrun at the rail's
+   left edge with no scrollbar to reach it. */
 #projects tbody tr.row td { padding-left: 12px; }
 #projects tbody tr.row td:first-child { position: relative; }
 #projects tbody tr.row td:first-child::before {
@@ -2290,11 +2314,9 @@ tbody td { padding: 7px 10px; border-bottom: 1px solid #1d222b; vertical-align: 
 /* The last row of a project closes the rail. `:has(~ tr.row)` ignores the detail rows that sit between
    a row and the next one, which `:last-of-type` cannot do. */
 #projects tbody tr.row:not(:has(~ tr.row)) td:first-child::before { content: "\2514"; /* └ */ }
-/* Inside the sideways-scrolling chart the glyph has nowhere to hang: 13px left of the first cell is outside the
-   scroller's own box, which clips it away. It moves into the cell and the cell's padding carries the room, so the
-   rail still reads - and it scrolls away with the row, which is where it belongs. */
-#projects .wt-scroll.is-scroll tbody tr.row td:first-child::before { left: 4px; }
-#projects .wt-scroll.is-scroll tbody tr.row td:first-child { padding-left: 16px; }
+/* The row's tree glyph hangs in the wrapper's left inset, which is where the card's rail is. It used to have an
+   `.is-scroll` variant that moved it inside the cell because a sideways scroller clipped it; the chart does not
+   scroll inside the card any more, so the inset is always there to hang it in. */
 #projects thead th {
   font-size: 10px; color: #66717f; letter-spacing: .07em; border-bottom-color: #1b222c;
 }
@@ -2822,18 +2844,20 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 
 /* The assistant, docked: a column at the right of the board, as tall as the window and pinned there while the
    board scrolls under it. Its width is the reader's — 340-640px, at most 60% of the window — and `assistant.js`
-   is its one authority: a min/max here would fight that clamp the way a second cap fought the old drag. */
-.assistant {
+   is its one authority: a min/max here would fight that clamp the way a second cap fought the old drag.
+   Scoped to `#assistant`: this rule was `.assistant` alone, and the chart's owner cell used to carry
+   `class="assistant"` — so every owner <td> was a 480px sticky flex column with the rail's border and background. */
+#assistant {
   position: sticky; top: 0; z-index: 5;
   flex: 0 0 auto; width: 480px;
   display: flex; flex-direction: column;
   background: var(--panel); border-left: 1px solid var(--line);
   overflow: hidden;
 }
-.assistant[hidden] { display: none; }
+#assistant[hidden] { display: none; }
 /* The rail's rows never share its height with the transcript: they keep their natural height and the body takes
    what is left, at every width. */
-.assistant .as-bar, .assistant .as-tabs, .assistant .as-subtabs { flex: none; }
+#assistant .as-bar, #assistant .as-tabs, #assistant .as-subtabs { flex: none; }
 /* The rail's title row: what it is, how it is running, and the one close toggle. It is not a window's title bar —
    there is nothing to drag, and no pin or maximize to press. */
 .as-bar {
@@ -3042,7 +3066,7 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 /* The rail's one grab: the edge it shares with the board, a 6px band down the whole column. `touch-action: none`
    is what lets a finger drag it instead of scrolling the board under it. */
 .as-split { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; z-index: 5; cursor: ew-resize; touch-action: none; }
-.as-split:hover, .assistant.is-splitting .as-split { background: #3d6ea8; }
+.as-split:hover, #assistant.is-splitting .as-split { background: #3d6ea8; }
 
 /* A parked question in the float: violet, same family as the card's own box, because "answer me" must not
    read as an alert about a failure. A single-select choice is one button; a multi-select question is ticks,
