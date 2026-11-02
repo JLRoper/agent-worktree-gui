@@ -5536,9 +5536,10 @@ async function reattachCard(btn) {
 // sent to the agent that already finished (it is finished — nudging it is the one thing this press must not do), and the
 // panel does not start an assistant turn either, which would talk over a run already in flight. Instead one message is
 // QUEUED for the board assistant through the wake queue an alert handed over uses (POST /api/jobs/ask-complete ->
-// Assistant.askAboutComplete -> wake), so it lands in the assistant's next turn inside its hourly budget. The pill says
-// the ask happened; a queue that refuses it (the hourly budget, or an assistant switched off) says WHY on the card, in
-// the place a failed nudge already speaks, and the pill is then left as it was rather than claiming a success.
+// Assistant.askAboutComplete -> wake), so it lands in the assistant's next turn. The pill says the ask happened; a queue
+// that refuses it (an assistant switched off) says WHY on the card, in the place a failed nudge already speaks, and the
+// pill is then left as it was rather than claiming a success. The hourly SWEEP budget cannot refuse it: a press is an
+// event, and events are never budgeted (`SWEEP_WAKE_RULES` in lib/assistant/config.js).
 async function askComplete(btn) {
   const id = btn.dataset.completeAsk || "";
   if (!id) return;

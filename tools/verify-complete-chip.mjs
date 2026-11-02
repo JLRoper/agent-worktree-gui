@@ -15,8 +15,8 @@
 // assistant turn at once and would talk over a run already in flight. The ask names the thread, the worktree, the branch
 // and the run, asks for a judgement on the EVIDENCE (the commits, the PR, the report's own admissions) rather than on the
 // agent's word, asks what is left for that worktree and who owns it, and says the chip was pressed. The chip says the ask
-// landed; a queue that refuses it (the hourly budget, a switched-off assistant) says so on the card instead of claiming
-// success.
+// landed; a queue that refuses it (a switched-off assistant) says so on the card instead of claiming success — and the
+// hourly sweep budget cannot refuse it, because a press is an EVENT (see `SWEEP_WAKE_RULES` in lib/assistant/config.js).
 //
 // WHAT IS DRIVEN
 //   * a panel of THIS checkout on its own PANEL_CONFIG (own port, own store, own throwaway HERMES_HOME) against a stub
@@ -25,9 +25,10 @@
 //     PANEL_BEFORE_SHA), with the same seeded store, for the before/after of every other status
 //   * a real headless Chromium over both panels: the pill's tag, classes, word, ink, size, place and hooks, read off the
 //     cards the panels actually serve
-//   * the PRESSES, in the browser, on the running panel: one accepted ask, a duplicate, a budget refusal, a
-//     disabled-assistant refusal, and a later ask after the assistant's turn was read — with every request the page made
-//     recorded, every run the panel asked for recorded off the stub, and the job store read before and after
+//   * the PRESSES, in the browser, on the running panel: one accepted ask, a duplicate, an ask the tightest sweep budget
+//     cannot refuse (a press is an event), a disabled-assistant refusal, and a later ask after the assistant's turn was
+//     read — with every request the page made recorded, every run the panel asked for recorded off the stub, and the job
+//     store read before and after
 // WHAT IS ONLY INSPECTED (read off the source, not driven)
 //   * that the COMPLETE branch is a status branch beside the continue pill's, that the re-attach pill's own line is
 //     byte-identical to the one it had, that askAboutComplete reaches wake() and never say(), and that the press path is
@@ -320,8 +321,8 @@ const settings = (p, jobs, assistant) =>
   )}\n`;
 const cfgNew = path.join(cfgNewDir, "config.json");
 const cfgOld = path.join(cfgOldDir, "config.json");
-// One wake per hour on the panel under test: the first press spends the budget, and the next card's press is the refusal
-// the chip has to report rather than swallow.
+// The tightest hour the sandbox allows: one SWEEP a wake. No sweep fires here — the COMPLETE press is an EVENT, so the cap
+// must not refuse it, and the assertions below prove both halves (the press lands, the sweep counter does not move).
 writeFileSync(cfgNew, settings(ports.now, path.join(logsNew, "jobs.json"), { enabled: true, seconds: 3600, maxWakesPerHour: 1 }));
 writeFileSync(cfgOld, settings(ports.before, path.join(logsOld, "jobs.json"), { enabled: false }));
 for (const f of [cfgNew, cfgOld]) ok(`the config ${path.basename(path.dirname(f))} was written (a missing PANEL_CONFIG binds the LIVE port)`, readFileSync(f, "utf8").includes('"port"'));
@@ -339,8 +340,16 @@ const baseFind = (() => {
     const app = git(ROOT, ["show", `${sha}:public/app.js`]);
     return app.ok && !app.out.includes("pill-complete") ? { sha, app } : { sha, app, refused: true };
   }
-  const revs = git(ROOT, ["rev-list", "--first-parent", "-40", "HEAD"]);
-  for (const sha of String(revs.out || "").split("\n").map((s) => s.trim()).filter(Boolean)) {
+  // `-40` was enough while the chip was within forty commits of the tip; it is 315 back on this history, so ask git
+  // which commit INTRODUCED the string (pickaxe, oldest first — `rev-list` has no `-S`, `log` does) and take its
+  // parent. A guessed window silently found nothing and refused to run at all.
+  const found = git(ROOT, ["log", "--format=%H", "--first-parent", "--reverse", "-S", "pill-complete", "--", "public/app.js"]);
+  const introducing = String(found.out || "").split("\n").map((s) => s.trim()).filter(Boolean)[0];
+  // Resolved, not left as `<sha>^`: the worktree is cut at this sha and `rev-parse HEAD` is compared with it below, so
+  // an unresolved rev read as a mismatch and failed a correct cut.
+  const parent = introducing ? git(ROOT, ["rev-parse", `${introducing}^`]) : { ok: false, out: "" };
+  const candidates = parent.ok ? [String(parent.out).trim()] : [];
+  for (const sha of candidates) {
     const app = git(ROOT, ["show", `${sha}:public/app.js`]);
     if (app.ok && !app.out.includes("pill-complete")) return { sha, app };
   }
@@ -586,8 +595,8 @@ try {
   check("...with no new line on its console", ((await cardFor(baseNow, "j-a-done"))?.lines || []).length, 2);
   ok("the ask is queued as a job on the assistant's own thread", ((await api(baseNow, "/api/jobs")).body.jobs || []).filter((j) => j.thread === "panel-assistant").length === 1);
   const st = await assistantState(baseNow);
-  check("the assistant's own state counts that one wake", st.wakes?.lastHour, 1);
-  check("...and its budget is the sandbox's own limit", st.wakes?.limit, 1);
+  check("the assistant's own state counts no sweep for that press — an event is never budgeted", st.sweeps?.lastHour, 0);
+  check("...though the sweep budget is the sandbox's own limit", st.sweeps?.limit, 1);
   check("...with nothing left pending behind it", st.wakePending, 0);
 
   console.log("\n== (d) the queued text, verbatim ==");
@@ -633,19 +642,21 @@ try {
   ok("(e) the card said the check is already queued", /already in the assistant's queue/.test(banner?.text || ""), banner?.text || "");
   check("...as a note, not a failure", banner?.ok, true);
 
-  // ── (e) the refusals: the budget, then a switched-off assistant ─────────────────────────────────
-  console.log("\n== (e) a wake the queue refuses (the hourly budget) ==");
+  // ── (e) the budget cannot refuse a press: a COMPLETE ask is an EVENT ────────────────────────────
+  console.log("\n== (e) the sweep budget at its floor, and the press is still an event ==");
   await page.click(`.job[data-thread="${CARDS[1].thread}"] [data-complete-ask]`);
-  await sleep(1500);
-  check("the refused ask put nothing on the queue", askRuns().length, 1);
-  const refused = await api(baseNow, "/api/jobs/ask-complete", { id: "j-b-done" });
-  check("the route answers the refusal instead of erroring", [refused.status, refused.body?.ok, refused.body?.queued, refused.body?.refused], [200, true, false, "budget"]);
+  const queuedB = await waitFor(async () => (await assistantState(baseNow)).wakePending === 1, {
+    timeoutMs: 20_000,
+    what: "the second card's ask to be queued",
+  });
+  ok("(e) with the sweep budget at 1/hour the press is still queued — an event is never refused", queuedB, JSON.stringify((await assistantState(baseNow)).sweeps));
   const bannerBudget = await bannerOf(page);
-  ok("(e) the card says the budget refused it, and does not claim the ask landed", /wake budget is spent \(1\/hour\)/.test(bannerBudget?.text || ""), bannerBudget?.text || "");
+  ok("(e) the card says the check was queued, not that the budget refused it", /queued one check for the board assistant/.test(bannerBudget?.text || ""), bannerBudget?.text || "");
   const chipB = await pillOf(page, CARDS[1].thread);
-  check("...and that chip is NOT left reading 'asked'", chipB.text, "complete");
-  ok("...so the reader can press it again", chipB.classes.includes("is-asked") === false, JSON.stringify(chipB.classes));
-  ok("...and the refusal is in the assistant's journal, where the sentry's own suppressions go", ((await assistantState(baseNow)).journal || []).some((j) => j.kind === "ask-refused"), JSON.stringify(((await assistantState(baseNow)).journal || []).map((j) => j.kind)));
+  check("...and that chip reads the ask landed", chipB.text, "asked");
+  ok("...with no budget refusal in the journal", !((await assistantState(baseNow)).journal || []).some((j) => j.kind === "ask-refused"), JSON.stringify(((await assistantState(baseNow)).journal || []).map((j) => j.kind)));
+  const stB = await assistantState(baseNow);
+  check("...and the sweep counter is untouched — the press is not a sweep", stB.sweeps?.lastHour, 0);
 
   console.log("\n== (e) a wake the queue refuses (the assistant is switched off) ==");
   const off = await api(baseNow, "/api/assistant/settings", { enabled: false });
@@ -663,12 +674,16 @@ try {
   console.log("\n== the assistant reads the ask, and a later press is a new question ==");
   // The stub holds a run open until the test answers it: end the first wake's run the way a real turn ends.
   stub.set("stub-run-1", { status: "completed", exit_code: 0, output: "I will look at that finished card and say what is left.", usage: { total_tokens: 10, input_tokens: 6, output_tokens: 4 } });
+  // The ask (e) queued behind that turn flushes the moment it ends, as a turn of its own: answer that run too, or the
+  // assistant never goes idle and every later step waits on a run this script never completed.
+  ok("the ask that waited behind the running turn went out when it ended", await waitFor(() => askRuns().length === 2, { timeoutMs: 20_000, what: "the queued ask to reach the gateway" }), `${askRuns().length} runs`);
+  stub.set("stub-run-2", { status: "completed", exit_code: 0, output: "Card b is closed: the claim holds.", usage: { total_tokens: 10, input_tokens: 6, output_tokens: 4 } });
   const settled = await waitFor(async () => (await assistantState(baseNow)).running === false, { timeoutMs: 25_000, what: "the assistant's turn to end" });
   ok("the assistant's turn ended, so the ask it was handed has been read", settled);
   const second = await api(baseNow, "/api/jobs/ask-complete", { id: "j-a-done" });
   check("a press after that is accepted as a new question", [second.body?.ok, second.body?.queued, second.body?.duplicate], [true, true, false]);
-  ok("...and reaches the queue", await waitFor(() => askRuns().length === 2, { timeoutMs: 15_000, what: "the second ask to be sent" }), `${askRuns().length} runs`);
-  ok("...carrying the same standing text, because the card is the same finished card", /the reader pressed its COMPLETE chip/.test(String(askRuns()[1]?.input || "")), String(askRuns()[1]?.input || "").slice(0, 120));
+  ok("...and reaches the queue", await waitFor(() => askRuns().length === 3, { timeoutMs: 15_000, what: "the second ask to be sent" }), `${askRuns().length} runs`);
+  ok("...carrying the same standing text, because the card is the same finished card", /the reader pressed its COMPLETE chip/.test(String(askRuns()[2]?.input || "")), String(askRuns()[2]?.input || "").slice(0, 120));
   check("no page error was thrown while the presses ran", pageErrors, []);
 
   // ── what can only be read off the source ───────────────────────────────────────────────────────
@@ -692,9 +707,12 @@ try {
   const lib = readFileSync(path.join(ROOT, "lib", "assistant.js"), "utf8");
   const askAt = lib.indexOf("  askAboutComplete(id) {");
   const askBody = lib.slice(askAt, lib.indexOf("\n  completeAskText(", askAt));
-  ok("inspected: the ask is queued through the assistant's own wake queue", askBody.includes("this.wake(text, null, \"complete\")"), "Assistant.askAboutComplete -> wake");
+  ok("inspected: the ask is queued through the assistant's own wake queue", askBody.includes('this.wake(text, null, "complete"'), "Assistant.askAboutComplete -> wake");
   ok("inspected: and never through say(), which would start a turn at once", !/\bthis\.say\(/.test(askBody), "no say() in the press path");
-  const alertAsk = lib.slice(lib.indexOf('} else if (action === "ask") {'), lib.indexOf('} else if (action === "ask") {') + 200);
+  // The block runs from its `else if` to the next branch's, however long the comments in between grew — a fixed 200
+  // characters cut it off before `this.wake(` the moment the routing comment above it got a sentence longer.
+  const alertAt = lib.indexOf('} else if (action === "ask") {');
+  const alertAsk = lib.slice(alertAt, alertAt > 0 ? lib.indexOf("} else {", alertAt) : 0);
   ok("inspected: that is the same queue the reader handing an alert over uses", alertAsk.includes("this.wake("), "alertAction(id, \"ask\") -> wake");
   const srv = readFileSync(path.join(ROOT, "server.js"), "utf8");
   ok("inspected: the route is a thin pass to the assistant, and does not fall into the say route", srv.includes('route === "/api/jobs/ask-complete"') && srv.includes("assistant.askAboutComplete("), "POST /api/jobs/ask-complete");
