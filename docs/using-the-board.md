@@ -533,6 +533,11 @@ Under every head — titled or not — is one dim line: `cwd …/project/.worktr
 actually runs in (the last three segments; hover for the whole path). When the row it is filed under is a different
 folder, a `row …` chip follows it. It is a reference, not a heading: smallest size, dimmest ink.
 
+On a **minimized** card that line is the row's identity line, and it reads left to right: the path, then the
+session's name, then the card's own buttons (`📌 🧠 🌊 ✎ ⤢ ✕`). The name is the only thing that gives up width — it
+truncates with an ellipsis (the whole name is in its tooltip) and never runs under the buttons, while the path keeps
+a floor of its own. A card with no cwd line has nowhere to put them, so it keeps the name and the buttons in its head.
+
 A `yolo` pill appears only if a run was started with that flag elsewhere; the panel never sends it.
 
 ### The pulse on a live card
