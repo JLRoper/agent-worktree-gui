@@ -617,13 +617,26 @@ try {
     // #2 was put back in the queue by the failed run, #3 was parked by the reader, #4 is live and #1 is done — the pane
     // orders running, queued, parked, done.
     check("…by id, in state order", await page.$$eval("#as-queue .as-task", (els) => els.map((el) => el.dataset.asQrow)), ["4", "2", "3", "1"]);
-    check("…each offering the Move control (a second assistant exists)", await page.$$eval("#as-queue .as-task", (els) => els.map((el) => Boolean(el.querySelector('[data-as-qact="reassign"]')))), [true, true, true, true]);
+    check("…each offering the Move control (a second assistant exists)", await page.$$eval("#as-queue .as-task", (els) => els.map((el) => Boolean(el.querySelector("[data-as-qmove-open]")))), [true, true, true, true]);
+    // One sub-row per agent, with the card's own pill word read from /api/jobs — never from the task record. These four
+    // tasks were started on real threads above, so the words here are the same four the cards wear.
+    check(
+      "…and one sub-row per agent wearing the card's own word",
+      await page.$$eval("#as-queue .as-task", (els) => els.map((el) => [...el.querySelectorAll(".as-task-agent")].map((a) => `${a.dataset.asQopen}|${(a.querySelector(".pill")?.textContent || "").trim()}`))),
+      [
+        [`${THREADS[3]}|running`],
+        [`${THREADS[1]}|exited`],
+        [`${THREADS[2]}|not-running`],
+        [`${THREADS[0]}|complete`],
+      ],
+    );
 
     const movedAt = [];
     for (const [id, title] of [[3, TASKS[2].title], [4, TASKS[3].title]]) {
       const before = await page.locator("#as-queue .as-task").count();
-      await page.selectOption(`[data-as-qmove="${id}"]`, "assistant-2");
-      await page.click(`[data-as-qact="reassign"][data-as-qid="${id}"]`);
+      // ➡️ opens the picker; the NAME in it is the choice — the always-visible <select> and its Move button are gone.
+      await page.click(`[data-as-qmove-open="assistant-1:${id}"]`);
+      await page.click(`[data-as-qmove-pop="assistant-1:${id}"] [data-as-qmove-to="assistant-2"]`);
       const gone = await waitFor(() => page.locator("#as-queue .as-task").count().then((n) => n === before - 1), {
         timeoutMs: 15_000,
         stepMs: 200,
