@@ -821,7 +821,10 @@ button.chip:active { transform: translateY(1px); }
 .job-cwd .cwd-label { flex: none; letter-spacing: .04em; color: var(--dimmer); }
 .job-cwd .cwd-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
 .job-cwd .cwd-row { flex: none; color: var(--dimmer); border: 1px solid #2b3240; border-radius: 4px; padding: 0 5px; }
-.job-cwd:hover .cwd-path, .job-cwd:hover .cwd-row { color: var(--text); }
+/* The run id rides the cwd line, right of the path: bookkeeping, so it stays as quiet as the label and never
+   costs a line of its own. */
+.job-cwd .cwd-run { flex: none; color: var(--dimmer); }
+.job-cwd:hover .cwd-path, .job-cwd:hover .cwd-row, .job-cwd:hover .cwd-run { color: var(--text); }
 .job.collapsed .job-cwd { margin-bottom: 3px; }
 /* A minimized card's cwd line is the row's identity line: the path, then the session's name, then the card's own
    buttons — left to right, in that order. The name used to sit at the right end of the head, where the spacer
