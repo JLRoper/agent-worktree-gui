@@ -29,7 +29,8 @@
 //   * 0 never fires: up 2.5 s into the setting, and its ✕ closes it
 //   * a typed 45 is clamped to 30 and a typed -2 to 0 — the row is 0–30
 //   * the setting survives a reload and the reloaded page honours it (up at 1.2 s on a 2 s number, gone by 3 s)
-//   * the green note still goes at four seconds while the red clock is set to 1 s, and carries no ✕
+//   * the green note still goes at four seconds while the red clock is set to 1 s, carries no ✕, and is not cut
+//     short when it replaces a red bar whose clock was already running
 //
 // BEFORE IT LANDED. Run this file against an export of 0.64.0 (`git archive 0.64.0 | tar -x`) and it fails on the
 // row that does not exist and on every survival check: the base's red bar is still up when this gate expects it gone.
@@ -269,16 +270,24 @@ async function main() {
         await openSettingsGroup(page, "board");
         await setSeconds(page, 1);
         await closeSettings(page);
+        // A green note can replace a red bar. The red bar's clock (1 s here) must not take the note at its own
+        // deadline: a note is a confirmation, not a failure with a remainder.
+        await showRed(page);
+        await sleep(300);
         await showGreen(page);
         await page.waitForTimeout(200);
         const green = await read(page);
         check(green.shown && green.ok, "the green confirmation is up");
         check(green.x && green.x.display === "none", "and it carries no ✕");
-        await sleep(3200);
+        await sleep(1000);
+        const greenAfterRed = await read(page);
+        check(greenAfterRed.shown && greenAfterRed.ok,
+          "a green note is not cut short by the red bar's clock it replaced", `shown ${greenAfterRed.shown}, ok ${greenAfterRed.ok}`);
+        await sleep(2000);
         const greenHeld = await read(page);
-        check(greenHeld.shown, "it is still up at 3.4 s, well past the 1 s red clock", `shown ${greenHeld.shown}`);
+        check(greenHeld.shown, "it is still up at 3.2 s into its own four", `shown ${greenHeld.shown}`);
         const greenGone = await hiddenWithin(page, 1500);
-        check(greenGone, "and it goes by 4.9 s — its own four seconds, not the setting's", greenGone ? "" : "still up");
+        check(greenGone, "and it goes by 4.7 s — its own four seconds, not the setting's", greenGone ? "" : "still up");
 
         check(pageErrors.length === 0, "no uncaught page errors", pageErrors.join(" | "));
       },

@@ -14427,6 +14427,8 @@ function showNote(msg) {
   b.classList.add("ok");
   placeBanner();
   b.classList.remove("hidden");
+  // A note can replace a red bar: the red bar's clock must not take the green one away at its own deadline.
+  stopBannerTimer();
   clearTimeout(noteTimer);
   noteTimer = setTimeout(hideBanner, BANNER_NOTE_MS);
 }
