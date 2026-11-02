@@ -1417,6 +1417,12 @@
   // Which assistant the Role tab is editing. A role belongs to ONE assistant, and the tab is a list tab (it sits
   // beside Alerts), so it carries its own selector and remembers the last session the reader was on.
   let roleTarget = "";
+  // The two fields on this tab that are NOT the charter: the default role prompt the assistant runs on and its two
+  // optional whitelists. They come in with the same read that brings the charter text — one request, one answer —
+  // and every one of them is keyed by the assistant being edited, never by "the" assistant.
+  let rolePrompt = "";
+  let roleProjects = "";
+  let roleWorktrees = "";
   const roleTargetSession = () => (isAssistant(roleTarget) ? roleTarget : lastSession);
 
   function loadRole(id = roleTargetSession()) {
@@ -1433,6 +1439,11 @@
         roleInfo = { role: d.role, sameAsRole: Boolean(d.sameAsRole), charter: d.charter, target: d.target };
         roleRoles = Array.isArray(d.roles) ? d.roles : [];
         rolePick = d.role?.id || rolePick;
+        // The two non-charter fields ride in the same answer. A list is shown as the reader typed it — comma
+        // separated — so a save round-trips what is on disk rather than re-inventing the punctuation.
+        rolePrompt = String(d.prompt ?? "");
+        roleProjects = Array.isArray(d.whitelists?.projects) ? d.whitelists.projects.join(", ") : "";
+        roleWorktrees = Array.isArray(d.whitelists?.worktrees) ? d.whitelists.worktrees.join(", ") : "";
         roleLoaded = true;
         roleLoadedAt = Date.now();
         roleErr = "";
@@ -1460,6 +1471,11 @@
       roleErr = "";
       roleInfo = null;
       rolePick = "";
+      // The prompt and the two lists are per assistant as well: painting #1's saved prompt under #2's name would
+      // offer the reader a box that saves #2's file with #1's words in it.
+      rolePrompt = "";
+      roleProjects = "";
+      roleWorktrees = "";
     }
     if (roleTriedFor !== target) void loadRole(target);
     const rec = sessionById(target);
@@ -1518,6 +1534,38 @@
         standing rules and the scratchpad are. Each assistant carries its OWN copy, so editing Assistant #2's charter
         never changes what Assistant #1 is told. Keep it inside the ${cap}-character cap: prune the OLDEST changelog
         entries first. The assistant adds one with a CHARTER: line at the end of a reply.</div>
+      </div>
+      <div class="as-group">
+        <h4>Its default role prompt — what this assistant runs on, including after a restart</h4>
+        <div class="as-help">Saved in this assistant's own settings file beside its charter, and injected at the top of
+        every turn it runs. It survives a restart because it is a file, not a field on this page. The charter above is
+        the long tier of memory; this is the short standing instruction — the words it should answer in.</div>
+        <textarea class="as-note-box" id="as-prompt-text" rows="5" spellcheck="false"${roleLoaded ? "" : " readonly"} placeholder="e.g. You are the PR reviewer: read the diff before you answer, and never approve your own work.">${esc(rolePrompt)}</textarea>
+        <div class="as-actions">
+          <button id="btn-as-prompt" type="button" class="primary"${roleLoaded ? "" : " disabled"}>Save default prompt</button>
+          <span class="as-hint">${rolePrompt.trim() ? `${rolePrompt.trim().length} char${rolePrompt.trim().length === 1 ? "" : "s"} saved` : "nothing saved — an empty prompt adds nothing to the turn"}</span>
+          <span class="as-err" id="as-prompt-err"></span>
+        </div>
+      </div>
+      <div class="as-group">
+        <h4>Its whitelists — which projects it is shown, and where it may spawn</h4>
+        <div class="as-help">Neither is required. A blank box means <b>all</b>, and so does <code>*</code>. Separate
+        names with commas or newlines. The <b>projects</b> list decides which projects this assistant is shown and
+        where a SPAWN may cut a new worktree; the <b>worktrees</b> list decides which existing trees a SPAWN IN may
+        target. A name that matches nothing is allowed and simply matches nothing — it is not an error.</div>
+        <div class="as-line">
+          <label title="project names as the board shows them, or full paths — blank or * means every project">projects
+            <input type="text" class="as-grow" id="as-projects" spellcheck="false"${roleLoaded ? "" : " readonly"} value="${esc(roleProjects)}" placeholder="* — all projects"></label>
+        </div>
+        <div class="as-line">
+          <label title="worktree directory names, branches or full paths — blank or * means every worktree">worktrees
+            <input type="text" class="as-grow" id="as-worktrees" spellcheck="false"${roleLoaded ? "" : " readonly"} value="${esc(roleWorktrees)}" placeholder="* — all worktrees"></label>
+        </div>
+        <div class="as-actions">
+          <button id="btn-as-whitelists" type="button" class="primary"${roleLoaded ? "" : " disabled"}>Save whitelists</button>
+          <span class="as-hint">projects: ${roleProjects.trim() ? esc(roleProjects) : "all"} · worktrees: ${roleWorktrees.trim() ? esc(roleWorktrees) : "all"}</span>
+          <span class="as-err" id="as-whitelist-err"></span>
+        </div>
       </div>`;
   }
 
@@ -1612,14 +1660,46 @@
     return `${list.length} threshold${list.length === 1 ? "" : "s"} · ${values}`;
   }
 
-  // A second assistant's Settings: its own rules, said plainly. The rest of the panel's assistant settings are the
-  // sentry's, and the sentry is Assistant #1's — so this pane names the assistant's thread and points at the Role tab
-  // for its charter rather than offering knobs that would change the other assistant.
+  // A second assistant's Settings: ITS OWN knobs, not a pointer at Assistant #1's.
+  //
+  // Every control drawn here is read by that assistant's own turns through `settingsFor(id)` in lib/assistant.js —
+  // its switch, its autonomy (what it may send without a click), its spawn mode, its model, its working directory and
+  // its command audit. What is deliberately NOT drawn is the sentry's clock, the wake budget and the per-rule
+  // escalation table: the panel runs ONE sentry and it is Assistant #1's, so a second copy of those controls would be
+  // two controls for one value — which is exactly what the reader reported as "#2's settings are really #1's".
   function renderAssistantRules(id, host) {
     const rec = sessionById(id);
     const n = String(id).replace(/^assistant-/, "");
     const rules = Array.isArray(rec?.rules) ? rec.rules : [];
+    const a = state.assistant;
+    // This assistant's own settings, from the map the server resolves out of its profile file. Never #1's: a pane
+    // that silently borrows #1's values is the bug this pane replaces.
+    const s = (a.assistantSettings || {})[id] || {};
+    const autonomy = a.autonomy || ["draft", "auto-safe", "auto"];
+    const autonomyLabel = {
+      draft: "draft only — nothing is sent without my click",
+      "auto-safe": "auto-safe — send what the assistant writes",
+      auto: "auto — send any draft it has text for",
+    };
     host.innerHTML = `
+      <div class="as-group">
+        <h4>${esc(rec?.name || "Assistant")}'s settings — its own, not Assistant #1's</h4>
+        <div class="as-help">Every knob here is read by THIS assistant's own turns, from its own file
+        <code>${esc(String(rec?.profile?.path || `assistants/${id}/settings.json`))}</code>. Changing one never
+        changes Assistant #1's settings, and changing #1's never changes these.</div>
+        <div class="as-line">
+          <label>watching <input type="checkbox" data-as-set="enabled" data-as-for="${esc(id)}"${s.enabled !== false ? " checked" : ""}></label>
+          <label>autonomy <select data-as-set="autonomy" data-as-for="${esc(id)}">${autonomy.map((v) => `<option value="${esc(v)}"${s.autonomy === v ? " selected" : ""}>${esc(autonomyLabel[v] || v)}</option>`).join("")}</select></label>
+        </div>
+        <div class="as-line"><label>create worktrees <select data-as-set="spawn" data-as-for="${esc(id)}" title="whether THIS assistant may cut a worktree and start a worker — ask keeps a one-click card between it and git">${(a.spawnModes || ["off", "ask", "auto"]).map((v) => `<option value="${esc(v)}"${s.spawn === v ? " selected" : ""}>${v === "off" ? "off — it may not start workers" : v === "ask" ? "ask me first" : "start immediately"}</option>`).join("")}</select></label></div>
+        <div class="as-line"><label>command audit <select data-as-set="commandAudit" data-as-for="${esc(id)}" title="what this assistant's written command lines are checked against — off reads nothing, report raises a red card and a journal line, enforce also replays the lines nothing accounted for, once">${(a.commandAuditModes || ["off", "report", "enforce"]).map((v) => `<option value="${esc(v)}"${s.commandAudit === v ? " selected" : ""}>${v === "off" ? "off — nothing is checked" : v === "report" ? "report — red card and journal" : "enforce — also replay once"}</option>`).join("")}</select></label></div>
+        <div class="as-line"><label>model <select data-as-set="model" data-as-for="${esc(id)}" title="the model THIS assistant's turns run on">${modelOptionsHtml(s.model || "")}</select></label></div>
+        <div class="as-line"><label title="the assistant does no work here — the gateway just refuses a run without an existing cwd. It is created if missing; leave empty for a folder beside the job store.">working dir <input type="text" spellcheck="false" data-as-set="cwd" data-as-for="${esc(id)}" value="${esc(s.cwd || "")}" placeholder="default: beside the job store"></label></div>
+        <div class="as-help">The sentry's clock, the wake budget and the per-rule escalation table belong to the panel's one
+        sentry, which is Assistant #1's — so they are not repeated here, where they would be a second control for one
+        value. Its role, its default role prompt and its two whitelists are in the <b>Role</b> tab. Its thread is
+        <code>${esc(rec?.threadId || "")}</code>.</div>
+      </div>
       <div class="as-group">
         <h4>${esc(rec?.name || "Assistant")}'s rules — its own, not Assistant #1's</h4>
         <div class="as-help">These ride in THIS assistant's preamble, clipped the way every rule is. Adding or
@@ -1637,8 +1717,7 @@
               )
               .join("")
           : `<div class="as-help">(none written down yet)</div>`}
-        <div class="as-help">Its role and its charter are in the <b>Role</b> tab, beside Scratchpad. Its thread is
-        <code>${esc(rec?.threadId || "")}</code>; it shares this panel's autonomy, spawn mode and model.</div>
+        <div class="as-err" id="as-set-err"></div>
       </div>`;
   }
 
@@ -2107,6 +2186,53 @@
       return;
     }
 
+    // The default role prompt: one press, one file. The box's own text is what is saved — never the state variable,
+    // which a repaint in between could have moved — and the response's assistant state is applied so the pane and
+    // the board agree about how much is saved.
+    if (t.id === "btn-as-prompt") {
+      const target = roleTargetSession();
+      const text = String(as$("as-prompt-text")?.value ?? "");
+      t.disabled = true;
+      try {
+        const d = await asPost("/api/assistant/profile", { assistantId: target, prompt: text });
+        if (d.assistant) applyAssistant(d.assistant);
+        // The box shows what the FILE holds: the server caps the prompt, so a paste over the cap is stored as its
+        // first `promptChars` characters and the box would otherwise claim to have saved more than it did.
+        rolePrompt = text.slice(0, Number(d.profile?.promptChars ?? text.length));
+        setErr("as-prompt-err", "");
+        renderAssistantRole(true);
+      } catch (err) {
+        setErr("as-prompt-err", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
+    // The two whitelists, saved together: they are two fields of one file, and saving them in one press is what makes
+    // "the box says what the file holds" true for both at once.
+    if (t.id === "btn-as-whitelists") {
+      const target = roleTargetSession();
+      const projects = String(as$("as-projects")?.value ?? "");
+      const worktrees = String(as$("as-worktrees")?.value ?? "");
+      t.disabled = true;
+      try {
+        const d = await asPost("/api/assistant/profile", { assistantId: target, projects, worktrees });
+        if (d.assistant) applyAssistant(d.assistant);
+        // Read back what the server STORED (comma separated, duplicates folded, blanks dropped) rather than what was
+        // typed: a box that keeps showing a duplicate the file no longer has is a box that lies about the list.
+        roleProjects = Array.isArray(d.profile?.whitelists?.projects) ? d.profile.whitelists.projects.join(", ") : projects;
+        roleWorktrees = Array.isArray(d.profile?.whitelists?.worktrees) ? d.profile.whitelists.worktrees.join(", ") : worktrees;
+        setErr("as-whitelist-err", "");
+        renderAssistantRole(true);
+      } catch (err) {
+        setErr("as-whitelist-err", err.message);
+      } finally {
+        t.disabled = false;
+      }
+      return;
+    }
+
     if (t.id === "btn-as-new-assistant") {
       const pick = String(as$("as-role-pick")?.value || rolePick || "");
       t.disabled = true;
@@ -2268,10 +2394,14 @@
     }
     if (el.dataset.asSet) {
       const key = el.dataset.asSet;
+      // WHICH assistant this knob belongs to: #1's pane carries no id and posts exactly as it always has; a second
+      // assistant's pane carries its own id, so its settings land in its own file and #1's are not touched.
+      const forId = el.dataset.asFor || "";
       const value = el.type === "checkbox" ? el.checked : el.type === "number" ? Number(el.value) : el.value;
       try {
-        await asPost("/api/assistant/settings", { [key]: value });
-        renderAssistantSettings(FIRST_ASSISTANT, true);
+        await asPost("/api/assistant/settings", { [key]: value, ...(forId ? { assistantId: forId } : {}) });
+        // asPost already applied the assistant state its answer carried, so this repaint reads the stored value.
+        renderAssistantSettings(forId || FIRST_ASSISTANT, true);
       } catch (err) {
         setErr("as-set-err", err.message);
       }
