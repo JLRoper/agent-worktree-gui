@@ -1,21 +1,24 @@
-// Choosing which of the worktree chart's ten columns are drawn.
+// Choosing which of the worktree chart's eleven columns are drawn.
 //
-// Four facts, each driven rather than read off the source:
+// Five facts, each driven rather than read off the source:
 //
 //   1. the server's normaliser keeps only the ids the panel knows, in canonical order, and never hides every column —
 //      an empty table has no row to bring the columns back from;
 //   2. the page's column list and the server's are the SAME list, in the same order. A typo on either side hides
 //      nothing and reports success, which is indistinguishable from a switch that does not work;
 //   3. the header and the column-spanning rows are built from the shown set, so hiding a column leaves a table whose
-//      header and every row still agree (colspan 10 → 7, not a bare strip of panel at the right edge);
-//   4. POST /api/settings/columns writes the panel's own config.json, the answer carries the stored list back, and the
+//      header and every row still agree (colspan 11 → 8, not a bare strip of panel at the right edge);
+//   4. a config that has NEVER expressed a preference omits `hiddenColumns`, and the panel serves the owner column
+//      switched OFF (`DEFAULT_HIDDEN_COLUMNS`) for it — the one column this chart starts without. The file stays
+//      keyless until the reader moves a switch, so the default is a read-time answer rather than a written record;
+//   5. POST /api/settings/columns writes the panel's own config.json, the answer carries the stored list back, and the
 //      choice survives a restart of the process that never saw the browser.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
-import { CHART_COLUMN_IDS, REQUIRED_COLUMN_ID, chartColumnsFrom, shownChartColumns } from "../lib/chart-columns.js";
+import { CHART_COLUMN_IDS, DEFAULT_HIDDEN_COLUMNS, REQUIRED_COLUMN_ID, chartColumnsFrom, shownChartColumns } from "../lib/chart-columns.js";
 import { post, sliceRegion, startPanel } from "../tools/panel-testkit.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
@@ -54,7 +57,7 @@ test("the page's columns are the server's columns, in the same order", () => {
   for (const c of CHART_COLUMNS) assert.equal(typeof c.label, "string", `${c.id} carries a label`);
 });
 
-test("nothing hidden draws all ten headers, each tagged with its column id", () => {
+test("nothing hidden draws every header, each tagged with its column id", () => {
   const { chartHeaderHtml, shownColumns, wtColspan } = page({});
   assert.equal(shownColumns().length, CHART_COLUMN_IDS.length);
   assert.equal(wtColspan(), CHART_COLUMN_IDS.length);
@@ -70,20 +73,23 @@ test("nothing hidden draws all ten headers, each tagged with its column id", () 
 
 test("a hidden column leaves the header, the colspan and the order consistent", () => {
   const { chartHeaderHtml, shownColumns, wtColspan } = page({ hiddenColumns: ["tip", "cherry", "life"] });
-  assert.equal(wtColspan(), 7);
+  // Eleven columns less the three hidden ones. The owner column is NOT hidden here because this settings object IS a
+  // preference: a config that has moved a switch takes the convention that a later column arrives visible (the reason
+  // the stored value is what to hide). The OFF-by-default answer is the ABSENT key, asserted in the next test.
+  assert.equal(wtColspan(), 8);
   assert.deepEqual(
     shownColumns().map((i) => CHART_COLUMN_IDS[i]),
-    ["name", "branch", "ahead", "pr", "dirty", "verdict", "actions"],
+    ["name", "branch", "assistant", "ahead", "pr", "dirty", "verdict", "actions"],
   );
   const html = chartHeaderHtml();
-  assert.equal((html.match(/<th /g) || []).length, 7);
+  assert.equal((html.match(/<th /g) || []).length, 8);
   assert.doesNotMatch(html, /data-col-id="tip"/);
   assert.doesNotMatch(html, /data-col-id="cherry"/);
   assert.doesNotMatch(html, /data-col-id="life"/);
   assert.ok(html.indexOf('data-col-id="branch"') < html.indexOf('data-col-id="ahead"'), "table order survives");
 });
 
-test("a config that hides all ten still draws one column, and it is the actions cell", () => {
+test("a config that hides every column still draws one, and it is the actions cell", () => {
   const { shownColumns, wtColspan, chartHeaderHtml } = page({ hiddenColumns: [...CHART_COLUMN_IDS] });
   assert.deepEqual(shownColumns(), [CHART_COLUMN_IDS.length - 1]);
   assert.equal(wtColspan(), 1);
@@ -99,6 +105,13 @@ test("every column-spanning row asks for the shown count, never a literal 10", (
 
 test("POST /api/settings/columns stores the choice in config.json and survives a restart", async (t) => {
   const panel = await startPanel({ keep: true });
+  // A sandbox config carries no `hiddenColumns` key: no preference has ever been expressed, so the owner column —
+  // the chart's one OFF-by-default column — is what the panel serves, and NOTHING was written to the file for it.
+  const fresh = await (await fetch(`${panel.base}/api/config`)).json();
+  assert.deepEqual(fresh.hiddenColumns, DEFAULT_HIDDEN_COLUMNS);
+  assert.deepEqual(DEFAULT_HIDDEN_COLUMNS, ["assistant"], "the owner column is the one that starts hidden");
+  assert.equal("hiddenColumns" in JSON.parse(readFileSync(path.join(panel.dir, "config.json"), "utf8")), false, "the default is not a written record");
+
   const first = await post(panel.base, "/api/settings/columns", { body: { hidden: ["cherry", "tip", "nonsense"] } });
   assert.equal(first.status, 200, first.text);
   assert.deepEqual(first.json.hidden, ["tip", "cherry"]);

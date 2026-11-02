@@ -31,10 +31,10 @@ import { Hosts, proposeMapping } from "./lib/hosts.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
 import { WorktreeNaming } from "./lib/worktree-naming.js";
-import { Locks, describeLock, rebaseKey, writerLocks } from "./lib/locks.js";
+import { DEFAULT_OWNER, Locks, describeLock, rebaseKey, writerLocks } from "./lib/locks.js";
 import { rebaseWorktree } from "./lib/rebase.js";
 import { ownCopyOf } from "./lib/sync-state.js";
-import { chartColumnsFrom } from "./lib/chart-columns.js";
+import { DEFAULT_HIDDEN_COLUMNS, chartColumnsFrom } from "./lib/chart-columns.js";
 import { createDescriptions } from "./lib/features/descriptions.js";
 import { TodoLists, todoSummary } from "./lib/todos.js";import { auditRepo } from "./lib/hermes-worktrees.js";
 import { REFRESH_LINES_SHOWN, RefreshJournal, liveRunIn, mergeDelta, normaliseRefreshAgent, parseCommitFiles, todoProposals } from "./lib/refresh-row.js";
@@ -67,7 +67,7 @@ import {
 } from "./lib/paths.js";
 // HTTP framing lives in lib/http/: transport.js knows about req/res and nothing about worktrees,
 // and static.js serves public/. Both are handed the state they used to read by closure.
-import { authorised, handleStream, readBody, readRawBody, sendJson } from "./lib/http/transport.js";
+import { authorised, handleStream, pageCaller, readBody, readRawBody, sendJson } from "./lib/http/transport.js";
 import { serveStatic, PUBLIC_DIR } from "./lib/http/static.js";
 import { createBuild } from "./lib/build-version.js";
 
@@ -187,7 +187,12 @@ async function loadConfig() {
   // column in any browser and every one of them draws the same chart. The stored value is the columns to HIDE, so a
   // column the page adds later starts visible for a reader who has already hidden some; lib/chart-columns.js drops
   // ids it does not know, so a hand-edited typo cannot quietly hide the wrong cell.
-  cfg.hiddenColumns = chartColumnsFrom(cfg.hiddenColumns);
+  // A config with NO hidden-columns key has never expressed a preference, so the owner column starts OFF there —
+  // the one default this chart has. A key that is present (even an empty array) IS a preference and is taken as
+  // written, so a reader who hid something keeps the convention that a later column arrives visible and can switch
+  // the owner column off in one press. Nothing is written for the default: the file stays keyless until the reader
+  // moves a switch, which is what "no record migration" means here.
+  cfg.hiddenColumns = cfg.hiddenColumns == null ? DEFAULT_HIDDEN_COLUMNS.slice() : chartColumnsFrom(cfg.hiddenColumns);
   cfg.projects = Array.isArray(cfg.projects) ? cfg.projects : [];
   if (!cfg.defaultCwd) cfg.defaultCwd = cfg.projects[0]?.path || process.cwd();
   // "all": keep every project fresh, whether or not anyone is looking at it. "visible": the page reports which
@@ -1388,6 +1393,9 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
       locks.setTree(projectName, finalPath, true, { by: held.by || "the reader", branch: branchRenamed ? newBranch : held.branch || oldBranch });
       log(`lock follows the rename: ${row.path} -> ${finalPath.replace(/\\/g, "/")}`);
     }
+    // The owner needs no line here, and that is the point of its key: `ownerKey` reads the tree's six-hex tag, which
+    // a rename keeps, so the owner the reader set is the same entry before and after this function runs. A path-keyed
+    // owner would have to be moved here and would still be orphaned by the panel's other rename paths.
     scheduler.store.dropRow(projectName, row.path);
     broadcast({ type: "drop", project: projectName, path: row.path });
   }
@@ -1631,6 +1639,50 @@ function withLocks(snap) {
   return snap;
 }
 
+// Who owns a tree: the assistant whose ROLE LABEL the row's bullet list draws and whose optional chart column says
+// "Manager 1". Stored beside the lock (lib/locks.js `owners`) for the same reason — it is the panel's own answer about
+// a directory git knows nothing about — and overlaid here for the same reason the lock is: the scanner reads git, this
+// reads the panel's store.
+//
+// Three rules, all of them readable from this one function:
+//
+//   * the STORE holds an id and nothing else, and the ID is `<project>::<the tree's six-hex tag>` — not the path and
+//     not the branch, both of which the panel itself rewrites when it renames a tree (lib/locks.js `ownerKey`);
+//   * the LABEL is resolved here, on every read, from the role the owner runs. Renaming a role therefore renames the
+//     bullet on every row that shows it without touching one byte of the store, and two assistants on two roles read
+//     as two labels ("Manager 1" / "Reviewer 1") rather than one;
+//   * ABSENCE is Assistant #1, so a tree nobody moved carries no record and a store written before owners existed
+//     needs no migration. An owner that is no longer on the board falls back to #1 TOO, and says so: the row keeps
+//     `stored` (the id the reader gave it) and a `fallback` sentence, because a silent fallback is the reader's
+//     setting appearing to have been ignored.
+//
+// DISPLAY ONLY: nothing in fired()/wake()/noteSettle reads `row.assistant`. It is here so the routing PR that follows
+// has one place to read the owner from — not wired into who wakes or runs in this one.
+function assistantForRow(projectName, row) {
+  const stored = locks.owner({ project: projectName, path: row.path, branch: row.branch });
+  const wanted = stored || DEFAULT_OWNER;
+  const rec = assistant.assistants.find((a) => a.id === wanted) || null;
+  if (rec) return { id: rec.id, name: rec.name, label: assistant.roleLabelOf(rec) };
+  // The default owner itself must always answer; a store that has lost #1 (a hand-edited file) still draws a name
+  // rather than an empty cell.
+  const first = assistant.assistants.find((a) => a.id === DEFAULT_OWNER) || null;
+  if (!stored) return { id: first?.id || DEFAULT_OWNER, name: first?.name || "", label: first ? assistant.roleLabelOf(first) : "" };
+  return {
+    id: first?.id || DEFAULT_OWNER,
+    name: first?.name || "",
+    label: first ? assistant.roleLabelOf(first) : "",
+    stored,
+    fallback: `${stored} is not on the board any more, so Assistant #1 controls this worktree until you set an owner again`,
+  };
+}
+
+function withAssistantOwners(snap) {
+  for (const project of snap.projects || []) {
+    for (const row of project.worktrees || []) row.assistant = assistantForRow(project.name, row);
+  }
+  return snap;
+}
+
 // What the panel itself knows about a tree's name — who gave it and when — is in no git repository, so it travels
 // with the snapshot the way the live agent state does. A row that carries `named` is a row the automatic rename
 // will never touch again; one without it is a tree still waiting for the run that will name it.
@@ -1729,7 +1781,7 @@ async function stewardProject(name) {
 }
 
 function snapshot() {
-  return withRefreshJournal(
+  const snap = withRefreshJournal(
     withReleases(
       withTodos(
         descriptions.withDescriptions(
@@ -1767,6 +1819,8 @@ function snapshot() {
       ),
     ),
   );
+  // The owner rides the snapshot like the lock does: one more per-row field the page can read without a second call.
+  return withAssistantOwners(snap);
 }
 
 const heartbeat = setInterval(() => {
@@ -2360,6 +2414,60 @@ const server = createServer(async (req, res) => {
         locked: Boolean(out.locked),
         lock,
         say: out.locked ? `🔒 ${what} is locked — nothing may delete it until you unlock it` : `🔓 ${what} is unlocked`,
+      });
+    }
+
+    // Who owns a worktree: the assistant whose ROLE LABEL the row's bullet list draws and whose optional chart
+    // column says "Manager 1". Same shape as the two settings routes above — the reader names a row and one value,
+    // and the answer carries the stored result back — because this is the same kind of fact: the panel's own,
+    // per-tree, persisted beside the lock (lib/locks.js) and DISPLAY ONLY. Nothing in fired()/wake()/noteSettle
+    // reads it in this PR.
+    //
+    // THE READER'S OWN PRESS IS THE ONLY CALLER, and that is a rule about this route rather than a convention:
+    // the owner is what will decide who wakes on this tree in the routing PR, so an agent must never be able to
+    // reassign the tree it is working in. A loopback panel has no user accounts, so the gate is the page's own
+    // request shape — `pageCaller` below. A browser attaches `Origin` to every same-origin POST and a page script
+    // cannot set it (it is a forbidden header name), while a run's own `curl`/`fetch` from a shell sends none. A
+    // request without a same-origin Origin is refused with a sentence and the store does not move. Nothing in the
+    // assistant's action grammar (lib/assistant/actions.js) can write this either: "make Assistant #2 own that
+    // worktree" is not a line an assistant can end its turn with, so a run has no route here at all.
+    //
+    // The default owner is Assistant #1 and absence is how that is represented, so setting #1 CLEARS the entry
+    // rather than writing a record that means what the absent key already means. The id must name a real assistant:
+    // a typo would otherwise store an owner the row could not name, and the next read would quietly show Assistant #1
+    // with no trace of the mistake.
+    if (route === "/api/worktree/assistant" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      if (!pageCaller(req)) {
+        return sendJson(res, 403, {
+          error:
+            "the worktree's owner is the reader's to set: this write is made from the board page, and a request with no same-origin Origin is refused",
+        });
+      }
+      const body = await readBody(req).catch(() => ({}));
+      const projectName = String(body.project || "").trim();
+      const project = scheduler.getProjects().find((p) => p.name === projectName);
+      if (!project) return sendJson(res, 404, { error: `unknown project: ${projectName}` });
+      const asked = body.path ? normPathKey(body.path) : null;
+      const row = asked ? scheduler.store.rowsFor(projectName).find((r) => normPathKey(r.path) === asked) : null;
+      if (!row) return sendJson(res, 404, { error: `not a worktree row of ${projectName}: ${body.path || "(none)"}` });
+      const id = String(body.assistant ?? body.assistantId ?? "").trim();
+      if (!id) return sendJson(res, 400, { error: "an assistant id is required — one of the ids /api/assistant lists" });
+      const rec = assistant.assistants.find((a) => a.id === id);
+      if (!rec) return sendJson(res, 404, { error: `no such assistant: ${id}` });
+      const out = locks.setOwner({ project: projectName, path: row.path, branch: row.branch }, id === DEFAULT_OWNER ? null : id);
+      if (!out || !out.ok) return sendJson(res, 400, { error: "the owner could not be changed" });
+      const label = assistant.roleLabelOf(rec);
+      const what = row.name || path.basename(String(row.path || ""));
+      log(`owner ${projectName}: ${what} -> ${label} (${rec.id})`);
+      // A settings-like write: every open board redraws the row's bullet list and column from this snapshot.
+      broadcast({ type: "snapshot", data: snapshot() });
+      return sendJson(res, 200, {
+        ok: true,
+        assistant: { id: rec.id, name: rec.name, label },
+        // The SAME shape the snapshot carries, fallback sentence included, so a caller that paints the answer and a
+        // board that paints the next snapshot cannot disagree about the row.
+        row: { ...row, assistant: assistantForRow(projectName, row) },
       });
     }
 
