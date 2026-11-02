@@ -56,7 +56,15 @@ function pane({ read }) {
     if (!hosts.has(id)) hosts.set(id, { id, innerHTML: "" });
     return hosts.get(id);
   };
+  // `/api/jobs` is answered here and kept out of `calls`: the queue painter asks for the agents' own statuses on its
+  // own clock, and every count in this file is about the QUEUE reads the cache gate is responsible for. `jobCalls`
+  // is what the run-status read is judged by instead.
+  const jobCalls = [];
   const apiFetch = (url) => {
+    if (String(url).startsWith("/api/jobs")) {
+      jobCalls.push(url);
+      return Promise.resolve(reply({ jobs: [] }));
+    }
     calls.push(url);
     return read(url);
   };
@@ -64,6 +72,7 @@ function pane({ read }) {
     "esc",
     "assistantIds",
     "sessionById",
+    "assistantThreadName",
     "hostFor",
     "paneIdFor",
     "typingInside",
@@ -74,12 +83,14 @@ function pane({ read }) {
     "asPost",
     "as$",
     "activeSessionId",
+    "isAssistant",
     `${region}
-return { renderAssistantQueue, loadQueue, queuePaneState, queueStateHtml, queueCache, queueInflight };`,
+return { renderAssistantQueue, loadQueue, queuePaneState, queueStateHtml, queueCache, queueInflight, queueJobs };`,
   )(
     esc,
     () => ["assistant-1", "assistant-2"],
     (id) => ({ id, name: id === "assistant-1" ? "Assistant #1" : "Assistant #2" }),
+    (t) => t,
     hostFor,
     (id, kind) => `as-${id}-${kind}`,
     () => false,
@@ -90,8 +101,9 @@ return { renderAssistantQueue, loadQueue, queuePaneState, queueStateHtml, queueC
     async () => ({}),
     () => null,
     () => "assistant-1",
+    (id) => ["assistant-1", "assistant-2"].includes(String(id)),
   );
-  return { api, calls, state, host: (id = "assistant-1") => hostFor(id) };
+  return { api, calls, jobCalls, state, host: (id = "assistant-1") => hostFor(id) };
 }
 
 test("a queue file that does not exist yet draws its own empty state, and the spinner stops", async () => {

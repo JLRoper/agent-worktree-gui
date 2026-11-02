@@ -368,9 +368,18 @@ try {
         owner: el.querySelector(".as-task-owner")?.textContent.trim() || "",
         meta: (el.querySelector(".as-task-meta")?.textContent || "").replace(/\s+/g, " ").trim(),
         note: (el.querySelector(".as-task-note")?.textContent || "").replace(/\s+/g, " ").trim(),
+        // One sub-row per agent: the thread, the mark that RUN owns and the card's own pill word/class.
+        agents: [...el.querySelectorAll(".as-task-agent")].map((a) => ({
+          thread: a.querySelector(".as-task-agent-thread")?.textContent.trim() || "",
+          mark: a.querySelector(".as-agent-mark")?.textContent.trim() || "",
+          open: a.dataset.asQopen || a.querySelector("[data-as-qopen]")?.dataset.asQopen || "",
+          word: (a.querySelector(".pill")?.textContent || "").trim(),
+          pill: a.querySelector(".pill")?.className || "",
+        })),
+        glyphs: [...el.querySelectorAll("[data-as-qact]")].map((b) => ({ act: b.dataset.asQact, text: b.textContent.trim(), aria: b.getAttribute("aria-label") || "" })),
         done: el.classList.contains("is-done"),
         opacity: getComputedStyle(el).opacity,
-        hasMove: Boolean(el.querySelector('[data-as-qact="reassign"]')),
+        hasMove: Boolean(el.querySelector('[data-as-qmove-open]')),
         hasDelete: Boolean(el.querySelector('[data-as-qact="delete"]')),
       })),
     );
@@ -381,7 +390,35 @@ try {
     ok("the done row is greyed in place, not removed", rows[2]?.done === true && Number(rows[2]?.opacity) < 1, `opacity ${rows[2]?.opacity}`);
     ok("…and no other row is", rows.slice(0, 2).every((r) => !r.done && Number(r.opacity) === 1), JSON.stringify(rows.map((r) => r.opacity)));
     check("each row shows its id and title", rows.map((r) => r.title), ["rewrite the queue's file claims", "SQL verify for the queue store", "land the per-assistant queue"]);
-    ok("the running row names its thread", (rows[0]?.meta || "").includes("thread queue-gate-thread-2"), rows[0]?.meta);
+    // The thread moved out of the meta line and onto its own sub-row: one agent per line, with the mark its RUN owns.
+    check("the running row draws one agent sub-row per thread, naming it", rows.map((r) => r.agents.map((a) => a.thread)), [
+      ["queue-gate-thread-2"],
+      ["queue-gate-thread-3"],
+      ["queue-gate-thread-4"],
+    ]);
+    check("…each sub-row carrying the card's own pill classes", rows.map((r) => r.agents[0]?.pill), [
+      "pill pill-notrunning",
+      "pill pill-notrunning",
+      "pill pill-notrunning",
+    ]);
+    check("…and the card's own words", rows.map((r) => r.agents[0]?.word), ["not-running", "not-running", "not-running"]);
+    check("…with the sub-row itself as the opener", rows.map((r) => r.agents[0]?.open), ["queue-gate-thread-2", "queue-gate-thread-3", "queue-gate-thread-4"]);
+    check(
+      "every press on the row is a glyph whose title= and aria-label= carry the real word",
+      // Row #2 is the running one, so its Start is not offered (a press that reports "already running" wasted a click).
+      rows[0]?.glyphs.map((g) => [g.act, g.text, g.aria]),
+      [
+        ["queued", "⤵", "Queue"],
+        ["parked", "⏸", "Park"],
+        ["done", "✓", "Done"],
+        ["delete", "✕", "Delete"],
+      ],
+    );
+    check(
+      "…and the parked row's ▶ is Start while its ↺-able neighbour says Requeue",
+      [rows[1]?.glyphs[0], rows[2]?.glyphs.map((g) => g.text)],
+      [{ act: "running", text: "▶", aria: "Start" }, ["▶", "↺", "⏸", "✕"]],
+    );
     ok("…says STALE instead of showing phantom progress", /^STALE — that thread has no live run/.test(rows[0]?.note || ""), rows[0]?.note);
     ok("the parked row carries its reason", /^parked — waiting on the DBA's verify$/.test(rows[1]?.note || ""), rows[1]?.note);
     ok("every row names the assistant that carries it", rows.every((r) => r.owner === "assistant-1"), JSON.stringify(rows.map((r) => r.owner)));
@@ -395,9 +432,16 @@ try {
     const readsAfter = queueReqs.length - readsBefore;
     ok("the pane does not re-read its queue in a loop", readsAfter <= 1, `${readsAfter} read(s) in 1.5 s after the paint`);
 
-    // Move through the pane: choose Assistant #2, press Move, wait for the ROW to leave this queue.
-    await page.selectOption('[data-as-qmove="3"]', "assistant-2");
-    await page.click('[data-as-qact="reassign"][data-as-qid="3"]');
+    // Move through the pane: the ➡️ opens the picker and a NAME in it is the choice — the always-visible <select> and
+    // its Move button are gone, and the same reassign action is what the pick posts.
+    await page.click('[data-as-qmove-open="assistant-1:3"]');
+    ok("the ➡️ opens a picker", await page.locator('[data-as-qmove-pop="assistant-1:3"]').isVisible());
+    ok(
+      "…listing the other assistant and not this one",
+      [await page.$$eval('[data-as-qmove-pop="assistant-1:3"] [data-as-qmove-to]', (els) => els.map((el) => el.dataset.asQmoveTo)), await page.locator('select[data-as-qmove]').count()],
+      [["assistant-2"], 0],
+    );
+    await page.click('[data-as-qmove-pop="assistant-1:3"] [data-as-qmove-to="assistant-2"]');
     const rowLeft = await waitFor(() => page.locator("#as-queue .as-task").count().then((n) => n === 2), {
       timeoutMs: 10_000,
       stepMs: 200,

@@ -3050,7 +3050,31 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-task-note.is-bad { color: var(--red); }
 .as-task-actions { display: flex; gap: 5px; flex-wrap: wrap; margin: 4px 0 0 19px; align-items: center; }
 .as-task-actions button { font-size: 10.5px; padding: 2px 7px; }
-.as-task-actions select { font-size: 10.5px; padding: 2px 5px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; }
+/* One agent per task: a sub-row per thread that carried it, wearing the card's own pill. The line itself is the opener
+   (it opens that agent's card AND the console of its current turn), so it takes a pointer and a focus ring. */
+.as-task-agents { margin: 3px 0 0 19px; display: flex; flex-direction: column; gap: 2px; }
+.as-task-agent { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 1px 4px 1px 2px; border-radius: 5px; cursor: pointer; }
+.as-task-agent:hover { background: rgba(255, 255, 255, .045); }
+.as-task-agent:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 0; }
+.as-task-agent.is-none { cursor: default; }
+.as-task-agent.is-none:hover { background: none; }
+.as-task-agent .as-task-agent-thread { font-family: var(--mono); font-size: 10px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-task-agent .as-task-agent-label { font-size: 10.5px; color: var(--dimmer); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-task-agent .pill { margin-left: auto; flex: none; }
+.as-agent-mark { font-size: 11px; line-height: 1; width: 11px; text-align: center; flex: 0 0 auto; }
+.as-agent-mark.is-queued { color: var(--dim); }
+.as-agent-mark.is-running { color: #8fb8ff; }
+.as-agent-mark.is-parked { color: #a78bfa; }
+.as-agent-mark.is-done { color: #6fcf97; }
+/* The row's presses are glyphs — the real word is in title= and aria-label=, so a narrow row stays readable. */
+.as-task-actions .as-qglyph { font-size: 11px; line-height: 1; padding: 3px 6px; min-width: 22px; }
+/* ➡️ opens the picker rather than standing beside a select: the list is as wide as the assistant names, so it floats
+   over the row above instead of laying the row out around it. */
+.as-qmove-wrap { position: relative; display: inline-flex; }
+.as-qmove-pop { position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 8; display: flex; flex-direction: column; min-width: 150px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; box-shadow: 0 10px 24px #000a; }
+.as-qmove-pop[hidden] { display: none; }
+.as-qmove-pop .as-qmove-pick { text-align: left; font-size: 11px; padding: 4px 8px; border: 0; background: transparent; color: var(--text); border-radius: 5px; }
+.as-qmove-pop .as-qmove-pick:hover { background: #20262f; }
 /* A rule's own thresholds fold under the row that reads them: a flat block of number inputs above the rules
    said nothing about which bar belonged to which rule. Closed by default, and the summary names the value in
    force, so a folded disclosure still answers "what does this rule fire on". */

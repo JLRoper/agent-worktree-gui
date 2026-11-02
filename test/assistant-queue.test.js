@@ -26,8 +26,10 @@ import { Assistant } from "../lib/assistant.js";
 import {
   addTask,
   adoptTask,
+  currentThread,
   deleteTask,
   decorateTasks,
+  editTask,
   intersectingFiles,
   pickTask,
   queueCounts,
@@ -441,4 +443,89 @@ test("a queue file is seeded for Assistant #1 at boot and for a new assistant at
   assert.equal(view.found, true);
   assert.equal(view.assistantId, second.id);
   assert.equal(view.counts.total, 0);
+});
+
+// ---- threads[]: one record, one agent per thread, `thread` still the legacy first field -------------------
+// The queue row draws one sub-row per agent, so a task that has been carried twice has to REMEMBER both runs. The
+// compatibility rule is the other half: `thread` stays the first entry and the first field written, so a queue file
+// from before this change (and any reader that only knows that field) keeps reading the same thread it always did.
+
+test("a task records its first agent in both `thread` and `threads`, with `thread` written first", () => {
+  const { task } = addTask([], { title: "one run", thread: "T1" });
+  assert.equal(task.thread, "T1", "the legacy field still names the thread");
+  assert.deepEqual(task.threads, ["T1"], "and the list says the same thing");
+  const keys = Object.keys(task);
+  assert.ok(keys.indexOf("thread") < keys.indexOf("threads"), "`thread` is serialised before `threads`");
+  assert.equal(currentThread(task), "T1", "the current agent is the last one");
+});
+
+test("an old queue file that knows only `thread` reads as a one-agent record", () => {
+  const old = pickTask({ id: 1, title: "from before threads[]", state: "running", thread: "T-old" });
+  assert.deepEqual(old.threads, ["T-old"]);
+  assert.equal(old.thread, "T-old");
+  // …and the other direction: a hand-edited file with a list and no legacy field still yields both.
+  const hand = pickTask({ id: 2, title: "list only", threads: ["T-a", "T-b"] });
+  assert.equal(hand.thread, "T-a");
+  assert.deepEqual(hand.threads, ["T-a", "T-b"]);
+});
+
+test("a second run APPENDS its thread: the first agent stays on the record, and duplicates never stack", () => {
+  const { tasks } = addTask([], { title: "carried twice", thread: "T1" });
+  const second = editTask(tasks, 1, { thread: "T2" });
+  assert.deepEqual(second.task.threads, ["T1", "T2"], "both agents are on the record");
+  assert.equal(second.task.thread, "T1", "the legacy field keeps the FIRST agent");
+  assert.equal(currentThread(second.task), "T2", "the current run is the newest agent");
+  const again = editTask(second.tasks, 1, { thread: "T2" });
+  assert.deepEqual(again.task.threads, ["T1", "T2"], "re-setting the same thread does not grow the list");
+  const blank = editTask(again.tasks, 1, { thread: "  " });
+  assert.deepEqual(blank.task.threads, ["T1", "T2"], "an empty edit cannot un-happen a run");
+});
+
+test("a task with two agents is live while its CURRENT run is, even with the first one long gone", () => {
+  const { tasks } = addTask([], { title: "second try", thread: "T-old" });
+  const { tasks: two } = editTask(tasks, 1, { thread: "T-new" });
+  const { tasks: running } = setTaskState(two, 1, "running");
+  const isLive = (th) => th === "T-new";
+  const [task] = decorateTasks(running, { isLive });
+  assert.equal(task.stale, undefined, "the live SECOND run is what decides staleness");
+  // The same task with only the dead first run recorded IS stale — the rule still bites.
+  const [onlyOld] = decorateTasks(setTaskState(tasks, 1, "running").tasks, { isLive });
+  assert.equal(onlyOld.stale, true);
+  assert.match(onlyOld.staleWhy, /that thread has no live run/);
+});
+
+test("the settle follows the current agent, not the first one", () => {
+  const { tasks } = addTask([], { title: "settle me", thread: "T-old" });
+  const { tasks: two } = editTask(tasks, 1, { thread: "T-new" });
+  const { tasks: running } = setTaskState(two, 1, "running");
+  const jobs = [
+    { thread: "T-old", status: "done", startedAt: "2024-05-01T09:00:00.000Z" },
+    { thread: "T-new", status: "failed", startedAt: "2024-05-01T10:00:00.000Z", finalMessage: "tests red" },
+  ];
+  const settled = settleTasks(running, { jobs, isLive: () => false });
+  assert.equal(settled.tasks[0].state, "queued", "the SECOND run's failure is the one that settles the task");
+  assert.equal(settled.tasks[0].attempts, 1);
+  assert.match(settled.tasks[0].reason, /ended failed/);
+  assert.deepEqual(settled.tasks[0].threads, ["T-old", "T-new"], "the history survives the settle");
+  // A live current run is left alone whatever the earlier one ended as.
+  const kept = settleTasks(running, { jobs, isLive: (th) => th === "T-new" });
+  assert.equal(kept.changed.length, 0);
+});
+
+test("the digest names the current agent and counts the ones before it", () => {
+  const { tasks } = addTask([], { title: "digest me", thread: "T1", worktree: "C:/wt" });
+  const { tasks: two } = editTask(tasks, 1, { thread: "T2" });
+  const lines = queueDigest(two, { isLive: () => false });
+  const line = lines.find((l) => l.includes("digest me"));
+  assert.match(line, /thread T2 \(\+1 earlier\)/, line);
+  const single = queueDigest(tasks, { isLive: () => false }).find((l) => l.includes("digest me"));
+  assert.match(single, /thread T1 ·/, "one agent reads as it always did");
+});
+
+test("a Move carries every agent across to the target queue", () => {
+  const { tasks } = addTask([], { title: "moved twice", thread: "T1", owner: "assistant-1" });
+  const { tasks: two } = editTask(tasks, 1, { thread: "T2" });
+  const adopted = adoptTask([], two[0]);
+  assert.deepEqual(adopted.task.threads, ["T1", "T2"], "the whole run history travels with the record");
+  assert.equal(adopted.task.thread, "T1");
 });

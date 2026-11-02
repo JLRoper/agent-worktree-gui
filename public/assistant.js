@@ -859,6 +859,44 @@
     jumpToAgent(thread);
   }
 
+  // A queue row is a CONSOLE row. `openAgentThread` opens the project, the row and the card; the reader asked for the
+  // TURN too, because the worst landing is a card header in view with the console it is about somewhere below it. So
+  // this unfolds the newest turn (a live one is open by default, but the reader may have folded it), scrolls that
+  // console into the middle of the screen and puts the caret on it. It re-asserts for a moment: a live card is rebuilt
+  // on every job frame, so the node the first pass found is gone by the second.
+  function openAgentTurn(thread) {
+    if (!thread) return;
+    openAgentThread(thread);
+    const land = () => {
+      let card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+      if (!card) return; // not painted yet — the next pass looks again
+      const turns = [...state.jobs.values()]
+        .filter((j) => (j.thread || j.id) === thread)
+        .sort((a, b) => String(a.startedAt || "").localeCompare(String(b.startedAt || "")));
+      const latest = turns[turns.length - 1] || null;
+      if (latest && state.turnOpen.get(turnKey(latest)) === false) {
+        state.turnOpen.set(turnKey(latest), true);
+        renderConversation(thread);
+        // That render replaced the card, so the console below has to be looked up on the new node, not this one.
+        card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+        if (!card) return;
+      }
+      // The newest `pre.job-out` in the card is the turn the agent is on; the ring says which console the click opened.
+      const outs = [...card.querySelectorAll("pre.job-out")];
+      const out = outs[outs.length - 1];
+      if (!out) return;
+      programmaticScroll();
+      out.scrollIntoView({ block: "center", behavior: "auto" });
+      out.setAttribute("tabindex", "-1");
+      out.focus({ preventScroll: true });
+      out.classList.add("jump");
+      setTimeout(() => document.querySelector(`.job[data-thread="${CSS.escape(thread)}"] pre.job-out.jump`)?.classList.remove("jump"), 1600);
+    };
+    requestAnimationFrame(land);
+    setTimeout(land, 120);
+    setTimeout(land, 400);
+  }
+
   function alertHtml(a) {
     const draft = a.draft && a.draft.thread ? a.draft : null;
     const conf = draft?.confidence || "";
@@ -1819,18 +1857,78 @@
   // cannot repaint the list the write replaced.
   const queueSeq = new Map(); // assistantId -> number
   const queueInflight = new Map(); // assistantId -> the promise of the read in flight
+  // Which row's ➡️ picker is open, keyed `<assistant>:<task>`. One record for the whole float rather than a DOM flag,
+  // so the pane can be repainted (the board polls it) without shutting a picker the reader is looking at, and two
+  // assistants' task #3 cannot toggle each other's list.
+  const qmoveOpen = new Set();
+  // The agents' own statuses, from GET /api/jobs, newest turn per thread. It is deliberately NOT the page's own job
+  // map: the brief asks the queue to read the run store, so a sub-row cannot inherit a stale status from a card that
+  // has not been repainted yet. `at` is the read's clock — a paint re-asks only when the answer is older than a few
+  // seconds, which is what keeps the pane's own repaint from becoming a request loop.
+  const queueJobs = { at: 0, byThread: new Map(), inflight: null };
 
   const queueMark = (state) => (state === "done" ? "✓" : state === "parked" ? "⏸" : state === "running" ? "●" : "○");
   const queueStateName = (state) => (state === "running" ? "running" : state === "parked" ? "parked" : state === "done" ? "done" : "queued");
 
-  // One row. The marker, the id and the title are the head; owner, thread/PR, tree and files are the meta line; a
-  // stale or conflicted task carries its reason under them, because "why is this not moving" is the question a queue
-  // exists to answer. A done row stays in place greyed: "it finished" is a record, not a task that vanished.
-  function queueTaskHtml(id, t) {
+  // ---- one agent per task: the threads that carried it, and the status of the RUN each one is on ------------------
+  //
+  // The status of an agent is read from GET /api/jobs, by thread — never from the task record. The task's `state` is
+  // what the READER decided about the work (queued, running, parked, done); an agent's line is what its RUN is doing,
+  // and the two disagree on purpose: a task still marked running whose run went away must read EXITED, and a task the
+  // reader parked while its agent keeps working must still read RUNNING. Two sources, two questions, one row.
+  //
+  // The classes and the words are the card's own (public/app.js's job head, `:4260-4300`), so a queue row and a card
+  // cannot describe one run two ways: `.pill.pill-running`, `.pill.pill-notrunning` (+ `.is-failed`), `button.pill-complete`,
+  // and the words running / complete / exited / not-running — which `.pill`'s own text-transform paints uppercase.
+  const QUEUE_LIVE = new Set(["running", "starting", "waiting", "waiting_for_approval", "queued"]);
+  function queueAgentChip(job) {
+    const status = String(job?.status || "").toLowerCase();
+    if (QUEUE_LIVE.has(status)) {
+      // ⏸ is the one live state that is not progress: the run is waiting on the reader (an approval, or an answer).
+      const waiting = status === "waiting" || status === "waiting_for_approval";
+      return { mark: waiting ? "⏸" : "●", markState: waiting ? "parked" : "running", word: "running", cls: "pill pill-running" };
+    }
+    if (status === "done") return { mark: "✓", markState: "done", word: "complete", cls: "pill pill-complete", button: true };
+    if (status === "failed") return { mark: "○", markState: "queued", word: "exited", cls: "pill pill-notrunning is-failed" };
+    // A cancelled/interrupted/stopped run, and a thread the job store has never heard of, say the same thing to a
+    // reader — nothing is running it now — and the card says the same word for both of them.
+    return { mark: "○", markState: "queued", word: "not-running", cls: "pill pill-notrunning" };
+  }
+
+  // One sub-row per agent. The whole line is the opener — it carries the mark this RUN owns (not the task's) and the
+  // card's own chip — and pressing it opens that agent's card AND the console of the turn it is on (openAgentTurn),
+  // not just the card header.
+  function queueAgentHtml(id, t, thread, jobs) {
+    const job = jobs && typeof jobs.get === "function" ? jobs.get(thread) : null;
+    const chip = queueAgentChip(job);
+    const label = String(assistantThreadName(thread) || "").trim();
+    const named = label && label !== thread;
+    const open = `data-as-qopen="${esc(thread)}" data-as-qid="${esc(String(t.id))}"`;
+    const title = `open ${named ? `“${label}” ` : ""}(${thread})'s card and its current console turn — this agent's run is ${chip.word}, read from /api/jobs`;
+    const pill = chip.button
+      ? `<button type="button" class="pill pill-complete" ${open} title="${esc(`${title} — the run finished, so nothing here is being resumed`)}" aria-label="${esc(`${chip.word} — ${title}`)}">${chip.word}</button>`
+      : `<span class="${chip.cls}" title="${esc(`this agent's run is ${chip.word} — read from /api/jobs, not from the task record`)}">${chip.word}</span>`;
+    return `<div class="as-task-agent" role="button" tabindex="0" ${open} title="${esc(title)}" aria-label="${esc(title)}">
+            <span class="as-agent-mark is-${esc(chip.markState)}" aria-hidden="true">${chip.mark}</span>
+            <code class="as-task-agent-thread">${esc(thread)}</code>
+            ${named ? `<span class="as-task-agent-label">${esc(label)}</span>` : ""}
+            ${pill}
+          </div>`;
+  }
+
+  // One row. The marker, the id and the title are the head; one sub-row per agent under it; owner, PR, tree and files
+  // are the meta line; a stale or conflicted task carries its reason under them, because "why is this not moving" is
+  // the question a queue exists to answer. A done row stays in place greyed: "it finished" is a record, not a task
+  // that vanished.
+  function queueTaskHtml(id, t, jobs) {
     const mark = queueMark(t.state);
     const owner = t.owner ? esc(t.owner) : "unowned";
+    // `threads` is the record's whole history and `thread` its legacy first entry, so a queue file written before the
+    // list existed still draws one agent row. The CURRENT run is the last one, and that is what a click on the body
+    // (rather than on a sub-row) opens.
+    const list = Array.isArray(t.threads) && t.threads.length ? t.threads.filter(Boolean) : t.thread ? [t.thread] : [];
+    const current = list.length ? list[list.length - 1] : "";
     const meta = [];
-    if (t.thread) meta.push(`thread <code>${esc(t.thread)}</code>`);
     if (t.row?.pr?.number) meta.push(`PR #${esc(String(t.row.pr.number))} ${esc(t.row.pr.state || "")}`.trim());
     else if (t.row?.verdict) meta.push(`PR ${esc(t.row.verdict)}`);
     if (t.worktree) meta.push(`tree ${esc(t.worktree)}`);
@@ -1845,29 +1943,50 @@
           : t.state === "queued" && t.reason
             ? `<div class="as-task-note">${esc(t.reason)}</div>`
             : "";
+    const agents = list.length
+      ? list.map((th) => queueAgentHtml(id, t, th, jobs)).join("")
+      : `<div class="as-task-agent is-none" title="nothing has run this task yet — Start marks it running, and the thread it is handed becomes its first agent row">
+            <span class="as-agent-mark is-queued" aria-hidden="true">○</span>
+            <span class="as-task-agent-label">no agent yet</span>
+          </div>`;
     // What can be pressed depends on where the task is. A transition to the state it is already in is not offered:
-    // a button that reports "already queued" is a button that wasted a click.
+    // a button that reports "already queued" is a button that wasted a click. Each press is a GLYPH on the row and the
+    // real word lives in title= and aria-label=, so the row stays narrow without becoming a row of unlabelled squares.
+    const btn = (act, glyph, word, why) =>
+      `<button type="button" class="as-qglyph" data-as-qact="${act}" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="${esc(`${word} — ${why}`)}" aria-label="${esc(word)}">${glyph}</button>`;
     const acts = [];
-    if (t.state !== "running") acts.push(`<button type="button" data-as-qact="running" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="mark this task running — the thread it names is what carries it">Start</button>`);
-    if (t.state !== "queued") acts.push(`<button type="button" data-as-qact="queued" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="put it back in the queue${t.state === "done" ? " — a finished task can be re-queued" : ""}">${t.state === "done" ? "Requeue" : "Queue"}</button>`);
-    if (t.state !== "parked") acts.push(`<button type="button" data-as-qact="parked" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="park it — blocked, waiting on something outside this assistant">Park</button>`);
-    if (t.state !== "done") acts.push(`<button type="button" data-as-qact="done" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="mark it finished — this is the reader's judgement, not the panel's">Done</button>`);
+    if (t.state !== "running") acts.push(btn("running", "▶", "Start", "mark this task running — the thread it names is what carries it"));
+    if (t.state !== "queued") acts.push(btn("queued", t.state === "done" ? "↺" : "⤵", t.state === "done" ? "Requeue" : "Queue", t.state === "done" ? "put it back in the queue — a finished task can be re-queued" : "put it back in the queue"));
+    if (t.state !== "parked") acts.push(btn("parked", "⏸", "Park", "park it — blocked, waiting on something outside this assistant"));
+    if (t.state !== "done") acts.push(btn("done", "✓", "Done", "mark it finished — this is the reader's judgement, not the panel's"));
+    // Move is a POPOVER, not a select that is always on the row: the picker is as wide as the assistant names, and it
+    // was the one control on the row that could not be a glyph. ➡️ opens the list; a name in it IS the choice (the
+    // press carries data-as-qmove-to), Esc or a press outside closes it, and the one open picker is remembered by key
+    // so a repaint of the pane does not shut a picker the reader is looking at.
     const others = assistantIds().filter((x) => x !== id);
+    const mkey = `${id}:${t.id}`;
+    const open = qmoveOpen.has(mkey);
     const move = others.length
-      ? `<select data-as-qmove="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="hand this task to another assistant — the move is recorded on the task">${others
-          .map((x) => `<option value="${esc(x)}">→ ${esc(sessionById(x)?.name || x)}</option>`)
-          .join("")}</select><button type="button" data-as-qact="reassign" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="move the task to the assistant chosen beside this button — it leaves this queue, arrives in that one's with an id of its own, and the move is recorded on the task">Move</button>`
+      ? `<span class="as-qmove-wrap">
+          <button type="button" class="as-qglyph" data-as-qmove-open="${esc(mkey)}" data-as-qown="${esc(id)}" data-as-qid="${esc(String(t.id))}" title="Move — hand this task to another assistant; it leaves this queue, arrives in that one's with an id of its own, and the move is recorded on the task (movedFrom)" aria-label="Move" aria-haspopup="menu" aria-expanded="${open ? "true" : "false"}">➡️</button>
+          <span class="as-qmove-pop" data-as-qmove-pop="${esc(mkey)}" role="menu" aria-label="Move #${esc(String(t.id))} to another assistant"${open ? "" : " hidden"}>${others
+            .map((x) =>
+              `<button type="button" role="menuitem" class="as-qmove-pick" data-as-qact="reassign" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" data-as-qmove-to="${esc(x)}" title="${esc(`Move to ${sessionById(x)?.name || x} — it leaves this queue, arrives in that one's with an id of its own, and the move is recorded on the task (movedFrom)`)}" aria-label="${esc(`Move to ${sessionById(x)?.name || x}`)}">↳ ${esc(sessionById(x)?.name || x)}</button>`,
+            )
+            .join("")}</span>
+        </span>`
       : `<span class="as-hint">no other assistant to move it to</span>`;
-    return `<div class="as-task${t.state === "done" ? " is-done" : ""}" data-as-qrow="${esc(String(t.id))}">
+    return `<div class="as-task${t.state === "done" ? " is-done" : ""}" data-as-qrow="${esc(String(t.id))}" data-as-qthread="${esc(current)}">
         <div class="as-task-head">
           <span class="as-task-mark is-${esc(queueStateName(t.state))}" aria-hidden="true">${mark}</span>
           <b class="mono">#${esc(String(t.id))}</b>
           <span class="as-task-title">${esc(t.title)}</span>
           <span class="as-task-owner">${owner}</span>
         </div>
+        <div class="as-task-agents">${agents}</div>
         ${meta.length ? `<div class="as-task-meta">${meta.join(" · ")}</div>` : ""}
         ${note}
-        <div class="as-task-actions">${acts.join("")}${move}<button type="button" data-as-qact="delete" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="delete this task — a removed task leaves no ghost in the digest">✕</button></div>
+        <div class="as-task-actions">${acts.join("")}${move}${btn("delete", "✕", "Delete", "delete this task — a removed task leaves no ghost in the digest")}</div>
       </div>`;
   }
 
@@ -1932,6 +2051,9 @@
     // "not read yet" for a frame, and the answer repaints it WITHOUT forcing another read (see loadQueue's .finally).
     const before = queueCache.get(id);
     if (force || !before || Date.now() - Number(before.at || 0) > 20_000) void loadQueue(id);
+    // The agents' statuses come from their own route, and a paint asks for it at most every few seconds: the pane is
+    // repainted by the board poll, so a read per paint would be the request loop the queue pane was fixed for once.
+    if (!queueJobs.at || Date.now() - queueJobs.at > 5_000) void loadQueueJobs();
     const cached = queueCache.get(id);
     const view = cached?.view;
     const pane = queuePaneState(cached);
@@ -1963,7 +2085,7 @@
           <span class="as-err" id="as-qerr-${esc(n)}">${cached?.error ? esc(cached.error) : ""}</span>
         </div>
         ${queueStateHtml(pane, { id, n, view, rows: sorted })}
-        ${sorted.map((t) => queueTaskHtml(id, t)).join("")}
+        ${sorted.map((t) => queueTaskHtml(id, t, queueJobs.byThread)).join("")}
         <div class="as-help">The queue lives in <code>state/assistants/${esc(id)}/queue.json</code> beside this assistant's charter.
         It is read on every wake, before the board: the digest names every task's state, thread, worktree and PR, and why
         it is not going (LIVE, STALE or PARKED), so a turn can start whatever can be parallelised. A finished task stays
@@ -2008,6 +2130,69 @@
       });
     queueInflight.set(id, read);
     return read;
+  }
+
+  // GET /api/jobs, indexed by thread and keeping that thread's NEWEST turn — the same "latest" the card's head reads,
+  // and the reason the queue does not ask the task record what its agents are doing. The answer cannot fail a paint:
+  // a refused read leaves the last map in place, so the pane keeps the words it had rather than claiming everything
+  // stopped. The clock is stamped on the way out either way, which is what stops a failing route from being retried on
+  // every repaint.
+  function loadQueueJobs() {
+    if (queueJobs.inflight) return queueJobs.inflight;
+    const read = apiFetch("/api/jobs")
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+        const byThread = new Map();
+        for (const j of Array.isArray(d.jobs) ? d.jobs : []) {
+          const thread = String(j.thread || "");
+          if (!thread) continue;
+          const prev = byThread.get(thread);
+          if (!prev || String(j.startedAt || "").localeCompare(String(prev.startedAt || "")) >= 0) byThread.set(thread, j);
+        }
+        queueJobs.byThread = byThread;
+      })
+      .catch(() => {
+        /* keep the last answer: an unreadable route is not every run having stopped */
+      })
+      .finally(() => {
+        queueJobs.at = Date.now();
+        queueJobs.inflight = null;
+        // One repaint of the pane on screen, WITHOUT force: a forced paint asks for a read, and a read that repaints
+        // itself by force is the spinner the queue pane was fixed for once already.
+        const view = state.assistantView;
+        if (view && view.subTab === "queue" && isAssistant(view.assistant)) renderAssistantQueue(view.assistant);
+      });
+    queueJobs.inflight = read;
+    return read;
+  }
+
+  // Which row's picker is open is the record above; this paints the DOM from it, so opening one closes the other and a
+  // repaint (which rebuilds the markup with `hidden` already right) needs no special case.
+  function paintQueueMove() {
+    for (const pop of document.querySelectorAll("[data-as-qmove-pop]")) {
+      const on = qmoveOpen.has(String(pop.dataset.asQmovePop || ""));
+      pop.hidden = !on;
+      const btn = pop.parentElement ? pop.parentElement.querySelector("[data-as-qmove-open]") : null;
+      if (btn) btn.setAttribute("aria-expanded", on ? "true" : "false");
+    }
+  }
+  function closeQueueMove() {
+    if (!qmoveOpen.size) return;
+    qmoveOpen.clear();
+    paintQueueMove();
+  }
+  // One picker at a time: opening a second one closes the first, and pressing the open one's ➡️ closes it. A pick is a
+  // plain data-as-qact="reassign" press with data-as-qmove-to, so the write path below is the same route it always was.
+  function toggleQueueMove(key) {
+    const k = String(key || "");
+    if (!k) return;
+    if (qmoveOpen.has(k)) qmoveOpen.delete(k);
+    else {
+      qmoveOpen.clear();
+      qmoveOpen.add(k);
+    }
+    paintQueueMove();
   }
 
   async function queueAct(id, action, body = {}) {
@@ -2136,7 +2321,59 @@
     setView({ subTab: b.dataset.asSubtab });
   });
 
+  // A ➡️ picker closes on the reader's own gestures: Esc, or a press anywhere outside it. Both are capture-phase and
+  // registered before the press that opens one, so a press on another row's ➡️ shuts this list first and the button's
+  // own handler then opens that one. Esc stops here while a picker is up: dismissing a list must not also close the rail
+  // it lives in, which the keys handler below would do because a picker press leaves the caret inside the rail.
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (!qmoveOpen.size) return;
+      if (e.target && e.target.closest && e.target.closest(".as-qmove-wrap")) return;
+      closeQueueMove();
+    },
+    true,
+  );
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key !== "Escape" || !qmoveOpen.size) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      closeQueueMove();
+    },
+    true,
+  );
+  // A sub-row is a div with role=button, because a <button> may not hold the COMPLETE pill (that one is a button too).
+  // Enter and Space are what the role promises, so they are honoured here or the role is a lie.
+  as$("assistant")?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
+    const target = e.target && e.target.closest ? e.target.closest('.as-task-agent[role="button"]') : null;
+    if (!target || (e.target.closest && e.target.closest("button"))) return;
+    e.preventDefault();
+    openAgentTurn(target.dataset.asQopen);
+  });
+
   as$("assistant")?.addEventListener("click", async (e) => {
+    // A queue row is a console row, so its whole body opens something — and the sub-rows are divs, not buttons, which
+    // is why this is asked BEFORE the button lookup below. A sub-row opens THAT agent (its own thread); anywhere else
+    // on the task's body opens the agent carrying it now. Controls keep their own presses: the check excludes every
+    // button, the picker's own menu, the add form's fields and the labels around them.
+    const opener = e.target.closest("[data-as-qopen]");
+    if (opener) {
+      e.preventDefault();
+      openAgentTurn(opener.dataset.asQopen);
+      return;
+    }
+    const taskRow = e.target.closest(".as-task");
+    if (taskRow && !e.target.closest("button, a, input, select, textarea, label, .as-qmove-pop")) {
+      const thread = String(taskRow.dataset.asQthread || "");
+      if (thread) {
+        e.preventDefault();
+        openAgentTurn(thread);
+      }
+      return;
+    }
     const t = e.target.closest("button");
     if (!t) return;
     // Tabs are buttons too and are handled above, in their own rows; ignore a second pass here.
@@ -2159,6 +2396,13 @@
 
     if (t.dataset.asOpen) {
       openAgentThread(t.dataset.asOpen);
+      return;
+    }
+
+    // The queue row's ➡️: one picker at a time, remembered in `qmoveOpen` so the next repaint of the pane keeps it open
+    // and pressing it again closes it.
+    if (t.dataset.asQmoveOpen) {
+      toggleQueueMove(t.dataset.asQmoveOpen);
       return;
     }
 
@@ -2674,12 +2918,12 @@
       return;
     }
     if (action === "reassign") {
-      // The chosen owner is the select beside the button, not the row's own owner: the row's owner is what the task
-      // is, the select is where it is going.
-      const row = t.closest(".as-task");
-      const sel = row?.querySelector("select[data-as-qmove]");
-      const owner = String(sel?.value || "").trim();
+      // The assistant is ON the pressed item (`data-as-qmove-to`) — the always-visible <select> that used to sit beside a
+      // Move button is gone, and a name in the ➡️ popover IS the choice. The row's own owner is what the task IS; this
+      // is where it is going, and the route records the hand-over on the task as movedFrom.
+      const owner = String(t.dataset.asQmoveTo || "").trim();
       if (!owner) return setErr(`as-qerr-${n}`, "pick the assistant to move it to");
+      closeQueueMove();
       t.disabled = true;
       try {
         await queueAct(own, "reassign", { id: Number(t.dataset.asQid), owner });
