@@ -4,7 +4,7 @@
 //
 // The float used to be one strip of tabs with "Chat" first and "Settings" last. It is now two rows: the float's own
 // row (the assistant sessions, then the lists that are the assistant's) and, under it, the session's own row holding
-// Chat and Settings. `public/index.html` carries both rows and the pane nesting, `public/assistant.js` the one
+// Chat, Settings and Queue. `public/index.html` carries both rows and the pane nesting, `public/assistant.js` the one
 // {assistant, subTab} record behind them, `public/style.css` the row and the pass-through panes. What is driven:
 //
 //   1. the top row is six buttons — "Assistant #1" first, no Settings among them — and the second row is a separate
@@ -237,8 +237,10 @@ async function browserPhase(pw) {
   ok("and it is the tab on screen", top.filter((t) => t.on).map((t) => t.tab).join() === "assistant-1", JSON.stringify(top.filter((t) => t.on)));
 
   const sub = await subRows();
-  check("the session's own row", sub.map((s) => s.sub), ["chat", "settings"]);
-  check("…labelled", sub.map((s) => s.label), ["Chat", "Settings"]);
+  // Three sub-tabs since every assistant got its own task queue: the queue landing updated the page and
+  // test/assistant-subtabs.test.js and left this gate asserting two, so it was red on main before this branch.
+  check("the session's own row", sub.map((s) => s.sub), ["chat", "settings", "queue"]);
+  check("…labelled", sub.map((s) => s.label), ["Chat", "Settings", "Queue"]);
   ok("Chat is the sub-tab on screen", sub.filter((s) => s.on).map((s) => s.sub).join() === "chat", JSON.stringify(sub.filter((s) => s.on)));
   ok("the second row is up with the session", await visible("#as-subtabs"));
 
