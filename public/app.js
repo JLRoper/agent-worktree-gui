@@ -17097,6 +17097,182 @@ function initSettingsSearch() {
 
 // ---- end settings search
 
+// ---- settings window: move it, size it ------------------------------------------------------------
+// The panel used to be a popover pinned under the top bar: `position: fixed; right: 16px; top: 74px` and no way to
+// move it off what it was covering, nor to see more of a long group than the height it opened at. It is a window
+// now — a press on its head drags it, its corner grip sizes it — and the rect the reader leaves it at is remembered
+// in this browser. The gestures follow the assistant's floating pane (`public/assistant.js`: `placeFloat` and the
+// `float-move` / `float-size` cases of `onDown`), because the two are the same problem: a fixed node measured in
+// CLIENT px and written back in LAYOUT px.
+const SETTINGS_RECT_KEY = "wtgui.settingsRect";
+const SETTINGS_MIN_W = 320;
+const SETTINGS_MIN_H = 240;
+const SETTINGS_EDGE = 8;
+const SETTINGS_SLOP = 3;
+
+// A client length as a layout one: `getBoundingClientRect` and `clientX` are VISUAL px while a length written to
+// `style.left`/`style.width` is LAYOUT px, and Settings > Display's zoom scales the page (`applyZoom`).
+function settingsZoom() {
+  const z = parseFloat(getComputedStyle(document.documentElement).zoom);
+  return Number.isFinite(z) && z > 0 ? z : 1;
+}
+
+// The box a clamp is measured against: the LAYOUT viewport (`documentElement.clientWidth` is layout px while the
+// page is zoomed), the same box the assistant's float places itself in.
+function settingsViewport() {
+  const doc = document.documentElement;
+  return { vw: doc.clientWidth || window.innerWidth, vh: doc.clientHeight || window.innerHeight };
+}
+
+// A stored rect, or nothing: a value that is not four finite numbers is no record at all, so a half-written store
+// opens the panel where the stylesheet puts it rather than at `NaNpx`.
+function readSettingsRect() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SETTINGS_RECT_KEY) || "null");
+    if (!raw || typeof raw !== "object") return null;
+    const rect = { x: Number(raw.x), y: Number(raw.y), w: Number(raw.w), h: Number(raw.h) };
+    return [rect.x, rect.y, rect.w, rect.h].every(Number.isFinite) ? rect : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSettingsRect(rect) {
+  try {
+    localStorage.setItem(SETTINGS_RECT_KEY, JSON.stringify(rect));
+  } catch {
+    /* a browser that refuses storage still drags; it just forgets between loads */
+  }
+}
+
+let settingsRect = readSettingsRect();
+
+// The remembered rect inside the window it is being opened on: a rect saved on a bigger screen must not put half the
+// panel outside a smaller one, and neither dimension goes under the panel's floor. Both edges are clamped, so a rect
+// left hanging off one side comes back whole rather than half-visible.
+function clampSettingsRect(r) {
+  const { vw, vh } = settingsViewport();
+  const maxW = Math.max(SETTINGS_MIN_W, vw - 2 * SETTINGS_EDGE);
+  const maxH = Math.max(SETTINGS_MIN_H, vh - 2 * SETTINGS_EDGE);
+  const w = Math.max(SETTINGS_MIN_W, Math.min(Number(r.w) || SETTINGS_MIN_W, maxW));
+  const h = Math.max(SETTINGS_MIN_H, Math.min(Number(r.h) || SETTINGS_MIN_H, maxH));
+  const x = Math.max(SETTINGS_EDGE, Math.min(Number(r.x) || 0, Math.max(SETTINGS_EDGE, vw - w - SETTINGS_EDGE)));
+  const y = Math.max(SETTINGS_EDGE, Math.min(Number(r.y) || 0, Math.max(SETTINGS_EDGE, vh - h - SETTINGS_EDGE)));
+  return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+}
+
+// Put the panel where the reader left it. A panel that was never moved keeps the stylesheet's anchored rule, so
+// there is no rect to place and this does nothing at all.
+function placeSettingsWindow() {
+  const panel = $("settings");
+  if (!panel || !settingsRect) return;
+  const rect = clampSettingsRect(settingsRect);
+  panel.style.left = `${rect.x}px`;
+  panel.style.top = `${rect.y}px`;
+  panel.style.width = `${rect.w}px`;
+  panel.style.height = `${rect.h}px`;
+  panel.style.right = "auto";
+  panel.style.bottom = "auto";
+  // The remembered height IS the window's height: the stylesheet's `max-height: calc(100vh - 90px)` would otherwise
+  // cap it wherever the top edge has been dragged to.
+  panel.style.maxHeight = "none";
+}
+
+function initSettingsWindow() {
+  const panel = $("settings");
+  if (!panel) return;
+  const head = panel.querySelector(":scope > .settings-head");
+  const grip = document.getElementById("settings-grip");
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  let press = null;
+
+  // `kind` is the gesture: the head moves the window, the grip sizes it from its bottom-right corner. Every length
+  // starts as a CLIENT measurement — the unit a pointer arrives in — and is divided by the zoom once, so the rect
+  // that is written and the rect that is remembered are both LAYOUT px.
+  const onDown = (e, kind, captureEl) => {
+    if (e.button !== 0) return;
+    // The head is a row of CONTROLS as well as the window's bar: a press on the search box or a button is that
+    // control's, or the box could never be clicked into and every ✕ press would start a drag first.
+    if (kind === "move" && e.target.closest("button,input,select,textarea,a,label")) return;
+    const z = settingsZoom();
+    const r = panel.getBoundingClientRect();
+    press = { kind, px: e.clientX, py: e.clientY, moved: false, z, box: { x: r.left / z, y: r.top / z, w: r.width / z, h: r.height / z } };
+    // Hold the pointer for the length of the gesture: without capture it leaves the panel (and the window) and the
+    // moves stop arriving, so a release out there never ends the drag started in here.
+    try {
+      captureEl.setPointerCapture(e.pointerId);
+    } catch {
+      /* older pointer stacks: the window listeners below still carry the gesture */
+    }
+    e.preventDefault();
+  };
+
+  // The anchored rule becomes explicit edges on the FIRST real movement, never on the press: a click on the head
+  // must leave the panel exactly as the stylesheet drew it (auto height and all), and only a drag freezes a rect.
+  const pin = (d) => {
+    panel.style.left = `${d.box.x}px`;
+    panel.style.top = `${d.box.y}px`;
+    panel.style.width = `${d.box.w}px`;
+    panel.style.height = `${d.box.h}px`;
+    panel.style.right = "auto";
+    panel.style.bottom = "auto";
+    panel.style.maxHeight = "none";
+  };
+
+  const onMove = (e) => {
+    if (!press) return;
+    const d = press;
+    const rawX = e.clientX - d.px;
+    const rawY = e.clientY - d.py;
+    if (!d.moved) {
+      if (Math.hypot(rawX, rawY) < SETTINGS_SLOP) return;
+      d.moved = true;
+      panel.classList.add(d.kind === "move" ? "is-moving" : "is-sizing");
+      pin(d);
+    }
+    const { vw, vh } = settingsViewport();
+    if (d.kind === "move") {
+      // The whole window stays inside the viewport: no edge of it is ever left off the screen.
+      const x = clamp(d.box.x + rawX / d.z, SETTINGS_EDGE, Math.max(SETTINGS_EDGE, vw - d.box.w - SETTINGS_EDGE));
+      const y = clamp(d.box.y + rawY / d.z, SETTINGS_EDGE, Math.max(SETTINGS_EDGE, vh - d.box.h - SETTINGS_EDGE));
+      panel.style.left = `${x}px`;
+      panel.style.top = `${y}px`;
+      return;
+    }
+    // The corner: the left and top edges stay put, the floor is the panel's own minimum, and neither dimension is
+    // ever asked for LESS than the window already has (a panel taller than the room left would snap on the first
+    // pixel of the drag).
+    const w = clamp(d.box.w + rawX / d.z, SETTINGS_MIN_W, Math.max(d.box.w, vw - SETTINGS_EDGE - d.box.x));
+    const h = clamp(d.box.h + rawY / d.z, SETTINGS_MIN_H, Math.max(d.box.h, vh - SETTINGS_EDGE - d.box.y));
+    panel.style.width = `${w}px`;
+    panel.style.height = `${h}px`;
+  };
+
+  const onUp = () => {
+    if (!press) return;
+    const d = press;
+    press = null;
+    panel.classList.remove("is-moving", "is-sizing");
+    if (!d.moved) return; // a click: nothing was dragged, so nothing is remembered
+    // Store what the clamp actually drew, measured back: a drag past an edge must not remember a rect the window can
+    // never have.
+    const z = settingsZoom();
+    const r = panel.getBoundingClientRect();
+    settingsRect = { x: Math.round(r.left / z), y: Math.round(r.top / z), w: Math.round(r.width / z), h: Math.round(r.height / z) };
+    writeSettingsRect(settingsRect);
+  };
+
+  if (head) head.addEventListener("pointerdown", (e) => onDown(e, "move", head));
+  if (grip) grip.addEventListener("pointerdown", (e) => onDown(e, "size", grip));
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+  // A window that shrinks under a placed panel must not leave it outside: the clamp that opens it re-runs.
+  window.addEventListener("resize", () => placeSettingsWindow());
+}
+
+// ---- end settings window
+
 function toggleSettings(open = null) {
   const panel = $("settings");
   if (!panel) return;
@@ -17107,6 +17283,9 @@ function toggleSettings(open = null) {
     clearSettingsSearch();
     return;
   }
+  // The window goes back where the reader left it — and inside a window that may have shrunk since — before the
+  // focus lands in it, so a restored rect never scrolls the body under the caret.
+  placeSettingsWindow();
   // The groups start folded, so the first control is the search box the fixed head keeps on screen. Focus used to
   // land on the font select — which is now inside a folded (display:none) group, where focus() does nothing at all.
   const searchBox = $("settings-search");
@@ -17655,6 +17834,8 @@ $("btn-settings-close")?.addEventListener("click", () => toggleSettings(false));
 // panel is never filtered by a query left in the DOM.
 initSettingsGroups();
 initSettingsSearch();
+// The window's own gestures: the head drags it, the corner grip sizes it, and the rect is remembered in this browser.
+initSettingsWindow();
 // A second way in that is always on screen at the top left: the title opens Settings.
 $("title-settings")?.addEventListener("click", (e) => {
   e.stopPropagation();

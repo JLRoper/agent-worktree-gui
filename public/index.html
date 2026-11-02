@@ -27,7 +27,7 @@
 
   <div id="settings" class="settings hidden">
     <div class="settings-head">
-      <h2>Settings</h2>
+      <h2 title="drag this bar to move Settings">Settings</h2>
       <input id="settings-search" type="search" autocomplete="off" spellcheck="false" placeholder="search settings — labels and tooltips" aria-label="search settings by label or tooltip" title="Type to filter the rows below by what they say and by their tooltip. A group with a match opens while the search is on; a group with no match folds away. Esc clears the box.">
       <button id="btn-settings-search-clear" type="button" title="clear the search (Esc)" hidden>✕</button>
       <span class="spacer"></span>
@@ -456,6 +456,9 @@
       </div>
 
     </div>
+    <!-- The panel's own corner: the one place a resize starts. The head is the window's bar — a drag anywhere on
+         it that is not a control — so the two gestures are separate elements with their own cursors. -->
+    <div class="settings-grip" id="settings-grip" title="drag to resize Settings (320 x 240 minimum)" aria-hidden="true"></div>
   </div>
 
   <!-- The banner FLOATS under the sticky topbar: a message that appears must not shove the board down under the
