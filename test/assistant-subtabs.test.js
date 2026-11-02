@@ -228,7 +228,7 @@ const page = ({
 test("the top row is the assistant and its lists, and the session's row is the very next row", () => {
   assert.deepEqual(
     topRow.map((t) => t.key),
-    ["assistant-1", "alerts", "watches", "messages", "pad", "role"],
+    ["assistant-1", "alerts", "watches", "messages", "pad", "role", "watchdog"],
     "the float's own row",
   );
   assert.equal(topRow[0].label, "Assistant #1", "the tab that was Chat is titled Assistant #1");
@@ -250,13 +250,17 @@ test("the top row is the assistant and its lists, and the session's row is the v
   );
   // The Settings tab's own tooltip said what it is for; the sub-tab keeps the sentence rather than becoming a label.
   assert.match(subRow[1].label, /^Settings$/);
-  assert.match(float, /data-as-subtab="settings" title="how aggressive it is, per rule"/);
+  // Settings is the SESSION's, and since the split it is that assistant's own knobs: the panel's per-rule table and
+  // the sentry's clock moved to the Watchdog tab, and the tooltip says where they went.
+  assert.match(float, /data-as-subtab="settings" title="this assistant's own settings/);
+  assert.match(float, /The panel's per-rule escalation table and the sentry's clock are in the Watchdog tab/);
+  assert.match(float, /data-as-tab="watchdog"/, "the panel's own tab is in the float's row");
 });
 
 test("both of a session's panes are inside the session's pane, so Settings moved down a level", () => {
   assert.deepEqual(
     panes.map((p) => p.key),
-    ["assistant-1", "alerts", "watches", "messages", "pad", "role"],
+    ["assistant-1", "alerts", "watches", "messages", "pad", "role", "watchdog"],
     "the float's top-level panes",
   );
   assert.ok(!panes.some((p) => p.key === "chat" || p.key === "settings"), "neither sub-tab is a top-level pane");

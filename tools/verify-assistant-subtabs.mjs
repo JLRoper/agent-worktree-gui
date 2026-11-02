@@ -226,8 +226,10 @@ async function browserPhase(pw) {
   check("nothing has been recorded about the view yet", await view(), null);
 
   const top = await rows();
-  check("the float's own row", top.map((t) => t.tab), ["assistant-1", "alerts", "watches", "messages", "pad", "role"]);
-  check("…labelled", top.map((t) => t.label), ["Assistant #1", "Alerts 0", "Watches 0", "Messages", "Scratchpad", "Role"]);
+  // The row carries the panel's own tab as well: Watchdog is where the sentry's switches, its pass clock and the
+  // per-rule escalation table live, and it is a LIST tab (it belongs to the panel, not to one assistant).
+  check("the float's own row", top.map((t) => t.tab), ["assistant-1", "alerts", "watches", "messages", "pad", "role", "watchdog"]);
+  check("…labelled", top.map((t) => t.label), ["Assistant #1", "Alerts 0", "Watches 0", "Messages", "Scratchpad", "Role", "Watchdog"]);
   ok("the Charter tab is the Role tab now", !top.some((t) => t.tab === "charter") && top.some((t) => t.tab === "role" && /role this assistant runs/i.test(t.title)));
   ok("the first tab is the assistant session, named Assistant #1", top[0].tab === "assistant-1" && top[0].label === "Assistant #1");
   ok("its tooltip says what it is and where the sub-tabs are", /normal agent card/i.test(top[0].title) && /row under this one/i.test(top[0].title), top[0].title);

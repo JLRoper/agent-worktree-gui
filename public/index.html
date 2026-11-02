@@ -51,13 +51,14 @@
       <button type="button" data-as-tab="messages" title="the message board between it and the agents — what it sent them and what they sent back, thread by thread, over the last 7 days">Messages</button>
       <button type="button" data-as-tab="pad" title="the server-side scratchpad: notes, standing rules and the journal">Scratchpad</button>
       <button type="button" data-as-tab="role" title="the role this assistant runs — the job title, the charter it carries (its own copy, injected in full on every turn), and a new assistant made from the same role">Role</button>
+      <button type="button" data-as-tab="watchdog" title="the panel's watchdog — the sentry's own switches (watching, the command audit's journal), the pass clock, every rule's escalation level and the bar it fires on. ONE value for the whole panel: an assistant's own settings are in that assistant's Settings tab">Watchdog</button>
     </div>
     <!-- The session's own row, under the assistant's tabs: what the assistant is showing (Chat) and how it behaves
          (Settings). It belongs to a session, so it is hidden while one of the lists is on, and it holds the
          reader's place — Chat comes back to the foot of the thread, Settings to the rules they were reading. -->
     <div class="as-subtabs" id="as-subtabs">
       <button type="button" data-as-subtab="chat" class="is-on" title="the assistant's own thread — the card, its console and the box you type in">Chat</button>
-      <button type="button" data-as-subtab="settings" title="how aggressive it is, per rule">Settings</button>
+      <button type="button" data-as-subtab="settings" title="this assistant's own settings — what its turns run on, its wake budget and quiet windows, and the assistants it would escalate to. The panel's per-rule escalation table and the sentry's clock are in the Watchdog tab">Settings</button>
     </div>
     <div class="as-body">
       <section class="as-pane" data-pane="assistant-1" id="as-assistant-1">
@@ -69,6 +70,7 @@
       <section class="as-pane hidden" data-pane="messages" id="as-messages"></section>
       <section class="as-pane hidden" data-pane="pad" id="as-pad"></section>
       <section class="as-pane hidden" data-pane="role" id="as-role"></section>
+      <section class="as-pane hidden" data-pane="watchdog" id="as-watchdog"></section>
     </div>
     <!-- Eight grabs, one per edge and corner. The single bottom-right grip could only grow the float toward that
          corner, and it walked away from the pointer once the frame hit the viewport: a band is where a reader
