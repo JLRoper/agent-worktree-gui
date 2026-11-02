@@ -48,7 +48,7 @@ write is a decision that has to be made somewhere visible).
 |---|---|
 | Runtime | Node ≥ 22.5, ESM, **no dependencies** (`"dependencies": {}`), no bundler, no transpiler |
 | Server | `server.js` — 4,304 lines, one composition root, 104 `if (route === …)` branches |
-| Domain | `lib/` — 68 modules, 23,975 lines, each with a header saying what it owns |
+| Domain | `lib/` — 76 modules, 28,212 lines, each with a header saying what it owns |
 | Client | `public/` — 23,295 lines of JS in 14 classic scripts, plus `style.css` (3,122) |
 | Verification | `test/` — 70 files, 524 test declarations; `tools/` — 78 `.mjs` scripts, 64 of them `verify-*.mjs` |
 | State | `dataDir` (`~/.wag` by default) — plain JSON files, versioned, written atomically |
@@ -294,6 +294,7 @@ agree about which tree a TODO, a lock, a name or a release refers to.
 | **Host** | link + API templates for one code host | `lib/hosts.js` | `hosts.json` over `hosts.seed.json` |
 | **Name** | which tree was named, by whom, when | `lib/tree-names.js` | `tree-names.json` |
 | **Description** | what a branch was started to do, in the words of its run | `lib/features/descriptions.js` | `descriptions.json` |
+| **Skill** | one `SKILL.md` under a root Hermes reads (`name`, `description`, `category`, `path`, `isLink`), or one name the gateway serves that no root carries | `lib/skills.js` | the disk + `GET /v1/skills` — nothing is written |
 
 ### The row is the centre of gravity
 

@@ -10,7 +10,7 @@
 // two groups could never be compared without scrolling.
 //
 // WHAT IS DRIVEN, on a sandbox panel of this checkout in a real Chromium:
-//   * seven tabs, one per `data-settings-group` key, in the markup's own order, with role=tablist/tab/tabpanel,
+//   * eight tabs, one per `data-settings-group` key, in the markup's own order, with role=tablist/tab/tabpanel,
 //     aria-controls/aria-labelledby, exactly one aria-selected, one roving tabindex=0 and exactly one panel drawn
 //   * a press selects a tab and shows only its panel, and remembers it under wtgui.settingsTab
 //   * ArrowLeft/ArrowRight (wrapping), Home/End move AND select, Enter/Space select, and the focus follows
@@ -34,8 +34,8 @@ import { startPanel } from "./panel-testkit.mjs";
 const WIDE = { width: 1400, height: 900 };
 const TAB_KEY = "wtgui.settingsTab";
 const RECT_KEY = "wtgui.settingsRect";
-const KEYS = ["display", "cards", "board", "branches", "data", "gateway", "updates"];
-const LABELS = ["Display", "Cards", "Board", "Branches", "Data", "Gateway", "Updates"];
+const KEYS = ["display", "cards", "board", "branches", "data", "gateway", "skills", "updates"];
+const LABELS = ["Display", "Cards", "Board", "Branches", "Data", "Gateway", "Skills", "Updates"];
 const MIN = { w: 320, h: 240 };
 const EDGE = 8;
 
@@ -136,15 +136,15 @@ async function main() {
         // ---- A. one tab per key, in the markup's order ---------------------------------------------------------
         const boot = await read(page);
         check(boot.stripRole === "tablist", "the strip is a tablist", boot.stripRole);
-        check(boot.tabCount === 7, "seven tabs, one per group", `${boot.tabCount} tabs`);
-        check(boot.panelCount === 7, "seven panels", `${boot.panelCount} panels`);
-        check(JSON.stringify(boot.tabKeys) === JSON.stringify(KEYS), "the tabs are the seven keys, in markup order", boot.tabKeys.join(","));
+        check(boot.tabCount === 8, "eight tabs, one per group", `${boot.tabCount} tabs`);
+        check(boot.panelCount === 8, "eight panels", `${boot.panelCount} panels`);
+        check(JSON.stringify(boot.tabKeys) === JSON.stringify(KEYS), "the tabs are the eight keys, in markup order", boot.tabKeys.join(","));
         check(JSON.stringify(boot.panelKeys) === JSON.stringify(KEYS), "and the panels are in the same order", boot.panelKeys.join(","));
         check(JSON.stringify(boot.labels) === JSON.stringify(LABELS), "each tab carries its group's label", boot.labels.join(" / "));
-        check(boot.roles.length === 7 && boot.roles.every((r) => r === "tab"), "every tab has role=tab");
-        check(boot.panelCount === 7 && boot.panelRoles.every((r) => r === "tabpanel"), "every panel has role=tabpanel");
-        check(boot.tabCount === 7 && boot.controls.every((c, i) => c === `settings-panel-${boot.tabKeys[i]}`), "aria-controls ties each tab to its own panel");
-        check(boot.panelCount === 7 && boot.panelLabelled.every((l, i) => l === `settings-tab-${boot.panelKeys[i]}`), "and aria-labelledby names each panel by its tab");
+        check(boot.roles.length === 8 && boot.roles.every((r) => r === "tab"), "every tab has role=tab");
+        check(boot.panelCount === 8 && boot.panelRoles.every((r) => r === "tabpanel"), "every panel has role=tabpanel");
+        check(boot.tabCount === 8 && boot.controls.every((c, i) => c === `settings-panel-${boot.tabKeys[i]}`), "aria-controls ties each tab to its own panel");
+        check(boot.panelCount === 8 && boot.panelLabelled.every((l, i) => l === `settings-tab-${boot.panelKeys[i]}`), "and aria-labelledby names each panel by its tab");
         check(boot.stored === null, "a first visit writes no tab key just by loading", String(boot.stored));
         if (!boot.tabCount) {
           // 0.63.0's Settings is the seven folding groups: there is no strip to measure. Say so once and stop,
@@ -184,7 +184,7 @@ async function main() {
           return read(page);
         };
         const right = await keyAt("ArrowRight");
-        check(selectedKey(right) === "updates" && right.focusTab === "updates", "ArrowRight moves to the next tab, selects it and focuses it", `${selectedKey(right)} focus ${right.focusTab}`);
+        check(selectedKey(right) === "skills" && right.focusTab === "skills", "ArrowRight moves to the next tab, selects it and focuses it", `${selectedKey(right)} focus ${right.focusTab}`);
         const left = await keyAt("ArrowLeft");
         check(selectedKey(left) === "gateway", "ArrowLeft comes back", selectedKey(left));
         const home = await keyAt("Home");

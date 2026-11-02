@@ -50,6 +50,7 @@ import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyForProject, p
 import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
 import { safeUrl, openerFor, openerForFolder } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
+import { readSkillsIndex } from "./lib/skills.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
   clarifyWindowSeconds, approvalWindowSeconds,
@@ -2006,6 +2007,26 @@ const server = createServer(async (req, res) => {
     // than no setting.
     if (route === "/api/settings/sessions" && req.method === "GET") {
       return sendJson(res, 200, await sessionSettings());
+    }
+
+    // ---- where these agents' skills are absorbed from ------------------------------------------
+    // The Skills tab's whole answer, and the one read in Settings that opens more than one file: every
+    // root Hermes reads skills from (the profile's own `skills/`, a junctioned directory as its own
+    // source, `skills.create_dir`, `skills.external_dirs`, a trusted project's `.hermes/skills`), the
+    // name and description out of each SKILL.md, and the gateway's `GET /v1/skills` for what a run is
+    // actually SERVED. Read on demand — the tab is the only caller — so a skill added a minute ago is
+    // there the next time it is opened, and a gateway that cannot answer is a reason in the payload
+    // rather than a failed request.
+    if (route === "/api/settings/skills" && req.method === "GET") {
+      return sendJson(
+        res,
+        200,
+        await readSkillsIndex({
+          home: hermesHome(),
+          projects: registry.projects.map((p) => ({ name: p.name, path: p.path })),
+          gateway: { url: jobs.api.url, key: jobs.api.key },
+        }),
+      );
     }
 
     if (route === "/api/settings/sessions" && req.method === "POST") {

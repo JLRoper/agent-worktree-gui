@@ -331,6 +331,29 @@ button.primary:hover { background: #24466a; }
 .settings-presets button:hover { color: var(--text); border-color: #3b4757; }
 .settings-presets button.on { border-color: var(--q-line); color: var(--q-head); background: var(--surface); }
 .settings-preview.bad { border-color: #57262a; color: #ff9c94; }
+/* ---- the Skills tab: a read-only inventory ---------------------------------------------------------------
+   One heading per source (label, what kind of place it is, how many skills it holds), one line under it with the
+   path and — for a junction — the target it points at, then one row per skill. The rows are direct children of the
+   panel on purpose (the settings search filters exactly those), and each skill's second line is a
+   `.settings-preview`, which is the class the search already treats as belonging to the row above it. Nothing in
+   here is a control: a skill is a file, and this window only reads it. */
+.skills-source { margin-top: 14px; gap: 6px; }
+.skills-source.empty { color: var(--dim); }
+.skills-source-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px var(--mono); letter-spacing: .03em; text-transform: uppercase; color: var(--text); }
+.skills-source-count { flex: none; font-size: 10.5px; color: var(--dim); }
+.skills-source-path { margin-top: 3px; padding: 3px 6px; border-style: solid; border-color: var(--line); border-radius: 5px; font-size: 10px; line-height: 1.35; color: var(--dimmer); overflow-wrap: anywhere; }
+.skills-source-path.bad { border-color: #57262a; color: #ff9c94; }
+.skills-skill { margin-top: 7px; gap: 5px; align-items: baseline; }
+.skills-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text); }
+.skills-chip { flex: none; padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; font: 9px/1.6 var(--mono); letter-spacing: .01em; color: var(--dim); }
+.skills-chip.kind { color: var(--dimmer); text-transform: uppercase; }
+.skills-chip.cat { color: #9fb6cf; border-color: #2b3a4b; }
+.skills-chip.link { color: #8fb8ea; border-color: #2c4a6e; }
+.skills-chip.unsent { color: #ff9c94; border-color: #57262a; }
+.skills-detail { margin-top: 1px; padding: 0 0 0 2px; border: 0; display: block; font-size: 10px; line-height: 1.4; }
+.skills-desc, .skills-path { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skills-desc { color: var(--dim); }
+.skills-path { color: #46505f; }
 .hidden { display: none; }
 
 /* The board is the page's ONE horizontal scroll container. It is also the element whose box is the chart's width, so
