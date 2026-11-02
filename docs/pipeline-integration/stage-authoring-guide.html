@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A stage is a contract — authoring criteria for a pipeline stage and the agent that works it</title>
+<style>
+  :root{
+    --paper:#fbfaf6;
+    --ink:#14171c;
+    --muted:#5b6472;
+    --rule:#d9d3c5;
+    --rule-strong:#b9b1a0;
+    --accent:#0d5c56;
+    --accent-soft:#e4efec;
+    --amber:#9a5b12;
+    --amber-soft:#f7eddc;
+    --red:#8b2e2e;
+    --red-soft:#f6e6e4;
+    --code:#f2efe7;
+    --mono:"Cascadia Mono","Consolas","SFMono-Regular",monospace;
+    --sans:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+    --serif:Georgia,"Iowan Old Style","Times New Roman",serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font:16px/1.62 var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 32px 96px}
+  a{color:var(--accent);text-decoration:none;border-bottom:1px solid rgba(13,92,86,.28)}
+  a:hover{border-bottom-color:var(--accent)}
+  code,pre,.mono{font-family:var(--mono);font-size:.86em}
+
+  /* ---------- masthead ---------- */
+  header.mast{padding:64px 0 34px;border-bottom:3px solid var(--ink)}
+  .eyebrow{display:flex;flex-wrap:wrap;gap:14px;align-items:baseline;
+    font:600 11.5px/1 var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+  .eyebrow .dot{width:5px;height:5px;background:var(--accent);border-radius:50%;display:inline-block}
+  h1{font:400 clamp(34px,5vw,54px)/1.06 var(--serif);letter-spacing:-.015em;margin:22px 0 16px;max-width:19ch}
+  h1 em{font-style:italic;color:var(--accent)}
+  .standfirst{font-size:19px;line-height:1.55;color:#333a45;max-width:62ch;margin:0 0 28px}
+  .meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:18px 26px;
+    border-top:1px solid var(--rule);padding-top:18px;margin-top:30px}
+  .meta dt{font:600 10.5px/1 var(--sans);letter-spacing:.13em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .meta dd{margin:0;font-size:13.5px;line-height:1.4}
+
+  /* ---------- toc ---------- */
+  nav.toc{margin:40px 0 8px;padding:22px 24px;background:#fff;border:1px solid var(--rule)}
+  nav.toc h2{font:600 11px/1 var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 14px;border:0;padding:0}
+  nav.toc ol{margin:0;padding:0;list-style:none;columns:2;column-gap:40px;font-size:14px}
+  nav.toc li{margin:0 0 7px;break-inside:avoid}
+  nav.toc .n{display:inline-block;width:2.2em;color:var(--muted);font-family:var(--mono);font-size:12px}
+
+  /* ---------- sections ---------- */
+  section{padding-top:52px}
+  h2.sec{font:400 30px/1.18 var(--serif);margin:0 0 8px;display:flex;gap:16px;align-items:baseline;letter-spacing:-.01em}
+  h2.sec .num{font:600 12px/1 var(--mono);color:var(--accent);letter-spacing:.06em;padding-top:6px;flex:none}
+  .kicker{color:var(--muted);font-size:14.5px;margin:0 0 24px 0;padding-left:44px;max-width:70ch}
+  h3{font:600 17px/1.35 var(--sans);margin:32px 0 10px;letter-spacing:-.005em}
+  h4{font:600 13px/1.4 var(--sans);letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:24px 0 8px}
+  p{margin:0 0 14px;max-width:74ch}
+  ul,ol{margin:0 0 16px;padding-left:22px;max-width:74ch}
+  li{margin:0 0 7px}
+  strong{font-weight:600}
+  .lede{font-size:18px;line-height:1.56;color:#252b34}
+
+  /* ---------- tables ---------- */
+  .tw{overflow-x:auto;margin:18px 0 22px;border:1px solid var(--rule);background:#fff}
+  table{border-collapse:collapse;width:100%;font-size:13.5px;line-height:1.45;min-width:620px}
+  th,td{text-align:left;vertical-align:top;padding:10px 13px;border-bottom:1px solid var(--rule)}
+  thead th{background:#f4f1e9;font:600 11px/1.3 var(--sans);letter-spacing:.09em;text-transform:uppercase;color:#4a525e;border-bottom:1px solid var(--rule-strong);white-space:nowrap}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:nth-child(even) td{background:#fdfcf9}
+  td.num,th.num{font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+  .tag{display:inline-block;font:600 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;padding:4px 7px;border-radius:2px;white-space:nowrap}
+  .t-keep{background:var(--accent-soft);color:var(--accent)}
+  .t-no{background:var(--red-soft);color:var(--red)}
+  .t-warn{background:var(--amber-soft);color:var(--amber)}
+  .t-mut{background:#ece9e2;color:#4d5560}
+
+  /* ---------- callouts ---------- */
+  .box{margin:24px 0;padding:18px 22px;border-left:3px solid var(--accent);background:#fff;border-top:1px solid var(--rule);border-right:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+  .box .label{font:600 10.5px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:8px}
+  .box p:last-child{margin-bottom:0}
+  .box.warn{border-left-color:var(--amber)}
+  .box.warn .label{color:var(--amber)}
+  .box.stop{border-left-color:var(--red)}
+  .box.stop .label{color:var(--red)}
+
+  /* ---------- figure ---------- */
+  figure{margin:30px 0 26px}
+  figure svg{width:100%;height:auto;display:block;background:#fff;border:1px solid var(--rule)}
+  figcaption{font-size:12.5px;color:var(--muted);margin-top:9px;line-height:1.5}
+
+  /* ---------- code ---------- */
+  pre{margin:16px 0 22px;padding:16px 18px;background:var(--code);border:1px solid var(--rule);
+      overflow-x:auto;line-height:1.5;font-size:12.4px;tab-size:2}
+  pre .c{color:#6f776f}
+  pre .k{color:#0d5c56;font-weight:600}
+  pre .s{color:#8b4a12}
+  .filename{font:600 10.5px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:22px 0 -10px}
+
+  /* ---------- stage cards ---------- */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin:22px 0}
+  .card{background:#fff;padding:16px 18px}
+  .card .n{font:600 11px/1 var(--mono);color:var(--accent);letter-spacing:.08em}
+  .card h4{margin:8px 0 6px;text-transform:none;letter-spacing:0;font-size:14.5px;color:var(--ink)}
+  .card p{font-size:13.2px;line-height:1.5;margin:0;color:#404854}
+
+  /* ---------- misc ---------- */
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+  @media (max-width:760px){.two{grid-template-columns:1fr}nav.toc ol{columns:1}h1{max-width:none}.wrap{padding:0 20px 64px}}
+  .small{font-size:13px;color:var(--muted)}
+  .hr{height:1px;background:var(--rule);margin:44px 0 0;border:0}
+  footer,.colophon{margin-top:64px;padding-top:22px;border-top:3px solid var(--ink);font-size:12.5px;color:var(--muted)}
+  footer p,.colophon p{max-width:none}
+  .colophon h2.sec,.colophon h3{color:var(--ink)}
+  details{margin:16px 0 22px;border:1px solid var(--rule);background:#fff;padding:0 18px}
+  details summary{cursor:pointer;padding:14px 0;font:600 13px/1.4 var(--sans);color:var(--accent)}
+  details[open] summary{border-bottom:1px solid var(--rule);margin-bottom:8px}
+  .anchor{color:var(--rule-strong);border:0;font-size:.7em;vertical-align:super;margin-left:.4em}
+  ol.refs{font-size:13.2px;line-height:1.55}
+  ol.refs li{margin-bottom:9px}
+  @media print{
+    body{background:#fff;font-size:10.5pt}
+    .wrap{max-width:none;padding:0}
+    nav.toc{page-break-after:always}
+    section{page-break-inside:auto}
+    h2.sec{page-break-after:avoid}
+    .tw,figure,pre{page-break-inside:avoid}
+    a{color:var(--ink);border:0}
+  }
+</style>
+<style>
+  /* ---------- additions for the pipeline reading view ---------- */
+  h1{max-width:30ch}
+  .cards{grid-template-columns:repeat(3,1fr)}
+  a.card{display:block;border:0;color:inherit}
+  a.card:hover{background:var(--accent-soft)}
+  a.card h4{margin:8px 0 6px;font:600 15px/1.3 var(--sans);color:var(--ink);text-transform:none;letter-spacing:0}
+  a.card .n{font:600 10.5px/1 var(--sans);letter-spacing:.14em;color:var(--muted)}
+
+  nav.strip{
+    position:sticky;top:0;z-index:20;margin:34px 0 0;padding:10px 0;
+    display:flex;gap:4px;align-items:center;flex-wrap:nowrap;overflow-x:auto;
+    background:rgba(251,250,246,.96);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);
+    -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);scrollbar-width:thin;
+  }
+  nav.strip .strip-label{flex:none;font:600 10px/1 var(--sans);letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);padding:0 12px 0 2px;border-right:1px solid var(--rule);margin-right:6px}
+  nav.strip a{flex:none;border:0;padding:6px 9px;font-size:12.5px;line-height:1;color:var(--ink);white-space:nowrap;border-radius:2px}
+  nav.strip a b{font:600 10px/1 var(--mono);color:var(--accent);margin-right:6px;letter-spacing:.04em}
+  nav.strip a:hover{background:var(--accent-soft)}
+
+  .srcpath{font-size:12px;color:var(--muted);margin:-6px 0 22px;padding-left:44px}
+  .srcpath a{font-size:12px}
+
+  .spine{display:grid;grid-template-columns:repeat(13,1fr);gap:1px;background:var(--rule);
+    border:1px solid var(--rule);margin:20px 0 26px}
+  .spine a{border:0;background:#fff;padding:9px 7px;display:block;color:var(--ink)}
+  .spine a:hover{background:var(--accent-soft)}
+  .spine a b{display:block;font:600 10.5px/1 var(--mono);color:var(--accent);margin-bottom:5px}
+  .spine a span{display:block;font-size:10.5px;line-height:1.25;color:#3c444f}
+
+  .layer,.seam,.risk{border:1px solid var(--rule);background:#fff;padding:16px 20px;margin:0 0 14px}
+  .layer h4,.seam h4,.risk h4{margin:0 0 10px;text-transform:none;letter-spacing:0;font:600 15.5px/1.3 var(--sans);color:var(--ink)}
+  .risk h4 .n{font:600 11px/1 var(--mono);color:var(--accent);margin-right:10px;letter-spacing:.06em}
+  .layer dl{margin:0;display:grid;grid-template-columns:150px 1fr;gap:6px 18px;font-size:13.6px}
+  .layer dl > div{display:contents}
+  pre{line-height:1.15}
+  table.rules td:last-child,table.rules th:last-child{width:1%;white-space:nowrap}
+  .nw,td.nw,th.nw{white-space:nowrap}
+  table.gaps td:nth-child(1){width:5%}
+  table.gaps td:nth-child(2){width:23%}
+  table.gaps td:nth-child(3){width:9%}
+  .layer dt{font:600 10.5px/1.5 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding-top:2px}
+  .layer dd{margin:0;line-height:1.5}
+  .layer dd.q{font-family:var(--serif);font-size:14.6px;color:#252b34}
+  .seam p,.risk p{font-size:13.8px;margin:0 0 8px;max-width:76ch}
+  .seam p:last-child,.risk p:last-child{margin-bottom:0}
+
+  .tw table caption{caption-side:top;text-align:left;padding:10px 13px;font-size:12px;color:var(--muted);
+    background:#f4f1e9;border-bottom:1px solid var(--rule-strong)}
+  tr.grp td{background:var(--accent-soft)!important;font:600 11px/1.3 var(--sans);letter-spacing:.09em;
+    text-transform:uppercase;color:var(--accent);padding:9px 13px}
+  ol.cut li,ol.verdict li{margin-bottom:11px}
+  ol.verdict{font-size:14.6px}
+  h2.sec{scroll-margin-top:64px}
+  section{scroll-margin-top:56px}
+  tr[id],a[id],footer,h2.sec{scroll-margin-top:70px}
+
+  @media (max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:820px){
+    .cards{grid-template-columns:1fr}
+    .spine{grid-template-columns:repeat(4,1fr)}
+    .layer dl{grid-template-columns:1fr;gap:2px}
+    .layer dt{padding-top:10px}
+  }
+  @media print{
+    nav.strip{position:static;overflow:visible;flex-wrap:wrap;border-top:0;page-break-after:always;
+      background:#fff;-webkit-backdrop-filter:none;backdrop-filter:none}
+    nav.strip a{border:0;padding:2px 6px}
+    .spine{grid-template-columns:repeat(13,1fr);page-break-inside:avoid}
+    .spine a{padding:4px 3px}
+    .spine a span{font-size:7pt}
+    .layer,.seam,.risk,tr,.tw{page-break-inside:avoid}
+    tr.grp td{background:#eee!important}
+    a.card{border:1px solid var(--rule)}
+  }
+</style>
+<style>
+  /* ---------- additions for the authoring guide ---------- */
+  h1{max-width:26ch}
+  .meta{grid-template-columns:repeat(6,1fr)}
+  nav.strip{flex-wrap:wrap;overflow:visible}
+  nav.strip a{padding:6px 8px;font-size:12px}
+  .grid12{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--rule);border:1px solid var(--rule);margin:20px 0 26px}
+  .grid12 a{border:0;background:#fff;padding:10px 11px;display:block;color:var(--ink)}
+  .grid12 a:hover{background:var(--accent-soft)}
+  .grid12 a b{display:block;font:600 10.5px/1 var(--mono);color:var(--accent);margin-bottom:6px}
+  .grid12 a span{display:block;font-size:13px;line-height:1.3;color:#3c444f}
+
+  .def{border:1px solid var(--rule);background:#fff;padding:16px 20px;margin:0 0 14px}
+  .def h4{margin:0 0 8px;text-transform:none;letter-spacing:0;font:600 15.5px/1.3 var(--sans);color:var(--ink)}
+  .def h4 .n{font:600 11px/1 var(--mono);color:var(--accent);margin-right:10px;letter-spacing:.06em}
+  .def p{font-size:13.8px;margin:0 0 8px;max-width:78ch}
+  .def p:last-child{margin-bottom:0}
+  .def .shape{font-family:var(--mono);font-size:12.2px;line-height:1.45;background:var(--code);padding:10px 12px;
+    border:1px solid var(--rule);margin:8px 0 10px;overflow-x:auto;white-space:pre}
+  .def .src,.def .refuse{font-size:12.6px;color:var(--muted);margin:0}
+  .def .refuse{color:var(--red)}
+  .def .refuse b,.def .src b{color:inherit;font-weight:600}
+
+  table.contract td:nth-child(1){width:15%}
+  table.contract td:nth-child(4){width:24%}
+  table.rubric td:nth-child(1){width:20%}
+  table.rubric th.n,table.rubric td.n{text-align:center}
+  table.scoreboard td:not(:first-child):not(:last-child),table.scoreboard th:not(:first-child):not(:last-child){text-align:center;font-family:var(--mono);font-size:12.5px}
+  table.scoreboard td:last-child,table.scoreboard th:last-child{text-align:left;font-family:var(--sans);font-size:13px}
+  table.scoreboard td.tot{font-weight:600}
+  .verdict{display:inline-block;font:600 11px/1 var(--mono);padding:3px 6px;border:1px solid currentColor;white-space:nowrap}
+  .v-pass{color:var(--accent)}
+  .v-fail{color:var(--red)}
+  .slot{color:var(--amber);font-weight:600}
+  .thr{font:600 13px/1.5 var(--sans)}
+  @media (max-width:900px){.meta{grid-template-columns:repeat(3,1fr)}}
+  @media (max-width:820px){.grid12{grid-template-columns:repeat(3,1fr)}.meta{grid-template-columns:repeat(2,1fr)}}
+  @media print{.def,.grid12{page-break-inside:avoid}.def{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">
+    <span>SEFL · AI Development Factory</span><span class="dot"></span>
+    <span>Authoring guide</span><span class="dot"></span>
+    <span>Design, not built</span>
+  </div>
+  <h1>A stage is a contract.<br><em>A conversation is not.</em></h1>
+  <p class="standfirst">
+    Twelve fields that define a pipeline stage, a scored test of whether the stage is one, and the five
+    criteria for the agent that works it. Everything here is read from the documents on <span class="mono">main</span>:
+    the stage, gate, roster, rule and work-breakdown files under <span class="mono">docs/pipeline/</span>, the
+    standards pack under <span class="mono">docs/standards/</span>, and the three suggestion files.
+  </p>
+  <p class="small">The numbers in the criteria — a pass at 12 of 16, three criteria that must be at 2, the
+  agent's 8 of 10 — are this page's proposal and are marked <strong>†</strong>. The failures the criteria are
+  written against are not: each one is attributed to the <span class="mono">SUG</span> id that found it.</p>
+  <dl class="meta">
+    <div><dt>Date</dt><dd>2 November 2026</dd></div>
+    <div><dt>Measured against</dt><dd>commit <span class="mono">ae431e5</span> (<span class="mono">main</span>)</dd></div>
+    <div><dt>Sources</dt><dd>9 pipeline files, the standards pack, 3 suggestion files</dd></div>
+    <div><dt>Scope</dt><dd>What defines a stage; what defines its agent</dd></div>
+    <div><dt>Threshold †</dt><dd>12/16 on the stage, 8/10 on the agent</dd></div>
+    <div><dt>Worked example</dt><dd>The verifier stage, <a href="#s06">§06</a></dd></div>
+  </dl>
+</header>
+
+<nav class="strip" aria-label="Contents">
+<span class="strip-label">Contents</span>
+<a href="#s01"><b>01</b>The test</a>
+<a href="#s02"><b>02</b>The fields</a>
+<a href="#s03"><b>03</b>Stage rubric</a>
+<a href="#s04"><b>04</b>The agent</a>
+<a href="#s05"><b>05</b>YAML + prompt</a>
+<a href="#s06"><b>06</b>Example</a>
+<a href="#s07"><b>07</b>Anti-patterns</a>
+<a href="#s08"><b>08</b>Standards</a>
+<a href="#counts">Counts</a>
+</nav>
+<div class="cards">
+  <a class="card" href="#s02"><div class="n">CONTRACT</div><h4>12 fields</h4><p>Id, name, purpose, owner, inputs, trigger, rule ids, method, artifact, exit check, stops, forbidden.</p></a>
+  <a class="card" href="#s03"><div class="n">STAGE TEST</div><h4>8 criteria, 0–2</h4><p>Pass at 12/16 with the exit check, the artifact and the separation all at 2. †</p></a>
+  <a class="card" href="#s04"><div class="n">AGENT TEST</div><h4>5 criteria, 0–2</h4><p>Capability, bounded context, forbidden actions, self-check, one escalation. Pass at 8/10. †</p></a>
+  <a class="card" href="#s06"><div class="n">EXAMPLE</div><h4>The verifier</h4><p>Twelve fields filled, a signed verdict, and the INCONCLUSIVE case the documents cannot express.</p></a>
+  <a class="card" href="#s07"><div class="n">FAILURES</div><h4>13 anti-patterns</h4><p>Each attributed to the SUG id that found it, and to the field it leaves empty.</p></a>
+  <a class="card" href="#s08"><div class="n">RULES</div><h4>3 namespaces</h4><p>P-* pipeline, SEFL-* standards pack, R-* only through Provenance. One subset per stage.</p></a>
+</div>
+
+<section id="s01">
+  <h2 class="sec"><span class="num">01</span>The test a stage has to pass</h2>
+  <p class="kicker">Given this input, produce that artifact, checked this way. A stage that cannot be said that way is a conversation, and conversations do not deploy.</p>
+  <p class="srcpath">Source: <span class="mono">docs/pipeline/stages.md</span> — opening; <span class="mono">README.md</span> §1; <span class="mono">agents.md</span> — opening and §9</p>
+  <p class="lede">The pipeline's own definition is three clauses: one input artifact, one producing role, one
+  machine-checkable exit. Thirteen stages are written to it, S0 to S12. That sentence is the whole test, and it is
+  harder to satisfy than it looks: the corpus is explicit that the exit check and the gate are different objects, that
+  an agent may not choose the next stage, and that a rule with no check is advice.</p>
+
+  <h3>The four questions, and what an unanswered one costs</h3>
+  <div class="tw"><table>
+  <thead><tr><th>Question</th><th>What a good answer looks like</th><th>What it costs when it is missing</th><th>Source</th></tr></thead><tbody>
+  <tr><td><strong>What must be true before it starts?</strong></td><td>A named artifact with a hash, and a predicate over that hash. Not a branch name, not "the previous stage".</td><td>The same run tomorrow reads different code and nobody can tell which run produced the result. This is why the packet carries a hash per input.</td><td class="num">SUG-GATE-03</td></tr>
+  <tr><td><strong>What one thing does it do?</strong></td><td>One verb over one artifact. If the description needs "and", it is two stages or one stage with two exits.</td><td>A stage with two exits is a stage whose exit check is computed by its own author, and whose failures have no destination.</td><td class="num">SUG-GATE-09</td></tr>
+  <tr><td><strong>What does it hand over?</strong></td><td>One artifact with a schema, a location, a hash and exactly one writer.</td><td>A handoff that is a message is a handoff the control plane cannot parse, and the next role reconstructs the meaning from prose.</td><td class="num">SUG-ROLE-35</td></tr>
+  <tr><td><strong>What can fail it?</strong></td><td>A command, a set operation, a comparison — something a machine runs and records, with an id per line.</td><td>"Looks right" becomes the exit, the panel floods on style, and the one real finding is lost.</td><td class="num">SUG-ROLE-13</td></tr>
+  </tbody></table></div>
+
+  <h3>What is not a stage</h3>
+  <div class="tw"><table>
+  <thead><tr><th>Not a stage</th><th>Why</th><th>It is</th></tr></thead><tbody>
+  <tr><td><strong>A gate</strong></td><td>A gate is a point where a person or a policy can stop the pipeline. It has an artifact, a decision and a time-box, and no method of its own. A gate never substitutes for a check.</td><td>G0–G5, in <span class="mono">gates.md</span> §1</td></tr>
+  <tr><td><strong>A job inside a stage</strong></td><td>The freeze and the verifier are deterministic services: they have no discretion on purpose, and a model's judgement inside them would make the evidence unusable.</td><td>A service in the roster, one input and one output</td></tr>
+  <tr><td><strong>A role</strong></td><td>A role is a remit with one input, one output and one stop condition. It works inside a stage; it does not own the order.</td><td>One row of <span class="mono">agents.md</span> §1</td></tr>
+  <tr><td><strong>A loop</strong></td><td>Review and parity are the same machinery with different finding sources, and S9 is entered from both. A loop node has two entry edges and its own cap; the thirteen-stage spine is unchanged.</td><td>A loop over stages, not a stage</td></tr>
+  </tbody></table></div>
+
+  <h3>The three kinds of actor, because the contract names one</h3>
+  <div class="tw"><table>
+  <thead><tr><th>Kind</th><th>Chooses what happens next?</th><th>Judgement?</th><th>Examples</th></tr></thead><tbody>
+  <tr><td><strong>Agent</strong></td><td>No</td><td>Yes, inside its remit</td><td>Rulewright, Fixer, Contract Reviewer</td></tr>
+  <tr><td><strong>Service / job</strong></td><td>No</td><td>No</td><td>Freeze job, Verifier, Analyzer Runner, Layer Validator</td></tr>
+  <tr><td><strong>Human seat</strong></td><td>Yes, at a gate</td><td>Yes, with accountability</td><td>User, engineer, DBA</td></tr>
+  </tbody></table></div>
+  <p class="small">The distinction is not cosmetic. Twenty-two agents, two services and one job are on the
+  roster, and the two services are exactly the places where a model's judgement would make the evidence
+  unusable: the freeze and the verifier. An orchestrator agent is on the list of roles that must not exist,
+  because if a model picks the next stage, "why did it deploy?" has no deterministic answer.</p>
+
+  <div class="box"><span class="label">Two claims keep the chain honest</span>
+  <p><strong>One writer per artifact</strong> — freeze job, teardown crews, rebuild agent, reviewer panel, fixer,
+  verifier, delivery plane, never two — and <strong>the ledger is append-only</strong>, including for refusals.
+  The twelve fields in <a href="#s02">§02</a> are the smallest set that lets a control plane enforce both without
+  reading a single sentence of prose.</p></div>
+
+  <div class="box warn"><span class="label">The sentence that decides whether a field is needed</span>
+  <p><span class="mono">work-breakdown.md</span> §5 states it for the packet, and it holds for the stage:
+  <em>"A packet is the agent's whole world for one run. If a field is missing, the agent will invent it."</em>
+  An invented input, exit or boundary is not a gap in a document; it is work performed against a different
+  contract than the one that was reviewed.</p></div>
+
+  <h3>The twelve fields</h3>
+  <div class="grid12">
+    <a href="#f01"><b>F01</b><span>id</span></a>
+    <a href="#f02"><b>F02</b><span>name</span></a>
+    <a href="#f03"><b>F03</b><span>purpose</span></a>
+    <a href="#f04"><b>F04</b><span>owner</span></a>
+    <a href="#f05"><b>F05</b><span>inputs</span></a>
+    <a href="#f06"><b>F06</b><span>trigger</span></a>
+    <a href="#f07"><b>F07</b><span>binds</span></a>
+    <a href="#f08"><b>F08</b><span>method</span></a>
+    <a href="#f09"><b>F09</b><span>artifact</span></a>
+    <a href="#f10"><b>F10</b><span>done</span></a>
+    <a href="#f11"><b>F11</b><span>stops</span></a>
+    <a href="#f12"><b>F12</b><span>forbidden</span></a>
+  </div>
+</section>
+
+<section id="s02">
+  <h2 class="sec"><span class="num">02</span>The twelve-field contract</h2>
+  <p class="kicker">A stage that cannot fill all twelve has not been designed. It has been described.</p>
+  <p class="srcpath">Sources: <span class="mono">stages.md</span> §S0–§S12; <span class="mono">agents.md</span> §1, §9, §10, §11; <span class="mono">rules.md</span> §1, §12; <span class="mono">work-breakdown.md</span> §5</p>
+  <p>Each field below is stated three ways: what it fixes, the shape a value must take, and what a missing value
+  causes. The shape is deliberately mechanical — a control plane reads it, and a reviewer checks it without
+  re-reading the stage's prose. The sources column names where the field's requirement comes from, so a reader can
+  tell a rule in the corpus from this page's formulation of it.</p>
+
+  <div class="tw"><table class="contract">
+  <caption>Twelve fields. Columns 2 and 4 are the reason the field exists: what it fixes, and what its absence breaks.</caption>
+  <thead><tr><th>Field</th><th>What it fixes</th><th>Required shape</th><th>A missing value causes</th></tr></thead><tbody>
+  <tr><td class="mono">id</td><td>Addressability and permanence</td><td><span class="mono">S&lt;n&gt;</span>, unique and never reused</td><td>A stage that cannot be cited in a ledger, a rule or a review by a stable name</td></tr>
+  <tr><td class="mono">name</td><td>What the act is called</td><td>A verb phrase, ≤ 4 words, identical in table, anchor and ledger</td><td>The same stage referred to three ways; a count that disagrees with itself</td></tr>
+  <tr><td class="mono">purpose</td><td>The one question the stage answers</td><td>One sentence: owner + act + artifact + the question</td><td>Two purposes in one stage; an exit check that covers neither completely</td></tr>
+  <tr><td class="mono">owner</td><td>Who does the work, and with what discretion</td><td>Exactly one roster role, with its kind: agent, service, job, seat</td><td>Two authors for one artifact; or a model choosing the next stage</td></tr>
+  <tr><td class="mono">inputs</td><td>What the stage may read</td><td>Enumerated: artifact, schema, location, <span class="mono">sha256</span>, mutability</td><td>An unbounded read: cost, attention, and the trifecta P-71 forbids</td></tr>
+  <tr><td class="mono">trigger</td><td>Who fires it and when</td><td>Firer + a predicate over the input hashes</td><td>A stage that starts on a stale artifact, or never starts at all</td></tr>
+  <tr><td class="mono">binds</td><td>The rules that constrain the work</td><td>Rule ids in three namespaces, each with the check that enforces it</td><td>A rule with no check — advice wearing a rule's clothes</td></tr>
+  <tr><td class="mono">method</td><td>What the owner does, in what order</td><td>Numbered steps; deterministic or model, stated</td><td>A method only its author can repeat, and no way to review it</td></tr>
+  <tr><td class="mono">artifact</td><td>What is handed over</td><td>One artifact: id, path, schema, <span class="mono">sha256</span>, writer</td><td>A message in place of an artifact; the next role invents the shape</td></tr>
+  <tr><td class="mono">done</td><td>When the stage has succeeded</td><td>Per check: <span class="mono">check_id</span>, command, pass condition, evidence</td><td>An opinion as an exit; a review that corrects nothing and passes</td></tr>
+  <tr><td class="mono">stops</td><td>How it says no</td><td>Stop code + condition + destination + loop cap</td><td>A stage whose only path to done is a green check, which teaches cheating</td></tr>
+  <tr><td class="mono">forbidden</td><td>What the owner may not do</td><td>Each line <em>Enforced by</em> a grant, hash, CI check or deny rule, or <em>Judged</em></td><td>A preference presented as a boundary, and a boundary the agent widens</td></tr>
+  </tbody></table></div>
+
+  <h3>Field by field</h3>
+
+  <div class="def" id="f01">
+    <h4><span class="n">F01</span>id</h4>
+    <p>The stage's permanent number. A new stage takes the next number; a renamed stage keeps its own. Nothing in
+    this directory renumbers, which is why two proposals that would have renumbered the spine — splitting S9 into
+    <span class="mono">S9a</span>/<span class="mono">S9b</span> and adding a fourteenth teardown stage — were reduced to
+    separate caps and a G5 precondition instead.</p>
+    <div class="shape">id: S7                 # S0..S12 exist; the next new stage is S13 or none</div>
+    <p class="src"><b>Source:</b> <span class="mono">rules.md</span> §1 on permanent ids, applied to stages; SUG-GATE-09, SUG-GATE-14.</p>
+    <p class="refuse"><b>Refuse:</b> an id already in the ledger, or a stage addressed only by its title.</p>
+  </div>
+
+  <div class="def" id="f02">
+    <h4><span class="n">F02</span>name</h4>
+    <p>The act, not the artifact: "Freeze and export", not "The export"; "DAL review and SQL verify", not "DAL
+    quality". An "and" is allowed when one exit check covers both halves — S2's ten-line checklist and S7's DAL
+    verdict each do — and forbidden when each half has its own exit, because then it is two stages and one of them
+    has no owner.</p>
+    <div class="shape">name: DAL review and SQL verify     # verb phrase; the same string in the table and the ledger</div>
+    <p class="src"><b>Source:</b> <span class="mono">stages.md</span> §S2, §S7; SUG-GATE-09 on two exits in one entry.</p>
+    <p class="refuse"><b>Refuse:</b> a noun phrase, or a conjunction whose halves have different exit checks.</p>
+  </div>
+
+  <div class="def" id="f03">
+    <h4><span class="n">F03</span>purpose</h4>
+    <p>One sentence, and it has to name the artifact as well as the act, because the artifact is what the next stage
+    is allowed to read. "Produce the semantic layer from the frozen export, so the rebuild has a contract it must
+    match" is a purpose; "understand the POC" is a wish. Two sentences mean two stages, or one stage with an
+    unstated second exit.</p>
+    <div class="shape">purpose: &gt;-
+      Turn the frozen export into the six layer files, so the rebuild has a contract
+      it must match and G2 has something to validate.</div>
+    <p class="src"><b>Source:</b> <span class="mono">stages.md</span> §S3 "Takes / Does / Produces"; <span class="mono">README.md</span> §1.</p>
+    <p class="refuse"><b>Refuse:</b> a purpose with no artifact in it, or a second sentence.</p>
+  </div>
+
+  <div class="def" id="f04">
+    <h4><span class="n">F04</span>owner</h4>
+    <p>Exactly one role, and its kind is part of the field. An agent has judgement inside its remit and no say in
+    what happens next; a service or job has neither; a human seat has both, at a gate, with accountability. The
+    control plane owns the order — a stage whose owner picks the next stage is not a stage in this pipeline.</p>
+    <div class="shape">owner: {role: dal-reviewer, kind: agent}
+owner: {role: verifier, kind: service}       # deterministic; no discretion</div>
+    <p class="src"><b>Source:</b> <span class="mono">agents.md</span> opening table, §1 roster, §12 "roles that must not exist".</p>
+    <p class="refuse"><b>Refuse:</b> two owners, an unnamed owner, or an owner that also owns the stage's check.</p>
+  </div>
+
+  <div class="def" id="f05">
+    <h4><span class="n">F05</span>inputs</h4>
+    <p>An enumerated list, one entry per artifact, and every entry carries a hash and a location. A branch path is
+    not a location: the same packet run tomorrow reads different code. The corpus has nine roles with no Reads field
+    at all, and the verifier is the one that matters most — an input nobody names cannot be granted, denied, hashed
+    or audited. The list is also a non-list: what the stage may <em>not</em> read is part of the field, because the
+    verifier reading the fixer's transcript would anchor it to the author's account of the change.</p>
+    <div class="shape">inputs:
+  read:
+    - {artifact: layer,       schema: layer/1,   location: "ledger#L-0042", sha256: "9f2c…", mutability: read-only}
+    - {artifact: finding-set, schema: finding/2, location: "ledger#F-0018", sha256: "a71b…", mutability: read-only}
+  non: [fixer-transcript, reviewer-confidence]</div>
+    <p class="src"><b>Source:</b> SUG-VER-01, SUG-ROLE-38, SUG-GATE-03; P-69, P-71.</p>
+    <p class="refuse"><b>Refuse:</b> a path without a hash; an input named in prose; no non-input list where a
+    neighbouring role's reasoning exists.</p>
+  </div>
+
+  <div class="def" id="f06">
+    <h4><span class="n">F06</span>trigger</h4>
+    <p>Two parts: who fires the stage, and the condition that must hold. "The control plane, when the producer's
+    envelope carries a status of <span class="mono">OK</span> and every input hash resolves" is a trigger. "After
+    S6" is not, because it does not say what makes S6's output usable. A new push re-fires the stage and invalidates
+    the previous approval, which is the same rule the verifier applies to its own verdict.</p>
+    <div class="shape">trigger:
+  fires: control-plane
+  when:  "envelope.status == OK and all(inputs[].sha256) resolve"   # else REFUSE-INPUT</div>
+    <p class="src"><b>Source:</b> <span class="mono">agents.md</span> §9 stop vocabulary; P-53; SUG-VER-11.</p>
+    <p class="refuse"><b>Refuse:</b> a trigger expressed as a position in a list rather than a predicate.</p>
+  </div>
+
+  <div class="def" id="f07">
+    <h4><span class="n">F07</span>binds</h4>
+    <p>The rule ids that constrain the work, in three namespaces that must not be mixed: <span class="mono">P-*</span>
+    for the pipeline's own rules, <span class="mono">SEFL-*</span> for the standards pack, and <span class="mono">R-*</span>
+    only through a rule's <span class="mono">Provenance</span> field. Each id names the check that enforces it, because
+    the corpus's own test is that a rule with no check is advice. A <span class="mono">PROPOSED</span> rule may run in
+    a pilot but may not block a merge, which is why a stage that binds one has to say what it does when that rule is
+    the only failing instrument.</p>
+    <div class="shape">binds:
+  - {id: P-52,  check: "verifier signature verifies and subject.commit == HEAD"}
+  - {id: P-41,  check: "instrument manifest hash equals the pinned hash"}
+  - {id: SEFL-DATA-004, check: "every statement has a verification id"}      # domain slice, see §08
+  - {id: P-42,  tag: PROPOSED, on_fail: "record regime; cannot block until adopted"}</div>
+    <p class="src"><b>Source:</b> <span class="mono">rules.md</span> §1 tag table and §12; SUG-VER-10; SUG-GATE-04.</p>
+    <p class="refuse"><b>Refuse:</b> "the standards pack" as a value; an id with no check; a bare R-number.</p>
+  </div>
+
+  <div class="def" id="f08">
+    <h4><span class="n">F08</span>method</h4>
+    <p>What the owner does, in order, and whether judgement is involved. The corpus splits the two: mechanical facts
+    are extracted by code, meaning by a model, and every model reading must quote the line it judged. Where the
+    method hits an ambiguity it produces a question — both readings, one record — rather than a decision, because
+    ambiguity that gets resolved silently is the failure the layer's citation rule exists to prevent.</p>
+    <div class="shape">method:
+  deterministic: [resolve-named-checks, hash-subject, run-suite-twice, run-holdouts]
+  judgement:     []                       # a service; no model in the path
+  on_ambiguity:  ESCALATE-AMBIGUITY       # both readings, one record</div>
+    <p class="src"><b>Source:</b> P-06, P-10, P-13; <span class="mono">stages.md</span> §S9 table of proved steps.</p>
+    <p class="refuse"><b>Refuse:</b> a method that names tools but not order, or a model step with no citation rule.</p>
+  </div>
+
+  <div class="def" id="f09">
+    <h4><span class="n">F09</span>artifact</h4>
+    <p>One artifact, with a schema, a location, a hash and a single writer. "Tier-1 results", "install SUCCESS" and a
+    prose report are not artifacts: a free-text result cannot be joined to a rule id, a finding, or a gate, and the
+    pipeline's blocking power becomes whatever a reader makes of prose. The schema at the boundary is the one measured
+    fix for handoff fidelity, and the artifact system — a specialist writes to a store and passes a reference back —
+    is what stops a long output being copied through a conversation.</p>
+    <div class="shape">artifact:
+  id: verdict
+  path: "ledger/verdicts/V-0001.json"
+  schema: "verdict/1"
+  sha256: "&lt;computed by the signer&gt;"
+  writer: verifier-signer          # exactly one; append-only</div>
+    <p class="src"><b>Source:</b> SUG-ROLE-22, SUG-ROLE-32, SUG-ROLE-20, SUG-ROLE-35; <span class="mono">README.md</span> §1.</p>
+    <p class="refuse"><b>Refuse:</b> two writers, no schema, or an artifact identified only by a directory.</p>
+  </div>
+
+  <div class="def" id="f10">
+    <h4><span class="n">F10</span>done</h4>
+    <p>The machine-checkable exit, one record per line: an id, a command, a pass condition and the evidence the
+    command leaves. Every line must be a command or a set operation. The corpus's own gate rule decides the tone — a
+    blank line is a refusal, not a pass — and S2 shows the shape a good exit takes: three conjuncts, not one, because
+    a single export hash proves an export happened, not that it is reproducible.</p>
+    <div class="shape">done:
+  - {check_id: EXIT-01, command: "sha256sum -c export.sha256",  pass_when: "exit 0"}
+  - {check_id: EXIT-02, command: "diff &lt;(jq . a.json) &lt;(jq . b.json)", pass_when: "empty diff"}
+  - {check_id: EXIT-03, command: "jq -e '.subject.commit == env.HEAD' verdict.json", pass_when: "true"}</div>
+    <p class="src"><b>Source:</b> <span class="mono">gates.md</span> §2 "a blank line is a refusal"; SUG-GATE-01, SUG-ROLE-13.</p>
+    <p class="refuse"><b>Refuse:</b> a line a reader has to evaluate ("reviewed", "looks consistent"); a check with no id.</p>
+  </div>
+
+  <div class="def" id="f11">
+    <h4><span class="n">F11</span>stops</h4>
+    <p>The stage's honest ways to say no, drawn from the seven-code vocabulary rather than invented per stage:
+    <span class="mono">REFUSE-INPUT</span>, <span class="mono">ESCALATE-AMBIGUITY</span>,
+    <span class="mono">ESCALATE-NO-PROGRESS</span>, <span class="mono">REJECT-SCOPE</span>,
+    <span class="mono">STOP-BUDGET</span>, <span class="mono">RECLASSIFY</span>,
+    <span class="mono">HANDOFF-HUMAN</span>. Each carries a destination and, for a loop, a cap. Two of the seven are
+    success, not failure — a clean reclassification and a clean ambiguity escalation — and a stage with no state for
+    "the check could not run" has a cheap path that reads it as green.</p>
+    <div class="shape">stops:
+  - {code: REFUSE-INPUT,           when: "named check does not resolve; hash mismatch", to: control-plane}
+  - {code: ESCALATE-NO-PROGRESS,   when: "two runs disagree",                          to: engineer, cap: flake-budget}
+  - {code: REJECT-SCOPE,           when: "assertion drift with no test-change record", to: control-plane}</div>
+    <p class="src"><b>Source:</b> <span class="mono">agents.md</span> §9; P-50, P-51; SUG-VER-07.</p>
+    <p class="refuse"><b>Refuse:</b> a free-text escape hatch, or a stop with no destination.</p>
+  </div>
+
+  <div class="def" id="f12">
+    <h4><span class="n">F12</span>forbidden</h4>
+    <p>The must-nots, each split into <em>Enforced by</em> — a grant, a frozen hash, a CI check, a deny rule — or
+    <em>Judged</em>: what the agent weighs and what it does instead. A line with neither is deleted. This is the test
+    <span class="mono">rules.md</span> §12 already applies to its own rules, and applying it to the roster is what
+    separates a boundary from a preference. Two of the boundaries have to be mechanical rather than stated: the
+    frozen manifest is closed under addition, and the blast radius is a set comparison.</p>
+    <div class="shape">forbidden:
+  - {line: "edit the branch or the tests",          enforced_by: "read-only clone; file:write deny rule"}
+  - {line: "hold the signing key in the runner",    enforced_by: "separate signer identity; KMS key"}
+  - {line: "read the fixer's transcript",           judged: "anchors the verdict; the non-input is the control"}
+  - {line: "widen the blast radius",                enforced_by: "patch file list ⊄ blast_radius.paths → REJECT-SCOPE"}</div>
+    <p class="src"><b>Source:</b> SUG-ROLE-37, SUG-VER-04, SUG-ROLE-28; P-44, P-54, P-72.</p>
+    <p class="refuse"><b>Refuse:</b> a must-not with neither an enforcement nor a judgement; a boundary an agent interprets.</p>
+  </div>
+</section>
+
+<section id="s03">
+  <h2 class="sec"><span class="num">03</span>The stage rubric, 0–2 per criterion</h2>
+  <p class="kicker">Eight criteria, sixteen points, and three of them cannot be traded against the others.</p>
+  <p class="srcpath">Sources: <span class="mono">stages.md</span> §S0–§S12; <span class="mono">gates.md</span> §1–§2; SUG-GATE-01, 02, 04, 09, 10; SUG-VER-01, 02, 03, 07, 10, 13; SUG-ROLE-13, 20, 22, 32, 35, 38</p>
+  <p>The twelve fields are the contract; the rubric is the test of whether the contract is real. Each criterion is
+  scored 0, 1 or 2 against what is <em>written</em>, not what the author intended, and each anchor is a sentence a
+  second reader can disagree with — which is the point of a rubric. The criteria are not independent: a stage that
+  scores 2 on the artifact and 0 on the exit check has an artifact nobody can accept or reject.</p>
+
+  <div class="tw"><table class="rubric">
+  <caption>Eight criteria, 0–2. The anchors are deliberately concrete: a 2 is something a stranger can verify from the file.</caption>
+  <thead><tr><th>Criterion</th><th class="n">0</th><th class="n">1</th><th class="n">2</th><th>Found by</th></tr></thead><tbody>
+  <tr><td><strong>C1 — One act</strong><br><span class="small">single responsibility</span></td><td>Two acts with different exits, or an act defined only by its output</td><td>One act, but its boundary is stated as "and also" in the method</td><td>One verb, one artifact, one exit; a second act is visibly a second stage or a loop</td><td class="num">SUG-GATE-09</td></tr>
+  <tr><td><strong>C2 — Done is a command</strong><br><span class="small">machine-checkable exit</span></td><td>An opinion: "reviewed", "looks right", "consistent with the plan"</td><td>Some lines are commands; at least one needs a reader to judge it</td><td>Every exit line is a command or a set operation, with an id and recorded evidence</td><td class="num">SUG-GATE-01</td></tr>
+  <tr><td><strong>C3 — Artifact contract</strong><br><span class="small">schema, location, hash, one writer</span></td><td>A message, a directory, or prose in a report</td><td>An artifact with a schema but no hash, or with two writers</td><td>Schema, location, hash and exactly one writer; the hash is in the ledger</td><td class="num">SUG-ROLE-20, 22, 32, 35</td></tr>
+  <tr><td><strong>C4 — Inputs frozen</strong><br><span class="small">immutability and completeness</span></td><td>The input is a branch, a URL, or "the previous stage"</td><td>Hashes named, but mutability or the non-input list is missing</td><td>Every input has a schema, location and hash; the export is read-only; additions are a breach</td><td class="num">SUG-GATE-03, VER-04</td></tr>
+  <tr><td><strong>C5 — Author ≠ judge</strong><br><span class="small">separation, instrument out of reach</span></td><td>The producer signs off its own work</td><td>A separate role judges, but the instrument is writable by the producer</td><td>A different role judges, with an instrument the producer cannot write to or read</td><td class="num">SUG-VER-03, VER-13</td></tr>
+  <tr><td><strong>C6 — Rules bind with ids</strong><br><span class="small">falsifiability and citation</span></td><td>No rule ids; the constraint is a preference</td><td>Ids named, but at least one has no check, or a PROPOSED rule blocks implicitly</td><td>Every id resolves to a check; the tag regime is stated for any PROPOSED rule</td><td class="num">SUG-GATE-04, VER-10</td></tr>
+  <tr><td><strong>C7 — Stops are named</strong><br><span class="small">refusal, escalation, cap</span></td><td>No way to stop except failure; escalation is a person's name in prose</td><td>Stop codes exist; at least one has no destination or no cap</td><td>Each stop has a code, a condition, a destination and a cap; "cannot run" is its own state</td><td class="num">SUG-VER-07</td></tr>
+  <tr><td><strong>C8 — Context is bounded</strong><br><span class="small">the input list is the whole world</span></td><td>The stage reads "the repository" or "the session"</td><td>The inputs are bounded, but an adjacent role's reasoning is reachable</td><td>The input list is the whole world; non-inputs are named; no context holds the trifecta</td><td class="num">SUG-ROLE-38, VER-01</td></tr>
+  </tbody></table></div>
+
+  <div class="box"><span class="label">Pass threshold †</span>
+  <p class="thr">A stage passes at <strong>12 of 16</strong>, and only if <strong>C2, C3 and C5 each score 2</strong>.
+  Everything below 12 is a conversation; a stage at 12 with a 1 on any of those three is a stage that cannot prove it
+  finished, cannot hand anything over, or grades itself.</p>
+  <p>The three locked criteria are locked because each one has a documented failure behind it: prose exits are how a
+  review round produces the same findings three times (S8), messages instead of artifacts are how "install SUCCESS"
+  survived 46 of 176 bundles not being ready (I-4, SUG-ROLE-32), and a producer with a reachable instrument is how a
+  green suite comes to mean nothing (SUG-VER-13). The number 12, and the choice of exactly these three, is this page's
+  judgement — the corpus states the criteria, not the weights.</p></div>
+
+  <h3>The thirteen stages, scored</h3>
+  <p>The scores below are the contract as written in <span class="mono">stages.md</span> and <span class="mono">agents.md</span>
+  on <span class="mono">main</span>, not the pipeline as this page would like it. All seven score at or above the
+  threshold — the <em>stages</em> pass; what drags them down is the artifact they hand over, which is usually a
+  Markdown file, and that is exactly what the suggestions propose to change.</p>
+  <div class="tw"><table class="scoreboard">
+  <caption>Seven of the thirteen, chosen where the corpus's own objections land. † = this page's scoring.</caption>
+  <thead><tr><th>Stage</th><th>C1</th><th>C2</th><th>C3</th><th>C4</th><th>C5</th><th>C6</th><th>C7</th><th>C8</th><th class="num">/16</th><th>What holds it back</th></tr></thead><tbody>
+  <tr><td><strong>S2</strong> Freeze and export</td><td>2</td><td>2</td><td>2</td><td>2</td><td>2</td><td>1</td><td>2</td><td>2</td><td class="tot">15</td><td>Checklist lines carry evidence but no rule id (C6)</td></tr>
+  <tr><td><strong>S3</strong> Reverse-engineer</td><td>2</td><td>2</td><td>1</td><td>2</td><td>2</td><td>2</td><td>2</td><td>2</td><td class="tot">15</td><td>Six files with schemas, but no layer hash — P-18 is PROPOSED (C3)</td></tr>
+  <tr><td><strong>S4</strong> Work breakdown</td><td>2</td><td>2</td><td>1</td><td>2</td><td>1</td><td>1</td><td>2</td><td>2</td><td class="tot">13</td><td>A Markdown plan, and an exit computed on the author's own artifact</td></tr>
+  <tr><td><strong>S7</strong> DAL review</td><td>2</td><td>2</td><td>1</td><td>2</td><td>2</td><td>1</td><td>2</td><td>2</td><td class="tot">14</td><td>Twelve checks identified by table position; <span class="mono">dal-review.md</span> is prose</td></tr>
+  <tr><td><strong>S9</strong> Rewrite to green</td><td>1</td><td>2</td><td>1</td><td>2</td><td>1</td><td>2</td><td>1</td><td>2</td><td class="tot">12</td><td>Two entry edges, one shared cap, a verdict with no schema, key and execution in one identity</td></tr>
+  <tr><td><strong>S11</strong> Delivery to UAT</td><td>2</td><td>1</td><td>1</td><td>2</td><td>2</td><td>1</td><td>1</td><td>2</td><td class="tot">12</td><td>"install SUCCESS" is a word, not a conjunction; failures have no named destination</td></tr>
+  <tr><td><strong>S12</strong> UAT sign-off</td><td>2</td><td>1</td><td>1</td><td>2</td><td>2</td><td>1</td><td>2</td><td>2</td><td class="tot">13</td><td>42 DoD lines, several machine-checkable, all closed by a signature</td></tr>
+  </tbody></table></div>
+  <p class="small">S4 scores 1 on C5 for a specific reason the corpus states: its exit check is computed on the
+  artifact its own author wrote, and every later stage is generated from it, so a wrong cut is discovered by
+  re-running S4 (SUG-GATE-02). S9 scores 1 on C5 because the grant "read the branch; write signed results" puts the
+  key, the code execution and the verdict in one identity — and the suite it runs is code from the branch
+  (SUG-VER-03). Neither is a criticism of the people; both are properties of the text.</p>
+
+  <h3>Three non-stages, for calibration</h3>
+  <p>A rubric that passes everything is not a test. These three are the shapes the fields exist to refuse, and the
+  scores show where the refusal lands.</p>
+  <div class="tw"><table class="scoreboard">
+  <caption>Not stages. Included so a reader can see the scale at the bottom as well as at the top. †</caption>
+  <thead><tr><th>What it is</th><th>C1</th><th>C2</th><th>C3</th><th>C4</th><th>C5</th><th>C6</th><th>C7</th><th>C8</th><th class="num">/16</th><th>Why it fails</th></tr></thead><tbody>
+  <tr><td>"Review the design"</td><td>0</td><td>0</td><td>0</td><td>0</td><td>1</td><td>0</td><td>0</td><td>1</td><td class="tot">2</td><td>No artifact in, none out, no exit; a meeting with a title</td></tr>
+  <tr><td>"Clean up the DAL"</td><td>1</td><td>0</td><td>0</td><td>0</td><td>1</td><td>0</td><td>0</td><td>1</td><td class="tot">3</td><td>A chore: nothing is produced, so nothing can be accepted</td></tr>
+  <tr><td>"Raise coverage to 80%"</td><td>1</td><td>2</td><td>0</td><td>0</td><td>1</td><td>1</td><td>0</td><td>1</td><td class="tot">6</td><td>A target with a measurement and no artifact or boundary — the metric passes, the stage does not exist</td></tr>
+  </tbody></table></div>
+  <div class="box stop"><span class="label">The trap in a scored rubric</span>
+  <p>A score is a finding, not a verdict on the team. The failure mode is the one the review chapters name: a panel
+  that grades everything 2 because the author is in the room. The corpus's answer is the sampled audit — 10% of
+  machine-approved artifacts read in full by someone who did not approve them (P-76, D9) — and the same discipline
+  applies here: a rubric scored only by the author of the stage is a 16/16 that means nothing.</p></div>
+</section>
+
+<section id="s04">
+  <h2 class="sec"><span class="num">04</span>The agent that works a stage</h2>
+  <p class="kicker">A role has one remit, one input, one output and one stop condition. Five criteria decide whether the role card says so.</p>
+  <p class="srcpath">Sources: <span class="mono">agents.md</span> §1, §9, §10, §11, §12; SUG-ROLE-18, 24, 35, 37, 38; SUG-VER-01, 07, 12</p>
+  <p>The stage contract says what the work is. The agent rubric says whether the worker can be trusted with it — not
+  in the moral sense, in the mechanical one: does it have the capability the method needs, the context the artifact
+  list allows, a list of things it may not do that something enforces, a self-check it must run, and one honest way
+  to stop. Five criteria, two points each, and the same shape as the stage rubric so a reviewer can hold both in
+  mind at once.</p>
+
+  <div class="tw"><table class="rubric">
+  <caption>Five criteria, 0–2. A3 and A5 are the ones that turn a prompt into a boundary.</caption>
+  <thead><tr><th>Criterion</th><th class="n">0</th><th class="n">1</th><th class="n">2</th><th>Found by</th></tr></thead><tbody>
+  <tr><td><strong>A1 — Capability match</strong><br><span class="small">grants cover the method, and no more</span></td><td>The role cannot do what the method requires, or holds a credential the method never uses</td><td>Capability is sufficient but the grant is broader than the method</td><td>Every method step maps to a grant; every grant maps to a step; no credential it does not need</td><td class="num">P-69</td></tr>
+  <tr><td><strong>A2 — Bounded context</strong><br><span class="small">its artifacts plus the binding rules</span></td><td>Reads the repository, the session, or "the ticket"</td><td>An input list exists but names no hashes, or omits the non-inputs</td><td>Reads exactly its artifacts plus its rule subset; the non-inputs are named</td><td class="num">SUG-ROLE-38, VER-01</td></tr>
+  <tr><td><strong>A3 — Forbidden actions</strong><br><span class="small">explicit, and each enforced or judged</span></td><td>No must-not list, or a list of preferences with nothing behind them</td><td>Must-nots exist but at least one is enforced by nothing</td><td>Every line is <em>Enforced by</em> a grant, hash or check, or <em>Judged</em> with the alternative named</td><td class="num">SUG-ROLE-37</td></tr>
+  <tr><td><strong>A4 — Mandatory self-check</strong><br><span class="small">runs its own exit, reports evidence</span></td><td>Reports "tests green" or "done"</td><td>Runs the check but reports a sentence rather than the command and its output hash</td><td>Runs its exit check, reports <span class="mono">{command, exit_code, stdout_sha256}</span> and the rule→test map</td><td class="num">SUG-ROLE-18</td></tr>
+  <tr><td><strong>A5 — One escalation rule</strong><br><span class="small">a stop code, an artifact, a seat</span></td><td>No way to refuse; failure is retried into a cheat</td><td>A stop condition with no code, or a code with no destination</td><td>A stop code carries the attempt as an artifact and names the seat it goes to</td><td class="num">SUG-VER-07, VER-12</td></tr>
+  </tbody></table></div>
+
+  <div class="box"><span class="label">Pass threshold †</span>
+  <p class="thr">An agent passes at <strong>8 of 10</strong>, with <strong>A3 and A5 at 2</strong>. A card that scores
+  2 on capability and 0 on the two boundaries is a capable agent with no brake and no voice — the two properties the
+  corpus's stop vocabulary exists to give every role.</p></div>
+
+  <h3>Three roles, scored as written</h3>
+  <div class="tw"><table class="scoreboard">
+  <caption>Before = the roster on main. After = the same card with the accepted suggestions applied. †</caption>
+  <thead><tr><th>Role</th><th>A1</th><th>A2</th><th>A3</th><th>A4</th><th>A5</th><th class="num">Before</th><th class="num">After</th><th>What changes</th></tr></thead><tbody>
+  <tr><td><strong>Verifier</strong> (S9)</td><td>2</td><td>0</td><td>2</td><td>1</td><td>1</td><td class="tot">6</td><td class="tot">10</td><td>Reads and non-inputs declared (VER-01); verdict schema (VER-02); INCONCLUSIVE state (VER-07)</td></tr>
+  <tr><td><strong>Implementer</strong> (S6)</td><td>2</td><td>2</td><td>2</td><td>1</td><td>1</td><td class="tot">8</td><td class="tot">10</td><td>Rule→test map and exit-check record (ROLE-18); envelope status (ROLE-35)</td></tr>
+  <tr><td><strong>Security Reviewer</strong> (S8)</td><td>2</td><td>0</td><td>2</td><td>1</td><td>1</td><td class="tot">6</td><td class="tot">10</td><td>Reads list and <span class="mono">enforcement_point</span> (ROLE-24); finding record with a dedupe key (ROLE-23)</td></tr>
+  </tbody></table></div>
+  <p>The pattern is the same in all three: capability was never the problem. What the roster is thin on is what the
+  role reads, what shape its evidence takes, and what it says when it cannot proceed. Nine roles state no Reads field
+  at all — eight role sections, plus the Freeze job, which has no section of its own.</p>
+
+  <h3>The envelope, because a self-check is not a report</h3>
+  <p>Every role returns the same shape, so the control plane never parses prose. The four fields the corpus adds are
+  the ones a self-check needs to be checkable: which version of the artifact, whether the run stopped, what it
+  consumed, and what it ran.</p>
+  <pre>artifact:
+  id: layer/2026-11-04.3
+  path: layer/
+  sha256: 9f2c…
+produced_by: {role: rulewright, image: sha256:…, model: …, prompt_version: …}
+stage: S3
+schema_version: 1
+status: OK                    <span class="c"># one of the seven stop codes, or OK</span>
+inputs:                       <span class="c"># SUG-ROLE-35</span>
+  - {artifact: export, sha256: 4b1e…}
+  - {artifact: change-log, sha256: c03d…}
+confidence: 0.84              <span class="c"># the agent's own estimate, never a gate</span>
+checks_run:                   <span class="c"># SUG-ROLE-18</span>
+  - {id: EXIT-02, command: "pytest -q", exit_code: 0, evidence: "stdout sha256 7aa1…"}
+evidence:
+  - rules.yaml#R-014 -&gt; server/routes/appointments.ts:184-206
+rule_tests:
+  - {rule_id: R-014, test_class: DetentionTest, test_name: roundsUpTo15, result: PASS}
+open_items:
+  - q: which door kinds may a reefer use?
+    owner: Carrier Ops lead
+    blocking: R-022
+cost: {tokens_in: 0, tokens_out: 0, wall_ms: 0}</pre>
+  <p class="small">Confidence is not authority: a 0.95 with no citation fails; a 0.6 with a line number and a named
+  question passes to the reviewer. The number routes attention; it does not decide.</p>
+
+  <h3>The grant, because "must not" has to have an object</h3>
+  <div class="tw"><table>
+  <thead><tr><th>Role</th><th>Allow</th><th>Deny</th></tr></thead><tbody>
+  <tr><td>Implementer</td><td>Write its module and its tests</td><td>Contracts, boundaries, frozen files, the layer</td></tr>
+  <tr><td>Reviewers</td><td>Read the diff and the layer; write findings</td><td>Write the branch; see the fixer's reasoning</td></tr>
+  <tr><td>Fixer</td><td>Write its own branch</td><td>Tests, build files, CI, the layer, the verifier</td></tr>
+  <tr><td>Verifier</td><td>Read the branch; write signed results</td><td>Be written to by any agent</td></tr>
+  <tr><td>Auditor</td><td>Read everything in the sample</td><td>Choose the sample; write to the stage</td></tr>
+  </tbody></table></div>
+  <p>A grant is per stage and per artifact. The rebuild agent necessarily touches user wording and can push, so its
+  egress is one branch on one internal repository and its model calls go through the gateway — it is not trusted to
+  behave; it is denied the ability to matter outside its branch.</p>
+
+  <div class="box stop"><span class="label">Four roles the roster forbids</span>
+  <p><strong>An orchestrator agent</strong> — if a model picks the next stage, "why did it deploy?" has no
+  deterministic answer. <strong>A self-reviewing agent</strong> — the producer and the judge are different roles with
+  different context, and the judge's instrument is out of the producer's reach. <strong>A general-purpose engineer
+  agent</strong> holding repo, Oracle, Tower and promote credentials — maximum capability is maximum blast radius.
+  <strong>An agent that dispositions its own findings</strong> — Sentinel and the reviewers raise, the adjudicator
+  merges, the verifier closes.</p></div>
+</section>
+
+<section id="s05">
+  <h2 class="sec"><span class="num">05</span>The definition in YAML, and the prompt it becomes</h2>
+  <p class="kicker">One file, twelve keys. The prompt is generated from the file; it is not written beside it.</p>
+  <p class="srcpath">Sources: field shapes from <a href="#s02">§02</a>; packet fields in <span class="mono">work-breakdown.md</span> §5; envelope in <span class="mono">agents.md</span> §10; SUG-GATE-03, SUG-ROLE-18, SUG-ROLE-35</p>
+  <p>The definition is the artifact a reviewer reads and a control plane executes. The prompt is a projection of it,
+  one slot per field, in the same order — which is what makes "the agent was given the packet" a checkable claim
+  rather than a good intention. If a slot is empty in the definition, the prompt has a hole where an instruction
+  would be, and the agent fills it with invention.</p>
+
+  <h3>The stage, as a file</h3>
+  <p class="filename">stages/S7-dal-review.yaml</p>
+  <pre>stage:
+  id: S7
+  name: DAL review and SQL verify
+  purpose: &gt;-
+    Read every DAL mapping against the twelve checks and get a verification
+    record per statement, so the review panel starts from a verified data layer.
+  owner: {role: dal-reviewer, kind: agent}
+
+  inputs:
+    read:
+      - {artifact: branch-head,      schema: git-commit/1,
+         location: "bitbucket:IT/&lt;repo&gt;@&lt;sha&gt;", sha256: "&lt;tree sha256&gt;", mutability: read-only}
+      - {artifact: layer,            schema: layer/1,
+         location: "ledger#L-0042",                sha256: "&lt;layer hash&gt;", mutability: read-only}
+      - {artifact: column-catalogue, schema: all_tab_columns/1,
+         location: "oracle://&lt;schema&gt;#all_tab_columns@&lt;snapshot-id&gt;", sha256: "&lt;snapshot hash&gt;",
+         mutability: read-only}
+    non: [poc-repository, fixer-transcript]
+
+  trigger:
+    fires: control-plane
+    when: "packet.exit_check.exit_code == 0 and all(inputs[].sha256) resolve"
+
+  binds:
+    - {id: P-30,           check: "raw-SQL scan finds zero statements outside -dal"}
+    - {id: P-31,           check: "one mapping class, one input type, one output type per operation"}
+    - {id: P-39,           check: "every statement has a verification id linked from the PR"}
+    - {id: P-77,           check: "statement schema set is a subset of owned schemas, or a recorded exception"}
+    - {id: SEFL-DATA-004,  check: "statement verified and endpoint has an integration test"}
+    - {id: SEFL-SEC-007,   check: "no value concatenated into SQL text"}
+    - {id: P-42, tag: PROPOSED, on_fail: "record the regime; may not block until adopted"}
+
+  method:
+    deterministic: [enumerate-mappings, read-types-from-all_tab_columns, hash-statements, run-twelve-checks]
+    judgement:     [judge-whether-a-mapping-decides-meaning]
+    on_ambiguity:  ESCALATE-AMBIGUITY
+
+  artifact:
+    id: dal-review
+    path: "ledger/dal-review/&lt;repo&gt;-&lt;sha&gt;.json"
+    schema: dal-review/1
+    sha256: "&lt;computed on write&gt;"
+    writer: dal-reviewer
+
+  done:
+    - {check_id: S7-EXIT-01,
+       command: "jq -e 'all(.statements[]; .verification_id != null)' dal-review.json", pass_when: "true"}
+    - {check_id: S7-EXIT-02,
+       command: "jq -e 'all(.statements[]; (.check_results | length) == 12)' dal-review.json", pass_when: "true"}
+    - {check_id: S7-EXIT-03,
+       command: "git grep -n 'java.sql' -- ':(exclude)*dal*'", pass_when: "no matches"}
+
+  stops:
+    - {code: REFUSE-INPUT,         when: "layer hash does not match the G2 record",        to: control-plane}
+    - {code: ESCALATE-AMBIGUITY,   when: "a column type cannot be read from all_tab_columns", to: dba}
+    - {code: STOP-BUDGET,          when: "statement count exceeds the episode envelope",   to: poc-owner}
+
+  forbidden:
+    - {line: "change the mapping or the statement",   enforced_by: "read-only branch; file:write deny rule"}
+    - {line: "approve its own SQL-verify submission", enforced_by: "the DBA seat owns the verification record"}
+    - {line: "file a cross-schema read as debt",      judged: "owner and milestone, or it is a finding"}</pre>
+
+  <h3>The prompt, as a projection</h3>
+  <p>Fourteen slots over the twelve fields — owner and inputs each split in two — in the same order as the fields. The bracketed names are the only places the generator substitutes;
+  everything else in the skeleton is fixed, so two stages differ exactly as much as their definitions do.</p>
+  <pre>You are <span class="slot">&lt;owner.role&gt;</span>, a <span class="slot">&lt;owner.kind&gt;</span>. You work one stage: <span class="slot">&lt;id&gt;</span> — <span class="slot">&lt;name&gt;</span>.
+
+PURPOSE
+  <span class="slot">&lt;purpose&gt;</span>
+
+YOU MAY READ, AND ONLY READ
+<span class="slot">&lt;inputs&gt;</span>            <span class="c"># one line per artifact: name, schema, location, sha256</span>
+
+YOU MAY NOT READ
+<span class="slot">&lt;non_inputs&gt;</span>
+
+START ONLY WHEN
+  <span class="slot">&lt;trigger.when&gt;</span>
+  If an input hash does not resolve, or the condition is false, return REFUSE-INPUT and stop.
+
+THE RULES THAT BIND THIS WORK
+<span class="slot">&lt;binds&gt;</span>             <span class="c"># id, the check that enforces it, and the tag regime for a PROPOSED rule</span>
+
+METHOD, IN ORDER
+<span class="slot">&lt;method&gt;</span>
+
+YOU PRODUCE EXACTLY ONE ARTIFACT
+<span class="slot">&lt;artifact&gt;</span>          <span class="c"># id, path, schema, sha256, writer — you are the writer or you are not</span>
+
+DONE MEANS EVERY LINE BELOW IS TRUE, WITH ITS OUTPUT RECORDED
+<span class="slot">&lt;done&gt;</span>
+
+YOU STOP, AND SAY SO, WHEN
+<span class="slot">&lt;stops&gt;</span>             <span class="c"># code, condition, destination</span>
+
+YOU NEVER
+<span class="slot">&lt;forbidden&gt;</span>         <span class="c"># each line Enforced by … or Judged: … and what you do instead</span>
+
+RETURN the handoff envelope: schema_version, status, inputs, checks_run, evidence,
+rule_tests, open_items, cost. Do not choose the next stage. Do not summarise the work.
+Do not do work you were not given.</pre>
+
+  <h3>The mapping, one to one</h3>
+  <div class="tw"><table>
+  <caption>Every slot has exactly one field, and every field exactly one slot. A slot with no field is an instruction nobody can review.</caption>
+  <thead><tr><th>Prompt slot</th><th>Field</th><th>YAML key</th><th>Why the correspondence has to be exact</th></tr></thead><tbody>
+  <tr><td class="mono">&lt;id&gt;</td><td><a href="#f01">F01</a> id</td><td class="mono">stage.id</td><td>The ledger, the trace and the review all key on it</td></tr>
+  <tr><td class="mono">&lt;name&gt;</td><td><a href="#f02">F02</a> name</td><td class="mono">stage.name</td><td>The agent's own name for the work must match the table's, or a finding cannot cite it</td></tr>
+  <tr><td class="mono">&lt;purpose&gt;</td><td><a href="#f03">F03</a> purpose</td><td class="mono">stage.purpose</td><td>The one sentence a refusal is measured against</td></tr>
+  <tr><td class="mono">&lt;owner.role&gt;</td><td><a href="#f04">F04</a> owner</td><td class="mono">stage.owner.role</td><td>Capability is granted per role, not per stage</td></tr>
+  <tr><td class="mono">&lt;owner.kind&gt;</td><td><a href="#f04">F04</a> owner</td><td class="mono">stage.owner.kind</td><td>An agent may judge; a service may not. The prompt has to say which it is</td></tr>
+  <tr><td class="mono">&lt;inputs&gt;</td><td><a href="#f05">F05</a> inputs</td><td class="mono">stage.inputs.read</td><td>An input nobody names cannot be granted, hashed or audited</td></tr>
+  <tr><td class="mono">&lt;non_inputs&gt;</td><td><a href="#f05">F05</a> inputs</td><td class="mono">stage.inputs.non</td><td>The prohibition is the control; a list of what to read does not imply it</td></tr>
+  <tr><td class="mono">&lt;trigger.when&gt;</td><td><a href="#f06">F06</a> trigger</td><td class="mono">stage.trigger</td><td>A stage that starts on a stale artifact produces a verdict about the wrong subject</td></tr>
+  <tr><td class="mono">&lt;binds&gt;</td><td><a href="#f07">F07</a> binds</td><td class="mono">stage.binds</td><td>The rule ids are the only durable statement of what "correct" means here</td></tr>
+  <tr><td class="mono">&lt;method&gt;</td><td><a href="#f08">F08</a> method</td><td class="mono">stage.method</td><td>Order is part of the method; a paraphrase reorders it</td></tr>
+  <tr><td class="mono">&lt;artifact&gt;</td><td><a href="#f09">F09</a> artifact</td><td class="mono">stage.artifact</td><td>One writer, one schema — the prompt cannot leave it to the agent's judgement</td></tr>
+  <tr><td class="mono">&lt;done&gt;</td><td><a href="#f10">F10</a> done</td><td class="mono">stage.done</td><td>The self-check is the same list the control plane will run; two lists drift</td></tr>
+  <tr><td class="mono">&lt;stops&gt;</td><td><a href="#f11">F11</a> stops</td><td class="mono">stage.stops</td><td>A stop the agent cannot name is a stop it will not take</td></tr>
+  <tr><td class="mono">&lt;forbidden&gt;</td><td><a href="#f12">F12</a> forbidden</td><td class="mono">stage.forbidden</td><td>Enforced-by and Judged-by are different instructions and must not merge</td></tr>
+  </tbody></table></div>
+
+  <div class="box warn"><span class="label">What the skeleton deliberately leaves out</span>
+  <p>No persona, no encouragement, no worked example of a good answer, no "use your judgement". Every sentence in the
+  skeleton is a slot for a field, and every field is something the control plane or the reviewer can check. The
+  corpus's own finding is that a delegated task needs an objective, an output format, the tools and sources, and clear
+  boundaries — the twelve fields are those four, made explicit enough to diff.</p></div>
+</section>
+
+<section id="s06">
+  <h2 class="sec"><span class="num">06</span>Worked example — the verifier stage</h2>
+  <p class="kicker">The only actor that closes a finding, written out as a stage: twelve fields, one signed artifact, and a fourth answer for the case the documents cannot express.</p>
+  <p class="srcpath">Sources: <span class="mono">agents.md</span> §7 Verifier; <span class="mono">stages.md</span> §S9; <span class="mono">suggestions/verifier-role.md</span> SUG-VER-01..13; <span class="mono">rules.md</span> P-41–P-53; <span class="mono">pipeline.html</span> §11.1–§11.2</p>
+  <p>The verifier is chosen because it is the hardest case. Its output is the verdict of record, its subject is a
+  commit it did not write, its instrument is code from the branch it is judging, and the corpus records that the
+  documents give it no input list, no record shape and no state for "the check could not run". It is also the stage
+  where the twelve fields do the most work: five of them are the anti-cheat set.</p>
+
+  <div class="box"><span class="label">Why this is S9.1 and not S13</span>
+  <p>S9 is modelled in the corpus as a loop node with two entry edges — the review's finding set and parity's — and a
+  proposal to split it into <span class="mono">S9a</span>/<span class="mono">S9b</span> was reduced to separate caps
+  because renumbering breaks the spine, the anchors and every count (SUG-GATE-09). This example follows that
+  decision: <span class="mono">S9.1</span> is the verification half of S9, addressed as a stage because it has all
+  twelve fields, and the thirteen-stage spine is unchanged.</p></div>
+
+  <h3>The twelve fields, filled</h3>
+  <div class="tw"><table class="contract">
+  <thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>
+  <tr><td class="mono">id</td><td><span class="mono">S9.1</span> — the verification half of S9; the spine stays S0–S12</td></tr>
+  <tr><td class="mono">name</td><td>Verify and sign the repair</td></tr>
+  <tr><td class="mono">purpose</td><td>Prove the named check and the layer oracle pass for one subject commit, and sign the record that lets the control plane close a finding.</td></tr>
+  <tr><td class="mono">owner</td><td><span class="mono">{role: verifier, kind: service}</span> — two identities: runner and signer</td></tr>
+  <tr><td class="mono">inputs</td><td>Seven, below, each with a schema, a location and a hash; four named non-inputs</td></tr>
+  <tr><td class="mono">trigger</td><td>The control plane, when the fixer's handoff resolves and the subject commit is the branch head; a new push re-fires it (P-53)</td></tr>
+  <tr><td class="mono">binds</td><td>P-41, P-42 (PROPOSED), P-43 (PROPOSED), P-44, P-45, P-51 (PROPOSED), P-52, P-53, P-69, P-74 — plus the tag regime below</td></tr>
+  <tr><td class="mono">method</td><td>Six deterministic steps; no model in the path</td></tr>
+  <tr><td class="mono">artifact</td><td><span class="mono">verdict.json</span>, schema <span class="mono">verdict/1</span>, written to the ledger by the signer; one writer, append-only</td></tr>
+  <tr><td class="mono">done</td><td>Eight exit checks, V-EXIT-01..08, each a command</td></tr>
+  <tr><td class="mono">stops</td><td>Four stop codes, each with a destination and a cap: REFUSE-INPUT, ESCALATE-NO-PROGRESS, REJECT-SCOPE, STOP-BUDGET</td></tr>
+  <tr><td class="mono">forbidden</td><td>Five lines: three enforced by a mechanism, two judged with the alternative named</td></tr>
+  </tbody></table></div>
+
+  <h3>The inputs, and the four it may not have</h3>
+  <div class="tw"><table>
+  <caption>SUG-VER-01's list, with the fields F05 requires. A row without a hash is REFUSE-INPUT.</caption>
+  <thead><tr><th>Input</th><th>Schema</th><th>Location</th><th>Why it is an input</th></tr></thead><tbody>
+  <tr><td>Subject commit and tree</td><td class="mono">git-commit/1</td><td class="mono">branch head, hashed</td><td>The verdict is a statement about this commit; <span class="mono">subject.commit == HEAD</span> is the first exit check</td></tr>
+  <tr><td>Frozen instrument manifest</td><td class="mono">manifest/1</td><td class="mono">ledger#M-0007, pinned at S8 start</td><td>Path, hash and pin commit per instrument; a modified, deleted or added path is a scope breach</td></tr>
+  <tr><td>Test manifest from S5</td><td class="mono">manifest/1</td><td class="mono">skeleton repo, committed</td><td>The generated acceptance tests hashed at generation, so <span class="mono">assertion_drift</span> is measurable (VER-13)</td></tr>
+  <tr><td>Holdout set id and store</td><td class="mono">holdout/1</td><td class="mono">outside the repository</td><td>Withheld assertions injected at run time; the set is never visible to the fixer</td></tr>
+  <tr><td>Layer version and <span class="mono">rules.yaml</span></td><td class="mono">layer/1</td><td class="mono">ledger#L-0042</td><td>The oracle's provenance: which rule id each assertion proves, from which layer version (VER-09)</td></tr>
+  <tr><td>Finding set with the named check</td><td class="mono">finding/2</td><td class="mono">ledger#F-0018</td><td>The check must resolve to a test id in the manifest, or REFUSE-INPUT (VER-12)</td></tr>
+  <tr><td>Environment recipe</td><td class="mono">env/1</td><td class="mono">image digest, JDK, Gradle, Oracle fixture</td><td>A verdict expires when any of these change (VER-11)</td></tr>
+  </tbody></table></div>
+  <div class="tw"><table>
+  <thead><tr><th>Non-input</th><th>Why the prohibition is the control</th></tr></thead><tbody>
+  <tr><td>The fixer's transcript</td><td>Reading it anchors the verifier to the author's account of the change — the failure the separation exists to prevent</td></tr>
+  <tr><td>The reviewer's confidence</td><td>A number is not evidence; it routes attention and cannot decide</td></tr>
+  <tr><td>The patch rationale</td><td>The verdict is about the artefact, not the intent behind it</td></tr>
+  <tr><td>The holdout store's contents</td><td>The runner receives the assertions for this run only; enumeration is a control failure, not a convenience</td></tr>
+  </tbody></table></div>
+
+  <h3>The rules that bind it, and the one conflict it has to record</h3>
+  <div class="tw"><table>
+  <thead><tr><th>Id</th><th>Tag</th><th>The check that enforces it</th></tr></thead><tbody>
+  <tr><td class="mono">P-41</td><td><span class="tag t-keep">ADOPTED</span></td><td>Manifest comparison: modification, deletion <em>or addition</em> inside the globs is a scope breach</td></tr>
+  <tr><td class="mono">P-44</td><td><span class="tag t-keep">ADOPTED</span></td><td>The fixer's deny list covers <span class="mono">src/test/**</span>, the build files, <span class="mono">buildSrc</span>, the wrapper, test resources and CI</td></tr>
+  <tr><td class="mono">P-52</td><td><span class="tag t-keep">ADOPTED</span></td><td>Signature verifies; the record names the subject commit and the assertion ids</td></tr>
+  <tr><td class="mono">P-53</td><td><span class="tag t-keep">ADOPTED</span></td><td>A push after the verdict re-fires S9.1; the old record stays and is not cited</td></tr>
+  <tr><td class="mono">P-42 · P-43</td><td><span class="tag t-warn">PROPOSED</span></td><td>Holdouts and canaries run and are recorded — but may not block a merge until adopted</td></tr>
+  <tr><td class="mono">P-51</td><td><span class="tag t-warn">PROPOSED</span></td><td>A refusal is recorded as an outcome, not as a failure of the run</td></tr>
+  <tr><td class="mono">P-69 · P-74</td><td><span class="tag t-keep">ADOPTED</span></td><td>The runner holds no key; the budget is enforced by the gateway, not the prompt</td></tr>
+  </tbody></table></div>
+  <div class="box stop"><span class="label">The tag conflict, recorded rather than resolved</span>
+  <p>P-52 is <span class="mono">ADOPTED</span> and closes a finding only when the named check, the full suite and the
+  holdouts pass. The holdouts are P-42 and the canaries P-43, both <span class="mono">PROPOSED</span> — and
+  <span class="mono">rules.md</span> §1 says a PROPOSED rule may not block a merge. Under the directory's own
+  semantics a finding whose only failing instrument is a holdout is unclosable. The stage's response is the only
+  honest one available: the verdict records <span class="mono">holdouts.regime</span> as
+  <span class="mono">adopted</span> or <span class="mono">advisory</span>, and F4 at UAT inherits the same field.
+  Either the two rules are promoted or P-52's holdout clause is restated as conditional; that is a tag decision, not
+  a stage decision (SUG-VER-10, pipeline.html §12 Q2).</p></div>
+
+  <h3>The method, in order</h3>
+  <ol>
+    <li><strong>Resolve.</strong> Each finding's named check is looked up in the frozen manifest. An id that does not
+    resolve, or that resolves to a skipped or empty test, is <span class="mono">REFUSE-INPUT</span> — the reproduce
+    step otherwise trusts the fixer's naming (SUG-VER-12).</li>
+    <li><strong>Hash.</strong> Subject tree, manifest, test manifest, holdout set and environment recipe. A manifest
+    path that is new is as much a breach as one that changed (SUG-VER-04).</li>
+    <li><strong>Run twice.</strong> The named check and the full suite, in an ephemeral environment, twice. Two runs
+    are required before either PASS or FAIL; P-45 already asks this of integration tests (SUG-VER-07).</li>
+    <li><strong>Inject the holdouts.</strong> Stratified by rule id and module, injected at run time, never written to
+    the repository. A failure reports the assertion id and a redacted diff, never the assertion text.</li>
+    <li><strong>Compute.</strong> The judge identity reads the runner's log and the manifest only, and computes one of
+    four results. It executes nothing and writes nothing.</li>
+    <li><strong>Sign.</strong> The signer, which never executes branch code and holds the key outside the job, signs
+    the record and appends it to the ledger with the previous entry's hash.</li>
+  </ol>
+
+  <h3>The artifact: verdict.json</h3>
+  <p class="filename">ledger/verdicts/V-0001.json — schema verdict/1</p>
+  <pre>{
+  "id": "V-0001",
+  "subject":      { "commit": "9c1f4ab", "tree": "3e07d21", "artifact_digest": null },
+  "policy":       { "id": "s9-exit", "version": 1 },
+  "oracle":       { "layer_version": "9f2c…", "generator_role": "Scaffolder",
+                    "generator_commit": "1b8e0c4", "assertion_ids": ["R-014-1"],
+                    "assertion_drift": [] },
+  "instruments":  { "manifest_hash": "7aa1…", "pinned_at_commit": "9c1f4ab", "paths": [] },
+  "holdouts":     { "set_id": "H-2026-11-02.3", "regime": "advisory",
+                    "coverage_by_rule": { "R-014": 2 }, "result": "PASS" },
+  "environment":  { "image_digest": "sha256:41c9…", "jdk": "21", "gradle": "8.7",
+                    "oracle_fixture_version": "FX-12" },
+  "findings":     [ { "id": "F-12", "named_check": "R-014-1",
+                      "test_id": "Rule014AcceptanceTest", "result": "PASS" } ],
+  "result":       "PASS",
+  "counts":       { "layer_assertions": { "passed": 77, "failed": 0 },
+                    "author_tests":     { "passed": 412, "failed": 0 } },
+  "runs":         [ { "started_at": "2026-11-02T18:31:04Z", "duration_s": 754,
+                      "result": "PASS", "log_hash": "c0de…" },
+                    { "started_at": "2026-11-02T18:44:52Z", "duration_s": 761,
+                      "result": "PASS", "log_hash": "b41a…" } ],
+  "flake":        { "reruns": 0, "disagreements": [] },
+  "signer":       { "identity": "verifier-signer@sefl", "key_id": "kms/verifier/2" },
+  "ledger":       { "entry_id": "L-0091", "prev_entry_hash": "5e2b…", "record_hash": "af03…" }
+}</pre>
+  <p>Four properties make it a record rather than a report. The <strong>subject</strong> binds it to a commit, and it
+  expires when the manifest, the holdout set, the image or the fixture changes (SUG-VER-11). The
+  <strong>oracle</strong> block names the generator, the layer version and the assertion ids, so a regenerated
+  assertion that passes its own test is distinguishable from the original (SUG-VER-09). The <strong>counts</strong>
+  separate the two oracle classes, and only <span class="mono">layer_assertions</span> can close a finding
+  (SUG-VER-05). The <strong>ledger</strong> block carries the previous entry's hash, which makes "append-only"
+  checkable rather than asserted (SUG-VER-02).</p>
+
+  <h3>Done: eight checks, each a command</h3>
+  <div class="tw"><table>
+  <caption>F10 in practice. The same list is the agent's self-check and the control plane's gate; there is one list.</caption>
+  <thead><tr><th>Id</th><th>Command, as it would run</th><th>Passes when</th></tr></thead><tbody>
+  <tr><td class="mono">V-EXIT-01</td><td class="mono">jq -e '.subject.commit == env.HEAD' verdict.json</td><td>true</td></tr>
+  <tr><td class="mono">V-EXIT-02</td><td class="mono">jq -e 'all(.findings[]; .test_id != null)' verdict.json</td><td>true</td></tr>
+  <tr><td class="mono">V-EXIT-03</td><td class="mono">jq -e '(.runs | length) == 2 and (.runs | map(.result) | unique | length) == 1' verdict.json</td><td>true</td></tr>
+  <tr><td class="mono">V-EXIT-04</td><td class="mono">jq -e '.counts.layer_assertions.failed == 0' verdict.json</td><td>true</td></tr>
+  <tr><td class="mono">V-EXIT-05</td><td class="mono">jq -e '.holdouts.result == "PASS" or .holdouts.regime == "advisory"' verdict.json</td><td>true, and the regime is named</td></tr>
+  <tr><td class="mono">V-EXIT-06</td><td class="mono">jq -e '.canary.result == "FAIL"' verdict.json</td><td>true — a canary that passes is a cheat</td></tr>
+  <tr><td class="mono">V-EXIT-07</td><td class="mono">jq -e '.oracle.assertion_drift == []' verdict.json</td><td>true, or a test-change record is linked</td></tr>
+  <tr><td class="mono">V-EXIT-08</td><td class="mono">cosign verify-blob --key kms/verifier/2 verdict.json</td><td>signature verifies and the ledger hash chain links</td></tr>
+  </tbody></table></div>
+
+  <h3>Four results, because three cannot say "could not run"</h3>
+  <p>The documents give the verifier three stop conditions and no state for a check that could not be executed, so the
+  cheap path reads that case as green. The verdict is four-valued:</p>
+  <div class="tw"><table>
+  <thead><tr><th>Result</th><th>Means</th><th>Closes a finding?</th><th>Who acts next</th></tr></thead><tbody>
+  <tr><td><span class="verdict v-pass">PASS</span></td><td>Both runs agree, the layer assertion passes, the holdouts pass under a named regime, no canary passed, no drift</td><td>Yes</td><td>Control plane closes the finding; G3 reads the record</td></tr>
+  <tr><td><span class="verdict v-fail">FAIL</span></td><td>A run failed reproducibly, or an assertion or holdout failed, or drift is unexplained</td><td>No — it reopens the finding</td><td>The fixer, for another round, within the cap</td></tr>
+  <tr><td><span class="verdict v-fail">INCONCLUSIVE</span></td><td>The runs disagree, the environment could not be reproduced, or a named check resolved to a skipped or empty test</td><td>No — and it never counts as green</td><td>The engineer, with the disagreement and the flake ledger</td></tr>
+  <tr><td><span class="verdict">REFUSED</span></td><td>An input hash did not resolve, the manifest was written to, or the subject is not the head</td><td>No</td><td>The control plane, which re-fires the producer</td></tr>
+  </tbody></table></div>
+
+  <h4>The INCONCLUSIVE case, worked</h4>
+  <p>R-014's acceptance test passes on the first run and fails on the second, with the same tree, the same image and the
+  same fixture. That is neither a pass nor a finding: it is evidence that the oracle is flaky, and the honest record
+  says so. The differing keys are these, and the rest of the object is as above:</p>
+  <pre>"result": "INCONCLUSIVE",
+"runs":   [ { "started_at": "2026-11-02T18:31:04Z", "result": "PASS", "log_hash": "c0de…" },
+            { "started_at": "2026-11-02T18:44:52Z", "result": "FAIL", "log_hash": "b41a…" } ],
+"flake":  { "reruns": 1,
+            "disagreements": [ { "rule_id": "R-014", "assertion_id": "R-014-1",
+                                 "first": "PASS", "second": "FAIL",
+                                 "suspected": "time-dependent fixture FX-12" } ] },
+"counts": { "layer_assertions": { "passed": 76, "failed": 1 },
+            "author_tests":     { "passed": 412, "failed": 0 } }</pre>
+  <p>What happens next is fixed by the stop list, not by the verifier's judgement: the finding stays open, the
+  disagreement goes to the engineer with both logs, and the flake ledger records R-014-1 against the fixture. A
+  quarantine is controlled debt with an owner and a date — a quarantined test stops proving its rule, which is why
+  who may quarantine it is an open question and not a stage decision (pipeline.html §12 Q7). The one thing the stage
+  forbids itself is the tempting move: retrying until green and reporting PASS.</p>
+
+  <h3>Stops</h3>
+  <div class="tw"><table>
+  <thead><tr><th>Code</th><th>Condition</th><th>Destination</th><th>Cap</th></tr></thead><tbody>
+  <tr><td class="mono">REFUSE-INPUT</td><td>A hash does not resolve; a named check does not resolve; the subject is not the head</td><td>Control plane, which re-fires the producer</td><td>None — a refusal is free</td></tr>
+  <tr><td class="mono">ESCALATE-NO-PROGRESS</td><td>Two runs disagree; the environment cannot be reproduced</td><td>The engineer, with both logs and the flake ledger</td><td>3 attempts, then a person</td></tr>
+  <tr><td class="mono">REJECT-SCOPE</td><td><span class="mono">assertion_drift</span> with no test-change record</td><td>Control plane; the patch is counted</td><td>A repeat is a misclassification</td></tr>
+  <tr><td class="mono">STOP-BUDGET</td><td>The episode envelope is reached</td><td>The POC owner</td><td>—</td></tr>
+  </tbody></table></div>
+
+  <h3>Forbidden, with the mechanism behind each line</h3>
+  <div class="tw"><table>
+  <thead><tr><th>Line</th><th>Enforced by / Judged</th></tr></thead><tbody>
+  <tr><td>Edit the branch, the tests, the manifest or the layer</td><td><strong>Enforced by:</strong> read-only clone; the file:write deny list; a signature over a tree the runner never writes</td></tr>
+  <tr><td>Hold the signing key in the runner, or sign from inside the executed process</td><td><strong>Enforced by:</strong> separate signer identity, key in KMS outside the job</td></tr>
+  <tr><td>Enumerate the holdout store, or write the assertions anywhere in the repository</td><td><strong>Enforced by:</strong> the store is not mounted in the runner; the injected set is per-run and read-only</td></tr>
+  <tr><td>Read the fixer's transcript or the reviewer's confidence</td><td><strong>Judged:</strong> it anchors the verdict to the author's account; the non-input is the control, and the run records what it read</td></tr>
+  <tr><td>Retry a disagreement until it is green, or report a single run as a verdict</td><td><strong>Judged:</strong> V-EXIT-03 requires two agreeing runs; a disagreement is INCONCLUSIVE and goes to the engineer</td></tr>
+  </tbody></table></div>
+
+  <div class="box warn"><span class="label">What this example leaves open, deliberately</span>
+  <p>Four things the corpus has not decided, and a stage cannot decide for it: <strong>who owns the holdout store
+  and for how long</strong> (D10, Q1); <strong>which identity signs and where the key lives</strong> — a Jenkins
+  credential, a KMS key or Sigstore keyless (Q4); <strong>what false-pass rate lets a verdict auto-merge</strong>, and
+  who measures it on a corpus that does not exist (Q3); and <strong>whether the verifier runs the implementer's tests
+  at all</strong>, or only the layer oracle (Q6). Each is named in the stage's <span class="mono">open_items</span>
+  rather than guessed, which is the same discipline the pipeline applies to every other ambiguity.</p></div>
+</section>
+
+<section id="s07">
+  <h2 class="sec"><span class="num">07</span>Anti-patterns, and which field each one empties</h2>
+  <p class="kicker">Thirteen failures the suggestion files found in the documents. Each is a field left empty, and each is attributed to the id that found it.</p>
+  <p class="srcpath">Sources: <span class="mono">suggestions/verifier-role.md</span>, <span class="mono">suggestions/stages-and-gates.md</span>, <span class="mono">suggestions/role-instructions.md</span>; decisions in <span class="mono">pipeline.html</span> §10</p>
+  <p>The corpus has its own anti-patterns, and they are evidence from real repositories rather than hypotheses:
+  a DELETE endpoint that returns 200 and deletes nothing, five procedure calls with five commits and no transaction,
+  a claim statement in production with its verification "pending" in a Javadoc. Those are failures of the code the
+  pipeline reviews. The table below is different: it is the failures of the pipeline's own documents, found by the
+  three research passes, and each one is a stage — or a role — whose contract has a hole in a named place.</p>
+
+  <div class="tw"><table>
+  <caption>Thirteen anti-patterns. The SUG id is where the evidence is; the field is where the repair belongs.</caption>
+  <thead><tr><th class="num">#</th><th>The failure, as it appears</th><th>Field</th><th>SUG id</th><th>Caught by</th></tr></thead><tbody>
+  <tr><td class="num">AP-01</td><td><strong>The stage that is two stages.</strong> S9 takes the review's finding set, is re-entered from parity, and appears twice in a sequence that promises one input artifact per stage — with one round cap over two independent finding sources.</td><td class="mono">purpose, done</td><td class="num">SUG-GATE-09</td><td>C1</td></tr>
+  <tr><td class="num">AP-02</td><td><strong>Done by opinion.</strong> "Reviewed", "looks consistent", "the reviewer spent ninety minutes and corrected nothing". A review where nothing is corrected is a review that did not happen.</td><td class="mono">done</td><td class="num">SUG-ROLE-13, SUG-GATE-01</td><td>C2</td></tr>
+  <tr><td class="num">AP-03</td><td><strong>The artifact that is a word.</strong> "Tier-1 results", "install SUCCESS", a prose validation report. Nothing can be joined to a rule id or a gate, and 46 of 176 bundles were not ready while the word still read success.</td><td class="mono">artifact</td><td class="num">SUG-ROLE-22, 32, 20</td><td>C3</td></tr>
+  <tr><td class="num">AP-04</td><td><strong>The input that is a path.</strong> A branch head, a repository, "the previous stage" — the same packet run tomorrow reads different code. Nine roles state no Reads field at all.</td><td class="mono">inputs</td><td class="num">SUG-GATE-03, SUG-VER-01, SUG-ROLE-38</td><td>C4, C8</td></tr>
+  <tr><td class="num">AP-05</td><td><strong>The unmeasured judge.</strong> A role that decides has no scorecard, while a reviewer class needs a measured precision before it may block. The actor with more power is the one with no measured accuracy.</td><td class="mono">owner, binds</td><td class="num">SUG-VER-08</td><td>C5</td></tr>
+  <tr><td class="num">AP-06</td><td><strong>The instrument in the author's hand.</strong> The implementer writes "its tests" from S5 to S8, and the verifier hashes whatever it left behind. In the same shape, the key, the code execution and the verdict sit in one identity.</td><td class="mono">forbidden</td><td class="num">SUG-VER-03, 13, SUG-ROLE-26</td><td>C5</td></tr>
+  <tr><td class="num">AP-07</td><td><strong>The hash set that catches edits but not additions.</strong> <span class="mono">settings.gradle</span> adds a module, <span class="mono">buildSrc</span> changes what "test" means, a test resource changes the fixture — none is a test file and three are not in the deny list.</td><td class="mono">inputs, forbidden</td><td class="num">SUG-VER-04</td><td>C4</td></tr>
+  <tr><td class="num">AP-08</td><td><strong>The must-not that nothing enforces.</strong> Twenty-three of twenty-four roles have a must-not list, and most of it is a preference wearing a rule's clothes.</td><td class="mono">forbidden</td><td class="num">SUG-ROLE-37</td><td>C8, A3</td></tr>
+  <tr><td class="num">AP-09</td><td><strong>The stage with no way to say no.</strong> Three stop conditions and no state for "the check could not run", so the cheap path reads an unrun check as green; a refusal is treated as a failure and retried into a cheat.</td><td class="mono">stops</td><td class="num">SUG-VER-07</td><td>C7</td></tr>
+  <tr><td class="num">AP-10</td><td><strong>The oracle with no provenance.</strong> Nothing records who generated an assertion, from which layer version, or which rule it proves — so a regenerated assertion that passes its own test is indistinguishable from the original.</td><td class="mono">inputs, done</td><td class="num">SUG-VER-09</td><td>C5</td></tr>
+  <tr><td class="num">AP-11</td><td><strong>Coverage without faithfulness.</strong> The check can only fail a rule with <em>no</em> source; a rule citing a real but unrelated line passes — and audits of generated citations find support is much rarer than citation.</td><td class="mono">binds</td><td class="num">SUG-GATE-04</td><td>C6</td></tr>
+  <tr><td class="num">AP-12</td><td><strong>The tolerance fitted to the result.</strong> The table has no owner and the agent has a default, so the exception is negotiated after the diff exists. A tolerance that describes what was built does not constrain it.</td><td class="mono">binds, done</td><td class="num">SUG-GATE-10</td><td>C6</td></tr>
+  <tr><td class="num">AP-13</td><td><strong>The handoff with no version.</strong> The envelope omits which artifact version it carries, whether the run stopped, what it consumed and what it ran — so the provenance chain is a set of summaries rather than queries.</td><td class="mono">inputs, artifact</td><td class="num">SUG-ROLE-35</td><td>C3, C4</td></tr>
+  </tbody></table></div>
+
+  <h3>How to use the table</h3>
+  <p>Score first, then read down the field column. A stage that fails C2 will match AP-02 and nothing else; a stage
+  that fails C5 usually matches two of AP-05, AP-06 and AP-10 at once, because the three are one defect seen at three
+  points in the timeline. The attribution matters for a second reason: the <span class="mono">SUG</span> ids are the
+  evidence, so a reader who disagrees with a repair can go to the file and check whether the failure is real before
+  arguing about the fix.</p>
+  <div class="box"><span class="label">One anti-pattern this page adds, and does not number</span>
+  <p><strong>Scoring your own stage.</strong> A rubric applied by the author of the thing being scored is a 16/16 that
+  measures nothing — the same failure the corpus names for reviews and for the adjudicator. The control is the sampled
+  audit: someone who did not write the stage reads the artifact in full, and a miss is a finding about the checks
+  rather than about the sample (P-76, D9).</p></div>
+</section>
+
+<section id="s08">
+  <h2 class="sec"><span class="num">08</span>How a stage cites the standards pack</h2>
+  <p class="kicker">A stage does not load "the standards". It names a domain slice, by id, and the worker loads only that slice.</p>
+  <p class="srcpath">Sources: <span class="mono">docs/standards/README.md</span>; <span class="mono">docs/standards/registry.json</span>; <span class="mono">rules.md</span> §1; SUG-ROLE-36 (rejected); <span class="mono">pipeline.html</span> §12 Q19</p>
+  <p>The pack is ninety rules in five domains, written to be loaded one domain at a time and cited by id. That
+  sentence is the whole citation rule, and it is also the part the pipeline has not decided: SUG-ROLE-36 proposed
+  attaching domains to every role card and was rejected, because the pack is not one of the nine documents and no
+  pipeline rule assigns its ids to a role. What follows is therefore a convention, not an enforced mapping — and it
+  is what a stage's <span class="mono">binds</span> field needs in order to name a rule at all.</p>
+
+  <h3>Three namespaces, never mixed</h3>
+  <div class="tw"><table>
+  <thead><tr><th>Namespace</th><th>What it is</th><th>Counts</th><th>Where it is authoritative</th></tr></thead><tbody>
+  <tr><td class="mono">P-*</td><td>The pipeline's own rules</td><td>77 — 64 <span class="tag t-keep">ADOPTED</span>, 13 <span class="tag t-warn">PROPOSED</span>, 10 groups</td><td class="mono">docs/pipeline/rules.md</td></tr>
+  <tr><td class="mono">SEFL-&lt;DOMAIN&gt;-NNN</td><td>The standards pack: architecture, infrastructure, code organization, security, data access</td><td>90 — 62 STANDARD, 28 PROPOSED; 14 Blocker, 50 Major, 26 Minor</td><td><span class="mono">registry.json</span> for the entry; the domain file for the text</td></tr>
+  <tr><td class="mono">R-*</td><td>The retired draft's ids, folded into the pack</td><td>64, R1–R64, all present and unique</td><td>Only through a rule's <span class="mono">Provenance</span> field</td></tr>
+  </tbody></table></div>
+  <p>A citation is the id and nothing else. The registry entry is machine-readable — <span class="mono">id, domain,
+  title, status, severity, file, line, applies_to, provenance, summary</span> — and the prose authority carries
+  <em>Why</em>, <em>How to check</em> and <em>Evidence</em>. Where the two disagree, the domain file wins for the rule
+  text and the registry is regenerated, which is why a citation never quotes the rule's text: it quotes the id.</p>
+
+  <h3>The slicing rule</h3>
+  <ul>
+    <li><strong>Name a domain, not the pack.</strong> "The standards pack" is not a value a stage can bind; it is a
+    corpus a reader can browse. A stage names <span class="mono">data-access</span> and the ids inside it.</li>
+    <li><strong>A domain per stage where possible.</strong> The pack's own boundary rule is that a rule lives in exactly
+    one file; where a rule touches a second domain, the other file references its id rather than restating it.
+    <span class="mono">SEFL-ARCH-009</span> (typed contracts) and <span class="mono">SEFL-SEC-005</span> (input
+    validation) are the pair that shows the split.</li>
+    <li><strong>Narrow inside the domain with <span class="mono">applies_to</span>.</strong> The values are
+    <span class="mono">web, service, batch, consumer, handler, library, dal, tests, review, all-java</span>; a DAL
+    stage loads the <span class="mono">dal</span> and <span class="mono">all-java</span> entries, not all sixteen
+    data-access rules.</li>
+    <li><strong>Say "none" when it is none.</strong> S0 and S1 bind no standards rule: a charter and a change log are
+    not code, and inventing a subset for them is how a mapping becomes decoration.</li>
+  </ul>
+
+  <h3>The load, as a command</h3>
+  <p>The registry is a single JSON file, so a worker's rule subset is a query, not a reading exercise. This is the DAL
+  Reviewer's slice — data access plus security, narrowed to the mapping and the statement:</p>
+  <pre>jq -r '.rules[]
+       | select((.domain == "data-access" or .domain == "security")
+                and (.applies_to | index("dal") or index("all-java")))
+       | [.id, .severity, .title] | @tsv' docs/standards/registry.json</pre>
+  <p class="small">Twenty-six rules qualify at the domain level — 16 data-access and 10 security — and twenty-one
+  survive the <span class="mono">applies_to</span> narrowing: the other five security rules apply to
+  <span class="mono">review</span>, <span class="mono">web</span> or <span class="mono">service</span> rather than to
+  the mappings. Both counts are in the counts table. Three of the 21 rows it returns:</p>
+  <pre>SEFL-SEC-002	Blocker	Secrets never appear in source, committed configuration, logs or error bodies
+SEFL-DATA-004	Blocker	Every statement is verified, and every data access endpoint has an integration test
+SEFL-DATA-009	Blocker	Configuration tables are reached only through their procedures</pre>
+  <p>That output is the whole justification for the citation convention: a stage that binds
+  <span class="mono">SEFL-DATA-004</span> has named a check a worker can run, and a stage that binds "data access
+  standards" has named a shelf.</p>
+
+  <h3>What each stage loads</h3>
+  <div class="tw"><table>
+  <caption>† marks this guide's mapping. The first three are the corpus's own example (SUG-ROLE-36); the rest is a proposal, and the pack's README is where an enforced mapping belongs.</caption>
+  <thead><tr><th>Stage</th><th>Domains</th><th>Why</th><th class="num">Rules</th></tr></thead><tbody>
+  <tr><td><strong>S0, S1</strong></td><td>none</td><td>A charter and a change log are not code; a subset here would be decoration</td><td class="num">0</td></tr>
+  <tr><td><strong>S5</strong> Scaffolder †</td><td>architecture, infrastructure</td><td>The skeleton is the layer model plus the build, the JDK baseline and the deployment key set</td><td class="num">34</td></tr>
+  <tr><td><strong>S6</strong> Implementer</td><td>architecture, data-access, code-organization</td><td>The corpus's own example: the layer direction, the DAL craft and the naming and test rules</td><td class="num">66</td></tr>
+  <tr><td><strong>S7</strong> DAL Reviewer</td><td>data-access, security</td><td>The corpus's own example: the statement, its verification, and what a caller can reach</td><td class="num">26</td></tr>
+  <tr><td><strong>S8</strong> Analyzer Runner</td><td>all five</td><td>The corpus's own example: it must map every analyzer result to an id, so it needs every domain</td><td class="num">90</td></tr>
+  <tr><td><strong>S8</strong> reviewer panel †</td><td>architecture, security, code-organization</td><td>Contract, security and convention/test: the three domains whose rules are reviewable from a diff</td><td class="num">60</td></tr>
+  <tr><td><strong>S9.1</strong> Verifier †</td><td>infrastructure, data-access</td><td>Build and test evidence at the pin, and the fixture rules its Oracle runs depend on</td><td class="num">30</td></tr>
+  <tr><td><strong>S10–S12</strong> †</td><td>code-organization, security</td><td>Review and change control (R56–R64), plus the access rules the sign-off checks by role</td><td class="num">40</td></tr>
+  </tbody></table></div>
+
+  <div class="box warn"><span class="label">The honest status of this section</span>
+  <p>SUG-ROLE-36 was <strong>rejected</strong> in the pipeline page's decision register, and Q19 — "does the 90-rule
+  pack attach to role cards at all, or stay a separate corpus?" — is still open. The reason given is sound: role cards
+  that load five domains each would cite rules no pipeline gate checks, and the mapping belongs in
+  <span class="mono">docs/standards/README.md</span>, where the pack's index can enforce it. This guide states the
+  citation <em>convention</em> because a stage's <span class="mono">binds</span> field is unusable without one, and it
+  marks every mapping it invents with †. It does not claim that any gate checks the attachment, because none does.</p></div>
+</section>
+
+<section id="counts">
+  <h2 class="sec"><span class="num">≡</span>Counts, sources, and what this page is</h2>
+  <p class="kicker">Every number on this page, with the file it came from and how it was counted.</p>
+  <div class="tw"><table>
+  <thead><tr><th class="num">#</th><th>What</th><th>Where it came from</th><th>How it was counted</th></tr></thead><tbody>
+  <tr><td class="num">12</td><td>Fields in the stage contract</td><td>This page, <a href="#s02">§02</a></td><td><span class="mono">grep -c 'id="f'</span> over the source — 12 blocks</td></tr>
+  <tr><td class="num">8</td><td>Stage criteria, 0–2 each</td><td>This page, <a href="#s03">§03</a></td><td>Rows in the rubric table — C1..C8</td></tr>
+  <tr><td class="num">5</td><td>Agent criteria, 0–2 each</td><td>This page, <a href="#s04">§04</a></td><td>Rows in the rubric table — A1..A5</td></tr>
+  <tr><td class="num">13</td><td>Anti-patterns</td><td>This page, <a href="#s07">§07</a></td><td>Rows AP-01..AP-13, each with a SUG id</td></tr>
+  <tr><td class="num">7</td><td>Stop codes</td><td><span class="mono">agents.md</span> §9</td><td>Rows in the stop-condition vocabulary</td></tr>
+  <tr><td class="num">13</td><td>Stages, S0–S12</td><td><span class="mono">stages.md</span>; <span class="mono">README.md</span> §2</td><td>Stage headings; the page's spine and its own count agree</td></tr>
+  <tr><td class="num">6</td><td>Gates, G0–G5</td><td><span class="mono">gates.md</span> §1</td><td>Rows in the gate table</td></tr>
+  <tr><td class="num">24</td><td>Roster rows — 19 agents, 4 services, 1 job</td><td><span class="mono">agents.md</span> §1</td><td>Rows in the roster table; the roster's own opening line counts them differently</td></tr>
+  <tr><td class="num">77</td><td>Pipeline rules — 64 ADOPTED, 13 PROPOSED</td><td><span class="mono">rules.md</span></td><td><span class="mono">grep -c '^### P-'</span>, and the tag column</td></tr>
+  <tr><td class="num">90</td><td>Standards rules — 62 STANDARD, 28 PROPOSED</td><td><span class="mono">registry.json</span></td><td><span class="mono">jq '.rules | length'</span>; by domain 20/14/30/10/16</td></tr>
+  <tr><td class="num">26</td><td>The DAL Reviewer's domain slice</td><td><span class="mono">registry.json</span></td><td>data-access 16 + security 10</td></tr>
+  <tr><td class="num">21</td><td>…after <span class="mono">applies_to</span> narrows it</td><td><span class="mono">registry.json</span></td><td>The <span class="mono">jq</span> query in <a href="#s08">§08</a>; five security rules apply to review, web or service</td></tr>
+  <tr><td class="num">65</td><td>Suggestions — 54 accept, 10 in part, 1 reject</td><td><span class="mono">docs/pipeline/suggestions/</span></td><td>Verifier 13, stage and gate 14, roster 38; decisions in <span class="mono">pipeline.html</span> §10</td></tr>
+  <tr><td class="num">42</td><td>UAT definition-of-done lines</td><td><span class="mono">gates.md</span> §2</td><td>Rows across seven groups, 6+7+6+5+7+6+5</td></tr>
+  </tbody></table></div>
+
+  <h3>The files this page read</h3>
+  <div class="tw"><table>
+  <thead><tr><th>File</th><th>What it supplied</th><th>Sections</th></tr></thead><tbody>
+  <tr><td class="mono">docs/pipeline/stages.md</td><td>The thirteen stages, their takes/does/produces/exit shape, the two loops</td><td>01, 02, 03</td></tr>
+  <tr><td class="mono">docs/pipeline/gates.md</td><td>Gate versus exit check; the DoD rule that a blank line is a refusal; the hard stops</td><td>01, 03</td></tr>
+  <tr><td class="mono">docs/pipeline/agents.md</td><td>Three actor kinds, the roster, the envelope, the grants, the seven stop codes, the forbidden roles</td><td>02, 04</td></tr>
+  <tr><td class="mono">docs/pipeline/rules.md</td><td>P-01..P-77 and their tags; permanent ids; "a rule with no check is advice"</td><td>02, 04, 06, 08</td></tr>
+  <tr><td class="mono">docs/pipeline/work-breakdown.md</td><td>The packet's eleven fields and "if a field is missing, the agent will invent it"</td><td>01, 05</td></tr>
+  <tr><td class="mono">docs/pipeline/README.md</td><td>The one-writer rule, the append-only ledger, the artifact chain</td><td>01</td></tr>
+  <tr><td class="mono">docs/pipeline/pipeline.html</td><td>The suggestion decisions, the verdict schema, the §11 proposals and §12 open questions</td><td>06, 07, 08</td></tr>
+  <tr><td class="mono">docs/pipeline/suggestions/verifier-role.md</td><td>SUG-VER-01..13 — the verdict, the two oracle classes, the four-valued result</td><td>03, 06, 07</td></tr>
+  <tr><td class="mono">docs/pipeline/suggestions/stages-and-gates.md</td><td>SUG-GATE-01..14 — the S2 determinism conjunct, the loop node, the tolerance refusal</td><td>03, 07</td></tr>
+  <tr><td class="mono">docs/pipeline/suggestions/role-instructions.md</td><td>SUG-ROLE-01..38 — the artifact schemas, the envelope, the Enforced/Judged test</td><td>04, 05, 07</td></tr>
+  <tr><td class="mono">docs/standards/README.md</td><td>The five domains, rule anatomy, status and severity, what is authoritative</td><td>08</td></tr>
+  <tr><td class="mono">docs/standards/registry.json</td><td>90 entries with domain, severity, <span class="mono">applies_to</span> and provenance</td><td>08</td></tr>
+  </tbody></table></div>
+
+  <h3>What this page is, and is not</h3>
+  <p><strong>It is</strong> a reading of eleven files at commit <span class="mono">ae431e5</span>, organised as a test
+  a pipeline stage can be held to: twelve fields, eight criteria, five criteria for the agent, one definition in YAML,
+  one prompt skeleton, one worked example and thirteen attributed failures.</p>
+  <p><strong>It is not</strong> a new stage, a change to any of the thirteen, or a decision on any of the thirteen open
+  decisions. Nothing in it runs. The thresholds (12/16, 8/10, three criteria locked at 2), the calibration scores, the
+  per-stage standards slice and the S9.1 identifier are this page's proposals, marked † where they appear; the
+  criteria, the failures and the citations are the documents'.</p>
+  <p><strong>It deliberately does not</strong> renumber the spine, resolve the PROPOSED-rule conflict, name who signs
+  G2, or decide where the holdout store lives. Those are the corpus's open questions, and a guide that answered them
+  would be a design decision wearing a guide's clothes.</p>
+</section>
+
+<footer>
+  <p><strong>A stage is a contract — authoring criteria for a pipeline stage and the agent that works it.</strong>
+  Measured against <span class="mono">main</span> at <span class="mono">ae431e5</span>, 2 November 2026. One
+  self-contained HTML file: inline CSS only, no external fonts, scripts or images.</p>
+  <p class="small">Structural check: <span class="mono">check_html_report.py</span> — tag balance, duplicate ids,
+  dangling anchors, relative images. The stylesheet is the one from
+  <span class="mono">docs/pipeline/pipeline.html</span>, copied verbatim and extended by one small block.</p>
+</footer>
+</div>
+</body>
+</html>
