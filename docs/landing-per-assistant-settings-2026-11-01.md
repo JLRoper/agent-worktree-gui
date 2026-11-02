@@ -1,8 +1,8 @@
 # Per-assistant settings, role prompts and whitelists landed as 0.49.0 — this tree re-checks it
 
 Read on branch `wtgui/give-each-assistant-its-dbf0ec`, cut from `main` at `8237843` (0.50.0), on 2026-11-01 at
-20:52 EST. The tree carries **no commits of its own** at the start of this run: the feature below is already on main,
-so nothing here re-implements it.
+19:52 EST (`date -u` 2026-11-02 00:52Z). The tree carried **no commits of its own** at the start of this run: the
+feature below is already on main, so nothing here re-implements it.
 
 **Answer: all seven items of the brief are already on main, delivered by PR #184 (merge commit `554d1cd…`, 0.49.0).
 This branch adds this record and a patch bump to 0.50.1, and no product change; the full suite passes on this tree
