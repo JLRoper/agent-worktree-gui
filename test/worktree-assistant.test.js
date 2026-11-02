@@ -78,6 +78,39 @@ const ownersOnDisk = async (panel) => {
 // so the test's own POSTs say where they came from — exactly as the browser does.
 const fromPage = (panel) => ({ headers: { Origin: panel.base } });
 
+// The panel's own SSE, read frame by frame until a matching event arrives. What a `row` event carries IS the contract
+// the page draws from: its handler replaces state.rows' entry wholesale (public/core/sse.js queueRow -> placeRow), so
+// a field missing here is a field the chart loses until the next full snapshot.
+async function readStream(base, match, { timeoutMs = 45_000 } = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${base}/api/stream`, { signal: ctrl.signal });
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return null;
+      buf += dec.decode(value, { stream: true });
+      let at;
+      while ((at = buf.indexOf("\n\n")) >= 0) {
+        const frame = buf.slice(0, at);
+        buf = buf.slice(at + 2);
+        const data = frame.split("\n").find((l) => l.startsWith("data: "));
+        if (!data) continue;
+        const evt = JSON.parse(data.slice(6));
+        if (match(evt)) return evt;
+      }
+    }
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+    ctrl.abort();
+  }
+}
+
 test("a tree nobody moved reports Assistant #1, labelled by its role", { timeout: 120_000 }, async (t) => {
   const board = await makeBoard();
   t.after(() => rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
@@ -340,4 +373,28 @@ test("the owner is display-only, and the page draws the name and role the server
   const assistant = await readFile(new URL("../lib/assistant.js", import.meta.url), "utf8");
   assert.doesNotMatch(assistant, /row\.assistant/);
   assert.doesNotMatch(assistant, /locks\.js|setOwner/);
+});
+
+test("a tree's FIRST row event carries the owner, before any snapshot has overlaid it", { timeout: 150_000 }, async (t) => {
+  const board = await makeBoard();
+  t.after(() => rm(board.dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
+  const panel = await startPanel({ keep: true, config: configFor(board) });
+  t.after(() => panel.stop());
+  await waitForRow(panel.base, "proj", board.trees["tree-one-1a2b3c"]);
+
+  // The page rebuilds ONE row from a `row` frame, and that frame replaces its row object wholesale
+  // (public/core/sse.js queueRow -> placeRow). A tree cut after the board is up reaches the page FIRST through that
+  // frame, which is why the owner has to be on it: the overlay lives in `withAssistantOwners`, which only ever sees
+  // the rows a snapshot carries, so a frame built from the scanner's own row draws the bare fallback name — the cell
+  // loses "(Manager 1)", the bullet loses "— Manager" — until the next full snapshot, and a board that is not polled
+  // never gets one. Observed as a 2-of-4 flake in tools/verify-chart-columns.mjs before this was pinned.
+  const fresh = path.join(board.proj, ".worktrees", "tree-two-4d5e6f");
+  const pending = readStream(panel.base, (evt) => evt.type === "row" && slash(evt.row?.path || "") === slash(fresh));
+  git(board.proj, ["worktree", "add", "-q", "-b", "work/two", slash(fresh)]);
+  const evt = await pending;
+  assert.ok(evt, "the new tree's arrival was announced as a row event");
+  assert.equal(evt.row.assistant?.id, "assistant-1", "the event's row carries the owner's id");
+  assert.equal(evt.row.assistant?.name, "Assistant #1", "…its name, which the cell draws");
+  assert.equal(evt.row.assistant?.label, "Manager 1", "…its numbered role label, which the tooltip draws");
+  assert.equal(evt.row.assistant?.role, "Manager", "…and its role, so the bullet keeps its second half");
 });

@@ -378,7 +378,12 @@ function guard(what, fn) {
   }
 }
 
-store.onEvent(broadcast);
+// Every row that leaves the panel carries its owner, on BOTH paths a row travels. `withAssistantOwners` overlays the
+// rows a snapshot carries, and a `row` frame REPLACES the page's row object wholesale (public/core/sse.js queueRow ->
+// placeRow): a tree whose first scan reaches the page before any snapshot has seen it would draw the bare fallback
+// name — the chart cell without its "(Manager 1)", the bullet without its "— Manager" — until the next snapshot, and
+// a board nobody polls never gets one. Observed as a 2-of-4 flake in tools/verify-chart-columns.mjs.
+store.onEvent((evt) => (evt?.type === "row" ? broadcast({ ...evt, row: ownerOnRow(evt.project, evt.row) }) : broadcast(evt)));
 
 // A `-w` agent's worktree exists a few seconds after spawn; adopt it into the board right then so the
 // card can be opened under a row instead of waiting for a discovery pass.
@@ -1700,6 +1705,14 @@ function withAssistantOwners(snap) {
     for (const row of project.worktrees || []) row.assistant = assistantForRow(project.name, row);
   }
   return snap;
+}
+
+// The same overlay for the other two ways a row reaches a browser: the store's per-row event (the scanner's own row,
+// which knows nothing about owners) and the reconcile route's answer. `assistant` is constructed after the store
+// listener that calls this, and a row event can only come from a scan, so the null check is a guard, not a path.
+function ownerOnRow(projectName, row) {
+  if (!row || !assistant) return row;
+  return { ...row, assistant: assistantForRow(projectName, row) };
 }
 
 // What the panel itself knows about a tree's name — who gave it and when — is in no git repository, so it travels
@@ -3979,7 +3992,7 @@ const server = createServer(async (req, res) => {
       else delete out.description;
       out.refreshJournal = refreshLog.recent(rowKey, REFRESH_LINES_SHOWN);
       // Every open board agrees with the click, not only the tab that made it.
-      broadcast({ type: "row", project: project.name, row: out, changed: true });
+      broadcast({ type: "row", project: project.name, row: ownerOnRow(project.name, out), changed: true });
 
       log(`row reconcile: ${project.name} ${after.path} — ${lines.join(" · ")}`);
       return sendJson(res, 200, {
