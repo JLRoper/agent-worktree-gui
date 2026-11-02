@@ -191,11 +191,11 @@ async function loadConfig() {
   // column in any browser and every one of them draws the same chart. The stored value is the columns to HIDE, so a
   // column the page adds later starts visible for a reader who has already hidden some; lib/chart-columns.js drops
   // ids it does not know, so a hand-edited typo cannot quietly hide the wrong cell.
-  // A config with NO hidden-columns key has never expressed a preference, so the owner column starts OFF there —
-  // the one default this chart has. A key that is present (even an empty array) IS a preference and is taken as
-  // written, so a reader who hid something keeps the convention that a later column arrives visible and can switch
-  // the owner column off in one press. Nothing is written for the default: the file stays keyless until the reader
-  // moves a switch, which is what "no record migration" means here.
+  // A config with NO hidden-columns key has never expressed a preference, so it gets DEFAULT_HIDDEN_COLUMNS — empty
+  // today, because the owner column hides itself from the rows (public/app.js `ownerMatters`) rather than from a
+  // default. A key that is present (even an empty array) IS a preference and is taken as written. Nothing is written
+  // for the default: the file stays keyless until the reader moves a switch, which is what "no record migration"
+  // means here.
   cfg.hiddenColumns = cfg.hiddenColumns == null ? DEFAULT_HIDDEN_COLUMNS.slice() : chartColumnsFrom(cfg.hiddenColumns);
   cfg.projects = Array.isArray(cfg.projects) ? cfg.projects : [];
   if (!cfg.defaultCwd) cfg.defaultCwd = cfg.projects[0]?.path || process.cwd();

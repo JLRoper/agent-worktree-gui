@@ -10341,27 +10341,54 @@ function prCellHtml(row) {
 }
 // ---- end pr cell
 
-// ---- owner cell: the assistant's name, and its role in the tooltip ---------------------------------------------
-// The owner column answers "whose is this tree", so its text is the ASSISTANT'S OWN NAME — "Assistant #1",
-// "Assistant #2" — and the detail's bullet is "Controlled by: <name> — <role>". The numbered ROLE LABEL ("Manager 1")
-// is resolved by the server from the role the owner runs and rides in the cell's tooltip beside the display-only
-// sentence: two assistants can run one role, so a cell that read the label named a team rather than an owner.
+// ---- owner cell: the assistant's compact tag, and its name and role in the tooltip -----------------------------
+// The owner column answers "whose is this tree" in one glyph pair instead of one name: M1 is Manager 1, M2 is
+// Manager 2, A1 is Assistant #1. A cell is one word wide and eleven columns do not fit a name like "Assistant #2"
+// twice over, so the cell carries the TAG and the tooltip carries the sentence — the assistant's own name, the
+// numbered role label the server resolved, and the display-only reminder. The row's detail keeps the long form
+// ("Controlled by: Assistant #1 — Manager") for the reader who wants it spelled out.
 //
 // The default owner IS Assistant #1, so a row with no `assistant` at all (an older payload, a hand-built row) still
-// draws that name rather than an empty cell or a dash: a column of dashes hides the fact that nothing there is
-// unowned. The fallback sentence — the stored owner is no longer on the board — travels in the tooltip and in the
-// detail's bullet, because a cell is one word wide. Nothing in the wake path reads any of this.
+// draws a tag rather than an empty cell or a dash: a column of dashes hides the fact that nothing there is unowned.
+// The fallback sentence — the stored owner is no longer on the board — travels in the tooltip and in the detail's
+// bullet, because a cell is one tag wide. Nothing in the wake path reads any of this.
+//
+// The class is `owner`, NOT `assistant`: `.assistant` is the rail's own rule (a sticky flex column 480px wide), and
+// a `<td class="assistant">` inherited every line of it — a 480px column, a sticky cell, a left border and the rail's
+// background painted into the middle of the chart. The tag class is `owner-tag` for the same reason.
 const ownerNameOf = (row) => String(row?.assistant?.name || "").trim() || "Assistant #1";
 const ownerLabelOf = (row) => String(row?.assistant?.label || "").trim();
 const ownerRoleOf = (row) => String(row?.assistant?.role || "").trim();
+
+// "Manager 1" → "M1", "Code Reviewer 2" → "CR2", "Assistant #1" → "A1". The number comes from the numbered ROLE
+// LABEL (the server resolves it from the role the owner runs), and the letters are its initials, so a renamed role
+// renames the tag without a write. A row the server could not label falls back to its own name, which always ends in
+// the assistant's number.
+function ownerTagOf(row) {
+  const label = ownerLabelOf(row);
+  const name = ownerNameOf(row);
+  const source = label || name;
+  const m = /^(.*?)[\s#]*(\d+)\s*$/.exec(source);
+  const words = String(m ? m[1] : source)
+    .split(/[\s/—-]+/)
+    .filter(Boolean);
+  const initials = words
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+  return `${initials || "A"}${m ? m[2] : ""}`;
+}
+
 function ownerCellHtml(row) {
   const name = ownerNameOf(row);
   const label = ownerLabelOf(row);
-  const seat = `${name}${label ? ` (${label})` : ""} owns this worktree`;
+  const tag = ownerTagOf(row);
+  const seat = `${tag} — ${name}${label ? ` (${label})` : ""} owns this worktree`;
   const title = row?.assistant?.fallback
     ? `${seat} — ${row.assistant.fallback}`
     : `${seat}. Display only: it does not change who wakes or runs.`;
-  return `<td class="assistant nowrap" title="${esc(title)}">${esc(name)}</td>`;
+  return `<td class="owner nowrap" title="${esc(title)}"><span class="owner-tag" aria-label="${esc(name)}">${esc(tag)}</span></td>`;
 }
 function ownerDetailHtml(row) {
   const role = ownerRoleOf(row);
@@ -10452,7 +10479,7 @@ function rowHtml(row) {
     tip: `<td class="mono dim nowrap">${esc(row.head || "—")}</td>`,
     ahead: `<td class="mono nowrap">${aheadBehindCellHtml(row)}</td>`,
     cherry: `<td class="mono dim nowrap">+${row.cherryPlus ?? 0}/−${row.cherryMinus ?? 0}</td>`,
-    pr: `<td>${pr}</td>`,
+    pr: `<td class="pr">${pr}</td>`,
     dirty: `<td class="mono nowrap">${dirty}</td>`,
     life: ageCellHtml(row),
     verdict: `<td class="verdict">${badge}</td>`,
@@ -12920,11 +12947,11 @@ const CHART_COLUMNS = [
   { id: "branch", label: "Branch", min: 110, give: 0.45 },
   {
     id: "assistant",
-    label: "Assistant",
-    min: 92,
-    give: 0.8,
+    label: "Owner",
+    min: 56,
+    give: 1,
     title:
-      "the assistant that controls this worktree, by its own name — \"Assistant #1\", \"Assistant #2\". The cell's tooltip carries the role it runs (\"Manager 1\"), and the same fact is a line in the row's detail: \"Controlled by: Assistant #1 — Manager\". Stored per tree and DISPLAY ONLY: it does not change who wakes, who runs, or who answers. OFF by default; switch it on in Settings → Display → Chart columns.",
+      "the assistant that controls this worktree, as a compact tag: M1 = Manager 1, M2 = Manager 2, A1 = Assistant #1. The cell's tooltip carries the assistant's own name and the role it runs (\"Assistant #2 — Manager\"), and the same fact is a line in the row's detail: \"Controlled by: Assistant #2 — Manager\". The column hides ITSELF while every row is on Assistant #1 and no second assistant exists, because it would be a column of identical tags; it comes back on its own the moment a tree is reassigned or a second assistant is created. Stored per tree and DISPLAY ONLY: it does not change who wakes, who runs, or who answers. Switch it off in Settings → Display → Chart columns.",
   },
   { id: "tip", label: "Tip", min: 70, give: 1 },
   {
@@ -12969,9 +12996,33 @@ function hiddenColumnIds() {
 // The columns actually drawn, as indexes into CHART_COLUMNS, in the table's own order. At least one always
 // survives: an empty table is not a narrower chart, and the last column carries the row's ⟳ and ✕. The server keeps
 // the same floor (lib/chart-columns.js), so a config that hides everything still draws that cell after a restart.
+//
+// The owner column is the one column that hides ITSELF, on top of the reader's switch: with every row on Assistant
+// #1 and no second assistant on the board it is a column of identical tags that costs a whole column of the chart
+// nothing but width. It returns the moment it can say something — a tree moved to another assistant, a stored owner
+// that is gone (drawn as the fallback), or a second assistant existing anywhere on the board. The switch in Settings
+// still turns it OFF for good; this rule can only take it away while it says nothing, and `chartColumnsSentence`
+// says so beside the switches so a ticked box over a missing column is explained rather than read as a bug.
+function ownerMatters(rows = state.rows, assistants = state.assistant?.assistants) {
+  if (Array.isArray(assistants) && assistants.length > 1) return true;
+  const list = typeof rows?.values === "function" ? [...rows.values()] : Array.isArray(rows) ? rows : [];
+  for (const row of list) {
+    const a = row?.assistant;
+    if (!a) continue;
+    if (String(a.stored || "").trim()) return true;
+    const id = String(a.id || "").trim();
+    if (id && id !== "assistant-1") return true;
+  }
+  return false;
+}
+
+const OWNER_COLUMN_ID = "assistant";
+
 function shownColumns() {
   const hidden = hiddenColumnIds();
   const shown = CHART_COLUMNS.map((_, i) => i).filter((i) => !hidden.has(CHART_COLUMNS[i].id));
+  const ownerAt = shown.findIndex((i) => CHART_COLUMNS[i].id === OWNER_COLUMN_ID);
+  if (ownerAt >= 0 && !ownerMatters()) shown.splice(ownerAt, 1);
   return shown.length ? shown : [WT_COLS - 1];
 }
 
@@ -13106,8 +13157,17 @@ function columnPlan(natural, total, cols = CHART_COLUMNS.map((_, i) => i)) {
       for (let p = 0; p < want.length; p += 1) want[p] = Math.max(24, Math.floor(want[p] * scale));
     }
   }
-  // Integers that add up to the table's width exactly: rounding lands on the leftmost column, the one with room.
-  want[0] = Math.max(24, want[0] + (total - sum(want)));
+  // Integers that add up to the table's width EXACTLY. A fixed-layout table is never narrower than the sum of its
+  // column widths, so a plan that rounds up is a table that grows past its card and is clipped at the card's edge —
+  // which is exactly how the chart used to run under the assistant rail. When even the floors do not fit (a phone, or
+  // the rail open on a narrow window) the columns give up proportionally here, down to a single pixel, and the
+  // remainder lands on the leftmost column: a chart that fits always beats a column at its measured floor.
+  const sumWant = sum(want);
+  if (sumWant > total) {
+    const scale = total / sumWant;
+    for (let p = 0; p < want.length; p += 1) want[p] = Math.max(1, Math.floor(want[p] * scale));
+  }
+  want[0] = Math.max(1, want[0] + (total - sum(want)));
   return want;
 }
 
@@ -13118,41 +13178,34 @@ function applyColumnWidths(table, widths) {
 }
 
 // ---- how wide the split is allowed to be, and what happens when there is less room than that ----------------
-// The table's own box has always been the answer, and on a desktop card it still is. It stops being an answer once
-// the card is narrower than the ten columns' measured floors (COL_MIN, 846px in total): the plan then had to scale
-// every column below its floor, and a 393px phone - 330px of table - gave each column ~24px, so the headers wrapped
-// onto three lines and the values ran into each other. There is no smaller readable version of ten columns, so below
-// that width the table keeps the floor width and `.wt-scroll` (its wrapper) scrolls sideways instead. The mode is
-// decided here, from the wrapper's own width, which the table cannot influence: no feedback loop, and no scrollbar
-// that makes itself necessary.
+// The table's box is the CARD, and the card's box is main's: the chart is planned to the width it is given and never
+// to a floor of its own. That is the whole fix for a table that painted under the docked assistant rail — the plan
+// used to keep a narrow window's floor width inside a card that had just lost 480px to the rail, and a fixed-layout
+// table cannot be narrower than the sum of its column widths, so it ran out of the card and the card clipped it at
+// the rail's edge with no scrollbar to reach the rest. Below the floors the columns now give up their slack and then
+// scale (columnPlan), and the cell text wraps or ellipsizes instead: a chart that fits is worth more than a column
+// at its measured floor.
+//
+// The only horizontal scroll container on the page is `main` (style.css). Nothing between main and the table may
+// clip or scroll sideways, so an overflow that ever did happen would be reachable there instead of painted under the
+// rail. `fitTarget` therefore reports the card's own width and no scroll mode: `.wt-scroll` is a padded wrapper, not
+// a second scroller.
 const WT_SCROLL = "wt-scroll";
 
 function fitTarget(table) {
   const wrap = table.parentElement && table.parentElement.classList.contains(WT_SCROLL) ? table.parentElement : null;
   const box = Math.floor((wrap || table).clientWidth);
-  // Only the columns on the chart set the width below which it scrolls: hiding five columns lowers that floor, which
-  // is the room a reader is buying back by hiding them.
-  const floor = shownColumns().reduce((a, i) => a + COL_MIN[i], 0);
-  const scroll = Boolean(wrap) && box > 0 && box < floor;
-  return { wrap, box, total: scroll ? floor : box, scroll };
+  return { wrap, box, total: box, scroll: false };
 }
 
-// Writes the mode onto the page: the class the CSS hangs the sideways scroll on, the table's own min-width (the
-// width the column split adds up to, so nothing overflows inside the table), and the visible width the two
-// column-spanning rows are pinned to while the columns move under them.
+// Writes the mode onto the page: nothing but the class the CSS uses to say "the chart is a wrapper" — the table's
+// min-width is cleared, because a min-width is how it used to outgrow the card, and the two column-spanning rows are
+// simply as wide as the table now that there is no scroller to pin them inside.
 function applyFitMode(table, fit) {
   if (!fit.wrap) return;
-  fit.wrap.classList.toggle("is-scroll", fit.scroll);
-  // Written only when it changes: this runs on every row rebuild, and re-setting a value that is already there
-  // costs a style recalculation of the whole table for nothing.
-  const minWidth = fit.scroll ? `${fit.total}px` : "";
-  if (table.style.minWidth !== minWidth) table.style.minWidth = minWidth;
-  if (fit.scroll) {
-    const visible = `${fit.box}px`;
-    if (fit.wrap.style.getPropertyValue("--wt-visible") !== visible) fit.wrap.style.setProperty("--wt-visible", visible);
-  } else if (fit.wrap.style.getPropertyValue("--wt-visible")) {
-    fit.wrap.style.removeProperty("--wt-visible");
-  }
+  fit.wrap.classList.remove("is-scroll");
+  if (table.style.minWidth) table.style.minWidth = "";
+  if (fit.wrap.style.getPropertyValue("--wt-visible")) fit.wrap.style.removeProperty("--wt-visible");
 }
 
 // Measurements are only good while the cells are: a repaint that changed no text should not pay for a layout.
@@ -13312,6 +13365,29 @@ window.addEventListener("resize", () => {
   clearTimeout(columnFitTimer);
   columnFitTimer = setTimeout(fitAllColumns, 140);
 });
+
+// The window does not have to move for the CHART's width to change: the assistant rail is a flex item beside main, so
+// opening it, closing it or dragging its edge takes 340-640px away from (or gives them back to) every table at once —
+// and not one of those is a `resize` event. That was the visibility half of the rail's bug: the columns kept the
+// split they were planned at, the table kept its sum-of-widths box, and the card clipped the overflow at the rail's
+// left edge. main is the one element whose box IS the chart's width, so it is the one to watch; the fit is coalesced
+// on the same 140ms timer as a window resize, because a rail drag changes it every frame.
+let boardWidthObserver = null;
+function watchBoardWidth() {
+  const main = document.querySelector("main");
+  if (!main || typeof ResizeObserver !== "function") return;
+  if (boardWidthObserver) boardWidthObserver.disconnect();
+  let last = Math.floor(main.clientWidth);
+  boardWidthObserver = new ResizeObserver(() => {
+    const now = Math.floor(main.clientWidth);
+    if (now === last) return;
+    last = now;
+    clearTimeout(columnFitTimer);
+    columnFitTimer = setTimeout(fitAllColumns, 140);
+  });
+  boardWidthObserver.observe(main);
+}
+watchBoardWidth();
 
 // ---- stabilize reordering -------------------------------------------------------------------
 // A list that re-sorts while the reader has something open in it moves the thing they are reading. With this on, a
@@ -17759,11 +17835,19 @@ function chartColumnsStored() {
   return CHART_COLUMNS.filter((c) => hidden.has(c.id)).map((c) => c.id);
 }
 
+// The owner column can be ON in the file and absent from the chart: it hides itself while it would be a column of
+// identical tags (ownerMatters). A sentence that counted it as drawn would make a ticked box over a missing column
+// read as a bug, so the reason travels with the count — unless the reader hid that column themselves, in which case
+// the list already says it.
 function chartColumnsSentence(hidden = chartColumnsStored()) {
   const shown = CHART_COLUMNS.length - hidden.length;
-  return hidden.length
+  const head = hidden.length
     ? `${shown} of ${CHART_COLUMNS.length} columns on the chart · hidden: ${hidden.join(", ")}`
     : `every column is on the chart (${CHART_COLUMNS.length})`;
+  const idle = !hidden.includes(OWNER_COLUMN_ID) && !ownerMatters();
+  return idle
+    ? `${head} · the Owner column hides itself while every tree is on Assistant #1 and there is no second assistant`
+    : head;
 }
 
 function paintChartColumns(note = "", bad = false) {

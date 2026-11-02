@@ -14,8 +14,10 @@ const code = assistant.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm,
 // that went with the window, and the one number it remembers — plus the clamp, which is the only arithmetic in it.
 
 test("the assistant is a docked column, not a floating window", () => {
-  const rule = css.match(/\n\.assistant \{([^}]*)\}/);
-  assert.ok(rule, "no .assistant rule");
+  // `#assistant`, not `.assistant`: the rule is scoped to the rail's id because the chart's owner cell used to carry
+  // `class="assistant"` and inherited the whole dock — a 480px sticky flex column in the middle of the table.
+  const rule = css.match(/\n#assistant \{([^}]*)\}/);
+  assert.ok(rule, "no #assistant rule");
   assert.doesNotMatch(rule[1], /position:\s*fixed/, "a fixed rail covers the board — the whole point of the dock");
   assert.match(rule[1], /position:\s*sticky/, "the rail stays put while the board scrolls under it");
   assert.match(rule[1], /flex:\s*0 0 auto/, "the rail must take layout width, not overlay the board");
