@@ -1923,7 +1923,12 @@
   // The cache is keyed by assistant id so stepping between tabs is instant, and a failed fetch leaves the last good
   // list on screen with the error above it rather than a pane that went blank because one request timed out.
   const queueCache = new Map(); // assistantId -> { view, error, loading, at }
-  let queueSeq = 0; // a stale answer must never overwrite a newer one
+  // One read in flight per assistant, and one counter per assistant. The counter used to be one `let` for the whole
+  // page, so two panes' answers judged each other stale; per id, an answer about assistant-2 says nothing about
+  // assistant-1. A write bumps its own id's counter too, so a read that was already in flight when the write landed
+  // cannot repaint the list the write replaced.
+  const queueSeq = new Map(); // assistantId -> number
+  const queueInflight = new Map(); // assistantId -> the promise of the read in flight
 
   const queueMark = (state) => (state === "done" ? "✓" : state === "parked" ? "⏸" : state === "running" ? "●" : "○");
   const queueStateName = (state) => (state === "running" ? "running" : state === "parked" ? "parked" : state === "done" ? "done" : "queued");
@@ -1976,15 +1981,46 @@
       </div>`;
   }
 
+  // What the pane is showing, as one of four words rather than a read through the cache scattered over the painter.
+  // The ORDER is the rule: an error is said before an empty queue, and a store that was never created says so
+  // instead of reading as "carrying nothing" — `found: false` is the server's answer for a queue.json that is not
+  // there, and `view.error` is the one that is there and could not be parsed.
+  function queuePaneState(cached) {
+    const error = cached?.error || cached?.view?.error || "";
+    if (error) return { kind: "error", message: String(error) };
+    if (!cached?.view) return cached?.loading ? { kind: "loading" } : { kind: "idle" };
+    if (cached.view.found === false) return { kind: "missing" };
+    return { kind: "ready" };
+  }
+
+  // The one line a pane with nothing (or nothing readable) to list draws. Its own function so all four cases can be
+  // driven without a DOM, and so a pane that has rows AND an error still says the error above them.
+  function queueStateHtml(pane, { id, n, view, rows }) {
+    const at = `id="as-qstate-${esc(n)}"`;
+    if (pane.kind === "error") {
+      return `<div class="as-task-note is-bad" ${at}>could not read its queue — ${esc(pane.message)} <button type="button" data-as-qact="reload" data-as-qown="${esc(id)}">Retry</button></div>`;
+    }
+    if (pane.kind === "missing") {
+      return `<div class="as-help" ${at}>no queue yet — <b>Add task</b> creates it${view?.file ? ` at <code>${esc(view.file)}</code>` : ""}</div>`;
+    }
+    if (pane.kind === "loading") return `<div class="as-help" ${at}>reading its queue…</div>`;
+    if (pane.kind === "idle") return `<div class="as-help" ${at}>not read yet</div>`;
+    return rows.length ? "" : `<div class="as-help" ${at}>(empty — this assistant is carrying nothing)</div>`;
+  }
+
   function renderAssistantQueue(id = activeSessionId(), force = false) {
     const host = hostFor(id, "queue");
     if (!host || !state.assistant) return;
     if (!force && typingInside(`#${paneIdFor(id, "queue")}`)) return;
-    const cached = queueCache.get(id);
     const rec = sessionById(id);
+    // Ask for a read BEFORE the paint when the cache is missing or old: the paint then says it is reading instead of
+    // "not read yet" for a frame, and the answer repaints it WITHOUT forcing another read (see loadQueue's .finally).
+    const before = queueCache.get(id);
+    if (force || !before || Date.now() - Number(before.at || 0) > 20_000) void loadQueue(id);
+    const cached = queueCache.get(id);
     const view = cached?.view;
+    const pane = queuePaneState(cached);
     const n = String(id).replace(/^assistant-/, "");
-    const others = assistantIds().filter((x) => x !== id);
     const counts = view?.counts || {};
     const head = view
       ? `${counts.queued || 0} queued · ${counts.running || 0} running${counts.stale ? `, ${counts.stale} stale` : ""} · ${counts.parked || 0} parked · ${counts.done || 0} done`
@@ -1998,51 +2034,63 @@
       <div class="as-group">
         <h4>Its task queue — ${esc(rec?.name || "this assistant")}'s own</h4>
         <div class="as-help">What THIS assistant is carrying: queued work it has not started, what is running (with its
-        thread), what it has parked, and what has finished. Another assistant — or you — can add work here, hand a task
-        over and set its state. A queued task whose files touch a running task's files is shown as skipped with the
-        reason; a running task whose thread has no live run reads STALE rather than showing phantom work in progress.</div>
+        thread), what it has parked, and what has finished. <b>Add task</b> files work into THIS assistant's queue — the
+        one this page belongs to — so a task cannot be created into a queue nobody is looking at; handing a task to
+        another assistant is the <b>Move</b> control on an existing row, and that move is recorded on the task. A queued
+        task whose files touch a running task's files is shown as skipped with the reason; a running task whose thread
+        has no live run reads STALE rather than showing phantom work in progress.</div>
         <div class="as-line"><b>${esc(head)}</b>${view?.file ? `<code>${esc(view.file)}</code>` : ""}<button type="button" class="primary" data-as-qact="reload" data-as-qown="${esc(id)}">Refresh</button></div>
         <div class="as-line"><label class="as-grow" title="what has to happen — one line is enough">title <input type="text" id="as-qtitle-${esc(n)}" class="as-grow" spellcheck="false" maxlength="200" placeholder="e.g. land the queue sub-tab's PR"></label></div>
         <div class="as-line"><label class="as-grow" title="optional: the detail an assistant needs to do it without asking">detail <input type="text" id="as-qdetail-${esc(n)}" class="as-grow" spellcheck="false" maxlength="400" placeholder="optional"></label></div>
         <div class="as-line"><label title="optional: comma-separated paths this task will touch — a queued task that overlaps a running task's files is skipped with the reason">files <input type="text" id="as-qfiles-${esc(n)}" spellcheck="false" maxlength="300" placeholder="lib/assistant/queue.js, public/assistant.js"></label>
-          <label>owner <select id="as-qowner-${esc(n)}"><option value="${esc(id)}">${esc(rec?.name || "this assistant")}</option>${others.map((x) => `<option value="${esc(x)}">${esc(sessionById(x)?.name || x)}</option>`).join("")}</select></label>
-          <button type="button" class="primary" data-as-qact="add" data-as-qown="${esc(id)}">Add task</button>
+          <button type="button" class="primary" data-as-qact="add" data-as-qown="${esc(id)}" title="add this task to ${esc(rec?.name || "this assistant")}'s own queue">Add task</button>
           <span class="as-err" id="as-qerr-${esc(n)}">${cached?.error ? esc(cached.error) : ""}</span>
         </div>
-        ${cached?.loading ? `<div class="as-help">reading its queue…</div>` : ""}
-        ${sorted.length ? sorted.map((t) => queueTaskHtml(id, t)).join("") : cached?.error ? "" : `<div class="as-help">(empty — this assistant is carrying nothing)</div>`}
+        ${queueStateHtml(pane, { id, n, view, rows: sorted })}
+        ${sorted.map((t) => queueTaskHtml(id, t)).join("")}
         <div class="as-help">The queue lives in <code>state/assistants/${esc(id)}/queue.json</code> beside this assistant's charter.
         It is read on every wake: the digest names the top of the queue, every running task with its thread and every stale
         one, so a turn can start whatever can be parallelised. A finished task stays here greyed — the record, not a ghost.</div>
       </div>`;
-    // Fetch on first paint and when the tab is opened explicitly; a repaint from the board poll reuses the cache so a
-    // poll every second does not become a request every second.
-    if (force || !cached || Date.now() - Number(cached.at || 0) > 20_000) void loadQueue(id);
   }
 
   function loadQueue(id = activeSessionId()) {
-    const seq = ++queueSeq;
+    // ONE read per assistant at a time. A paint that arrives while a read is in flight joins that read instead of
+    // starting a second: the pane is repainted by the board poll and by the read's own completion, so without this
+    // guard an answer that lands in 62 ms could start a request per paint.
+    const running = queueInflight.get(id);
+    if (running) return running;
+    const seq = (queueSeq.get(id) || 0) + 1;
+    queueSeq.set(id, seq);
+    const fresh = () => seq === (queueSeq.get(id) || 0);
     const prior = queueCache.get(id);
     queueCache.set(id, { ...prior, loading: true, error: null });
     // The pane is painted by the caller; this only refreshes the cache and asks for one repaint of the pane the reader
     // is looking at. A second tab's answer repaints nothing.
-    return apiFetch(`/api/assistant/queue?assistantId=${encodeURIComponent(id)}`)
+    const read = apiFetch(`/api/assistant/queue?assistantId=${encodeURIComponent(id)}`)
       .then(async (r) => {
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
         if (d.assistant) applyAssistant(d.assistant);
-        if (seq !== queueSeq) return; // a newer read has landed; this answer describes a moment already gone
+        if (!fresh()) return; // a newer read or a write has landed; this answer describes a moment already gone
         queueCache.set(id, { view: d.queue, error: null, loading: false, at: Date.now() });
       })
       .catch((err) => {
-        if (seq !== queueSeq) return;
+        if (!fresh()) return;
         const last = queueCache.get(id) || {};
         queueCache.set(id, { ...last, loading: false, error: String((err && err.message) || err), at: Date.now() });
       })
       .finally(() => {
+        queueInflight.delete(id);
+        // WITHOUT force. A forced repaint calls loadQueue again, and a read that repaints itself by force is a spinner
+        // with no end — that was the defect: the pane never left "reading its queue…" and every superseded answer was
+        // dropped by the sequence guard. An empty store and a failed read are STATES the pane draws, not reasons to
+        // read again; Retry is the reader's own second attempt.
         const view = state.assistantView;
-        if (view.subTab === "queue" && view.assistant === id) renderAssistantQueue(id, true);
+        if (view && view.subTab === "queue" && view.assistant === id) renderAssistantQueue(id);
       });
+    queueInflight.set(id, read);
+    return read;
   }
 
   async function queueAct(id, action, body = {}) {
@@ -2051,6 +2099,9 @@
       // The route answers with the assistant's whole state and the queue it just wrote, so the pane repaints from the
       // same answer the tab would have fetched — no second read, and no window where the row says "running" while the
       // file says "queued".
+      // A read that was already in flight when this write landed describes the queue as it was BEFORE the write, so
+      // this write supersedes it rather than letting it repaint the old list over the new one.
+      queueSeq.set(id, (queueSeq.get(id) || 0) + 1);
       if (d.queue) queueCache.set(id, { view: d.queue, error: null, loading: false, at: Date.now() });
       renderAssistantQueue(id, true);
       return d;
@@ -2705,7 +2756,8 @@
       const titleEl = as$(`as-qtitle-${n}`);
       const detailEl = as$(`as-qdetail-${n}`);
       const filesEl = as$(`as-qfiles-${n}`);
-      const ownerEl = as$(`as-qowner-${n}`);
+      // No owner picker: the owner IS the assistant whose page this is. A task is created into the queue the reader
+      // is looking at, and the only way it changes hands is the explicit Move control on an existing row.
       const title = String(titleEl?.value || "").trim();
       if (!title) {
         setErr(`as-qerr-${n}`, "a task needs a title");
@@ -2718,7 +2770,7 @@
           title,
           detail: String(detailEl?.value || "").trim(),
           files: String(filesEl?.value || "").trim(),
-          owner: String(ownerEl?.value || "").trim() || own,
+          owner: own,
         });
       } finally {
         t.disabled = false;
