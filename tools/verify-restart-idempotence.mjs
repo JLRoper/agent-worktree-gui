@@ -11,6 +11,9 @@
 //      "replay skipped: already landed", the digest stops advertising it and NO run is POSTed — for a debt whose
 //      tree is GONE too (missing, or an EMPTY leftover directory whose git answers for the primary checkout).
 //      See 1b, which proves no replay can be aimed into the primary checkout either;
+//   1c. the debt in section 1 was SEEDED by this file; 1c records one the way the panel does — its own
+//      `noteSpawnIntent` + `checkSpawns`, its own digest advertises it, the next boot settles it and nothing is
+//      started — and then reads the same turn again to prove the settled line is refused instead of cut again;
 //   2. a reasonless POST /api/restart is refused with 400 and leaves nothing queued;
 //   3. a waiting entry can be cancelled (200, queue empty) and no restart happens even once the turn it was
 //      waiting for has ended — the case a cancel has to win.
@@ -21,6 +24,7 @@ import { createServer } from "node:http";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Assistant } from "../lib/assistant.js";
 import { freePort, git, slash, startPanel, waitFor } from "./panel-testkit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -305,6 +309,99 @@ try {
   const jobsNow = ((await api(panel.base, "/api/jobs")).body || {}).jobs || [];
   eq("…and no job of any kind sits in the primary checkout", jobsNow.filter((j) => norm(j.cwd) === primary).length, 0);
 
+
+  // ============================================================================================
+  console.log("\n1c. a REAL debt the panel recorded is settled by the next boot");
+  // The three debts in the live store were not written by hand — `noteSpawnIntent` recorded them from an
+  // assistant turn's own SPAWN line, the watchdog marked them lost, and `digest()` advertised them under
+  // "SPAWN LINES THAT PRODUCED NOTHING"; the next boot then re-issued the brief and cut a fresh tree for work
+  // that had already landed (#212, #211). This reproduces the RECORDING with the panel's own methods, into the
+  // same store the panel is about to read: no `spawnIntents` array is written by this file.
+  const bot = new Assistant({
+    config: {
+      jobsFile: path.join(dir, "logs", "jobs.json"),
+      defaultCwd: repo,
+      assistantFile: asstFile,
+      charterFile: path.join(dir, "logs", "assistant-charter.md"),
+    },
+    jobs: { list: () => [], get: () => null, firstOfThread: () => null, busyFor: () => ({ held: false, where: null, by: [] }) },
+    getProjects: () => [],
+    onEvent: () => {},
+    onLog: () => {},
+  });
+  const realTurn = { id: "turn-real-debt", thread: "panel-assistant", status: "done", endedAt: new Date(Date.now() - 3 * 60_000).toISOString(), lines: [] };
+  // The turn ended three minutes ago, which is what the watchdog's scan passes as `at` for a turn it finds in the
+  // console — so the debt is already past its window and is marked lost on the next pass, exactly as the live
+  // store's three were.
+  bot.noteSpawnIntent(realTurn, { target: "sandbox-repo", existing: false, prompt: "the brief that already landed" }, Date.now() - 3 * 60_000);
+  bot.checkSpawns([]);
+  bot.persist();
+  if (typeof bot.writeNow === "function") bot.writeNow();
+  clearTimeout(bot.persistTimer);
+  if (bot.timer) clearInterval(bot.timer);
+  const recorded = (JSON.parse(readFileSync(asstFile, "utf8")).spawnIntents || []).find((x) => x.turnId === "turn-real-debt") || null;
+  ok("the panel's own watchdog recorded the SPAWN line as a debt", Boolean(recorded), JSON.stringify(recorded));
+  eq("…owed and lost, with no worktree and no branch (the shape the live store carries)", [recorded?.outcome, recorded?.tree, recorded?.branch], ["lost", null, null]);
+  ok(
+    "…and the panel's own digest advertises it under SPAWN LINES THAT PRODUCED NOTHING",
+    /PRODUCED NOTHING[\s\S]*the brief that already landed/.test(String(bot.digest() || "")),
+    String(bot.digest() || "").slice(0, 800),
+  );
+
+  await panel.stop();
+  const postsBeforeSettle = stub.state.posts.length;
+  panel = await boot();
+  const settledReal = await waitFor(
+    async () => ((await assistantOf(panel.base)).journal || []).find((j) => /replay skipped: already landed/.test(String(j.text || "")) && String(j.text || "").includes("turn-real-debt")),
+    { what: "the boot to settle the debt it recorded", timeoutMs: 30_000 },
+  );
+  ok("the next boot settles the debt the panel recorded itself", Boolean(settledReal), JSON.stringify(((await assistantOf(panel.base)).journal || []).slice(-4)));
+  ok("…naming the evidence rather than a guess", /names no tree at all|tree is gone|leftover directory/.test(String(settledReal?.text || "")), String(settledReal?.text || ""));
+  await sleep(1_500);
+  eq("…and no run was POSTed for the brief", stub.state.posts.length, postsBeforeSettle);
+  const settledOnDisk = (JSON.parse(readFileSync(asstFile, "utf8")).spawnIntents || []).find((x) => x.turnId === "turn-real-debt") || null;
+  eq("…and the debt reads landed on disk", [settledOnDisk?.outcome, Boolean(settledOnDisk?.landedAt)], ["landed", true]);
+  ok(
+    "…and the digest the next turn reads advertises none of it",
+    !/PRODUCED NOTHING[\s\S]*the brief that already landed/.test(String((await assistantOf(panel.base)).digest || "")),
+    String((await assistantOf(panel.base)).digest || "").slice(0, 800),
+  );
+
+  // The boot replay itself: the same turn read again (a boot re-reading a turn whose `harvested` mark aged out,
+  // which is how the 10:45:08 trees were cut) must find the settled debt and refuse, not cut a second tree.
+  const replayed = new Assistant({
+    config: {
+      jobsFile: path.join(dir, "logs", "jobs.json"),
+      defaultCwd: repo,
+      assistantFile: asstFile,
+      charterFile: path.join(dir, "logs", "assistant-charter.md"),
+    },
+    jobs: { list: () => [], get: () => null, firstOfThread: () => null, busyFor: () => ({ held: false, where: null, by: [] }) },
+    getProjects: () => [],
+    spawner: async () => null,
+    onEvent: () => {},
+    onLog: () => {},
+  });
+  replayed.settings.spawn = "auto";
+  await replayed.harvest({
+    id: "turn-real-debt",
+    thread: "panel-assistant",
+    status: "done",
+    endedAt: new Date().toISOString(),
+    lines: [{ kind: "text", text: "The board is quiet — nothing needs a look.\nSPAWN sandbox-repo | the brief that already landed\n", at: Date.now() }],
+  });
+  clearTimeout(replayed.persistTimer);
+  if (replayed.timer) clearInterval(replayed.timer);
+  ok(
+    "…and the same turn read again is refused by name, not carried into a second tree",
+    (replayed.journal || []).some((j) => j.kind === "spawn-replay-refused" && /already landed/.test(String(j.text || ""))),
+    JSON.stringify((replayed.journal || []).slice(-3)),
+  );
+  eq(
+    "…and the settled debt is untouched by the refusal",
+    (JSON.parse(readFileSync(asstFile, "utf8")).spawnIntents || []).find((x) => x.turnId === "turn-real-debt")?.outcome,
+    "landed",
+  );
 
   // ============================================================================================
   console.log("\n2. a reasonless restart is refused with 400");
