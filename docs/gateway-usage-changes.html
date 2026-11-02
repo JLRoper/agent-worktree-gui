@@ -70,10 +70,12 @@ change names its <code>file:line</code>, the number that should move, and the te
   dropping real events today: seven <code>watch finished</code> wakes were refused by the budget between 22:32 and
   22:54 (journal <code>wake-suppressed</code>, "rate limit reached (6/h)"), because Assistant #2 runs on the default
   6/hour and only <code>settle</code> and <code>exited</code> are exempt.</p>
-  <p><b>So the three changes are:</b> (1) make the wake budget cover only the sentry's speculative <i>sweeps</i>, never
-  an <i>event</i>; (2) stop re-sending the unchanged charter on every turn; (3) put the board digest on a wake counter
-  for sweeps — an event turn always sees the board. With the charter and digest gone from the hot path there is room
-  to wake <b>twice as often as today and still send fewer bytes</b> (§5).</p>
+  <p><b>So the three changes are:</b> (1) leave every <i>event</i> wake alone — a run that finished, failed, parked on
+  an approval, asked a question or hit a watch always gets a turn — and apply the hourly budget only to the sentry's
+  repeated "still like this" observations (<i>sweeps</i>: quiet, looping, leftover work), which the next 5 s pass sees
+  again anyway; (2) stop re-sending the unchanged charter on every turn; (3) put the board digest on a wake counter
+  for sweep turns — an event turn always sees the board. With the charter and digest gone from the hot path there is
+  room to wake <b>twice as often as today and still send fewer bytes</b> (§5).</p>
 </div>
 
 <div class="toc">
@@ -117,6 +119,44 @@ change names its <code>file:line</code>, the number that should move, and the te
 <code>restart</code>, or no rule at all). The hourly budget applies to sweeps only; <b>an event is never refused</b>.
 The list is written as the sweeps on purpose: a rule added later defaults to event, so it cannot silently become
 droppable.</p>
+
+<div class="box"><b>What "sweep" means here — and why throttling one loses nothing.</b> The sentry runs every 5 seconds
+(<code>settings.seconds</code>, <code>lib/assistant.js:1476-1477</code>) and looks at the same board each time. An
+<i>event</i> is a change with a moment: a run ended, failed, parked on an approval, asked a question, a watch hit its
+deadline, a turn was cut off. Once that moment is past, nothing re-reports it — so a refused event is a fact the
+assistant never hears. A <i>sweep</i> is a condition that is still true: "no output for six minutes", "the same call
+nine times", "uncommitted files in a finished tree". The pass at 12:00:05 and the pass at 12:00:10 see the same
+condition, so refusing one sweep delays a dedicated turn; it does not lose the fact. The alert is still recorded and
+visible on the board (<code>lib/assistant.js:1696-1720</code>), and the first pass that fits the budget wakes with the
+current state.</div>
+
+<div class="tw"><table>
+  <thead><tr><th>Rule</th><th>What makes it fire</th><th>If the budget refuses it</th></tr></thead>
+  <tbody>
+    <tr><td><code>settle</code>, <code>exited</code></td><td>a run ended done / failed — a moment</td>
+      <td class="bad">the fact is lost: nothing re-reports it</td></tr>
+    <tr><td><code>approval</code>, <code>question</code></td><td>a run is parked on a command or a clarify — a moment</td>
+      <td class="bad">the run stays parked; the person is not told</td></tr>
+    <tr><td><code>watch</code>, <code>interrupted</code></td><td>a watch expired or finished; a turn was cut off — a moment</td>
+      <td class="bad">the reader asked to be told and was not</td></tr>
+    <tr><td><code>quiet</code>, <code>loop</code>, <code>errorloop</code></td><td>a condition on a live run, re-true every pass</td>
+      <td class="good">nothing: the next pass sees it again</td></tr>
+    <tr><td><code>leftover</code>, <code>repeat</code>, <code>child</code></td><td>a tree or thread state that persists</td>
+      <td class="good">nothing: still true at the next pass, alert still on the board</td></tr>
+    <tr><td><code>noevidence</code>, <code>context</code>, <code>collision</code>, <code>spawnidle</code>, <code>spawnlost</code></td>
+      <td>a measurement, or a card that is waiting</td>
+      <td class="good">nothing: a re-observed measurement, and the alert stays</td></tr>
+  </tbody>
+</table></div>
+
+<div class="warn"><b>"Do all events go in one sweep?" No.</b> Events are not batched into a sweep. A wake is coalesced
+only within one 150 ms pass (<code>lib/assistant.js:2826-2829</code>): four runs ending in the same moment are one turn
+that names four. An event that arrives while a turn is live waits for the end of that turn and goes as one batch
+(<code>:2848-2851</code>), because one assistant thread cannot have two live turns. And the 5 s sentry is only how often
+conditions are re-checked: <code>settle</code> and <code>exited</code> fire from the job event stream as the run ends
+(<code>observe()</code>, <code>:2881-2883</code>), while <code>approval</code>, <code>question</code> and
+<code>watch</code> are noticed on the next pass. That up-to-5 s detection latency is unchanged by this work; the
+budget is a separate thing, and it no longer touches them.</div>
 
 <div class="box"><b>Why this is safe from a storm.</b> Four guards already exist and stay: wakes coalesce for 150 ms
 (<code>lib/assistant.js:2826-2829</code>), one terminal wake per finished run (<code>:1728</code>,
