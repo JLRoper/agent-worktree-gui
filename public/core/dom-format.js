@@ -141,6 +141,7 @@ function verdictClass(v) {
   if (s.startsWith("MERGED")) return "merged";
   if (s === "ON MAIN") return "onmain";
   if (s.startsWith("NO COMMITS") || s.startsWith("EMPTY REPO")) return "nocommits";
+  if (s === "RELEASED") return "released";
   if (s.startsWith("UNMERGED")) return "unmerged";
   return "error";
 }

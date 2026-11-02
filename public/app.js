@@ -9917,6 +9917,10 @@ function verdictHtml(row) {
   const verdict = String(row.verdict || "");
   const cls = `badge ${verdictClass(verdict)}${row.verdictStale ? " stale" : ""}`;
   const text = esc(row.verdict);
+  // A RELEASED row's badge carries the REASON its path stopped being a tree (lib/own-tree.js), because the counts
+  // beside it are empty by construction: the tooltip is the only place the reader can find out that this is a folder
+  // left behind, and which checkout git would answer for there.
+  const released = String(row.released?.why || "");
   // The count against the project's main lives HERE now: the Ahead / Behind column counts the branch against its own
   // copy on the remote. Every title below ends with it, and a plain badge, which had no title at all, carries it alone.
   // Inline, not a helper: this region is read out of the page on its own (tools/verify-merge-chip.mjs).
@@ -9926,7 +9930,10 @@ function verdictHtml(row) {
       : "";
   const withVs = (t) => (vs ? `${t} — ${vs}` : t);
   // Every other verdict is a statement; only UNMERGED has an action behind it.
-  if (!verdict.startsWith("UNMERGED")) return `<span class="${cls}"${vs ? ` title="${esc(vs)}"` : ""}>${text}</span>`;
+  if (!verdict.startsWith("UNMERGED")) {
+    const title = released || vs;
+    return `<span class="${cls}"${title ? ` title="${esc(title)}"` : ""}>${text}</span>`;
+  }
   const key = keyOf(row.project, row.path);
   const attrs =
     `data-merge-start="${esc(key)}" data-merge-project="${esc(row.project)}" data-merge-path="${esc(row.path)}"` +
@@ -10408,8 +10415,12 @@ function ownerDetailHtml(row) {
 
 function rowHtml(row, forceOwner = false) {
   const isOpen = state.expanded.has(keyOf(row.project, row.path));
-  const dirty =
-    row.dirty || row.untracked
+  // A row whose path is no longer a tree of its own (lib/scan.js's RELEASED row) has no counts to show: "clean" would
+  // be a claim about a worktree that is not there, so the cell says — with the reason in its tooltip.
+  const releasedWhy = row.released ? String(row.released.why || "this path is not a worktree any more") : "";
+  const dirty = releasedWhy
+    ? `<span class="dim" title="${esc(releasedWhy)}">—</span>`
+    : row.dirty || row.untracked
       ? `<span class="dirty">${row.dirty}</span>${row.untracked ? ` <span class="dimmer">+${row.untracked}?</span>` : ""}`
       : `<span class="clean">clean</span>`;
   const pr = prCellHtml(row);
@@ -12391,7 +12402,8 @@ function chipsHtml(name) {
   }).length;
   const unmerged = rows.filter((r) => {
     const v = String(r.verdict || "");
-    return !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN";
+    // A RELEASED row is a folder left behind, not work waiting to merge: it is counted in the tree total only.
+    return !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN" && v !== "RELEASED";
   }).length;
   const dirty = rows.filter((r) => r.dirty || r.untracked).length;
   const serving = rows.filter((r) => r.signals?.ports?.on).length;
@@ -12688,7 +12700,7 @@ function rootChips(projects, hidden = 0) {
   const rows = [...state.rows.values()].filter((r) => names.has(r.project));
   const unmerged = rows.filter((r) => {
     const v = String(r.verdict || "");
-    return v && !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN";
+    return v && !v.startsWith("MERGED") && !v.startsWith("NO COMMITS") && v !== "ON MAIN" && v !== "RELEASED";
   }).length;
   const dirty = rows.filter((r) => r.dirty || r.untracked).length;
   const live = rows.filter(isRowLive).length;

@@ -210,6 +210,7 @@ Pool.enqueue({ worktree, depth })
    ▼
 scan-worker.js  (worker_threads)
    │  scanWorktree(): rev-parse · status --porcelain=v2 --branch · log · merge-base · cherry · diff
+   │  • first: `ownTree()` (lib/own-tree.js) — a path that is not its own tree is reported RELEASED, no counts
    │  depth "fast"  = branch, head, dirty, ahead/behind, upstream
    │  depth "full"  = + patch-ids, verdict, commit list, diffstat
    ▼
