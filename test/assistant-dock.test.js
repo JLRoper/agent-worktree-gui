@@ -119,8 +119,13 @@ test("room the rail gains goes into the open turn's console, not into blank pane
   assert.match(code, /openNewestTurn\(\)/, "a resize with every turn folded must open the newest");
   // The two rules have equal specificity with the `flex: 0 0 auto` set, so order is the whole mechanism.
   const zeroIndex = css.lastIndexOf("> .turn:not(.folded) .job-out { max-height: none; flex: 0 0 auto;");
-  const slackIndex = css.lastIndexOf("> .turn.is-slack { flex: 1 1 auto; }");
+  const slackIndex = css.lastIndexOf("> .turn.is-slack { flex: 1 0 auto; }");
   assert.ok(zeroIndex > 0 && slackIndex > zeroIndex, "the .is-slack flex rules must come AFTER the flex: 0 0 auto set");
+  // GROW, NEVER SHRINK. An overflowing transcript has no room to gain, and a shrink factor (`1 1 auto`) spent the
+  // whole overflow on this one turn: it collapsed to a zero-height box while its console painted outside it, behind
+  // the sticky composer — the newest message disappearing under the reply box. `1 0 auto` keeps the turn at its
+  // content's height at every width and in both frames; tools/verify-assistant-dock-overlap.mjs measures it.
+  assert.doesNotMatch(css, /> \.turn\.is-slack { flex: 1 1 auto; }/, "the slack turn must not shrink below its content");
   assert.match(css, /\.job-body:has\(> \.turn\.is-slack\)::before \{ content: none; \}/,
     "the spacer above the turns must stand down when a turn can take the room");
 });

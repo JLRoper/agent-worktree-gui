@@ -3571,8 +3571,14 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-subpane[data-subpane="chat"] > .job > .job-body > .turn:not(.folded) .job-out { max-height: none; flex: 0 0 auto; min-height: 0; }
 /* The assistant float is the exception the reader asked for: room the panel gains goes INTO the console they are
    reading instead of becoming blank panel above it. Same specificity as the `flex: 0 0 auto` rules just above, so
-   this has to come after them — that is why the `.is-slack` set is split across the block. */
-.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack { flex: 1 1 auto; }
+   this has to come after them — that is why the `.is-slack` set is split across the block.
+   GROW, NEVER SHRINK (`1 0 auto`). In an overflowing transcript there is no room to gain, and a shrink factor
+   spent the whole overflow on this one turn: it collapsed to a zero-height box while its console — min-height
+   34px, and `max-height: none` here — painted outside it, straight behind the sticky composer. That is the
+   newest message disappearing under the reply box; the composer's `bottom: 0` only decided what it hid behind.
+   With no shrink the turn keeps its content's height, the transcript scrolls instead, and the composer stays
+   after it at the foot of the scrollport at every width and in both frames. */
+.as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack { flex: 1 0 auto; }
 .as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap { flex: 1 1 auto; }
 .as-subpane[data-subpane="chat"] > .job > .job-body > .turn.is-slack > .out-wrap > .job-out { flex: 1 1 auto; max-height: none; }
 .as-subpane[data-subpane="chat"] > .job .reply-box { min-height: 79px; }
