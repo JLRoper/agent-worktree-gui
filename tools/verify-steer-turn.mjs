@@ -1,6 +1,6 @@
-// Steer turn, end to end: a steer the gateway accepts actually steers, and a steer it refuses is SAID, never
-// silently turned into a queued reply. Proved by driving a real panel of this checkout and a real browser over
-// it, against a STUB gateway that records every `POST /v1/runs/<id>/steer` it is sent.
+// Steer turn, end to end: a steer the gateway accepts actually steers, and a steer it refuses is HELD as a queued
+// reply and said so — never silently lost. Proved by driving a real panel of this checkout and a real browser
+// over it, against a STUB gateway that records every `POST /v1/runs/<id>/steer` it is sent.
 //
 //   node tools/verify-steer-turn.mjs
 //   PANEL_PLAYWRIGHT_ROOT=<dir with node_modules/playwright> node tools/verify-steer-turn.mjs
@@ -9,8 +9,11 @@
 //
 //   (a) a steer the gateway will accept actually steers — one recorded POST /v1/runs/<id>/steer carrying the
 //       typed text, the box emptied, and ZERO queued ghost rows on the card (button, and again from Ctrl+Enter)
-//   (b) a steer the gateway REFUSES (409 run_not_accepting_steer) is said plainly: the card's warn line carries
-//       the refusal, the text stays in the box, and no ghost row and no queue entry appear anywhere
+//   (b) a steer the gateway REFUSES on a run it still calls running (409 run_not_accepting_steer — the panel
+//       classifies that as the last-tool-boundary refusal) is HELD: the card says so in words, the text becomes ONE
+//       queued reply, the box is emptied and the Steer control goes in the same round trip. The brief for the
+//       parked-turn fix reversed the older rule that handed the text back with "press Queue reply": the reader
+//       asked for it to be sent, so it is held for the next turn rather than lost to a second press
 //   (c) Queue reply still holds the text (one ghost, its own "sends when the current turn finishes" line) and
 //       ENTER still queues rather than steering: the Queue press and the Enter press make no steer POST at all
 //
@@ -381,27 +384,29 @@ async function run(pw) {
     check("Enter held a second reply instead of steering", await ghostCount(TH_QUEUED), 2);
     check("…and neither press sent a steer to the gateway", steerPostsFor(RUN_QUEUED).length, 0);
 
-    // ── (b) a refused steer is SAID — never silently queued ───────────────────────────────────────────
-    console.log("\n== (b) a steer the gateway refuses (409 run_not_accepting_steer) ==");
-    check("the card offers Steer turn for the parked run", await steerBtn(TH_REFUSED).count(), 1);
-    await type(TH_REFUSED, "this text must not become a queued reply");
+    // ── (b) a genuine 409 is HELD as a queued reply, and said ─────────────────────────────────────────
+    // The stub's `run_refuse` answers the steer 409 `run_not_accepting_steer` AND reports the run as still `running`,
+    // so the panel classifies it as the gateway's last-tool-boundary refusal: the turn exists, it is finishing, and
+    // nothing can be steered into it. The text belongs in a held reply, and the card must say it was held.
+    console.log("\n== (b) a steer the gateway refuses (409 run_not_accepting_steer on a live run) ==");
+    check("the card offers Steer turn for the live run", await steerBtn(TH_REFUSED).count(), 1);
+    await type(TH_REFUSED, "this text must survive the refusal");
     await steerBtn(TH_REFUSED).click();
     const refusedSeen = await waitFor(() => steerPostsFor(RUN_REFUSED).length === 1, { what: "the refused steer to reach the stub" });
     ok("the panel did ask the gateway (one recorded steer)", refusedSeen && steerPostsFor(RUN_REFUSED).length === 1);
-    check("…carrying the typed text", steerPostsFor(RUN_REFUSED)[0]?.body?.input, "this text must not become a queued reply");
-    await page.waitForTimeout(500);
+    check("…carrying the typed text", steerPostsFor(RUN_REFUSED)[0]?.body?.input, "this text must survive the refusal");
+    await page.waitForTimeout(700);
     const refusedWarn = await warn(TH_REFUSED);
-    ok("the card says the steer was refused", /refus|cannot|not accepting|not running/i.test(refusedWarn), refusedWarn);
+    ok("the card says the steer was HELD", /held/i.test(refusedWarn), refusedWarn);
+    ok("…and says where the text went: queued", /queued/i.test(refusedWarn), refusedWarn);
     ok("…in words, not a code: it names what happened", refusedWarn.trim().length > 20, refusedWarn);
-    ok("…and never claims it was queued", !/queued/i.test(refusedWarn) || /not queued|nothing was queued/i.test(refusedWarn), refusedWarn);
-    check("NO ghost row appeared", await ghostCount(TH_REFUSED), 0);
-    check("NO queue count on the card", await queueNote(TH_REFUSED), null);
-    check("the text is still in the box, not swallowed", await boxText(TH_REFUSED), "this text must not become a queued reply");
-    // Queue reply is still the reader's to press, and it is the only thing that holds a reply.
-    await page.locator(`${cardSel(TH_REFUSED)} [data-queue-reply]`).click();
-    await page.waitForTimeout(300);
-    check("pressing Queue reply afterwards IS what holds it", await ghostCount(TH_REFUSED), 1);
-    check("…and it still sent no steer", steerPostsFor(RUN_REFUSED).length, 1);
+    check("the text became ONE held reply", await ghostCount(TH_REFUSED), 1);
+    ok("…whose line is the typed text", /survive the refusal/.test((await ghostTexts(TH_REFUSED))[0] || ""), JSON.stringify(await ghostTexts(TH_REFUSED)));
+    check("…the card counts it", await queueNote(TH_REFUSED), "1 queued");
+    check("the box is empty (held, not left to send twice)", await boxText(TH_REFUSED), "");
+    // The route answered 409 and the card remembered it: the control the gateway cannot answer is not drawn again.
+    check("the Steer control is gone in the same round trip", await steerBtn(TH_REFUSED).count(), 0);
+    check("…and no second steer was sent", steerPostsFor(RUN_REFUSED).length, 1);
 
     await page.waitForTimeout(200);
     ok("no uncaught page errors", pageErrors.length === 0, pageErrors.slice(0, 3).join(" | "));
