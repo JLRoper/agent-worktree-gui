@@ -10,6 +10,8 @@
     "dev": "node --watch server.js",
     "hooks:install": "git config core.hooksPath .githooks",
     "branches": "node tools/merged-branches.mjs",
+    "changelog": "node tools/changelog.mjs",
+    "changelog:check": "node tools/changelog.mjs --check",
     "render:pipelines": "node tools/render-pipelines.mjs",
     "verify:pipelines-viz": "node tools/verify-pipelines-viz.mjs",
     "audit:child-process": "node tools/child-process-audit.mjs",

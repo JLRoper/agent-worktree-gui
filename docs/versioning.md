@@ -1,9 +1,28 @@
 # Versioning this panel
 
-The version is one number, declared once, in `package.json`'s `"version"`. Nothing else carries it: there is no
-tag (`git tag` lists nothing on this repo), no changelog to keep in step, and no second copy in the code — the
-server reads that field and hands it to the page, which prints it on the board's own config line
-(`v0.3.0 · 9 project(s) · …`). A bump is therefore a one-line change and is visible where you already look.
+The version is one number, declared once, in `package.json`'s `"version"`. The server reads that field and hands
+it to the page, which prints it on the board's own config line (`v0.84.0 · 9 project(s) · …`), so a bump is a
+one-line change and is visible where you already look. Two things anchor the number to history: an annotated
+`v<version>` tag at the commit that first declared it, and `CHANGELOG.md`, rendered from the commits between
+consecutive tags. `npm run verify:version-tags` fails when a bump has no tag; `npm run changelog` rewrites the
+changelog and `npm run changelog:check` fails when it is stale.
+
+## The tag, and the changelog it renders
+
+A version number is anchored by an annotated tag, `v<version>`, at the commit on `main` that first declared it,
+and `CHANGELOG.md` is rendered from the commits between consecutive tags — so the two cannot describe different
+history. The gate is `npm run verify:version-tags`: it walks `git log -p --follow -- package.json` and fails when
+a bump has no tag at its commit, when the tag points at another commit, when it is lightweight, or when it names
+a version `package.json` never held.
+
+A rebase merge re-creates the branch's commits on `main` with new shas, so the tag is made against the commit
+`main` carries once the PR has merged — never against the branch's pre-merge tip:
+
+    git tag -a v0.85.0 <the commit main now carries> -m "v0.85.0"
+    git push origin v0.85.0
+
+The rendered changelog gains that section at the next `npm run changelog`. Commit the render with the next
+release's bump rather than as a release of its own, so a housekeeping render never spends a version number.
 
 ## The bump is a judgement, made by the agent landing the change
 
@@ -71,6 +90,8 @@ Nothing new for a user and nothing broken for anyone:
 | `node tools/version.mjs suggest` | reads the branch's commits (and its PR's title and body, when `gh` has them) against the base and prints the level it reads from the conventional-commit prefixes, with a reason per commit. It says so when a prefix is missing instead of guessing. **Advice — it writes nothing.** |
 | `node tools/version.mjs check` | the pipeline's gate: exits non-zero when the branch carries commits and `package.json` still holds the base's version, naming the commits. Silent and zero on an already-bumped branch, and on a branch with no commits. It never writes. |
 | `node tools/version.mjs apply <patch\|minor\|major>` | writes the new version to `package.json` — the one place it lives — and prints old and new. Run by the landing agent, deliberately; never by `check` and never by a hook. |
+| `node tools/verify-version-tags.mjs` | the anchor's gate: walks `git log -p --follow -- package.json` and fails when a version that first appeared at a commit has no annotated `v<version>` tag there, when the tag points at another commit, when it is lightweight, or when it names a version `package.json` never held. `npm run verify:version-tags`. It exits 2, never a vacuous pass, when the walk comes back empty. |
+| `node tools/changelog.mjs` | renders `CHANGELOG.md` from the commits between consecutive tags, newest first, grouped by the conventional-commit prefix; `--since v<version>` prints only what came after the build a tab is running, and `--check` fails when the file is stale. `npm run changelog`, `npm run changelog:check`. |
 | `.githooks/pre-push` | makes forgetting impossible: it runs `check`, so a push cannot carry a bump-worthy branch with no bump. |
 | the merge prompt (`lib/merge-prompt.js`) | tells the landing agent to decide the level from the diff, run `apply`, and state the level and the reason in the PR body and the commit. |
 
