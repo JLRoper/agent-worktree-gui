@@ -383,16 +383,20 @@ button.primary:hover { background: #24466a; }
    was read from. The status chip is the difference between "read", "not in the file" and a source that
    could not be read — a source with a reason draws the reason, never a row it did not read. */
 .perm-group { margin-top: 16px; }
-.perm-head { gap: 8px; align-items: baseline; }
-.perm-label { flex: 1 1 auto; min-width: 0; font: 11px var(--mono); letter-spacing: .03em; text-transform: uppercase; color: var(--text); }
-.perm-status { flex: none; padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; font: 9px/1.7 var(--mono); color: var(--dim); }
+.perm-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; align-items: start; }
+.perm-label { min-width: 0; overflow-wrap: anywhere; font: 11px var(--mono); letter-spacing: .03em; text-transform: uppercase; color: var(--text); }
+.perm-status { justify-self: end; padding: 0 6px; border: 1px solid var(--line); border-radius: 999px; font: 9px/1.7 var(--mono); color: var(--dim); }
 .perm-status.bad { color: #ff9c94; border-color: #57262a; }
-.perm-head .perm-source { flex: 0 1 48%; font-size: 10px; color: var(--dimmer); text-align: right; overflow-wrap: anywhere; }
+/* The head's source gets the full width under the label and pill: three columns cannot share 310 px without the
+   label's wrapped lines painting under the pill. One line, ellipsized, with the whole path in the title. */
+.perm-head .perm-source { grid-column: 1 / -1; min-width: 0; font-size: 10px; color: var(--dimmer); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .perm-rows { margin-top: 3px; }
 .perm-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1.4fr); gap: 8px; align-items: start; padding: 2px 0 2px 9px; border-left: 1px solid #1c2230; font-size: 11px; }
 .perm-row .perm-name { color: var(--text); overflow-wrap: anywhere; }
 .perm-row .perm-value { color: #9fb6cf; overflow-wrap: anywhere; }
-.perm-row .perm-source { font-size: 10px; color: #46505f; overflow-wrap: anywhere; }
+/* Every row's file:line is ONE line: a 310 px column holds three wrapped paths that make the tab four times its
+   height. The full path:line stays in the span's title. */
+.perm-row .perm-source { min-width: 0; font-size: 10px; color: #46505f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .perm-note { margin-top: 3px; padding: 3px 6px; font-size: 10px; line-height: 1.4; border-style: solid; color: var(--dimmer); overflow-wrap: anywhere; }
 .perm-note.bad { border-color: #57262a; color: #ff9c94; }
 .hidden { display: none; }

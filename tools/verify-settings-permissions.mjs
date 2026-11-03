@@ -26,6 +26,13 @@
 //   * the tab is the ninth in the strip, a press selects it and shows only its panel, and it is remembered
 //   * every group heading and every row prints a source that is `file:line` or `endpoint`; the approval
 //     rows read 600/manual from the fixture, and the always-ask list has its fixture's three patterns
+//   * at the settings window's own 340 px width the status pill and the group label never intersect — the
+//     label's text stays inside its column and the pill has a column of its own. The 401 gateway is the
+//     case that shows it: "not exposed, needs a token" is the longest pill the tab carries.
+//   * every `file:line` (the group heading's and each row's) is ONE line, ellipsized, with the whole
+//     path:line in its title — at 340 px a wrapped path made the tab four times its height
+//   * screenshots at 1280 and 340 wide land in SETTINGS_PERMISSIONS_OUT (default: a directory under the
+//     OS temp), beside the verdict
 //   * deleting config.yaml and reloading turns the five YAML sources into "cannot read" with the path in
 //     the reason, in the tab itself — not a stale value from the previous read
 //   * the settings search filters this grouped list and counts its rows on the tab
@@ -35,6 +42,11 @@
 // the HTTP check and the tab check all fail by name. A green run here means the module, the route and the
 // tab answered, not an empty page. A missing Playwright prints BROWSER-HALF-NOT-RUN and exits 2 after the
 // module and HTTP halves have already been reported.
+//
+// The 340 px layout checks have their own, narrower red: on 0.72.4 (an export of main) every other check
+// passes and these fail by name — the gateway label is 57 px wide with 64 px of text, and every source
+// measures 5 lines instead of 1. Measured on an export of origin/main 2d24432; the numbers are in the
+// landing note.
 //
 // The configured-path check has its own, narrower red: on 0.70.0 (a12c737) every other check still passes and
 // "the policy chip names this instance's PANEL_CONFIG file" fails, because that route was handed
@@ -47,7 +59,15 @@ import { loadPlaywright, notRun, openPage, withBrowser } from "./browser.mjs";
 import { ROOT, startPanel } from "./panel-testkit.mjs";
 
 const TAB_KEY = "wtgui.settingsTab";
-const WIDE = { width: 1400, height: 900 };
+const WIDE = { width: 1280, height: 900 };
+const NARROW = { width: 340, height: 900 };
+// Where the two screenshots land. The gate's own output, never the checkout: a tree that is being landed
+// must stay clean, and a reader who wants the pictures should not have to hunt a temp sandbox that is
+// deleted at the end.
+const SHOTS = process.env.SETTINGS_PERMISSIONS_OUT
+  ? path.resolve(process.env.SETTINGS_PERMISSIONS_OUT)
+  : path.join(tmpdir(), "wag", "settings-permissions");
+mkdirSync(SHOTS, { recursive: true });
 
 let failures = 0;
 let checks = 0;
@@ -63,6 +83,81 @@ const lineOf = (text, needle, from = 0) => {
   return null;
 };
 const slashed = (p) => String(p).split(path.sep).join("/");
+
+// The one measurement both widths share: a group head's label against its status pill, and every source's
+// computed line count/ellipsis beside the title that holds the full path:line. The label's own text is read
+// through a Range, because a flex/grid box can be narrow enough for a word to paint outside it while the
+// box itself still stops at the pill's edge.
+const readLayout = (page) =>
+  page.evaluate(() => {
+    const area = (a, b) =>
+      Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) *
+      Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+    const round = (n) => Math.round(n * 100) / 100;
+    const sourceFacts = (node) => {
+      if (!node) return null;
+      const cs = getComputedStyle(node);
+      const lineHeight = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2 || 12;
+      const box = node.getBoundingClientRect();
+      return {
+        text: (node.textContent || "").trim(),
+        title: (node.title || "").trim(),
+        width: round(box.width),
+        height: round(box.height),
+        lineHeight,
+        lines: Math.max(1, Math.round(box.height / lineHeight)),
+        whiteSpace: cs.whiteSpace,
+        overflow: cs.overflow,
+        textOverflow: cs.textOverflow,
+        scrollWidth: node.scrollWidth,
+        clientWidth: node.clientWidth,
+      };
+    };
+    const groups = [...document.querySelectorAll("#permissions-list .perm-group")].map((group) => {
+      const label = group.querySelector(".perm-label");
+      const pill = group.querySelector(".perm-status");
+      const labelBox = label.getBoundingClientRect();
+      const pillBox = pill.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(label);
+      const textBoxes = [...range.getClientRects()];
+      return {
+        key: group.dataset.permissionsGroup,
+        label: (label.textContent || "").trim(),
+        pill: (pill.textContent || "").trim(),
+        labelWidth: round(labelBox.width),
+        labelScrollWidth: label.scrollWidth,
+        labelClientWidth: label.clientWidth,
+        labelHeight: round(labelBox.height),
+        pillWidth: round(pillBox.width),
+        boxOverlap: round(area(labelBox, pillBox)),
+        textOverlap: round(textBoxes.reduce((sum, box) => sum + area(box, pillBox), 0)),
+        headSource: sourceFacts(group.querySelector(".perm-head .perm-source")),
+        rowSources: [...group.querySelectorAll("[data-permissions-row] .perm-source")].map(sourceFacts),
+      };
+    });
+    return {
+      viewport: innerWidth,
+      panelWidth: round(document.getElementById("settings").getBoundingClientRect().width),
+      groups,
+    };
+  });
+
+const labelHits = (layout) =>
+  layout.groups
+    .filter((g) => g.boxOverlap > 1 || g.textOverlap > 1 || g.labelScrollWidth > g.labelClientWidth + 1)
+    .map((g) => `${g.key}: label ${g.labelScrollWidth}/${g.labelClientWidth} px, box ${g.boxOverlap}, text ${g.textOverlap}, pill ${g.pillWidth}`);
+
+const sourceHits = (layout) =>
+  layout.groups
+    .flatMap((g) => [g.headSource, ...g.rowSources].filter(Boolean).map((s) => ({ key: g.key, ...s })))
+    .filter((s) => s.lines !== 1 || s.whiteSpace !== "nowrap" || s.overflow !== "hidden" || s.textOverflow !== "ellipsis" || s.title !== s.text)
+    .map((s) => `${s.key}: ${s.lines} line(s), ${s.whiteSpace}/${s.overflow}/${s.textOverflow}, title ${s.title === s.text ? "ok" : "MISSING"} — ${s.text}`);
+
+const clippedSources = (layout) =>
+  layout.groups
+    .flatMap((g) => [g.headSource, ...g.rowSources].filter(Boolean))
+    .filter((s) => s.scrollWidth > s.clientWidth + 1).length;
 
 const FIXTURE = `# the gate's own config.yaml — never the developer's
 tool_loop_guardrails:
@@ -268,6 +363,7 @@ const playwright = loadPlaywright();
 try {
   console.log(`sandbox: ${panel.base}`);
   console.log(`gateway: ${gatewayUrl} (stub) · home ${home}`);
+  console.log(`screenshots: ${slashed(SHOTS)}`);
 
   // ---- C. the route ------------------------------------------------------------------------------
   const answer = await readRoute();
@@ -330,7 +426,7 @@ try {
     console.log(notRun("the Permissions tab", "playwright is not installed (set PANEL_PLAYWRIGHT_ROOT)"));
   } else {
     await withBrowser(
-      async ({ page }) => {
+      async ({ page, pageErrors }) => {
         await page.setViewportSize(WIDE);
         await openPage(page, panel.base, { selector: "#btn-settings" });
         await page.waitForTimeout(250);
@@ -423,6 +519,55 @@ try {
         await page.fill("#settings-search", "");
         await page.waitForTimeout(150);
 
+        // ---- the two layout defects from the #251 review, at the window's own 340 px width ------------
+        // A 401 gateway is the longest pill the tab can carry ("not exposed, needs a token"), and it is the
+        // state the review photographed the label under. Re-read the tab in that state rather than trusting
+        // the keyed 200 answer measured above: the pill's width is what squeezes the label.
+        gatewayMode = "unauthorized";
+        await page.setViewportSize(WIDE);
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await page.waitForSelector("#btn-settings", { timeout: 15_000 });
+        await page.click("#btn-settings");
+        await page.waitForSelector("#settings:not(.hidden)", { timeout: 10_000 });
+        await page.click('[data-settings-tab="permissions"]');
+        await page.waitForSelector("#permissions-list .perm-group", { timeout: 10_000 });
+        await page.waitForTimeout(200);
+        const wideLayout = await readLayout(page);
+        note(`window ${wideLayout.panelWidth} px wide at a ${wideLayout.viewport} px viewport`);
+        check(Math.abs(wideLayout.panelWidth - 340) <= 0.5, "the window is at its own 340 px width", `${wideLayout.panelWidth} px`);
+        const wideHits = labelHits(wideLayout);
+        check(wideHits.length === 0, "at 340 px the status pill and the group label never intersect", wideHits.join(" · "));
+        const wideSources = sourceHits(wideLayout);
+        check(wideSources.length === 0, "every source is one ellipsized line with the full path:line in its title", wideSources[0] || "");
+        check(clippedSources(wideLayout) >= 5, "a long path is really ellipsized, not merely on one line", `${clippedSources(wideLayout)} sources cut off`);
+        const wideShot = path.join(SHOTS, "permissions-1280.png");
+        await page.screenshot({ path: wideShot });
+        note(`screenshot ${slashed(wideShot)}`);
+
+        // ---- 340 wide: the same tab, in the window a reader on a narrow screen has ---------------------
+        // The harness places the window inside the narrow viewport before opening it: the stylesheet anchors
+        // a 340 px box 16 px from the right, so at a 340 px viewport its left edge would be off screen and
+        // the screenshot would cut the label it is meant to show. That placement is setup, not an assertion.
+        await page.setViewportSize(NARROW);
+        await page.evaluate(() => localStorage.setItem("wtgui.settingsRect", JSON.stringify({ x: 8, y: 8, w: 324, h: 860 })));
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await page.waitForSelector("#btn-settings", { timeout: 15_000 });
+        await page.click("#btn-settings");
+        await page.waitForSelector("#settings:not(.hidden)", { timeout: 10_000 });
+        await page.click('[data-settings-tab="permissions"]');
+        await page.waitForSelector("#permissions-list .perm-group", { timeout: 10_000 });
+        await page.waitForTimeout(200);
+        const narrowLayout = await readLayout(page);
+        note(`window ${narrowLayout.panelWidth} px wide at a ${narrowLayout.viewport} px viewport`);
+        check(narrowLayout.panelWidth <= 324.5, "at 340 wide the window fits inside the viewport", `${narrowLayout.panelWidth} px`);
+        const narrowHits = labelHits(narrowLayout);
+        check(narrowHits.length === 0, "at 340 wide the status pill and the group label still never intersect", narrowHits.join(" · "));
+        const narrowSources = sourceHits(narrowLayout);
+        check(narrowSources.length === 0, "at 340 wide every file:line is still one ellipsized line with its title", narrowSources[0] || "");
+        const narrowShot = path.join(SHOTS, "permissions-340.png");
+        await page.screenshot({ path: narrowShot });
+        note(`screenshot ${slashed(narrowShot)}`);
+
         // The honest cannot-read state, in the tab itself: delete config.yaml, reload, press the tab.
         renameSync(configPath, `${configPath}.gone`);
         await page.reload();
@@ -446,6 +591,7 @@ try {
         check(broke.status === "cannot read" && /not found/.test(broke.note), "the Approvals group says cannot read and why", `${broke.status} · ${broke.note}`);
         check(broke.rows === 0, "and it draws no stale rows");
         renameSync(`${configPath}.gone`, configPath);
+        check(pageErrors.length === 0, "the tab raises no page errors", pageErrors.join(" · "));
       });
     }
 } finally {
@@ -454,5 +600,6 @@ try {
   rmSync(dir, { recursive: true, force: true });
 }
 
-console.log(`\nRESULT: ${failures === 0 ? "PASS" : "FAIL"} — ${checks} checks, ${failures} failed`);
+console.log(`\nscreenshots: ${slashed(SHOTS)}`);
+console.log(`RESULT: ${failures === 0 ? "PASS" : "FAIL"} — ${checks} checks, ${failures} failed`);
 process.exit(failures === 0 ? 0 : 1);
