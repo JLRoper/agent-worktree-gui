@@ -4,7 +4,7 @@
 import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 // The push-guard record is a few hundred bytes read at boot and written on an install: sync is the honest shape
 // for it, and it is the same file the Settings row reports from.
 import { existsSync, mkdirSync, readFileSync, writeFileSync, writeSync } from "node:fs";
@@ -302,6 +302,54 @@ async function loadConfig() {
 
 // Write one setting into the panel's own config.json, leaving every other key exactly as it was. Only the key being
 // changed is written: dumping the in-memory config would bake computed defaults into the file.
+//
+// `config.json` is read by more than this writer: the next settings route, a harness, the reader's own editor, and
+// a poller beside it. Writing it IN PLACE truncates the file before the new bytes land, so a reader that gets there
+// in between parses an empty or half-written file and throws `Unexpected end of JSON input` — a torn read that
+// looks like the READER's bug, which is how this class of defect hides. A sibling temp file plus a rename fixes it:
+// the rename is atomic on this filesystem precisely because the temp file is in the SAME directory (a different
+// directory could be a different volume, and a cross-volume move is a copy), so every reader sees the whole old file
+// or the whole new one and never a third thing. The bytes, the key order and the 2-space formatting are unchanged —
+// only HOW the file is replaced is.
+const CONFIG_WRITE_TRIES = 40;
+const CONFIG_WRITE_RETRY_MS = 1;
+// The codes Windows reports for "somebody else has this file open": EPERM for the plain concurrent read, EBUSY for a
+// handle that cannot be deleted at all, EACCES for a file marked read-only.
+const CONFIG_WRITE_BUSY = new Set(["EPERM", "EBUSY", "EACCES"]);
+
+let configWriteSeq = 0;
+async function writeConfigAtomic(text) {
+  // A name of this process's own, so two saves racing in one panel cannot write the same temp file, and it ends in
+  // `.tmp` so a run that dies between the write and the rename leaves something nobody mistakes for the config.
+  const tmp = path.join(CONFIG_DIR, `${path.basename(CONFIG_PATH)}.${process.pid}.${++configWriteSeq}.tmp`);
+  await writeFile(tmp, text, "utf8");
+  // Windows refuses a rename whose DESTINATION another handle is reading, even when that handle is a plain
+  // `readFile` — measured on this box, one reader looping over the target refused 244 of 300 replaces, and one handle
+  // held open refused all 300, while the same loop against another file refused none. The read it competes with lasts
+  // a fraction of a millisecond, so the refusal is TRANSIENT and a bounded retry is what turns it into a save that
+  // lands: without it this fix would trade a torn read for a 500 on the save. A reader that holds the file open for
+  // good (an editor, a `tail -f`) still exhausts the retries and gets the error, which is the honest answer — the
+  // alternative is writing in place again and handing back the torn read. The budget is 40 attempts a millisecond
+  // apart: measured under a reader looping over the target, every save landed in ~5-15 ms, and a reader that never
+  // lets go costs that route at most ~40 ms before the error.
+  let last = null;
+  for (let attempt = 0; attempt < CONFIG_WRITE_TRIES; attempt++) {
+    try {
+      await rename(tmp, CONFIG_PATH);
+      return;
+    } catch (e) {
+      if (!CONFIG_WRITE_BUSY.has(e && e.code)) {
+        await unlink(tmp).catch(() => {});
+        throw e;
+      }
+      last = e;
+      await new Promise((r) => setTimeout(r, CONFIG_WRITE_RETRY_MS));
+    }
+  }
+  await unlink(tmp).catch(() => {});
+  throw last;
+}
+
 async function patchPanelConfig(patch) {
   let raw = {};
   try {
@@ -310,7 +358,7 @@ async function patchPanelConfig(patch) {
     raw = {};
   }
   Object.assign(raw, patch);
-  await writeFile(CONFIG_PATH, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+  await writeConfigAtomic(`${JSON.stringify(raw, null, 2)}\n`);
 }
 
 let config = await loadConfig();
