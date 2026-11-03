@@ -301,13 +301,15 @@ const state = {
 // one of the records the server sent names it; before that first /api/assistant answer, Assistant #1's fixed thread
 // is the only assistant thread there is. Every "is this a board agent" question goes through here, because with
 // roles there is more than one assistant thread and comparing against #1's alone leaves #2 counted as a worker.
-function assistantSessionFor(thread) {
+// `board` is a parameter for the same reason `rootOf`'s roots is: a pure reader of a state object it was handed
+// must not consult the module's own.
+function assistantSessionFor(thread, board = state) {
   const t = String(thread || "");
   if (!t) return null;
-  const list = state.assistant?.assistants;
+  const list = board.assistant?.assistants;
   const hit = Array.isArray(list) ? list.find((a) => a.threadId === t) : null;
   if (hit) return hit;
-  if (t === state.assistantThread) return { id: "assistant-1", name: "Assistant #1", threadId: t };
+  if (t === board.assistantThread) return { id: "assistant-1", name: "Assistant #1", threadId: t };
   return null;
 }
 
@@ -617,12 +619,14 @@ function projectOfTree(p) {
 
 // Longest matching scan root wins, so a nested root groups under the more specific folder.
 // No match means the project lives outside every root: group it under its own parent folder.
-function rootOf(project) {
+// `roots` is a parameter so a pure reader (the collapse tiers' selector) can answer from the state it was handed
+// instead of whatever the module happens to hold; every page caller keeps the live list by omitting it.
+function rootOf(project, roots = state.scanRoots) {
   const raw = normPath(project.path);
   const lower = raw.toLowerCase();
   if (!lower) return "(unknown folder)";
-  const roots = (state.scanRoots || []).map(normPath).filter(Boolean);
-  const match = roots
+  const list = (roots || []).map(normPath).filter(Boolean);
+  const match = list
     .filter((r) => lower === r.toLowerCase() || lower.startsWith(`${r.toLowerCase()}/`))
     .sort((a, b) => b.length - a.length)[0];
   if (match) return match;
@@ -937,7 +941,12 @@ function paintCollapseAll() {
   const open = anythingOpen();
   const names = [...state.projects.keys()];
   btn.textContent = open ? "Collapse all" : "Expand all";
-  btn.title = `${open ? "collapse" : "expand"} the whole tree — every folder, project, worktree row, card and turn (${boardRoots().length} folders, ${names.length} projects) — Ctrl+${open ? "[" : "]"}`;
+  // This button is the one-press gesture and says so; the bracket on the left peels one tier at a time, so a title
+  // promising it would close the tree is a promise the key no longer keeps.
+  btn.title =
+    `${open ? "collapse" : "expand"} the whole tree — every folder, project, worktree row, card and turn ` +
+    `(${boardRoots().length} folders, ${names.length} projects) in one press; ` +
+    "Ctrl+[ folds one tier per press (turns, cards, rows, projects, folders); Ctrl+] expands everything";
 }
 
 // One direction at a time. The header button must toggle (one button, two words), but a hotkey that
@@ -985,6 +994,148 @@ function setEverythingOpen(open) {
 function toggleEverything() {
   setEverythingOpen(!anythingOpen());
 }
+
+// ---- collapse one tier ---------------------------------------------------------
+// Ctrl+[ peels the board back one layer per press: the deepest accordion that still holds something open goes
+// first, then the next one up. Five tiers in this order — the turn bodies inside a card, the agent cards, the
+// worktree rows, the project sections, and the folder roots together with the two fixed cards. The last tier
+// is one tier because a folder holds no project of its own and the two fixed cards sit above every folder.
+// The header's "Collapse all" button stays the one-press gesture; this is its peel-one-layer sibling, and the
+// difference is what the button's own title says.
+const COLLAPSE_TIERS = ["turns", "cards", "rows", "projects", "folders"];
+
+// The folders the board draws, derived from the facts the renderer groups by (a project outside every scan root
+// is filed under its own folder). A selector that read `boardRoots()` would need the DOM; this one never does.
+function boardRootsOf(state) {
+  const roots = new Set();
+  for (const project of state.projects.values()) roots.add(rootOf(project, state.scanRoots));
+  return [...roots];
+}
+
+// The board cards the fold set belongs to: one per conversation, minus the assistant — it is a conversation but
+// not a card, is drawn in its own float, and never carries a `wm.collapsedJobs` entry. Counting it would hold
+// the cards tier open forever.
+function cardThreadsOf(state) {
+  const threads = new Set();
+  for (const turn of state.jobs?.values?.() || []) {
+    const thread = turn.thread || turn.id;
+    if (thread && !assistantSessionFor(thread, state)) threads.add(thread);
+  }
+  return [...threads];
+}
+
+// The turn a card draws open when nothing says otherwise: its newest, in the order `conversations()` sorts by.
+function latestTurnOf(state, thread) {
+  let latest = null;
+  for (const turn of state.jobs?.values?.() || []) {
+    if ((turn.thread || turn.id) !== thread) continue;
+    if (!latest || turnOrder(turn, latest) > 0) latest = turn;
+  }
+  return latest;
+}
+
+// Anything open in one tier, read from that tier's own book. The two closed sets (`collapsedJobs`,
+// `collapsedRoots`/`collapsedFixed`) say nothing about a member nobody ever wrote, so the universe they range over
+// comes from the board's own facts rather than from the set's size.
+function tierHasOpen(state, tier) {
+  if (tier === "turns") {
+    for (const open of state.turnOpen.values()) if (open) return true;
+    // A card whose newest turn has no entry is painted open (`turnIsOpen`), and a body on screen counts.
+    return cardThreadsOf(state).some((thread) => {
+      const latest = latestTurnOf(state, thread);
+      return Boolean(latest) && state.turnOpen.get(turnKey(latest)) !== false;
+    });
+  }
+  if (tier === "cards") return cardThreadsOf(state).some((thread) => !state.collapsedJobs.has(thread));
+  if (tier === "rows") return state.expanded.size > 0;
+  if (tier === "projects") return state.expandedProjects.size > 0;
+  if (tier === "folders") {
+    return (
+      boardRootsOf(state).some((root) => !state.collapsedRoots.has(root)) ||
+      FIXED_CARDS.some((id) => !state.collapsedFixed.has(id))
+    );
+  }
+  return false;
+}
+
+// Pure: the state handed in is the whole input — no DOM, no writes, no module state — so the same board always
+// answers the same tier. `null` is a board with nothing open, and the hotkey must treat that as a NO-OP rather
+// than fall through into expanding.
+function nextCollapseTier(state) {
+  return COLLAPSE_TIERS.find((tier) => tierHasOpen(state, tier)) || null;
+}
+
+// One press, one tier. Only the sets this gesture wrote are saved, and the parent tiers arm their cascade clock
+// exactly as a click on that parent does — the hotkey is not a way around it. No tier here writes a CHILD's fold:
+// folding a project leaves its rows and cards as they were, which is what the lower tiers are for.
+function collapseOneTier() {
+  const tier = nextCollapseTier(state);
+  if (!tier) return null;
+  if (tier === "turns") {
+    for (const conv of conversations()) {
+      for (const turn of conv.turns || []) {
+        state.turnOpen.set(turnKey(turn), false);
+        // A pinned turn has its own copy above the paged ones with its own key.
+        if (state.pinnedTurns.has(turn.id)) state.turnOpen.set(turnKey(turn, "@pin"), false);
+      }
+    }
+    // `turnOpen` is the session's own fold book (not persisted), so the tiers below leave it alone: the paint is
+    // the whole save.
+    for (const conv of conversations()) renderConversation(conv.thread);
+  } else if (tier === "cards") {
+    const threads = cardThreadsOf(state).filter((thread) => !state.collapsedJobs.has(thread));
+    for (const thread of threads) state.collapsedJobs.add(thread);
+    if (threads.length) saveCollapsedJobs();
+    for (const thread of threads) {
+      // A card in a folded project has no node; its fold is still written, and the next expand reads it.
+      if (document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)) renderConversation(thread);
+    }
+    renderJobs();
+  } else if (tier === "rows") {
+    for (const key of [...state.expanded]) {
+      state.expanded.delete(key);
+      state.detailEls.get(key)?.remove();
+      state.detailEls.delete(key);
+      document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.classList.remove("expanded");
+      scheduleCollapseCascade("row", key, true);
+    }
+  } else if (tier === "projects") {
+    const names = [...state.expandedProjects];
+    for (const name of names) {
+      state.expandedProjects.delete(name);
+      scheduleCollapseCascade("project", name, true);
+      applyProjectCollapse(name);
+      // Rows are only built for open projects, so closing one drops them instead of leaving hidden markup.
+      renderProjectRows(name);
+    }
+    if (names.length) saveExpandedProjects();
+    // Keep each folder's own collapse-all button honest, the way a click on the project header does.
+    for (const name of names) {
+      const root = document
+        .querySelector(`section.project[data-project="${CSS.escape(name)}"]`)
+        ?.closest("section.root-group")?.dataset.root;
+      if (root) paintRootButton(root);
+    }
+  } else if (tier === "folders") {
+    const roots = boardRootsOf(state).filter((root) => !state.collapsedRoots.has(root));
+    for (const root of roots) {
+      state.collapsedRoots.add(root);
+      scheduleCollapseCascade("root", root, true);
+      applyRootCollapse(root);
+    }
+    if (roots.length) saveCollapsedRoots();
+    const fixed = FIXED_CARDS.filter((id) => !state.collapsedFixed.has(id));
+    for (const id of fixed) {
+      state.collapsedFixed.add(id);
+      scheduleCollapseCascade("fixed", id, true);
+      applyFixedCollapse(id);
+    }
+    if (fixed.length) saveCollapsedFixed();
+  }
+  paintCollapseAll();
+  return tier;
+}
+// ---- end collapse one tier
 
 // ---- clone a repo into a folder ------------------------------------------------
 // The "+" in a folder header opens this row. The root is fixed to the folder you clicked, so a
@@ -1353,6 +1504,12 @@ function refreshJobPreview(id) {
 // ---- conversations ------------------------------------------------------------
 // Every turn of one thread is a separate CLI process, but they are one conversation: group
 // them so the card reads top to bottom and the reply box continues the same session.
+// The order a thread's turns are drawn in: by the clock, with the counter as the tiebreaker for one millisecond.
+// The collapse tiers name the newest turn through this same order, so "the turn drawn open" cannot drift from
+// the one the card paints.
+const turnOrder = (a, b) =>
+  (Date.parse(a.startedAt || "") || 0) - (Date.parse(b.startedAt || "") || 0) || (a.turn || 0) - (b.turn || 0);
+
 function conversations() {
   const groups = new Map();
   for (const j of state.jobs.values()) {
@@ -1368,7 +1525,7 @@ function conversations() {
     // it replaced was still 8, and the card drew "turn 7 · running" ABOVE "turn 8 · interrupted" — running on top
     // of interrupted, which is exactly what a reader reads as a contradiction (measured live on 7473). The clock
     // only moves forward, so it orders the list; the counter is the tiebreaker for one millisecond.
-    turns.sort((a, b) => (Date.parse(a.startedAt || "") || 0) - (Date.parse(b.startedAt || "") || 0) || (a.turn || 0) - (b.turn || 0));
+    turns.sort(turnOrder);
     out.push({ thread, turns, first: turns[0], latest: turns[turns.length - 1] });
   }
   out.sort((a, b) => String(b.latest.startedAt).localeCompare(String(a.latest.startedAt)));
@@ -1379,7 +1536,7 @@ function conversations() {
 // rewrites a running head's text in place, so it has to agree with the render or the label jumps a second later.
 function turnSeqOf(j) {
   const turns = [...state.jobs.values()].filter((x) => (x.thread || x.id) === (j.thread || j.id));
-  turns.sort((a, b) => (Date.parse(a.startedAt || "") || 0) - (Date.parse(b.startedAt || "") || 0) || (a.turn || 0) - (b.turn || 0));
+  turns.sort(turnOrder);
   const i = turns.findIndex((x) => x.id === j.id);
   return i < 0 ? j.turn || "?" : i + 1;
 }
@@ -14934,19 +15091,22 @@ $("btn-reset-colors").addEventListener("click", () => {
 });
 $("btn-collapse-all").addEventListener("click", () => toggleEverything());
 
-// Ctrl+[ folds the whole board, Ctrl+] opens it — the square brackets point the way (in, then out).
+// Ctrl+[ peels ONE tier off the board (the lowest tier with anything open: turn bodies, then cards, then rows,
+// then projects, then the folders and the two fixed cards) and Ctrl+] opens everything — the square brackets point
+// the way (in, then out). A board with nothing open makes the left bracket a no-op: it must never fall through
+// into expanding. The one-press "collapse everything" is the header button, which says so.
 // Ignored while a field has focus: a bracket belongs in a prompt or a filter, not on the board.
 window.addEventListener("keydown", (e) => {
   if (!e.ctrlKey || e.metaKey || e.altKey) return;
   // e.key is layout-dependent; e.code is not, so either identifies the key.
-  let open = null;
-  if (e.key === "[" || e.code === "BracketLeft") open = false;
-  else if (e.key === "]" || e.code === "BracketRight") open = true;
-  if (open === null) return;
+  const collapse = e.key === "[" || e.code === "BracketLeft";
+  const expand = e.key === "]" || e.code === "BracketRight";
+  if (!collapse && !expand) return;
   const el = e.target;
   if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
   e.preventDefault();
-  setEverythingOpen(open);
+  if (collapse) collapseOneTier();
+  else setEverythingOpen(true);
 });
 $("btn-fetch").addEventListener("click", () =>
   readNow("/api/fetch", () => {
