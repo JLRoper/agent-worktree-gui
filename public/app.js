@@ -68,6 +68,14 @@ const state = {
   // The amber flash is held here, not only on the DOM node: opening a project or a row repaints the card, and a
   // class added to the old element dies with it. The renderer re-applies it until the window closes.
   hotFlash: { thread: null, until: 0 },
+  // HUMAN: the rotation through every OPEN permission and clarify question. `key` is the question last shown
+  // and `at` its place in that sample; `sig` is what was last painted on the button. The list itself is never
+  // stored — it is rebuilt from live state on every press, so an answered question cannot linger in it.
+  human: { key: null, at: -1, sig: "" },
+  humanFlashTimer: null,
+  // The prompt a HUMAN hop just landed on, held for a beat so the repaint a row-opening causes puts the ring and
+  // the caret back instead of dropping them: { thread, turnId, kind, until }.
+  humanFocus: null,
   projects: new Map(),
   // Handle for the board-reorder clock, which the settings row can re-arm at another cadence.
   reorderTimer: null,
@@ -7076,6 +7084,10 @@ function tickApprovals() {
     card.classList.toggle("is-over", left <= 0);
     if (left <= 0) closeApprovalCard(box);
   }
+  // The HUMAN button's count is a live fact like the countdowns above: a question whose window just closed is no
+  // longer open, and a number that kept counting it would send the reader to a box that is over. One clock for
+  // both, so nothing else has to remember to repaint it.
+  paintHumanButton();
 }
 setInterval(tickApprovals, 1000);
 
@@ -9056,6 +9068,9 @@ function updateJob(j, { scroll = false } = {}) {
     }
     reorderProjects();
   }
+  // Every turn change lands here, so this is where the HUMAN count is kept honest without waiting for the page's
+  // clock: a question that arrived, or one the reader just answered, moves the number in the same repaint.
+  paintHumanButton();
 }
 
 // What the card actually draws. If none of this changed, the DOM does not need rebuilding — and
@@ -9345,6 +9360,9 @@ function renderConversation(thread, { scroll = false } = {}) {
   // A repaint replaces the card node, and the node that held the caret is gone with it — so a spawn
   // that asked for the reply box puts the caret back here, once the new card is in the document.
   applyPendingFocus();
+  // …and a HUMAN hop whose row was still opening when it focused has the same problem: the box it landed on is
+  // replaced a moment later. Put the ring and the caret back, scoped to the thread and the beat that asked for it.
+  humanRefocus(thread);
 }
 
 // After a spawn the reader wants to be typing, not hunting: put that agent's card in view and its
@@ -10369,6 +10387,9 @@ function repaintAgentState() {
   // An agent starting or finishing changes where its project belongs: bring it up (or let it settle)
   // without waiting for the next 30s snapshot, in every folder the reader is not working in.
   reorderProjects();
+  // A job that started, stopped or parked changes the HUMAN rotation's own list, and the count on its button is
+  // how the reader notices a question without looking for it — so it is repainted with the rest of the state.
+  paintHumanButton();
 }
 
 function livenessLines(row) {
@@ -17712,6 +17733,324 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     hotStep(-1);
   }
+});
+
+// ---- HUMAN (the question rotation) -----------------------------------------------------------
+// NOT-RUNNING steps through agents that are not running. This is the other waiting list: every OPEN question
+// on the board — a turn parked on a permission request, an agent parked on its own `clarify` question, and the
+// dock's own permission cards (a CLI approval, or the panel's remote-write request). An agent can be RUNNING and
+// still hold a question, and that is exactly the case NOT-RUNNING cannot reach — it is how permissions and
+// clarify questions kept being missed.
+//
+// THE LIST IS NEVER CACHED. It is rebuilt from live state on every press, so a question that was answered, timed
+// out, or whose turn ended is simply not in the next list. What IS remembered is the KEY of the question last
+// shown and the place it held: once that question is gone its old slot is where the entry after it now sits,
+// which is how a press lands on the NEXT question instead of starting over.
+// One question on one turn is open while its carrier is still there and the gateway is still holding it — the
+// same two tests `turnBody` and the card's own chips make, so the rotation can never offer a box that is not drawn.
+function humanOpenOnTurn(turn, kind) {
+  if (!turn || !turnLive(turn)) return false;
+  if (kind === "question") return Boolean(turn.question) && !turn.questionDone && approvalLive(turn.question);
+  return Boolean(turn.approval) && !turn.approvalDone && approvalLive(turn.approval);
+}
+
+// The name the reader knows an agent by: the card's title, else the label, else the thread id.
+function humanAgentName(thread) {
+  const job = [...state.jobs.values()].find((j) => (j.thread || j.id) === thread);
+  return (job && (job.title || job.label)) || thread || "the dock";
+}
+
+// Every open question, in the order the board shows it: cards that are in the page in DOM order (the unattached
+// panel sits above the table, so it comes first), then the cards a folded project hides, newest thread first,
+// then the dock's own permission cards, soonest deadline first — the one the gateway refuses soonest is the one
+// to answer next. `deadline` is 0 for a question that carries no window; those sort last.
+function humanQuestions() {
+  const out = [];
+  const convs = conversations().filter((c) => !assistantSessionFor(c.thread));
+  const rank = new Map([...document.querySelectorAll(".job[data-thread]")].map((el, i) => [el.dataset.thread, i]));
+  const onScreen = convs.filter((c) => rank.has(c.thread)).sort((a, b) => rank.get(a.thread) - rank.get(b.thread));
+  const hidden = convs
+    .filter((c) => !rank.has(c.thread))
+    .sort((a, b) => (Date.parse(b.latest?.startedAt || "") || 0) - (Date.parse(a.latest?.startedAt || "") || 0));
+  for (const c of [...onScreen, ...hidden]) {
+    for (const t of c.turns) {
+      for (const kind of ["approval", "question"]) {
+        if (!humanOpenOnTurn(t, kind)) continue;
+        const ask = kind === "question" ? t.question : t.approval;
+        out.push({
+          kind,
+          // The request id, not just the turn: a turn can carry a second approval after the first is answered,
+          // and that is a different question with its own place in the rotation.
+          key: `${kind}:${t.id}:${ask?.requestId || ""}`,
+          thread: c.thread,
+          turnId: t.id,
+          agent: humanAgentName(c.thread),
+          deadline: Number(ask?.deadline) || 0,
+        });
+      }
+    }
+  }
+  const dock = [
+    ...[...state.approvals.values()].filter(approvalLive).map((r) => ({
+      kind: "approval",
+      dock: true,
+      key: `dock:${r.id}`,
+      id: r.id,
+      thread: r.thread || null,
+      agent: approvalAgentName(r),
+      deadline: Number(r.deadline) || 0,
+    })),
+    ...[...state.rwPending.values()].filter(approvalLive).map((r) => ({
+      kind: "write",
+      dock: true,
+      key: `write:${r.id}`,
+      id: r.id,
+      thread: r.thread || null,
+      agent: baseNameOf(r.worktree || "") || r.project || "a worktree",
+      deadline: Number(r.deadline) || 0,
+    })),
+  ].sort((a, b) => (a.deadline > 0 ? a.deadline : Infinity) - (b.deadline > 0 ? b.deadline : Infinity));
+  return [...out, ...dock];
+}
+
+// The header control: one red count of everything waiting on a human, and a title that splits it. Zero questions
+// means no badge at all — a quiet button, not a broken one — and the count is repainted from live state on the
+// page's own clock so a deadline that passes cannot leave a number claiming a question that is over.
+function paintHumanButton() {
+  const btn = $("btn-human");
+  if (!btn) return;
+  const list = humanQuestions();
+  const perms = list.filter((q) => q.kind !== "question").length;
+  const asks = list.length - perms;
+  const agents = [...new Set(list.map((q) => q.agent).filter(Boolean))];
+  const at = state.human.key ? list.findIndex((q) => q.key === state.human.key) : -1;
+  const label = $("human-label");
+  const badge = $("human-badge");
+  const sig = `${list.length}|${perms}|${asks}|${agents.join(",")}|${at}`;
+  if (sig === state.human.sig) return;
+  state.human.sig = sig;
+  if (label) label.textContent = at >= 0 ? `HUMAN ${at + 1}/${list.length}` : "HUMAN";
+  if (badge) {
+    badge.hidden = list.length === 0;
+    badge.textContent = String(list.length);
+  }
+  btn.classList.toggle("has-questions", list.length > 0);
+  btn.setAttribute(
+    "aria-label",
+    list.length
+      ? `HUMAN — ${list.length} open question${list.length === 1 ? "" : "s"} waiting on you: ${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}`
+      : "HUMAN — nothing is waiting on you",
+  );
+  const named = agents.length > 4 ? `${agents.slice(0, 4).join(", ")} and ${agents.length - 4} more` : agents.join(", ");
+  btn.title = list.length
+    ? `HUMAN — ${list.length} open question${list.length === 1 ? "" : "s"} waiting on you: ${perms} permission${perms === 1 ? "" : "s"}, ${asks} clarify question${asks === 1 ? "" : "s"}${named ? ` — held by ${named}` : ""}. Click or press H to step through them: each agent is opened, its prompt centred and flashed red, and its answer control focused. A question that is answered, expires or whose turn ends drops out.`
+    : "HUMAN — nothing is waiting on you: no permission or clarify question is open on this board. Click or press H to check again.";
+}
+
+// Open exactly the path to one question and put it in front of the reader: its project and row open, its card
+// unfolded, the turn that owns it unfolded AND paged in (a question can live on a turn that is folded, or on a
+// turn the pager is not currently showing), then the prompt centred, flashed and its control focused. Returns
+// false when the question can no longer be drawn — the caller steps on instead of opening a dead agent.
+function humanShow(q) {
+  if (q.dock) return humanShowDock(q);
+  const conv = conversations().find((c) => c.thread === q.thread);
+  if (!conv) return false;
+  const turn = conv.turns.find((t) => t.id === q.turnId);
+  if (!turn || !humanOpenOnTurn(turn, q.kind)) return false;
+  // The project and the row first: a card inside a closed row is not on the page at all, and after Collapse all
+  // the project is only open in state while its folder is still shut. hotOpenPath is the NOT-RUNNING stepper's
+  // own opener, so the two rotations cannot drift into two ideas of "open".
+  const row = hotRowFor(q.thread);
+  if (row) hotOpenPath(row);
+  if (state.collapsedJobs.has(q.thread)) state.collapsedJobs.delete(q.thread);
+  const pages = Math.max(1, Math.ceil(conv.turns.length / TURNS_PER_PAGE));
+  state.turnOpen.set(turn.id, true);
+  state.turnCompact.delete(turn.id);
+  state.turnPage.set(q.thread, pages - 1 - Math.floor(conv.turns.indexOf(turn) / TURNS_PER_PAGE));
+  renderConversation(q.thread);
+  let card = document.querySelector(`.job[data-thread="${CSS.escape(q.thread)}"]`);
+  if (!card) {
+    // An unattached card that no render has placed yet: #jobs is the panel's own renderer for that set.
+    renderJobs();
+    card = document.querySelector(`.job[data-thread="${CSS.escape(q.thread)}"]`);
+  }
+  if (!card) return false;
+  const turnEl = card.querySelector(`.turn[data-turn="${CSS.escape(q.turnId)}"]`);
+  const box = turnEl?.querySelector(q.kind === "question" ? ".turn-question" : ".turn-approval");
+  // The gate again, on the DOM this time: the box is drawn only while its turn is live and its carrier is open,
+  // and a question that closed between the sample and this paint has no box to show.
+  if (!box || box.classList.contains("is-expired")) return false;
+  // The card wears the NOT-RUNNING stepper's own amber ring (state-held, so a repaint keeps it), and the prompt
+  // itself gets a red ring: this is a question, and the box is what the reader was brought here to read. ONE box
+  // carries it: a ring left on the previous prompt would say two questions are current, and every reader of the
+  // class (this page, the gate) counts exactly one.
+  flashHotCard(q.thread);
+  for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
+  // The PROMPT, not the card: centring the card left the question under the fold, and the console above it is
+  // what the reader reads first. programmaticScroll keeps the panel's scroll-follow from reading this as the
+  // reader taking over.
+  programmaticScroll();
+  box.scrollIntoView({ block: "center", behavior: "smooth" });
+  box.classList.remove("human-flash");
+  void box.offsetWidth; // restart the ring on every hop, even while the last one is still fading
+  box.classList.add("human-flash");
+  clearTimeout(state.humanFlashTimer);
+  state.humanFlashTimer = setTimeout(() => {
+    for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
+  }, 1900);
+  // The control the reader would reach for. A permission box gets its DENY focused on purpose: the panel answers
+  // approvals on pointerup, so a stray key cannot approve a command, and the fail-closed choice is the safe one
+  // to leave under the caret. A clarify question gets its first choice (or its typed box when it has none).
+  humanFocusNow(box, q.kind);
+  // A row that is opening renders its detail a moment after the press, and that repaint replaces this box: the
+  // target is held for a beat and put back by the next render of this thread (humanRefocus), the same way the
+  // spawn's caret is. Scoped to this one thread and only while nothing else holds the caret.
+  state.humanFocus = { thread: q.thread, turnId: q.turnId, kind: q.kind, until: Date.now() + 1500 };
+  return true;
+}
+
+// Put the caret on a prompt's answer control, and say which one: the one place a permission box and a clarify box
+// agree on where the reader starts.
+function humanFocusNow(box, kind) {
+  const control =
+    kind === "question"
+      ? box.querySelector("input[data-qpick], button.tq-choice, textarea.tq-other, button.tq-send")
+      : box.querySelector('[data-choice="deny"]') || box.querySelector("[data-choice]");
+  if (!control) return false;
+  try {
+    control.focus({ preventScroll: true });
+  } catch {
+    control.focus();
+  }
+  return document.activeElement === control;
+}
+
+// After a repaint of the thread the rotation just landed on: put the red ring and the caret back, but never take
+// the caret from the reader (a click, a typed reply or another control all own it from that point).
+function humanRefocus(thread) {
+  const want = state.humanFocus;
+  if (!want || want.thread !== thread || Date.now() > want.until) return;
+  const box = document.querySelector(
+    `.job[data-thread="${CSS.escape(thread)}"] .turn[data-turn="${CSS.escape(want.turnId)}"] ${want.kind === "question" ? ".turn-question" : ".turn-approval"}`,
+  );
+  if (!box) return;
+  box.classList.add("human-flash");
+  if (!document.activeElement || document.activeElement === document.body) humanFocusNow(box, want.kind);
+}
+
+// …and the same put-back on a short clock, because a card can be redrawn by the ROW renderer too (opening a row,
+// a reorder, a project repaint), and none of those go through renderConversation. Scoped to the one prompt the
+// rotation last landed on and to the beat it asked for; the first pointerdown or keystroke ends it, so the page
+// never fights the reader for the caret.
+function humanTick() {
+  const want = state.humanFocus;
+  if (!want) return;
+  if (Date.now() > want.until) {
+    state.humanFocus = null;
+    return;
+  }
+  const box = document.querySelector(
+    `.job[data-thread="${CSS.escape(want.thread)}"] .turn[data-turn="${CSS.escape(want.turnId)}"] ${want.kind === "question" ? ".turn-question" : ".turn-approval"}`,
+  );
+  if (!box) return;
+  if (!box.classList.contains("human-flash")) box.classList.add("human-flash");
+  if (!document.activeElement || document.activeElement === document.body) humanFocusNow(box, want.kind);
+}
+setInterval(humanTick, 250);
+document.addEventListener("pointerdown", () => (state.humanFocus = null), { capture: true, passive: true });
+document.addEventListener("keydown", () => (state.humanFocus = null), { capture: true });
+
+// One of the dock's own permission cards: unfold the dock, then scroll and flash the card itself. The dock is
+// fixed, so scrollIntoView only moves its own list — which is exactly what the dock's own jump does.
+function humanShowDock(q) {
+  const dock = $("approvals");
+  if (!dock) return false;
+  state.humanFocus = null; // a dock card is not a thread: nothing to restore on a card's repaint
+  try {
+    localStorage.setItem(APPROVALS_FOLDED_KEY, "0");
+  } catch {
+    /* the unfurl still happens */
+  }
+  applyApprovalsFold(dock);
+  const sel =
+    q.kind === "write"
+      ? `.turn-approval[data-remote-write="${CSS.escape(q.id)}"]`
+      : `.approval[data-approval="${CSS.escape(q.id)}"]`;
+  const card = dock.querySelector(sel);
+  if (!card) return false;
+  card.scrollIntoView({ block: "center", behavior: "smooth" });
+  for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
+  void card.offsetWidth;
+  card.classList.add("human-flash");
+  clearTimeout(state.humanFlashTimer);
+  state.humanFlashTimer = setTimeout(() => {
+    for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
+  }, 1900);
+  const control = card.querySelector('[data-approval-choice="deny"]') || card.querySelector("[data-approval-choice]") || card.querySelector('[data-choice="deny"]') || card.querySelector("[data-choice]");
+  if (control) {
+    try {
+      control.focus({ preventScroll: true });
+    } catch {
+      control.focus();
+    }
+  }
+  return true;
+}
+
+// One press: the next open question, wrapping past the last one. The list is sampled here and NOT kept; only the
+// chosen key and its place are, so the next press knows where to continue from even if this question has gone.
+function humanStep() {
+  const list = humanQuestions();
+  const last = state.human.key;
+  if (!list.length) {
+    state.human.key = null;
+    state.human.at = -1;
+    state.human.sig = "";
+    paintHumanButton();
+    showBanner("HUMAN: nothing is waiting on you — no permission or clarify question is open");
+    return;
+  }
+  // Where to look: after the question last shown; if that one has gone, the slot it held (the entry that took
+  // its place), or the first when it was the last of the list.
+  const at = last ? list.findIndex((q) => q.key === last) : -1;
+  const from = at >= 0 ? (at + 1) % list.length : last ? (state.human.at >= list.length ? 0 : Math.max(0, state.human.at)) : 0;
+  for (let n = 0; n < list.length; n++) {
+    const i = (from + n) % list.length;
+    if (!humanShow(list[i])) continue; // it closed between the sample and the paint: step on
+    state.human.key = list[i].key;
+    state.human.at = i;
+    state.human.sig = "";
+    paintHumanButton();
+    return;
+  }
+  state.human.key = null;
+  state.human.at = -1;
+  state.human.sig = "";
+  paintHumanButton();
+  showBanner("HUMAN: those questions closed before I could open one — nothing is waiting on you now");
+}
+
+$("btn-human")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  humanStep();
+});
+
+// H is the rotation's key, and a reader in ANY text field owns that keystroke: an `h` typed into a reply box, a
+// Settings search, an answer box or a contenteditable must not jump the page. Skipped, never swallowed.
+function humanTextEntry(el) {
+  if (!el) return false;
+  const tag = String(el.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable) return true;
+  return Boolean(el.closest?.('[contenteditable]:not([contenteditable="false"])'));
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key !== "h" && e.key !== "H") return;
+  if (e.repeat) return; // holding the key must not race through the whole rotation
+  if (humanTextEntry(document.activeElement)) return;
+  e.preventDefault();
+  humanStep();
 });
 
 document.addEventListener("keydown", (e) => {

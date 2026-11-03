@@ -120,6 +120,33 @@ button, select, input, textarea { font-family: var(--ui); }
 #btn-hot.on { background: #ffb545; border-color: #ffb545; color: #241a05; font-weight: 700; box-shadow: 0 0 0 2px rgba(255, 181, 69, .28); }
 #btn-hot.on:hover { background: #ffc163; border-color: #ffc163; }
 
+/* HUMAN: the other waiting list — every open permission and clarify question, wherever it is. Quiet until
+   something is waiting; then the red count and the red border are what say a human is needed. Red, not the
+   amber of NOT-RUNNING: a stopped agent is a state, a question is an interruption. */
+#btn-human { display: inline-flex; align-items: center; gap: 6px; }
+#btn-human.has-questions { border-color: #7a3138; background: #241012; color: #ffb3ad; }
+#btn-human.has-questions:hover { border-color: #a03c44; background: #2d1518; }
+#human-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 9px; background: #e5534b; color: #fff;
+  font: 700 10.5px/17px var(--ui); text-align: center;
+  box-shadow: 0 0 0 1px #e5534b55;
+}
+#human-badge[hidden] { display: none; }
+
+/* The question a HUMAN hop landed on: a red ring, on the prompt box itself, that dies back to the box's own
+   border. It rides beside the amber card ring (the NOT-RUNNING stepper's), so "this agent" and "this box" are
+   two different marks and the eye goes to the box. */
+@keyframes humanflash {
+  0% { box-shadow: 0 0 0 3px #e5534bcc, 0 0 24px rgba(229, 83, 75, .22); border-color: #e5534b; }
+  70% { box-shadow: 0 0 0 2px #e5534b55, 0 0 10px rgba(229, 83, 75, .12); border-color: #b8433c; }
+  100% { box-shadow: 0 0 0 3px rgba(229, 83, 75, 0); }
+}
+.turn-approval.human-flash,
+.turn-question.human-flash,
+.approval.human-flash,
+#approval-list .turn-approval.human-flash { animation: humanflash var(--flash-ring, 1700ms) ease-out; }
+
 /* The whole card flashes amber when NOT-RUNNING lands on it, and fades back to the panel it always was. Amber,
    not the green a jump uses: this is a prompt to answer, not a confirmation. The last frame matches the card's
    resting border and background, so it settles instead of snapping. */
