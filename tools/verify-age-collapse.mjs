@@ -361,10 +361,11 @@ async function browserPhase(pw) {
   await openSettingsGroup(page, "board");
   await page.fill("#hide-older-days", "30");
   await page.press("#hide-older-days", "Enter");
-  // The number is read out of the waitFor that proves it arrived rather than with a raw read beside it: the panel's
-  // `patchPanelConfig` writes config.json in place, and this press makes TWO saves (the handler's, and the one the
-  // blur's own `change` fires), so a read landing inside either write throws `Unexpected end of JSON input` — a
-  // partial file, not a missing save. Here the second write only ever carries the same number.
+  // The number is read out of the waitFor that proves it arrived rather than with a raw read beside it: this press
+  // makes TWO saves (the handler's, and the one the blur's own `change` fires), so a single read can land before
+  // either has been renamed into place and see the number the file held BEFORE the gesture — a stale read, which
+  // reads exactly like a save that never happened (config.json is replaced atomically, so a torn read is no longer
+  // one of the ways this can go wrong; a read taken too early still is). Here both saves carry the same number.
   let landed = null;
   const took = await waitFor(
     () => {
