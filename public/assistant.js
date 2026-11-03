@@ -2194,15 +2194,15 @@
     const words = pipeline
       ? `pipeline ${pipeline}${stage ? ` · ${stage}` : ""}`
       : run == null
-        ? "pipeline: none"
+        ? "assistant decides"
         : object
-          ? "pipeline: no pipeline named"
-          : "pipeline: unreadable record";
+          ? "pipeline: unresolved — no pipeline named"
+          : "pipeline: unresolved — unreadable record";
     const title = pipeline
-      ? `pipeline ${pipeline}${stage ? `, stage ${stage}` : ""} — open the pipeline window: every stage in order, where this task is, and the gate that ended the stage before it`
+      ? `pipeline ${pipeline}${stage ? `, stage ${stage}` : ""} — open the pipeline window: every stage in order, where this task is, the gate that ended the stage before it, and the control that moves it`
       : run == null
-        ? "no pipeline is assigned — the assistant decides; open the pipeline window to read what the default path means for this task"
-        : `the pipeline record is ${JSON.stringify(run)} — open the pipeline window to see why it cannot be read`;
+        ? "no pipeline is assigned — the assistant decides; open the pipeline window to put this task on a pipeline or read what the default path means"
+        : `the pipeline record is ${JSON.stringify(run)} — open the pipeline window to see why it cannot be read (it is NOT treated as the default path)`;
     return `<button type="button" class="as-task-pipe" data-as-qpipe="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="${esc(title)}" aria-label="${esc(title)}">${esc(words)}</button>`;
   }
 
@@ -2737,7 +2737,7 @@
   const PIPE_TABBABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
   // The one open window's frame of reference: the row the caret came from, the ids needed to find it again after a
   // repaint, and the timer. It is a record, not a DOM flag, so the tick can be stopped without reading the page.
-  const pipeWindowState = { opener: null, assistantId: null, taskId: null, at: 0, timer: null, model: null };
+  const pipeWindowState = { opener: null, assistantId: null, taskId: null, at: 0, timer: null, model: null, catalogue: null, busy: false };
 
   // How long a stage has been lived in, `tick` ms after the answer that said `ms`. The server's number is the base: this
   // adds nothing but the wall clock since, and a clock that went backwards takes nothing away from the stage.
@@ -2811,9 +2811,72 @@
       </li>`;
   }
 
+  // The pipelines a catalogue offers, or none. Kept as one reader so the form and the dependent stage select cannot
+  // disagree about what "the bundle holds" means.
+  function pipeWindowPipelines(catalogue) {
+    return catalogue && catalogue.ok === true && Array.isArray(catalogue.pipelines) ? catalogue.pipelines : [];
+  }
+
+  // The stage options for ONE pipeline, with `selectedId` marked when that pipeline holds it. The form's first paint and
+  // the change handler both call this, so choosing another pipeline can never leave a stage id from the old one
+  // selected — an id the new pipeline does not hold falls back to its first stage, visibly, rather than being kept.
+  function pipeWindowStageOptions(catalogue, pipelineId, selectedId) {
+    const list = pipeWindowPipelines(catalogue);
+    const chosen = list.find((p) => p.id === String(pipelineId || "")) || list[0] || null;
+    if (!chosen) return '<option value="">(no stage)</option>';
+    const want = String(selectedId || "");
+    const keep = chosen.stages.some((s) => s.id === want) ? want : (chosen.stages[0] && chosen.stages[0].id) || "";
+    return chosen.stages.map((s) => `<option value="${esc(s.id)}"${s.id === keep ? " selected" : ""}>${esc(`${s.position}. ${s.title}`)}</option>`).join("");
+  }
+
+  // The control that puts a task ON a pipeline, moves it, or sends it back to the default. Three answers, and each of
+  // them is an explicit press: this never assigns anything on its own, and it never draws the form against a bundle the
+  // server said it could not read — the reason is printed where the selects would have been.
+  function pipeWindowAssignHtml(model, catalogue) {
+    if (!catalogue) {
+      return `<div class="pipew-assign" data-pipew-assign><div class="pipew-note">reading the pipelines a task can be put on…</div></div>`;
+    }
+    const pipelines = pipeWindowPipelines(catalogue);
+    if (catalogue.ok !== true || !pipelines.length) {
+      return `<div class="pipew-assign" data-pipew-assign><div class="pipew-note is-bad"><b>no pipeline can be chosen</b> — ${esc(
+        catalogue.reason || "the bundle holds no pipeline",
+      )}${catalogue.code ? ` <span class="mono">(${esc(catalogue.code)})</span>` : ""}${catalogue.file ? ` <span class="mono">${esc(catalogue.file)}</span>` : ""}</div></div>`;
+    }
+    const mode = model.mode;
+    const current = model.current || null;
+    const inForce = model.pipeline && pipelines.some((p) => p.id === model.pipeline.id) ? model.pipeline.id : null;
+    const chosen = inForce || pipelines[0].id;
+    const stageId = inForce && current ? current.id : "";
+    const heading = mode === "pipeline" ? "move this task to another stage" : "put this task on a pipeline";
+    const apply = mode === "pipeline" ? "move it to this stage" : "put it on this pipeline";
+    // An unresolved record is REPAIRED by an assignment, and saying so is the difference between a repair and a silent
+    // fallback: the broken record is replaced because the reader pressed a button that says it will be.
+    const repair =
+      mode === "unresolved"
+        ? `<div class="pipew-note">this record cannot be read by the bundle — assigning a pipeline here <b>replaces</b> it with a stage the bundle holds. It is the repair, not a fallback that pretends the record was the default path.</div>`
+        : "";
+    const clear =
+      mode === "pipeline"
+        ? `<button type="button" class="pipew-clear" data-pipew-clear title="clear the assignment — the task goes back to the assistant decides, and no stage or time in stage is claimed for it" aria-label="clear the pipeline assignment, back to the assistant decides">clear — back to the assistant decides</button>`
+        : "";
+    return `<div class="pipew-assign" data-pipew-assign data-pipew-mode="${esc(mode)}">
+      <div class="pipew-assign-head"><b>${esc(heading)}</b> — the choice is stored on the task, and entering a stage stamps that moment; the assistant decides only while no pipeline is assigned.</div>
+      ${repair}
+      <div class="pipew-form">
+        <label>pipeline <select data-pipew-pipe>${pipelines
+          .map((p) => `<option value="${esc(p.id)}"${p.id === chosen ? " selected" : ""}>${esc(p.title)} (${esc(p.id)})</option>`)
+          .join("")}</select></label>
+        <label>starting stage <select data-pipew-stage>${pipeWindowStageOptions(catalogue, chosen, stageId)}</select></label>
+        <button type="button" class="primary" data-pipew-apply>${esc(apply)}</button>
+        ${clear}
+        <span class="pipew-assign-note" data-pipew-assign-note role="status" aria-live="polite"></span>
+      </div>
+    </div>`;
+  }
+
   // The whole dialog body, from the server's model. `null` is the press's first paint: the read is in flight and the
   // window is already open, so the reader sees what is happening instead of a dead row.
-  function pipelineWindowHtml(model) {
+  function pipelineWindowHtml(model, catalogue = null) {
     const close = `<button type="button" class="pipew-close" data-pipew-close title="close (Esc) — focus goes back to the task row" aria-label="close the pipeline window">✕</button>`;
     const bar = (title, sub) =>
       `<div class="pipew-bar"><span class="pipew-kicker">pipeline window</span><b class="pipew-title" id="pipew-title">${esc(title)}</b>${
@@ -2833,6 +2896,7 @@
     if (model.mode === "assistant-decides") {
       return `${head("no pipeline")}<div class="pipew-body">
         <div class="pipew-note"><b>This task is on the default path</b> — no pipeline is assigned, so the assistant decides what it does next. There is no stage to be in, and no time in stage to measure.</div>
+        ${pipeWindowAssignHtml(model, catalogue)}
       </div>`;
     }
 
@@ -2844,6 +2908,7 @@
         <div class="pipew-note"><b>Never treated as the default path</b> — a record the bundle cannot read is shown as it is, because calling it “the assistant decides” would silently drop the pipeline this task was put on. The stages below are the sequence the bundle still holds${rows ? ", with nothing marked current" : ""}.</div>
         ${model.bundle && model.bundle.ok === false && model.bundle.file ? `<div class="pipew-note mono">bundle ${esc(model.bundle.file)} — ${esc(model.bundle.code || "refused")}${model.bundle.where ? ` at ${esc(model.bundle.where)}` : ""}</div>` : ""}
         ${rows ? `<ol class="pipew-stages">${rows}</ol>` : ""}
+        ${pipeWindowAssignHtml(model, catalogue)}
       </div>`;
     }
 
@@ -2861,17 +2926,18 @@
       </div>
       ${pipeWindowPreviousLine(model.previous)}
       <ol class="pipew-stages">${rows}</ol>
+      ${pipeWindowAssignHtml(model, catalogue)}
     </div>`;
   }
 
   // Draw the dialog. `doc` is an argument, not a global, so the whole controller can be driven by a test with a stub
   // page — the same reason the queue's renderer takes `esc`.
-  function pipeWindowShow({ doc = document, model = null, opener = null, assistantId = null, taskId = null } = {}) {
+  function pipeWindowShow({ doc = document, model = null, catalogue = null, opener = null, assistantId = null, taskId = null } = {}) {
     const host = doc.getElementById(PIPE_WINDOW_ID);
     const card = doc.getElementById(PIPE_CARD_ID);
     if (!host || !card) return null;
     host.hidden = false;
-    card.innerHTML = pipelineWindowHtml(model);
+    card.innerHTML = pipelineWindowHtml(model, catalogue);
     // The state, on the element: reading / pipeline / assistant-decides / unresolved / error. A harness (and a reader of
     // the DOM with devtools) can tell a window that is still reading from one that answered without reading the words.
     card.dataset.pipewMode = model ? (model.error ? "error" : model.mode || "unknown") : "reading";
@@ -2881,6 +2947,7 @@
     pipeWindowState.taskId = taskId ?? model?.task?.id ?? pipeWindowState.taskId;
     pipeWindowState.at = Date.now();
     pipeWindowState.model = model;
+    pipeWindowState.catalogue = catalogue;
     // The dialog takes the caret on open — it is a modal, and the reader's next key must land in it. `preventScroll`
     // because focusing a fixed card must not move the page behind it.
     card.focus?.({ preventScroll: true });
@@ -2980,23 +3047,74 @@
 
   // The press: open at once with the reading state, then draw what the server says. A failed read is a window with the
   // reason in it, never a press that did nothing.
+  //
+  // TWO reads, in parallel: the task's own answer, and the catalogue the assignment control offers. They are separate
+  // routes because the catalogue is panel-wide (one bundle per install) and the window's model is one row's — but they
+  // are asked at the same moment, so the control is not a second wait after the window has already answered.
   async function openTaskPipelineWindow(assistantId, taskId, opener = null) {
     if (!assistantId || !taskId) return;
     const doc = document;
-    pipeWindowShow({ doc, model: null, opener, assistantId, taskId });
+    pipeWindowShow({ doc, model: null, catalogue: pipeWindowState.catalogue, opener, assistantId, taskId });
     pipeWindowStartClock(doc);
-    let model;
-    try {
-      const r = await apiFetch(`/api/assistant/task-pipeline?assistantId=${encodeURIComponent(assistantId)}&task=${encodeURIComponent(taskId)}`);
+    const readJson = async (url) => {
+      const r = await apiFetch(url);
       const body = await r.json().catch(() => null);
-      model = r.ok ? body : { mode: "error", error: (body && body.error) || `the panel answered ${r.status}` };
-    } catch (err) {
-      model = { mode: "error", error: String((err && err.message) || err) };
-    }
+      if (!r.ok) throw new Error((body && body.error) || `the panel answered ${r.status}`);
+      return body;
+    };
+    let model;
+    let catalogue;
+    const [taskRead, catalogueRead] = await Promise.allSettled([
+      readJson(`/api/assistant/task-pipeline?assistantId=${encodeURIComponent(assistantId)}&task=${encodeURIComponent(taskId)}`),
+      readJson(`/api/assistant/pipeline-catalogue?assistantId=${encodeURIComponent(assistantId)}`),
+    ]);
+    model = taskRead.status === "fulfilled" ? taskRead.value : { mode: "error", error: String((taskRead.reason && taskRead.reason.message) || taskRead.reason) };
+    // A catalogue that could not be read is a REFUSAL the control prints, in the same shape the route's own refusals
+    // take — never null, which the window would draw as "still reading" forever.
+    catalogue =
+      catalogueRead.status === "fulfilled"
+        ? catalogueRead.value
+        : { ok: false, code: "error", reason: String((catalogueRead.reason && catalogueRead.reason.message) || catalogueRead.reason), pipelines: [] };
     // The reader may have closed it, or opened another row's, while the read was in flight: only the window that is
     // still on this task is drawn again.
     if (!pipeWindowState.opener || String(pipeWindowState.taskId) !== String(taskId)) return;
-    pipeWindowShow({ doc, model, opener: pipeWindowState.opener, assistantId, taskId });
+    pipeWindowShow({ doc, model, catalogue, opener: pipeWindowState.opener, assistantId, taskId });
+  }
+
+  // One assignment press: the pipeline and stage the selects hold, or `clear`. It writes through the QUEUE's route (the
+  // record's one door), then re-reads the window at the new clock so the stage, its position and its elapsed span come
+  // from the record the write just produced — never from the form.
+  async function pipeWindowAssign({ clear = false, doc = document } = {}) {
+    if (pipeWindowState.busy) return null;
+    const card = doc.getElementById(PIPE_CARD_ID);
+    if (!card) return null;
+    const note = card.querySelector("[data-pipew-assign-note]");
+    const pipeSel = card.querySelector("[data-pipew-pipe]");
+    const stageSel = card.querySelector("[data-pipew-stage]");
+    const body = clear
+      ? { clear: true }
+      : { pipeline: pipeSel ? pipeSel.value : "", stage: stageSel ? stageSel.value : "" };
+    if (!clear && (!body.pipeline || !body.stage)) {
+      if (note) note.textContent = "choose a pipeline and a stage first";
+      return null;
+    }
+    const { assistantId, taskId, opener } = pipeWindowState;
+    if (!assistantId || !taskId) return null;
+    pipeWindowState.busy = true;
+    if (note) note.textContent = clear ? "clearing…" : "assigning…";
+    // The card is repainted by the re-read, so a busy note is a status on the form, not a lock on the dialog: Esc still
+    // closes it, and the write already sent is the server's to finish.
+    try {
+      const out = await queueAct(assistantId, "pipeline", { id: taskId, ...body });
+      if (!out) {
+        if (note) note.textContent = "the panel refused the change — see the error above";
+        return null;
+      }
+      await openTaskPipelineWindow(assistantId, taskId, opener);
+      return out;
+    } finally {
+      pipeWindowState.busy = false;
+    }
   }
 
   // Delegated on the float (the pane is rebuilt on every change, so a per-row listener would die with it) and on the
@@ -3018,8 +3136,27 @@
     host?.addEventListener("keydown", (e) => {
       if (pipeWindowKey(e)) return;
     });
-    // A press on the backdrop or the ✕ closes it; a press inside the card does not.
+    // Choosing another pipeline redraws the stage list from THAT pipeline. A native select's change is the press; the
+    // first paint and this handler share `pipeWindowStageOptions`, so the two can never offer different stages.
+    host?.addEventListener("change", (e) => {
+      const sel = e.target?.closest?.("[data-pipew-pipe]");
+      if (!sel) return;
+      const stageSel = document.getElementById(PIPE_CARD_ID)?.querySelector?.("[data-pipew-stage]");
+      if (stageSel) stageSel.innerHTML = pipeWindowStageOptions(pipeWindowState.catalogue, sel.value, "");
+    });
+    // A press on the backdrop or the ✕ closes it; a press inside the card does not. The two assignment presses are the
+    // card's own and are handled before the close test, so a press on them never reads as a backdrop press.
     host?.addEventListener("click", (e) => {
+      if (e.target?.closest?.("[data-pipew-apply]")) {
+        e.preventDefault();
+        void pipeWindowAssign();
+        return;
+      }
+      if (e.target?.closest?.("[data-pipew-clear]")) {
+        e.preventDefault();
+        void pipeWindowAssign({ clear: true });
+        return;
+      }
       if (e.target === host || e.target?.closest?.("[data-pipew-close]")) {
         e.preventDefault();
         pipeWindowClose();
