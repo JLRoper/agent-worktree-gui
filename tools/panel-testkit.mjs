@@ -99,7 +99,11 @@ export function freePort() {
 // `port` pins the listener instead of asking the OS for one. A measurement whose brief names a port (7200-and-up
 // slots running side by side, each told which port is its own) has to answer on THAT port, or the report cannot
 // prove which panel its numbers came from; the boot fails loudly on EADDRINUSE rather than landing somewhere else.
-export async function startPanel({ token = null, config = {}, env = {}, dir: givenDir = null, keep = false, reuseConfig = false, port: fixedPort = null } = {}) {
+//
+// `root` boots a DIFFERENT checkout — a `git archive` of another branch or of main — through this same kit. It is
+// how a failing-first proof is made: the same gate, run against the code before the change and after it, with no
+// second worktree to clean up. Absent, the panel is the one beside this file.
+export async function startPanel({ token = null, config = {}, env = {}, dir: givenDir = null, keep = false, reuseConfig = false, port: fixedPort = null, root = ROOT } = {}) {
   const dir = givenDir || (await mkdtemp(path.join(os.tmpdir(), "wtgui-test-")));
   const repos = path.join(dir, "repos");
   await mkdir(repos, { recursive: true });
@@ -141,7 +145,7 @@ export async function startPanel({ token = null, config = {}, env = {}, dir: giv
 
   const out = [];
   const child = spawn(process.execPath, ["server.js"], {
-    cwd: ROOT,
+    cwd: root,
     env: {
       ...process.env,
       PANEL_CONFIG: cfgPath,
