@@ -335,19 +335,19 @@
           </select>
         </label>
 
-        <label class="settings-row settings-gap" for="hide-older-days" title="How old a worktree has to be before the chart stops drawing its row. Measured from its LAST ACTIVITY — the newest of its last commit, its last edited file, and the last time the panel saw it alive — never from when the directory was created, so a tree cut months ago that somebody is still working in today stays on the chart. Nothing is lost when a row is held back: the arrow at the bottom of that project's chart shows every tree again, and the project's own chips say how many are being held back. 0 shows everything. Saved in this panel's config.json, so it survives a restart and applies to every browser.">
-          <span>Hide stale worktrees <span class="settings-info">ⓘ</span></span>
-          <input id="hide-older-days" type="number" inputmode="numeric" step="1" min="0" max="3650">
-          <span class="settings-unit mono">days</span>
+        <label class="settings-row settings-gap" for="chart-top-count" title="How many of a project's worktrees its chart draws on first paint. The top rows are the ones whose LAST ACTIVITY is newest — the newest of last commit, last edited file, last time the panel saw it alive and any agent event — with ties broken by name, never by the order the scan happened to return them in. The rest are not lost: the arrow at the bottom of that chart lists every one of them in that same order, and the project's chips say how many are being held back. 0 draws every tree. Saved in this panel's config.json, so it survives a restart and applies to every browser.">
+          <span>Top worktrees per chart <span class="settings-info">ⓘ</span></span>
+          <input id="chart-top-count" type="number" inputmode="numeric" step="1" min="0" max="5000">
+          <span class="settings-unit mono">rows</span>
         </label>
         <div class="settings-presets">
-          <button type="button" data-age-set="0">off</button>
-          <button type="button" data-age-set="3">3 d</button>
-          <button type="button" data-age-set="7">7 d</button>
-          <button type="button" data-age-set="14">14 d</button>
-          <button type="button" data-age-set="30">30 d</button>
+          <button type="button" data-top-set="0">all</button>
+          <button type="button" data-top-set="3">3</button>
+          <button type="button" data-top-set="5">5</button>
+          <button type="button" data-top-set="10">10</button>
+          <button type="button" data-top-set="25">25</button>
         </div>
-        <div class="settings-preview mono" id="hide-older-preview">…</div>
+        <div class="settings-preview mono" id="chart-top-preview">…</div>
 
         <div class="settings-row settings-gap" id="chart-cols-row" title="Which of the worktree chart's ten columns are drawn. Every switch is one column of every project's table: Worktree (the name, its ▶ probe, the lock, the rename buttons and the agent badge), Branch, Tip, Ahead / Behind, Cherry, PR, Dirty, Life / next read, Verdict, and Actions (the row's ＋ ⟳ ✕). Turning one off removes that cell from the header and from every row, and gives its width back to the columns that are left — so a narrow window needs no sideways scroll once the columns you do not read are gone. At least one column always stays. Saved in this panel's config.json (hiddenColumns), so it survives a restart and applies to every browser.">
           <span>Chart columns <span class="settings-info">ⓘ</span></span>

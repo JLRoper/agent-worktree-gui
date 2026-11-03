@@ -3086,6 +3086,17 @@ section.project > .legend:hover .wt-age-toggle,
 .wt-age-toggle:active { transform: translateY(1px); }
 /* Showing every tree: the arrow points up (app.js) and says so in colour. */
 .wt-age-toggle.is-on { color: var(--amber); border-color: #6b4d16; }
+/* The arrow's label carries the real count ("show 15 more"), so the chip is a pill once it has one: the shared
+   `.tail-chip` shape is the 21px circle of the console's glyph-only chip, and a count does not fit in it. Only the
+   width and the radius move — the height, the ink and the letterform stay `.wt-age-toggle`'s own. A two-class
+   selector, so it wins over the shared rule without moving it. */
+.wt-age-toggle.wt-age-labeled {
+  width: auto;
+  min-width: 21px;
+  padding: 0 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
 /* Nothing hovers on a touch screen, so there the arrow is simply always there. */
 @media (hover: none) {
   .wt-age-toggle { opacity: 1; pointer-events: auto; }

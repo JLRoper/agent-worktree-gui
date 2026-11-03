@@ -110,7 +110,7 @@ test("config.json is saved atomically: a concurrent reader never sees it torn, a
   try {
     const statuses = [];
     for (let i = 0; i < WRITES; i++) {
-      const r = await post(panel.base, "/api/settings/age", { body: { days: (i % 2) + 1 } });
+      const r = await post(panel.base, "/api/settings/chart-top", { body: { count: (i % 2) + 1 } });
       statuses.push(r.status);
     }
     await reader.stopAndWait();
@@ -123,7 +123,7 @@ test("config.json is saved atomically: a concurrent reader never sees it torn, a
     // The last write wins (this loop alternates 1 and 2), and what landed is exactly what the old writer would have
     // written: two-space indent, one trailing newline, and the new key APPENDED after the fixture's own keys in
     // their original order. Read off the FILE, not off a re-serialisation of the panel's memory.
-    const expected = { ...before, hideOlderThanDays: ((WRITES - 1) % 2) + 1 };
+    const expected = { ...before, chartTopCount: ((WRITES - 1) % 2) + 1 };
     assert.equal(readFileSync(configPath, "utf8"), `${JSON.stringify(expected, null, 2)}\n`, "the file's bytes, key order and newline are unchanged");
     assert.deepEqual(
       [...reader.seen.shapes].sort(),
@@ -133,14 +133,14 @@ test("config.json is saved atomically: a concurrent reader never sees it torn, a
 
     // ...and the panel reads its own file back, so the settings route serves from the atomic write.
     const config = await (await fetch(`${panel.base}/api/config`)).json();
-    assert.equal(config.hideOlderThanDays, expected.hideOlderThanDays);
+    assert.equal(config.chartTopCount, expected.chartTopCount);
 
     // Two saves at the SAME moment: each gets its own temp file, so neither may leave one behind and no reader may
     // see a torn file. Which of the two keys survives is the lost-update race named in the header above — not this
     // test's subject, and not something the atomic replace changes; the file is a whole document either way.
     const together = startReader(configPath);
     const answers = await Promise.all([
-      post(panel.base, "/api/settings/age", { body: { days: 21 } }),
+      post(panel.base, "/api/settings/chart-top", { body: { count: 21 } }),
       post(panel.base, "/api/settings/collapse-after", { body: { seconds: 45 } }),
     ]);
     await together.stopAndWait();

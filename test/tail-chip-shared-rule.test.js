@@ -1,10 +1,12 @@
 // The tail chip is one rule, not two copies of one: the console's "jump to the newest line" and the worktree
-// chart's "show the trees this chart is holding back" are the same 21px circle, and both rules used to carry the
+// chart's "show the ones this chart is holding back" were the same 21px circle, and both rules used to carry the
 // shape verbatim — eight declarations spelled out twice, in two places, drifting apart the first time one of them
 // was touched. The shape now lives once, in `.tail-chip`, and each owner keeps only what is its own: the console
-// chip's placement over its scroll box, the chart chip's place IN the legend's flow and its brighter ink.
+// chip's placement over its scroll box, the chart chip's place IN the legend's flow and its brighter ink. Since the
+// chart's arrow carries a COUNT in its label ("show 15 more"), `.wt-age-toggle.wt-age-labeled` widens it into a pill
+// — a separate two-class rule, so the shared circle is still the shape both are built from.
 //
-// The seam-free half of `tools/verify-age-collapse.mjs`'s style digest (there is no layout engine in `npm test`).
+// The seam-free half of `tools/verify-chart-top-count.mjs`'s style digest (there is no layout engine in `npm test`).
 // That harness compares the two chips' COMPUTED styles in a real browser, where this test asserts the stylesheet's
 // text and the cascade order that makes the text mean what it says. Both halves are needed: the rule can be
 // perfectly present in the file and still be inert — a shared rule placed AFTER `.wt-age-toggle` would win the

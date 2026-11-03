@@ -11,7 +11,7 @@ import { post, startPanel } from "../tools/panel-testkit.mjs";
 const TOKEN = "phase0-test-token";
 const PROTECTED = ["/api/refresh", "/api/visible", "/api/fetch", "/api/reload"];
 // A write route that has always carried the guard, so "one rule" is measured against something.
-const ALWAYS = "/api/settings/age";
+const ALWAYS = "/api/settings/chart-top";
 
 function lanAddress() {
   return (

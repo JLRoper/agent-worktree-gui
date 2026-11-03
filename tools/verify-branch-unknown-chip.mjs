@@ -115,7 +115,7 @@ try {
       midSeconds: 5,
       dormantSeconds: 5,
       slowSeconds: 5,
-      hideOlderThanDays: 0,
+      chartTopCount: 0,
     },
   });
   say(`sandbox panel on ${panel.base}`);

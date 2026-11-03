@@ -209,7 +209,7 @@ function writeConfig(stubUrl, extra = {}) {
     prCacheSeconds: 99999,
     remoteCacheSeconds: 4,
     liveSeconds: 2,
-    hideOlderThanDays: 0,
+    chartTopCount: 0,
     defaultCwd: PROJECT,
     jobsFile: `${S}/panel/logs/jobs.json`,
     assistantFile: `${S}/panel/logs/assistant.json`,
