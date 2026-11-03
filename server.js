@@ -157,6 +157,19 @@ function ageDaysFrom(value) {
   return Math.min(AGE_DAYS_MAX, Math.round(n));
 }
 
+// How long a parent the reader collapsed stays a decision about everything under it before the page writes every
+// card inside into its remembered fold set (Settings → Board → Collapse cascade). 0 disables the cascade. An
+// unreadable value falls back to the DEFAULT rather than to 0, for the same reason the age threshold does: a typo
+// must never silently switch a behaviour off (and Number(null) is 0, so "absent" is handled first).
+const COLLAPSE_AFTER_DEFAULT = 30;
+const COLLAPSE_AFTER_MAX = 3600;
+function collapseAfterSecondsFrom(value) {
+  if (value == null || value === "") return COLLAPSE_AFTER_DEFAULT;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return COLLAPSE_AFTER_DEFAULT;
+  return Math.min(COLLAPSE_AFTER_MAX, Math.round(n));
+}
+
 async function loadConfig() {
   // A fresh clone may have no config.json yet: start on defaults and say so, rather than dying.
   let cfg;
@@ -190,6 +203,10 @@ async function loadConfig() {
   cfg.midSeconds = Number(cfg.midSeconds ?? 30);
   cfg.dormantSeconds = Number(cfg.dormantSeconds ?? 60);
   cfg.slowSeconds = Number(cfg.slowSeconds ?? 60);
+  // How long a parent the reader collapsed stays a decision about everything under it: the page holds one timer per
+  // collapsed parent, and when it fires every card under that parent is written into the browser's remembered fold
+  // set. Server-side like the age threshold below, so it survives a restart and applies to every browser.
+  cfg.collapseAfterSeconds = collapseAfterSecondsFrom(cfg.collapseAfterSeconds);
   cfg.fetchSeconds = Number(cfg.fetchSeconds ?? 600);
   cfg.threads = Number(cfg.threads) || Math.max(1, Math.min(4, cpus().length - 1));
   // How old a worktree's last activity has to be before the chart hides its row. Server-side, like scanMode below:
@@ -842,6 +859,11 @@ const settingsOut = () => ({
   dormantSeconds: config.dormantSeconds,
   liveSeconds: config.liveSeconds,
   slowSeconds: config.slowSeconds,
+  // How long a parent collapsed by the reader keeps its cards as they were before every one of them is written into
+  // the page's remembered fold set. 0 disables the cascade. It travels with every snapshot for the same reason the
+  // age threshold does: the timer that reads it is the page's own, and a tab opened before the number moved has to
+  // agree with the file.
+  collapseAfterSeconds: config.collapseAfterSeconds,
   fetchSeconds: config.fetchSeconds,
   liveMinutes: config.liveMinutes ?? 5,
   hideOlderThanDays: config.hideOlderThanDays,
@@ -4163,6 +4185,26 @@ const server = createServer(async (req, res) => {
       log(`worktrees older than: ${days ? `${days} day${days === 1 ? "" : "s"} held back (the chart's arrow shows them)` : "none held back"}`);
       broadcast({ type: "snapshot", data: snapshot() });
       return sendJson(res, 200, { ok: true, days, settings: settingsOut() });
+    }
+
+    // How long a parent the reader collapsed keeps the cards under it as they were before the page writes every one
+    // of them into its remembered fold set. Server-side like the age threshold above: the number goes into this
+    // panel's own config.json, so it survives a restart and applies to whichever browser is open. `seconds: 0`
+    // disables the cascade — a collapsed parent then leaves its children's folds alone, which is what the panel did
+    // before this row existed.
+    if (route === "/api/settings/collapse-after" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const seconds = collapseAfterSecondsFrom(body.seconds);
+      try {
+        await patchPanelConfig({ collapseAfterSeconds: seconds });
+      } catch (e) {
+        return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
+      }
+      config.collapseAfterSeconds = seconds;
+      log(`collapse cascade: ${seconds ? `a parent collapsed for ${seconds}s minimizes every card under it` : "off — a collapsed parent leaves its cards as they are"}`);
+      broadcast({ type: "settings", settings: settingsOut() });
+      return sendJson(res, 200, { ok: true, seconds, settings: settingsOut() });
     }
 
     // Which of the worktree chart's columns are drawn. Server-side like the age threshold above: the list goes into

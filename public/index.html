@@ -275,6 +275,13 @@
           <input id="stabilize-reorder" type="checkbox" checked>
         </label>
 
+        <label class="settings-row settings-gap" for="collapse-after" title="How long a parent you collapsed has to stay collapsed before everything under it is minimized. Collapse a project — or a folder, a worktree row, the Agents card — and leave it: after this many seconds every agent card inside it is written into the board's own remembered fold set, so expanding the parent draws them minimized instead of a wall of open transcripts, and they stay that way through a reload. The clock belongs to that one parent: collapsing it again restarts the clock, opening it again before the time is up cancels it, and opening it never un-minimizes a card. 0 turns the cascade off. Saved in this panel's config.json, so it survives a restart and applies to every browser.">
+          <span>Collapse cascade <span class="settings-info">ⓘ</span></span>
+          <input id="collapse-after" type="number" inputmode="numeric" step="5" min="0" max="3600">
+          <span class="settings-unit mono">s</span>
+        </label>
+        <div class="settings-preview mono" id="collapse-after-preview">…</div>
+
         <label class="settings-row" for="rank-window" title="How far back the board looks when it decides what is busiest — one window for every liveness ranking: the worktree rows in a project, the projects in a folder, the folders, and the agent cards in a worktree. A thing's place is its average rate of liveness events over this window (a console line, a job starting or finishing, an approval), so anything being hammered sits at the top, a single line moves nothing, and anything that goes quiet slides down as its events age out. The orders are recomputed on the board-reorder clock, never on each event, and a thing must out-rate the one above it by at least one event a minute before it takes that slot. 300 s (5 minutes) is the default; longer is slower and steadier. Saved in this browser.">
           <span>Rank window <span class="settings-info">ⓘ</span></span>
           <input id="rank-window" type="number" inputmode="numeric" step="30" min="30" max="3600">

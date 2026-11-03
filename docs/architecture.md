@@ -681,7 +681,8 @@ panel. It is where the entropy is, and §10 says so.
                  "mainBranch": "main", "prRepo": "JLRoper/agent-worktree-gui",
                  "remoteBranchPolicy": "allow", "releaseWorktrees": true }],
   "worktreeSeconds": 5, "midSeconds": 45, "dormantSeconds": 90,
-  "slowSeconds": 300, "fetchSeconds": 1800, "liveSeconds": 5,
+  "slowSeconds": 300, "collapseAfterSeconds": 30,
+  "fetchSeconds": 1800, "liveSeconds": 5,
   "threads": 5, "jobMaxRuntimeSeconds": 3600,
   "remoteBranchPolicy": "local-only"
 }
