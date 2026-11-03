@@ -154,6 +154,10 @@ const state = {
   // Persisted, like the card fold state: the number is the reader's own, and a reload is not a reason to forget it.
   outHeights: loadOutHeights(),
   collapsedJobs: loadCollapsedJobs(),
+  // One timer per collapsed parent (`kind:id`), for the cascade above: a parent left collapsed for
+  // `collapseAfterSeconds` writes every card under it into `collapsedJobs`. Never persisted — a reload has no
+  // collapse to time, and a parent that arrives collapsed is not a decision this session made.
+  collapseTimers: new Map(),
   openDescs: loadOpenDescs(),
   // Which worktrees' TODO sections the reader unfolded (localStorage, `wm.openTodos`), and the reader's in-flight
   // add/edit text (module state, never persisted: a half-typed item is not something to bring back a reload later).
@@ -511,6 +515,7 @@ function toggleFixed(name) {
   if (state.collapsedFixed.has(name)) state.collapsedFixed.delete(name);
   else state.collapsedFixed.add(name);
   saveCollapsedFixed();
+  scheduleCollapseCascade("fixed", name, state.collapsedFixed.has(name));
   applyFixedCollapse(name);
   // Collapsing the Agents card and expanding it again must not lose the reply drafts or the
   // scroll position of a running turn: nothing is destroyed, the body is only hidden.
@@ -521,6 +526,7 @@ function toggleProject(name) {
   if (state.expandedProjects.has(name)) state.expandedProjects.delete(name);
   else state.expandedProjects.add(name);
   saveExpandedProjects();
+  scheduleCollapseCascade("project", name, !state.expandedProjects.has(name));
   applyProjectCollapse(name);
   // Rows are only built for projects that are open, so opening one has to build them now — and
   // closing one should drop them again instead of leaving hidden markup behind.
@@ -637,6 +643,7 @@ function toggleRoot(root) {
   if (state.collapsedRoots.has(root)) state.collapsedRoots.delete(root);
   else state.collapsedRoots.add(root);
   saveCollapsedRoots();
+  scheduleCollapseCascade("root", root, state.collapsedRoots.has(root));
   applyRootCollapse(root);
   paintCollapseAll();
 }
@@ -653,6 +660,111 @@ function applyRootCollapse(root) {
     if (chev) chev.textContent = open ? "\u25be" : "\u25b8";
   }
 }
+
+// ---- the collapse cascade -----------------------------------------------------
+// A folder, a project, a worktree row and the two fixed cards are accordions, and folding one is a decision about
+// everything under it — but only the container's own fold was ever written down: the cards inside kept whatever fold
+// they had, so a project left closed for a while came back as a wall of open transcripts.
+//
+// A collapsed parent now holds ONE timer, keyed by the parent itself (`kind:id`). When it fires, every card under
+// that parent is written into `wm.collapsedJobs` — the persisted set `conversationHtml` reads on load — and the cards
+// still in the page are rebuilt from it, because a folder's section and the fixed cards keep their DOM through a
+// collapse. The next expand therefore draws them minimized. This is durable state, not an animation: nothing here is
+// a CSS transition, and nothing is hidden by a class the set does not carry.
+//
+// The clock is the parent's own. Collapsing it again restarts the clock, expanding it cancels the clock, and an
+// expand NEVER takes a child out of the set — a child's fold belongs to the child, and only that card's own toggle
+// (or Minimize all) writes it.
+const COLLAPSE_CASCADE_DEFAULT_SECONDS = 30;
+const COLLAPSE_CASCADE_MAX_SECONDS = 3600;
+
+function collapseAfterSeconds() {
+  const n = Number(state.settings?.collapseAfterSeconds);
+  if (!Number.isFinite(n) || n < 0) return COLLAPSE_CASCADE_DEFAULT_SECONDS;
+  return Math.min(COLLAPSE_CASCADE_MAX_SECONDS, n);
+}
+
+const collapseTimerKey = (kind, id) => `${kind}:${id}`;
+
+// The path a card is filed under: the worktree it runs in, or the project's own checkout.
+function cardOwnerPath(conv) {
+  return normPath(conv?.latest?.ownerPath || conv?.first?.ownerPath || "").toLowerCase();
+}
+
+// Every card the page draws under one parent, resolved by the same facts the renderer files them by: a row owns the
+// cards whose cwd is that tree, a project owns its rows' cards, a folder owns the cards of the projects grouped under
+// it, and the Agents card owns the cards no row claims. The assistant is a conversation but not a board card.
+function cardsUnderParent(kind, id) {
+  const convs = conversations().filter((c) => !assistantSessionFor(c.thread));
+  const rows = [...state.rows.values()];
+  const pathSet = (list) => new Set(list.map((r) => normPath(r.path).toLowerCase()));
+  let paths;
+  if (kind === "row") {
+    const row = state.rows.get(id);
+    paths = new Set(row ? [normPath(row.path).toLowerCase()] : []);
+  } else if (kind === "project") {
+    paths = pathSet(rows.filter((r) => r.project === id));
+  } else if (kind === "root") {
+    paths = pathSet(
+      rows.filter((r) => {
+        const project = state.projects.get(r.project);
+        return Boolean(project) && rootOf(project) === id;
+      }),
+    );
+  } else if (kind === "fixed" && id === "agents") {
+    const every = pathSet(rows);
+    return convs.filter((c) => !every.has(cardOwnerPath(c))).map((c) => c.thread);
+  } else {
+    return [];
+  }
+  return convs.filter((c) => paths.has(cardOwnerPath(c))).map((c) => c.thread);
+}
+
+// The cascade itself: write every card under the parent into the persisted set, then rebuild the ones still on the
+// page. A folder's section and the fixed cards keep their cards in the DOM while collapsed, so without the rebuild
+// the next expand would draw the expanded node the reader built before the timer fired.
+function cascadeCollapse(kind, id) {
+  const added = cardsUnderParent(kind, id).filter((t) => !state.collapsedJobs.has(t));
+  if (!added.length) return 0;
+  for (const thread of added) state.collapsedJobs.add(thread);
+  saveCollapsedJobs();
+  for (const thread of added) {
+    if (!document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)) continue;
+    renderConversation(thread);
+  }
+  return added.length;
+}
+
+// Collapsing a parent starts its clock; expanding it stops the clock. `collapsed` is the state AFTER the toggle.
+function scheduleCollapseCascade(kind, id, collapsed) {
+  clearCollapseCascade(kind, id);
+  if (!collapsed) return null;
+  const seconds = collapseAfterSeconds();
+  if (!(seconds > 0)) return null; // 0 disables the cascade: a collapsed parent leaves its children alone
+  const key = collapseTimerKey(kind, id);
+  const timer = setTimeout(() => {
+    state.collapseTimers.delete(key);
+    cascadeCollapse(kind, id);
+  }, Math.round(seconds * 1000));
+  state.collapseTimers.set(key, timer);
+  return timer;
+}
+
+function clearCollapseCascade(kind, id) {
+  const key = collapseTimerKey(kind, id);
+  if (!state.collapseTimers.has(key)) return false;
+  clearTimeout(state.collapseTimers.get(key));
+  state.collapseTimers.delete(key);
+  return true;
+}
+
+// Expand-all and collapse-all answer for every parent at once, so every pending clock goes with the gesture: a timer
+// that outlived it would fold cards the reader had just opened.
+function clearEveryCollapseCascade() {
+  for (const timer of state.collapseTimers.values()) clearTimeout(timer);
+  state.collapseTimers.clear();
+}
+// ---- end the collapse cascade
 
 // ---- filter one folder's projects ---------------------------------------------
 // A folder can hold ninety projects. The box in its header narrows the list to those whose name or path
@@ -720,6 +832,7 @@ function toggleAllInRoot(root) {
   for (const n of names) {
     if (collapse) state.expandedProjects.delete(n);
     else state.expandedProjects.add(n);
+    scheduleCollapseCascade("project", n, collapse);
   }
   saveExpandedProjects();
   for (const n of names) applyProjectCollapse(n);
@@ -834,6 +947,9 @@ function setEverythingOpen(open) {
   const names = [...state.projects.keys()];
   const roots = boardRoots();
   if (!names.length && !roots.length) return;
+  // Every parent's clock goes with this gesture, either way: collapse-all writes every card itself (so no cascade is
+  // left to run), and expand-all must not leave a timer that folds a card the reader just opened.
+  clearEveryCollapseCascade();
   if (!open) {
     state.expandedProjects.clear();
     state.expanded.clear(); // an open row would otherwise come back when a project is reopened
@@ -16837,6 +16953,7 @@ $("projects").addEventListener("click", (e) => {
         state.detailEls.get(key)?.remove();
         state.detailEls.delete(key);
         tr.classList.remove("expanded");
+        scheduleCollapseCascade("row", key, true);
       } else {
         state.expanded.add(key);
         const holder = document.createElement("tbody");
@@ -16846,6 +16963,7 @@ $("projects").addEventListener("click", (e) => {
         state.detailEls.set(key, dEl);
         fillAgentSlots(dEl, new Map());
         tr.classList.add("expanded");
+        scheduleCollapseCascade("row", key, false);
       }
     },
   );
@@ -19229,6 +19347,77 @@ for (const btn of document.querySelectorAll("[data-age-set]")) {
   });
 }
 
+// ---- how long a collapsed parent stays a decision about everything under it -----------------------
+// `collapseAfterSeconds` lives in this panel's config.json (POST /api/settings/collapse-after), like the age
+// threshold above: one number for every browser, and it survives a restart. The timers themselves are the page's own
+// (state.collapseTimers, public/app.js's collapse cascade), so this only decides how long each one waits — and a
+// number that moves applies to the NEXT collapse, never to a clock already running.
+const COLLAPSE_AFTER_MAX_UI = 3600;
+
+function collapseAfterStored() {
+  const n = Number(state.settings?.collapseAfterSeconds);
+  return Number.isFinite(n) && n >= 0 ? Math.min(COLLAPSE_AFTER_MAX_UI, Math.round(n)) : COLLAPSE_CASCADE_DEFAULT_SECONDS;
+}
+
+function collapseAfterSentence(seconds) {
+  return seconds > 0
+    ? `a parent left collapsed for ${seconds} second${seconds === 1 ? "" : "s"} minimizes every card under it`
+    : "a collapsed parent leaves its cards as they are — the cascade is off";
+}
+
+function paintCollapseAfterSetting(note = "", bad = false) {
+  const stored = collapseAfterStored();
+  const input = $("collapse-after");
+  // A rejected save leaves what was typed in the box: snapping back to the stored number reads as "it saved that",
+  // when the save is exactly what failed.
+  if (input && !bad && document.activeElement !== input) input.value = String(stored);
+  const preview = $("collapse-after-preview");
+  if (!preview) return;
+  const live = input && document.activeElement === input ? Math.round(Number(input.value)) : stored;
+  const seconds = Number.isFinite(live) && live >= 0 ? Math.min(COLLAPSE_AFTER_MAX_UI, live) : stored;
+  const bits = [
+    `${collapseAfterSentence(seconds)} · set in config.json, so it applies to every browser and survives a restart`,
+    "opening the parent before the time is up cancels its clock, and opening it never un-minimizes a card",
+  ];
+  preview.textContent = bad
+    ? `NOT SAVED - ${note}. config.json still says: ${collapseAfterSentence(stored)}.`
+    : note
+      ? `${note} - ${bits.join(" · ")}`
+      : bits.join(" · ");
+  preview.classList.toggle("bad", bad);
+}
+
+async function saveCollapseAfterSetting(seconds) {
+  const stored = collapseAfterStored();
+  const want = Number(seconds);
+  const n = Number.isFinite(want) ? Math.max(0, Math.min(COLLAPSE_AFTER_MAX_UI, Math.round(want))) : stored;
+  const preview = $("collapse-after-preview");
+  if (preview) {
+    preview.textContent = "saving…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch(
+      "/api/settings/collapse-after",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seconds: n }),
+      },
+      { timeoutMs: 10000 },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    state.settings.collapseAfterSeconds = Number.isFinite(Number(d.seconds)) ? Number(d.seconds) : n;
+    paintCollapseAfterSetting(collapseAfterSentence(state.settings.collapseAfterSeconds));
+    showBanner(collapseAfterSentence(state.settings.collapseAfterSeconds));
+  } catch (err) {
+    paintCollapseAfterSetting(String((err && err.message) || err), true);
+  }
+}
+
+$("collapse-after")?.addEventListener("change", (e) => void saveCollapseAfterSetting(e.target.value));
+
 // ---- which of the chart's columns are drawn ------------------------------------------------------
 // The choice lives in this panel's config.json (POST /api/settings/columns, `hiddenColumns`), like the refresh mode
 // and the age threshold above: one answer for every browser, and it survives a restart. The switches are BUILT from
@@ -19580,6 +19769,7 @@ function applySettings(settings) {
   if (scanMode) scanMode.value = state.settings.scanMode === "visible" ? "visible" : "all";
   paintRemotePolicy();
   paintChartColumns();
+  paintCollapseAfterSetting();
   if ((state.settings.hiddenColumns || []).join(",") !== colsBefore) renderAll();
 }
 
@@ -19900,6 +20090,7 @@ startVisibilityReporting();
     updateColorsRow();
     paintAnchorSettings();
     paintAgeSetting();
+    paintCollapseAfterSetting();
     paintChartColumns();
     paintRemotePolicy();
     paintAgentCleanup();

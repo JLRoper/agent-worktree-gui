@@ -4,6 +4,7 @@
   "midSeconds": 45,
   "dormantSeconds": 90,
   "slowSeconds": 300,
+  "collapseAfterSeconds": 30,
   "fetchSeconds": 1800,
   "refreshSeconds": 30,
   "prCacheSeconds": 1800,
