@@ -9,7 +9,7 @@
 // never "ahead by N".
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -226,6 +226,126 @@ test("a boot keeps a queued entry for a version this panel does not serve yet", 
   controller.cancel(queued[0].id);
   await sleep(120);
   assert.equal(runs.length, 0);
+});
+// ---- a queued entry is ONE bounce ------------------------------------------------------------
+// Two panel bounces ten minutes apart, the second carrying the first one's reason on a tree that had moved
+// on since: the ledger's entry had run, but nothing on disk said so (`"reason": null`, `"resumedAt": null`).
+// An entry is consumed when it runs — its id goes into the ledger with the moment it was resumed, and the
+// queue stops naming it — and a boot handed that id again refuses it by name instead of executing it.
+const ledgerController = (file) => {
+  let executions = 0;
+  let shutdowns = 0;
+  let proofs = 0;
+  const controller = new RestartController({
+    config: { restartFile: file },
+    jobs: {
+      list: () => [],
+      runningJobs: () => [],
+      reconcileRestored: async () => [],
+    },
+    home,
+    version: "1.0.0",
+    log: () => {},
+    credentials: () => null,
+    proveGateway: () => {
+      proofs += 1;
+      return { ok: true, stage: "turn", runId: "proof-ledger", status: "completed", output: "PANEL-RESTART-OK", ms: 3 };
+    },
+    spawnPanel: () => {
+      executions += 1;
+      return { command: "stub panel", pid: 5150, at: new Date().toISOString() };
+    },
+    shutdown: () => {
+      shutdowns += 1;
+    },
+    pollMs: 10,
+  });
+  return { controller, ran: () => executions, shutdowns: () => shutdowns, proofs: () => proofs };
+};
+const waitUntil = async (fn, what, timeoutMs = 5_000) => {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    if (fn()) return;
+    if (Date.now() > until) throw new Error(`timed out waiting for ${what}`);
+    await sleep(20);
+  }
+};
+
+test("a panel entry is consumed when it runs, with its id and a resumedAt on the ledger", async () => {
+  const file = path.join(dir, `restart-consumed-${++seq}.json`);
+  const { controller, ran, shutdowns } = ledgerController(file);
+  const rec = controller.request({ target: "panel", reason: "serve 1.2.0 after the landing", waitFor: "no-thread" });
+  await waitUntil(() => ran() === 1, "the entry to run");
+  assert.equal(shutdowns(), 1, "the panel exits through the shared shutdown path");
+
+  const ledger = JSON.parse(readFileSync(file, "utf8"));
+  assert.equal(ledger.id, rec.id, "the ledger names the entry that bounced it");
+  assert.equal(ledger.reason, "serve 1.2.0 after the landing", "…and what it was for");
+  assert.equal(ledger.resumedAt, null, "…and that the replacement has not resumed it yet");
+  const consumed = (ledger.consumed || []).find((e) => e.id === rec.id);
+  assert.ok(consumed, "the id is on the consumed list");
+  assert.match(String(consumed.resumedAt || ""), /^\d{4}-\d{2}-\d{2}T/, "…with the moment it was consumed");
+  assert.equal(consumed.reason, "serve 1.2.0 after the landing", "…and its reason, so the ledger can say what ran");
+  assert.equal((ledger.queued || []).filter((e) => e.id === rec.id).length, 0, "the persisted queue no longer asks for it");
+});
+
+test("a replay of a consumed id is refused with a journal line instead of executed", async () => {
+  const file = path.join(dir, `restart-replay-${++seq}.json`);
+  const first = ledgerController(file);
+  const rec = first.controller.request({ target: "panel", reason: "serve 1.2.0 after the landing", waitFor: "no-thread" });
+  await waitUntil(() => first.ran() === 1, "the first entry to run");
+
+  // The stale ledger a death between the write and the replacement leaves: the same entry still in `queued`.
+  const ledger = JSON.parse(readFileSync(file, "utf8"));
+  ledger.queued = [
+    {
+      id: rec.id,
+      target: "panel",
+      reason: rec.reason,
+      waitFor: "no-thread",
+      version: "2.0.0",
+      requestedBy: "reader",
+      queuedAt: new Date().toISOString(),
+      state: "queued",
+    },
+  ];
+  writeFileSync(file, JSON.stringify(ledger), "utf8");
+
+  const second = ledgerController(file);
+  await second.controller.resumePending();
+  await sleep(150);
+  assert.equal(second.ran(), 0, "the replay was not executed");
+  assert.equal(second.controller.state().queued.length, 0, "…and it was not left in the queue");
+  const line = second.controller.state().journal.find((j) => /refused a replay/.test(String(j.text || "")));
+  assert.ok(line, "the refusal is journalled");
+  assert.match(String(line.text), new RegExp(rec.id), "…naming the id");
+  assert.match(String(line.text), /already ran at/, "…and saying that it already ran, with when");
+});
+
+test("a queued entry whose reason is null is refused at boot, with a journal line", async () => {
+  const file = path.join(dir, `restart-null-reason-${++seq}.json`);
+  writeFileSync(
+    file,
+    JSON.stringify({
+      queued: [{ id: "null0001", target: "panel", reason: null, waitFor: "no-thread", version: "2.0.0", queuedAt: new Date().toISOString() }],
+    }),
+    "utf8",
+  );
+  const { controller, ran } = ledgerController(file);
+  await controller.resumePending();
+  await sleep(150);
+  assert.equal(ran(), 0, "a bounce that cannot say what it is for is not run");
+  assert.equal(controller.state().queued.length, 0);
+  const line = controller.state().journal.find((j) => /records a null reason/.test(String(j.text || "")));
+  assert.ok(line, "the refusal is journalled");
+  assert.match(String(line.text), /null0001/);
+});
+
+test("a request with a null reason is a 400 at the queue, and nothing is queued", () => {
+  const { controller, ran } = ledgerController(path.join(dir, `restart-null-request-${++seq}.json`));
+  assert.throws(() => controller.request({ target: "panel", reason: null }), (e) => e.status === 400 && /reason/.test(e.message));
+  assert.equal(controller.state().queued.length, 0);
+  assert.equal(ran(), 0);
 });
 
 test("the grammar's pipe is a separator: RESTART panel | <why> keeps the reason, not the pipe", () => {
