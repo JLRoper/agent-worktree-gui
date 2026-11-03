@@ -2511,6 +2511,86 @@
   //     `queueDragEnded` stamps. A drag must never open a card.
   const QUEUE_DRAG_THRESHOLD = 4;
 
+  // ---- the pane's own edge: a held gesture scrolls the list -----------------------------------------
+  //
+  // The pane is usually SHORTER than the queue — nine queued cards in the 480 px rail are taller than the window it
+  // draws — and a pointer cannot travel past the edge of the box it is in. Without the crawl below, a card could only
+  // be put where a visible card is: the pointer stopped at the edge and the drop landed on whatever midpoint it had
+  // last crossed, while the reader was aiming at a row further down. That is the reader's "it does not drag and drop
+  // like it says", so the frame loop is part of the gesture, not a decoration on it.
+  //
+  // The edge band is measured on the SCROLLER, not the pane: the rail and the float both scroll in `.as-body`, and a
+  // narrow enough window falls back to the document, so the walk starts at the pane and takes the first ancestor that
+  // can actually move. Speed ramps from nothing at the band's inner edge to full at the box's edge, which is what makes
+  // a small overshoot crawl and a deliberate one travel.
+  const QUEUE_SCROLL_EDGE = 26;
+  const QUEUE_SCROLL_STEP = 14;
+  let queueDragRaf = 0;
+  function queueScrollerOf(el) {
+    for (let n = el?.closest?.('[data-subpane="queue"]') || null; n && n !== document.body; n = n.parentElement) {
+      if (!/(auto|scroll)/.test(getComputedStyle(n).overflowY)) continue;
+      if (n.scrollHeight <= n.clientHeight + 1) continue;
+      return n;
+    }
+    const doc = document.scrollingElement;
+    return doc && doc.scrollHeight > doc.clientHeight + 1 ? doc : null;
+  }
+  function queueScrollBy(d, dy) {
+    const s = d.scroller;
+    if (!s) return 0;
+    const before = s.scrollTop;
+    s.scrollTop = Math.max(0, Math.min(s.scrollHeight - s.clientHeight, before + dy));
+    return s.scrollTop - before;
+  }
+  // Where the card lands, and where it is drawn. Split out because a scroll moves the LIST under a pointer that has
+  // not moved: the same decision has to run again with the pointer where it already is.
+  function queueDragPaint(d, clientY) {
+    // Where the card would land: before the first queued card whose midpoint the pointer has passed, else after the
+    // last one. Only queued cards take part — the three fixed sections never swap places with the drag.
+    const cards = queueCardsIn(d.el).filter((c) => c !== d.el && c.dataset.asQstate === "queued");
+    const at = cards.find((c) => {
+      const box = c.getBoundingClientRect();
+      return clientY < box.top + box.height / 2;
+    });
+    if (at) {
+      if (d.el.nextElementSibling !== at) at.parentElement.insertBefore(d.el, at);
+    } else if (cards.length) {
+      const last = cards[cards.length - 1];
+      if (d.el.previousElementSibling !== last) last.parentElement.insertBefore(d.el, last.nextElementSibling);
+    }
+    // Re-anchor under the pointer: a DOM move changes the card's layout top, and the transform is measured from that
+    // top, so it is recomputed from the box the browser just laid out rather than accumulated from deltas.
+    const layoutTop = d.el.getBoundingClientRect().top - d.translate;
+    d.translate = Math.round(clientY - d.grab - layoutTop);
+    d.el.style.transform = `translateY(${d.translate}px)`;
+  }
+  function queueDragFrame() {
+    const d = queueDrag;
+    if (!d || !d.moved) {
+      queueDragRaf = 0;
+      return;
+    }
+    let dy = 0;
+    const box = d.scroller?.getBoundingClientRect?.();
+    if (box && box.height > 0) {
+      const top = box.top + QUEUE_SCROLL_EDGE;
+      const bottom = box.bottom - QUEUE_SCROLL_EDGE;
+      if (d.y < top) dy = -Math.ceil(QUEUE_SCROLL_STEP * Math.min(1, (top - d.y) / QUEUE_SCROLL_EDGE));
+      else if (d.y > bottom) dy = Math.ceil(QUEUE_SCROLL_STEP * Math.min(1, (d.y - bottom) / QUEUE_SCROLL_EDGE));
+    }
+    // The crawl only re-decides the drop when it actually moved the list: a pointer parked far from either edge costs
+    // one comparison a frame and nothing else.
+    if (dy && queueScrollBy(d, dy)) queueDragPaint(d, d.y);
+    queueDragRaf = requestAnimationFrame(queueDragFrame);
+  }
+  const queueDragScrollStart = () => {
+    if (!queueDragRaf) queueDragRaf = requestAnimationFrame(queueDragFrame);
+  };
+  const queueDragScrollStop = () => {
+    if (queueDragRaf) cancelAnimationFrame(queueDragRaf);
+    queueDragRaf = 0;
+  };
+
   function queueCardDown(e) {
     if (queueDrag || e.button !== 0) return;
     const el = e.target?.closest?.(".as-task.is-draggable");
@@ -2521,7 +2601,11 @@
     queueDrag = {
       el,
       own: String(el.dataset.asQown || ""),
+      // The box a held gesture has to crawl. Measured once: the frame it has to move cannot change mid-press without
+      // the pane being rebuilt, and the pane is not rebuilt while a drag is live.
+      scroller: queueScrollerOf(el),
       startY: e.clientY,
+      y: e.clientY,
       grab: e.clientY - rect.top,
       translate: 0,
       moved: false,
@@ -2541,31 +2625,19 @@
       d.el.classList.add("is-dragging");
       d.el.closest('[data-subpane="queue"]')?.classList.add("as-qdrag");
       queueDropNotes.delete(d.own);
+      // The crawl starts with the gesture and runs until the release, so a pointer held still at the pane's edge keeps
+      // travelling: a reader waits for the list, they do not shake the card at it.
+      queueDragScrollStart();
     }
-    // Where the card would land: before the first queued card whose midpoint the pointer has passed, else after the
-    // last one. Only queued cards take part — the three fixed sections never swap places with the drag.
-    const cards = queueCardsIn(d.el).filter((c) => c !== d.el && c.dataset.asQstate === "queued");
-    const at = cards.find((c) => {
-      const box = c.getBoundingClientRect();
-      return e.clientY < box.top + box.height / 2;
-    });
-    if (at) {
-      if (d.el.nextElementSibling !== at) at.parentElement.insertBefore(d.el, at);
-    } else if (cards.length) {
-      const last = cards[cards.length - 1];
-      if (d.el.previousElementSibling !== last) last.parentElement.insertBefore(d.el, last.nextElementSibling);
-    }
-    // Re-anchor under the pointer: a DOM move changes the card's layout top, and the transform is measured from that
-    // top, so it is recomputed from the box the browser just laid out rather than accumulated from deltas.
-    const layoutTop = d.el.getBoundingClientRect().top - d.translate;
-    d.translate = Math.round(e.clientY - d.grab - layoutTop);
-    d.el.style.transform = `translateY(${d.translate}px)`;
+    d.y = e.clientY;
+    queueDragPaint(d, e.clientY);
   }
 
   async function queueCardUp(cancelled = false) {
     const d = queueDrag;
     if (!d) return;
     queueDrag = null;
+    queueDragScrollStop();
     const el = d.el;
     el.classList.remove("is-dragging");
     el.style.transform = "";
