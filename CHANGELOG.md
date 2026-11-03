@@ -4,16 +4,24 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v0.84.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v0.85.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-205 releases from v0.1.0 (2026-10-20) to v0.84.0 (2026-11-03), 784 commits between the tags. Every release is anchored by an
+206 releases from v0.1.0 (2026-10-20) to v0.85.0 (2026-11-03), 785 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v0.85.0 — 2026-11-03 · 1 commit
+
+[`44cb6a8`](https://github.com/JLRoper/agent-worktree-gui/commit/44cb6a8d31dd6a5b0eadaa2143b537022e06cdb5) · [compare v0.84.0...v0.85.0](https://github.com/JLRoper/agent-worktree-gui/compare/v0.84.0...v0.85.0)
+
+### Docs & tests
+
+- test: the minimized composer block, driven in a real browser at two window heights ([`44cb6a8`](https://github.com/JLRoper/agent-worktree-gui/commit/44cb6a8d31dd6a5b0eadaa2143b537022e06cdb5))
 
 ## v0.84.0 — 2026-11-03 · 1 commit
 
