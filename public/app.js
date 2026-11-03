@@ -6447,6 +6447,10 @@ function reviewAgentName(r) {
 // An auto-allowed write, after the fact: the panel was never asked, so this is the only record that it happened.
 // Keep closes it; Unwind names EXACTLY what it would do — a remote branch delete, or a message drafted to the agent
 // when there is no safe inverse. The panel never runs an inverse of its own, and the button is the confirmation.
+// ---- rw review card
+// Keep is the safe action and the whole width of the card, with Unwind as the red bar under it (`.rw-keep` +
+// `.rw-review .ap-actions` in the sheet). The class goes on the control in BOTH states, because the dismissed
+// record's one control is the same slot.
 function remoteWriteReviewHtml(r) {
   const unwind = r.unwind && r.unwind.type ? r.unwind : { type: "message", text: "" };
   const target = r.branch ? `${r.remote || "origin"}/${r.branch}` : "";
@@ -6457,8 +6461,8 @@ function remoteWriteReviewHtml(r) {
   const why = [r.why, target].filter(Boolean).join(" · ");
   const buttons =
     r.state === "unwound"
-      ? `<button type="button" data-rw-review-keep="${esc(r.id)}" title="dismiss this record">Dismiss</button>`
-      : `<button type="button" data-rw-review-keep="${esc(r.id)}" title="keep it — the write stands and this card goes">Keep</button>` +
+      ? `<button type="button" class="rw-keep" data-rw-review-keep="${esc(r.id)}" title="dismiss this record">Dismiss</button>`
+      : `<button type="button" class="rw-keep" data-rw-review-keep="${esc(r.id)}" title="keep it — the write stands and this card goes">Keep</button>` +
         (unwind.type === "delete-branch"
           ? `<button type="button" class="btn-deny" data-rw-review-unwind="${esc(r.id)}" title="deletes ${esc(unwind.label || "the remote branch")} on the remote — this click is its confirmation">Unwind — ${esc(unwind.label || "delete the remote branch")}</button>`
           : `<button type="button" data-rw-review-unwind="${esc(r.id)}" title="nothing is run: this drafts a message to the agent instead">Unwind — draft a message to ${esc(reviewAgentName(r))}</button>`);
@@ -6475,6 +6479,7 @@ function remoteWriteReviewHtml(r) {
     ${detail}${jumpNote}
   </div>`;
 }
+// ---- end rw review card
 
 // Records and reviews live under their OWN heads. The reader's report was a green check under "waiting on you":
 // a group label says what a group is, and the dock's head only ever counts what is actually pending.
