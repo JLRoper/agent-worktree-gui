@@ -331,8 +331,9 @@ test("every digest line carries state, thread, worktree, PR state and its skip r
   assert.match(text, /- ○ #1 queued · clashing · thread \(none\) · tree \(none\) · PR none · files a\.js · SKIP: files in use by #9 \(stale\)/);
   // A running task: the same facts, plus the PR's number and the verdict on its thread.
   assert.match(text, /- ● #9 running · running · thread T1 · tree C:\/wt · PR OPEN #3 · files a\.js · STALE: that thread has no live run/);
-  // A parked task: the same facts, plus why it is parked.
-  assert.match(text, /- ⏸ #10 parked · parked · thread \(none\) · tree C:\/wt2 · PR none · PARKED: waiting on review/);
+  // A parked task: the same facts, plus why it is parked. The park carries no hold, so it reads `parked (manual)` — the
+  // release condition slot says out loud that there is nothing the panel can test (see test/queue-holds.test.js).
+  assert.match(text, /- ⏸ #10 parked \(manual\) · parked · thread \(none\) · tree C:\/wt2 · PR none · PARKED: waiting on review/);
   assert.ok(!text.includes("queued 5"), "only the top N queued are listed");
   assert.match(text, /and 5 more queued/);
 });

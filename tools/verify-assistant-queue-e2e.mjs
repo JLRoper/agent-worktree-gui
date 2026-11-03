@@ -682,7 +682,9 @@ try {
     const digest1 = afterMove.digest || [];
     const digest2 = twoQueue.digest || [];
     ok("Assistant #1's digest no longer names the moved work", !digest1.some((l) => l.includes(TASKS[2].title) || l.includes(TASKS[3].title)), digest1.join(" | "));
-    ok("Assistant #2's digest does, with its new ids", digest2.some((l) => /^- ⏸ #1 parked · SQL verify for the moved tasks/.test(l)) && digest2.some((l) => /^- ● #2 running · record the e2e run/.test(l)), digest2.join(" | "));
+    // The park was made by a plain `state` write with a reason and no hold, so the digest says `parked (manual)` — the
+    // hold slot is where a testable release condition would be, and an absent one is said out loud.
+    ok("Assistant #2's digest does, with its new ids", digest2.some((l) => /^- ⏸ #1 parked \(manual\) · SQL verify for the moved tasks/.test(l)) && digest2.some((l) => /^- ● #2 running · record the e2e run/.test(l)), digest2.join(" | "));
     check("…and its header counts them", digest2[0], "Your task queue (0 queued · 1 running · 1 parked · 0 done):");
 
     // Assistant #2's pane, painted from its own file: the two rows, in state order. The pane ids are per session
