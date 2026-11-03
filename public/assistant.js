@@ -2055,13 +2055,12 @@
           </div>`;
   }
 
-  // One row. The marker, the id and the title are the head; one sub-row per agent under it; owner, PR, tree and files
-  // are the meta line; a stale or conflicted task carries its reason under them, because "why is this not moving" is
+  // One row. The marker, the id and the title are the head; one sub-row per agent under it; PR, tree and files are
+  // the meta line; a stale or conflicted task carries its reason under them, because "why is this not moving" is
   // the question a queue exists to answer. A done row stays in place greyed: "it finished" is a record, not a task
-  // that vanished.
+  // that vanished. The pane is already scoped to ONE assistant's queue, so the row no longer names an owner.
   function queueTaskHtml(id, t, jobs) {
     const mark = queueMark(t.state);
-    const owner = t.owner ? esc(t.owner) : "unowned";
     // `threads` is the record's whole history and `thread` its legacy first entry, so a queue file written before the
     // list existed still draws one agent row. The CURRENT run is the last one, and that is what a click on the body
     // (rather than on a sub-row) opens.
@@ -2116,15 +2115,16 @@
         </span>`
       : `<span class="as-hint">no other assistant to move it to</span>`;
     return `<div class="as-task${t.state === "done" ? " is-done" : ""}" data-as-qrow="${esc(String(t.id))}" data-as-qthread="${esc(current)}">
-        <div class="as-task-head">
-          <span class="as-task-mark is-${esc(queueStateName(t.state))}" aria-hidden="true">${mark}</span>
-          <b class="mono">#${esc(String(t.id))}</b>
-          <span class="as-task-title">${esc(t.title)}</span>
-          <span class="as-task-owner">${owner}</span>
+        <div class="as-task-body"${current ? ` data-as-qopen="${esc(current)}"` : ""}>
+          <div class="as-task-head">
+            <span class="as-task-mark is-${esc(queueStateName(t.state))}" aria-hidden="true">${mark}</span>
+            <b class="mono">#${esc(String(t.id))}</b>
+            <span class="as-task-title">${esc(t.title)}</span>
+          </div>
+          <div class="as-task-agents">${agents}</div>
+          ${meta.length ? `<div class="as-task-meta">${meta.join(" · ")}</div>` : ""}
+          ${note}
         </div>
-        <div class="as-task-agents">${agents}</div>
-        ${meta.length ? `<div class="as-task-meta">${meta.join(" · ")}</div>` : ""}
-        ${note}
         <div class="as-task-actions">${acts.join("")}${move}${btn("delete", "✕", "Delete", "delete this task — a removed task leaves no ghost in the digest")}</div>
       </div>`;
   }

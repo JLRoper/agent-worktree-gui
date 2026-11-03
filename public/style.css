@@ -3254,13 +3254,18 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-rule-row .as-rule-name b { font-weight: 500; }
 .as-rule-row .as-rule-name i { display: block; font-style: normal; color: var(--dimmer); font-size: 10px; }
 .as-rule-row select { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 3px 5px; font-size: 11px; }
-/* The Queue sub-tab: one row per task. The marker is the state at a glance — ○ queued, ● running, ⏸ parked,
+/* The Queue sub-tab: one CARD per task. The marker is the state at a glance — ○ queued, ● running, ⏸ parked,
    ✓ done — and a done row stays in place greyed rather than vanishing, because "it finished" is the record the
    reader asked for. A stale or skipped row carries its reason under the title in amber/red: "why is this not
-   moving" is the question a queue exists to answer. */
-.as-task { border-bottom: 1px solid #20262f; padding: 5px 0; font-size: 11.5px; }
-.as-task:last-child { border-bottom: 0; }
+   moving" is the question a queue exists to answer. The card is a raised surface on the group's own background:
+   a radius and a gap between cards is what separates one task from the next now that the bullet rules are gone. */
+.as-task { display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; margin: 0 0 8px; font-size: 11.5px; box-shadow: 0 1px 2px #0006; }
+.as-task:last-child { margin-bottom: 0; }
 .as-task.is-done { opacity: .55; }
+/* The body is what opens the console — the head, the agents, the meta line and the note — while the actions row
+   below it stays a row of presses. An empty body (no thread to open) is not a target. */
+.as-task-body { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
+.as-task-body[data-as-qopen] { cursor: pointer; }
 .as-task-head { display: flex; align-items: center; gap: 7px; }
 .as-task-mark { font-size: 13px; line-height: 1; width: 12px; text-align: center; flex: 0 0 auto; }
 .as-task-mark.is-queued { color: var(--dim); }
@@ -3268,12 +3273,13 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-task-mark.is-parked { color: #a78bfa; }
 .as-task-mark.is-done { color: #6fcf97; }
 .as-task-title { flex: 1; min-width: 0; font-weight: 500; }
-.as-task-owner { color: var(--dimmer); font-size: 10.5px; flex: 0 0 auto; }
-.as-task-meta { color: var(--dimmer); font-size: 10px; margin: 2px 0 0 19px; display: flex; gap: 8px; flex-wrap: wrap; }
+.as-task-meta { color: var(--dimmer); font-size: 9.5px; line-height: 1.4; margin: 0 0 0 19px; display: flex; gap: 8px; flex-wrap: wrap; }
 .as-task-meta code { font-family: var(--mono); }
-.as-task-note { margin: 3px 0 0 19px; font-size: 10.5px; color: #e0b341; line-height: 1.35; }
+.as-task-note { margin: 0 0 0 19px; font-size: 10.5px; color: #e0b341; line-height: 1.35; }
 .as-task-note.is-bad { color: var(--red); }
-.as-task-actions { display: flex; gap: 5px; flex-wrap: wrap; margin: 4px 0 0 19px; align-items: center; }
+/* Anchored at the card's bottom, over a hairline: the presses do not float up under a long title, and a reader
+   scanning a column of cards finds them in the same place on every one. */
+.as-task-actions { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin: auto 0 0; padding: 7px 0 0 19px; border-top: 1px solid #1f2530; }
 .as-task-actions button { font-size: 10.5px; padding: 2px 7px; }
 /* One agent per task: a sub-row per thread that carried it, wearing the card's own pill. The line itself is the opener
    (it opens that agent's card AND the console of its current turn), so it takes a pointer and a focus ring. */

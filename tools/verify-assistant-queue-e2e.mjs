@@ -705,13 +705,13 @@ try {
         id: el.dataset.asQrow,
         mark: el.querySelector(".as-task-mark")?.textContent.trim() || "",
         title: el.querySelector(".as-task-title")?.textContent.trim() || "",
-        owner: el.querySelector(".as-task-owner")?.textContent.trim() || "",
+        ownerNamed: Boolean(el.querySelector(".as-task-owner")),
         note: (el.querySelector(".as-task-note")?.textContent || "").replace(/\s+/g, " ").trim(),
       })),
     );
     check("…running first, then parked, each with its own marker", rowsTwo.map((r) => [r.id, r.mark]), [["2", "●"], ["1", "⏸"]]);
     check("…their titles, unchanged by the move", rowsTwo.map((r) => r.title), [TASKS[3].title, TASKS[2].title]);
-    check("…owned by Assistant #2", rowsTwo.map((r) => r.owner), ["assistant-2", "assistant-2"]);
+    ok("…and no row prints an owner label — the pane is Assistant #2's own queue", rowsTwo.every((r) => !r.ownerNamed), JSON.stringify(rowsTwo.map((r) => r.ownerNamed)));
     ok("…the parked one carrying the reason it was parked for", /^parked — the run was cancelled/.test(rowsTwo[1]?.note || ""), rowsTwo[1]?.note);
     ok("…and the running one's thread still live, not STALE", !/STALE/.test(rowsTwo[0]?.note || ""), rowsTwo[0]?.note || "(no note)");
 

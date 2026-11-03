@@ -367,7 +367,7 @@ try {
         mark: el.querySelector(".as-task-mark")?.textContent.trim() || "",
         markClass: el.querySelector(".as-task-mark")?.className || "",
         title: el.querySelector(".as-task-title")?.textContent.trim() || "",
-        owner: el.querySelector(".as-task-owner")?.textContent.trim() || "",
+        ownerNamed: Boolean(el.querySelector(".as-task-owner")),
         meta: (el.querySelector(".as-task-meta")?.textContent || "").replace(/\s+/g, " ").trim(),
         note: (el.querySelector(".as-task-note")?.textContent || "").replace(/\s+/g, " ").trim(),
         // One sub-row per agent: the thread, the mark that RUN owns and the card's own pill word/class. Only real
@@ -422,7 +422,7 @@ try {
     );
     ok("…says STALE instead of showing phantom progress", /^STALE — that thread has no live run/.test(rows[0]?.note || ""), rows[0]?.note);
     ok("the parked row carries its reason", /^parked — waiting on the DBA's verify$/.test(rows[1]?.note || ""), rows[1]?.note);
-    ok("every row names the assistant that carries it", rows.every((r) => r.owner === "assistant-1"), JSON.stringify(rows.map((r) => r.owner)));
+    ok("no row prints an owner label — the pane is that assistant's own queue", rows.every((r) => !r.ownerNamed), JSON.stringify(rows.map((r) => r.ownerNamed)));
     ok("every row offers a delete", rows.every((r) => r.hasDelete));
     ok("every row offers the move control (a second assistant exists)", rows.every((r) => r.hasMove));
 
