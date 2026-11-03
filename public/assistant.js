@@ -3089,8 +3089,11 @@
     const card = doc.getElementById(PIPE_CARD_ID);
     if (!card) return null;
     const note = card.querySelector("[data-pipew-assign-note]");
-    const pipeSel = card.querySelector("[data-pipew-pipe]");
-    const stageSel = card.querySelector("[data-pipew-stage]");
+    const pipeSel = card.querySelector("select[data-pipew-pipe]");
+    // `select[...]`, not the bare attribute: the stage ROWS carry `data-pipew-stage` too and they are drawn ABOVE the
+    // form, so a bare lookup matches the first <li> — whose `.value` is undefined — and the press answers "choose a
+    // pipeline and a stage first" for a stage the reader did choose.
+    const stageSel = card.querySelector("select[data-pipew-stage]");
     const body = clear
       ? { clear: true }
       : { pipeline: pipeSel ? pipeSel.value : "", stage: stageSel ? stageSel.value : "" };
@@ -3141,7 +3144,9 @@
     host?.addEventListener("change", (e) => {
       const sel = e.target?.closest?.("[data-pipew-pipe]");
       if (!sel) return;
-      const stageSel = document.getElementById(PIPE_CARD_ID)?.querySelector?.("[data-pipew-stage]");
+      // The same qualification as the assignment press: the stage rows carry this attribute too, and repainting the
+      // first <li>'s innerHTML would replace the row the reader is looking at with a list of <option> elements.
+      const stageSel = document.getElementById(PIPE_CARD_ID)?.querySelector?.("select[data-pipew-stage]");
       if (stageSel) stageSel.innerHTML = pipeWindowStageOptions(pipeWindowState.catalogue, sel.value, "");
     });
     // A press on the backdrop or the ✕ closes it; a press inside the card does not. The two assignment presses are the
