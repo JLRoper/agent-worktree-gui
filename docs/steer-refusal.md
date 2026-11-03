@@ -379,3 +379,22 @@ the text is unsent. "Queue reply" is wrong here — there is no live turn to que
   line by line.
 - The brief's `lib/jobs.js:3421-3460` is the **running checkout's working copy** (dirty; `approvalPending` at `3408`),
   not this branch or main, where the same code is at `3273-3326`. Line numbers here are this tree's, at `d86ca81`.
+
+---
+
+## 5. What landed
+
+The repair exists now; the code is the authority, and three points differ from the design above on purpose.
+
+- **§2.3A is reversed for a genuine 409.** The fix's brief asks for the text to be HELD as a reply rather than handed
+  back with "press Queue reply": the reader already asked for it to be sent, so the card queues it and says it was
+  held. `parked` keeps the text in the box and points at the approval, and `gone` keeps it there while the row settles.
+- **The predicate is a file, not a summary field alone.** `public/core/steerable.js` is loaded by the page as a
+  classic script (`globalThis.wtSteerable`) and imported by `lib/jobs.js` and `server.js`, so the button, the summary's
+  `steerable` field and the route's refusal all read one implementation.
+- **`past_boundary` is remembered on the turn.** `jobs.steer()` records the refusal on the card (`steerRefused`) and
+  clears it when the turn settles or is re-attached, so the control is not drawn again for a turn that cannot take it.
+
+The gates are `test/steerable.test.js` (the predicate, the second-approval reset, and the three refusals driven
+through `Jobs`) and `tools/verify-steerable.mjs` (the four card states — parked, second request, past boundary,
+gone — driven through a real panel and a real browser; it fails on a 0.74.0 export).
