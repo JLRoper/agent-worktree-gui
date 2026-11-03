@@ -683,7 +683,7 @@ panel. It is where the entropy is, and §10 says so.
   "worktreeSeconds": 5, "midSeconds": 45, "dormantSeconds": 90,
   "slowSeconds": 300, "collapseAfterSeconds": 30,
   "fetchSeconds": 1800, "liveSeconds": 5,
-  "threads": 5, "jobMaxRuntimeSeconds": 3600,
+  "threads": 5, "jobMaxRuntimeSeconds": 7200,
   "remoteBranchPolicy": "local-only"
 }
 ```
