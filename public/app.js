@@ -17642,7 +17642,9 @@ function paintSettingsSearch() {
     const hits =
       panel.dataset.settingsGroup === "skills"
         ? paintSkillsSearch(query, matched)
-        : paintSettingsRows([...panel.children], query, matched);
+        : panel.dataset.settingsGroup === "permissions"
+          ? paintPermissionsSearch(query, matched)
+          : paintSettingsRows([...panel.children], query, matched);
     counts.set(panel.dataset.settingsGroup, hits);
   }
   paintSettingsTabCounts(counts, query);
@@ -18096,6 +18098,149 @@ async function loadSkills() {
   return skillsLoading;
 }
 
+// ---- Permissions tab -----------------------------------------------------------------------------
+// Read-only: the server parses config.yaml and asks the gateway when this tab is read, and this side
+// only draws the answer. Every row prints the file:line (or endpoint) it came from; a source that
+// could not be read prints its reason in place of rows, never a guessed value. The search treats this
+// list like the Skills one — its rows are two levels deep, so it paints its own filter and hands the
+// same per-tab count back.
+const PERMISSIONS_PANEL_ID = "settings-panel-permissions";
+let permissionsIndex = null;
+let permissionsLoadedAt = 0;
+let permissionsLoading = null;
+
+const permissionsRows = (source) => (Array.isArray(source && source.rows) ? source.rows : []);
+const permissionsBad = (source) => Boolean(source) && source.status !== "ok";
+
+function permissionStatusText(source) {
+  if (!source) return "no answer";
+  if (source.status === "ok") return "read";
+  if (source.status === "missing") return "not in the file";
+  if (source.status === "malformed") return "cannot read — malformed";
+  if (source.status === "unauthorized") return "not exposed, needs a token";
+  if (source.status === "unreachable") return "cannot reach";
+  return "cannot read";
+}
+
+function permissionsGroupHtml(source) {
+  const rows = permissionsRows(source);
+  const bad = permissionsBad(source);
+  const where = source.source || source.file || source.endpoint || "(no source)";
+  const title = [source.label, where, source.reason || ""].filter(Boolean).join(" · ");
+  let html =
+    `<div class="perm-group" data-permissions-group="${esc(source.key)}" data-permissions-block="1">` +
+    `<div class="settings-row perm-head" title="${esc(title)}">` +
+    `<span class="perm-label">${esc(source.label || source.key)}</span>` +
+    `<span class="perm-status mono${bad ? " bad" : ""}">${esc(permissionStatusText(source))}</span>` +
+    `<span class="perm-source mono" title="${esc(where)}">${esc(where)}</span>` +
+    `</div>`;
+  if (bad) {
+    html += `<div class="settings-preview mono perm-note bad" title="${esc(source.reason || "")}">${esc(source.reason || "this source could not be read")}</div>`;
+  } else if (!rows.length) {
+    html += `<div class="settings-preview mono perm-note">the source is present and holds no rows</div>`;
+  } else {
+    html += `<div class="perm-rows">`;
+    for (const row of rows) {
+      const src = row.source || where;
+      html +=
+        `<div class="settings-row perm-row" data-permissions-row="1" data-permissions-group="${esc(source.key)}" title="${esc(`${row.name}: ${row.value} · ${src}`)}">` +
+        `<span class="perm-name mono">${esc(row.name)}</span>` +
+        `<span class="perm-value mono">${esc(row.value)}</span>` +
+        `<span class="perm-source mono" title="${esc(src)}">${esc(src)}</span>` +
+        `</div>`;
+    }
+    html += `</div>`;
+  }
+  return `${html}</div>`;
+}
+
+// The whole tab, from one payload. A failure says why in the summary line instead of leaving
+// `reading…` up for ever; a source that answered still draws its rows beside one that did not.
+function paintPermissions(error = null) {
+  const panel = document.getElementById(PERMISSIONS_PANEL_ID);
+  if (!panel) return;
+  for (const node of [...panel.querySelectorAll("[data-permissions-block]")]) node.remove();
+  const summary = document.getElementById("permissions-summary");
+  const config = document.getElementById("permissions-config");
+  const data = permissionsIndex;
+  if (error || !data) {
+    if (summary) summary.textContent = `could not read the permissions — ${error || "no answer"}`;
+    if (config) {
+      config.textContent = "nothing was read, so this tab knows nothing about config.yaml or the gateway either";
+      config.title = config.textContent;
+      config.classList.add("bad");
+    }
+    return;
+  }
+  const sources = Array.isArray(data.sources) ? data.sources : [];
+  const counts = data.counts || {};
+  const read = sources.filter((source) => source.status === "ok").length;
+  const bits = [`${read}/${sources.length} sources read`, `${counts.rows || 0} rows`];
+  if (counts.unreadable) bits.push(`${counts.unreadable} cannot be read`);
+  if (summary) summary.textContent = bits.join(" · ");
+  if (config) {
+    const ok = data.configFile?.status === "ok";
+    config.textContent = ok
+      ? `${data.configFile.path} · read ${new Date(data.checkedAt).toLocaleTimeString()}`
+      : `config.yaml · ${data.configFile?.reason || "could not be read"}`;
+    config.title = config.textContent;
+    config.classList.toggle("bad", !ok);
+  }
+  const list = document.getElementById("permissions-list");
+  if (list) list.insertAdjacentHTML("beforeend", sources.map(permissionsGroupHtml).join(""));
+  // A query typed before this answer landed must still hide what it does not match.
+  const box = document.getElementById("settings-search");
+  if (box && box.value) paintSettingsSearch();
+}
+
+// The Permissions list's own filter: the global search walks a panel's DIRECT children and this list
+// is grouped, so every source heading and every permission row is matched here and the same per-tab
+// count goes back. A group that answers nothing is hidden; a heading that answers alone still shows
+// its (unmatched) rows, because the heading's tooltip names the source a reader was looking for.
+function paintPermissionsSearch(query, matched) {
+  const panel = document.getElementById(PERMISSIONS_PANEL_ID);
+  if (!panel) return 0;
+  const flat = [...panel.children].filter((node) => node.id !== "permissions-list");
+  let hits = paintSettingsRows(flat, query, matched);
+  for (const group of panel.querySelectorAll(".perm-group[data-permissions-group]")) {
+    const head = group.querySelector(".perm-head");
+    const rows = [...group.querySelectorAll("[data-permissions-row]")];
+    let groupHits = 0;
+    for (const row of rows) {
+      const hit = !query || settingsRowText(row).includes(query);
+      row.classList.toggle("search-hidden", !hit);
+      if (hit) {
+        groupHits += 1;
+        if (query) matched.push(row);
+      }
+    }
+    const headHit = !query || (head && settingsRowText(head).includes(query));
+    if (query && headHit && head) matched.push(head);
+    group.classList.toggle("search-hidden", Boolean(query) && !groupHits && !headHit);
+    hits += groupHits || (query && headHit ? 1 : 0);
+  }
+  return hits;
+}
+
+async function loadPermissions() {
+  if (permissionsLoading) return permissionsLoading;
+  permissionsLoading = (async () => {
+    try {
+      const r = await apiFetch("/api/settings/permissions");
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+      permissionsIndex = data;
+      permissionsLoadedAt = Date.now();
+      paintPermissions();
+    } catch (e) {
+      paintPermissions(e.message || String(e));
+    } finally {
+      permissionsLoading = null;
+    }
+  })();
+  return permissionsLoading;
+}
+
 // ---- settings window: move it, size it ------------------------------------------------------------
 // The panel used to be a popover pinned under the top bar: `position: fixed; right: 16px; top: 74px` and no way to
 // move it off what it was covering, nor to see more of a long group than the height it opened at. It is a window
@@ -18315,6 +18460,9 @@ function toggleSettings(open = null) {
   // The skills inventory is a filesystem walk plus a gateway call, so it is read at boot and then only re-read when
   // the answer is old: a reader opening Settings twice in a minute is not asking the disk the same question again.
   if (Date.now() - skillsLoadedAt > 15000) void loadSkills();
+  // The permissions inventory reads config.yaml and asks the gateway, so it gets the same treatment:
+  // read once when Settings opens, and again only when the answer is old.
+  if (Date.now() - permissionsLoadedAt > 15000) void loadPermissions();
   // The remote-write setting is the panel's own (config.json), but which trees carry the push guard is a file on
   // disk that another instance or a hand edit can change, so it is re-read every time the panel opens.
   void refreshRemoteGuards();
@@ -18844,6 +18992,8 @@ initSettingsSearch();
 // a Skills tab that only reads when it is selected would answer "no matches" for a skill the reader can plainly see
 // after one press. It is a filesystem walk on the server, not a page render.
 void loadSkills();
+// Same reason for the permissions list: the search counts its rows too, and it must be there before the first press.
+void loadPermissions();
 // The window's own gestures: the head drags it, the corner grip sizes it, and the rect is remembered in this browser.
 initSettingsWindow();
 // A second way in that is always on screen at the top left: the title opens Settings.

@@ -10,7 +10,7 @@
 // two groups could never be compared without scrolling.
 //
 // WHAT IS DRIVEN, on a sandbox panel of this checkout in a real Chromium:
-//   * eight tabs, one per `data-settings-group` key, in the markup's own order, with role=tablist/tab/tabpanel,
+//   * nine tabs, one per `data-settings-group` key, in the markup's own order, with role=tablist/tab/tabpanel,
 //     aria-controls/aria-labelledby, exactly one aria-selected, one roving tabindex=0 and exactly one panel drawn
 //   * a press selects a tab and shows only its panel, and remembers it under wtgui.settingsTab
 //   * ArrowLeft/ArrowRight (wrapping), Home/End move AND select, Enter/Space select, and the focus follows
@@ -34,8 +34,8 @@ import { startPanel } from "./panel-testkit.mjs";
 const WIDE = { width: 1400, height: 900 };
 const TAB_KEY = "wtgui.settingsTab";
 const RECT_KEY = "wtgui.settingsRect";
-const KEYS = ["display", "cards", "board", "branches", "data", "gateway", "skills", "updates"];
-const LABELS = ["Display", "Cards", "Board", "Branches", "Data", "Gateway", "Skills", "Updates"];
+const KEYS = ["display", "cards", "board", "branches", "data", "gateway", "skills", "updates", "permissions"];
+const LABELS = ["Display", "Cards", "Board", "Branches", "Data", "Gateway", "Skills", "Updates", "Permissions"];
 const MIN = { w: 320, h: 240 };
 const EDGE = 8;
 
@@ -175,15 +175,15 @@ async function main() {
         // ---- A. one tab per key, in the markup's order ---------------------------------------------------------
         const boot = await read(page);
         check(boot.stripRole === "tablist", "the strip is a tablist", boot.stripRole);
-        check(boot.tabCount === 8, "eight tabs, one per group", `${boot.tabCount} tabs`);
-        check(boot.panelCount === 8, "eight panels", `${boot.panelCount} panels`);
-        check(JSON.stringify(boot.tabKeys) === JSON.stringify(KEYS), "the tabs are the eight keys, in markup order", boot.tabKeys.join(","));
+        check(boot.tabCount === 9, "nine tabs, one per group", `${boot.tabCount} tabs`);
+        check(boot.panelCount === 9, "nine panels", `${boot.panelCount} panels`);
+        check(JSON.stringify(boot.tabKeys) === JSON.stringify(KEYS), "the tabs are the nine keys, in markup order", boot.tabKeys.join(","));
         check(JSON.stringify(boot.panelKeys) === JSON.stringify(KEYS), "and the panels are in the same order", boot.panelKeys.join(","));
         check(JSON.stringify(boot.labels) === JSON.stringify(LABELS), "each tab carries its group's label", boot.labels.join(" / "));
-        check(boot.roles.length === 8 && boot.roles.every((r) => r === "tab"), "every tab has role=tab");
-        check(boot.panelCount === 8 && boot.panelRoles.every((r) => r === "tabpanel"), "every panel has role=tabpanel");
-        check(boot.tabCount === 8 && boot.controls.every((c, i) => c === `settings-panel-${boot.tabKeys[i]}`), "aria-controls ties each tab to its own panel");
-        check(boot.panelCount === 8 && boot.panelLabelled.every((l, i) => l === `settings-tab-${boot.panelKeys[i]}`), "and aria-labelledby names each panel by its tab");
+        check(boot.roles.length === 9 && boot.roles.every((r) => r === "tab"), "every tab has role=tab");
+        check(boot.panelCount === 9 && boot.panelRoles.every((r) => r === "tabpanel"), "every panel has role=tabpanel");
+        check(boot.tabCount === 9 && boot.controls.every((c, i) => c === `settings-panel-${boot.tabKeys[i]}`), "aria-controls ties each tab to its own panel");
+        check(boot.panelCount === 9 && boot.panelLabelled.every((l, i) => l === `settings-tab-${boot.panelKeys[i]}`), "and aria-labelledby names each panel by its tab");
         check(boot.stored === null, "a first visit writes no tab key just by loading", String(boot.stored));
         if (!boot.tabCount) {
           // 0.63.0's Settings is the seven folding groups: there is no strip to measure. Say so once and stop,
@@ -244,29 +244,29 @@ async function main() {
         const home = await keyAt("Home");
         check(selectedKey(home) === "display" && home.focusTab === "display", "Home takes the first tab", `${selectedKey(home)} focus ${home.focusTab}`);
         const end = await keyAt("End");
-        check(selectedKey(end) === "updates" && end.focusTab === "updates", "End takes the last tab", `${selectedKey(end)} focus ${end.focusTab}`);
+        check(selectedKey(end) === "permissions" && end.focusTab === "permissions", "End takes the last tab", `${selectedKey(end)} focus ${end.focusTab}`);
         const wrap = await keyAt("ArrowRight");
         check(selectedKey(wrap) === "display", "ArrowRight on the last tab wraps to the first", selectedKey(wrap));
         await page.keyboard.press("ArrowLeft");
         await page.waitForTimeout(100);
         const backWrap = await read(page);
-        check(selectedKey(backWrap) === "updates", "and ArrowLeft on the first wraps to the last", selectedKey(backWrap));
+        check(selectedKey(backWrap) === "permissions", "and ArrowLeft on the first wraps to the last", selectedKey(backWrap));
         await page.keyboard.press("Enter");
         await page.waitForTimeout(100);
         const entered = await read(page);
-        check(selectedKey(entered) === "updates", "Enter selects the tab that has the focus", selectedKey(entered));
+        check(selectedKey(entered) === "permissions", "Enter selects the tab that has the focus", selectedKey(entered));
         await page.keyboard.press(" ");
         await page.waitForTimeout(100);
         const spaced = await read(page);
-        check(selectedKey(spaced) === "updates" && spaced.stored === "updates", "Space selects it too, and remembers it", `${selectedKey(spaced)} / ${spaced.stored}`);
+        check(selectedKey(spaced) === "permissions" && spaced.stored === "permissions", "Space selects it too, and remembers it", `${selectedKey(spaced)} / ${spaced.stored}`);
 
         // ---- D. the chosen tab survives a reload, before the panel is opened -----------------------------------
         await page.reload({ waitUntil: "domcontentloaded" });
         await page.waitForSelector("#btn-settings", { timeout: 30_000 });
         await page.waitForTimeout(250);
         const reloaded = await read(page);
-        check(selectedKey(reloaded) === "updates", "after a reload the chosen tab is still selected", selectedKey(reloaded));
-        check(JSON.stringify(reloaded.unhidden) === JSON.stringify(["updates"]), "and its panel is the one painted at load", reloaded.unhidden.join(","));
+        check(selectedKey(reloaded) === "permissions", "after a reload the chosen tab is still selected", selectedKey(reloaded));
+        check(JSON.stringify(reloaded.unhidden) === JSON.stringify(["permissions"]), "and its panel is the one painted at load", reloaded.unhidden.join(","));
         await openSettings(page);
         await page.click('[data-settings-tab="display"]');
         await page.waitForTimeout(120);
@@ -394,8 +394,8 @@ async function main() {
         await page.click('[data-settings-tab="updates"]');
         await page.waitForTimeout(200);
         const narrow = await read(page);
-        check(narrow.tabStyle && narrow.tabStyle.boxes.length === 8 && JSON.stringify(narrow.labels) === JSON.stringify(LABELS),
-          "all eight labels are still on the strip at 640px", narrow.labels.join(" / "));
+        check(narrow.tabStyle && narrow.tabStyle.boxes.length === 9 && JSON.stringify(narrow.labels) === JSON.stringify(LABELS),
+          "all nine labels are still on the strip at 640px", narrow.labels.join(" / "));
         check(narrow.tabStyle && narrow.tabStyle.clipped.length === 0, "and none of them is clipped at 640px",
           narrow.tabStyle ? narrow.tabStyle.clipped.join(",") || "none clipped" : "no tab");
         check(narrow.tabStyle && narrow.tabStyle.rows >= 2, "the strip wraps to more than one row rather than scrolling",
