@@ -695,6 +695,13 @@ body.addbar-top .agents-block > .add-agent-form { order: -1; margin-top: 0; marg
 .rw-note { margin-top: 5px; font-size: 10.5px; line-height: 1.4; color: #d8c79a; }
 .rw-review .btn-deny { border-color: #6b2a2a; color: #ff9c9c; }
 .rw-review .btn-deny:hover { background: rgba(107,42,42,.18); }
+/* Keep is the SAFE answer, so it owns the whole row: stacked and stretched, with Unwind's red bar underneath. It used
+   to sit inline beside Unwind, where Unwind only filled the row because its label was wider than the card and Keep
+   was a narrow chip. Scoped to .rw-review on purpose — .ap-actions is shared with approvals and every other card. */
+.rw-review .ap-actions { flex-direction: column; align-items: stretch; }
+.rw-review .ap-actions button { width: 100%; text-align: center; }
+.rw-review button.rw-keep { background: var(--green-bg); border-color: #1f4a2a; color: #7ee787; }
+.rw-review button.rw-keep:hover { background: #1f4a2a; border-color: #3fb950; color: #d6ffe0; }
 /* The permission box for a remote write wears the same chrome as a parked turn's approval (.turn-approval), which
    is deliberately in-card markup. Inside the dock it needs nothing but a trim: the dock already has the border and
    the shadow, so the inner box keeps its own colour and loses the outer glow. */
