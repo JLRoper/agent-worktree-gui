@@ -2703,9 +2703,11 @@ function toolGroupHtml(lines, key, filter = "", openBody = false, anchor = "", g
 
 // The chip that jumps a console back to its newest line. It sits beside the scrolled element inside a
 // positioned wrapper, so it stays in the corner of the console instead of travelling with the text; it is shown
-// only while the reader is scrolled away from the end.
+// only while the reader is scrolled away from the end. It is also a `tail-chip`: the same 21px circle as the
+// chart's held-back arrow (`.wt-age-toggle` in public/style.css), so the shape comes from that shared rule and
+// this one keeps only the placement.
 function toBottomBtnHtml() {
-  return `<button type="button" class="to-bottom" data-to-bottom="1" title="jump to the newest line and follow it again">\u2193</button>`;
+  return `<button type="button" class="tail-chip to-bottom" data-to-bottom="1" title="jump to the newest line and follow it again">\u2193</button>`;
 }
 
 // The console's own two views, in a strip at its top-right: RAW restores the turn's text exactly as it arrived,
@@ -20845,6 +20847,17 @@ async function saveAgeSetting(days) {
 }
 
 $("hide-older-days")?.addEventListener("change", (e) => void saveAgeSetting(e.target.value));
+// Enter is this box's other way out, the same bargain every other number row in Settings makes (banner-seconds,
+// stream-words, stream-lines, reorder-every, rank-window): the reader who types a number and presses Enter means
+// "save this", and without this handler the field can only be left by a click somewhere else. The blur is half of
+// the gesture, not tidying after it — the save is async, so the field holds the focus until it is given up, and
+// paintAgeSetting deliberately leaves a focused box's value alone.
+$("hide-older-days")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  void saveAgeSetting(e.target.value);
+  e.target.blur();
+});
 for (const btn of document.querySelectorAll("[data-age-set]")) {
   btn.addEventListener("click", (e) => {
     e.preventDefault();

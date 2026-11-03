@@ -30,9 +30,12 @@
 //                 back to the default rather than to "off", and an absurd one is clamped
 //   driven        the browser (Playwright, headless Chromium): the chart at rest holds the 45-day-old tree back and
 //                 says so in a chip, the arrow is there but invisible and takes no clicks, hovering the chart brings
-//                 it up, its computed shape is the console chip's own, one click draws the held-back tree, the chip
+//                 it up, its computed shape is the console chip's own and its ink is its own (both chips carry the
+//                 shared `.tail-chip` rule, so the shape and the ink are read in the browser, not off the file), one
+//                 click draws the held-back tree, the chip
 //                 goes, the arrow turns up, the choice is written to localStorage, it survives a reload, the arrow
-//                 holds the tree back again, the Settings control reads and writes the number, the chart redraws from
+//                 holds the tree back again, the Settings control reads and writes the number (on `change`, and on
+//                 Enter, which also gives the field up), the chart redraws from
 //                 it, and 0 puts every tree back and takes the arrow away
 //   inspected     the arity of the filter itself: that the row a chart holds back is decided in the client
 //                 (public/app.js `rowAgeHidden`) and never in the server's row set is read off the source, not
@@ -245,6 +248,8 @@ async function browserPhase(pw) {
   };
   const drawn = () => page.$$eval(`tbody[data-tbody="${PROJECT}"] tr.row`, (els) => els.map((tr) => tr.querySelector(".row-name")?.textContent || tr.dataset.key));
   const chips = () => page.$$eval(`[data-chips="${PROJECT}"] .chip`, (els) => els.map((e) => e.textContent.trim()));
+  // What the page's focus is on, by id (or tag name when it has none): the Enter check reads it after the press.
+  const focus = () => page.evaluate(() => document.activeElement ? String(document.activeElement.id || document.activeElement.tagName) : null);
   const arrow = () =>
     page.evaluate((project) => {
       const b = document.querySelector(`section.project[data-project="${project}"] [data-age-toggle]`);
@@ -292,12 +297,22 @@ async function browserPhase(pw) {
     const chartChip = document.querySelector('section.project[data-project="sandbox-repo"] [data-age-toggle]');
     const keys = ["width", "height", "borderRadius", "borderTopWidth", "transitionProperty", "transitionDuration", "cursor"];
     const pick = (el) => Object.fromEntries(keys.map((k) => [k, getComputedStyle(el)[k]]));
-    const out = { consoleChip: pick(consoleChip), chartChip: pick(chartChip), consoleGlyph: consoleChip.textContent, chartGlyph: chartChip.textContent };
+    // Those seven are the SHARED shape now (`.tail-chip` in public/style.css), which is why "the ink is each chip's
+    // own" stops being a comment and becomes something a shared rule can break: read it beside the shape.
+    const ink = (el) => Object.fromEntries(["color", "backgroundColor", "fontSize"].map((k) => [k, getComputedStyle(el)[k]]));
+    const out = { consoleChip: pick(consoleChip), chartChip: pick(chartChip), consoleInk: ink(consoleChip), chartInk: ink(chartChip), consoleGlyph: consoleChip.textContent, chartGlyph: chartChip.textContent };
     wrap.remove();
     return out;
   });
   check("the chart arrow is the console chip's own shape and bargain", styleDigest.chartChip, styleDigest.consoleChip);
   check("and both carry the same down arrow", [styleDigest.consoleGlyph, styleDigest.chartGlyph], ["\u2193", "\u2193"]);
+  ok(
+    "and its ink is still its own — brighter than the console chip's, now that the shape is shared",
+    styleDigest.chartInk.color !== styleDigest.consoleInk.color
+      && styleDigest.chartInk.backgroundColor !== styleDigest.consoleInk.backgroundColor
+      && styleDigest.chartInk.fontSize !== styleDigest.consoleInk.fontSize,
+    `console ${JSON.stringify(styleDigest.consoleInk)} vs chart ${JSON.stringify(styleDigest.chartInk)}`,
+  );
   note(`screenshot: ${await shot("2-arrow-on-hover")}`);
 
   console.log("\n== one click shows every tree, and the choice is what a reload comes back with ==");
@@ -337,6 +352,37 @@ async function browserPhase(pw) {
   if (!(await waitFor(async () => (await drawn()).length === 4, { what: "a 60-day threshold to draw the 45-day-old tree" }))) throw new Error("the new threshold did not reach the chart");
   ok("a 60-day threshold no longer holds the 45-day-old tree back", (await drawn()).includes(path.basename(TREE_OLD)), (await drawn()).slice().sort().join(" | "));
   ok("and nothing is reported as held back", !(await chips()).some((c) => /older hidden/.test(c)), (await chips()).join(" | "));
+
+  console.log("\n== the box's other way out: Enter saves the number and gives the field up ==");
+  // The gesture, not a dispatched `change`: a real key press into a real field. It has to end with the panel's own
+  // config.json holding the number AND with the focus given up — the save is async, and paintAgeSetting deliberately
+  // leaves a focused box's text alone (a rejected save must not be repaired out of sight), so the blur is what tells
+  // the reader the number took.
+  await openSettingsGroup(page, "board");
+  await page.fill("#hide-older-days", "30");
+  await page.press("#hide-older-days", "Enter");
+  // The number is read out of the waitFor that proves it arrived rather than with a raw read beside it: the panel's
+  // `patchPanelConfig` writes config.json in place, and this press makes TWO saves (the handler's, and the one the
+  // blur's own `change` fires), so a read landing inside either write throws `Unexpected end of JSON input` — a
+  // partial file, not a missing save. Here the second write only ever carries the same number.
+  let landed = null;
+  const took = await waitFor(
+    () => {
+      try {
+        landed = readConfigFile().hideOlderThanDays;
+      } catch {
+        landed = null;
+      }
+      return landed === 30;
+    },
+    { what: "Enter to write 30 days" },
+  );
+  if (!took) throw new Error("Enter did not save the threshold");
+  check("Enter in the threshold box writes the number to config.json, with no click anywhere else", landed, 30);
+  ok("and the field gives the focus up, so what was typed is not left half-committed", (await focus()) !== "hide-older-days", `activeElement: ${await focus()}`);
+  await page.click("#btn-settings-close");
+  if (!(await waitFor(async () => (await drawn()).length === 3, { what: "the Entered threshold to reach the chart" }))) throw new Error("the Entered threshold never reached the chart");
+  ok("and the number Entered reaches the chart: 30 days still holds the 45-day-old tree back", (await chips()).includes("1 older hidden"), (await chips()).join(" | "));
 
   await openSettingsGroup(page, "board");
   await page.fill("#hide-older-days", "7");

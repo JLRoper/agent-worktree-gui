@@ -1147,28 +1147,36 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
    boxes line up exactly and the chip centred in the wrapper is centred in the console. */
 .out-wrap.out-tab { margin-left: 18px; }
 .out-wrap.out-tab > .job-out { margin-left: 0; }
+/* The chip both tail controls are, written once. The console's "jump to the newest line" and the worktree chart's
+   "show the trees this chart is holding back" (`.wt-age-toggle`, further down) are the same 21px circle, and every
+   declaration here is one the two rules carried verbatim. What they do NOT share stays with its owner: where the
+   chip is placed, and its ink and letterform — the chart's arrow is deliberately brighter, because it sits on the
+   legend's dark strip rather than floating over a console's own text. This rule is the earlier of the two, which is
+   what lets `.wt-age-toggle` keep overriding it. */
+.tail-chip {
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  padding: 0;
+  line-height: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: opacity .16s ease, color .16s ease, border-color .16s ease;
+}
 .out-wrap > .to-bottom {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
   bottom: 9px;
   z-index: 2;
-  width: 21px;
-  height: 21px;
   display: grid;
-  place-items: center;
-  padding: 0;
   font-size: 12px;
-  line-height: 1;
   /* Centred over the console's own text, so it has to be opaque and carry a halo: at 92% the lines behind it
      showed through the circle and the arrow read as a ghost. */
   color: #c3ccd8;
   background: #161c24;
   border: 1px solid #39424f;
-  border-radius: 50%;
   box-shadow: 0 0 0 4px rgba(10, 13, 18, .55), 0 2px 8px rgba(0, 0, 0, .45);
-  cursor: pointer;
-  transition: opacity .16s ease, color .16s ease, border-color .16s ease;
 }
 .out-wrap > .to-bottom:hover { color: var(--text); border-color: #3a4353; }
 .out-wrap > .to-bottom:active { transform: translate(-50%, 1px); }
@@ -3050,31 +3058,25 @@ button.sig:hover { filter: brightness(1.25); }
 }
 
 /* ---- the chart's age arrow: the console's "to newest line" chip, at the foot of a worktree chart --------
-   The same little circular arrow as `.out-wrap > .to-bottom`, so the two read as one idea: it appears while the
-   pointer is over the chart and fades when the pointer leaves. It sits in the legend line, which is the one strip
-   under the chart that neither scrolls sideways nor clips its children, so it stays on the chart's bottom edge at
-   every width. app.js draws no arrow at all for a chart with nothing held back and nothing shown. */
+   Literally that chip's rule now: the shape (width, height, the centring, the radius, the fade transition) is the
+   shared `.tail-chip` above and this rule carries only what belongs to the chart's own arrow — that it sits IN the
+   legend's flow rather than floating over a scroll box, and that its ink is brighter. It appears while the pointer
+   is over the chart and fades when the pointer leaves. The legend line is the one strip under the chart that neither
+   scrolls sideways nor clips its children, so the arrow stays on the chart's bottom edge at every width. app.js
+   draws no arrow at all for a chart with nothing held back and nothing shown. */
 .wt-age-toggle {
-  width: 21px;
-  height: 21px;
   display: inline-grid;
-  place-items: center;
   vertical-align: -5px;
   margin-right: 8px;
-  padding: 0;
   font-size: 13px;
-  line-height: 1;
   /* Brighter than the console chip's glyph on purpose: that one floats over its own console, this one sits on
      the legend's dark strip where #c3ccd8 read as a smudge rather than a control. */
   color: #dbe2ea;
   background: #191f28;
   border: 1px solid #46515f;
-  border-radius: 50%;
   box-shadow: 0 0 0 3px rgba(10, 13, 18, .55);
-  cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: opacity .16s ease, color .16s ease, border-color .16s ease;
 }
 /* Revealed while the pointer is over the chart, and kept up while it is over the legend so the press lands. */
 section.project > .wt-scroll:hover ~ .legend .wt-age-toggle,
