@@ -61,6 +61,9 @@ import {
   sessionSettings, writeSessionListLimit, SESSION_LIST_MIN, SESSION_LIST_MAX,
   providerState, writeProviderSettings,
 } from "./lib/hermes-config.js";
+// The named (URL, key) pairs the Gateway tab applies. The store lives in the panel's state folder and its keys
+// never leave this process: Apply reads one here and hands it straight to writeProviderSettings above.
+import { listProfiles, saveProfile, deleteProfile, profileWithKey } from "./lib/provider-profiles.js";
 import { hermesSessionTail } from "./lib/activity.js";
 import { Assistant, ASSISTANT_THREAD } from "./lib/assistant.js";
 // The per-assistant task queue's HTTP adapter. One import and one call site: the module owns the routes and the
@@ -2325,6 +2328,85 @@ const server = createServer(async (req, res) => {
           ...providerState(),
           written: true,
           note: "saved — the next run uses it; a run already in flight keeps the endpoint and key it started with",
+        });
+      } catch (e) {
+        return sendJson(res, 400, { ...providerState(), error: String((e && e.message) || e) });
+      }
+    }
+
+    // ---- the saved provider profiles: a named (URL, key) pair ------------------------------
+    // One store, four answers, and one rule that shapes all of them: a key is written here and applied here, and
+    // no answer carries it back. What a list row says about a key is whether it is set and its last four — the
+    // same sentence the config.yaml field already speaks. Apply is server-side for exactly that reason: the
+    // browser names a profile, this process reads the key out of the state file and hands it to
+    // writeProviderSettings, so the secret is never in a request body or in a response.
+    // The path is lib/paths.js's (statePaths.providerProfilesFile, assigned onto this config at boot), never a
+    // literal built here: it must stay inside the panel's own state folder and outside every checkout.
+    const profilesFile = config.providerProfilesFile;
+
+    if (route === "/api/settings/provider/profiles" && req.method === "GET") {
+      return sendJson(res, 200, listProfiles({ file: profilesFile }));
+    }
+
+    if (route === "/api/settings/provider/profiles" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      try {
+        const saved = saveProfile({ file: profilesFile, id: body.id || null, name: body.name, baseUrl: body.baseUrl, apiKey: body.apiKey });
+        log(`provider profile ${saved.created ? "saved" : "updated"}: "${saved.profile.name}" (${saved.profile.baseUrl}) in ${profilesFile}`);
+        return sendJson(res, 200, {
+          ...listProfiles({ file: profilesFile }),
+          saved: saved.profile,
+          note: saved.created
+            ? `profile "${saved.profile.name}" saved — its key stays in the panel's own state folder, never in the repository`
+            : `profile "${saved.profile.name}" updated${body.apiKey ? "" : " — the stored key was kept because the key box was empty"}`,
+        });
+      } catch (e) {
+        return sendJson(res, Number(e.status) || 400, { ...listProfiles({ file: profilesFile }), error: String((e && e.message) || e) });
+      }
+    }
+
+    if (route === "/api/settings/provider/profiles/delete" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      try {
+        const dropped = deleteProfile({ file: profilesFile, id: body.id });
+        if (!dropped) {
+          return sendJson(res, 404, { ...listProfiles({ file: profilesFile }), error: `no profile with id ${String(body.id || "(none)")}` });
+        }
+        log(`provider profile deleted: "${dropped.removed.name}" — its stored key was removed with it, from ${profilesFile}`);
+        return sendJson(res, 200, {
+          ...listProfiles({ file: profilesFile }),
+          removed: dropped.removed,
+          note: `profile "${dropped.removed.name}" deleted, and the key it held with it`,
+        });
+      } catch (e) {
+        return sendJson(res, Number(e.status) || 400, { ...listProfiles({ file: profilesFile }), error: String((e && e.message) || e) });
+      }
+    }
+
+    // Apply writes the chosen pair through the SAME function the URL/key rows use, so there is one writer of
+    // model.base_url and model.api_key in this process and one set of checks on the way in.
+    if (route === "/api/settings/provider/apply" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const state = providerState();
+      if (!state.editable) return sendJson(res, 409, { ...state, error: state.reason || "not editable" });
+      const profile = profileWithKey({ file: profilesFile, id: body.id });
+      if (!profile) {
+        return sendJson(res, 404, { ...providerState(), error: `no saved profile with id ${String(body.id || "(none)")}` });
+      }
+      if (!profile.apiKey) {
+        return sendJson(res, 400, { ...providerState(), error: `profile "${profile.name}" holds no key — open it and press Edit with a key in the box` });
+      }
+      try {
+        const wrote = writeProviderSettings({ baseUrl: profile.baseUrl, apiKey: profile.apiKey });
+        log(`provider profile applied: "${profile.name}" (${profile.baseUrl}) -> ${wrote.configPath}`);
+        return sendJson(res, 200, {
+          ...providerState(),
+          applied: { id: profile.id, name: profile.name, baseUrl: profile.baseUrl },
+          written: true,
+          note: `profile "${profile.name}" applied — the next run uses it; a run already in flight keeps the endpoint and key it started with`,
         });
       } catch (e) {
         return sendJson(res, 400, { ...providerState(), error: String((e && e.message) || e) });

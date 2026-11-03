@@ -19829,6 +19829,7 @@ function toggleSettings(open = null) {
   void loadApprovalSetting();
   void loadSessionSetting();
   void loadProviderSetting();
+  void loadProviderProfiles();
   void loadModelsSetting();
   // The skills inventory is a filesystem walk plus a gateway call, so it is read at boot and then only re-read when
   // the answer is old: a reader opening Settings twice in a minute is not asking the disk the same question again.
@@ -19955,6 +19956,251 @@ async function clearProviderKey(btn) {
     showBanner(d.key?.set ? "model.api_key removed — the .env key is used again" : "model.api_key removed — runs now have no key from config.yaml");
   } catch (e) {
     paintProviderSetting(e.message);
+  }
+}
+
+// ---- saved provider profiles -------------------------------------------------------------------
+// A profile is a named (model.base_url, model.api_key) pair the rows above can apply with one press. What
+// comes back from the server is the name, the URL and the LAST FOUR of each key: the key itself is read by
+// the panel when Apply runs, so it never enters this page. Apply is deliberately not "fill the boxes and
+// save": the key would have to come back here to do that, and a second Save with a stale box would then
+// write the wrong one.
+let providerProfilesCache = null;
+// Which option is chosen, kept here rather than read off the <select>: the list is rebuilt on every paint,
+// and a rebuilt select would forget the choice made a moment earlier.
+let providerProfileChosen = "";
+
+function providerProfiles() {
+  return providerProfilesCache?.profiles || [];
+}
+
+function selectedProfile() {
+  return providerProfiles().find((p) => p.id === providerProfileChosen) || null;
+}
+
+function paintProviderProfiles(error = null) {
+  const select = $("provider-profile");
+  const preview = $("provider-profile-preview");
+  const save = $("btn-provider-profile-save");
+  const edit = $("btn-provider-profile-edit");
+  const drop = $("btn-provider-profile-delete");
+  const apply = $("btn-provider-profile-apply");
+  const nameBox = $("provider-profile-name");
+  if (!select || !preview) return;
+  const list = providerProfiles();
+  if (providerProfileChosen && !list.some((p) => p.id === providerProfileChosen)) providerProfileChosen = "";
+  const editable = Boolean(providerStateCache?.editable);
+  select.textContent = "";
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = list.length === 0 ? "(none saved yet)" : `(${list.length} saved — pick one)`;
+  select.append(blank);
+  for (const p of list) {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = `${p.name} — ${p.baseUrl}${p.key.set ? ` · ${p.key.masked}` : " · no key"}`;
+    select.append(opt);
+  }
+  select.value = providerProfileChosen;
+  const chosen = selectedProfile();
+  if (save) save.disabled = !editable;
+  if (edit) edit.disabled = !editable || !chosen;
+  if (drop) drop.disabled = !chosen;
+  if (apply) apply.disabled = !editable || !chosen;
+  if (nameBox && chosen && document.activeElement !== nameBox) nameBox.value = chosen.name;
+  const where = providerProfilesCache?.file ? ` in ${providerProfilesCache.file}` : "";
+  if (error) {
+    preview.textContent = `NOT SAVED — ${error}`;
+    preview.classList.add("bad");
+  } else {
+    preview.classList.remove("bad");
+    preview.textContent = chosen
+      ? `${chosen.name} · ${chosen.baseUrl} · key ${chosen.key.set ? chosen.key.masked : "none"}${where}`
+      : list.length
+        ? `${list.length} profile${list.length === 1 ? "" : "s"} saved${where} — pick one to Apply, or name the pair above and press Save as`
+        : `no profiles saved yet — type a name above and press Save as; keys are kept${where || " in the panel's own state folder"}, never in the repository`;
+  }
+  preview.title = providerProfilesCache?.file || "";
+}
+
+async function loadProviderProfiles() {
+  try {
+    const r = await apiFetch("/api/settings/provider/profiles");
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+    providerProfilesCache = d;
+    paintProviderProfiles();
+  } catch (e) {
+    providerProfilesCache = null;
+    paintProviderProfiles(e.message);
+  }
+}
+
+// Save as creates, Edit replaces the chosen record. Both send the boxes exactly as they are, and the server
+// treats an empty key box on an Edit as "keep the key already stored" — the reason an Edit that only renames
+// a profile cannot silently strip its credential.
+async function saveProviderProfile(mode) {
+  const chosen = selectedProfile();
+  if (mode === "edit" && !chosen) return;
+  const nameBox = $("provider-profile-name");
+  const preview = $("provider-profile-preview");
+  if (!providerStateCache?.editable) return;
+  const body = {
+    name: (nameBox?.value || "").trim() || (mode === "edit" ? chosen.name : ""),
+    baseUrl: $("provider-url")?.value || "",
+    apiKey: $("provider-key")?.value || "",
+  };
+  if (mode === "edit") body.id = chosen.id;
+  if (preview) {
+    preview.textContent = mode === "edit" ? "updating the profile…" : "saving the profile…";
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch("/api/settings/provider/profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      paintProviderProfiles(d.error || `HTTP ${r.status}`);
+      return;
+    }
+    providerProfilesCache = d;
+    providerProfileChosen = d.saved?.id || providerProfileChosen;
+    if (nameBox && d.saved) nameBox.value = d.saved.name;
+    paintProviderProfiles();
+    showBanner(d.note || "profile saved");
+  } catch (e) {
+    paintProviderProfiles(e.message);
+  }
+}
+
+// Two clicks, like clear key: a profile's key goes with the record, so a stray press must not take it out.
+async function deleteProviderProfile(btn) {
+  const chosen = selectedProfile();
+  if (!btn || !chosen) return;
+  if (btn.dataset.armed !== "1") {
+    btn.dataset.armed = "1";
+    btn.textContent = "delete?";
+    btn.classList.add("dirty");
+    clearTimeout(btn._disarm);
+    btn._disarm = setTimeout(() => {
+      btn.dataset.armed = "";
+      btn.textContent = "Delete";
+      btn.classList.remove("dirty");
+    }, 4000);
+    return;
+  }
+  clearTimeout(btn._disarm);
+  btn.dataset.armed = "";
+  btn.textContent = "Delete";
+  btn.classList.remove("dirty");
+  try {
+    const r = await apiFetch("/api/settings/provider/profiles/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: chosen.id }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      paintProviderProfiles(d.error || `HTTP ${r.status}`);
+      return;
+    }
+    providerProfilesCache = d;
+    providerProfileChosen = "";
+    const nameBox = $("provider-profile-name");
+    if (nameBox) nameBox.value = "";
+    paintProviderProfiles();
+    showBanner(d.note || "profile deleted");
+  } catch (e) {
+    paintProviderProfiles(e.message);
+  }
+}
+
+async function applyProviderProfile() {
+  const chosen = selectedProfile();
+  if (!chosen || !providerStateCache?.editable) return;
+  const preview = $("provider-profile-preview");
+  if (preview) {
+    preview.textContent = `applying ${chosen.name}…`;
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch("/api/settings/provider/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: chosen.id }),
+    });
+    const d = await r.json();
+    providerStateCache = d;
+    // The key box is emptied on the way through, whether or not the write landed: what it held belonged to
+    // the pair just replaced, and a later Save with it still in the box would put that old key back.
+    const key = $("provider-key");
+    if (key) key.value = "";
+    if (!r.ok) {
+      paintProviderSetting(d.error || `HTTP ${r.status}`);
+      paintProviderProfiles(d.error || `HTTP ${r.status}`);
+      return;
+    }
+    paintProviderSetting();
+    paintProviderProfiles();
+    showBanner(d.note || `profile "${chosen.name}" applied`);
+  } catch (e) {
+    paintProviderSetting(e.message);
+    paintProviderProfiles(e.message);
+  }
+}
+
+// ---- the two restarts: one press, one target, never chained --------------------------------------
+// "Restart gateway" and "Restart panel" are separate controls because they are separate operations: each
+// queues exactly one restart with its own target and answers at once, and the panel refuses a second
+// request while one is still queued rather than folding them together. A press only disables ITSELF for
+// the length of its own request, so the other button stays pressable and this page stays up through both.
+async function restartFromSettings(target, btn) {
+  const preview = $("restart-preview");
+  if (btn) btn.disabled = true;
+  if (preview) {
+    preview.textContent = `queueing a ${target} restart…`;
+    preview.classList.remove("bad");
+  }
+  try {
+    const r = await apiFetch("/api/restart", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        target,
+        reason: `reader pressed "Restart ${target}" in Settings → Gateway`,
+        // No thread of its own: the panel's own default decides which turn has to end first, which is the
+        // whole reason the request returns before the restart runs.
+        waitFor: null,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) {
+      if (preview) {
+        preview.textContent = `${target} restart NOT queued — ${d.error || `HTTP ${r.status}`}`;
+        preview.classList.add("bad");
+      }
+      return;
+    }
+    const rec = d.restart || {};
+    if (preview) {
+      preview.classList.remove("bad");
+      preview.textContent =
+        `${target} restart queued${rec.id ? ` (${rec.id})` : ""} — it runs once ${rec.thread || "the current turn"} has no turn running. ` +
+        (target === "panel"
+          ? "The gateway keeps running; this page reconnects when the panel is back — reload the tab if it does not."
+          : "The panel and this page keep running; runs in flight are interrupted and reported as such.");
+    }
+    showBanner(`restart queued: ${target}`);
+  } catch (e) {
+    if (preview) {
+      preview.textContent = `${target} restart NOT queued — ${e.message}`;
+      preview.classList.add("bad");
+    }
+  } finally {
+    if (btn) btn.disabled = false;
   }
 }
 
@@ -21181,6 +21427,22 @@ $("btn-approval-save")?.addEventListener("click", () => void saveApprovalSetting
 $("btn-session-limit-save")?.addEventListener("click", () => void saveSessionSetting());
 $("btn-provider-save")?.addEventListener("click", () => void saveProviderSetting());
 $("btn-provider-clear")?.addEventListener("click", (e) => void clearProviderKey(e.currentTarget));
+$("provider-profile")?.addEventListener("change", (e) => {
+  providerProfileChosen = e.target.value || "";
+  paintProviderProfiles();
+});
+$("btn-provider-profile-save")?.addEventListener("click", () => void saveProviderProfile("new"));
+$("btn-provider-profile-edit")?.addEventListener("click", () => void saveProviderProfile("edit"));
+$("btn-provider-profile-delete")?.addEventListener("click", (e) => void deleteProviderProfile(e.currentTarget));
+$("btn-provider-profile-apply")?.addEventListener("click", () => void applyProviderProfile());
+$("provider-profile-name")?.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  void saveProviderProfile("new");
+});
+// Two controls, two handlers, one target each: nothing here reaches both processes in one action.
+$("btn-restart-gateway")?.addEventListener("click", (e) => void restartFromSettings("gateway", e.currentTarget));
+$("btn-restart-panel")?.addEventListener("click", (e) => void restartFromSettings("panel", e.currentTarget));
 $("btn-provider-default-url")?.addEventListener("click", () => {
   const url = $("provider-url");
   if (url) url.value = url.placeholder || "https://openrouter.ai/api/v1";
