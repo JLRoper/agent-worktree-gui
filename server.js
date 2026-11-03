@@ -33,7 +33,7 @@ import { ReleaseRequests, agentCleanupFrom, releaseWorktree, releasesEnabled } f
 import { Hosts, proposeMapping } from "./lib/hosts.js";
 // What a worktree is FOR: the definition catalogue (reader-edited over the shipped seed), where each tree stands in
 // one, and the ladder that is the only way a tree's kind may change (docs/pipelines.md §1–§3).
-import { Pipelines, PipelineRecords, presumedPipeline, changePipeline, storeSwitch } from "./lib/pipelines.js";
+import { PIPELINES_VERSION, PIPELINE_KINDS, EXIT_CHECKS, Pipelines, PipelineRecords, presumedPipeline, changePipeline, storeSwitch, validatePipelinesDocument, readPipelinesFile } from "./lib/pipelines.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
 import { WorktreeNaming } from "./lib/worktree-naming.js";
@@ -2145,6 +2145,101 @@ const server = createServer(async (req, res) => {
           gateway: { url: jobs.api.url, key: jobs.api.key },
         }),
       );
+    }
+
+    // ---- the pipeline catalogue ------------------------------------------------------------------
+    // The Pipeline tab's whole answer: the merged catalogue — the reader's pipelines.json over the shipped seed —
+    // with its provenance (both file paths), the version it was written with, and every refusal the loader made.
+    // A file whose version is newer than this panel's is refused whole (the seed is in force read-only); a
+    // definition that fails validation is dropped by id and named. The FULL definitions travel here, not the
+    // summary /api/state carries: the tab edits stages and prompts, and a summary would make it guess.
+    if (route === "/api/pipelines" && req.method === "GET") {
+      const doc = pipelines.doc({ fresh: true });
+      return sendJson(res, 200, {
+        file: doc.file,
+        seedFile: doc.seedFile,
+        version: doc.version,
+        supported: PIPELINES_VERSION,
+        kinds: PIPELINE_KINDS,
+        exitChecks: EXIT_CHECKS,
+        readOnly: doc.readOnly,
+        refused: doc.refused,
+        warnings: doc.warnings,
+        dropped: doc.dropped,
+        pipelines: doc.pipelines,
+      });
+    }
+
+    // Replace the live catalogue. The document is the pipelines.json shape: `{version, note, pipelines}`. A version
+    // newer than this panel's is refused whole (409), exactly as the loader would refuse it on the next read. Every
+    // definition is validated with validatePipeline and its findings come back UNALTERED under `findings`, so the
+    // tab can show each sentence beside the field it belongs to. Nothing is written when any definition is
+    // refused: a half-saved catalogue is the one state the loader's drop-by-id rule exists to prevent.
+    //
+    // A document may carry ONE definition (the tab's save sends only the pipeline it edited): the body's pipelines
+    // are merged over the live file's own, so an edit to one id never silently deletes the reader's other edits.
+    // The seed's definitions are not copied in — the live file holds only the reader's, and the seed still supplies
+    // everything it supplies.
+    if (route === "/api/pipelines" && req.method === "PUT") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => null);
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return sendJson(res, 400, { error: "a pipeline document is required (a JSON object)" });
+      }
+      const version = Number(body.version);
+      if (Number.isFinite(version) && version > PIPELINES_VERSION) {
+        return sendJson(res, 409, {
+          error: `the document is version ${version}, newer than this panel's ${PIPELINES_VERSION} — it is refused whole, not half-parsed`,
+          refused: { version, supported: PIPELINES_VERSION, why: `the document names version ${version}, newer than this panel's ${PIPELINES_VERSION}` },
+        });
+      }
+      const live = readPipelinesFile(config.pipelinesFile);
+      if (live.refused) {
+        return sendJson(res, 409, {
+          error: `the live pipelines.json is refused whole: ${live.refused.why}`,
+          refused: live.refused,
+        });
+      }
+      const incoming = Array.isArray(body.pipelines)
+        ? Object.fromEntries(body.pipelines.filter((rec) => rec && typeof rec === "object").map((rec) => [String(rec.id ?? "").trim(), rec]))
+        : body.pipelines && typeof body.pipelines === "object"
+          ? body.pipelines
+          : {};
+      const merged = { ...(live.pipelines || {}), ...incoming };
+      // The document the reader is asking to put in force is the WHOLE catalogue — the seed's definitions, the live
+      // file's and this edit — so a `next` pointing at a seed definition is not reported as unknown. Only the live
+      // file's definitions and the edit are WRITTEN; the seed still supplies its own.
+      const inForce = { ...(pipelines.doc({ fresh: true }).pipelines || {}), ...incoming };
+      const document = { version: PIPELINES_VERSION, pipelines: inForce };
+      if (body.note) document.note = body.note;
+      const { errors } = validatePipelinesDocument(document);
+      if (errors.length) {
+        return sendJson(res, 422, {
+          error: `the pipeline document was refused: ${errors.length} finding${errors.length === 1 ? "" : "s"}`,
+          findings: errors,
+        });
+      }
+      const saved = pipelines.save({ version: PIPELINES_VERSION, pipelines: merged, ...(body.note ? { note: body.note } : {}) });
+      if (!saved.ok) return sendJson(res, 500, { error: saved.error });
+      log(`pipelines: saved ${saved.file} — ${Object.keys(merged).length} definition(s) in force`);
+      const doc = pipelines.doc({ fresh: true });
+      return sendJson(res, 200, {
+        ok: true,
+        file: saved.file,
+        state: {
+          file: doc.file,
+          seedFile: doc.seedFile,
+          version: doc.version,
+          supported: PIPELINES_VERSION,
+          kinds: PIPELINE_KINDS,
+          exitChecks: EXIT_CHECKS,
+          readOnly: doc.readOnly,
+          refused: doc.refused,
+          warnings: doc.warnings,
+          dropped: doc.dropped,
+          pipelines: doc.pipelines,
+        },
+      });
     }
 
     if (route === "/api/settings/sessions" && req.method === "POST") {
