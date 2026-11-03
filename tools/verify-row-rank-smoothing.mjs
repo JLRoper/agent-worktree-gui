@@ -157,7 +157,7 @@ writeFileSync(
       threads: 1,
       scanMode: "all",
       liveMinutes: 5,
-      hideOlderThanDays: 0,
+      chartTopCount: 0,
       defaultCwd: repo,
       projectsCacheFile: path.join(configDir, "logs", "projects.json"),
       apiServer: { url: "http://127.0.0.1:9", key: "sandbox-key" },

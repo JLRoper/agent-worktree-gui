@@ -154,20 +154,20 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const build = createBuild({ publicDir: PUBLIC_DIR, log });
 const buildAtBoot = await build.current();
 
-// How old a worktree's last activity has to be before the chart holds its row out of the view it opens on (the row
-// is never lost — one arrow on that chart shows every tree again). Measured from ACTIVITY, never from when the
-// directory was created: a tree cut months ago that somebody is working in right now is not stale, and hiding it
-// would be the one thing this setting must not do. 0 shows everything.
+// How many of a project's worktrees its chart draws on first paint. The top-N projection itself is the client's
+// (public/app.js `chartTopOrder`: last activity newest first, then by name), because that is where the rows and their
+// activity live; this is only the number, kept in the panel's own config.json so it survives a restart and applies
+// to every browser. 0 draws every tree.
 //
-// A value that cannot be read as a number or a count of days falls back to the DEFAULT rather than to 0: an
-// unreadable number must never silently switch a filter off (and Number(null) is 0, so "absent" is handled first).
-const AGE_DAYS_DEFAULT = 7;
-const AGE_DAYS_MAX = 3650;
-function ageDaysFrom(value) {
-  if (value == null || value === "") return AGE_DAYS_DEFAULT;
+// A value that cannot be read as a number or a count falls back to the DEFAULT rather than to 0: an unreadable
+// number must never silently switch a limit off (and Number(null) is 0, so "absent" is handled first).
+const CHART_TOP_DEFAULT = 10;
+const CHART_TOP_MAX = 5000;
+function chartTopCountFrom(value) {
+  if (value == null || value === "") return CHART_TOP_DEFAULT;
   const n = Number(value);
-  if (!Number.isFinite(n) || n < 0) return AGE_DAYS_DEFAULT;
-  return Math.min(AGE_DAYS_MAX, Math.round(n));
+  if (!Number.isFinite(n) || n < 0) return CHART_TOP_DEFAULT;
+  return Math.min(CHART_TOP_MAX, Math.round(n));
 }
 
 // How long a parent the reader collapsed stays a decision about everything under it before the page writes every
@@ -222,9 +222,12 @@ async function loadConfig() {
   cfg.collapseAfterSeconds = collapseAfterSecondsFrom(cfg.collapseAfterSeconds);
   cfg.fetchSeconds = Number(cfg.fetchSeconds ?? 600);
   cfg.threads = Number(cfg.threads) || Math.max(1, Math.min(4, cpus().length - 1));
-  // How old a worktree's last activity has to be before the chart hides its row. Server-side, like scanMode below:
-  // it lives in this file so it survives a restart and applies to every browser.
-  cfg.hideOlderThanDays = ageDaysFrom(cfg.hideOlderThanDays);
+  // How many of a project's worktrees its chart draws before the reader opens the rest. Server-side, like scanMode
+  // below: it lives in this file so it survives a restart and applies to every browser. The retired
+  // `hideOlderThanDays` is NOT read: a file that still carries it keeps to the default (or its own chartTopCount),
+  // never to "0", and the settings sentence names the ignored key so the reader can delete it.
+  cfg.chartTopCount = chartTopCountFrom(cfg.chartTopCount);
+  cfg.hideOlderDaysIgnored = Object.prototype.hasOwnProperty.call(cfg, "hideOlderThanDays");
   // Which of the worktree chart's columns are drawn, also server-side and for the same reason: the reader can hide a
   // column in any browser and every one of them draws the same chart. The stored value is the columns to HIDE, so a
   // column the page adds later starts visible for a reader who has already hidden some; lib/chart-columns.js drops
@@ -944,7 +947,12 @@ const settingsOut = () => ({
   collapseAfterSeconds: config.collapseAfterSeconds,
   fetchSeconds: config.fetchSeconds,
   liveMinutes: config.liveMinutes ?? 5,
-  hideOlderThanDays: config.hideOlderThanDays,
+  // How many of a project's worktrees its chart draws before the reader opens the rest. It travels with every
+  // snapshot for the same reason the collapse cascade does: the count decides which rows are in the DOM, and a tab
+  // opened before the number moved has to agree with the file. `hideOlderDaysIgnored` is the retired age key's
+  // presence, so the settings sentence can name it instead of ignoring the reader's file in silence.
+  chartTopCount: config.chartTopCount,
+  hideOlderDaysIgnored: config.hideOlderDaysIgnored === true,
   // The chart's hidden columns travel with every snapshot for the same reason the age threshold does: the table's
   // header and rows are built from this list, and a page that opened before the setting moved has to agree with it.
   hiddenColumns: config.hiddenColumns,
@@ -4431,23 +4439,23 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, agentCleanup: allowed, settings: settingsOut() });
     }
 
-    // How old a worktree has to be before the chart holds its row back, so the board can open on the trees that
-    // are still being worked in. Server-side for the same reason the refresh mode is: the number goes into this
-    // panel's own config.json, so it survives a restart and applies to whichever browser is open — and it is the
-    // config.json the reader edits by hand. `days: 0` shows everything.
-    if (route === "/api/settings/age" && req.method === "POST") {
+    // How many worktrees a project's chart draws before its arrow lists the rest, so the board can open on the top
+    // of each chart. Server-side for the same reason the refresh mode is: the number goes into this panel's own
+    // config.json, so it survives a restart and applies to whichever browser is open — and it is the config.json the
+    // reader edits by hand. `count: 0` draws every tree.
+    if (route === "/api/settings/chart-top" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
-      const days = ageDaysFrom(body.days);
+      const count = chartTopCountFrom(body.count);
       try {
-        await patchPanelConfig({ hideOlderThanDays: days });
+        await patchPanelConfig({ chartTopCount: count });
       } catch (e) {
         return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
       }
-      config.hideOlderThanDays = days;
-      log(`worktrees older than: ${days ? `${days} day${days === 1 ? "" : "s"} held back (the chart's arrow shows them)` : "none held back"}`);
+      config.chartTopCount = count;
+      log(`chart: ${count ? `the top ${count} worktree${count === 1 ? "" : "s"} drawn (the chart's arrow shows the rest)` : "every worktree drawn"}`);
       broadcast({ type: "snapshot", data: snapshot() });
-      return sendJson(res, 200, { ok: true, days, settings: settingsOut() });
+      return sendJson(res, 200, { ok: true, count, settings: settingsOut() });
     }
 
     // How long a parent the reader collapsed keeps the cards under it as they were before the page writes every one

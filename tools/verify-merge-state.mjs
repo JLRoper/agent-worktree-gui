@@ -257,7 +257,7 @@ writeFileSync(
       threads: 1,
       scanMode: "all",
       // Nothing in this sandbox is old enough to be interesting: the age collapse must not hold a row back.
-      hideOlderThanDays: 0,
+      chartTopCount: 0,
       defaultCwd: cwdDir,
       projectsCacheFile: path.join(configDir, "logs", "projects.json"),
       apiServer: { url: stubUrl, key: "sandbox-key" },
