@@ -2220,6 +2220,31 @@
     return `<button type="button" class="as-task-pipe" data-as-qpipe="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="${esc(title)}" aria-label="${esc(title)}">${esc(words)}</button>`;
   }
 
+  // The PROJECT a card is about, in one word — the field the panel wrote when it cut the task, else the project the
+  // tree path names (everything before `/.worktrees/`, reduced to its directory name), else the board row's own
+  // project. Nothing at all when none of the three says anything: a guessed project reads exactly like a fact, and a
+  // wrong one sends the reader to the wrong repository. Always the NAME, never the path — the meta line has room for
+  // one short word beside the files, and a path there is what would push them off it.
+  function queueProjectName(t) {
+    const leaf = (v) =>
+      String(v ?? "")
+        .trim()
+        .replace(/\\/g, "/")
+        .replace(/\/+$/, "")
+        .split("/")
+        .filter(Boolean)
+        .pop() || "";
+    const own = leaf(t?.project);
+    if (own) return own;
+    const tree = String(t?.worktree || "").replace(/\\/g, "/");
+    const at = tree.toLowerCase().indexOf("/.worktrees/");
+    if (at > 0) {
+      const before = leaf(tree.slice(0, at));
+      if (before) return before;
+    }
+    return leaf(t?.row?.project);
+  }
+
   // One row. The marker, the id and the title are the head; one sub-row per agent under it; PR, tree and files are
   // the meta line; a stale or conflicted task carries its reason under them, because "why is this not moving" is
   // the question a queue exists to answer. A done row stays in place greyed: "it finished" is a record, not a task
@@ -2232,6 +2257,10 @@
     const list = Array.isArray(t.threads) && t.threads.length ? t.threads.filter(Boolean) : t.thread ? [t.thread] : [];
     const current = list.length ? list[list.length - 1] : "";
     const meta = [];
+    // FIRST: `project Menu · files …` places the card before the reader reads anything else about it, and it comes
+    // before the PR and the tree so the one word that says WHERE the work is never wraps off the bottom of the card.
+    const project = queueProjectName(t);
+    if (project) meta.push(`project ${esc(project)}`);
     if (t.row?.pr?.number) meta.push(`PR #${esc(String(t.row.pr.number))} ${esc(t.row.pr.state || "")}`.trim());
     else if (t.row?.verdict) meta.push(`PR ${esc(t.row.verdict)}`);
     if (t.worktree) meta.push(`tree ${esc(t.worktree)}`);

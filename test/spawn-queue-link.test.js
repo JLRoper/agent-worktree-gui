@@ -110,6 +110,7 @@ test("a SPAWN naming a task writes that row running at the cut, with its thread 
   assert.equal(row.thread, THREAD, "the row names the worker's thread");
   assert.deepEqual(row.threads, [THREAD], "and the run is on its agent list");
   assert.equal(row.worktree, TREE, "the row names the tree the worker runs in");
+  assert.equal(row.project, "agent-worktree-gui", "…and the project the SPAWN cut it in, as a name");
   assert.equal(row.startedAt, iso(T0), "startedAt is the cut's own clock");
   assert.equal(row.doneAt, null);
   assert.equal(row.reason, "");

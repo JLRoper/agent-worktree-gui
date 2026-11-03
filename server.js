@@ -750,6 +750,15 @@ const spawnFeature = createSpawn({
   jobs,
 });
 
+// The board's rows, each carrying the PROJECT it belongs to. The store keys its rows `<project>::<path>`, and one
+// reader needs the name ON the row rather than beside it: the assistant's queue card draws the project first in its
+// meta line, and a task with no project of its own falls back to its row's. A row that already carries one keeps it.
+const rowsWithProject = () =>
+  [...store.rows].map(([key, row]) => {
+    const at = String(key).indexOf("::");
+    return { ...row, project: row.project || (at > 0 ? String(key).slice(0, at) : null) };
+  });
+
 // ---- the reader's locks ---------------------------------------------------------------------------------------
 // A worktree or a branch the reader has locked (lib/locks.js): the one record here that is the reader's and not
 // git's, persisted under logs/ so it survives a restart, and consulted before ANY delete touches a tree. The row
@@ -764,8 +773,9 @@ assistant = new Assistant({
   jobs,
   getProjects: () => registry.projects,
   // The rows the scanner already produced (dirty files, commits ahead, verdict) — no second git pass — and the
-  // delegated children the gateway keeps in `state.db`, which never reach a parent's run stream.
-  getRows: () => [...store.rows.values()],
+  // delegated children the gateway keeps in `state.db`, which never reach a parent's run stream. Each row carries the
+  // project it belongs to (see rowsWithProject), because the queue card draws that name.
+  getRows: rowsWithProject,
   getChildren: () => subagentRoster({ dbPath: path.join(hermesHome(), "state.db") }),
   spawner: spawnFeature.assistantSpawnRun,
   // The reader's per-tree owner store: WHO wakes on a tree is decided from this same record the row's owner cell
