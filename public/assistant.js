@@ -2949,7 +2949,12 @@
   function pipeWindowTick(doc = document) {
     const el = doc.querySelector?.("[data-pipew-elapsed]");
     if (!el || !el.dataset) return null;
-    const ms = pipeWindowElapsedAt(Number(el.dataset.pipewMs), Number(el.dataset.pipewAt), Date.now());
+    // An elapsed the server could NOT compute (a stamp that is missing or local-time) is drawn as "—" and has no base to
+    // advance: a tick that read the empty attribute as 0 would count up from the moment the window opened, which is a
+    // number nobody can defend. The window keeps saying it does not know.
+    const raw = el.dataset.pipewMs;
+    if (raw == null || raw === "" || !Number.isFinite(Number(raw))) return null;
+    const ms = pipeWindowElapsedAt(Number(raw), Number(el.dataset.pipewAt), Date.now());
     if (ms == null) return null;
     el.textContent = pipeWindowElapsedText(ms);
     return ms;

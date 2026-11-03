@@ -59,7 +59,7 @@ const windowRegion = sliceRegion(assistant, "the task pipeline window");
 const queueRegion = sliceRegion(assistant, "the queue sub-tab");
 
 const buildWindow = () =>
-  new Function("esc", "fmtDur", `${windowRegion}\nreturn { pipelineWindowHtml, pipeWindowElapsedAt, pipeWindowElapsedText, pipeWindowShow, pipeWindowClose, pipeWindowKey, pipeWindowState };`)(esc, fmtDur);
+  new Function("esc", "fmtDur", `${windowRegion}\nreturn { pipelineWindowHtml, pipeWindowElapsedAt, pipeWindowElapsedText, pipeWindowShow, pipeWindowClose, pipeWindowKey, pipeWindowTick, pipeWindowState };`)(esc, fmtDur);
 
 const buildQueue = () =>
   new Function("esc", "assistantIds", "sessionById", "assistantThreadName", `${queueRegion}\nreturn { queueTaskHtml };`)(
@@ -266,6 +266,21 @@ test("Tab wraps inside the dialog instead of reaching the page behind it", () =>
   const middle = tab(false);
   assert.equal(pipeWindowKey(middle, { doc }), false, "a Tab in the middle is the browser's own move");
   assert.equal(middle.prevented, false);
+});
+
+test("an elapsed the server could not compute is drawn as unknown, and the tick does not invent one", () => {
+  const { pipelineWindowHtml, pipeWindowTick } = buildWindow();
+  // The stage is known and marked; only the stored stamp is bad, so the row keeps its mark and says "—".
+  const m = buildTaskPipelineWindow(
+    { id: 7, title: "carry the contract", pipelineRun: { pipeline: "poc-to-uat", stage: "S3", enteredAt: "2026-11-03 12:30:00" } },
+    { source: bundle(), now: NOW },
+  );
+  const html = pipelineWindowHtml(m);
+  assert.match(html, /data-pipew-elapsed data-pipew-ms="" data-pipew-at="\d+">—</);
+  const el = { dataset: { pipewMs: "", pipewAt: String(NOW.getTime()) }, textContent: "—" };
+  const doc = { querySelector: () => el };
+  assert.equal(pipeWindowTick(doc), null, "no base, no advance");
+  assert.equal(el.textContent, "—", "the word stays unknown instead of counting up from the open");
 });
 
 test("the row carries the opener, naming what the record says, and a task with no assignment still gets one", () => {
