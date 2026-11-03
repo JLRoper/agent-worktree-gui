@@ -37,6 +37,9 @@ const FIRST_SETTINGS_KEYS = [
   "commandAudit",
   "contextPercent",
   "cwd",
+  // The board digest's own gate, beside the queue's: N sends the full board one sweep in N, and every other sweep
+  // gets the marker. It is #1's setting like every other assistant's.
+  "digestSweepEveryNWakes",
   "enabled",
   "exitedSeconds",
   "leftoverMinutes",
