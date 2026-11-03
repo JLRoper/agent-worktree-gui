@@ -652,6 +652,15 @@
       <div class="as-split" id="as-split" title="drag to resize the assistant's column (340–640 px, at most 60% of the window)"></div>
     </aside>
 
+    <!-- The task pipeline window: one queue row's pipeline, stage by stage. A real dialog — role, aria-modal, focus taken
+         on open and handed back to the row it came from on Escape — and deliberately OUTSIDE #assistant: the rail's own
+         Escape handler closes the panel only when the caret is inside it, and a dialog that lived in the rail would close
+         the assistant behind it. The card's content is rendered from the server's model by public/assistant.js
+         (`pipelineWindowHtml`); this element is only the frame. -->
+    <div class="pipew" id="pipew" hidden>
+      <div class="pipew-card" id="pipew-card" role="dialog" aria-modal="true" aria-labelledby="pipew-title" tabindex="-1"></div>
+    </div>
+
     <!-- The footer is inside the row on purpose: it is the last thing on the page, and the rail's sticky
          containing block has to reach the bottom of the page or the rail slides up under the topbar at the end
          of a scroll. It wraps onto a line of its own (`.shell > .foot`). -->

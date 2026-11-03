@@ -3516,6 +3516,59 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-journal div { padding: 2px 0; border-bottom: 1px solid #1c222b; }
 .as-journal .k { color: #8fb8ff; }
 .as-journal .t { color: var(--dimmer); }
+/* ---- the task pipeline window -------------------------------------------------------------------- */
+/* The row's opener: a press, not a chip, because it opens a window. It sits on its own line under the agents so a long
+   pipeline id can never squeeze the title out of a 340px rail, and it renders what the RECORD says — the resolved
+   "2 of 5" is the window's job, one press away. */
+.as-task-pipeline { margin: 2px 0 0 19px; display: flex; min-width: 0; }
+.as-task-pipe { font-size: 10px; line-height: 1.5; padding: 1px 7px; border-radius: 999px; color: #a9c4ff; background: #17202e; border: 1px solid #2b3d57; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-task-pipe:hover { color: var(--text); border-color: #3d5a8a; background: #1b2838; }
+.as-task-pipe:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 1px; }
+/* The dialog: a fixed card over the board, centred, with the page behind locked (body.pipew-open) and dimmed. It is
+   OUTSIDE #assistant on purpose (the rail's Escape closes the rail), and `tabindex="-1"` on the card is what takes the
+   caret on open without adding a Tab stop of its own. */
+.pipew { position: fixed; inset: 0; z-index: 70; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 14px 14px; background: #05070ac9; }
+.pipew[hidden] { display: none; }
+.pipew-card { width: min(780px, 100%); max-height: 84vh; overflow: auto; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 26px 70px #000d; outline: none; }
+.pipew-card:focus-visible { outline: 2px solid #6b7b8f; outline-offset: 2px; }
+.pipew-bar { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 9px 12px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.pipew-kicker { font-family: var(--mono); font-size: 9.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--dimmer); }
+.pipew-title { font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipew-bar .spacer { flex: 1; }
+.pipew-close { flex: 0 0 auto; font-size: 12px; line-height: 1; padding: 3px 7px; }
+.pipew-sub { min-width: 0; font-size: 10px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipew-sub code, .pipew-pipe code { font-family: var(--mono); color: var(--dimmer); }
+.pipew-body { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 14px; font-size: 11.5px; }
+.pipew-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.pipew-pipe { font-weight: 600; }
+.pipew-since { color: var(--dim); font-size: 10.5px; }
+.pipew-prev { padding: 5px 8px; border-left: 2px solid #2c3442; color: var(--dim); background: #12171e; border-radius: 0 6px 6px 0; }
+.pipew-prev b { color: var(--text); }
+.pipew-note { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--dim); line-height: 1.45; }
+.pipew-note b { color: var(--text); }
+.pipew-note.is-bad { border-color: #57262a; background: var(--red-bg); color: #ffb4ac; }
+.pipew-note.is-bad b { color: #ffd7d2; }
+.pipew-stages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pipew-stage { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: baseline; gap: 1px 8px; padding: 6px 9px; border: 1px solid #1f2530; border-radius: 8px; background: var(--panel-2); }
+.pipew-stage.is-before { opacity: .68; }
+.pipew-stage.is-after { opacity: .82; }
+.pipew-stage.is-unplaced { border-style: dashed; opacity: .7; }
+/* The current stage is the one thing the reader came for: a lit left edge, a warmer card, and the only row carrying the
+   elapsed number. Everything else is context for it. */
+.pipew-stage.is-current { border-color: #365a8c; background: #16202c; box-shadow: inset 2px 0 0 #8fb8ff; opacity: 1; }
+.pipew-n { font-family: var(--mono); font-size: 10px; color: var(--dimmer); }
+.pipew-name { font-weight: 600; min-width: 0; }
+.pipew-pos { font-family: var(--mono); font-size: 9.5px; color: var(--dimmer); white-space: nowrap; }
+.pipew-phase, .pipew-live, .pipew-artifact, .pipew-gate { grid-column: 2 / -1; font-size: 10px; color: var(--dim); }
+.pipew-phase { color: var(--dimmer); }
+.pipew-live { color: #cfe0ff; font-size: 11px; }
+.pipew-live b { font-family: var(--mono); }
+.pipew-warn { color: #e0b341; }
+.pipew-artifact { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipew-gate b { color: var(--text); }
+.pipew-note.mono { font-family: var(--mono); font-size: 9.5px; overflow-wrap: anywhere; }
+body.pipew-open { overflow: hidden; }
+
 /* The rail's one grab: the edge it shares with the board, a 6px band down the whole column. `touch-action: none`
    is what lets a finger drag it instead of scrolling the board under it. */
 .as-split { position: absolute; left: 0; top: 0; bottom: 0; width: 6px; z-index: 5; cursor: ew-resize; touch-action: none; }
