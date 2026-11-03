@@ -257,3 +257,79 @@ test("a row whose thread is parked on a question wears one `question` chip, and 
     "the row that was not asked stays clean",
   );
 });
+
+// ---- the project word: first in the meta line, short, derived, or absent -------------------------------------
+// The card's meta line is the row's own string (`project Menu · PR #12 open · tree … · files …`), so the assertions
+// read that div's text rather than the whole markup: a `project` anywhere else on the row (a title, a reason) must not
+// pass for the meta word.
+const metaOf = (html) => {
+  const m = /<div class="as-task-meta">([\s\S]*?)<\/div>/.exec(html);
+  return m ? m[1] : "";
+};
+
+test("the card's meta reads `project Menu · files …` with the project FIRST", () => {
+  const { queueTaskHtml } = build();
+  const html = queueTaskHtml(
+    "assistant-1",
+    { id: 1, title: "carry it", state: "queued", project: "Menu", files: ["lib/assistant/queue.js", "public/assistant.js"] },
+    new Map(),
+  );
+  const meta = metaOf(html);
+  assert.match(meta, /^project Menu · /, "the project is the first thing in the meta line");
+  assert.match(meta, /files lib\/assistant\/queue\.js, public\/assistant\.js/, "…and the files follow it");
+  assert.equal(meta.includes("tree "), false, "a queued row with no worktree carries no tree word");
+});
+
+test("an old row with no project derives one from its worktree, as a NAME", () => {
+  const { queueTaskHtml } = build();
+  const html = queueTaskHtml(
+    "assistant-1",
+    { id: 2, title: "old row", state: "running", worktree: "C:/ProjectDevelopment/Menu/.worktrees/put-a-thing-1234", files: [] },
+    new Map(),
+  );
+  const meta = metaOf(html);
+  assert.match(meta, /^project Menu · tree /, "the segment before /.worktrees/, reduced to its directory name");
+  assert.match(meta, /^project Menu · tree C:\/ProjectDevelopment\/Menu\/\.worktrees\//, "the tree word keeps the path; the project word does not");
+});
+
+test("a tree outside .worktrees/ falls back to the row's own project", () => {
+  const { queueTaskHtml } = build();
+  const html = queueTaskHtml(
+    "assistant-1",
+    {
+      id: 3,
+      title: "in the project checkout",
+      state: "running",
+      worktree: "C:/ProjectDevelopment/Menu",
+      row: { path: "C:/ProjectDevelopment/Menu", branch: "main", verdict: "ON MAIN", project: "Menu" },
+      files: [],
+    },
+    new Map(),
+  );
+  assert.match(metaOf(html), /^project Menu · PR ON MAIN/);
+});
+
+test("nothing to derive draws NO project word, and the files stay on the card", () => {
+  const { queueTaskHtml } = build();
+  const html = queueTaskHtml(
+    "assistant-1",
+    { id: 4, title: "loose work", state: "queued", worktree: "C:/scratch/a-loose-tree", files: ["lib/x.js"] },
+    new Map(),
+  );
+  const meta = metaOf(html);
+  assert.equal(meta.includes("project"), false, "a row that cannot say where it is says nothing");
+  assert.match(meta, /files lib\/x\.js/, "…and the files are still there");
+});
+
+test("a long project name never pushes the files off the card", () => {
+  const { queueTaskHtml } = build();
+  const files = ["lib/a.js", "lib/b.js", "public/c.js", "test/d.test.js", "tools/e.mjs"];
+  const html = queueTaskHtml(
+    "assistant-1",
+    { id: 5, title: "many files", state: "queued", project: "C:/ProjectDevelopment/a-very-long-project-directory-name-that-would-wrap", files },
+    new Map(),
+  );
+  const meta = metaOf(html);
+  assert.match(meta, /^project a-very-long-project-directory-name-that-would-wrap · /, "the name is the directory, however long");
+  assert.match(meta, /files lib\/a\.js, lib\/b\.js, public\/c\.js, test\/d\.test\.js…/, "the first four files and the ellipsis are intact");
+});

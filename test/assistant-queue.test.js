@@ -31,6 +31,7 @@ import {
   decorateTasks,
   editTask,
   intersectingFiles,
+  linkTaskRun,
   pickTask,
   queueCounts,
   queueDigest,
@@ -40,6 +41,7 @@ import {
 } from "../lib/assistant/queue.js";
 
 const at = (iso) => new Date(iso);
+const TREE = "C:/ProjectDevelopment/Menu/.worktrees/put-the-project-name-5efc0d";
 
 // ---- add -------------------------------------------------------------------------------------------------
 
@@ -75,6 +77,45 @@ test("addTask defaults the fields a caller did not give, and refuses a task with
 test("addTask's files are normalised, de-duplicated and capped", () => {
   const { task } = addTask([], { title: "t", files: ["lib/assistant.js", "./lib/assistant.js", "LIB\\Assistant.JS", "public/assistant.js"] });
   assert.deepEqual(task.files, ["lib/assistant.js", "public/assistant.js"]);
+});
+
+// ---- project: a NAME on the card, optional and derived when absent --------------------------------------
+test("a task's project is optional and is kept as the directory NAME, never the path", () => {
+  const { task } = addTask([], { title: "name the project", project: "C:/ProjectDevelopment/Menu" });
+  assert.equal(task.project, "Menu", "a path posted by a script is reduced to the name the card has room for");
+  assert.equal(addTask([], { title: "no project" }).task.project, null, "an absent project means nothing known");
+  // The file a row is read from is the same door: an old queue.json with no project reads as null, not as a guess.
+  assert.equal(pickTask({ id: 9, title: "old row" }).project, null);
+  assert.equal(pickTask({ id: 9, title: "old row", project: "Menu" }).project, "Menu");
+  assert.equal(pickTask({ id: 9, title: "old row", project: "  " }).project, null, "whitespace is not a project");
+});
+
+test("editTask sets and clears the project, and an edit that says nothing leaves it alone", () => {
+  const { tasks } = addTask([], { title: "carry it", project: "Menu" });
+  const retitled = editTask(tasks, 1, { title: "carry it still" });
+  assert.equal(retitled.task.project, "Menu", "a title edit cannot erase the project the cut wrote");
+  const moved = editTask(tasks, 1, { project: "agent-worktree-gui" });
+  assert.equal(moved.task.project, "agent-worktree-gui");
+  const cleared = editTask(tasks, 1, { project: "" });
+  assert.equal(cleared.task.project, null, "an empty project sends the row back to \"nothing known\"");
+});
+
+test("linkTaskRun stamps the project the cut knew, and a later link cannot erase it", () => {
+  const { tasks } = addTask([], { title: "at the cut" });
+  const linked = linkTaskRun(tasks, 1, { thread: "T1", worktree: TREE, project: "C:/ProjectDevelopment/Menu" });
+  assert.equal(linked.task.project, "Menu");
+  const again = linkTaskRun(linked.tasks, 1, { thread: "T2", worktree: TREE });
+  assert.equal(again.task.project, "Menu", "a link with nothing to say keeps the project already on the row");
+});
+
+test("the decorated row carries its own project, for a card with no project of its own", () => {
+  const { tasks } = addTask([], { title: "in the project checkout", worktree: "C:/ProjectDevelopment/Menu" });
+  const [task] = decorateTasks(tasks, {
+    rowFor: () => ({ path: "C:/ProjectDevelopment/Menu", project: "Menu", branch: "main", verdict: "ON MAIN" }),
+  });
+  assert.equal(task.row.project, "Menu", "the row's project is the fallback the card reads");
+  const [bare] = decorateTasks(tasks, { rowFor: () => ({ path: "C:/ProjectDevelopment/Menu", branch: "main" }) });
+  assert.equal(bare.row.project, null, "a row with no project says nothing rather than guessing");
 });
 
 // ---- each state ------------------------------------------------------------------------------------------
