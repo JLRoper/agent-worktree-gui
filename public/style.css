@@ -2109,12 +2109,16 @@ button.btn-star:hover { color: var(--text); }
 button.btn-star.on { color: #ffd479; }
 .pinned-turns { margin: 6px 0 8px; padding: 3px 0 3px 10px; border-left: 2px solid #6b4d16; }
 .pinned-head { display: flex; gap: 8px; align-items: center; font-size: 10.5px; letter-spacing: .04em; color: #ffd479; margin-bottom: 2px; }
-/* turns page five at a time: arrows sit next to the turn count in the card head */
-.turn-pager { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; }
+/* turns page five at a time: arrows sit next to the turn count in the card head. `flex: none` for the same reason
+   `.job-head > button` and `.job-head > .pill` carry it (:870): the head is `nowrap`, so a shrinkable flex item
+   goes to its min-content instead of pushing back, and in the docked rail (480px) this one squeezed the count to
+   11.5px — one word per line, four lines tall. The pager keeps its own width; the arrows keep theirs. */
+.turn-pager { display: inline-flex; align-items: center; gap: 3px; margin-left: 8px; flex: none; }
 button.pager-btn { padding: 0 5px; font-size: 10px; line-height: 1.6; background: transparent; border: 1px solid var(--line); color: var(--dim); border-radius: 4px; }
 button.pager-btn:hover:not(:disabled) { color: var(--text); background: #232936; }
 button.pager-btn:disabled { opacity: .3; cursor: default; }
-.turn-pager .pager-n { font-size: 10.5px; color: var(--dimmer); }
+/* "3–7 / 7" is a value, not prose: it holds one line in every rail width, so the head never reads as a column. */
+.turn-pager .pager-n { font-size: 10.5px; color: var(--dimmer); white-space: nowrap; }
 /* git / commit / diff detail: one summary line, body only when unfolded */
 .git-block { margin-bottom: 6px; }
 .git-head { display: flex; align-items: baseline; gap: 7px; padding: 2px 0; cursor: pointer; user-select: none; min-width: 0; }
