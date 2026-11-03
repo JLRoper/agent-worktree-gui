@@ -47,7 +47,7 @@ import { REFRESH_LINES_SHOWN, RefreshJournal, liveRunIn, mergeDelta, normaliseRe
 import { ParentBook } from "./lib/parents.js";
 import { cutChildWorktree } from "./lib/child-worktree.js";
 import { Questions, applyPlan, buildPlan, inspectProject, parentWorktreeOf, readPlan, rollGate, rollUp, worktrees as stewardWorktrees, writePlan } from "./lib/steward.js";
-import { RestartController, providerKeyCheck } from "./lib/restart.js";
+import { REASON_REQUIRED, RestartController, providerKeyCheck } from "./lib/restart.js";
 import { Approvals } from "./lib/approvals.js";
 import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyForProject, policyLabel } from "./lib/remote-writes.js";
 import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
@@ -4943,6 +4943,12 @@ const server = createServer(async (req, res) => {
     if (route === "/api/restart" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
+      // The HTTP boundary refuses a null or missing reason, so no such entry can reach the queue and later be
+      // written into restart.json as `"reason": null`. The controller refuses it too — this is the boundary half,
+      // worded once in lib/restart.js so the two cannot drift.
+      if (body.reason === null || body.reason === undefined || typeof body.reason !== "string" || !body.reason.trim()) {
+        return sendJson(res, 400, { ok: false, error: REASON_REQUIRED, restart: restart.state() });
+      }
       try {
         const record = restart.request({ target: body.target, reason: body.reason, waitFor: body.waitFor || body.thread });
         log(`restart queued: ${record.target} (${record.id}) — it runs once ${record.thread} has no turn running`);
