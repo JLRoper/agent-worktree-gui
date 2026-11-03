@@ -181,6 +181,9 @@ test("the escalation list is stored in order, inert, and never written until it 
   assert.equal(assistant.settingsFor(second).escalateTo, undefined);
   // ...and a turn is TOLD nothing different with a list than without one, ...
   assistant.saveProfile(second, { escalateTo: [] });
+  // The first turn of this session is the full-charter send; what this test is about is the turns AFTER it, so the
+  // full send is spent up front and the two turns compared below are both ordinary turns.
+  assistant.preamble(second);
   const without = assistant.preamble(second);
   assistant.saveProfile(second, { escalateTo: [third, PRIMARY_ASSISTANT] });
   assert.equal(assistant.preamble(second), without, "a list changes nothing the turn is told");
