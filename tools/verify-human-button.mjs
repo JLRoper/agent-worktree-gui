@@ -1,4 +1,5 @@
 // The HUMAN button: every open permission and clarify question on the board, in one rotation.
+// HARNESS: LIVE GATE — it tracks main, and `npm run verify:human-button` is how the repo runs it by name.
 //
 //   node tools/verify-human-button.mjs                    # this checkout
 //   node tools/verify-human-button.mjs --root <export>     # serve a `git archive` of another build (RED PROOF)
@@ -32,7 +33,14 @@
 //   7. the dock's own permission card joins the rotation — a parked remote write raises the count, is reachable by
 //      pressing H, and unfolds the dock;
 //   8. zero is quiet — every question answered or denied leaves no badge, a plain HUMAN label, and a press that says
-//      nothing is waiting instead of doing nothing.
+//      nothing is waiting instead of doing nothing;
+//   9. an ASSISTANT's own question is in the rotation — an assistant turn started through /api/assistant/say parks on
+//      its own clarify prompt beside a board question, and one badge counts both. The press opens the FLOAT (it
+//      starts shut), puts that assistant's Chat pane on screen, unfolds and pages in the turn holding the question,
+//      centres the prompt in the float's own scroller, flashes it red and the card amber, and leaves the caret on its
+//      first choice — then the same question's console is paged off and the next press pages it back;
+//  10. a question whose TURN ends is dropped — the stub ends the run under an open question with the gateway's own
+//      terminal event, and the next press steps on to the question that is still open instead of a dead float.
 //
 // THE RED PROOF is `--root` against a `git archive` of the base (0.81.0): there is no #btn-human at all, so every
 // check fails; the harness itself still runs, because it takes the panel kit and the browser helper from the tree it
@@ -77,17 +85,48 @@ const section = (name) => console.log(`\n-- ${name}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---- the stub gateway -------------------------------------------------------------------------------------------
-// Exactly what lib/jobs.js asks of a real one, plus the one thing this gate needs: a SCRIPT per run. Submission N
-// streams the event that parks it (an approval for the first, a clarify question for the others), then holds the
-// stream open — a parked run is still a live run, and a stub that closed the stream would settle the turn.
+// Exactly what lib/jobs.js asks of a real one, plus the two things this gate needs: a SCRIPT per run, and a way to
+// END a run on demand — a question whose TURN ends has to drop out of the rotation, and that is a real terminal
+// event from the gateway, never a record quietly deleted from the store.
+//
+// A run is NAMED by the marker the panel put in its input ("GATE-APPROVE …"), not by the order it arrived in: the
+// assistant is switched on in this sandbox — that is the thing under test — so its sentry may submit a wake of its
+// own at any moment, and a counter would renumber every script behind it, failing the gate for a reason that is not
+// in the panel. A submission with no marker still gets an id, and its script is a QUIET one that settles at once, so
+// a stray wake can never park a question this gate would have to account for.
 const REQUEST_ID = "human-req-1";
 const QUESTION = "Which base should this branch use?";
 const CHOICES = ["main (Recommended)", "develop"];
 const APPROVAL_COMMAND = "git push origin feat/human";
+// The assistant's own question: its own wording and its own choices, so a box on the board can never be mistaken
+// for the one in the float.
+const ASSISTANT_QUESTION = "Which queue should this assistant fold first?";
+const ASSISTANT_CHOICES = ["The landed one (Recommended)", "The stalled one"];
 
 function makeStub(scripts) {
-  const seen = { submitted: [], events: [], approvals: [], answers: [] };
+  const seen = { submitted: [], events: [], approvals: [], answers: [], stray: [] };
   const timers = new Set();
+  // The streams that are still open, so a press can end one the way a gateway ends a run it finishes.
+  const live = new Map();
+  // Runs this stub has ended: their GET must answer finished, or the panel's poll would read the parked prompt out
+  // of `pending_controls` again and resurrect a question that is over.
+  const settled = new Set();
+  let strays = 0;
+  // What a run with no script does: settles at once, drawing no question and no approval.
+  const QUIET = { event: "run.completed", payload: { status: "completed", exit_code: 0, output: "settled by the stub" }, pendingKind: null, pendingText: "" };
+  const runIdFor = (submission) => {
+    // The LAST marker in the input, not the first: an assistant's turn carries a digest of the board in its
+    // preamble, and that digest quotes the other agents' prompts — so the first GATE- marker in the text can be a
+    // question this run is only reading about. The run's own prompt is the tail of the input.
+    const text = String(submission?.input ?? submission?.prompt ?? "");
+    const hits = [...text.matchAll(/\bGATE-([A-Z0-9-]+)/g)];
+    const hit = hits.length ? hits[hits.length - 1] : null;
+    if (hit) return `stub-${hit[1].toLowerCase()}`;
+    strays += 1;
+    const id = `stub-stray-${strays}`;
+    seen.stray.push(id);
+    return id;
+  };
   const json = (res, code, body) => {
     res.writeHead(code, { "Content-Type": "application/json" });
     res.end(JSON.stringify(body));
@@ -113,14 +152,34 @@ function makeStub(scripts) {
       });
     }
     if (url.pathname === "/v1/runs" && req.method === "POST") {
-      seen.submitted.push(await readBody(req));
-      return json(res, 200, { run_id: `stub-run-${seen.submitted.length}`, status: "running" });
+      const submission = await readBody(req);
+      seen.submitted.push(submission);
+      return json(res, 200, { run_id: runIdFor(submission), status: "running" });
+    }
+    // The gate's own lever: end this run now, with the terminal event a gateway sends when a turn is over.
+    if (url.pathname.startsWith("/release/") && req.method === "POST") {
+      const id = decodeURIComponent(url.pathname.slice("/release/".length));
+      const held = live.get(id);
+      if (!held) return json(res, 404, { error: `no live stream for ${id}` });
+      settled.add(id);
+      clearInterval(held.hold);
+      clearTimeout(held.park);
+      timers.delete(held.hold);
+      timers.delete(held.park);
+      live.delete(id);
+      try {
+        held.res.write(`event: run.completed\ndata: ${JSON.stringify({ event: "run.completed", status: "completed", exit_code: 0, output: "the turn ended" })}\n\n`);
+        held.res.end();
+      } catch {
+        /* the listener went away with the panel */
+      }
+      return json(res, 200, { ok: true });
     }
     const m = /^\/v1\/runs\/([^/]+)(\/[a-z]+)?$/.exec(url.pathname);
     if (m) {
       const id = decodeURIComponent(m[1]);
       const sub = m[2] || "";
-      const script = scripts[id];
+      const script = settled.has(id) ? QUIET : scripts[id] || QUIET;
       if (sub === "/approval") {
         seen.approvals.push({ id, ...(await readBody(req)) });
         return json(res, 200, { ok: true, resolved: 1 });
@@ -135,10 +194,21 @@ function makeStub(scripts) {
       }
       if (sub === "/stop") return json(res, 200, { ok: true });
       if (sub === "/events") {
-        if (!script) return json(res, 404, { error: { message: "no such run" } });
         seen.events.push(id);
         res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
         res.write(": attached\n\n");
+        if (script === QUIET || settled.has(id)) {
+          // Already over: say so at once and close, so a late attach cannot hold a listen of its own.
+          setTimeout(() => {
+            try {
+              res.write(`event: ${QUIET.event}\ndata: ${JSON.stringify({ event: QUIET.event, ...QUIET.payload })}\n\n`);
+              res.end();
+            } catch {
+              /* gone */
+            }
+          }, 50);
+          return;
+        }
         const park = setTimeout(() => {
           timers.delete(park);
           try {
@@ -160,17 +230,21 @@ function makeStub(scripts) {
           }
         }, 500);
         timers.add(hold);
+        live.set(id, { res, hold, park });
         req.on("close", () => {
           clearInterval(hold);
           clearTimeout(park);
           timers.delete(hold);
           timers.delete(park);
+          live.delete(id);
         });
         return;
       }
       // A GET of the run: pending_controls names the parked prompt, which is where the panel resolves a request id
       // the event did not carry.
-      if (!script) return json(res, 404, { error: { message: "no such run" } });
+      if (settled.has(id) || !scripts[id]) {
+        return json(res, 200, { run_id: id, status: "completed", exit_code: 0, output: "settled by the stub" });
+      }
       return json(res, 200, {
         run_id: id,
         status: "running",
@@ -273,6 +347,67 @@ async function pressUntil(page, predicate, { tries = 6, key = false } = {}) {
   return await read(page);
 }
 
+// What the rotation did INSIDE the assistant's card, read off the painted page: the float's frame, which of its
+// tabs is on screen, the box that carries the red ring, where that box sits in the float's OWN scroller, and the
+// caret. Nothing here is a copy of the fixture — a box that is not drawn reads as null.
+const readAssistant = (page) =>
+  page.evaluate(() => {
+    const el = document.getElementById("assistant");
+    const box = document.querySelector("#assistant .turn-question.human-flash, #assistant .turn-approval.human-flash");
+    const chat = document.getElementById("as-chat");
+    const body = box?.closest(".as-subpane[data-subpane='chat'] > .job > .job-body") || null;
+    const card = box?.closest(".job") || null;
+    const rect = box ? box.getBoundingClientRect() : null;
+    const bodyRect = body ? body.getBoundingClientRect() : null;
+    const active = document.activeElement;
+    let view = null;
+    try {
+      view = JSON.parse(localStorage.getItem("wm.assistantView") || "null");
+    } catch {
+      view = null;
+    }
+    return {
+      floatOpen: Boolean(el) && !el.hidden,
+      view,
+      chatVisible: Boolean(chat) && !chat.classList.contains("hidden"),
+      flash: box
+        ? {
+            kind: box.classList.contains("turn-question") ? "question" : "approval",
+            cls: box.className,
+            thread: card?.dataset.thread || null,
+            turnId: box.closest(".turn")?.dataset.turn || null,
+            folded: Boolean(box.closest(".turn")?.classList.contains("folded")),
+            text: box.textContent.replace(/\s+/g, " ").trim().slice(0, 90),
+          }
+        : null,
+      cardHot: Boolean(card?.classList.contains("hot-flash")),
+      centreY: rect ? Math.round(rect.top + rect.height / 2) : null,
+      bodyCentreY: bodyRect ? Math.round(bodyRect.top + bodyRect.height / 2) : null,
+      bodyTop: bodyRect ? Math.round(bodyRect.top) : null,
+      bodyBottom: bodyRect ? Math.round(bodyRect.bottom) : null,
+      page: (() => {
+        try {
+          return state.turnPage.get("panel-assistant") ?? 0;
+        } catch {
+          return 0;
+        }
+      })(),
+      focus: active ? { tag: active.tagName.toLowerCase(), value: active.dataset?.qvalue || active.dataset?.choice || null } : null,
+      boxes: document.querySelectorAll("#as-chat .turn-question").length,
+    };
+  });
+
+// Press until the flash lands inside the float on the turn the predicate names (bounded): the rotation may put the
+// board's question first, and this is the same "step until it is the one" the board checks use.
+async function pressUntilFloat(page, predicate, { tries = 4 } = {}) {
+  for (let i = 0; i < tries; i++) {
+    await pressHuman(page);
+    const now = await readAssistant(page);
+    if (predicate(now)) return now;
+  }
+  return await readAssistant(page);
+}
+
 async function main() {
   const playwright = loadPlaywright();
   if (!playwright) {
@@ -341,26 +476,55 @@ async function main() {
     seed("seed-quiet", "th-quiet", 1, now - 30 * 60_000),
   ];
   for (let i = 1; i <= 6; i++) jobs.push(seed(`seed-ask-${i}`, "th-ask", i, now - (30 - i) * 60_000));
+  // Six settled turns on the ASSISTANT's own thread too. Its card is the float's, and a tall one is what makes the
+  // float's chat body scroll and its pager real — so the live seventh turn lands behind that pager, and the rotation
+  // has to page the turn holding the question back in exactly as it does on a board card.
+  for (let i = 1; i <= 6; i++) {
+    jobs.push({
+      ...seed(`seed-assistant-${i}`, "panel-assistant", i, now - (40 - i) * 60_000, { ownerPath: null, projectPath: null }),
+      assistant: true,
+      assistantId: "assistant-1",
+    });
+  }
   writeFileSync(path.join(dir, "logs", "jobs.json"), JSON.stringify({ savedAt: iso(now), jobs }), "utf8");
 
   const stub = makeStub({
-    "stub-run-1": {
+    "stub-approve": {
       event: "approval.request",
       payload: { request_id: REQUEST_ID, command: APPROVAL_COMMAND, choices: ["once", "deny"], timeout_seconds: 600 },
       pendingKind: "approval",
       pendingText: APPROVAL_COMMAND,
     },
-    "stub-run-2": {
+    "stub-ask": {
       event: "clarify.request",
       payload: { prompt_id: REQUEST_ID, question: QUESTION, choices: CHOICES, multi_select: false, timeout_s: 600 },
       pendingKind: "clarify",
       pendingText: `Which base should this branch use?\n\nReply "skip" to skip this question.`,
     },
-    "stub-run-3": {
+    "stub-homeless": {
       event: "clarify.request",
       payload: { prompt_id: REQUEST_ID, question: "Should this branch be landed now?", choices: ["Yes", "Not yet"], multi_select: false, timeout_s: 600 },
       pendingKind: "clarify",
       pendingText: "Should this branch be landed now?",
+    },
+    // 9 and 10: the board question the assistant's own question is rotated beside, then the assistant's two turns.
+    "stub-board-next": {
+      event: "clarify.request",
+      payload: { prompt_id: REQUEST_ID, question: "Should this one be landed beside it?", choices: ["Yes", "Not yet"], multi_select: false, timeout_s: 600 },
+      pendingKind: "clarify",
+      pendingText: "Should this one be landed beside it?",
+    },
+    "stub-assistant": {
+      event: "clarify.request",
+      payload: { prompt_id: REQUEST_ID, question: ASSISTANT_QUESTION, choices: ASSISTANT_CHOICES, multi_select: false, timeout_s: 600 },
+      pendingKind: "clarify",
+      pendingText: ASSISTANT_QUESTION,
+    },
+    "stub-assistant-end": {
+      event: "clarify.request",
+      payload: { prompt_id: REQUEST_ID, question: "Which one is the stalled one?", choices: ["The oldest (Recommended)", "The newest"], multi_select: false, timeout_s: 600 },
+      pendingKind: "clarify",
+      pendingText: "Which one is the stalled one?",
     },
   });
   await new Promise((r) => stub.server.listen(0, "127.0.0.1", r));
@@ -381,7 +545,10 @@ async function main() {
       discoverSeconds: 3600,
       threads: 1,
       defaultCwd: repoPath,
-      assistant: { enabled: false },
+      // The assistant is ON, and quiet: the sentry's own clock is an hour, so the only turn it takes in this sandbox
+      // is one the gate starts through /api/assistant/say. That turn is the thing under test — an assistant's clarify
+      // prompt belongs in the same rotation, and on the same badge, as the board's.
+      assistant: { enabled: true, autonomy: "draft", seconds: 3600, maxWakesPerHour: 20 },
       apiServer: { url: stubUrl, key: "sandbox-key" },
     },
   });
@@ -398,9 +565,11 @@ async function main() {
     console.log(`stub:    ${stubUrl}`);
 
     // ---- three real runs, each parking on a question ------------------------------------------------------
+    // Each reply carries its own marker, which is how the stub names the run (`runIdFor`): the assistant is enabled
+    // in this sandbox, so a wake of its own must not be able to renumber these three.
     const started = [];
-    for (const thread of ["th-approve", "th-ask", "th-homeless"]) {
-      const reply = await POST("/api/agents/reply", { thread, text: "carry on until you need a decision" });
+    for (const [thread, marker] of [["th-approve", "GATE-APPROVE"], ["th-ask", "GATE-ASK"], ["th-homeless", "GATE-HOMELESS"]]) {
+      const reply = await POST("/api/agents/reply", { thread, text: `${marker} carry on until you need a decision` });
       started.push([thread, reply.status, Boolean(reply.body.job?.id)]);
     }
     check("three real runs are started against the stub", started.map((s) => s[1]), [202, 202, 202]);
@@ -672,6 +841,158 @@ async function main() {
         const emptyPress = await read(page);
         ok("a press says nothing is waiting", /nothing is waiting/i.test(emptyPress.banner), emptyPress.banner);
         check("...and does not invent a question", emptyPress.listLength, 0);
+
+        // ---- 9. the assistant's own question is in the rotation ------------------------------------------
+        section("9. an assistant's own question is in the rotation");
+        // A board question and an assistant's turn are started side by side. The proof is not that the assistant
+        // has a waiting list of its own: both threads are entries in ONE rotation, on one badge, and the press
+        // opens each the way its home is opened — the row and card for a worker, the float and its own Chat pane
+        // for the assistant, whose prompt used to be excluded here and so never reached the count.
+        const boardNext = await POST("/api/agents/reply", { thread: "th-quiet", text: "GATE-BOARD-NEXT carry on until you need a decision" });
+        const said = await POST("/api/assistant/say", { text: "GATE-ASSISTANT which queue should you fold first?" });
+        check("a board run and an assistant turn are both started", [boardNext.status, said.status], [202, 202]);
+        const pair = await waitFor(
+          async () => {
+            const all = await jobsNow();
+            const board = all.find((j) => j.thread === "th-quiet" && j.question?.requestId === REQUEST_ID);
+            const assistant = all.find((j) => j.thread === "panel-assistant" && j.id === said.body.job?.id && j.question?.requestId === REQUEST_ID);
+            return board && assistant ? { board, assistant } : false;
+          },
+          { timeoutMs: 40_000, stepMs: 250, what: "the board's and the assistant's clarify questions" },
+        );
+        ok(
+          "both park on a question",
+          Boolean(pair),
+          pair ? `${pair.board.id} on th-quiet · ${pair.assistant.id} on the assistant` : `never arrived (${JSON.stringify(said.body).slice(0, 200)})`,
+        );
+        if (pair) {
+          await waitFor(
+            async () => {
+              const s = await read(page);
+              return s.listLength === 2 && s.badgeText === "2";
+            },
+            { timeoutMs: 20_000, what: "two open questions" },
+          );
+          const both = await read(page);
+          check("the badge counts the assistant's question with the board's", [both.listLength, both.badgeText], [2, "2"]);
+          ok("the title splits them as two clarify questions", /0 permissions, 2 clarify questions/.test(both.title), both.title.slice(0, 160));
+          ok("...and names the assistant among the agents holding them", /held by [^.]*Assistant #1/.test(both.title), both.title.slice(0, 240));
+          check(
+            "both threads are entries in the same rotation",
+            [both.keys.includes(`question:${pair.board.id}:${REQUEST_ID}`), both.keys.includes(`question:${pair.assistant.id}:${REQUEST_ID}`)],
+            [true, true],
+          );
+          const named = await page.evaluate((id) => (humanQuestions().find((q) => q.turnId === id) || {}).agent || null, pair.assistant.id);
+          check("the assistant's entry is named for the assistant, not for its prompt", named, "Assistant #1");
+
+          // The float is shut and has never been opened on this page. The press has to open it, put THAT assistant's
+          // Chat on screen, unfold the turn holding the question, and land on the box there — not on the board.
+          const shut = await readAssistant(page);
+          check("the float starts shut on this board", shut.floatOpen, false);
+          const inFloat = await pressUntilFloat(page, (s) => s.flash?.thread === "panel-assistant");
+          check("a press lands on the assistant's question", [inFloat.flash?.thread, inFloat.flash?.kind], ["panel-assistant", "question"]);
+          check("the float was opened for it", inFloat.floatOpen, true);
+          check("...on that assistant's own Chat tab", [inFloat.view?.assistant, inFloat.view?.subTab, inFloat.chatVisible], ["assistant-1", "chat", true]);
+          ok("the turn that owns it is unfolded", inFloat.flash?.folded === false, String(inFloat.flash?.folded));
+          ok("the prompt wears the red ring inside the float", /human-flash/.test(inFloat.flash?.cls || ""), inFloat.flash?.cls);
+          ok("its card wears the NOT-RUNNING amber ring too", inFloat.cardHot === true, String(inFloat.cardHot));
+          ok(
+            "the prompt is centred in the float's own scroller",
+            Math.abs((inFloat.centreY ?? 0) - (inFloat.bodyCentreY ?? 0)) < 160 &&
+              (inFloat.centreY ?? 0) > (inFloat.bodyTop ?? 0) &&
+              (inFloat.centreY ?? 0) < (inFloat.bodyBottom ?? 0),
+            `centre ${inFloat.centreY} of body ${inFloat.bodyTop}..${inFloat.bodyBottom}`,
+          );
+          ok("the question the stub asked is the box in the float", /Which queue should this assistant/.test(inFloat.flash?.text || ""), inFloat.flash?.text);
+          check("the clarify answer's first choice owns the caret", inFloat.focus, { tag: "button", value: ASSISTANT_CHOICES[0] });
+          const placed = await read(page);
+          ok("the counter names the place in a two-question rotation", /^HUMAN \d\/2$/.test(placed.label), placed.label);
+
+          // The float's own pager, exactly like a board card's: page the live turn off, press, and the rotation has
+          // to page the turn that owns the question back in before it can centre it.
+          const pagedFloat = await page.evaluate(() => {
+            const btn = document.querySelector('#as-chat .turn-pager [data-turn-page="older"]');
+            if (!btn) return { pager: false, page: 0 };
+            if (!btn.disabled) btn.click();
+            return { pager: true, page: state.turnPage.get("panel-assistant") ?? 0 };
+          });
+          check("the assistant's card has a pager that was used to page back", [pagedFloat.pager, pagedFloat.page > 0], [true, true]);
+          check(
+            "the question's console is off the float's page before the press",
+            await page.evaluate((id) => Boolean(document.querySelector(`#as-chat pre.job-out[data-out="${id}"]`)), pair.assistant.id),
+            false,
+          );
+          const rePaged = await pressUntilFloat(page, (s) => s.flash?.thread === "panel-assistant" && s.page === 0);
+          check("the next press pages that turn back into the float", [rePaged.page, rePaged.flash?.folded], [0, false]);
+          ok(
+            "its console is on the page with it",
+            await page.evaluate((id) => Boolean(document.querySelector(`#as-chat pre.job-out[data-out="${id}"]`)), rePaged.flash?.turnId),
+            true,
+          );
+
+          // Answering it in the float is a real POST through the panel to the stub. The entry leaves the count; the
+          // board's question — the other half of the pair — stays, so this is one question closing, not the list.
+          await page.click(`#as-chat .job[data-thread="panel-assistant"] .turn-question button.tq-choice[data-qvalue="${ASSISTANT_CHOICES[0]}"]`);
+          await waitFor(async () => (await read(page)).listLength === 1, { timeoutMs: 15_000, what: "the assistant's question to close" });
+          const answeredFloat = await read(page);
+          check("the answered assistant question is out of the count", answeredFloat.badgeText, "1");
+          check("...and its box is gone from the float", await page.evaluate(() => document.querySelectorAll("#as-chat .turn-question").length), 0);
+          check("...because the answer really reached the stub", stub.seen.answers.some((a) => a.id === pair.assistant.runId && String(a.answer).includes("The landed one")), true);
+          ok("the board's question is the one still waiting", await page.evaluate((id) => humanQuestions().some((q) => q.turnId === id), pair.board.id), true);
+
+          // ---- 10. a question whose turn ends is dropped ----------------------------------------------
+          section("10. a question whose turn ends is dropped");
+          // End the first assistant turn for real — the gateway's terminal event, not a deleted record — so the
+          // assistant is free for a second turn whose question is then taken away UNDER the reader.
+          const releaseA = await fetch(`${stubUrl}/release/${encodeURIComponent(pair.assistant.runId)}`, { method: "POST" });
+          check("the stub ends the assistant's first run", releaseA.status, 200);
+          await waitFor(
+            async () => {
+              const j = (await jobsNow()).find((x) => x.id === pair.assistant.id);
+              return j && !["running", "starting", "waiting"].includes(String(j.status));
+            },
+            { timeoutMs: 20_000, what: "the assistant's first turn to settle" },
+          );
+          const secondSaid = await POST("/api/assistant/say", { text: "GATE-ASSISTANT-END and now which one is stalled?" });
+          check("a second assistant turn starts once the first has ended", secondSaid.status, 202);
+          const second = await waitFor(
+            async () => (await jobsNow()).find((j) => j.thread === "panel-assistant" && j.question?.requestId === REQUEST_ID && j.id !== pair.assistant.id),
+            { timeoutMs: 40_000, stepMs: 250, what: "the second assistant question" },
+          );
+          ok("the second assistant turn parks on its own question", Boolean(second), second ? second.id : "never arrived");
+          if (second) {
+            await waitFor(async () => (await read(page)).listLength === 2, { timeoutMs: 20_000, what: "two open questions again" });
+            const atSecond = await pressUntilFloat(page, (s) => s.flash?.turnId === second.id);
+            ok("the rotation reaches the second assistant question in the float", atSecond.flash?.thread === "panel-assistant", `${atSecond.flash?.thread} · ${atSecond.flash?.turnId}`);
+            const releaseB = await fetch(`${stubUrl}/release/${encodeURIComponent(second.runId)}`, { method: "POST" });
+            check("the stub ends that turn while its question is still open", releaseB.status, 200);
+            const dropped = await waitFor(
+              async () => {
+                const s = await read(page);
+                return s.listLength === 1 && s.badgeText === "1" ? s : false;
+              },
+              { timeoutMs: 20_000, what: "the ended turn's question to leave the rotation" },
+            );
+            ok("the question whose turn ended is out of the count", Boolean(dropped), dropped ? `${dropped.listLength} · ${dropped.badgeText}` : "still counted");
+            check("...and out of the list by its key", await page.evaluate((key) => !humanQuestions().some((q) => q.key === key), `question:${second.id}:${REQUEST_ID}`), true);
+            check("...with no box left drawn in the float", await page.evaluate(() => document.querySelectorAll("#as-chat .turn-question").length), 0);
+            // A press now steps on to the question that is still open rather than opening a dead float.
+            const stepOn = await pressUntil(page, (s) => s.flash?.thread === "th-quiet");
+            check("the next press steps on to the board's question", [stepOn.flash?.thread, stepOn.flash?.kind], ["th-quiet", "question"]);
+          }
+
+          // Back to quiet, the way the board's own case ends: the float shut, the last question answered in its box.
+          await page.evaluate(() => window.__assistantToggle(false));
+          const last = await page.evaluate(() => {
+            const box = document.querySelector('.job[data-thread="th-quiet"] .turn-question');
+            const choice = box?.querySelector("button.tq-choice");
+            return choice ? { box: true, value: choice.dataset.qvalue } : { box: Boolean(box), value: null };
+          });
+          if (last.value) await page.click(`.job[data-thread="th-quiet"] .turn-question button.tq-choice[data-qvalue="${last.value}"]`);
+          await waitFor(async () => (await read(page)).listLength === 0, { timeoutMs: 15_000, what: "an empty rotation again" });
+          const quietAgain = await read(page);
+          check("the rotation ends empty with the assistant's turn still live", [quietAgain.listLength, quietAgain.badgeHidden], [0, true]);
+        }
 
         ok("no page error was thrown", pageErrors.length === 0, pageErrors.slice(0, 2).join(" | "));
       },
