@@ -380,7 +380,7 @@ falling back to another project's — would be the panel landing work nobody ask
 The `wait` stage is the one place a pipeline has to be patient, and the obvious implementation — the worker runs
 `sleep 1800` and then asks again — is the one that must not be built.
 
-**Why, in the panel's own numbers.** `jobMaxRuntimeSeconds` is 3600 and the README states the rule plainly: *"anything
+**Why, in the panel's own numbers.** `jobMaxRuntimeSeconds` is 7200 and the README states the rule plainly: *"anything
 still running after `jobMaxRuntimeSeconds` is stopped and marked failed"* (README, the run's hard cap). A reviewer
 who takes an hour and ten minutes therefore turns a healthy review into a **failed card** — a red row on work that is
 open, approved an hour later, and merged. A parked run also holds one of the gateway's run slots for the whole wait
