@@ -382,7 +382,7 @@ The `wait` stage is the one place a pipeline has to be patient, and the obvious 
 
 **Why, in the panel's own numbers.** `jobMaxRuntimeSeconds` is 7200 and the README states the rule plainly: *"anything
 still running after `jobMaxRuntimeSeconds` is stopped and marked failed"* (README, the run's hard cap). A reviewer
-who takes an hour and ten minutes therefore turns a healthy review into a **failed card** — a red row on work that is
+who takes two hours and ten minutes therefore turns a healthy review into a **failed card** — a red row on work that is
 open, approved an hour later, and merged. A parked run also holds one of the gateway's run slots for the whole wait
 (`max_concurrent_runs`, default 10, per `docs/runs-api-phase0.md`), so a fleet of waiting trees is a gateway at its
 cap with nothing being worked on. And it is not even durable: a panel restart marks every in-flight run
