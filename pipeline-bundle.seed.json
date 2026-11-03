@@ -1,0 +1,3267 @@
+{
+  "external_inputs": [
+    {
+      "artifact": "poc-snapshot",
+      "reason": "The POC is built before the pipeline starts; S2 freezes its state, and no stage in this document writes the snapshot it freezes.",
+      "source": "the POC builder's running checkpoint (S1 runs outside this document, driven by the user)"
+    },
+    {
+      "artifact": "branch-head",
+      "reason": "The pipeline reads code it did not write; a commit is evidence from the repository, not a stage artifact, and pinning it in the ledger makes the read reproducible.",
+      "source": "the target repository's Git history, pinned in the ledger at C-0091"
+    },
+    {
+      "artifact": "poc-crawl",
+      "reason": "The crawl is written by the POC runtime while the user exercises the POC, before the parity stages run; no stage in this document writes it.",
+      "source": "the POC export directory, exports/poc-0007/crawl.json"
+    }
+  ],
+  "gates": [
+    {
+      "after": "S0",
+      "artifact": "charter",
+      "decider": "user",
+      "id": "G0",
+      "may_not_read": [
+        "a proposed design"
+      ],
+      "name": "Charter",
+      "reads": [
+        "the request",
+        "the user's own material"
+      ],
+      "refuses_when": "No decision the POC exists to make; grade above 2; no owner or TTL; real data in the fake-data spec.",
+      "timebox": "30 min",
+      "verified_by": "machine"
+    },
+    {
+      "after": "S1",
+      "artifact": "change-log",
+      "decider": "user",
+      "id": "G1",
+      "may_not_read": [
+        "the POC source"
+      ],
+      "name": "Behaviour",
+      "reads": [
+        "the running POC",
+        "the change log"
+      ],
+      "refuses_when": "The user is describing what they want instead of reacting to what runs; the POC is grade 3; corrections are unlogged.",
+      "timebox": "30 min",
+      "verified_by": "machine"
+    },
+    {
+      "after": "S3",
+      "artifact": "semantic-layer",
+      "decider": "engineer",
+      "id": "G2",
+      "may_not_read": [
+        "the rebuilt code",
+        "the POC repository"
+      ],
+      "name": "Meaning",
+      "reads": [
+        "the layer",
+        "the validation report",
+        "the exceptions queue",
+        "the inventories"
+      ],
+      "refuses_when": "Any rule without a source; any entity without an owner; any security finding without a disposition; any blocking open question unresolved; the layer does not validate.",
+      "timebox": "90 min",
+      "verified_by": "layer-validator"
+    },
+    {
+      "after": "S10",
+      "artifact": "parity-report",
+      "decider": "engineer",
+      "id": "G3",
+      "may_not_read": [
+        "the POC repository as a specification"
+      ],
+      "name": "Rebuild",
+      "reads": [
+        "the diff",
+        "the layer",
+        "the findings",
+        "the DAL verdict",
+        "the parity report"
+      ],
+      "refuses_when": "A blocking finding open; a rule id with no passing test; a table not in the layer; a parity pair unverdicted.",
+      "timebox": "as usual for a PR",
+      "verified_by": "machine"
+    },
+    {
+      "after": "S12",
+      "artifact": "signed-dod",
+      "decider": "user",
+      "id": "G4",
+      "may_not_read": [
+        "a promise that it worked in dev"
+      ],
+      "name": "UAT sign-off",
+      "reads": [
+        "the UAT instance",
+        "the acceptance list",
+        "the parity report",
+        "the evidence pack"
+      ],
+      "refuses_when": "Any DoD line blank; an open exception with no owner and date; the acceptance list not run.",
+      "timebox": "60 min",
+      "verified_by": "machine"
+    }
+  ],
+  "handoffs": [
+    {
+      "artifact": "charter",
+      "from": "S0",
+      "id": "H-01",
+      "kind": "sequence",
+      "note": "G0 is signed between the two.",
+      "to": "S1"
+    },
+    {
+      "artifact": "change-log",
+      "from": "S1",
+      "id": "H-02",
+      "kind": "sequence",
+      "note": "G1 is signed between the two.",
+      "to": "S2"
+    },
+    {
+      "artifact": "frozen-export",
+      "from": "S2",
+      "id": "H-03",
+      "kind": "sequence",
+      "to": "S3"
+    },
+    {
+      "artifact": "semantic-layer",
+      "from": "S3",
+      "id": "H-04",
+      "kind": "sequence",
+      "note": "G2 is signed between the two.",
+      "to": "S4"
+    },
+    {
+      "artifact": "module-plan",
+      "from": "S4",
+      "id": "H-05",
+      "kind": "sequence",
+      "to": "S5"
+    },
+    {
+      "artifact": "skeleton",
+      "from": "S5",
+      "id": "H-06",
+      "kind": "sequence",
+      "to": "S6"
+    },
+    {
+      "artifact": "module-build",
+      "from": "S6",
+      "id": "H-07",
+      "kind": "sequence",
+      "to": "S7"
+    },
+    {
+      "artifact": "dal-verdict",
+      "from": "S7",
+      "id": "H-08",
+      "kind": "sequence",
+      "to": "S8"
+    },
+    {
+      "artifact": "finding-set",
+      "from": "S8",
+      "id": "H-09",
+      "kind": "sequence",
+      "to": "S9"
+    },
+    {
+      "artifact": "verdict",
+      "cap": "3 rounds (P-50)",
+      "from": "S9",
+      "id": "H-10",
+      "kind": "loop",
+      "note": "A new round after the fix; the verifier's verdict re-enters review.",
+      "to": "S8"
+    },
+    {
+      "artifact": "verdict",
+      "from": "S9",
+      "id": "H-11",
+      "kind": "sequence",
+      "to": "S10"
+    },
+    {
+      "artifact": "verdict",
+      "cap": "3 rounds (P-50)",
+      "from": "S10",
+      "id": "H-12",
+      "kind": "loop",
+      "note": "Parity findings re-enter the same fix loop.",
+      "to": "S9"
+    },
+    {
+      "artifact": "parity-report",
+      "from": "S10",
+      "id": "H-13",
+      "kind": "sequence",
+      "note": "G3 is signed between the two.",
+      "to": "S11"
+    },
+    {
+      "artifact": "install-verdict",
+      "from": "S11",
+      "id": "H-14",
+      "kind": "sequence",
+      "to": "S12"
+    },
+    {
+      "artifact": "signed-dod",
+      "cap": "2 re-deliveries",
+      "from": "S12",
+      "id": "H-15",
+      "kind": "loop",
+      "note": "A UAT failure returns to delivery, not to the user's seat.",
+      "to": "S11"
+    }
+  ],
+  "project": {
+    "budget": {
+      "episode_rounds": 3,
+      "stage_tokens": 400000,
+      "wall_minutes": 240
+    },
+    "description": "The existing SEFL pipeline: thirteen stages S0-S12, five gates G0-G4. Imported from docs/pipeline/pipeline.html and the roster in docs/pipeline/agents.md, then held in the studio as an editable project.",
+    "id": "poc-to-uat",
+    "name": "POC to UAT"
+  },
+  "roles": [
+    {
+      "capabilities": {
+        "allow": [
+          "read the request",
+          "write charter.md"
+        ],
+        "deny": [
+          "any repo",
+          "any data",
+          "any credential"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/charters/charter-question.json",
+        "code": "ESCALATE-AMBIGUITY",
+        "to": "user"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "grant: write charter.md only",
+          "line": "specify screens or rules"
+        },
+        {
+          "enforced_by": "EXIT-01 asserts grade == 2",
+          "line": "set a grade above 2"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "steward",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#2-intake-and-poc"
+      },
+      "instructions": "You write one page and no more. A charter is a decision paper, not a specification. If the request has no decision it exists to make, stop and say so. Do not specify screens or rules, promise an integration, or set a grade above 2.",
+      "kind": "agent",
+      "name": "Steward",
+      "remit": "Turn the request into a one-page charter: the decision, the users, three to five journeys, grade 2, the fake-data spec, out-of-scope, owner and TTL.",
+      "self_check": {
+        "command": "jq -e '.decision and .owner and .ttl and .grade == 2' charter.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S0",
+      "tools": [
+        "ledger.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the session",
+          "write change-log.json"
+        ],
+        "deny": [
+          "the POC",
+          "the layer",
+          "any repo"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/change-log-question.json",
+        "code": "ESCALATE-AMBIGUITY",
+        "to": "user"
+      },
+      "forbidden": [
+        {
+          "judged": "the log is the user's corrections; the builder's actions belong in a build log",
+          "line": "record what the agent did as a requirement"
+        },
+        {
+          "enforced_by": "grant: write change-log.json only",
+          "line": "edit the POC"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "scribe",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#2-intake-and-poc"
+      },
+      "instructions": "You record what the user corrected, never what the builder built. One entry per correction, with a turn reference. If two corrections contradict, record both and flag the pair. If the session produces no corrections, the POC is a demo and you stop.",
+      "kind": "agent",
+      "name": "Scribe",
+      "remit": "Watch the POC session and record every correction as a change-log entry: turn, sentence, screen, the rule it implies.",
+      "self_check": {
+        "command": "jq -e '(.entries | length) > 0 and all(.entries[]; .turn != null)' change-log.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S1",
+      "tools": [
+        "session.read",
+        "ledger.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the checkpoint",
+          "write the export and its manifest"
+        ],
+        "deny": [
+          "any branch",
+          "any credential",
+          "anything after the hash"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/freeze-refusal.json",
+        "code": "REFUSE-INPUT",
+        "to": "control-plane"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the export directory is read-only after EXIT-01",
+          "line": "allow additions to the export after the hash"
+        },
+        {
+          "enforced_by": "EXIT-03 requires a database dump",
+          "line": "copy the schema from the ORM models"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "freeze-job",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#1-the-roster-at-a-glance"
+      },
+      "instructions": "You are deterministic and take no model decision. Dump the schema from the live database, not from ORM models. Crawl every reachable route. Hash the export twice and compare. A failed line refuses the export; it does not warn.",
+      "kind": "job",
+      "name": "Freeze job",
+      "remit": "Perform the ten-item freeze checklist and refuse to proceed on any failed line.",
+      "self_check": {
+        "command": "sha256sum -c export.sha256 && jq -e 'all(.item[]; .ok == true)' freeze-checklist.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S2",
+      "tools": [
+        "pg_dump",
+        "playwright",
+        "sha256sum",
+        "ledger.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the frozen export",
+          "write inventory.json"
+        ],
+        "deny": [
+          "write to the export",
+          "any credential"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/reconcile-gap.json",
+        "code": "REFUSE-INPUT",
+        "to": "control-plane"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "each count carries its command",
+          "line": "count approximately"
+        },
+        {
+          "judged": "meaning belongs to the modeller; a reading here anchors it",
+          "line": "interpret meaning"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "cartographer",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#3-teardown"
+      },
+      "instructions": "Every count carries the command that produced it. Do not interpret meaning, summarise, or count approximately. If a route in the crawl or a table in the dump has no entry, stop; the reconciliation is exhaustive or it is not done.",
+      "kind": "agent",
+      "name": "Cartographer",
+      "remit": "Produce the seven inventories from the frozen export, plus the change log as the eighth.",
+      "self_check": {
+        "command": "python tools/reconcile.py inventory.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S3",
+      "tools": [
+        "export.read",
+        "ledger.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read inventory.json and seed rows",
+          "write model.yaml"
+        ],
+        "deny": [
+          "the rebuild branch",
+          "the POC",
+          "choose an auth model"
+        ]
+      },
+      "escalation": {
+        "artifact": "layer/questions/model.json",
+        "code": "ESCALATE-AMBIGUITY",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the layer schema requires source_table",
+          "line": "invent an entity with no source"
+        },
+        {
+          "judged": "the auth model is SEFL's; the modeller records the POC's actual behaviour as a finding",
+          "line": "choose an auth model"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "modeller",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#3-teardown"
+      },
+      "instructions": "An entity with no source table does not exist. Carry the POC's table and column names only as source_table, never as domain names. If a type is missing or a relationship has no target, record an open question rather than guessing.",
+      "kind": "agent",
+      "name": "Modeller",
+      "remit": "Turn the data inventory into model.yaml: entities, attributes, real types, keys, invariants, relationships, and the source table for each.",
+      "self_check": {
+        "command": "python tools/validate_model.py layer/model.yaml",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S3",
+      "tools": [
+        "inventory.read",
+        "layer.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read inventory.json and the change log",
+          "write rules.yaml and open-questions.md"
+        ],
+        "deny": [
+          "the rebuild branch",
+          "the POC repository"
+        ]
+      },
+      "escalation": {
+        "artifact": "layer/questions/rules.json",
+        "code": "ESCALATE-AMBIGUITY",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "G2's citation coverage check",
+          "line": "accept a rule with no source"
+        },
+        {
+          "judged": "a column is data shape, not behaviour; it belongs in model.yaml",
+          "line": "restate a column name as a rule"
+        },
+        {
+          "enforced_by": "the layer schema requires both readings for an ambiguity",
+          "line": "resolve a contradiction"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "rulewright",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#3-teardown"
+      },
+      "instructions": "No source, no rule. No evidence, no finding. Every rule carries file:line or a change-log turn and an assertion that can run against a build. A contradiction between the log and the code is recorded with both readings, never resolved.",
+      "kind": "agent",
+      "name": "Rulewright",
+      "remit": "Extract every behavioural rule with a citation and an executable acceptance assertion.",
+      "self_check": {
+        "command": "python tools/check_citations.py layer/rules.yaml",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S3",
+      "tools": [
+        "inventory.read",
+        "layer.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the export and seed data",
+          "write access.yaml and findings"
+        ],
+        "deny": [
+          "write the layer",
+          "disposition its findings"
+        ]
+      },
+      "escalation": {
+        "artifact": "layer/findings/security.json",
+        "code": "ESCALATE-AMBIGUITY",
+        "to": "security-lead"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the adjudicator merges; the verifier closes",
+          "line": "disposition its own findings"
+        },
+        {
+          "judged": "it is a finding; the server side is the permission",
+          "line": "report a client-side guard as a permission"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "sentinel",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#3-teardown"
+      },
+      "instructions": "A client-side guard is a finding, not a permission. Compare the server side with the client side and record where enforcement actually happens. You raise findings; you never disposition your own.",
+      "kind": "agent",
+      "name": "Sentinel",
+      "remit": "Describe the access model as it is enforced, and raise every security finding with a severity and a disposition.",
+      "self_check": {
+        "command": "python tools/check_findings.py layer/access.yaml",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S3",
+      "tools": [
+        "export.read",
+        "layer.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the layer",
+          "write the validation report"
+        ],
+        "deny": [
+          "the POC",
+          "the rebuild branch",
+          "edit the layer"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/layer-validation.json",
+        "code": "REFUSE-INPUT",
+        "to": "control-plane"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the layer schema rejects additional properties",
+          "line": "ignore an unknown key"
+        },
+        {
+          "enforced_by": "citation coverage runs over every rule",
+          "line": "sample 90% of rules"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "layer-validator",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#3-teardown"
+      },
+      "instructions": "You are deterministic. Validate the schema, then citation coverage, falsifiability, inventory reconciliation, disposition completeness, question hygiene and contradictions. Any failing check is a refusal.",
+      "kind": "service",
+      "name": "Layer Validator",
+      "remit": "Run the seven G2 checks against the layer files and return a validation report.",
+      "self_check": {
+        "command": "python tools/validate_layer.py layer/ --report report.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S3",
+      "tools": [
+        "jsonschema",
+        "ledger.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the layer",
+          "write the plan"
+        ],
+        "deny": [
+          "write code",
+          "change the layer"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/plan-question.json",
+        "code": "ESCALATE-AMBIGUITY",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "judged": "the plan's template table names the capability; a table cut is a finding at G2",
+          "line": "cut modules by table or by POC screen"
+        },
+        {
+          "enforced_by": "grant: write the plan only",
+          "line": "write code"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "architect",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#4-planning-and-scaffolding"
+      },
+      "instructions": "Cut by capability, never by table or by POC screen. Every rule id lands in exactly one module. The dependency graph must be acyclic. A rule with no obvious home is an escalated question, not a dropped line.",
+      "kind": "agent",
+      "name": "Architect",
+      "remit": "Cut the layer into modules and packets: choose the deployable shape, assign every rule and screen to a layer, and emit one packet per unit.",
+      "self_check": {
+        "command": "python tools/check_plan.py module-plan.json && python tools/acyclic.py module-plan.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S4",
+      "tools": [
+        "layer.read",
+        "ledger.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "write the skeleton branch"
+        ],
+        "deny": [
+          "implement behaviour",
+          "edit the layer",
+          "add a module"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/skeleton-refusal.json",
+        "code": "REFUSE-INPUT",
+        "to": "control-plane"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "grant: write the skeleton branch",
+          "line": "implement behaviour"
+        },
+        {
+          "judged": "the job type is wrong for this POC; regenerate it from the plan",
+          "line": "copy deployment.yml from another POC"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "scaffolder",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#4-planning-and-scaffolding"
+      },
+      "instructions": "Complete is the important word. A skeleton that compiles but has a fake seam is not done. Generate deployment.yml for this POC's job type; do not copy another POC's. Every acceptance test exists and fails for the right reason.",
+      "kind": "agent",
+      "name": "Scaffolder",
+      "remit": "Create the empty but complete skeleton: every layer exists, every seam is wired, every stub has the right signature.",
+      "self_check": {
+        "command": "gradle build -x test --offline && gradle validateDeploymentDefinition",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S5",
+      "tools": [
+        "gradle",
+        "git",
+        "layer.read"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "write its module and its tests"
+        ],
+        "deny": [
+          "contracts",
+          "module boundaries",
+          "frozen files",
+          "the layer"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/packets/$PACKET/question.json",
+        "code": "ESCALATE-AMBIGUITY",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the instrument is frozen; a change is REJECT-SCOPE",
+          "line": "edit the acceptance tests"
+        },
+        {
+          "enforced_by": "the offline build resolves only from the pinned repositories",
+          "line": "add a dependency outside Nexus"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "implementer",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#5-implementation-and-the-dal"
+      },
+      "instructions": "You own one module and one packet. If a contract does not fit, raise it; do not change it. Never edit the acceptance tests, the build files, the layer or a module boundary. A rule you disagree with is raised, not fixed (P-13).",
+      "kind": "agent",
+      "name": "Implementer",
+      "remit": "Implement one packet: replace the stubs, write the unit tests beside the code, and turn the generated acceptance tests green one rule id at a time.",
+      "self_check": {
+        "command": "gradle :module:build --offline && python tools/rule_test_map.py --packet $PACKET",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S6",
+      "tools": [
+        "gradle",
+        "git",
+        "layer.read"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the branch",
+          "write the review",
+          "submit SQL verify"
+        ],
+        "deny": [
+          "change code",
+          "approve its own verification"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/dal/question.json",
+        "code": "ESCALATE-AMBIGUITY",
+        "to": "dba"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the DBA signs the SQL-verify record",
+          "line": "approve its own verification"
+        },
+        {
+          "judged": "read all_tab_columns or file an open question",
+          "line": "assume a schema fact"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "dal-reviewer",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#5-implementation-and-the-dal"
+      },
+      "instructions": "Read the statements, not only the diff. Read the schema facts from all_tab_columns; never assume one. Every statement gets a verification id linked from the PR. You may not change code, and you may not approve your own verification.",
+      "kind": "agent",
+      "name": "DAL Reviewer",
+      "remit": "Read every mapping and verify every statement with the DBA through the SQL-verify process.",
+      "self_check": {
+        "command": "jq -e 'all(.statements[]; .verification_id != null)' dal-verdict.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S7",
+      "tools": [
+        "git",
+        "oracle.read",
+        "jira"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the diff",
+          "run the analyzer suite",
+          "write tier-1 results"
+        ],
+        "deny": [
+          "write the branch",
+          "choose the rule set"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/analyzer-refusal.json",
+        "code": "REFUSE-INPUT",
+        "to": "control-plane"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the result record carries a skip state",
+          "line": "treat a skipped analyzer as a pass"
+        },
+        {
+          "enforced_by": "the instrument manifest hash must match",
+          "line": "use an unpinned analyzer version"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "analyzer-runner",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#6-review"
+      },
+      "instructions": "Deterministic. Pinned instrument versions only. A failing analyzer blocks; a skipped analyzer is a finding, because a skip and a pass are not the same result.",
+      "kind": "service",
+      "name": "Analyzer Runner",
+      "remit": "Run tier-1 analyzers and return typed results.",
+      "self_check": {
+        "command": "python tools/instrument_hash.py --verify && gradle analyzers",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S8",
+      "tools": [
+        "gradle",
+        "analyzer-suite"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the diff and the layer",
+          "write findings"
+        ],
+        "deny": [
+          "write the branch",
+          "see the fixer's reasoning"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/findings/contract-question.json",
+        "code": "ESCALATE-AMBIGUITY",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "P-47 and the rule tag",
+          "line": "block on a PROPOSED rule"
+        },
+        {
+          "enforced_by": "grant: read the diff, write findings",
+          "line": "write the branch"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "contract-reviewer",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#6-review"
+      },
+      "instructions": "Your scope is the contract: signatures, types, operation names, error shape. One finding per defect, with the rule id it breaks and a dedupe key. You may not block on style, and you may not see the fixer's reasoning.",
+      "kind": "agent",
+      "name": "Contract Reviewer",
+      "remit": "Raise findings where the rebuild breaks a contract in the layer.",
+      "self_check": {
+        "command": "python tools/check_findings.py --scope contract",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S8",
+      "tools": [
+        "git",
+        "layer.read",
+        "ledger.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the diff and the layer",
+          "write findings"
+        ],
+        "deny": [
+          "write the branch",
+          "see the fixer's reasoning"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/findings/security-question.json",
+        "code": "ESCALATE-AMBIGUITY",
+        "to": "security-lead"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "P-47 allows only three finding classes to block",
+          "line": "block on a style issue"
+        },
+        {
+          "enforced_by": "the finding schema requires a citation",
+          "line": "raise a finding with no source"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "security-reviewer",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#6-review"
+      },
+      "instructions": "Only security blocks from this seat. Name the enforcement point, the data it protects and the exploit path. A finding with no severity and no source is not a finding.",
+      "kind": "agent",
+      "name": "Security Reviewer",
+      "remit": "Raise findings where the rebuild widens authority, leaks data or bypasses an enforcement point.",
+      "self_check": {
+        "command": "python tools/check_findings.py --scope security",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S8",
+      "tools": [
+        "git",
+        "layer.read",
+        "ledger.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the diff and the standards pack",
+          "write findings"
+        ],
+        "deny": [
+          "write the branch",
+          "block a merge"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/findings/convention-question.json",
+        "code": "ESCALATE-AMBIGUITY",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the finding class is advisory; P-47",
+          "line": "block a merge"
+        },
+        {
+          "judged": "no rule id, no finding",
+          "line": "raise a preference as a rule"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "convention-reviewer",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#6-review"
+      },
+      "instructions": "You are advisory and never block. Every finding cites a rule id and a line. If the standards pack has no rule for what you see, say nothing rather than inventing a preference.",
+      "kind": "agent",
+      "name": "Convention Reviewer",
+      "remit": "Raise advisory findings where the code departs from the standards pack.",
+      "self_check": {
+        "command": "python tools/check_findings.py --scope convention",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S8",
+      "tools": [
+        "git",
+        "standards.read",
+        "ledger.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the diff and the instrument manifest",
+          "write findings"
+        ],
+        "deny": [
+          "write the branch",
+          "change the instrument"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/findings/test-question.json",
+        "code": "ESCALATE-AMBIGUITY",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the instrument manifest hash must match",
+          "line": "accept a change with no test-change record"
+        },
+        {
+          "enforced_by": "the finding class",
+          "line": "block on anything but test tampering"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "test-reviewer",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#6-review"
+      },
+      "instructions": "Test tampering is the one thing you block on. Compare the test files with the frozen instrument hash set; a difference is a finding unless a test-change record exists. Read the assertions, not the coverage number.",
+      "kind": "agent",
+      "name": "Test Reviewer",
+      "remit": "Raise findings where a test was changed, deleted, skipped or made to assert what the code does.",
+      "self_check": {
+        "command": "python tools/instrument_diff.py --since $BASE",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S8",
+      "tools": [
+        "git",
+        "ledger.read"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the findings",
+          "write the merged set"
+        ],
+        "deny": [
+          "write the branch",
+          "judge a reviewer's scope",
+          "see the fixer's reasoning"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/findings/adjudication.json",
+        "code": "ESCALATE-NO-PROGRESS",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the finding set records merged_into",
+          "line": "drop a duplicate instead of recording it"
+        },
+        {
+          "judged": "the adjudicator merges; a new defect goes back to the reviewer with the scope",
+          "line": "add a finding of its own"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "adjudicator",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#6-review"
+      },
+      "instructions": "You do not raise findings; you merge them. Two findings are the same when they share a dedupe key and a rule id. A merge that drops a finding is worse than a duplicate. The set's hash is what the next round compares.",
+      "kind": "agent",
+      "name": "Adjudicator",
+      "remit": "Merge the reviewers' findings into one typed set, resolving duplicates without dropping one.",
+      "self_check": {
+        "command": "jq -e 'all(.findings[]; .dedupe_key != null)' finding-set.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S8",
+      "tools": [
+        "ledger.read",
+        "ledger.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "write its own branch"
+        ],
+        "deny": [
+          "tests",
+          "build files",
+          "CI",
+          "the layer",
+          "the verifier"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/patches/rejected.json",
+        "code": "REJECT-SCOPE",
+        "to": "control-plane"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the instrument is frozen",
+          "line": "edit a test to make it pass"
+        },
+        {
+          "enforced_by": "patch file list outside blast_radius.paths is REJECT-SCOPE",
+          "line": "widen the blast radius"
+        }
+      ],
+      "handoff_mode": "resume",
+      "id": "fixer",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#7-repair-and-verification"
+      },
+      "instructions": "One finding, one patch, one assertion. You may not edit tests, build files, CI, the layer or the verifier. A patch outside the blast radius is rejected and counted; a refusal is a successful outcome, not a failure to retry.",
+      "kind": "agent",
+      "name": "Fixer",
+      "remit": "Close one finding at a time on its own assertion, inside the finding's blast radius.",
+      "resume_from": "implementer",
+      "self_check": {
+        "command": "git diff --check && python tools/blast_radius.py --patch $PATCH --finding $FINDING",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S9",
+      "tools": [
+        "git",
+        "gradle",
+        "ledger.read"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the branch",
+          "write signed results"
+        ],
+        "deny": [
+          "be written to by any agent",
+          "accept a patch from the fixer's identity"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/verdicts/inconclusive.json",
+        "code": "ESCALATE-NO-PROGRESS",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "a separate signer identity",
+          "line": "let the fixer hold the signing key"
+        },
+        {
+          "judged": "it anchors the verdict; the non-input is the control",
+          "line": "read the fixer's transcript"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "verifier",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#7-repair-and-verification"
+      },
+      "instructions": "You are the verdict of record. Resolve the named check, hash the subject, run the suite twice and run the holdouts. You may not be written to by any agent, and the fixer may not hold your key. An inconclusive run is its own state, never a pass.",
+      "kind": "service",
+      "name": "Verifier",
+      "remit": "Sign a per-finding verdict on the layer assertion: PASS, FAIL, INCONCLUSIVE or REFUSED.",
+      "self_check": {
+        "command": "python tools/verify.py --subject $HEAD --out verdict.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S9",
+      "tools": [
+        "git",
+        "gradle",
+        "kms.sign"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the app and the crawl",
+          "write the parity report"
+        ],
+        "deny": [
+          "change the app, the POC or the layer"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/parity-exception.json",
+        "code": "HANDOFF-HUMAN",
+        "to": "user"
+      },
+      "forbidden": [
+        {
+          "judged": "the POC's wording is the contract",
+          "line": "correct a label for grammar"
+        },
+        {
+          "enforced_by": "one verdict per crawled screen",
+          "line": "skip the empty or error state"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "parity-agent",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#8-parity-and-delivery"
+      },
+      "instructions": "The POC's look and feel is the contract. Compare at the POC's width and zoom. A missing design-system component is not a licence to redesign; it is a finding. Do not change the app, the POC or the layer.",
+      "kind": "agent",
+      "name": "Parity Agent",
+      "remit": "Pair every rebuilt screen with its POC screen and prove parity on text, layout and journeys.",
+      "self_check": {
+        "command": "npx playwright test parity --reporter=junit",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S10",
+      "tools": [
+        "playwright",
+        "export.read",
+        "ledger.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "drive CI, promote and install for its namespace"
+        ],
+        "deny": [
+          "shared UAT",
+          "PROD",
+          "a definition edit"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/install-refusal.json",
+        "code": "REFUSE-INPUT",
+        "to": "control-plane"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the lane runs non-interactively",
+          "line": "use an interactive environment prompt"
+        },
+        {
+          "enforced_by": "grant: one namespace",
+          "line": "deploy to shared UAT or PROD"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "release-driver",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#8-parity-and-delivery"
+      },
+      "instructions": "Deterministic, no discretion. Build from the named commit, never a floating version. Use the enterprise lane; never reimplement it. One namespace, one schema. A green install with no named checks is not a result.",
+      "kind": "service",
+      "name": "Release Driver",
+      "remit": "Drive CI, promote and install for this POC's namespace, and return a provenance chain.",
+      "self_check": {
+        "command": "curl -fsS \"$UAT/actuator/health\" | jq -e '.status == \"UP\"'",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S11",
+      "tools": [
+        "jenkins",
+        "k8s",
+        "tower",
+        "ledger.write"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "write the POC's own namespace (classes 1-3)"
+        ],
+        "deny": [
+          "shared schema",
+          "grants",
+          "auth",
+          "quotas",
+          "topics",
+          "PROD"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/complaints/class-4.json",
+        "code": "RECLASSIFY",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the complaint record requires a class before a patch",
+          "line": "fix before classifying"
+        },
+        {
+          "judged": "class 5 is escalated with the user's words, not built",
+          "line": "attempt a class 5 change"
+        }
+      ],
+      "handoff_mode": "resume",
+      "id": "triage-agent",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#8-parity-and-delivery"
+      },
+      "instructions": "A complaint is classified before it is fixed. Class 1 to 3 you may write inside the POC's own namespace. Class 4 and 5 are escalated, not attempted, even when the user is persuasive.",
+      "kind": "agent",
+      "name": "Triage Agent",
+      "remit": "Reproduce, evidence and classify each UAT complaint 1 to 5 before anything changes.",
+      "resume_from": "release-driver",
+      "self_check": {
+        "command": "jq -e 'all(.complaints[]; .class != null)' complaints.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S12",
+      "tools": [
+        "k8s",
+        "oracle.read",
+        "jira"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read everything in the sample"
+        ],
+        "deny": [
+          "choose the sample",
+          "write to the stage"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/audit/reopen.json",
+        "code": "HANDOFF-HUMAN",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the sample is drawn from machine-approved artifacts",
+          "line": "audit only the failures"
+        },
+        {
+          "enforced_by": "read-only grant",
+          "line": "write to the stage"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "auditor",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#1-the-roster-at-a-glance"
+      },
+      "instructions": "You read what the panel passed, not what it failed. You do not choose the sample and you do not write to the stage. A sampled pass that does not survive reading reopens the gate it closed.",
+      "kind": "agent",
+      "name": "Auditor",
+      "remit": "Read a 10% sample of machine-approved artifacts in full and reopen a gate when the sample does not hold.",
+      "self_check": {
+        "command": "jq -e '.sample_size > 0 and .read_in_full == .sample_size' audit.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "",
+      "tools": [
+        "ledger.read"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the request, the POC and the UAT instance",
+          "sign a gate"
+        ],
+        "deny": [
+          "edit a stage artifact",
+          "approve a code change"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/dod/unsigned.json",
+        "code": "HANDOFF-HUMAN",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "judged": "the suite proves the rebuild; the user proves the contract matches the intent",
+          "line": "sign off on a suite alone"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "user",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/agents.md#1-the-roster-at-a-glance"
+      },
+      "instructions": "You are the accountable seat at G0, G1 and G4. React to what runs; do not describe what you want. Sign only against the acceptance list, line by line, with evidence.",
+      "kind": "seat",
+      "name": "User",
+      "remit": "Decide the gates that need intent, and sign the definition of done against the running UAT instance.",
+      "self_check": {
+        "command": "jq -e 'all(.lines[]; .evidence != null)' dod.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S12",
+      "tools": []
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the pipeline artifacts",
+          "decide an exception"
+        ],
+        "deny": [
+          "sign a code change they authored"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/exceptions/escalation.json",
+        "code": "HANDOFF-HUMAN",
+        "to": "user"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "P-54",
+          "line": "approve their own change"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "engineer",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/gates.md#1-the-gates"
+      },
+      "instructions": "You decide ambiguity escalations, class 4 reclassifications and gate exceptions. You attest the evidence pack at G4. You do not approve your own change.",
+      "kind": "seat",
+      "name": "Engineer",
+      "remit": "Own the exceptions queue, the sampled audit and the human decisions a model may not make.",
+      "self_check": {
+        "command": "jq -e '.evidence_pack != null' attestation.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "",
+      "tools": [
+        "ledger.read",
+        "jira"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read the schema",
+          "sign a SQL-verify record"
+        ],
+        "deny": [
+          "edit the branch"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/dal/dba-refusal.json",
+        "code": "REFUSE-INPUT",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "S7 EXIT-02",
+          "line": "accept a statement with no verification id"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "dba",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/gates.md#1-the-gates"
+      },
+      "instructions": "You verify the statement against the schema you read, not the one the reviewer describes. You sign the SQL-verify record; the reviewer may not. A statement without a verification id does not merge.",
+      "kind": "seat",
+      "name": "DBA",
+      "remit": "Verify each DAL statement through the SQL-verify process and sign the record.",
+      "self_check": {
+        "command": "jq -e 'all(.statements[]; .verified_by == \"dba\")' dal-verdict.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "S7",
+      "tools": [
+        "oracle.read",
+        "jira"
+      ]
+    },
+    {
+      "capabilities": {
+        "allow": [
+          "read security findings",
+          "disposition a finding"
+        ],
+        "deny": [
+          "edit code",
+          "close a finding without evidence"
+        ]
+      },
+      "escalation": {
+        "artifact": "ledger/findings/security-escalation.json",
+        "code": "HANDOFF-HUMAN",
+        "to": "engineer"
+      },
+      "forbidden": [
+        {
+          "enforced_by": "the disposition record requires an evidence link",
+          "line": "close a finding with no evidence"
+        }
+      ],
+      "handoff_mode": "new",
+      "id": "security-lead",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "source": "docs/pipeline/gates.md#1-the-gates"
+      },
+      "instructions": "You rule on a high-severity finding's disposition. A finding with no disposition is not closed. You do not build the fix.",
+      "kind": "seat",
+      "name": "Security Lead",
+      "remit": "Decide security dispositions a reviewer may not decide alone.",
+      "self_check": {
+        "command": "jq -e 'all(.findings[]; .disposition != null)' access-findings.json",
+        "reports": [
+          "command",
+          "exit_code",
+          "stdout_sha256"
+        ]
+      },
+      "stage": "",
+      "tools": [
+        "ledger.read"
+      ]
+    }
+  ],
+  "stages": [
+    {
+      "artifact": {
+        "id": "charter",
+        "path": "ledger/charters/charter.md",
+        "schema": "charter/1",
+        "sha256": "sha256:1f0a9c4d2b77",
+        "writer": "steward"
+      },
+      "binds": [
+        {
+          "check": "charter.md states the decision the POC exists to make",
+          "id": "P-01",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "charter.md names grade 2 and lists what the POC may not add",
+          "id": "P-02",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "charter.md names an owner and a TTL",
+          "id": "P-08",
+          "tag": "ADOPTED"
+        }
+      ],
+      "class": "intake",
+      "done": [
+        {
+          "check_id": "EXIT-01",
+          "command": "jq -e '.decision and .owner and .ttl and .grade == 2' charter.json",
+          "evidence": "stdout and exit code in the ledger",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-02",
+          "command": "jq -e '(.journeys | length) >= 3 and (.journeys | length) <= 5' charter.json",
+          "evidence": "stdout and exit code in the ledger",
+          "pass_when": "exit 0"
+        }
+      ],
+      "forbidden": [
+        {
+          "enforced_by": "grant: write charter.md only",
+          "line": "specify screens or rules"
+        },
+        {
+          "enforced_by": "EXIT-01 asserts grade == 2",
+          "line": "set a grade above 2"
+        },
+        {
+          "judged": "an integration is a grade-3 marker; the steward names it out of scope instead",
+          "line": "promise an integration"
+        }
+      ],
+      "gates": [
+        "G0"
+      ],
+      "id": "S0",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "note": "Imported as written on main, including the gaps the stage guide scores it for.",
+        "source": "docs/pipeline/pipeline.html#the-stage-table"
+      },
+      "inputs": {
+        "non": [
+          "a proposed design",
+          "the POC stack",
+          "any repo",
+          "any customer data"
+        ],
+        "read": []
+      },
+      "method": {
+        "deterministic": [
+          "read the request",
+          "draft the eight charter fields",
+          "hash the draft"
+        ],
+        "judgement": [
+          "compress the request into three to five journeys",
+          "name the decision the POC exists to make"
+        ],
+        "on_ambiguity": "ESCALATE-AMBIGUITY"
+      },
+      "name": "Intake and charter",
+      "owner": {
+        "kind": "agent",
+        "role": "steward"
+      },
+      "purpose": "Turn the request into a one-page charter the user signs, so the POC is built against a decision instead of a wish.",
+      "stops": [
+        {
+          "code": "ESCALATE-AMBIGUITY",
+          "to": "user",
+          "when": "the request names no decision the POC exists to make"
+        },
+        {
+          "code": "REFUSE-INPUT",
+          "to": "control-plane",
+          "when": "the request asks for real customer data"
+        }
+      ],
+      "trigger": {
+        "fires": "control-plane",
+        "when": "a request exists and the user has named an owner and a TTL"
+      }
+    },
+    {
+      "artifact": {
+        "id": "change-log",
+        "path": "ledger/change-log.json",
+        "schema": "change-log/1",
+        "sha256": "sha256:c03d7e5a1b90",
+        "writer": "scribe"
+      },
+      "binds": [
+        {
+          "check": "the POC builder adds no auth provider, real integration or production hosting",
+          "id": "P-02",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "one change-log entry per correction, each with a turn reference",
+          "id": "P-04",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "the PII scan over the POC session is clean",
+          "id": "P-03",
+          "tag": "ADOPTED"
+        }
+      ],
+      "class": "intake",
+      "done": [
+        {
+          "check_id": "EXIT-01",
+          "command": "jq -e '[.entries[] | select(.turn == null)] | length == 0' change-log.json",
+          "evidence": "stdout and exit code in the ledger",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-02",
+          "command": "jq -e '(.entries | length) > 0' change-log.json",
+          "evidence": "entry count reconciled with the session turns",
+          "pass_when": "exit 0"
+        }
+      ],
+      "forbidden": [
+        {
+          "judged": "the log is what the user corrected, not what the builder built",
+          "line": "record what the agent did as a requirement"
+        },
+        {
+          "enforced_by": "grant: write change-log.json only",
+          "line": "edit the POC"
+        }
+      ],
+      "gates": [
+        "G1"
+      ],
+      "id": "S1",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "note": "The POC builder is external and is not a roster role; the scribe is the stage's owner.",
+        "source": "docs/pipeline/pipeline.html#the-stage-table"
+      },
+      "inputs": {
+        "non": [
+          "the POC source",
+          "the layer",
+          "the reviewer's notes"
+        ],
+        "read": [
+          {
+            "artifact": "charter",
+            "location": "ledger#C-0001",
+            "mutability": "read-only",
+            "schema": "charter/1",
+            "sha256": "sha256:1f0a9c4d2b77"
+          }
+        ]
+      },
+      "method": {
+        "deterministic": [
+          "watch the session",
+          "append one change-log entry per correction"
+        ],
+        "judgement": [
+          "distinguish a correction from a description of intent"
+        ],
+        "on_ambiguity": "ESCALATE-AMBIGUITY"
+      },
+      "name": "POC build",
+      "owner": {
+        "kind": "agent",
+        "role": "scribe"
+      },
+      "purpose": "Let the user correct a running POC while a scribe records every correction, so the requirements are discovered against behaviour instead of prose.",
+      "stops": [
+        {
+          "code": "ESCALATE-AMBIGUITY",
+          "to": "user",
+          "when": "a correction contradicts an earlier one"
+        },
+        {
+          "code": "REFUSE-INPUT",
+          "to": "control-plane",
+          "when": "the session produces no corrections, so the POC is a demo"
+        }
+      ],
+      "trigger": {
+        "fires": "control-plane",
+        "when": "charter.sha256 resolves and G0 is signed"
+      }
+    },
+    {
+      "artifact": {
+        "id": "frozen-export",
+        "path": "exports/poc-0007/",
+        "schema": "export/1",
+        "sha256": "sha256:4b1e0c9a7d21",
+        "writer": "freeze-job"
+      },
+      "binds": [
+        {
+          "check": "the export hash is recorded in the ledger and the export path is closed under addition",
+          "id": "P-05",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "the secrets and PII scans are clean before the hash is taken",
+          "id": "P-03",
+          "tag": "ADOPTED"
+        }
+      ],
+      "class": "teardown",
+      "done": [
+        {
+          "check_id": "EXIT-01",
+          "command": "sha256sum -c export.sha256",
+          "evidence": "the checklist output and the manifest hash",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-02",
+          "command": "test \"$(cat run1.sha256)\" = \"$(cat run2.sha256)\"",
+          "evidence": "two independent exports of the same checkpoint agree",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-03",
+          "command": "jq -e '.item | length == 10 and all(.item[]; .ok == true)' freeze-checklist.json",
+          "evidence": "freeze-checklist.json in the ledger",
+          "pass_when": "exit 0"
+        }
+      ],
+      "forbidden": [
+        {
+          "enforced_by": "EXIT-03 asserts a schema dump from the database",
+          "line": "copy the schema from the ORM models"
+        },
+        {
+          "enforced_by": "the export directory is read-only after EXIT-01",
+          "line": "allow additions to the export after the hash"
+        },
+        {
+          "enforced_by": "the PII scan blocks the hash",
+          "line": "leave a real customer name in the seed data"
+        }
+      ],
+      "id": "S2",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "note": "A deterministic job, no model in the path.",
+        "source": "docs/pipeline/pipeline.html#the-stage-table"
+      },
+      "inputs": {
+        "non": [
+          "the live POC URL",
+          "any branch head",
+          "the builder's session"
+        ],
+        "read": [
+          {
+            "artifact": "change-log",
+            "location": "ledger#CL-0004",
+            "mutability": "read-only",
+            "schema": "change-log/1",
+            "sha256": "sha256:c03d7e5a1b90"
+          },
+          {
+            "artifact": "poc-snapshot",
+            "location": "checkpoint#POC-0007",
+            "mutability": "read-only",
+            "schema": "snapshot/1",
+            "sha256": "sha256:7aa1f03e9c22"
+          }
+        ]
+      },
+      "method": {
+        "deterministic": [
+          "run the ten-item checklist",
+          "dump the schema from the database",
+          "crawl every route",
+          "hash the export twice"
+        ],
+        "judgement": [],
+        "on_ambiguity": "REFUSE-INPUT"
+      },
+      "name": "Freeze and export",
+      "owner": {
+        "kind": "job",
+        "role": "freeze-job"
+      },
+      "purpose": "Freeze the accepted POC into an immutable export with hashes, so every later stage reads the same bytes.",
+      "stops": [
+        {
+          "code": "REFUSE-INPUT",
+          "to": "control-plane",
+          "when": "any checklist line fails, or the two exports disagree"
+        },
+        {
+          "code": "STOP-BUDGET",
+          "to": "owner",
+          "when": "the crawl exceeds the stage budget"
+        }
+      ],
+      "trigger": {
+        "fires": "control-plane",
+        "when": "G1 is signed and the checkpoint hash resolves"
+      }
+    },
+    {
+      "artifact": {
+        "id": "semantic-layer",
+        "path": "layer/",
+        "schema": "layer/1",
+        "sha256": "sha256:9f2c8b41e6d0",
+        "writer": "rulewright"
+      },
+      "binds": [
+        {
+          "check": "every rule carries a file:line or a change-log turn",
+          "id": "P-10",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "every rule has an executable acceptance assertion",
+          "id": "P-11",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "an ambiguity is recorded with both readings, not resolved",
+          "id": "P-13",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "the layer hash is recorded in the ledger",
+          "id": "P-18",
+          "on_fail": "record the regime; the hash cannot block a merge until P-18 is adopted",
+          "tag": "PROPOSED"
+        }
+      ],
+      "class": "teardown",
+      "done": [
+        {
+          "check_id": "EXIT-01",
+          "command": "python tools/validate_layer.py layer/",
+          "evidence": "the validation report in the ledger",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-02",
+          "command": "jq -e '[.rules[] | select(.source == null)] | length == 0' layer/rules.yaml",
+          "evidence": "citation coverage over every rule",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-03",
+          "command": "jq -e '[.questions[] | select(.blocking and .owner == null)] | length == 0' layer/open-questions.md",
+          "evidence": "open-questions disposition",
+          "pass_when": "exit 0"
+        }
+      ],
+      "forbidden": [
+        {
+          "enforced_by": "the export is a read-only mount; the repo is not granted",
+          "line": "read the POC repository"
+        },
+        {
+          "enforced_by": "EXIT-01 rejects an entity without source_table",
+          "line": "invent an entity with no source table"
+        },
+        {
+          "judged": "both readings go into open-questions.md with one owner",
+          "line": "resolve a contradiction silently"
+        }
+      ],
+      "gates": [
+        "G2"
+      ],
+      "id": "S3",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "note": "Four crews work this stage; the layer's single writer is the rulewright for the exported document.",
+        "source": "docs/pipeline/pipeline.html#the-stage-table"
+      },
+      "inputs": {
+        "non": [
+          "the POC repository",
+          "the live POC",
+          "the builder's reasoning"
+        ],
+        "read": [
+          {
+            "artifact": "frozen-export",
+            "location": "ledger#L-0042",
+            "mutability": "read-only",
+            "schema": "export/1",
+            "sha256": "sha256:4b1e0c9a7d21"
+          },
+          {
+            "artifact": "change-log",
+            "location": "ledger#CL-0004",
+            "mutability": "read-only",
+            "schema": "change-log/1",
+            "sha256": "sha256:c03d7e5a1b90"
+          }
+        ]
+      },
+      "method": {
+        "deterministic": [
+          "extract the seven inventories",
+          "reconcile counts with the source",
+          "hash the layer"
+        ],
+        "judgement": [
+          "interpret meaning from a cited line",
+          "name an entity that has a source table"
+        ],
+        "on_ambiguity": "ESCALATE-AMBIGUITY"
+      },
+      "name": "Reverse-engineer",
+      "owner": {
+        "kind": "agent",
+        "role": "rulewright"
+      },
+      "purpose": "Turn the frozen export into the six layer files, so the rebuild has a contract it must match and G2 has something to validate.",
+      "stops": [
+        {
+          "code": "REFUSE-INPUT",
+          "to": "control-plane",
+          "when": "the export hash does not match the ledger"
+        },
+        {
+          "code": "ESCALATE-AMBIGUITY",
+          "to": "engineer",
+          "when": "a rule has no source, or two readings survive"
+        },
+        {
+          "code": "STOP-BUDGET",
+          "to": "owner",
+          "when": "the teardown exceeds the stage budget"
+        }
+      ],
+      "trigger": {
+        "fires": "control-plane",
+        "when": "export.sha256 resolves and every inventory has a producer"
+      }
+    },
+    {
+      "artifact": {
+        "id": "module-plan",
+        "path": "ledger/module-plan.md",
+        "schema": "module-plan/1",
+        "sha256": "sha256:5d90a7c3e142",
+        "writer": "architect"
+      },
+      "binds": [
+        {
+          "check": "the build graph equals the layer graph",
+          "id": "P-19",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "every rule id lands in exactly one module",
+          "id": "P-26",
+          "on_fail": "record the duplicate; it cannot block until adopted",
+          "tag": "PROPOSED"
+        },
+        {
+          "check": "one packet is one layer, one rule family, one test class per class under test",
+          "id": "P-27",
+          "on_fail": "record the regime; packets still split by layer",
+          "tag": "PROPOSED"
+        }
+      ],
+      "class": "planning",
+      "done": [
+        {
+          "check_id": "EXIT-01",
+          "command": "python tools/check_plan.py module-plan.json",
+          "evidence": "packet count and rule coverage in the ledger",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-02",
+          "command": "python tools/acyclic.py module-plan.json",
+          "evidence": "dependency graph in topological order",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-03",
+          "command": "sha256sum module-plan.md",
+          "evidence": "the plan hash S5 refuses without",
+          "pass_when": "exit 0"
+        }
+      ],
+      "forbidden": [
+        {
+          "enforced_by": "grant: write the plan only",
+          "line": "write code"
+        },
+        {
+          "enforced_by": "the layer is a read-only input",
+          "line": "change the layer"
+        },
+        {
+          "judged": "the rule is escalated as a question, not deleted",
+          "line": "drop a rule with no obvious home"
+        }
+      ],
+      "id": "S4",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "note": "The guide scores its exit at 1 because the check runs on the author's own artifact.",
+        "source": "docs/pipeline/pipeline.html#the-stage-table"
+      },
+      "inputs": {
+        "non": [
+          "the POC repository",
+          "the layer's rejected rules",
+          "a note from the meeting"
+        ],
+        "read": [
+          {
+            "artifact": "semantic-layer",
+            "location": "ledger#L-0042",
+            "mutability": "read-only",
+            "schema": "layer/1",
+            "sha256": "sha256:9f2c8b41e6d0"
+          }
+        ]
+      },
+      "method": {
+        "deterministic": [
+          "assign every rule id once",
+          "build the dependency graph",
+          "hash the plan"
+        ],
+        "judgement": [
+          "choose the deployable shape",
+          "cut modules by capability"
+        ],
+        "on_ambiguity": "ESCALATE-AMBIGUITY"
+      },
+      "name": "Work breakdown",
+      "owner": {
+        "kind": "agent",
+        "role": "architect"
+      },
+      "purpose": "Cut the layer into modules and one packet per unit, so every rule has exactly one owner before coding starts.",
+      "stops": [
+        {
+          "code": "ESCALATE-AMBIGUITY",
+          "to": "engineer",
+          "when": "a rule has no obvious home"
+        },
+        {
+          "code": "STOP-BUDGET",
+          "to": "owner",
+          "when": "the plan exceeds the stage budget"
+        }
+      ],
+      "trigger": {
+        "fires": "control-plane",
+        "when": "G2 is signed and layer.sha256 resolves"
+      }
+    },
+    {
+      "artifact": {
+        "id": "skeleton",
+        "path": "ledger/skeleton-manifest.json",
+        "schema": "skeleton/1",
+        "sha256": "sha256:a3b51d8f0c76",
+        "writer": "scaffolder"
+      },
+      "binds": [
+        {
+          "check": "every contract compiles with its DTO and its stub",
+          "id": "P-29",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "no SQL outside the DAL package",
+          "id": "P-30",
+          "tag": "ADOPTED"
+        }
+      ],
+      "class": "planning",
+      "done": [
+        {
+          "check_id": "EXIT-01",
+          "command": "gradle build -x test --offline",
+          "evidence": "the build log in the ledger",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-02",
+          "command": "gradle validateDeploymentDefinition",
+          "evidence": "the validated deployment.yml",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-03",
+          "command": "gradle test --tests '*Acceptance*' --continue",
+          "evidence": "every acceptance test fails for the right reason, not a compile error",
+          "pass_when": "non-zero exit with assertion failures only"
+        }
+      ],
+      "forbidden": [
+        {
+          "enforced_by": "grant: write the skeleton branch",
+          "line": "implement behaviour"
+        },
+        {
+          "enforced_by": "EXIT-02 rejects a package not in the plan",
+          "line": "add a module"
+        },
+        {
+          "judged": "the job type is wrong for this POC; the scaffolder regenerates it",
+          "line": "copy deployment.yml from another POC"
+        }
+      ],
+      "id": "S5",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "note": "Complete means every layer exists; behaviour is S6.",
+        "source": "docs/pipeline/pipeline.html#the-stage-table"
+      },
+      "inputs": {
+        "non": [
+          "a module the plan does not contain",
+          "the POC's source"
+        ],
+        "read": [
+          {
+            "artifact": "module-plan",
+            "location": "ledger#MP-0003",
+            "mutability": "read-only",
+            "schema": "module-plan/1",
+            "sha256": "sha256:5d90a7c3e142"
+          },
+          {
+            "artifact": "semantic-layer",
+            "location": "ledger#L-0042",
+            "mutability": "read-only",
+            "schema": "layer/1",
+            "sha256": "sha256:9f2c8b41e6d0"
+          }
+        ]
+      },
+      "method": {
+        "deterministic": [
+          "render the package tree",
+          "emit DAL stubs and contract DTOs",
+          "hash the generated acceptance tests"
+        ],
+        "judgement": [],
+        "on_ambiguity": "REFUSE-INPUT"
+      },
+      "name": "Instantiate the model",
+      "owner": {
+        "kind": "agent",
+        "role": "scaffolder"
+      },
+      "purpose": "Generate the empty but complete skeleton from the plan, so every seam is wired before any behaviour is written.",
+      "stops": [
+        {
+          "code": "REFUSE-INPUT",
+          "to": "control-plane",
+          "when": "the plan needs a module the plan does not name"
+        },
+        {
+          "cap": "2 reruns",
+          "code": "ESCALATE-NO-PROGRESS",
+          "to": "engineer",
+          "when": "two skeleton runs produce different manifests"
+        }
+      ],
+      "trigger": {
+        "fires": "control-plane",
+        "when": "plan.sha256 resolves and S4's exit evidence is present"
+      }
+    },
+    {
+      "artifact": {
+        "id": "module-build",
+        "path": "ledger/builds/S6-module.json",
+        "schema": "build/1",
+        "sha256": "sha256:e77c2a91b4d8",
+        "writer": "implementer"
+      },
+      "binds": [
+        {
+          "check": "no SQL outside the DAL",
+          "id": "P-30",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "the instrument manifest hash equals the pinned hash",
+          "id": "P-41",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "the implementer holds no write grant on the test instrument",
+          "id": "P-44",
+          "tag": "ADOPTED"
+        }
+      ],
+      "class": "build",
+      "done": [
+        {
+          "check_id": "EXIT-01",
+          "command": "gradle :module:build --offline",
+          "evidence": "the build log and test report in the ledger",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-02",
+          "command": "grep -rn 'SELECT\\|INSERT\\|UPDATE' src/main --include='*.java' | grep -v '/dal/'",
+          "evidence": "the grep output in the ledger",
+          "pass_when": "empty output"
+        },
+        {
+          "check_id": "EXIT-03",
+          "command": "python tools/rule_test_map.py --packet $PACKET",
+          "evidence": "one passing acceptance test per rule id",
+          "pass_when": "exit 0"
+        }
+      ],
+      "forbidden": [
+        {
+          "enforced_by": "a layer change is its own event (P-16)",
+          "line": "fix a rule it disagrees with"
+        },
+        {
+          "enforced_by": "tests are a frozen instrument (P-41)",
+          "line": "write a test that asserts the label it just wrote"
+        },
+        {
+          "enforced_by": "the offline build resolves only from the pinned repository list",
+          "line": "add a dependency outside Nexus"
+        }
+      ],
+      "id": "S6",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "note": "One implementer per module, run in dependency order.",
+        "source": "docs/pipeline/pipeline.html#the-stage-table"
+      },
+      "inputs": {
+        "non": [
+          "another module's packet",
+          "the tests' expected values",
+          "the reviewer's notes"
+        ],
+        "read": [
+          {
+            "artifact": "skeleton",
+            "location": "ledger#SK-0002",
+            "mutability": "read-only",
+            "schema": "skeleton/1",
+            "sha256": "sha256:a3b51d8f0c76"
+          },
+          {
+            "artifact": "semantic-layer",
+            "location": "ledger#L-0042",
+            "mutability": "read-only",
+            "schema": "layer/1",
+            "sha256": "sha256:9f2c8b41e6d0"
+          }
+        ]
+      },
+      "method": {
+        "deterministic": [
+          "replace the stubs",
+          "run the module build",
+          "run the packet's acceptance tests"
+        ],
+        "judgement": [
+          "fill the behaviour against the layer's operation names"
+        ],
+        "on_ambiguity": "ESCALATE-AMBIGUITY"
+      },
+      "name": "Implement per module",
+      "owner": {
+        "kind": "agent",
+        "role": "implementer"
+      },
+      "purpose": "Fill one packet per run so each module turns its acceptance tests green one rule id at a time.",
+      "stops": [
+        {
+          "code": "REJECT-SCOPE",
+          "to": "control-plane",
+          "when": "a patch touches a contract, a module boundary or a frozen file"
+        },
+        {
+          "code": "ESCALATE-AMBIGUITY",
+          "to": "engineer",
+          "when": "the layer and the packet disagree"
+        },
+        {
+          "code": "STOP-BUDGET",
+          "to": "owner",
+          "when": "the packet exceeds the stage budget"
+        }
+      ],
+      "trigger": {
+        "fires": "control-plane",
+        "when": "every dependency module's build is green and the packet hashes resolve"
+      }
+    },
+    {
+      "artifact": {
+        "id": "dal-verdict",
+        "path": "ledger/dal/V-0004.json",
+        "schema": "dal-verdict/1",
+        "sha256": "sha256:2c6f8d10ab35",
+        "writer": "dal-reviewer"
+      },
+      "binds": [
+        {
+          "check": "every statement has a SQL-verify record linked from the PR",
+          "id": "P-39",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "every operation is a mapping class plus an input and an output type",
+          "id": "P-31",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "real types at the boundary; legacy encodings normalised in the DAL",
+          "id": "P-35",
+          "tag": "ADOPTED"
+        }
+      ],
+      "class": "build",
+      "done": [
+        {
+          "check_id": "EXIT-01",
+          "command": "python tools/dal_review.py --module $MODULE",
+          "evidence": "the twelve-check table in the ledger",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-02",
+          "command": "jq -e '[.statements[] | select(.verification_id == null)] | length == 0' dal-verdict.json",
+          "evidence": "every statement has a verification id",
+          "pass_when": "exit 0"
+        }
+      ],
+      "forbidden": [
+        {
+          "enforced_by": "grant: read the branch, write the review",
+          "line": "change code"
+        },
+        {
+          "enforced_by": "the DBA signs the SQL-verify record",
+          "line": "approve its own verification"
+        },
+        {
+          "judged": "the reviewer reads all_tab_columns or files an open question",
+          "line": "assume a schema fact instead of reading it"
+        }
+      ],
+      "id": "S7",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "note": "The twelve checks are identified by table position in the source; the studio records them as one command.",
+        "source": "docs/pipeline/pipeline.html#the-stage-table"
+      },
+      "inputs": {
+        "non": [
+          "the implementer's transcript",
+          "the review finding set"
+        ],
+        "read": [
+          {
+            "artifact": "module-build",
+            "location": "ledger#B-0031",
+            "mutability": "read-only",
+            "schema": "build/1",
+            "sha256": "sha256:e77c2a91b4d8"
+          },
+          {
+            "artifact": "semantic-layer",
+            "location": "ledger#L-0042",
+            "mutability": "read-only",
+            "schema": "layer/1",
+            "sha256": "sha256:9f2c8b41e6d0"
+          }
+        ]
+      },
+      "method": {
+        "deterministic": [
+          "list every statement",
+          "match each statement to a verification record"
+        ],
+        "judgement": [
+          "read the mapping for a cross-schema read",
+          "decide whether the transaction boundary is stated"
+        ],
+        "on_ambiguity": "ESCALATE-AMBIGUITY"
+      },
+      "name": "DAL review and SQL verify",
+      "owner": {
+        "kind": "agent",
+        "role": "dal-reviewer"
+      },
+      "purpose": "Verify every DAL statement with the DBA before review, so a data defect is caught where it is cheapest.",
+      "stops": [
+        {
+          "code": "REFUSE-INPUT",
+          "to": "control-plane",
+          "when": "the module has not passed its own packet check"
+        },
+        {
+          "code": "ESCALATE-AMBIGUITY",
+          "to": "dba",
+          "when": "a column type cannot be read from all_tab_columns"
+        },
+        {
+          "code": "RECLASSIFY",
+          "to": "engineer",
+          "when": "the statement is a schema change, which is class 4"
+        }
+      ],
+      "trigger": {
+        "fires": "control-plane",
+        "when": "the module's own packet check passed and the branch head hash is recorded"
+      }
+    },
+    {
+      "artifact": {
+        "id": "finding-set",
+        "path": "ledger/findings/F-0018.json",
+        "schema": "finding/2",
+        "sha256": "sha256:a71b3e0d59f4",
+        "writer": "adjudicator"
+      },
+      "binds": [
+        {
+          "check": "three tiers run in order: analyzers, scoped reviewers, adjudication",
+          "id": "P-46",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "every finding is a record with a dedupe key, not a paragraph",
+          "id": "P-48",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "the round count is capped at three",
+          "id": "P-50",
+          "tag": "ADOPTED"
+        }
+      ],
+      "class": "review",
+      "done": [
+        {
+          "check_id": "EXIT-01",
+          "command": "jq -e '[.findings[] | select(.severity == \"blocking\")] | length == 0' finding-set.json",
+          "evidence": "the finding set and the analyzer report in the ledger",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-02",
+          "command": "jq -e '[.findings[] | select(.dedupe_key == null)] | length == 0' finding-set.json",
+          "evidence": "every finding is addressable exactly once",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-03",
+          "command": "python tools/instrument_hash.py --verify",
+          "evidence": "the frozen-instrument hash set is unchanged",
+          "pass_when": "exit 0"
+        }
+      ],
+      "forbidden": [
+        {
+          "judged": "it anchors the finding; the non-input is the control",
+          "line": "see the fixer's reasoning"
+        },
+        {
+          "enforced_by": "grant: read the diff, write findings",
+          "line": "write the branch"
+        },
+        {
+          "enforced_by": "P-47 allows only three finding classes to block",
+          "line": "report a style preference as blocking"
+        }
+      ],
+      "id": "S8",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "note": "Four scoped reviewers plus analyzers; the adjudicator owns the merged set.",
+        "source": "docs/pipeline/pipeline.html#the-stage-table"
+      },
+      "inputs": {
+        "non": [
+          "the fixer's reasoning",
+          "the implementer's transcript",
+          "a promise that it will pass later"
+        ],
+        "read": [
+          {
+            "artifact": "dal-verdict",
+            "location": "ledger#DV-0004",
+            "mutability": "read-only",
+            "schema": "dal-verdict/1",
+            "sha256": "sha256:2c6f8d10ab35"
+          },
+          {
+            "artifact": "branch-head",
+            "location": "ledger#C-0091",
+            "mutability": "read-only",
+            "schema": "commit/1",
+            "sha256": "sha256:8e41b7d29c50"
+          },
+          {
+            "artifact": "semantic-layer",
+            "location": "ledger#L-0042",
+            "mutability": "read-only",
+            "schema": "layer/1",
+            "sha256": "sha256:9f2c8b41e6d0"
+          }
+        ]
+      },
+      "method": {
+        "deterministic": [
+          "run tier-1 analyzers",
+          "dedupe findings by key",
+          "sort by severity"
+        ],
+        "judgement": [
+          "judge a finding inside a reviewer's scope",
+          "merge duplicates without dropping one"
+        ],
+        "on_ambiguity": "ESCALATE-NO-PROGRESS"
+      },
+      "name": "Code review rounds",
+      "owner": {
+        "kind": "agent",
+        "role": "adjudicator"
+      },
+      "purpose": "Raise a typed finding set against the branch, so the fix loop has a bounded set it can close.",
+      "stops": [
+        {
+          "cap": "3 rounds (P-50)",
+          "code": "ESCALATE-NO-PROGRESS",
+          "to": "engineer",
+          "when": "the same blocking set hash appears in two consecutive rounds"
+        },
+        {
+          "code": "REJECT-SCOPE",
+          "to": "control-plane",
+          "when": "a reviewer blocks on a PROPOSED rule"
+        },
+        {
+          "code": "REFUSE-INPUT",
+          "to": "control-plane",
+          "when": "the DAL verdict is missing"
+        }
+      ],
+      "trigger": {
+        "fires": "control-plane",
+        "when": "the DAL verdict is recorded and the branch head hash resolves"
+      }
+    },
+    {
+      "artifact": {
+        "id": "verdict",
+        "path": "ledger/verdicts/V-0001.json",
+        "schema": "verdict/1",
+        "sha256": "sha256:d02e6c47b918",
+        "writer": "verifier"
+      },
+      "binds": [
+        {
+          "check": "the verifier signature verifies and subject.commit equals HEAD",
+          "id": "P-52",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "the fixing identity holds no signing grant",
+          "id": "P-54",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "a layer change is its own event, not part of the patch",
+          "id": "P-16",
+          "tag": "ADOPTED"
+        }
+      ],
+      "class": "repair",
+      "done": [
+        {
+          "check_id": "EXIT-01",
+          "command": "jq -e '.subject.commit == env.HEAD and .result == \"PASS\"' verdict.json",
+          "evidence": "the signed verdict and the commit it names",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-02",
+          "command": "diff <(jq -S . run1.json) <(jq -S . run2.json)",
+          "evidence": "two consecutive runs agree",
+          "pass_when": "empty diff"
+        },
+        {
+          "check_id": "EXIT-03",
+          "command": "python tools/blast_radius.py --patch $PATCH --finding $FINDING",
+          "evidence": "every patched file is inside the finding's blast radius",
+          "pass_when": "exit 0"
+        }
+      ],
+      "forbidden": [
+        {
+          "enforced_by": "the test instrument is frozen; a change is REJECT-SCOPE",
+          "line": "edit a test to make it pass"
+        },
+        {
+          "enforced_by": "a separate signer identity (P-54)",
+          "line": "hold the signing key"
+        },
+        {
+          "enforced_by": "patch file list outside blast_radius.paths is REJECT-SCOPE",
+          "line": "widen the blast radius"
+        }
+      ],
+      "id": "S9",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "note": "Two entry edges (review and parity) and one shared verifier.",
+        "source": "docs/pipeline/pipeline.html#the-stage-table"
+      },
+      "inputs": {
+        "non": [
+          "the verifier's signing key",
+          "the review transcript",
+          "the tests' expected values"
+        ],
+        "read": [
+          {
+            "artifact": "finding-set",
+            "location": "ledger#F-0018",
+            "mutability": "read-only",
+            "schema": "finding/2",
+            "sha256": "sha256:a71b3e0d59f4"
+          },
+          {
+            "artifact": "branch-head",
+            "location": "ledger#C-0091",
+            "mutability": "read-only",
+            "schema": "commit/1",
+            "sha256": "sha256:8e41b7d29c50"
+          }
+        ]
+      },
+      "method": {
+        "deterministic": [
+          "hash the subject",
+          "run the suite twice",
+          "check the patch file list against the blast radius"
+        ],
+        "judgement": [
+          "decide the smallest patch that closes one finding"
+        ],
+        "on_ambiguity": "REJECT-SCOPE"
+      },
+      "name": "Rewrite to green",
+      "owner": {
+        "kind": "agent",
+        "role": "fixer"
+      },
+      "purpose": "Close each finding on its own assertion and have a separate verifier sign it, so a green suite means the finding is gone and not that the test moved.",
+      "stops": [
+        {
+          "code": "REJECT-SCOPE",
+          "to": "control-plane",
+          "when": "the patch touches a frozen file or leaves the blast radius"
+        },
+        {
+          "cap": "flake-budget",
+          "code": "ESCALATE-NO-PROGRESS",
+          "to": "engineer",
+          "when": "two runs disagree"
+        },
+        {
+          "code": "STOP-BUDGET",
+          "to": "owner",
+          "when": "the episode budget is reached"
+        }
+      ],
+      "trigger": {
+        "fires": "control-plane",
+        "when": "finding_set.sha256 resolves and every finding has a blast radius"
+      }
+    },
+    {
+      "artifact": {
+        "id": "parity-report",
+        "path": "ledger/parity-report.md",
+        "schema": "parity/1",
+        "sha256": "sha256:3f8a2d61e0b9",
+        "writer": "parity-agent"
+      },
+      "binds": [
+        {
+          "check": "the POC's look and feel is the contract; every screen has a pair",
+          "id": "P-56",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "parity is proven by Playwright, not by inspection",
+          "id": "P-58",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "tolerances are explicit per screen and agreed before the run",
+          "id": "P-59",
+          "on_fail": "record the tolerance; it cannot block until adopted",
+          "tag": "PROPOSED"
+        }
+      ],
+      "class": "parity",
+      "done": [
+        {
+          "check_id": "EXIT-01",
+          "command": "npx playwright test parity --reporter=junit",
+          "evidence": "junit xml in the ledger",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-02",
+          "command": "jq -e '[.screens[] | select(.verdict == null)] | length == 0' parity.json",
+          "evidence": "one verdict per crawled screen",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-03",
+          "command": "jq -e '[.journeys[] | select(.status != \"green\")] | length == 0' parity.json",
+          "evidence": "journey runs in the report",
+          "pass_when": "exit 0"
+        }
+      ],
+      "forbidden": [
+        {
+          "enforced_by": "read-only checkouts; grant: write the report",
+          "line": "change the app, the POC or the layer"
+        },
+        {
+          "judged": "the POC's wording is the contract; a mismatch is a finding",
+          "line": "correct a label for grammar"
+        },
+        {
+          "enforced_by": "EXIT-02 requires a verdict per crawled screen",
+          "line": "skip an empty or error state"
+        }
+      ],
+      "gates": [
+        "G3"
+      ],
+      "id": "S10",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "note": "Parity findings re-enter S9 and return here.",
+        "source": "docs/pipeline/pipeline.html#the-stage-table"
+      },
+      "inputs": {
+        "non": [
+          "a different viewport than the POC",
+          "the design-system default page",
+          "a quick CSS commit"
+        ],
+        "read": [
+          {
+            "artifact": "verdict",
+            "location": "ledger#V-0001",
+            "mutability": "read-only",
+            "schema": "verdict/1",
+            "sha256": "sha256:d02e6c47b918"
+          },
+          {
+            "artifact": "poc-crawl",
+            "location": "exports/poc-0007/crawl.json",
+            "mutability": "read-only",
+            "schema": "crawl/1",
+            "sha256": "sha256:6b19f4a0c8e3"
+          }
+        ]
+      },
+      "method": {
+        "deterministic": [
+          "pair every screen",
+          "diff the text",
+          "measure the layout",
+          "run the journeys"
+        ],
+        "judgement": [
+          "decide whether a difference is a rebuild defect or a user exception"
+        ],
+        "on_ambiguity": "ESCALATE-AMBIGUITY"
+      },
+      "name": "Playwright UI parity",
+      "owner": {
+        "kind": "agent",
+        "role": "parity-agent"
+      },
+      "purpose": "Pair every rebuilt screen with its POC screen and run the journeys, so parity is proven rather than inspected.",
+      "stops": [
+        {
+          "code": "REFUSE-INPUT",
+          "to": "control-plane",
+          "when": "the crawl manifest is missing a screen"
+        },
+        {
+          "code": "HANDOFF-HUMAN",
+          "to": "user",
+          "when": "a deliberate difference needs a user decision"
+        },
+        {
+          "code": "ESCALATE-AMBIGUITY",
+          "to": "engineer",
+          "when": "a missing design-system component would become a redesign"
+        }
+      ],
+      "trigger": {
+        "fires": "control-plane",
+        "when": "the verdict names the current head as PASS and the crawl manifest hash resolves"
+      }
+    },
+    {
+      "artifact": {
+        "id": "install-verdict",
+        "path": "ledger/install/V-0002.json",
+        "schema": "install/1",
+        "sha256": "sha256:b640e1f27d58",
+        "writer": "release-driver"
+      },
+      "binds": [
+        {
+          "check": "one namespace and one schema per POC",
+          "id": "P-61",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "the pipeline drives the enterprise lane and does not reimplement it",
+          "id": "P-62",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "every UAT state resolves through the provenance chain",
+          "id": "P-64",
+          "tag": "ADOPTED"
+        }
+      ],
+      "class": "delivery",
+      "done": [
+        {
+          "check_id": "EXIT-01",
+          "command": "curl -fsS \"$UAT/actuator/health\" | jq -e '.status == \"UP\"'",
+          "evidence": "http status and body in the ledger",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-02",
+          "command": "jq -e '.checks | length > 0 and all(.checks[]; .exit_code == 0)' install-verdict.json",
+          "evidence": "one named check per install claim",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-03",
+          "command": "gradle acceptanceSmoke --offline",
+          "evidence": "the smoke report against UAT, not the sandbox",
+          "pass_when": "exit 0"
+        }
+      ],
+      "forbidden": [
+        {
+          "enforced_by": "grant: one namespace",
+          "line": "deploy to shared UAT or PROD"
+        },
+        {
+          "enforced_by": "the lane runs non-interactively; the prompt path is denied",
+          "line": "use an interactive environment prompt"
+        },
+        {
+          "judged": "the verdict names checks; the word on its own is not a result",
+          "line": "call an install SUCCESS without named checks"
+        }
+      ],
+      "id": "S11",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "note": "Imported from the stage table with its exit written as named checks; the guide scores the source's 'install SUCCESS' wording at 1 on C2.",
+        "source": "docs/pipeline/pipeline.html#the-stage-table"
+      },
+      "inputs": {
+        "non": [
+          "shared UAT",
+          "PROD",
+          "an environment prompt",
+          "a floating version"
+        ],
+        "read": [
+          {
+            "artifact": "parity-report",
+            "location": "ledger#PR-0002",
+            "mutability": "read-only",
+            "schema": "parity/1",
+            "sha256": "sha256:3f8a2d61e0b9"
+          },
+          {
+            "artifact": "branch-head",
+            "location": "ledger#C-0091",
+            "mutability": "read-only",
+            "schema": "commit/1",
+            "sha256": "sha256:8e41b7d29c50"
+          }
+        ]
+      },
+      "method": {
+        "deterministic": [
+          "build from the named commit",
+          "promote the artifact",
+          "deploy the namespace",
+          "run the health check and the smoke suite"
+        ],
+        "judgement": [],
+        "on_ambiguity": "REFUSE-INPUT"
+      },
+      "name": "Delivery to UAT",
+      "owner": {
+        "kind": "service",
+        "role": "release-driver"
+      },
+      "purpose": "Drive the existing lane for this POC's own namespace, so the UAT instance is reproducible and its install is auditable.",
+      "stops": [
+        {
+          "code": "REFUSE-INPUT",
+          "to": "control-plane",
+          "when": "branch CI is not green at origin head"
+        },
+        {
+          "code": "STOP-BUDGET",
+          "to": "owner",
+          "when": "the install exceeds its time-box"
+        },
+        {
+          "cap": "2 attempts",
+          "code": "ESCALATE-NO-PROGRESS",
+          "to": "engineer",
+          "when": "two installs of the same commit differ"
+        }
+      ],
+      "trigger": {
+        "fires": "control-plane",
+        "when": "G3 is signed and branch CI is green at origin head"
+      }
+    },
+    {
+      "artifact": {
+        "id": "signed-dod",
+        "path": "ledger/dod/V-0005.json",
+        "schema": "dod/1",
+        "sha256": "sha256:ff30c7a2418b",
+        "writer": "user"
+      },
+      "binds": [
+        {
+          "check": "every complaint is reproduced, evidenced and classified before anything changes",
+          "id": "P-65",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "sign-off is a recorded checklist, not a verdict on how it looks",
+          "id": "P-68",
+          "tag": "ADOPTED"
+        },
+        {
+          "check": "the acceptance suite ran against both the sandbox and UAT from the same assertions",
+          "id": "P-63",
+          "tag": "ADOPTED"
+        }
+      ],
+      "class": "uat",
+      "done": [
+        {
+          "check_id": "EXIT-01",
+          "command": "jq -e '[.lines[] | select(.evidence == null or .evidence == \"\")] | length == 0' dod.json",
+          "evidence": "every DoD line has an evidence link",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-02",
+          "command": "jq -e '[.complaints[] | select(.class == null)] | length == 0' dod.json",
+          "evidence": "every complaint classified before it changed anything",
+          "pass_when": "exit 0"
+        },
+        {
+          "check_id": "EXIT-03",
+          "command": "jq -e '.signed_by and .signed_at' dod.json",
+          "evidence": "the signature record",
+          "pass_when": "exit 0"
+        }
+      ],
+      "forbidden": [
+        {
+          "judged": "the suite proves the rebuild; the user proves the contract matches the intent",
+          "line": "infer sign-off from a green suite"
+        },
+        {
+          "enforced_by": "grant: the POC's own namespace only",
+          "line": "test a shared environment"
+        },
+        {
+          "enforced_by": "EXIT-01 and the DoD schema",
+          "line": "accept an open exception with no owner and date"
+        }
+      ],
+      "gates": [
+        "G4"
+      ],
+      "id": "S12",
+      "imported": {
+        "imported_at": "2026-11-02T00:00:00.000Z",
+        "note": "The sign-off is a seat, not an agent.",
+        "source": "docs/pipeline/pipeline.html#the-stage-table"
+      },
+      "inputs": {
+        "non": [
+          "a promise that it worked in dev",
+          "the sandbox",
+          "an inferred sign-off"
+        ],
+        "read": [
+          {
+            "artifact": "install-verdict",
+            "location": "ledger#IV-0002",
+            "mutability": "read-only",
+            "schema": "install/1",
+            "sha256": "sha256:b640e1f27d58"
+          },
+          {
+            "artifact": "parity-report",
+            "location": "ledger#PR-0002",
+            "mutability": "read-only",
+            "schema": "parity/1",
+            "sha256": "sha256:3f8a2d61e0b9"
+          }
+        ]
+      },
+      "method": {
+        "deterministic": [
+          "run the acceptance list",
+          "record each DoD line with its evidence link"
+        ],
+        "judgement": [
+          "classify a complaint 1 to 5",
+          "decide whether an exception is accepted"
+        ],
+        "on_ambiguity": "HANDOFF-HUMAN"
+      },
+      "name": "UAT sign-off",
+      "owner": {
+        "kind": "seat",
+        "role": "user"
+      },
+      "purpose": "Record the signed definition of done against the running UAT instance, so the contract is proven to match what the user meant.",
+      "stops": [
+        {
+          "code": "HANDOFF-HUMAN",
+          "to": "user",
+          "when": "a DoD line is blank"
+        },
+        {
+          "code": "RECLASSIFY",
+          "to": "engineer",
+          "when": "a complaint is class 4 or 5"
+        },
+        {
+          "code": "REFUSE-INPUT",
+          "to": "control-plane",
+          "when": "the acceptance list was not run"
+        }
+      ],
+      "trigger": {
+        "fires": "control-plane",
+        "when": "the UAT instance is UP and the evidence pack hash resolves"
+      }
+    }
+  ],
+  "version": 1
+}

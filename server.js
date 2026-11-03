@@ -70,6 +70,8 @@ import { createQueueRoutes } from "./lib/assistant/queue.js";
 // The task pipeline window's read: a queue row's stages, its current one and the gate that ended the one before it.
 // Mounted beside the queue's own routes because it is the same record, read one stage deeper.
 import { createPipelineWindowRoutes } from "./lib/pipeline-window.js";
+// The pipelines a window's assignment control may offer, read from the same bundle. A read, mounted beside the window.
+import { createPipelineCatalogueRoutes } from "./lib/task-pipeline-assign.js";
 import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./lib/subagents.js";
 import { thinkingFor } from "./lib/thinking.js";
 import { modelCatalogue, refreshModelCatalogue } from "./lib/hermes-models.js";
@@ -786,6 +788,9 @@ const queueRoutes = createQueueRoutes({ assistant, config, sendJson, readBody, a
 // The window one queue row opens: the task's pipeline, stage by stage. Same Assistant, same transport; a GET that
 // writes nothing, and a refusal carried as a value so the dialog can draw the reason.
 const pipelineWindowRoutes = createPipelineWindowRoutes({ assistant, config, sendJson });
+// What the window's assignment control offers: the bundle's pipelines and their stages, in order. A read of the same
+// file the window resolves against, so the control cannot offer a stage the window would then call unresolved.
+const pipelineCatalogueRoutes = createPipelineCatalogueRoutes({ config, sendJson });
 
 // ---- restarting the gateway, or this panel ---------------------------------------------
 // Everything that touches the outside world is injectable (lib/restart.js), which is what lets
@@ -2064,6 +2069,9 @@ const server = createServer(async (req, res) => {
 
     // The task pipeline window's own read, beside the queue's routes: one row's stages, resolved against the bundle.
     if (await pipelineWindowRoutes(req, res, route, url)) return;
+
+    // …and the catalogue its assignment control draws: the bundle's pipelines, their stages in order.
+    if (await pipelineCatalogueRoutes(req, res, route, url)) return;
 
     if (route === "/api/health") {
       return sendJson(res, 200, { ok: true, host: config.host, projects: registry.projects.map((p) => p.name), settings: settingsOut(), clients: clients.size });

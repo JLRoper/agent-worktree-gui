@@ -59,7 +59,7 @@ const windowRegion = sliceRegion(assistant, "the task pipeline window");
 const queueRegion = sliceRegion(assistant, "the queue sub-tab");
 
 const buildWindow = () =>
-  new Function("esc", "fmtDur", `${windowRegion}\nreturn { pipelineWindowHtml, pipeWindowElapsedAt, pipeWindowElapsedText, pipeWindowShow, pipeWindowClose, pipeWindowKey, pipeWindowTick, pipeWindowState };`)(esc, fmtDur);
+  new Function("esc", "fmtDur", `${windowRegion}\nreturn { pipelineWindowHtml, pipeWindowStageOptions, pipeWindowAssignHtml, pipeWindowElapsedAt, pipeWindowElapsedText, pipeWindowShow, pipeWindowClose, pipeWindowKey, pipeWindowTick, pipeWindowState };`)(esc, fmtDur);
 
 const buildQueue = () =>
   new Function("esc", "assistantIds", "sessionById", "assistantThreadName", `${queueRegion}\nreturn { queueTaskHtml };`)(
@@ -295,7 +295,7 @@ test("the row carries the opener, naming what the record says, and a task with n
 
   const none = queueTaskHtml("assistant-1", { ...base, pipelineRun: null }, new Map());
   assert.match(none, /data-as-qpipe="7"/, "a task on the default path still opens its window");
-  assert.match(none, /pipeline: none/);
+  assert.match(none, /assistant decides/, "the row says which choice is in force, in the assistant's own words");
 
   const broken = queueTaskHtml("assistant-1", { ...base, pipelineRun: "poc-to-uat" }, new Map());
   assert.match(broken, /data-as-qpipe="7"/);
@@ -303,4 +303,92 @@ test("the row carries the opener, naming what the record says, and a task with n
 
   const escaped = queueTaskHtml("assistant-1", { ...base, pipelineRun: { pipeline: '"><script>', stage: "S3" } }, new Map());
   assert.doesNotMatch(escaped, /<script>/);
+});
+
+// ---- putting a task on a pipeline, from the window --------------------------------------------------
+// The window is the only place the stage list is already drawn, so it is where the choice belongs: a
+// reader looking at "this task is on the default path" can put it on a pipeline without leaving the
+// screen that told them so. The control draws the CATALOGUE the server read (ids, names, positions) and
+// writes through the queue's own route; it never assumes a bundle is there, because the panel must stay
+// honest when one is not.
+const catalogue = () => ({
+  ok: true,
+  code: null,
+  reason: null,
+  file: "C:/state/pipeline-bundle.json",
+  name: "poc-to-uat",
+  pipelines: [
+    { id: "poc-to-uat", title: "POC to UAT", stages: [{ id: "S1", title: "Gather the ask", position: 1 }, { id: "S2", title: "Scope it", position: 2 }, { id: "S3", title: "Shape the contract", position: 3 }, { id: "S4", title: "Build it", position: 4 }, { id: "S5", title: "Hand it over", position: 5 }] },
+    { id: "triage", title: "Triage", stages: [{ id: "T1", title: "Read it", position: 1 }, { id: "T2", title: "Place it", position: 2 }] },
+  ],
+});
+
+test("a task on the default path is offered a pipeline and a starting stage, from the bundle's catalogue", () => {
+  const { pipelineWindowHtml } = buildWindow();
+  const html = pipelineWindowHtml(model(null), catalogue());
+  assert.match(html, /data-pipew-assign/, "the control is drawn in the default-path window");
+  assert.match(html, /<select[^>]*data-pipew-pipe/, "a pipeline is chosen by name, not typed as an id");
+  assert.match(html, /<select[^>]*data-pipew-stage/, "and a starting stage is chosen explicitly");
+  assert.match(html, /data-pipew-apply/, "one press writes the choice");
+  assert.doesNotMatch(html, /data-pipew-clear/, "there is nothing to clear on a task that has no pipeline");
+  for (const name of ["POC to UAT", "Triage"]) assert.ok(plain(html).includes(name), `the catalogue's ${name} is offered`);
+  // The stage select is the FIRST pipeline's stages until another is chosen — the same list the rows above draw.
+  const options = [...html.matchAll(/<option value="(S\d)"/g)].map((m) => m[1]);
+  assert.deepEqual(options, ["S1", "S2", "S3", "S4", "S5"]);
+});
+
+test("a task already on a pipeline offers the move and the way back to the assistant-decides default", () => {
+  const { pipelineWindowHtml } = buildWindow();
+  const html = pipelineWindowHtml(model(), catalogue());
+  assert.match(html, /<option value="poc-to-uat" selected/, "the pipeline in force is the one selected");
+  assert.match(html, /<option value="S3" selected/, "the stage in force is the one selected");
+  assert.match(html, /data-pipew-apply/, "the move is one press");
+  assert.match(html, /data-pipew-clear/, "and clearing is its own press, never a side effect of the move");
+  assert.match(plain(html), /back to the assistant/i, "the clear button says where it puts the task");
+});
+
+test("choosing another pipeline redraws the stage list from that pipeline, and keeps the chosen stage", () => {
+  const { pipeWindowStageOptions } = buildWindow();
+  const options = pipeWindowStageOptions(catalogue(), "triage", "T2");
+  assert.deepEqual([...options.matchAll(/value="(T\d)"/g)].map((m) => m[1]), ["T1", "T2"]);
+  assert.match(options, /<option value="T2" selected/);
+  // A stage id the chosen pipeline does not hold is not silently kept: the first stage is selected instead.
+  const fallback = pipeWindowStageOptions(catalogue(), "triage", "S3");
+  assert.match(fallback, /<option value="T1" selected/);
+});
+
+test("with no bundle, the window says why the choice cannot be offered — and still says the default path", () => {
+  const { pipelineWindowHtml } = buildWindow();
+  const missing = {
+    ok: false,
+    code: "missing",
+    reason: "C:/state/pipeline-bundle.json: there is no bundle at that path",
+    where: null,
+    file: "C:/state/pipeline-bundle.json",
+    name: null,
+    pipelines: [],
+  };
+  const html = pipelineWindowHtml(model(null), missing);
+  const text = plain(html);
+  assert.match(text, /default path/i, "the task's own answer is unchanged");
+  assert.match(text, /no bundle at that path/, "the refusal is printed rather than hidden");
+  assert.match(text, /pipeline-bundle\.json/, "it names the file that is not there");
+  assert.doesNotMatch(html, /data-pipew-apply/, "nothing can be assigned against a bundle that is not there");
+  assert.doesNotMatch(html, /data-pipew-clear/);
+});
+
+test("while the catalogue is still being read, the control says so and offers nothing pressable", () => {
+  const { pipelineWindowHtml } = buildWindow();
+  const html = pipelineWindowHtml(model(null), null);
+  assert.match(plain(html), /reading the pipelines/i);
+  assert.doesNotMatch(html, /data-pipew-apply/);
+});
+
+test("an unresolved record can be repaired by assigning a pipeline, and the control says that is what it does", () => {
+  const { pipelineWindowHtml } = buildWindow();
+  const html = pipelineWindowHtml(model({ pipeline: "gone-to-uat", stage: "S1", enteredAt: "2026-11-03T12:30:00.000Z" }), catalogue());
+  assert.match(html, /data-pipew-assign/, "the broken record still has a way out");
+  assert.match(plain(html), /replaces? (this|the) record|replac/i, "it says the assignment replaces the record");
+  assert.match(html, /<option value="poc-to-uat" selected/, "and defaults to a pipeline the bundle DOES hold, not the broken one");
+  assert.match(html, /data-pipew-apply/);
 });

@@ -3567,6 +3567,18 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .pipew-artifact { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pipew-gate b { color: var(--text); }
 .pipew-note.mono { font-family: var(--mono); font-size: 9.5px; overflow-wrap: anywhere; }
+/* The assignment control: a quiet strip under the sequence, not a second dialog. The selects are native and sized to the
+   card, the two presses are ordinary buttons, and the status line reserves its height so a refusal cannot push the
+   stages around under the reader's eyes. */
+.pipew-assign { margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.pipew-assign-head { font-size: 10.5px; color: var(--dim); line-height: 1.45; }
+.pipew-assign-head b { color: var(--text); }
+.pipew-form { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.pipew-form label { display: flex; flex-direction: column; gap: 2px; font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--dimmer); }
+.pipew-form select { font-size: 11px; padding: 3px 6px; max-width: 240px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; }
+.pipew-form button { font-size: 11px; padding: 4px 9px; }
+.pipew-clear { color: var(--dim); }
+.pipew-assign-note { flex: 1 0 100%; min-height: 13px; font-size: 10px; color: #e0b341; }
 body.pipew-open { overflow: hidden; }
 
 /* The rail's one grab: the edge it shares with the board, a 6px band down the whole column. `touch-action: none`

@@ -13,9 +13,14 @@
 // the window can give:
 //
 //   #7  on stage 3 of 5 of `poc-to-uat`  -> the sequence, S3 current, the gate that ended S2, the stamp, the elapsed
-//   #8  no pipelineRun at all            -> the DEFAULT path in words, no sequence
+//   #8  no pipelineRun at all            -> the DEFAULT path in words, no sequence, and the control that puts it on one
 //   #9  a pipeline the bundle left       -> UNRESOLVED with the reason, no stage current
 //   #10 a stage its pipeline left        -> UNRESOLVED, the sequence drawn unplaced
+//
+// THE ASSIGNMENT CONTROL is driven end to end from #8's window: the catalogue's pipelines and stages are read from the
+// select it drew, apply writes through the queue's own route, the window turns into the pipeline it just entered, the
+// row's chip behind it changes, the STAGE SURVIVES A REOPEN (it is the record, not the dialog), and clear puts the task
+// back on the default path with `pipelineRun: null` on disk. Each step is checked against the queue FILE, not the page.
 //
 // THE CLOCK IS NOT WAITED ON. The number in the window is the server's `elapsed.ms` (lib/task-pipeline.js
 // `elapsedInStage`, computed from the stored `enteredAt`), so this gate compares the drawn span with the route's own
@@ -31,10 +36,12 @@
 //   mkdir -p "$SCRATCH/main" && git archive origin/main | tar -x -C "$SCRATCH/main"
 //   git -C "$SCRATCH/main" init -q -b main && git -C "$SCRATCH/main" add -A && git -C "$SCRATCH/main" commit -qm export
 //   node tools/verify-task-pipeline-window.mjs --root "$SCRATCH/main"
-// The base has no `#pipew`, no `.as-task-pipe` and no /api/assistant/task-pipeline, so every window check fails there.
+// The base has no `#pipew`, no `.as-task-pipe` and no /api/assistant/task-pipeline, so every window check fails there —
+// and no `[data-pipew-assign]` or /api/assistant/pipeline-catalogue, so the assignment control's checks fail there too,
+// by name and one at a time rather than by aborting the run.
 //
 // Exit codes: 0 held; 1 a check failed; 2 the run did not measure what it claims (no Playwright, no rows, no dialog).
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -227,7 +234,7 @@ try {
     same("four rows, each with a pipeline press", chips.map((c) => [c.task, c.exists]), [["7", true], ["8", true], ["9", true], ["10", true]]);
     same("the press is a real button", [...new Set(chips.map((c) => c.tag))], ["BUTTON"]);
     same("a task on a pipeline names it and its stage", chips[0].text, "pipeline poc-to-uat · S3");
-    same("a task with no assignment says so, and still has a press", chips[1].text, "pipeline: none");
+    same("a task with no assignment says the assistant decides — and still has a press", chips[1].text, "assistant decides");
     same("the press carries the ids the route needs", chips.map((c) => [c.opens, c.own]), [["7", "assistant-1"], ["8", "assistant-1"], ["9", "assistant-1"], ["10", "assistant-1"]]);
 
     // ---- 2. the task on a pipeline: every stage, the current one, the gate before it ---------------------------
@@ -328,6 +335,113 @@ try {
     ok("…in the assistant's own terms", /assistant decides/i.test(none.text));
     same("…and draws no stage list", none.stages, 0);
 
+    // ---- 5b. the control that puts it on a pipeline, and takes it back off ------------------------------------
+    console.log("\n== #8 put on a pipeline from its window, and cleared back to the default ==");
+    const controlLabels = [
+      "the control offers every pipeline the bundle holds",
+      "…and the chosen pipeline's stages, in order, with a starting stage selected",
+      "…and no clear press on a task that has nothing to clear",
+      "opening the control writes nothing",
+      "pressing apply turns the window into the pipeline it just entered",
+      "…marking the stage and its position of N",
+      "…with elapsed computed from the stamp the write stored",
+      "…and the row behind says which pipeline is now in force",
+      "…and the queue file on disk carries the stage and a real UTC stamp",
+      "an assigned task offers the way back to the default",
+      "clearing turns the window back into the default path",
+      "…the row behind says the assistant decides again",
+      "…and the stored record is pipelineRun null, not a deleted field",
+    ];
+    const hasControl = (await page.locator("#pipew-card [data-pipew-assign]").count()) === 1;
+    ok("the default-path window carries an assignment control", hasControl, hasControl ? "" : "no [data-pipew-assign] in this build");
+    if (!hasControl) {
+      // The negative control: on the base this section FAILS every check instead of aborting the run, so the report can
+      // say how many of the new control's checks hold there (none) beside the window checks that already held.
+      for (const label of controlLabels) check(false, label, "no assignment control in this build");
+    } else {
+      const form = await page.evaluate(() => {
+        const card = document.getElementById("pipew-card");
+        const pipe = card.querySelector("[data-pipew-pipe]");
+        const stage = card.querySelector("[data-pipew-stage]");
+        return {
+          pipelines: pipe ? [...pipe.options].map((o) => o.value) : [],
+          stages: stage ? [...stage.options].map((o) => o.value) : [],
+          selectedStage: stage ? stage.value : null,
+          clear: Boolean(card.querySelector("[data-pipew-clear]")),
+          apply: card.querySelector("[data-pipew-apply]")?.textContent.trim() || null,
+        };
+      });
+      same("the control offers every pipeline the bundle holds", form.pipelines, ["poc-to-uat"]);
+      same("…and the chosen pipeline's stages, in order, with a starting stage selected", [form.stages, form.selectedStage], [["S1", "S2", "S3", "S4", "S5"], "S1"]);
+      ok("…and no clear press on a task that has nothing to clear", form.clear === false);
+      const untouched = JSON.parse(readFileSync(queueFile, "utf8")).tasks.find((x) => x.id === 8);
+      ok("opening the control writes nothing", untouched.pipelineRun === null, JSON.stringify(untouched.pipelineRun));
+
+      await page.selectOption("#pipew-card [data-pipew-pipe]", "poc-to-uat");
+      await page.selectOption("#pipew-card [data-pipew-stage]", "S2");
+      await page.click("#pipew-card [data-pipew-apply]");
+      await page.waitForFunction(
+        () => {
+          const card = document.getElementById("pipew-card");
+          const current = card?.querySelector(".pipew-stage.is-current");
+          return card?.dataset.pipewMode === "pipeline" && current?.dataset.pipewStage === "S2";
+        },
+        null,
+        { timeout: 15_000, polling: 80 },
+      );
+      const entered = await page.evaluate(() => {
+        const card = document.getElementById("pipew-card");
+        const current = card.querySelector(".pipew-stage.is-current");
+        const row = document.querySelector('#as-queue .as-task[data-as-qrow="8"] [data-as-qpipe]');
+        return {
+          mode: card.dataset.pipewMode,
+          stage: current?.dataset.pipewStage || null,
+          text: (card.innerText || "").replace(/\s+/g, " ").trim(),
+          elapsedMs: Number(card.querySelector("[data-pipew-elapsed]")?.dataset.pipewMs),
+          chip: row ? row.textContent.replace(/\s+/g, " ").trim() : null,
+        };
+      });
+      ok("pressing apply turns the window into the pipeline it just entered", entered.mode === "pipeline", entered.mode);
+      ok("…marking the stage and its position of N", entered.stage === "S2" && /2 of 5/.test(entered.text), `${entered.stage} / ${entered.text.slice(0, 160)}`);
+      const route = await modelOf(8);
+      ok(
+        "…with elapsed computed from the stamp the write stored",
+        route.body?.current?.id === "S2" && Math.abs(entered.elapsedMs - (route.body?.elapsed?.ms ?? -1)) < 5_000,
+        `window ${entered.elapsedMs} vs route ${route.body?.elapsed?.ms}`,
+      );
+      ok("…and the row behind says which pipeline is now in force", entered.chip === "pipeline poc-to-uat · S2", entered.chip);
+      const stored = JSON.parse(readFileSync(queueFile, "utf8")).tasks.find((x) => x.id === 8).pipelineRun;
+      ok(
+        "…and the queue file on disk carries the stage and a real UTC stamp",
+        stored?.pipeline === "poc-to-uat" && stored?.stage === "S2" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(String(stored?.enteredAt)),
+        JSON.stringify(stored),
+      );
+
+      // The stage survives a close and a reopen — it is the RECORD, not the dialog's memory.
+      await closeWindow(page);
+      await openWindow(page, 8, "pipeline");
+      same("the stage survives closing and reopening the window", await page.evaluate(() => document.querySelector("#pipew-card .pipew-stage.is-current")?.dataset.pipewStage || null), "S2");
+      const clearable = (await page.locator("#pipew-card [data-pipew-clear]").count()) === 1;
+      ok("an assigned task offers the way back to the default", clearable);
+
+      if (clearable) {
+        await page.click("#pipew-card [data-pipew-clear]");
+        await page.waitForFunction(() => document.getElementById("pipew-card")?.dataset.pipewMode === "assistant-decides", null, { timeout: 15_000, polling: 80 });
+        const cleared = await page.evaluate(() => ({
+          mode: document.getElementById("pipew-card").dataset.pipewMode,
+          chip: document.querySelector('#as-queue .as-task[data-as-qrow="8"] [data-as-qpipe]')?.textContent.replace(/\s+/g, " ").trim() || null,
+        }));
+        ok("clearing turns the window back into the default path", cleared.mode === "assistant-decides", cleared.mode);
+        ok("…the row behind says the assistant decides again", cleared.chip === "assistant decides", cleared.chip);
+        const after = JSON.parse(readFileSync(queueFile, "utf8")).tasks.find((x) => x.id === 8);
+        ok("…and the stored record is pipelineRun null, not a deleted field", after.pipelineRun === null, JSON.stringify(after.pipelineRun));
+      } else {
+        check(false, "clearing turns the window back into the default path", "no clear press in this build");
+        check(false, "…the row behind says the assistant decides again", "no clear press in this build");
+        check(false, "…and the stored record is pipelineRun null, not a deleted field", "no clear press in this build");
+      }
+    }
+
     // ---- 6. the two unresolved records -----------------------------------------------------------------------
     console.log("\n== #9 and #10: a pipeline the bundle left, a stage its pipeline left ==");
     await closeWindow(page);
@@ -362,6 +476,26 @@ try {
     same("…and the sequence it still has is drawn, every row unplaced", goneStage.phases, ["unplaced", "unplaced", "unplaced", "unplaced", "unplaced"]);
     same("…with nothing marked current", goneStage.current, 0);
     await page.screenshot({ path: path.join(SHOTS, "pipeline-window-unresolved.png"), fullPage: false });
+
+    // ---- 7b. no bundle beside the job store: unresolved with a reason, and no control that pretends --------------
+    console.log("\n== the bundle removed: an assigned task reads UNRESOLVED, and the control says why it cannot offer one ==");
+    await closeWindow(page);
+    rmSync(bundleFile, { force: true });
+    await openWindow(page, 7, "unresolved");
+    const noBundle = await page.evaluate(() => {
+      const card = document.getElementById("pipew-card");
+      return {
+        text: (card.innerText || "").replace(/\s+/g, " ").trim(),
+        mode: card.dataset.pipewMode,
+        apply: card.querySelectorAll("[data-pipew-apply]").length,
+        stages: card.querySelectorAll(".pipew-stage").length,
+      };
+    });
+    ok("with no bundle, an assigned task reads UNRESOLVED instead of the default path", noBundle.mode === "unresolved" && /UNRESOLVED/.test(noBundle.text), noBundle.mode);
+    ok("…naming the file that is not there", /pipeline-bundle\.json/.test(noBundle.text), noBundle.text.slice(0, 220));
+    same("…and no stage is marked current", noBundle.stages, 0);
+    same("…and the control offers no press to assign against nothing", noBundle.apply, 0);
+    ok("…saying no pipeline can be chosen, rather than an empty list", /no pipeline can be chosen/i.test(noBundle.text), noBundle.text.slice(0, 220));
 
     // ---- 7. the ✕, and a clean console ----------------------------------------------------------------------
     console.log("\n== the ✕ closes it, and the page logged nothing ==");
