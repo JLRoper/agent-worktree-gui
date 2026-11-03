@@ -871,6 +871,31 @@ button.chip:active { transform: translateY(1px); }
 /* The head's text gives up width rather than growing the row: the title has its own
    ellipsis rule, and the meta line gets one here so a long project/tree name cannot make the head two lines tall. */
 .job-head > span.mono.dim { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The pipeline chip on a card's head (public/app.js `pipelineChipHtml`): which pipeline this tree is in, and where in
+   it. It is the HOST chip's pill — `button.btn-host`'s height, type scale, radius and surface — because the two answer
+   the same kind of question in the same line of chrome, and it inherits the head's own 8px gap by being one more flex
+   item there. A record WITH a stage is the louder state and takes the host chip's mapped blue; an id with no stage
+   keeps the quiet surface; no record draws nothing at all — no "local" stand-in, no empty pill. */
+.pipeline-chip {
+  /* The head is `nowrap`, so the chip has to be able to give up width rather than push the controls off the card: it
+     trims its tail with an ellipsis (the whole record is still in its `title`). The 0.01 shrink weight is what makes
+     it the LAST item to give up — the meta line's rule below hands its own width over first, and only a head with
+     nothing else left (the 480px docked rail) squeezes the chip. */
+  flex: 0 0.01 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 1px 7px;
+  font: 10.5px/1.6 var(--mono);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #20242c;
+  color: var(--dim);
+}
+/* Which pipeline the tree is on is a fact about the card; `owner <path>`, the model and the turn count are the head's
+   bookkeeping. When the two compete for the same row, the meta gives its width up first: a 1600px card draws the chip
+   in full and only a head with nothing else left squeezes it. `:has()` scopes this to heads that carry a chip, so
+   every other card's head is untouched. */
+.job-head:has(> .pipeline-chip) > span.mono.dim { flex-shrink: 200; }
+/* The staged form, in the host chip's mapped family (public/style.css `button.btn-host.is-mapped`). */
+.pipeline-chip[data-pipeline-stage] { color: #9ecbff; border-color: #1c3a56; background: var(--blue-bg); }
 /* Where the agent runs: one dim line under the card's head, on every card. It answers "which tree is
    this one in" at a glance, so it must stay legible but never compete with the head — smallest size,
    dimmest ink, one line, the tail of the path only, and the full path in the tooltip. */

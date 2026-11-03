@@ -4464,6 +4464,27 @@ document.addEventListener(
   true,
 );
 
+// ---- pipeline chip: the pipeline in force on this tree, and where in it -----------------------------------------
+// `lib/jobs.js` writes the record on every job row (`pipelineForJob`: `{id, stage, since, history[]}`) and
+// docs/pipelines.md §3 keeps the durable copy on the tree; this is the card drawing it, from the row it already has.
+// The host chip (`hostChipHtml`) is the panel's chip of this shape, so this one takes its pill height, type scale and
+// gap, and it sits beside the card's state pill: "which pipeline" and "where in it" are one question when the reader
+// is judging a card.
+//
+// Three states, and no fourth: a record with a stage draws `pipeline: <id> · <stage>`, a record with no stage draws
+// the id alone, and no record draws NOTHING — never a "local" stand-in and never an empty pill. It is a span, not a
+// button: `POST /api/worktree/pipeline` refuses every switch until it can start the first stage as a turn, so a
+// control here would promise work that cannot happen yet.
+function pipelineChipHtml(pipeline) {
+  const id = pipeline && pipeline.id ? String(pipeline.id).trim() : "";
+  if (!id) return "";
+  const stage = pipeline.stage ? String(pipeline.stage).trim() : "";
+  const what = stage ? `pipeline ${id}, stage ${stage}` : `pipeline ${id}, no stage recorded`;
+  const title = `${what} — this worktree's durable pipeline record (docs/pipelines.md §3). The chip draws what the record says; it switches nothing.`;
+  return `<span class="pipeline-chip" data-pipeline="${esc(id)}"${stage ? ` data-pipeline-stage="${esc(stage)}"` : ""} title="${esc(title)}">pipeline: ${esc(id)}${stage ? ` · ${esc(stage)}` : ""}</span>`;
+}
+// ---- end pipeline chip
+
 function conversationHtml(conv) {
   const { thread, turns, latest } = conv;
   const collapsed = state.collapsedJobs.has(thread);
@@ -4661,6 +4682,7 @@ function conversationHtml(conv) {
           `<button class="pill pill-notrunning pill-continue${latest.status === "failed" ? " is-failed" : ""}" data-continue-thread="${esc(thread)}" type="button" title="${esc(
             `${latest.status} · ${elapsed(latest)}${latest.error ? ` · ${latest.error}` : ""} — click to send this agent "${CONTINUE_TEXT}" and start its next turn`,
           )}">${latest.status === "failed" ? "exited" : "not-running"}<span class="pill-again" aria-hidden="true">\u21bb</span></button>`}
+      ${pipelineChipHtml(latest.pipeline)}
       ${livePulseHtml(latest)}
       ${whenHtml}
       ${waitingApproval ? `<button class="sig sig-approval" data-approval-jump="${esc(waitingApproval.id)}" title="this agent is blocked on an approval — click to answer it">waiting on you →</button>` : ""}
