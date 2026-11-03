@@ -82,6 +82,11 @@ import {
 import { authorised, handleStream, pageCaller, readBody, readRawBody, sendJson } from "./lib/http/transport.js";
 import { serveStatic, PUBLIC_DIR } from "./lib/http/static.js";
 import { createBuild } from "./lib/build-version.js";
+// The steer refusal's own vocabulary: the page draws its control from this same file, so the route's status split
+// and the card's button can never disagree about which of the three refusals happened.
+import "./public/core/steerable.js";
+
+const { PARKED: STEER_PARKED, PAST_BOUNDARY: STEER_PAST_BOUNDARY, GONE: STEER_GONE } = globalThis.wtSteerable;
 
 // A file an agent produced is meant to be OPENED, and the shell association may hand a .md to a
 // browser. Prefer a text editor: Notepad++ when installed, else Windows' notepad (always present),
@@ -3805,13 +3810,18 @@ const server = createServer(async (req, res) => {
       // A steer lands inside the turn that is already running, so its documents belong to that turn's
       // card rather than to a new one.
       if (r.ok && Array.isArray(body.attachments) && body.attachments.length) jobs.addAttachments(String(body.id || ""), body.attachments);
-      // 409 is a run that exists and will not take a steer RIGHT NOW — the gateway's own refusal, or the one the
-      // panel knows before asking (a run parked on an approval). 400 stays what it was: a request this route cannot
-      // act on at all (no such card, no text, a card that is not running). The caller says either one in words;
-      // neither is a queue.
+      // One status per case, and the body's `reason` says which: 409 for a run that EXISTS and will not take a steer
+      // right now (parked on an approval, or past its last tool boundary), 404 for a run the gateway no longer has
+      // (the row has already been settled in this same answer), and 400 only for a request this route cannot act on
+      // at all (no such card, no text, a card that is not running).
+      const why = String(r.reason || "");
       const refused =
-        ["run_not_accepting_steer", "steer_not_accepted", "run_parked_on_approval"].includes(String(r.code || "")) || Number(r.gatewayStatus) === 409;
-      return sendJson(res, r.ok ? 200 : refused ? 409 : 400, r);
+        why === STEER_PARKED ||
+        why === STEER_PAST_BOUNDARY ||
+        ["run_not_accepting_steer", "steer_not_accepted", "run_parked_on_approval"].includes(String(r.code || "")) ||
+        Number(r.gatewayStatus) === 409;
+      const status = r.ok ? 200 : why === STEER_GONE ? 404 : refused ? 409 : 400;
+      return sendJson(res, status, r);
     }
 
     // The NOT-RUNNABLE chip's press: ask the gateway about ONE interrupted card's run and take the same decision

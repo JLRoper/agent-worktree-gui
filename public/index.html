@@ -684,6 +684,11 @@
        is liveness, silence past the window (or a closed stream) is the only reason to resync. test/liveness.test.js
        imports this same file. -->
   <script src="/core/liveness.js"></script>
+  <!-- May this run take a steer right now? One pure predicate (`wtSteerable`), shared by this page's Steer control
+       and the panel's own steer route: a run parked on an approval, a run past its last tool boundary, and a run the
+       gateway no longer has must never draw a button the gateway would refuse. Loaded before app.js, which draws
+       from it; test/steerable.test.js imports this same file. -->
+  <script src="/core/steerable.js"></script>
   <!-- How fast a run's output reaches the reader's eyes: the word pacer (a paragraph typing out) and the line gate
        (whole lines walking into a console), both driven from app.js by the two Settings > Display rows. Published
        on globalThis as `wtType`; test/type-stream.test.js imports this same file. -->

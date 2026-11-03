@@ -2876,7 +2876,10 @@ function approvalPrompt(turn, copy = "") {
   // offering "Allow once" for a turn that is already dead is worse than no box. The terminal state of
   // the turn wins, and the error line left in its console is the record of what happened.
   const live = turnLive(turn);
-  if (!live || turn.approvalDone) return "";
+  // A park that is on the card is drawn. `approvalDone` records an EARLIER approval on this same turn, and gating a
+  // later request on it is exactly what hid the second box behind the first's answer (docs/steer-refusal.md §1.4) —
+  // `approval.responded` and settle clear `approval` itself, so its presence is the whole test.
+  if (!live) return "";
   const choices = Array.isArray(approval.choices) && approval.choices.length ? approval.choices : ["once", "deny"];
   // The window is the gateway's own (`approvals.timeout`), carried on the request when it arrived. An approval
   // is a question with a deadline: the gateway gives up at it and denies the command on its own, so a box that
@@ -4506,6 +4509,11 @@ function conversationHtml(conv) {
   // matters, instead of promising a boundary the turn may never reach.
   const inDelegate = runningTurn ? inflightToolName(jobLines(runningTurn.id)) === "delegate_task" : false;
   const running = Boolean(runningTurn);
+  // The Steer control's own question, asked once from the predicate the ROUTE refuses with (public/core/steerable.js,
+  // carried on every job summary as `steerable`): a turn parked on an approval, past its last tool boundary, or one
+  // whose run the gateway no longer has is live but not steerable, and must not offer a press the gateway refuses.
+  const steerTurnFor = turns.find((t) => turnLive(t) && t.steerable?.ok) || null;
+  const canSteer = Boolean(steerTurnFor);
   // The second reason Queue reply is offered: the turn is over but the subagents it started are still out. Asked
   // once here, because the placeholder, both button titles and the button itself all have to agree on it.
   const childrenStillOut = childrenOut(thread);
@@ -4727,16 +4735,27 @@ function conversationHtml(conv) {
             data-1p-ignore data-bwignore data-lpignore="true" data-form-type="other" autocomplete="off"
             data-reply="${esc(thread)}" data-chipbox="reply:${esc(thread)}" data-rows="2" spellcheck="false"
             data-ph="${running
-              ? (inDelegate
-                ? "a subagent is out — a steer lands when delegate_task returns; Enter holds yours for the next turn"
-                : "a turn is running — Ctrl+Enter steers it; Enter holds yours for the next turn")
+              ? (!canSteer
+                // A live turn with no Steer press to offer: the box says what Enter does instead of promising a
+                // gesture the card has taken away.
+                ? (runningTurn?.steerable?.why === "parked"
+                  ? "this turn is parked on an approval — Enter holds yours for the next turn"
+                  : "this turn cannot take a steer right now — Enter holds yours for the next turn")
+                : inDelegate
+                  ? "a subagent is out — a steer lands when delegate_task returns; Enter holds yours for the next turn"
+                  : "a turn is running — Ctrl+Enter steers it; Enter holds yours for the next turn")
               : childrenStillOut
                 ? "this thread's subagents are still out — Enter holds yours until they finish"
                 : "Reply to this agent — continues the same Hermes thread, Enter or Ctrl+Enter to send"}"></div>
           <div class="reply-actions">
-            ${running
-              ? `<button class="btn-reply btn-steer-primary" data-steer="${esc(runningTurn.id)}" type="button" title="${inDelegate ? "send this into the running turn (Ctrl+Enter) — it waits for delegate_task to return, and if the turn ends first it comes back to this box unsent" : "send this into the running turn (Ctrl+Enter) — the agent reads it at its next tool boundary and the turn carries on"}">Steer turn</button>`
-              : `<button class="btn-reply" data-thread="${esc(thread)}" type="button" title="${childrenStillOut ? "send this as the next turn now — the subagents this thread started are still out, and Enter holds it until they finish instead" : "send this as the next turn (Enter or Ctrl+Enter)"}">Send reply</button>`}
+            ${canSteer
+              ? `<button class="btn-reply btn-steer-primary" data-steer="${esc(steerTurnFor.id)}" type="button" title="${inDelegate ? "send this into the running turn (Ctrl+Enter) — it waits for delegate_task to return, and if the turn ends first it comes back to this box unsent" : "send this into the running turn (Ctrl+Enter) — the agent reads it at its next tool boundary and the turn carries on"}">Steer turn</button>`
+              : running
+                // A live turn the gateway will not take a steer for right now — parked on an approval, past its last
+                // tool boundary, or a run the gateway no longer has. No press at all: Queue reply holds text for the
+                // next turn, and Cancel turn is the other thing this state can be given (docs/steer-refusal.md §2.2).
+                ? ""
+                : `<button class="btn-reply" data-thread="${esc(thread)}" type="button" title="${childrenStillOut ? "send this as the next turn now — the subagents this thread started are still out, and Enter holds it until they finish instead" : "send this as the next turn (Enter or Ctrl+Enter)"}">Send reply</button>`}
             ${running || childrenStillOut
               ? `<button class="btn-queue" data-queue-reply="${esc(thread)}" type="button" title="${running ? "hold this reply and send it the moment the current turn finishes (Enter)" : "hold this reply until the subagents this thread started have finished, so the parent is not talking over them (Enter)"}">Queue reply</button>`
               : ""}
@@ -5326,7 +5345,11 @@ function steerOfferedFor(box) {
 // thread is looked up instead, which is the same turn the card drew its button for.
 function steerFromBox(thread, turnId = null) {
   const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
-  const id = turnId || [...state.jobs.values()].find((j) => (j.thread || j.id) === thread && turnLive(j))?.id;
+  // From the keyboard the turn is found through the SAME predicate the card drew its button from, never through any
+  // live turn on the thread: Ctrl+Enter is offered only while that button is, so it must name the same turn.
+  const id =
+    turnId ||
+    [...state.jobs.values()].find((j) => (j.thread || j.id) === thread && turnLive(j) && j.steerable?.ok)?.id;
   if (!id) return Promise.resolve(false);
   return steerTurn(thread, id, readBox(box));
 }
@@ -6215,13 +6238,47 @@ async function steerTurn(thread, id, text, btn = null) {
     });
     const out = await res.json().catch(() => ({}));
     if (!res.ok || !out.ok) {
-      // A steer that did not land is SAID, on the card — that is the whole of it. This used to turn a 409 into a
-      // queued reply: a run parked on an approval (or one past its last tool boundary) silently became a ghost
-      // line under "queued", so the instruction was neither steered nor visibly pending, and the reader was told
-      // it had been held when they had asked for it to be sent. Holding a reply is the Queue reply button's job,
-      // and that press is the reader's to make: the text stays in the box, one keystroke away from it.
+      // One sentence per reason, because the three refusals want three different next actions (docs/steer-refusal.md
+      // §2.2/§2.4). `out.reason` is classified by the route from the same predicate the card drew its button from;
+      // a refusal it could not classify falls through to the plain sentence rather than guessing a case.
+      const reason = String(out.reason || "").trim();
       const why = String(out.error || "").trim() || `HTTP ${res.status}`;
-      if (warn) warn.textContent = `steer refused — ${why}. Nothing was queued; press Queue reply to hold this text.`;
+      // The route settled a run the gateway no longer has and carried the card back: repaint now, so the Steer control
+      // and the card's "running" word go in the same round trip as the answer.
+      if (out.card && typeof updateJob === "function") {
+        try {
+          updateJob(out.card);
+        } catch {
+          /* the job frame that follows repaints anyway */
+        }
+      }
+      if (reason === "past_boundary") {
+        // A GENUINE 409: the run exists and is already past its last tool boundary, so this text cannot land in it and
+        // no later press will land either. Hold it as the reply the reader asked for — the same hold the Queue reply
+        // press makes — and say it was held, so nobody is left thinking the instruction was lost.
+        state.replyDrafts[thread] = "";
+        const box = document.querySelector(`.reply-box[data-reply="${CSS.escape(thread)}"]`);
+        if (box) {
+          writeBox(box, "");
+          clearBoxDraft(box);
+        }
+        queueReply(thread, typed || attached);
+        // After the repaint queueReply causes: it replaces the card, and the old warnline with it.
+        const heldWarn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`);
+        if (heldWarn) heldWarn.textContent = `steer held — ${why}; your text is queued and goes out as the next turn on this thread.`;
+        if (btn) btn.disabled = false;
+        return false;
+      }
+      const advice =
+        reason === "parked"
+          ? "Nothing was queued — answer the approval above and Steer works again."
+          : reason === "gone"
+            ? "Nothing was queued — the card is settled now, and Send reply starts a new turn."
+            : "Nothing was queued; the text is still in the box.";
+      // The repaint above replaced the warnline with the card, so the sentence goes on the node that is on the page
+      // now — the one captured when this press started may already be detached.
+      const liveWarn = document.querySelector(`[data-reply-warn="${CSS.escape(thread)}"]`) || warn;
+      if (liveWarn) liveWarn.textContent = `steer refused — ${why}. ${advice}`;
       if (btn) btn.disabled = false;
       return false;
     }
@@ -8753,6 +8810,10 @@ function conversationSignature(conv) {
   // and it still carries an error, so nothing else in this signature moves. Without it the pill sat on a card whose
   // run is provably gone until some unrelated event forced a rebuild.
   const runReattach = conv.turns.map((t) => `${t.id}:${t.runGone ? 1 : 0}`).join(",");
+  // Whether each turn may offer its Steer control, and why not: the gateway's 409 (`past_boundary`) and a proven 404
+  // (`gone`) change the verdict while the card's status word stays `running`, so without this the control the route
+  // just refused stayed drawn until some unrelated event forced a rebuild.
+  const runSteerable = conv.turns.map((t) => `${t.id}:${t.steerable?.ok ? 1 : 0}:${t.steerable?.why || ""}`).join(",");
   const open = [...state.turnOpen].map(([k, v]) => `${k}${v ? 1 : 0}`).join(",");
   const approvals = [...state.approvals.values()]
     .filter((a) => a && a.thread === conv.thread)
@@ -8789,6 +8850,7 @@ function conversationSignature(conv) {
     runApprovals,
     runQuestions,
     runReattach,
+    runSteerable,
     l.runId || "",
     l.cwd || "",
     // The row this agent is filed under: the card's cwd line falls back to it, so a change must repaint.
@@ -10058,7 +10120,9 @@ function agentBadgeHtml(row) {
   const running = agentsRunning(mine);
   // A parked approval is the one state that needs the reader, and it used to be invisible the moment
   // the row was collapsed — the badge only ever said "running".
-  const waiting = mine.filter((c) => (c.turns || []).some((t) => approvalLive(t.approval) && !t.approvalDone && turnLive(t))).length;
+  // `approvalDone` is deliberately absent: a turn whose FIRST approval was answered is not thereby un-parked when
+  // its SECOND one arrives, and this badge is how the reader is told a human is needed (docs/steer-refusal.md §1.4).
+  const waiting = mine.filter((c) => (c.turns || []).some((t) => approvalLive(t.approval) && turnLive(t))).length;
   const cls = waiting ? "sig-approval" : running ? "sig-panel" : "sig-panel-done";
   const bits = [waiting ? `${waiting} awaiting approval` : null, running ? `${running} running` : null].filter(Boolean);
   return `<button class="sig ${cls}" data-open-row="${esc(keyOf(row.project, row.path))}" title="${mine.length} agent${mine.length === 1 ? "" : "s"} owned by this worktree${waiting ? `, ${waiting} parked on a permission request — click to answer it` : running ? `, ${running} running` : ""} — click to open the row and its agents">⧉ ${mine.length}${bits.length ? ` · ${bits.join(" · ")}` : ""}</button>`;
@@ -13152,8 +13216,9 @@ function chipsHtml(name) {
   }
   // Amber and loud: an agent parked on a permission request is the one thing here that is waiting for
   // a human, and it must be visible with the project collapsed.
+  // Same rule as the row badge: the park on the card is the signal, not the record of an earlier answer.
   const panelWaiting = panelAgents.filter((c) =>
-    (c.turns || []).some((t) => approvalLive(t.approval) && !t.approvalDone && turnLive(t)),
+    (c.turns || []).some((t) => approvalLive(t.approval) && turnLive(t)),
   ).length;
   if (panelWaiting) {
     out.push(
