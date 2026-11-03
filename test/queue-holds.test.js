@@ -22,12 +22,16 @@
 //   6. the digest puts the hold FIRST, so a 200-character title and reason cannot clip it, and a park with no hold
 //      reads `parked (manual)`;
 //   7. the lane: rows sharing a file are ordered by id, the head is named, and a queued row behind a LIVE head reads
-//      `waiting on #N (lane <file>)` — and nothing is started by any of it.
+//      `waiting on #N (lane <file>)` — and nothing is started by any of it;
+//   8. the stale reason: a manual park (or one with no hold at all) whose prose names a row that is already done is
+//      NEVER released, but the digest says the reason is stale — and a throwing rule on the sentry's tick cannot
+//      stop the sweep putting a released hold back.
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { Assistant } from "../lib/assistant.js";
 import {
   addTask,
   adoptTask,
@@ -39,8 +43,11 @@ import {
   normHold,
   pickTask,
   queueDigest,
+  readQueueFile,
   setTaskState,
   settleTasks,
+  staleReason,
+  writeQueueFile,
 } from "../lib/assistant/queue.js";
 
 const at = (iso) => new Date(iso);
@@ -354,4 +361,113 @@ test("a lane orders rows and starts nothing: no state, no id, no thread is touch
     before,
     "the digest is a read: the panel renders the order, the assistant decides what to start",
   );
+});
+
+// ---- 7. the stale reason -----------------------------------------------------------------------------------
+//
+// The row that started this: parked on `#38` in prose, no hold at all, and still parked twenty minutes after #38
+// landed. Nothing may release it — "needs a decision" is the reader's, and a hold guessed out of a sentence is the
+// defect the field replaced — but the digest can say the sentence has stopped being true, so the next turn does not
+// wait on a row the board already finished.
+
+test("a manual park whose reason names a DONE row reads stale — and is still never released", () => {
+  let q = addTask([], { title: "the blocker" }).tasks;
+  q = addTask(q, { title: "parked on it in prose" }, { nextId: 2 }).tasks;
+  q = setTaskState(q, 1, "done", { by: "reader" }).tasks;
+  q = setTaskState(q, 2, "parked", { reason: "blocked on #1 landing as PR #276" }).tasks;
+  assert.equal(q[1].hold, null, "no hold at all — a prose park, like the ten already on disk");
+
+  assert.deepEqual(staleReason(q[1], q), { task: 1, state: "done", why: "#1 is done" });
+  const line = queueDigest(q, { isLive: () => false }).find((l) => l.includes("#2")) || "";
+  assert.match(line, /^- ⏸ #2 parked \(manual, stale reason: #1 is done\) · parked on it in prose/, line);
+  assert.match(line, /· PARKED: blocked on #1 landing as PR #276$/, "and the reader's own sentence is still last");
+
+  // The marker is a READ: a thousand sweeps with every job terminal leave the row exactly where it is.
+  let after = q;
+  for (let i = 0; i < 1000; i += 1) {
+    const out = settleTasks(after, { jobs: [job(T1, "done")], isLive: () => false, by: "panel" });
+    assert.equal(out.changed.length, 0, `sweep ${i + 1} touched a park the panel cannot test`);
+    after = out.tasks;
+  }
+  assert.equal(after[1].state, "parked");
+  assert.equal(after[1].reason, "blocked on #1 landing as PR #276", "the reason is the reader's, untouched");
+  // …and a `manual` hold written out loud is the same park, so it reads the same marker.
+  const explicit = setTaskState(q, 2, "parked", { hold: { kind: "manual", value: "" }, reason: "blocked on #1" }).tasks;
+  assert.deepEqual(staleReason(explicit[1], explicit), { task: 1, state: "done", why: "#1 is done" });
+});
+
+test("the stale marker is only for the FIRST id the sentence names, and only when it is a row in this queue", () => {
+  let q = addTask([], { title: "the open blocker" }).tasks;
+  q = addTask(q, { title: "behind an open row" }, { nextId: 2 }).tasks;
+  q = addTask(q, { title: "behind a done row" }, { nextId: 3 }).tasks;
+  q = setTaskState(q, 3, "done", { by: "reader" }).tasks;
+
+  // An open target is not a stale reason, however the sentence is worded.
+  assert.equal(staleReason({ state: "parked", hold: null, reason: "waiting on #1" }, q), null);
+  // The first id is the one judged: "#1 (see PR #276)" must not read stale because #276 happens to be a task.
+  assert.equal(staleReason({ state: "parked", hold: null, reason: "waiting on #1 (see #3)" }, q), null);
+  // An id with no row in the queue says nothing about the park — and a sentence with no id says nothing either.
+  assert.equal(staleReason({ state: "parked", hold: null, reason: "waiting on PR #276" }, q), null);
+  assert.equal(staleReason({ state: "parked", hold: null, reason: "needs a decision" }, q), null);
+  // A row that is not parked carries no park to be stale.
+  assert.equal(staleReason(q[0], q), null);
+  // A TYPED hold is judged by `holdState`, not by its prose: the sweep releases it, so the marker would be a second,
+  // weaker answer to a question the hold already answers.
+  const typed = { state: "parked", hold: { kind: "task", value: "#3", since: null }, reason: "blocked on #3" };
+  assert.equal(staleReason(typed, q), null);
+
+  // The digest keeps the plain `(manual)` for every one of those.
+  const plain = setTaskState(q, 2, "parked", { reason: "waiting on PR #276" }).tasks;
+  const line = queueDigest(plain, { isLive: () => false }).find((l) => l.includes("#2")) || "";
+  assert.match(line, /^- ⏸ #2 parked \(manual\) · /, line);
+});
+
+test("the sentry's tick still sweeps when an earlier pass throws — the sweep has its own try", async (t) => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-queue-sweep-rule-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const assistantFile = path.join(dir, "assistant.json");
+  // `enabled: false` keeps the reader's rules out of the pass, so nothing can wake or spawn; the pass this test makes
+  // throw is the one the tick runs for every assistant either way.
+  await writeFile(assistantFile, JSON.stringify({ version: 2, settings: { enabled: false }, notes: "", rules: [], watches: [], alerts: [], journal: [] }));
+  const jobs = [job(T1, "done")];
+  const logged = [];
+  const assistant = new Assistant({
+    config: { jobsFile: path.join(dir, "jobs.json"), assistantFile },
+    jobs: { list: () => jobs, firstOfThread: () => null, create: async (body) => ({ id: "job-1", ...body }) },
+    getProjects: () => [],
+    onLog: (line) => logged.push(line),
+  });
+  const file = assistant.queuePathOf(assistant.assistantRecord());
+  writeQueueFile(
+    file,
+    [
+      { id: 1, title: "held on a run that ended", state: "parked", hold: { kind: "thread", value: T1, since: "2024-05-01T21:36:00.000Z" }, reason: "the resume run is still going" },
+      { id: 2, title: "manual", state: "parked", hold: null, reason: "needs a decision" },
+    ],
+    3,
+  );
+
+  // The passes before the sweep are the board's own read of the world. One that throws must cost its own pass only.
+  assistant.checkSpawnWatches = () => {
+    throw new Error("a pass that throws");
+  };
+  assistant.tick();
+
+  const rows = readQueueFile(file).tasks;
+  assert.equal(rows.find((r) => r.id === 1).state, "queued", "the hold that ended was put back anyway");
+  assert.match(rows.find((r) => r.id === 1).reason, /^hold ended: thread .* ended done 22:43$/);
+  assert.equal(rows.find((r) => r.id === 2).state, "parked", "and the manual park is still the reader's");
+  assert.ok(
+    logged.some((l) => /tick failed: a pass that throws/.test(l)),
+    `the failed pass is still logged: ${JSON.stringify(logged)}`,
+  );
+  assert.ok(
+    assistant.journal.some((j) => /#1 held on a run that ended — back in the queue by the panel: hold ended: thread/.test(j.text)),
+    "and the release is journalled with the hold kind and the value that ended it",
+  );
+  // Idempotent: the next tick has nothing left to do, so the row cannot thrash between queued and parked.
+  writeQueueFile(file, readQueueFile(file).tasks, 3);
+  assistant.tick();
+  const again = readQueueFile(file).tasks;
+  assert.deepEqual(again.map((r) => [r.id, r.state]), [[1, "queued"], [2, "parked"]]);
 });

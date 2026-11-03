@@ -17,15 +17,19 @@
 //   (4) a path that is gone releases the row the same way;
 //   (5) a park with NO hold is a manual park: the digest says `parked (manual)` and it is STILL parked after several
 //       sweeps with every job in the store terminal. There is no TTL and nothing here invents one;
+//   (5b) a manual park whose REASON names a task id that is already done is never released either — but the digest
+//       says the reason is stale (`parked (manual, stale reason: #N is done)`), so the board does not leave a later
+//       turn to remember that the row it waits for has landed. A reason naming an OPEN row keeps the plain `(manual)`;
 //   (6) the digest puts the hold FIRST, before the 90-character title and the 100-character reason, so a 200-character
 //       title and reason cannot clip the only part a reader can act on;
 //   (7) two rows that claim the same file are ONE lane, ordered by id, the head marked `(head)` and the row behind it
 //       naming the head — and nothing is started by any of it.
 //
 // RED PROOF. Everything above is asserted through the real `/api/assistant/queue` of a panel booted from `--root`.
-// Run this file against a `git archive origin/main` export and it fails at the first refusal check: main accepts a park
-// on a row that is already done, stores no hold, and releases nothing. (The export has no tools/verify-queue-holds.mjs
-// of its own; run THIS file with --root pointing at it.)
+// Run this file against a `git archive origin/main` export at 0.75.0 and it fails at (5b): that build reports every
+// hold-less park as `parked (manual)`, whatever its reason says, so a row parked on a task that already reads done
+// stays parked with nothing on the board saying why the sentence is no longer true. (The export has no
+// tools/verify-queue-holds.mjs of its own; run THIS file with --root pointing at it.)
 //
 // Everything runs in a sandbox of its own: `tools/panel-testkit.mjs` gives it a throwaway data directory, a scanned
 // repo and a free port, `assistant.enabled` is false and `apiServer` is a dead port, so nothing can spawn a run. The
@@ -254,6 +258,34 @@ try {
   check("…and it is STILL parked three sweeps later", [stillParked?.state, stillParked?.hold], ["parked", null]);
   ok("…with its reason the reader's own", stillParked?.reason === "needs a decision plus an offline gradle run", stillParked?.reason);
 
+  // ---- 5b. a manual park whose reason names a DONE row: the board says the reason is stale -----------------
+  console.log("\n== a hold-less park whose reason names a done row says the reason is STALE ==");
+  // The row that started this: parked on `#38` in prose (no hold at all), still parked twenty minutes after #38 landed.
+  // #1 is this gate's done row, and the sentence names it the way a reader writes one — a task id, then a PR number.
+  const stale = await add({ title: "parked on prose that named a row since finished" });
+  const staleParked = await POST({ action: "state", id: stale.body.task.id, state: "parked", reason: "blocked on #1 landing as PR #276" });
+  ok("it parks with no hold at all (a prose park, like the ones already on disk)", staleParked.status === 200 && staleParked.body.task?.hold === null, JSON.stringify({ status: staleParked.status, hold: staleParked.body.task?.hold }));
+  const staleLine = await lineFor(stale.body.task.id);
+  ok(
+    "the digest says the reason is stale, naming the row that ended it",
+    /^- ⏸ #\d+ parked \(manual, stale reason: #1 is done\) · /.test(staleLine),
+    staleLine,
+  );
+  ok("…with the reader's own sentence still last on the line", /· PARKED: blocked on #1 landing as PR #276$/.test(staleLine), staleLine.slice(-70));
+
+  // A reason naming a row that is still OPEN says nothing is stale: the marker is about a fact that has ENDED.
+  const open = await add({ title: "parked on prose naming a row still queued" });
+  const openParked = await POST({ action: "state", id: open.body.task.id, state: "parked", reason: "waiting on #2, which is still queued" });
+  ok("a prose park naming an OPEN row keeps the plain `(manual)`", /^- ⏸ #\d+ parked \(manual\) · /m.test(await lineFor(openParked.body.task.id)), await lineFor(openParked.body.task.id));
+
+  // It is never released: the marker is a read, and this row rides the same three-sweep wait as #3 above.
+  await sleep(7000);
+  const staleStill = await task(stale.body.task.id);
+  check("…and it is STILL parked after three more sweeps", [staleStill?.state, staleStill?.hold], ["parked", null]);
+  ok("…with its reason untouched — nothing here writes a hold out of prose", staleStill?.reason === "blocked on #1 landing as PR #276", staleStill?.reason);
+  const staleAgain = await lineFor(stale.body.task.id);
+  ok("…and the digest says the same thing on the next sweep (idempotent)", staleAgain === staleLine, `${staleAgain === staleLine ? "same line" : "the line moved"}`);
+
   // ---- 6. a path hold releases when the path goes ------------------------------------------------------
   console.log("\n== a path hold releases when the path is gone ==");
   const watched = path.join(dir, "watched-file.txt");
@@ -323,7 +355,8 @@ console.log("\n== summary ==");
 console.log(`${checks - failures}/${checks} checks held`);
 console.log("WHAT WAS DRIVEN: a panel booted from the checkout under test over its own data directory and a job store with");
 console.log("one ENDED run — its queue route (add / edit / state), the write-time refusal of a hold that is already false, a");
-console.log("hold released by the sentry's own sweep, a manual park that stayed parked across three sweeps, a path hold");
-console.log("released when the file was deleted, and the digest: the hold first, the reason last, the lane head named.");
+console.log("hold released by the sentry's own sweep, a manual park that stayed parked across three sweeps, a prose park whose");
+console.log("reason names a done row reading `stale reason` and staying parked too, a path hold released when the file was");
+console.log("deleted, and the digest: the hold first, the reason last, the lane head named.");
 if (!failures) console.log("QUEUE-HOLDS-OK");
 process.exitCode = failures ? 1 : 0;
