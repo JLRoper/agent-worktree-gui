@@ -10,7 +10,7 @@
 //   2. the markup carries one tab per `data-settings-group` key, in the same order as the panels (Display first),
 //      with aria-controls/aria-labelledby tying each tab to its own panel;
 //   3. exactly one tab is selected and one panel is not `hidden`: the six other panels ship hidden, so the page
-//      never paints all eight before the script runs;
+//      never paints all nine before the script runs;
 //   4. the tab the reader chose is remembered (`wtgui.settingsTab`), an absent or stale key lands on the first tab
 //      without writing one, and the old fold keys are inert: neither read nor rewritten;
 //   5. the strip is one Tab stop (roving tabindex), a press selects and remembers, and ArrowLeft/ArrowRight/Home/End
@@ -72,8 +72,8 @@ test("the two read-now buttons are in Settings, not in the top bar", () => {
 });
 
 test("one tab per data-settings-group key, in the markup's own order", () => {
-  assert.equal(tabs.length, 8, `the strip has eight tabs, found ${tabs.length}`);
-  assert.equal(panels.length, 8, `the panel has eight panels, found ${panels.length}`);
+  assert.equal(tabs.length, 9, `the strip has nine tabs, found ${tabs.length}`);
+  assert.equal(panels.length, 9, `the panel has nine panels, found ${panels.length}`);
   assert.equal(settings.split('role="tablist"').length - 1, 1, "one tab strip");
   assert.ok(tabs.every((t) => t.key), "each tab carries a stable data-settings-tab key");
   assert.ok(panels.every((p) => p.key), "each panel carries its data-settings-group key");
@@ -88,13 +88,13 @@ test("one tab per data-settings-group key, in the markup's own order", () => {
 });
 
 test("exactly one tab is selected, and only its panel is not hidden", () => {
-  assert.deepEqual(tabs.map((t) => t.selected), ["true", "false", "false", "false", "false", "false", "false", "false"],
+  assert.deepEqual(tabs.map((t) => t.selected), ["true", "false", "false", "false", "false", "false", "false", "false", "false"],
     "Display is the first visit's tab, and it is the only selected one");
   assert.equal(tabs.filter((t) => t.tabindex === "0").length, 1, "the strip is one Tab stop: one tab is reachable");
   assert.equal(tabs[0].tabindex, "0");
   assert.ok(tabs.slice(1).every((t) => t.tabindex === "-1"), "the rest are roving stops");
-  assert.deepEqual(panels.map((p) => p.hidden), [false, true, true, true, true, true, true, true],
-    "the seven other panels ship hidden, so the page never paints all eight");
+  assert.deepEqual(panels.map((p) => p.hidden), [false, true, true, true, true, true, true, true, true],
+    "the eight other panels ship hidden, so the page never paints all nine");
 });
 
 test("the strip is styled by a class of its own, and the fold machinery is gone", () => {

@@ -42,6 +42,7 @@
       <button type="button" class="settings-tab" id="settings-tab-gateway" role="tab" aria-controls="settings-panel-gateway" aria-selected="false" tabindex="-1" data-settings-tab="gateway" title="Written to the gateway's config.yaml, not this browser. It re-reads them, so the next prompt or session list uses the new number without a restart. The tab you choose is remembered in this browser."><span class="settings-tab-label">Gateway</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
       <button type="button" class="settings-tab" id="settings-tab-skills" role="tab" aria-controls="settings-panel-skills" aria-selected="false" tabindex="-1" data-settings-tab="skills" title="Every place an agent's skills are absorbed from, and every skill those places hold — name, description and the path relative to the folder it was read from, one row each, read only. The list is grouped twice: by SOURCE (a junctioned folder is its own source and says what it points at, so the same skill is never listed twice), then by the CATEGORY the skill's own directory gives it. Every heading folds and carries the count of the skills under it; a source opens, and its categories open only while there are six or fewer of them — the folds you choose are remembered in this browser. The search box at the top of the window filters this list by name, description and category, and the counts follow the filter. The line under the summary is the gateway's own answer for what a run is actually served: plugin skills included, and the reason when it cannot answer — a gateway that does not answer marks the rows as unknown instead of claiming either way. The tab you choose is remembered in this browser."><span class="settings-tab-label">Skills</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
       <button type="button" class="settings-tab" id="settings-tab-updates" role="tab" aria-controls="settings-panel-updates" aria-selected="false" tabindex="-1" data-settings-tab="updates" title="A panel that restarted (or whose public/ was edited while it ran) serves a new build. This is what this tab does about it — and what it refuses to do while you are mid-sentence or an agent is mid-turn. The tab you choose is remembered in this browser."><span class="settings-tab-label">Updates</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
+      <button type="button" class="settings-tab" id="settings-tab-permissions" role="tab" aria-controls="settings-panel-permissions" aria-selected="false" tabindex="-1" data-settings-tab="permissions" title="The permissions actually in force, read-only, and where each one comes from. Five blocks are parsed from the gateway's config.yaml when this tab is read — approvals, the always-ask command list, the tool loop guardrails, platform toolsets and the code-execution sandbox — and every row carries the file and line it was read from. The gateway's advertised surface comes from its own GET /v1/capabilities; a gateway that answers 401 is shown as not exposed, needs a token, never guessed at. The bottom group is this panel's own layer: config.json's remoteBranchPolicy (with each project's override) and lib/remote-writes.js's grant choices and permission window. Nothing here can be edited. The tab you choose is remembered in this browser."><span class="settings-tab-label">Permissions</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
     </div>
     <div class="settings-body">
 
@@ -472,6 +473,16 @@
           <button id="btn-check-update" type="button" title="ask GET /api/build now and offer the reload if the answer is a different build — works even with Update check set to off">Check now</button>
         </div>
         <div class="settings-preview mono" id="update-preview">…</div>
+      </div>
+
+      <div class="settings-group" id="settings-panel-permissions" data-settings-group="permissions" role="tabpanel" aria-labelledby="settings-tab-permissions" hidden>
+
+        <div class="settings-row" id="permissions-summary-row" title="What this read covers: how many sources answered, how many permission rows they carry, and how many sources could not be read at all. Read only — no control on this tab writes anything.">
+          <span>Permissions in force <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono" id="permissions-summary">reading…</span>
+        </div>
+        <div class="settings-preview mono" id="permissions-config">…</div>
+        <div id="permissions-list"></div>
       </div>
 
     </div>

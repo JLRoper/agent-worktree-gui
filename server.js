@@ -54,6 +54,7 @@ import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree }
 import { safeUrl, openerFor, openerForFolder } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
 import { readSkillsIndex } from "./lib/skills.js";
+import { readPermissions } from "./lib/gateway-permissions.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
   clarifyWindowSeconds, approvalWindowSeconds,
@@ -2075,6 +2076,26 @@ const server = createServer(async (req, res) => {
         await readSkillsIndex({
           home: hermesHome(),
           projects: registry.projects.map((p) => ({ name: p.name, path: p.path })),
+          gateway: { url: jobs.api.url, key: jobs.api.key },
+        }),
+      );
+    }
+
+    // ---- what permissions are in force, and where each one comes from ----------------------------
+    // The Permissions tab's whole answer: the five config.yaml blocks the gateway actually reads
+    // (parsed at request time, every row carrying its own file:line), the gateway's advertised
+    // surface (a 401 is "not exposed, needs a token", never a guess at the features), and this
+    // panel's remote-write layer — config.json's policy and lib/remote-writes.js's grants.
+    // Read on demand, so the tab reports the file as it is now rather than a snapshot from boot.
+    if (route === "/api/settings/permissions" && req.method === "GET") {
+      return sendJson(
+        res,
+        200,
+        await readPermissions({
+          home: hermesHome(),
+          panelConfig: config,
+          panelConfigPath: path.join(HERE, "config.json"),
+          modulePath: path.join(HERE, "lib", "remote-writes.js"),
           gateway: { url: jobs.api.url, key: jobs.api.key },
         }),
       );
