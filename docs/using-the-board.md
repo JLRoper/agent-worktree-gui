@@ -39,7 +39,7 @@ is `rev-parse`, `rev-list`, `merge-base`, `cherry`, `diff`, `status` and `log`.
 | Stream readout | `pool 1/3 · 3 conversations · 29 events · 2.4/s`: scan workers busy, how many conversations, and the event rate arriving over SSE. |
 | **NOT-RUNNING** | Steps through the agents that are not running and are waiting on you. See below. |
 | **✧ Assistant** | Opens the assistant panel beside the board (`A` or `Ctrl+Shift+A`) — a rail by default, and a floating window for an assistant whose own **Settings** says `floating`. Its purple badge counts the open alerts; the `⧗` pill beside it counts the **spawn cards** waiting for a click, amber once the oldest has waited over two minutes. |
-| **Collapse all** | Folds the whole tree — every folder, project, worktree row, card and turn. The button then reads **Expand all**. Same as `Ctrl+[` / `Ctrl+]`. |
+| **Collapse all** | Folds the whole tree in one press — every folder, project, worktree row, card and turn. The button then reads **Expand all**. `Ctrl+]` also opens everything; `Ctrl+[` folds one tier per press instead. |
 | **⚡ Aggressive** | Switches the assistant's aggressive profile on or off. Its pill reads `on`/`off`, so the state does not depend on colour. |
 | **Pause** | Freezes the page: closes the live stream, so nothing updates. The button reads **Resume**, which reconnects and resyncs. |
 | **⚙ Settings** | The Settings panel (`Ctrl+,`). **Refresh now** and **Fetch remotes** live in it too, under Board → **Read now**. |
@@ -929,7 +929,8 @@ does not price; no press can re-fetch it — `python tools/openrouter-prices.py`
 | `Esc` | Anywhere | Close what is open: an artifacts list, Settings, a maximized card, a clone row, or a folder filter. |
 | `Ctrl+wheel` | Over a card's console text — its words, a tool's output or the reasoning | Size that card's console, all three kinds of text together; anywhere else it zooms the page. |
 | `Ctrl+` / `Ctrl-` / `Ctrl+0` | Anywhere | Page zoom in, out, reset. |
-| `Ctrl+[` / `Ctrl+]` | Anywhere | Collapse / expand the whole tree. |
+| `Ctrl+[` | Anywhere | Fold one tier — the lowest with anything open, in the order turn bodies, cards, worktree rows, projects, folders and the two fixed cards. Nothing open: no-op. |
+| `Ctrl+]` | Anywhere | Expand the whole tree. |
 | Click | Worktree row | Open its detail (description, TODO, merge state, liveness, agents, sessions). |
 | Click | Project or folder title | Open or close it. |
 | `Ctrl+click` | Project title | Give it a theme colour; again re-rolls. |
