@@ -3329,8 +3329,13 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-task.is-dragging, .as-task.is-dragging .as-task-body { cursor: grabbing; }
 .as-qdrag, .as-qdrag * { user-select: none; }
 /* The one line a blocked drop says, above the cards it is about: which row is holding the card, and that it cannot go
-   above it. Amber, the same voice as a note on a card, because nothing failed — the queue refused a move. */
-.as-qdrop { margin: 0 0 8px; padding: 5px 8px; font-size: 10.5px; color: #e0b341; background: #2a2418; border: 1px solid #4a3d1f; border-radius: 7px; }
+   above it. Amber, the same voice as a note on a card, because nothing failed — the queue refused a move.
+   STICKY, because the queue it describes is usually scrolled: the line is painted above the cards, and a reader who
+   dropped a card near the bottom of a long list would otherwise have the refusal snap back with its reason sitting
+   off-screen above them — indistinguishable from a drag that did nothing. `top: 0` pins it to the scrollport the cards
+   move in (`.as-body` in the rail and the float, the document when the window is narrow), so the sentence arrives where
+   the reader is looking; the background keeps the cards from reading through it. */
+.as-qdrop { position: sticky; top: 0; z-index: 6; margin: 0 0 8px; padding: 5px 8px; font-size: 10.5px; color: #e0b341; background: #2a2418; border: 1px solid #4a3d1f; border-radius: 7px; }
 /* The badge a card whose hold actually blocks wears — the only card that wears one. A card the drag is not competing
    with is not greyed: the row it waits on is named in the badge, and everything above it stays legible. */
 .as-task-hold { margin-left: auto; flex: 0 0 auto; font-size: 9px; color: #c4b5fd; background: #241f36; border: 1px solid #3b3358; border-radius: 999px; padding: 1px 6px; white-space: nowrap; }
