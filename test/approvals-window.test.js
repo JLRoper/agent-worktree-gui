@@ -1,14 +1,19 @@
-// An approval card must live as long as the gateway is willing to wait for it.
+// An approval card must live exactly as long as the gateway is willing to wait for it.
 //
-// lib/approvals.js gave every request a 300 s default and then set the deadline five seconds short of it, so the
-// sweep took the card away at 4m55s while the gateway (`approvals.timeout`) held the same request for 600 s: the
-// reader lost a prompt that could still be answered, and the agent was re-asked for a decision already on screen.
-// The window is now one named constant, defaults to the gateway's 600 s, and is the WHOLE window the host names.
-// `ttlMs` — a constructor option stored on `this.ttlMs` and read nowhere — is gone; the last test proves an option
-// by that name cannot come back and quietly shorten a card.
+// The request the transport plugin presents carries no window, so the fallback decides everything. It used to be
+// a copied-in 300 s with a deadline five seconds short of it: the sweep took the card away at 4m55s while the
+// gateway (`approvals.timeout`) held the same request for 600 s, so the reader lost a prompt that could still be
+// answered and the agent re-asked for a decision already on screen. The fallback now comes from the same
+// `approvals.timeout` the gateway reads (lib/hermes-config.js), resolved at construction, and is the WHOLE window.
+// The numbers below are the contract: config unset -> 300 (the host default), 600 -> 600, 900 -> 900, and an
+// explicit `timeout_seconds` wins over all of them.
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
-import { Approvals, DEFAULT_APPROVAL_TIMEOUT_SECONDS } from "../lib/approvals.js";
+import { Approvals } from "../lib/approvals.js";
+import { APPROVAL_TIMEOUT_DEFAULT } from "../lib/hermes-config.js";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const recorder = () => {
@@ -16,47 +21,75 @@ const recorder = () => {
   return { seen, onEvent: (evt) => seen.push(evt) };
 };
 
-test("a request that names no window gets 600 s, and a sweep does not touch it", () => {
-  const { seen, onEvent } = recorder();
-  const approvals = new Approvals({ onEvent });
-  const at = Date.now();
-  const req = approvals.present({ request_id: "no-window", command: "git push --force" });
+// A HERMES_HOME of its own. lib/approvals.js reads `<home>/config.yaml` at construction, so every case names
+// its own approvals.timeout instead of inheriting the developer's.
+function homeWith(timeout, t) {
+  const dir = mkdtempSync(path.join(os.tmpdir(), "wag-approvals-window-"));
+  if (timeout !== null) {
+    writeFileSync(path.join(dir, "config.yaml"), `approvals:\n  timeout: ${timeout}\n  mode: manual\n`, "utf8");
+  }
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+}
 
-  assert.equal(DEFAULT_APPROVAL_TIMEOUT_SECONDS, 600);
-  assert.equal(req.timeoutSeconds, 600);
-  // The deadline is the END of the window, counted from arrival. The old 300 s default produced 295 s here,
-  // which is the card that vanished in under five minutes.
-  const window = req.deadline - at;
-  assert.ok(window >= 600_000, `deadline only ${window}ms after arrival`);
-  assert.ok(window <= 600_050, `deadline ${window}ms after arrival is past the named window`);
+// The window the card was given, measured from its own arrival stamp.
+const windowMs = (req) => req.deadline - Date.parse(req.receivedAt);
+
+test("no approvals.timeout in the config: the card is sized from the host default, 300 s", (t) => {
+  const { seen, onEvent } = recorder();
+  const approvals = new Approvals({ onEvent, home: homeWith(null, t) });
+  const req = approvals.present({ request_id: "unset", command: "git push --force" });
+
+  assert.equal(APPROVAL_TIMEOUT_DEFAULT, 300);
+  assert.equal(approvals.windowSeconds, 300);
+  assert.equal(req.timeoutSeconds, 300);
+  assert.ok(windowMs(req) >= 300_000 && windowMs(req) <= 300_050, `300 s window measured ${windowMs(req)}ms`);
 
   approvals.sweep();
-  assert.equal(approvals.status("no-window").status, "pending");
+  assert.equal(approvals.status("unset").status, "pending");
   assert.equal(approvals.list().length, 1);
   assert.equal(seen[0].type, "approval");
-  assert.equal(seen[0].request.id, "no-window");
+  assert.equal(seen[0].request.id, "unset");
 });
 
-test("an explicit timeout_seconds is used whole, and overrides the default", () => {
-  const approvals = new Approvals({ onEvent: () => {} });
-  const long = approvals.present({ request_id: "long", timeout_seconds: 600 });
-  const longWindow = long.deadline - Date.parse(long.receivedAt);
-  assert.equal(long.timeoutSeconds, 600);
-  assert.ok(longWindow >= 600_000 && longWindow <= 600_050, `600 s window measured ${longWindow}ms`);
+test("approvals.timeout: 600 sizes the card to 600 s", (t) => {
+  const approvals = new Approvals({ onEvent: () => {}, home: homeWith(600, t) });
+  const req = approvals.present({ request_id: "cfg-600" });
 
-  const short = approvals.present({ request_id: "short", timeout_seconds: 42 });
-  const shortWindow = short.deadline - Date.parse(short.receivedAt);
-  assert.equal(short.timeoutSeconds, 42);
-  assert.ok(shortWindow >= 42_000 && shortWindow <= 42_050, `42 s window measured ${shortWindow}ms`);
-  // The sweep runs every 5 s, so a deadline a few seconds inside the named window would have dropped the
-  // long card at the first tick. Both cards are still pending right after presenting.
+  assert.equal(approvals.windowSeconds, 600);
+  assert.equal(req.timeoutSeconds, 600);
+  assert.ok(windowMs(req) >= 600_000 && windowMs(req) <= 600_050, `600 s window measured ${windowMs(req)}ms`);
+
+  // The sweep runs every 5 s. A deadline a few seconds inside the window (the old `timeout - 5`) would drop
+  // the card at the first tick; it is still pending right after presenting.
   approvals.sweep();
-  assert.equal(approvals.list().length, 2);
+  assert.equal(approvals.status("cfg-600").status, "pending");
 });
 
-test("the card lives through its own window, is denied at the end, and a re-ask is accepted", async () => {
+test("approvals.timeout: 900 sizes the card to 900 s", (t) => {
+  const approvals = new Approvals({ onEvent: () => {}, home: homeWith(900, t) });
+  const req = approvals.present({ request_id: "cfg-900" });
+
+  assert.equal(approvals.windowSeconds, 900);
+  assert.equal(req.timeoutSeconds, 900);
+  assert.ok(windowMs(req) >= 900_000 && windowMs(req) <= 900_050, `900 s window measured ${windowMs(req)}ms`);
+});
+
+test("an explicit timeout_seconds wins over the configured window", (t) => {
+  const approvals = new Approvals({ onEvent: () => {}, home: homeWith(900, t) });
+
+  const named = approvals.present({ request_id: "named", timeout_seconds: 120 });
+  assert.equal(named.timeoutSeconds, 120);
+  assert.ok(windowMs(named) >= 120_000 && windowMs(named) <= 120_050, `120 s window measured ${windowMs(named)}ms`);
+
+  // The same instance still sizes a request with no window from the config, not from the last named value.
+  const configured = approvals.present({ request_id: "configured" });
+  assert.equal(configured.timeoutSeconds, 900);
+});
+
+test("the card lives through its own window, is denied at the end, and a re-ask is accepted", async (t) => {
   const { seen, onEvent } = recorder();
-  const approvals = new Approvals({ onEvent });
+  const approvals = new Approvals({ onEvent, home: homeWith(null, t) });
   const start = Date.now();
   approvals.present({ request_id: "reask", timeout_seconds: 2 });
 
@@ -82,10 +115,10 @@ test("the card lives through its own window, is denied at the end, and a re-ask 
   assert.equal(approvals.status("reask").choice, "once");
 });
 
-test("the dead ttlMs option is gone, so an option by that name cannot shorten the default", () => {
-  const approvals = new Approvals({ onEvent: () => {}, ttlMs: 1_000 });
+test("the dead ttlMs option is gone, so an option by that name cannot shorten the configured window", (t) => {
+  const approvals = new Approvals({ onEvent: () => {}, ttlMs: 1_000, home: homeWith(600, t) });
   assert.equal("ttlMs" in approvals, false);
   const req = approvals.present({ request_id: "ttl" });
-  assert.equal(req.timeoutSeconds, DEFAULT_APPROVAL_TIMEOUT_SECONDS);
-  assert.ok(req.deadline - Date.now() > 599_000);
+  assert.equal(req.timeoutSeconds, 600);
+  assert.ok(windowMs(req) > 599_000);
 });
