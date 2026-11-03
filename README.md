@@ -962,8 +962,19 @@ The assistant acts by writing plain lines in a reply, and every such line in it 
     NOTE: something to remember
     CHARTER: a dated entry for the continuity file (one per changed standing answer or closed long task)
     RULE: a standing answer you are sure of
-    SPAWN <project> | what the new worker should do
-    SPAWN IN <directory, worktree directory name, or branch> | what the worker should do in that tree  (no new worktree)
+    SPAWN [<task id>] <project> | what the new worker should do
+    SPAWN IN [<task id>] <directory, worktree directory name, or branch> | what the worker should do in that tree  (no new worktree)
+
+**A SPAWN that leads with a queue id writes that row at the cut.** `SPAWN #12 <project> | …` and
+`SPAWN IN #12 <tree> | …` (a bare `12` is read the same way) name the task the line is carrying out. The row is
+checked before anything is cut — no such row, a row that is already done, a row in another assistant's queue, or a
+parked row is refused out loud and no worker starts — and then written exactly once, at the moment the job exists:
+`running`, with the worker's `thread`, the `worktree` it runs in, and `startedAt` (`linkTaskRun`,
+`lib/assistant/queue.js`, called from `startSpawn`). That is the whole of the link an assistant used to have to make
+with a follow-up `edit` + `state` pair, and the reason a live worker's row can no longer sit reading `queued` until
+somebody notices. A line with no id cuts exactly as it always did and links nothing. The id also rides the SPAWN debt
+(`spawnIntents[].taskId`), so a restart's replay asks the row whether it already names a run and re-links it instead
+of cutting a second tree.
 
 **Every command line is reconciled against what the panel actually did with it.** Each kind already journals its own
 refusals — a busy thread, a TODO id that does not exist, a WATCH with no such thread, a RESTART with no key — so the
