@@ -19,6 +19,9 @@
 //     answer becomes one row per advertised feature, sourced to the endpoint
 //   * config.json's remoteBranchPolicy (global and a project override) and lib/remote-writes.js's grant
 //     choices, permission window and grant lifetimes are reported with their own file:line
+//   * that config.json is THIS instance's: the PANEL_CONFIG file a sandbox booted on, named on the chip at the
+//     line its value sits on, and never the checkout's copy (two files that agree hide the difference, so the
+//     check reads the path back rather than the value)
 //   * GET /api/settings/permissions answers 200 and carries all of it
 //   * the tab is the ninth in the strip, a press selects it and shows only its panel, and it is remembered
 //   * every group heading and every row prints a source that is `file:line` or `endpoint`; the approval
@@ -32,12 +35,16 @@
 // the HTTP check and the tab check all fail by name. A green run here means the module, the route and the
 // tab answered, not an empty page. A missing Playwright prints BROWSER-HALF-NOT-RUN and exits 2 after the
 // module and HTTP halves have already been reported.
-import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
+//
+// The configured-path check has its own, narrower red: on 0.70.0 (a12c737) every other check still passes and
+// "the policy chip names this instance's PANEL_CONFIG file" fails, because that route was handed
+// `path.join(HERE, "config.json")` and answered with the checkout's file. Measured on an export of a12c737.
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadPlaywright, notRun, openPage, withBrowser } from "./browser.mjs";
-import { startPanel } from "./panel-testkit.mjs";
+import { ROOT, startPanel } from "./panel-testkit.mjs";
 
 const TAB_KEY = "wtgui.settingsTab";
 const WIDE = { width: 1400, height: 900 };
@@ -282,6 +289,21 @@ try {
   check(routeSources.gateway?.rows?.every((r) => r.source === `${gatewayUrl}/v1/capabilities`),
     "sourced to the capabilities endpoint");
   check(routeSources.remoteBranchPolicy?.rows?.[0].value === "local-only", "config.json's policy is in the payload");
+  // WHICH config.json. This panel boots on its own PANEL_CONFIG (tools/panel-testkit.mjs), and its own file sits in a
+  // temp dir, so a tab that reports the CHECKOUT's policy is visible here rather than hidden behind two files that
+  // agree. The chip has to name the file actually read, line and all.
+  const sandboxConfigText = readFileSync(panel.configPath, "utf8");
+  check(
+    routeSources.remoteBranchPolicy?.file === panel.configPath &&
+      routeSources.remoteBranchPolicy?.source === `${panel.configPath}:${lineOf(sandboxConfigText, '"remoteBranchPolicy"')}`,
+    "the policy chip names this instance's PANEL_CONFIG file, at the line the value sits on",
+    routeSources.remoteBranchPolicy?.source,
+  );
+  check(
+    routeData.panelConfig?.source === "PANEL_CONFIG" && routeData.panelConfig?.path !== path.join(ROOT, "config.json"),
+    "and it was resolved by the PANEL_CONFIG rule, never the checkout's config.json",
+    `${routeData.panelConfig?.source} · ${routeData.panelConfig?.path}`,
+  );
 
   gatewayMode = "unauthorized";
   const unauth = await readRoute();

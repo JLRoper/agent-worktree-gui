@@ -2093,8 +2093,9 @@ const server = createServer(async (req, res) => {
         200,
         await readPermissions({
           home: hermesHome(),
-          panelConfig: config,
-          panelConfigPath: path.join(HERE, "config.json"),
+          // THIS instance's config, as this process resolved it at boot — never `path.join(HERE, "config.json")`,
+          // which is the checkout's file and is what a PANEL_CONFIG sandbox used to have reported back to it.
+          panelConfigPath: CONFIG_PATH,
           modulePath: path.join(HERE, "lib", "remote-writes.js"),
           gateway: { url: jobs.api.url, key: jobs.api.key },
         }),

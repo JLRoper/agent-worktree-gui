@@ -13,10 +13,14 @@ import path from "node:path";
 import {
   BLOCKS,
   REMOTE_WRITES_PATH,
+  panelConfigFile,
   parseYamlBlock,
   readPermissions,
+  remotePolicySource,
   remoteWritesSource,
 } from "../lib/gateway-permissions.js";
+import { policyFrom } from "../lib/remote-writes.js";
+import { ROOT, startPanel } from "../tools/panel-testkit.mjs";
 
 const lineOf = (text, needle, from = 0) => {
   const lines = String(text).split("\n");
@@ -359,6 +363,126 @@ test("config.json's malformed JSON is a reason, not a policy guess", async () =>
     },
     { text: FIXTURE },
   );
+});
+
+// ---- which config.json: THIS instance's, by the rule the server booted with ----------------------
+// A sandbox panel booted on its own PANEL_CONFIG used to have the CHECKOUT's policy reported back to it, because
+// lib/gateway-permissions.js derived the path itself (`path.resolve(HERE, "..", "config.json")`) while the rest of
+// the server asked lib/paths.js. These boot real servers, so they fail on that second copy of the rule.
+const checkoutConfigPath = path.join(ROOT, "config.json");
+const checkoutText = readFileSync(checkoutConfigPath, "utf8");
+const checkoutPolicy = policyFrom(JSON.parse(checkoutText).remoteBranchPolicy);
+const policyOf = (body) => (body?.sources || []).find((source) => source.key === "remoteBranchPolicy");
+const readPolicyRoute = async (panel) =>
+  policyOf(await (await fetch(`${panel.base}/api/settings/permissions`)).json());
+
+test("a panel booted on PANEL_CONFIG reports that config's remoteBranchPolicy", async () => {
+  // A value the checkout's file does not carry, so the payload itself says which file was read.
+  const distinctive = ["deny", "allow"].find((policy) => policy !== checkoutPolicy);
+  const panel = await startPanel({
+    config: { assistant: { enabled: false }, remoteBranchPolicy: distinctive, projects: [] },
+  });
+  try {
+    const policy = await readPolicyRoute(panel);
+    const ownText = readFileSync(panel.configPath, "utf8");
+    assert.equal(policy.status, "ok");
+    assert.equal(policy.file, panel.configPath, "the chip names the file the panel is actually running on");
+    assert.equal(policy.configSource, "PANEL_CONFIG");
+    assert.equal(policy.rows[0].value, distinctive, "and the value is that file's policy");
+    assert.equal(
+      policy.source,
+      `${panel.configPath}:${lineOf(ownText, '"remoteBranchPolicy"')}`,
+      "with the line that value sits on in that file",
+    );
+  } finally {
+    await panel.stop();
+  }
+});
+
+test("the checkout's policy is never shown to a panel booted on its own config.json", async () => {
+  const distinctive = ["deny", "allow"].find((policy) => policy !== checkoutPolicy);
+  const panel = await startPanel({
+    config: { assistant: { enabled: false }, remoteBranchPolicy: distinctive, projects: [] },
+  });
+  try {
+    const body = await (await fetch(`${panel.base}/api/settings/permissions`)).json();
+    const policy = policyOf(body);
+    assert.notEqual(checkoutPolicy, distinctive, "premise: the two files carry different policies");
+    assert.equal(policy.rows[0].value, distinctive);
+    assert.notEqual(policy.rows[0].value, checkoutPolicy, "the checkout's value is not what the tab reports");
+    // Nor may any chip name the checkout's file: a row sourced to it is the checkout's answer wearing this
+    // panel's prefix, whatever the value beside it says.
+    const named = body.sources
+      .flatMap((source) => [source.file, source.source, ...(source.rows || []).map((row) => row.source)])
+      .filter(Boolean)
+      .map((value) => String(value).toLowerCase());
+    const checkoutKey = checkoutConfigPath.toLowerCase().replace(/\//g, "\\");
+    assert.ok(
+      named.every((value) => !value.startsWith(checkoutKey)),
+      `no source may name ${checkoutConfigPath}; got ${JSON.stringify(named.filter((v) => v.startsWith(checkoutKey)))}`,
+    );
+    assert.equal(body.panelConfig.path, panel.configPath, "and the payload says which config it read");
+    assert.equal(body.panelConfig.source, "PANEL_CONFIG");
+  } finally {
+    await panel.stop();
+  }
+});
+
+test("a default boot, with no PANEL_CONFIG, still reads the checkout's config.json", async () => {
+  // The default install listens on config.json's own port (7331), which the reader's panel already holds, so this
+  // asserts the rule the boot applies rather than binding a second listener on that port: the resolution the server
+  // performs, then the read of the file it names. `home` is a throwaway profile with no moved config to find.
+  const home = mkdtempSync(path.join(tmpdir(), "gwperm-default-"));
+  try {
+    const file = panelConfigFile({ env: {}, home });
+    assert.equal(file.path, checkoutConfigPath);
+    assert.equal(file.source, "checkout");
+    const result = await readPermissions({
+      configPath: path.join(home, "hermes", "config.yaml"),
+      panelEnv: {},
+      panelHome: home,
+      moduleText: MODULE_TEXT,
+      gateway: { url: "" },
+    });
+    const policy = byKey(result).remoteBranchPolicy;
+    assert.equal(policy.file, checkoutConfigPath);
+    assert.equal(policy.configSource, "checkout");
+    assert.equal(policy.rows[0].value, checkoutPolicy, "the checkout's own policy, read from its own file");
+    assert.equal(
+      policy.source,
+      `${checkoutConfigPath}:${lineOf(checkoutText, '"remoteBranchPolicy"')}`,
+      "with the line it sits on in the checkout's file",
+    );
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("a panel config that cannot be read is a status and a reason, never a fallback", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "gwperm-unreadable-"));
+  try {
+    const checkoutCopy = path.join(dir, "config.json");
+    writeFileSync(checkoutCopy, PANEL_CONFIG);
+    const configured = path.join(dir, "sandbox.json");
+    // The configured path is gone, the checkout's copy IS readable: the value must still not be borrowed from it,
+    // because the chip under it names the configured file.
+    const borrowed = remotePolicySource({ panelConfigPath: configured, checkoutConfigPath: checkoutCopy });
+    assert.equal(borrowed.status, "unreadable");
+    assert.deepEqual(borrowed.rows, []);
+    assert.match(borrowed.reason, /not found/);
+    assert.match(borrowed.reason, /was not used instead/);
+    // Neither readable: both paths are named, with what each answered.
+    const neither = remotePolicySource({
+      panelConfigPath: configured,
+      checkoutConfigPath: path.join(dir, "also-gone.json"),
+    });
+    assert.equal(neither.status, "unreadable");
+    assert.match(neither.reason, /sandbox\.json/);
+    assert.match(neither.reason, /also-gone\.json/);
+    assert.deepEqual(neither.rows, []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("a missing lib/remote-writes.js is unreadable and says so", () => {
