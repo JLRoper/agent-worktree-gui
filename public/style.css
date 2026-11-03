@@ -339,8 +339,8 @@ button.primary:hover { background: #24466a; }
 .settings-preview.sample-skill { font: var(--skill-font-size, var(--term-size))/1.5 var(--term); font-weight: var(--term-weight); color: var(--skill-color, var(--con-color, var(--dim))); }
 .settings-preview.sample-console { font: var(--term-size)/1.5 var(--term); font-weight: var(--term-weight); color: var(--con-color, #e6e9ef); }
 .settings-row input[type="number"] { width: 74px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
-.settings-row input[type="url"], .settings-row input[type="password"] { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
-.settings-row input[type="url"]::placeholder, .settings-row input[type="password"]::placeholder { color: var(--dimmer); }
+.settings-row input[type="url"], .settings-row input[type="password"], .settings-row input[type="text"] { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
+.settings-row input[type="url"]::placeholder, .settings-row input[type="password"]::placeholder, .settings-row input[type="text"]::placeholder { color: var(--dimmer); }
 .settings-row input[type="number"]:disabled { color: var(--dimmer); background: #0e1218; }
 .settings-unit { font-size: 11px; color: var(--dimmer); }
 .settings-row button { padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }

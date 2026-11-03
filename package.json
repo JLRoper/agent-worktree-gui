@@ -37,6 +37,7 @@
     "verify:attachment-spawn": "node tools/verify-attachment-spawn.mjs",
     "verify:turn-pager": "node tools/verify-turn-pager.mjs",
     "verify:human-button": "node tools/verify-human-button.mjs",
+    "verify:provider-profiles": "node tools/verify-provider-profiles.mjs",
     "verify:assistant-dock-overlap": "node tools/verify-assistant-dock-overlap.mjs",
     "measure:perf-paths": "node tools/measure-perf-paths.mjs",
     "verify:task-pipeline-window": "node tools/verify-task-pipeline-window.mjs",
