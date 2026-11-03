@@ -305,6 +305,17 @@ A `pipeline: <id> ▾` chip in the same chip row as the existing `host: github` 
 `pipeline: sefl-review-loop · wait ▾`, because "which pipeline" and "where in it" are one question when the reader
 is judging a card.
 
+**What is drawn today (0.74.0) — the chip, without the ▾.** `public/app.js` `pipelineChipHtml` draws the record the
+card already holds (`row.pipeline`, from `/api/jobs`) in the agent card's HEAD, one gap beside its state pill, not in
+the project header: the record is per TREE and one project header can hold several trees. Three states and no
+fourth — a record with a stage draws `pipeline: <id> · <stage>`, a record with no stage draws the id alone, and a card
+with no record draws nothing at all (never a `local` stand-in, never an empty pill). It is a `span` carrying the
+record and its own tooltip: the `▾`, the upward-only options below and the switch under them stay parked until
+`POST /api/worktree/pipeline` can start the new pipeline's first stage as a turn, because a menu whose every choice
+would be refused is a promise the panel cannot keep. It takes `button.btn-host`'s pill height, type scale and gap,
+the head stays one row at 1280, 1600 and in the 480px docked rail, and `tools/verify-pipeline-chip.mjs` proves all of
+it (red on 0.73.3, where `public/` had no chip at all).
+
 The menu offers **only what the project allows, and only upwards**:
 
 | the tree is on | the menu offers |
@@ -462,7 +473,9 @@ Nothing in this page runs today. Explicitly missing:
   `makeWorktree` writes nothing of the kind.
 - **No route.** There is no `POST /api/worktree/pipeline` and no `POST /api/settings/pipelines` /
   `/api/settings/pipeline-defaults`.
-- **No chip.** `hostChipHtml` is the only chip of that shape; there is no `pipeline: … ▾` anywhere in `public/`.
+- **No chip menu.** The card's chip is drawn (`public/app.js` `pipelineChipHtml`, §4.1): `pipeline: <id> · <stage>`
+  from the job row, beside the card's state pill. It is a `span` and carries no `▾` — there is nothing to press until
+  `POST /api/worktree/pipeline` can start the first stage as a turn, and no menu is drawn before then.
 - **No tab.** Settings has eight panels (`display`, `cards`, `board`, `branches`, `data`, `gateway`, `skills`,
   `updates`); there is no `pipeline` group, and `test/settings-tabs.test.js` would fail the moment the markup and the
   tab strip disagreed about one.
