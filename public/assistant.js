@@ -2056,6 +2056,50 @@
     const title = `held by #${target.id}${target.since ? ` since ${target.since}` : ""} — this card cannot be dragged above it`;
     return `<span class="as-task-hold" data-as-qhold="${target.id}" title="${esc(title)}">held by #${target.id}</span>`;
   }
+
+  // ---- a row whose agent has stopped to ask something ----------------------------------------------
+  //
+  // A queue row says what the reader has queued, and a row is a lane only while it is waiting on the QUEUE. A row whose
+  // agent is parked on a `clarify` question is waiting on a PERSON instead, and until now it read exactly like a lane:
+  // "parked" plus a reason, which is what a board full of held work looks like when it is actually stopped. So the row
+  // wears one more word and one press, `question`, over the panel's own alert for that question.
+  //
+  // The alert is the store's, not a second copy: the assistant's state publishes its OPEN alerts (`rule`, `parked`,
+  // `requestId`, `thread`, `title`, `detail`, `choices`) and this only joins one to a row — by THREAD, because a task's
+  // agent IS its thread and `threads[]` is the whole history a re-attempt leaves behind. That title is clipped to 70
+  // characters server-side, so the chip is a SIGN, never the question: the full text, every choice and the answer are
+  // drawn in the agent's own card by the turn renderer (`questionPrompt`/`questionAnswered` in public/app.js), and the
+  // press lands there.
+  function queueQuestionAlert(t, alerts) {
+    const list = Array.isArray(alerts) ? alerts : [];
+    if (!list.length) return null;
+    const threads = new Set([...(Array.isArray(t?.threads) ? t.threads : []), t?.thread].map((v) => String(v || "")).filter(Boolean));
+    if (!threads.size) return null;
+    // The panel writes this alert as rule `question` with `parked` and a request id (`lib/assistant.js`'s clarify
+    // branch); `clarify` is accepted by name for a record written against the other spelling of the same fact. An
+    // APPROVAL is not a question — its box lives on the card too, but it is a different prompt with a different answer
+    // route — so it is excluded by rule rather than by whatever shape it happens to carry.
+    const isQuestion = (a) =>
+      Boolean(a) && a.status === "open" && (a.rule === "question" || a.rule === "clarify") && (a.parked === true || Boolean(a.requestId));
+    // The NEWEST when a thread somehow holds two: a re-ask is the question holding the run now.
+    return (
+      list
+        .filter((a) => isQuestion(a) && threads.has(String(a.thread || "")))
+        .sort((a, b) => String(b.at || "").localeCompare(String(a.at || "")))[0] || null
+    );
+  }
+  // The chip reuses the hold badge's class on purpose: it is the same kind of thing — a pill-sized condition on a row —
+  // and a question is made readable with NO new stylesheet rule. A <button> so Enter and Space are the browser's own,
+  // and `data-as-qopen` so it opens its agent through the handler that already opens an agent row (the console turn,
+  // not just the card header): one opener, not a second path.
+  function queueQuestionChip(t, alerts) {
+    const alert = queueQuestionAlert(t, alerts);
+    if (!alert) return "";
+    const thread = String(alert.thread || "");
+    const label = String(assistantThreadName(thread) || "").trim();
+    const title = `${label && label !== thread ? `“${label}” ` : ""}(${thread}) has stopped to ask you something — click to open its card; the question, every choice and the answer are in its chat`;
+    return `<button type="button" class="as-task-hold" data-as-qopen="${esc(thread)}" data-as-qid="${esc(String(t.id))}" data-as-qquestion="${esc(alert.id || "")}" title="${esc(title)}" aria-label="${esc(title)}">question</button>`;
+  }
   /**
    * The drop the model refuses, found before the request is sent: a queued row may not sit above a row it holds for
    * while that row is still open. `ids` is the whole visible list as the drop leaves it, so this is the same rule
@@ -2142,7 +2186,7 @@
   // the meta line; a stale or conflicted task carries its reason under them, because "why is this not moving" is
   // the question a queue exists to answer. A done row stays in place greyed: "it finished" is a record, not a task
   // that vanished. The pane is already scoped to ONE assistant's queue, so the row no longer names an owner.
-  function queueTaskHtml(id, t, jobs, byId) {
+  function queueTaskHtml(id, t, jobs, byId, alerts) {
     const mark = queueMark(t.state);
     // `threads` is the record's whole history and `thread` its legacy first entry, so a queue file written before the
     // list existed still draws one agent row. The CURRENT run is the last one, and that is what a click on the body
@@ -2204,6 +2248,7 @@
             <b class="mono">#${esc(String(t.id))}</b>
             <span class="as-task-title">${esc(t.title)}</span>
             ${queueHoldBadge(t, byId)}
+            ${queueQuestionChip(t, alerts)}
           </div>
           <div class="as-task-agents">${agents}</div>
           ${meta.length ? `<div class="as-task-meta">${meta.join(" · ")}</div>` : ""}
@@ -2316,7 +2361,7 @@
         </div>
         ${queueStateHtml(pane, { id, n, view, rows: sorted })}
         ${dropNote ? `<div class="as-qdrop" data-as-qdrop="${esc(id)}" role="status">${esc(dropNote)}</div>` : ""}
-        ${sorted.map((t) => queueTaskHtml(id, t, queueJobs.byThread, byId)).join("")}
+        ${sorted.map((t) => queueTaskHtml(id, t, queueJobs.byThread, byId, state.assistant?.alerts || [])).join("")}
         <div class="as-help">The queue lives in <code>state/assistants/${esc(id)}/queue.json</code> beside this assistant's charter.
         It is read on every wake, before the board: the digest names every task's state, thread, worktree and PR, and why
         it is not going (LIVE, STALE or PARKED), so a turn can start whatever can be parallelised. A finished task stays
