@@ -1,0 +1,884 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<title>Architectural review — the six oversized files</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a21; --panel2: #1b212a; --line: #2a3340; --text: #e6e9ef; --dim: #9aa5b4;
+    --dimmer: #6f7a89; --green: #7ee787; --red: #ff9c94; --amber: #f0c674; --blue: #9ecbff; --purple: #c8a6ff;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 15px/1.62 var(--ui); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 30px 24px 72px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1 { font-size: 27px; line-height: 1.22; margin: 4px 0 8px; letter-spacing: -0.2px; }
+  h2 { font-size: 19px; margin: 44px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 15.5px; margin: 26px 0 8px; color: var(--blue); }
+  h4 { font-size: 14px; margin: 18px 0 6px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
+  p { margin: 9px 0; }
+  ul, ol { margin: 8px 0 8px 22px; padding: 0; }
+  li { margin: 5px 0; }
+  code, .mono { font-family: var(--mono); font-size: 12.8px; }
+  code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .kicker { color: var(--dimmer); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
+  .sub { color: var(--dim); font-size: 16px; margin: 0 0 14px; max-width: 900px; }
+  .meta { color: var(--dim); font-size: 12.5px; }
+  .meta code { font-size: 12px; }
+  .anchor { font-family: var(--mono); font-size: 12.2px; color: var(--purple); background: #1d1826;
+            border: 1px solid #3d3352; border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+  .src { font-family: var(--mono); font-size: 10.5px; font-weight: 700; border-radius: 3px; padding: 1px 4px;
+         border: 1px solid transparent; vertical-align: 1px; }
+  .s-a1 { color: #0d1117; background: var(--blue); }
+  .s-b1 { color: #0d1117; background: var(--purple); }
+  .s-a2 { color: #0d1117; background: var(--green); }
+  .s-b2 { color: #0d1117; background: var(--amber); }
+  .s-both { color: #0d1117; background: #b7c0cc; }
+  nav { margin: 18px 0 8px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line);
+        border-radius: 8px; font-size: 13px; line-height: 1.9; }
+  nav b { color: var(--dimmer); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
+  nav a { margin: 0 10px 0 0; white-space: nowrap; }
+  .lead { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--blue);
+          border-radius: 8px; padding: 14px 18px; margin: 18px 0; }
+  .lead p { margin: 5px 0; }
+  .verdict { background: #13261a; border: 1px solid #2f5f38; border-left: 4px solid var(--green);
+             border-radius: 8px; padding: 13px 18px; margin: 18px 0; }
+  .verdict h4 { color: var(--green); margin: 0 0 4px; }
+  .warn { background: #2a2414; border: 1px solid #5c4d22; border-left: 4px solid var(--amber);
+          border-radius: 8px; padding: 12px 18px; margin: 16px 0; }
+  .warn h4 { color: var(--amber); margin: 0 0 4px; }
+  .not { background: #1f1a26; border: 1px solid #44395a; border-left: 4px solid var(--purple);
+         border-radius: 8px; padding: 12px 18px; margin: 16px 0; }
+  .not h4 { color: var(--purple); margin: 0 0 4px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 18px; margin: 14px 0; }
+  blockquote { margin: 14px 0; padding: 12px 18px; background: #12171d; border-left: 4px solid var(--dimmer);
+               border-radius: 0 8px 8px 0; color: #d6dbe4; font-size: 15px; }
+  blockquote p { margin: 4px 0; }
+  .tw { overflow-x: auto; margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--panel2); color: var(--dim); font-weight: 600; font-size: 12px;
+       text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .good { color: var(--green); font-weight: 600; }
+  .bad { color: var(--red); font-weight: 600; }
+  .may { color: var(--amber); }
+  .dim { color: var(--dim); }
+  .small { font-size: 12.5px; }
+  footer { margin-top: 54px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--dimmer); font-size: 12px; }
+  @media print {
+    html { background: #fff; }
+    body { color: #111; font-size: 11pt; }
+    .wrap { max-width: none; padding: 0; }
+    nav, .src { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    h2 { page-break-after: avoid; }
+    .tw, table, blockquote, .verdict, .warn, .not, .box, .lead { page-break-inside: avoid; }
+    a { color: #111; }
+    code, .anchor { background: #f3f4f6; border-color: #ccc; color: #333; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker">agent-worktree-gui &middot; architectural review</div>
+<h1>The six oversized files</h1>
+<p class="sub">Where this tree can be cut, what each cut buys, and what it costs — folded from four documents
+written by two agents over three rounds, with every disagreement either decided or left standing in the open.</p>
+<p class="meta">Snapshots: <code>cc61bb9</code> (0.84.0) &middot; <code>0.85.3</code> &middot; anchors re-checked at
+<code>0.87.1</code>. No source file was modified by any round: the review is five documents and a version bump.</p>
+
+<nav>
+  <b>Contents</b><br>
+  <a href="#how">1. How to read this</a>
+  <a href="#tree">2. The tree, measured</a>
+  <a href="#server">3. The server half</a>
+  <a href="#client">4. The client half</a>
+  <a href="#seams">5. The six files</a>
+  <a href="#cost">6. What a cut costs</a>
+  <a href="#lock">7. The landing lock</a>
+  <a href="#list">8. The seam list</a>
+  <a href="#contest">9. Dropped, and contested</a>
+  <a href="#numbers">10. The numbers</a>
+  <a href="#gaps">11. Not measured</a>
+  <a href="#anchors">A. Anchors</a>
+  <a href="#docs">B. Sources</a>
+</nav>
+
+<div class="lead">
+  <p><b>The one-paragraph answer.</b> The server half is a clean acyclic library (85 modules, 187 edges, zero
+  import cycles) hanging off a 5,435-line composition root that is also the whole HTTP API; the client half is
+  sixteen classic scripts with no imports at all, sharing one namespace and one mutable <code>state</code>
+  object, so a client "module" is a cut through names rather than a dependency edge. The work that pays is not
+  "split the big files": it is (a) move the server's route chain and its header helpers out, once, serially,
+  (b) move one client vertical at a time, beginning with the settings tail, and (c) accept that the division of
+  labour is bounded by one three-line file — <code>package.json</code> — that every landing must touch.</p>
+</div>
+
+<h2 id="how">1. How to read this</h2>
+
+<p>Four documents, two lenses, three rounds. Each claim below carries a badge naming the document it came from,
+so a reader can go back to the argument rather than take this page's word for it.</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>Badge</th><th>Document</th><th>Lens</th><th class="num">Lines</th><th>Snapshot</th></tr></thead>
+<tbody>
+<tr><td><span class="src s-a1">A1</span></td><td><code>docs/arch-review-r1-a.md</code></td>
+    <td>Top-down by responsibility: the module graph, then a seam per oversized file</td><td class="num">609</td>
+    <td><code>cc61bb9</code> / 0.84.0</td></tr>
+<tr><td><span class="src s-b1">B1</span></td><td><code>docs/arch-review-r1-b.md</code></td>
+    <td>Bottom-up by coupling and churn: import degrees, co-change over 200 commits, hunk geography</td>
+    <td class="num">583</td><td><code>cc61bb9</code> / 0.84.0</td></tr>
+<tr><td><span class="src s-a2">A2</span></td><td><code>docs/arch-review-r2-a.md</code></td>
+    <td>Adjudication from above: two graphs, one costed statement, the landing lock, the drift</td>
+    <td class="num">301</td><td>0.85.3</td></tr>
+<tr><td><span class="src s-b2">B2</span></td><td><code>docs/arch-review-r2-b.md</code></td>
+    <td>Adjudication from below: the load contract against the churn, the factory's real shape, the marker API</td>
+    <td class="num">325</td><td><code>cc61bb9</code> / 0.84.0</td></tr>
+</tbody>
+</table>
+</div>
+
+<p><span class="src s-both">BOTH</span> marks a claim both adjudications reached independently. <span
+class="src s-a2">A2</span> and <span class="src s-b2">B2</span> are the two second-round documents, and they
+disagree in places; where they do, §9 says so rather than averaging them.</p>
+
+<div class="box">
+<h4>The anchoring rule on this page</h4>
+<p><b>Every location is given by its marker text, never by a line number.</b> A region in
+<code>public/app.js</code> is named by the pair of <code>// ----</code> markers that bound it — for example
+<span class="anchor">// ---- thinking</span> &rarr; <span class="anchor">// ---- copy buttons</span> — because
+those strings are what fourteen test files and one test kit already pin, and because they survive a rebase.
+A region in <code>server.js</code> is named by the code that opens it. Line numbers appear only in
+<a href="#anchors">Appendix A</a>, labelled with the snapshot they belong to, and are there for orientation,
+not for locating.</p>
+<p class="small dim">This is not pedantry: three of the four documents quote line numbers, and between
+<code>cc61bb9</code> and 0.87.1 <code>public/app.js</code> grew by 315 lines. A number that was right when it
+was written is wrong now, and a marker string is still there.</p>
+</div>
+
+<h2 id="tree">2. The tree, measured</h2>
+
+<p>One Node process, <code>"type": "module"</code>, zero runtime dependencies, no bundler, no build step, no CI.
+<code>server.js</code> is the composition root <i>and</i> the HTTP server; <code>lib/</code> is a server-private
+library; <code>public/</code> is sixteen classic <code>&lt;script&gt;</code> tags in a fixed order with no module
+system of any kind. <span class="src s-a1">A1</span></p>
+
+<div class="tw">
+<table>
+<thead><tr><th>Part</th><th class="num">Files</th><th class="num">Lines @ <code>cc61bb9</code></th>
+<th class="num">Lines @ 0.87.1</th><th>What it is</th></tr></thead>
+<tbody>
+<tr><td><code>server.js</code></td><td class="num">1</td><td class="num">5,343</td><td class="num">5,435</td>
+    <td>composition root + the entire HTTP API</td></tr>
+<tr><td><code>lib/</code></td><td class="num">84</td><td class="num">32,947</td><td class="num">85 files</td>
+    <td>eight responsibilities, not one library</td></tr>
+<tr><td><code>public/app.js</code></td><td class="num">1</td><td class="num">21,367</td><td class="num">21,682</td>
+    <td>the board: every renderer, every handler, one file</td></tr>
+<tr><td><code>public/assistant.js</code></td><td class="num">1</td><td class="num">4,177</td><td class="num">4,222</td>
+    <td>one IIFE, three globals</td></tr>
+<tr><td><code>public/core/</code> + <code>board/</code></td><td class="num">14</td><td class="num">4,511</td>
+    <td class="num">4,511</td><td>the extracted client modules — the part of the split that already happened</td></tr>
+<tr><td><code>public/style.css</code></td><td class="num">1</td><td class="num">3,761</td><td class="num">3,763</td>
+    <td>1,615 rule blocks, 835 distinct classes, 61 custom properties</td></tr>
+<tr><td><code>test/*.test.js</code></td><td class="num">143</td><td class="num">30,789</td><td class="num">143</td>
+    <td>1,165 tests, green</td></tr>
+<tr><td><code>tools/verify-*.mjs</code></td><td class="num">120</td><td class="num">—</td><td class="num">120</td>
+    <td>the only proof of browser behaviour</td></tr>
+</tbody>
+</table>
+</div>
+
+<p><b>Two corrections to the documents that circled this review.</b> The brief that opened round 1 said
+<code>lib/jobs.js</code> was 3,964 lines; it is <b>3,829</b>, at both snapshots. And
+<code>docs/architecture.md</code> is stale on every headline number it carries — it says <code>app.js</code> is
+17,178 lines with 668 top-level functions (it is 21,367 with 1,080 at <code>cc61bb9</code>), <code>server.js</code>
+4,304 with 104 routes (5,343 with 123 branches), 70 test files (143) and 64 harnesses (120). Its §8 also says
+14 classic scripts; there are 16. <span class="src s-a1">A1</span> <span class="src s-b1">B1</span></p>
+
+<div class="warn">
+<h4>A stale number in a source document, named</h4>
+<p><code>docs/architecture.md</code> §10 recommends that readers find the request surface by grepping
+<code>if (route ===</code> in <code>server.js</code> — which is still the right instruction — but every count
+around it in that document describes a tree roughly a fifth smaller than this one. This page does not restate
+those counts as fact; it cites its own.</p>
+</div>
+
+<h2 id="server">3. The server half: acyclic, and that is not the problem</h2>
+
+<p>The first measurement that changes a decision is that <b>there is no import cycle to break.</b> Parsing every
+<code>import</code>, <code>export … from</code> and dynamic <code>import()</code> across <code>server.js</code>
+and all 84 <code>lib/</code> files gives <b>187 internal edges over 85 nodes, zero strongly-connected components,
+and a longest chain of 6</b> from <code>server.js</code>. <span class="src s-a1">A1</span> <span
+class="src s-b1">B1</span> independently re-derived it with Tarjan and got the same answer. <span
+class="src s-b2">B2</span></p>
+
+<blockquote>
+<p><span class="src s-both">BOTH</span> The server half is a library that already points downward. The
+extraction work there is not untangling; it is moving code out of a file that is both composition root and
+service layer.</p>
+</blockquote>
+
+<div class="tw">
+<table>
+<thead><tr><th>Fact</th><th class="num">Value</th><th>Why it matters</th></tr></thead>
+<tbody>
+<tr><td>Modules with in-degree 1 (exactly one consumer)</td><td class="num">45 of 85</td>
+    <td>half the library is already isolated from everything but its caller</td></tr>
+<tr><td>Imported by <code>server.js</code> and nothing else</td><td class="num">32</td>
+    <td>a long tail that exists because the composition root is one file</td></tr>
+<tr><td>Perfect leaves (import nothing internal)</td><td class="num">29, 7,558 lines</td>
+    <td><code>paths</code>, <code>pipelines</code>, <code>todos</code>, <code>push-guard</code>, <code>hosts</code> …</td></tr>
+<tr><td>Highest in-degree</td><td class="num">12</td>
+    <td><code>lib/scan.js</code> — it also defines the row shape the SSE payload carries</td></tr>
+<tr><td>Server's own fan-out</td><td class="num">54</td><td>the widest in the tree, and where a wide fan-out belongs</td></tr>
+<tr><td>Import cycles</td><td class="num good">0</td><td>nothing to untangle on this side</td></tr>
+</tbody>
+</table>
+</div>
+
+<p class="small dim">Both second-round documents reproduce the two counts that matter exactly — 45 modules with
+in-degree 1 and 32 imported only by <code>server.js</code> — on windows taken two hours apart. The degree
+structure is not in dispute.</p>
+
+<h3>The two edges that break the layering, on purpose</h3>
+<p><span class="src s-a1">A1</span> Exactly two server files import a <b>browser</b> file:
+<code>server.js</code> and <code>lib/jobs.js</code> both pull in <code>public/core/steerable.js</code> for its
+<code>globalThis.wtSteerable</code> side effect, then destructure the three refusal codes. It is 82 lines, it is
+loaded by <code>index.html</code> as a classic script too, and the comment at the import says why: one vocabulary
+so the route's status split and the card's button can never disagree. Any layering rule has to allow this one
+file, or move it — which is a three-line change in three places, not a refactor. <span class="src s-a2">A2</span></p>
+
+<h3>The composition root is two halves, and they carry different churn</h3>
+<p><span class="src s-b1">B1</span> <span class="src s-b2">B2</span> measured every hunk in <code>server.js</code>
+over 200 non-merge commits and mapped it to a band:</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>Band (by code, not offset)</th><th class="num">Hunks</th><th class="num">Commits</th><th>What lives there</th></tr></thead>
+<tbody>
+<tr><td>import block</td><td class="num">17</td><td class="num">14</td><td>adding a module is how this file grows</td></tr>
+<tr><td>header, above <code>createServer(</code></td><td class="num">34</td><td class="num">15</td>
+    <td>config load, the object graph, <code>broadcast</code>, the boot-pass promise, and <b>44 helper functions</b></td></tr>
+<tr><td>route chain, inside the request callback</td><td class="num">32</td><td class="num">19</td>
+    <td>123 branches at <code>cc61bb9</code></td></tr>
+<tr><td>tail, after the chain</td><td class="num">9</td><td class="num">7</td><td>post-chain helpers, shutdown</td></tr>
+<tr><td><b>total</b></td><td class="num"><b>92</b></td><td class="num"><b>30</b></td><td></td></tr>
+</tbody>
+</table>
+</div>
+
+<p><b>51 of 92 hunks — 55% — are above the dispatcher.</b> That is the finding the top-down draft missed and
+the churn lens supplied: a plan that extracts only the route chain fixes the smaller half of this file's churn,
+and it <i>adds</i> five lines to a block that fourteen commits already edit. <span class="src s-b2">B2</span>
+<span class="src s-a2">A2</span> folded this into its first seam as "helpers out, routes out" — one file, one
+landing.</p>
+
+<h3>The route chain, and what the existing factories really are</h3>
+<p>The dispatcher is a linear <code>if</code> sequence inside one request callback, not a table: <b>123 branches
+at <code>cc61bb9</code></b> (122 <code>route ===</code> comparisons plus one <code>route.startsWith</code> prefix
+branch), 3,215 of the callback's 3,233 lines being branch bodies. At 0.87.1 the same count is 127. The branches
+are <b>interleaved, not contiguous</b> — the worktree group spans the assistant and settings branches — so the
+chain is ordered by arrival, not by subject. <span class="src s-b1">B1</span> <span class="src s-a1">A1</span></p>
+
+<p><b>The idiom already exists three times</b>, and it is one-path RPC rather than group dispatch: each factory
+guards a single path and dispatches on an <code>action</code> field, taking its transport helpers as named
+arguments and returning <code>false</code> to fall through. A route <i>group</i> has 13, 14 or 23 paths, so the
+first group factory needs a method-and-path table that the existing three do not have. That is one small design
+decision, and it should be made once, on the first group. <span class="src s-b2">B2</span></p>
+
+<div class="verdict">
+<h4>Verdict — the count to use</h4>
+<p><b>75 branches migrate; 48 stay in <code>server.js</code>.</b> 123 total, minus the 48 that belong to the
+process and the SSE entry. The three existing factories do <i>not</i> appear in the chain at all — they are
+intercepted before the dispatcher — so they are precedent, not progress, and must not be subtracted a second
+time. <span class="src s-b2">B2</span> corrects <span class="src s-a2">A2</span>'s 72 here, and B2 is right;
+see §10.</p>
+</div>
+
+<p><b>Mount point is part of the contract.</b> <code>authorised</code> is called once, and the boot-pass flag
+<code>bootPassCanSatisfyReload</code> is cleared, both <i>before</i> the factories mount. A factory mounted at the
+same point inherits both; one hoisted above those lines silently loses them. <span class="src s-b2">B2</span></p>
+
+<h2 id="client">4. The client half: no modules, one call-time loop, one mutable object</h2>
+
+<p>Sixteen classic scripts, 30,055 lines, <b>zero static imports</b>. Their graph is the global namespace: which
+top-level name of one file appears in another. That is a weaker measure than an import — a mention in a comment
+counts — so every client number below is a <i>reference</i> count, not an edge count. <span
+class="src s-b1">B1</span></p>
+
+<h3>What "cycle" means on this side</h3>
+<div class="verdict">
+<h4>Verdict — the sentence that must never travel</h4>
+<p><b>"The tree has no cycles" is true of <code>lib/</code> and false of the product.</b> The two documents are
+not disagreeing: they measured different graphs. The server graph is ESM imports — 85 nodes, 187 edges, 0 SCCs.
+The client graph is name references — 16 files, and one loop of <b>9 files</b>:
+<code>app.js</code> &harr; <code>dom-format</code>, <code>console-format</code>, <code>console-markdown</code>,
+<code>sse</code>, <code>transport</code>, <code>attachments</code>, <code>hot</code>, <code>paste-chips</code>.
+The other seven — <code>model-menu</code>, <code>stream-merge</code>, <code>liveness</code>,
+<code>steerable</code>, <code>type-stream</code>, <code>update-check</code>, <code>assistant</code> — read
+<code>app.js</code> and are read by nothing.</p>
+</div>
+
+<p><span class="src s-b2">B2</span> refines the word further: on the client there is no import graph, so every
+edge is a <b>call-time back-edge</b>. <code>sse.js</code>'s reads of <code>app.js</code> all sit inside
+<code>connect()</code>, and <code>connect()</code> is called by <code>app.js</code> after every name it needs
+already exists. <code>dom-format</code> is stricter still — it loads first of all sixteen and executes nothing at
+load, so its back-edges cannot be "broken by load order" at all. The invariant is not "load order breaks
+cycles"; it is <b>"no top-level statement may read a name another file provides"</b>, which is the load contract
+in §4.</p>
+
+<h3>The boundary is nominal</h3>
+<div class="tw">
+<table>
+<thead><tr><th>Fact</th><th class="num">Value</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td>Top-level names declared by <code>public/app.js</code></td><td class="num">1,080</td>
+    <td><span class="src s-a1">A1</span> 829 functions, 251 const/let</td></tr>
+<tr><td>Names it publishes on <code>window</code> or <code>globalThis</code></td><td class="num bad">0</td>
+    <td><span class="src s-a1">A1</span> every name is a page global by being a top-level declaration</td></tr>
+<tr><td>Bare <code>esc(</code> call sites</td><td class="num">913</td>
+    <td><span class="src s-a1">A1</span> 627 in <code>app.js</code>, 286 in <code>assistant.js</code></td></tr>
+<tr><td>Readers of <code>WMApp.core.domFormat</code></td><td class="num bad">1</td>
+    <td><span class="src s-a1">A1</span> the module's own header says "Nothing reads it yet"</td></tr>
+<tr><td><code>app.js</code> names read from outside the file</td><td class="num">66&ndash;78</td>
+    <td><span class="src s-a1">A1</span> 66 with comments stripped, <span class="src s-b1">B1</span> 78 with them counted</td></tr>
+<tr><td><code>state.</code> property reads inside <code>app.js</code></td><td class="num">1,141</td>
+    <td><span class="src s-b1">B1</span></td></tr>
+<tr><td><code>state.</code> property reads from outside it</td><td class="num">197</td>
+    <td><span class="src s-b1">B1</span> across 8 files; only 7 of 16 files read no <code>state</code> at all</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>The namespace object exists, is additive, and is unread: eight modules publish
+<code>window.WMApp.core.*</code> or <code>.board.*</code>, six publish a single global
+(<code>wtLive</code>, <code>wtStream</code>, <code>wtType</code>, <code>wtSteerable</code>,
+<code>wtUpdateCheck</code>, <code>ModelMenu</code>), and the units themselves stay page globals. The two readings
+of that fact differ and both survive: A1 calls it <i>a promise the code has not kept</i>, which makes a split look
+mechanical; B1 calls it <i>the API is 78 names plus one mutable object</i>, which bounds what a split can
+achieve. §6 shows that bound biting.</p>
+
+<h3>The load contract — phase 1 and phase 3</h3>
+<p><code>public/app.js</code> carries <b>222 top-level statements</b>, 24 of which assign a
+<code>state.*</code> property. A region that carries one of those cannot move <i>before</i> <code>app.js</code>,
+because <code>state</code> is being built there. <span class="src s-a1">A1</span> <span
+class="src s-b1">B1</span> reproduced both numbers independently and exactly.</p>
+
+<div class="verdict">
+<h4>Verdict — it is a phase, not an exception</h4>
+<p><span class="src s-a2">A2</span> first called the after-<code>app.js</code> slot "a fourth phase nothing else
+uses". <span class="src s-b2">B2</span> is right and A2's framing is withdrawn: two scripts already load after
+<code>app.js</code> — <code>core/update-check.js</code> and <code>assistant.js</code> — so adding a third line is
+the cheapest change available, and it is the <i>correct</i> home for every region that executes at load. The
+contract is two-sided: <b>phase 1 (before <code>app.js</code>) is pure declarations; phase 3 (after) is anything
+that executes.</b> Stated that way the 24 writes stop being a list of exceptions and become the definition of a
+phase the page already has two examples of.</p>
+</div>
+
+<h3>The markers are an API, and one range is pinned by an anchor, not a marker</h3>
+<p>Fourteen test and tool files slice <code>public/app.js</code> through <code>sliceRegion</code> /
+<code>sliceBetween</code>; nine more cut their own <code>indexOf("// ----")</code> anchors, for a union of
+<b>22 files of the 40 that read <code>app.js</code> at all</b>. <span class="src s-b2">B2</span> counts higher —
+19 through <code>sliceRegion</code> once tool files are included, 29 once own-<code>indexOf</code> cuts are added —
+and the three definitions are reconciled in §10 rather than averaged.</p>
+
+<div class="warn">
+<h4>The sharpest failure mode either document found <span class="src s-b2">B2</span></h4>
+<p><code>test/ahead-behind-cell.test.js</code> pins two ranges that are <b>not</b> section slices: one from
+<code>const CHART_COLUMNS = [</code> to the <span class="anchor">// ---- end chart columns</span> closer, and one
+from <code>function verdictHtml</code> to the <span class="anchor">// ---- end merge control</span> closer.
+<code>verdictHtml</code> belongs to a different section than the marker that bounds it. These ranges depend on
+<i>what sits between an anchor and an unrelated closer</i>, so a vertical cut that moves either symbol changes the
+slice without touching either marker — and the failure is a failed <code>assert.match</code>, not a thrown
+"missing region". Making the markers honest does not fix it; the <i>anchors</i> are positional. Both ranges must be
+re-expressed as section slices before any vertical move that crosses them.</p>
+</div>
+
+<h2 id="seams">5. The six files, seam by seam</h2>
+
+<p>For each seam: what moves out, what stays, and the new boundary's <b>public surface</b> — the count of names
+defined inside the region and read outside it, which is what the extracted file must publish back. Surface is
+measured; "lines" is context, not a unit of work.</p>
+
+<h3>5.1 <code>public/app.js</code> — 21,367 lines, 1,080 top-level names</h3>
+<p>There are <b>no natural seams to discover</b>: a symbol reference graph over the file (2,682
+symbol-to-symbol edges) puts 1,079 of 1,080 top-level declarations in <b>one weakly-connected component</b>.
+Every boundary is a cut through references, and only its price differs. <span class="src s-a1">A1</span></p>
+
+<div class="tw">
+<table>
+<thead><tr><th>Seam</th><th>Anchored range</th><th class="num">Lines</th><th class="num">Surface</th>
+<th class="num">Top-level stmts</th><th class="num">of which <code>state</code> writes</th><th>Verdict</th></tr></thead>
+<tbody>
+<tr><td><b>A1 settings tail</b></td>
+    <td><span class="anchor">// ---- the add-agent bar's green</span> &rarr; <span class="anchor">// ---- what the page can see</span></td>
+    <td class="num">2,964</td><td class="num good">9</td><td class="num">96</td><td class="num good">0</td>
+    <td>first client cut <span class="src s-both">BOTH</span></td></tr>
+<tr><td><b>A2 chart / ranking</b></td>
+    <td><span class="anchor">// ---- the age column</span> &rarr; <span class="anchor">// ---- how long a red failure stays</span></td>
+    <td class="num">3,710</td><td class="num bad">58</td><td class="num">3</td><td class="num good">0</td>
+    <td><b>dropped as a unit</b> <span class="src s-b2">B2</span></td></tr>
+<tr><td><b>A3 conversations</b></td>
+    <td><span class="anchor">// ---- conversations</span> &rarr; <span class="anchor">// ---- the row's own &#10227;</span></td>
+    <td class="num">3,568</td><td class="num may">69</td><td class="num">12</td><td class="num bad">7</td>
+    <td>late <span class="src s-a1">A1</span></td></tr>
+<tr><td><b>A4 console</b></td>
+    <td><span class="anchor">// ---- thinking</span> &rarr; <span class="anchor">// ---- copy buttons</span></td>
+    <td class="num">1,166</td><td class="num may">35</td><td class="num">14</td><td class="num bad">12</td>
+    <td>worst risk-to-value <span class="src s-both">BOTH</span></td></tr>
+<tr><td><b>A5 dock</b></td>
+    <td><span class="anchor">// ---- approvals</span> &rarr; <span class="anchor">// ---- thinking</span></td>
+    <td class="num">569</td><td class="num good">14</td><td class="num">5</td><td class="num bad">4</td>
+    <td>phase 3, then cheap <span class="src s-a1">A1</span></td></tr>
+<tr><td><b>A6 model picker</b></td>
+    <td><span class="anchor">// ---- the model picker</span> &rarr; <span class="anchor">// ---------------- worktrees</span></td>
+    <td class="num">260</td><td class="num good">11</td><td class="num good">0</td><td class="num good">0</td>
+    <td>safest, smallest <span class="src s-a1">A1</span></td></tr>
+</tbody>
+</table>
+</div>
+
+<p><b>Read the last two columns together.</b> The settings tail is cheap to export (9 names) and expensive to
+load (96 boot statements that stay behind). The console and the dock are the reverse — few statements, but most
+of them <i>write</i> <code>state</code>, so they are initialisers disguised as renderers and belong in phase 3.
+The chart is nearly pure at load and still the worst cut, because its cost is dependencies: 76 outer names,
+nine of them the scroll-and-caret protocol. The model picker is the only region with neither problem, and it is
+1.2% of the file. <span class="src s-a1">A1</span></p>
+
+<h3>5.2 <code>public/assistant.js</code> — 4,177 lines, 32 sections, one IIFE, 3 globals</h3>
+<p>The cheapest real boundary on the client, for one structural reason: the whole file is already private. A
+split cannot leak a new global unless you make one, and only <code>applyAssistant</code> and two test hooks must
+survive. What moves, best first: the task pipeline window (458), the queue sub-tab (732), the message board (197),
+then alerts and watches (328), then the settings block (359). What stays: the frame (float vs dock), the boot
+sequence, and the wiring block — 611 lines of listeners and fan-out that is the file's composition root.
+<span class="src s-a1">A1</span></p>
+<p><b>The caveat that changes the order:</b> the queue sub-tab is the most-sliced section in the client — four
+test files pin it — so this move must follow the marker work, and it is the one place where B1's "do not split
+the assistant" and A1's "split it" meet: split the file, but never the vertical's server half.
+<span class="src s-b2">B2</span></p>
+
+<h3>5.3 <code>lib/assistant.js</code> — 5,192 lines, one class, 147 methods</h3>
+<p>The class spans from the declaration to end of file: <b>4,968 lines in one class</b>. Its own section markers
+are <b>not a reliable map</b> — the section labelled <span class="anchor">// ---- one assistant's task queue</span>
+is 1,018 lines and holds the queue <i>and</i> the assistant registry, the ownership resolution, the roster, the
+per-assistant settings and the charter accessors. A reader trusting the banner will mis-plan.
+<span class="src s-a1">A1</span></p>
+<ul>
+<li><b>Rules engine</b> — <code>evaluate</code> (453 lines) plus its three helpers, 674 lines, 12 fields. A pure
+decision over (live jobs, settings, rules) &rarr; alerts. It is the only place the assistant decides anything, and
+it is testable without a clock, a file or a gateway. <span class="src s-a1">A1</span></li>
+<li><b>Queue host</b> — the 1,018-line section, moved behind thin delegating wrappers so call sites do not move.
+The queue's schema and caps already live in <code>lib/assistant/queue.js</code>; this is the host half.
+<span class="src s-a1">A1</span></li>
+<li><b>Spawn machinery</b> — 712 lines turning a <code>SPAWN</code> line into a job. <span class="src s-a1">A1</span></li>
+</ul>
+<p><span class="src s-b1">B1</span> adds the ordering fact that decides priority: this file is the <i>worst</i>
+collision target of the four big ones — 74% of commit pairs still share a module at K=12 — so it is a poor
+contention fix and a good testability fix. It belongs to the assistant vertical's owner, after the client work.
+<span class="src s-a2">A2</span> demoted it from step 2 to step 7 for exactly this reason.</p>
+
+<h3>5.4 <code>lib/jobs.js</code> — 3,829 lines, one class, 114 methods</h3>
+<p>A run state machine with an HTTP client grown through it. Four cuts: the gateway transport (the POST, the 429
+absorption, the stream open — ~780 lines of method plus 73 lines of already-exported retry policy), persistence
+(671 lines: the file format, caps, debounce, migrations), artifacts and worktree measurement (411), and the
+control verbs (386: approve, steer, answer-question). Surface in each case is the method name the class already
+calls. <span class="src s-a1">A1</span></p>
+<p>It is also the safest cut in the repository on one measure: 15 test files import it directly, so a move is
+proved by the existing suite rather than by a new one. <span class="src s-b1">B1</span></p>
+
+<h3>5.5 <code>server.js</code> — 5,343 lines, two cuts that are not the same cut</h3>
+<ul>
+<li><b>The route chain</b> &rarr; <code>lib/routes/*.js</code>: 3,215 lines of branch bodies, 75 branches to
+migrate, groups of 13/14/23/11/8/3/3/2. Removes the cross-workstream collision — both clusters pass through this
+file. <span class="src s-both">BOTH</span></li>
+<li><b>The header</b> (the object graph and the 44 helpers above <code>createServer(</code>) &rarr;
+<code>lib/</code>: 55% of the file's hunks. Removes the churn band. <span class="src s-b2">B2</span> found it;
+<span class="src s-a2">A2</span> folded it into the same seam.</li>
+</ul>
+<p>What stays in <code>server.js</code>: the process (config load, state migration, directory setup), the object
+graph's construction, <code>broadcast</code>, the boot-pass promise, the auth and method guard, the static and SSE
+entry, and shutdown. That is the composition root, and it is where a wide fan-out belongs. <span
+class="src s-a1">A1</span></p>
+
+<h3>5.6 <code>public/style.css</code> — 3,761 lines, 1,615 blocks, 835 classes</h3>
+<p>Zero <code>@layer</code>, two <code>!important</code>, and <b>24 selectors declared more than once</b> —
+<code>:root</code>, <code>td.age</code>, <code>tbody tr.row</code>, <code>.turn-head</code>,
+<code>.wt-age-toggle</code> and others. Those 24 are order-dependent overrides, so the cascade is load-bearing and
+a split that reorders sections silently changes paint. <span class="src s-a1">A1</span></p>
+<p>Ownership is measurable: of 835 classes, 484 appear only in <code>app.js</code>, <b>152 only in
+<code>assistant.js</code></b> and all of those are <code>as-*</code> prefixed, 82 in both, 17 only in
+<code>index.html</code>, and 100 in none of the three — an upper bound on dead CSS, not a count, because
+<code>class="${…}"</code> composition defeats a literal scan. <span class="src s-a1">A1</span></p>
+<p>The one signed slice is the <code>as-*</code> block: 247 of its 248 rule lines are already adjacent, and the
+prefix is a written contract. That is ~600 of 3,763 lines — a 16% move, which is why the two adjudications place
+it differently (see §9).</p>
+
+<h2 id="cost">6. What a cut buys and what it costs</h2>
+
+<p><span class="src s-b1">B1</span> cut <code>app.js</code> into K equal-line modules at its marker boundaries and
+asked what fraction of commit pairs would still share a module. <span class="src s-a2">A2</span> re-derived it on
+80 commits — each hunk bucketed by its own revision's length, so drift cannot contaminate it — and added the
+surface cost of the <i>same</i> cuts:</p>
+
+<div class="tw">
+<table>
+<thead><tr><th class="num">Parts, K</th><th class="num">Pair-collision</th><th class="num">Commits in one part</th>
+<th class="num">Names published across the boundary</th></tr></thead>
+<tbody>
+<tr><td class="num">1</td><td class="num">100%</td><td class="num">100%</td><td class="num">no boundary</td></tr>
+<tr><td class="num">2</td><td class="num">82%</td><td class="num">60%</td><td class="num">269</td></tr>
+<tr><td class="num">4</td><td class="num">60%</td><td class="num">55%</td><td class="num">346</td></tr>
+<tr><td class="num">8</td><td class="num">47%</td><td class="num">38%</td><td class="num">449</td></tr>
+<tr><td class="num">12</td><td class="num">39%</td><td class="num">33%</td><td class="num">469</td></tr>
+<tr><td class="num">16</td><td class="num">36%</td><td class="num">29%</td><td class="num">515</td></tr>
+<tr><td class="num">24</td><td class="num">28%</td><td class="num">28%</td><td class="num">546</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>And the same two axes on a hand-placed partition — the six responsibility ranges plus the hub remainder,
+deliberately non-uniform:</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>Partition (7 parts)</th><th class="num">Pair-collision</th><th class="num">Commits in one part</th>
+<th class="num">Names published</th></tr></thead>
+<tbody>
+<tr><td>six responsibility ranges + hub</td><td class="num">56%</td><td class="num">45%</td><td class="num good">320</td></tr>
+<tr><td>equal-line, K=7</td><td class="num">51%</td><td class="num">43%</td><td class="num bad">444</td></tr>
+</tbody>
+</table>
+</div>
+
+<p>The hand-placed boundaries are <i>worse</i> on collision and <b>28% cheaper</b> on surface. That is the whole
+argument in one row, and it is the opposite of what both first-round drafts expected. <span
+class="src s-a2">A2</span></p>
+
+<div class="verdict">
+<h4>The one costed statement <span class="src s-a2">A2</span></h4>
+<p>A cut buys the commits that stop sharing a file and costs the names that must stay visible across the new
+boundary; collision relief is bought by the <b>number</b> of parts (100% &rarr; 39% at K=12 &rarr; 28% at K=24) and
+is nearly independent of <b>where</b> the boundary falls (equal-line K=7 is 51% against 56% for a hand-placed
+partition), while surface cost is bought by <b>where</b> it falls (444 names equal-line against 320 hand-placed at
+the same K=7, a 28% saving) — so boundary choice is a cost decision, part count is a benefit decision, and the two
+are separable.</p>
+</div>
+
+<p><b>The knee is in the marginal rate.</b> From K=8 to K=12, 8 points of relief cost 20 names — 40 points per
+100. From K=12 to K=24, 11 points cost 77 names — 14 per 100. Same direction, a third of the rate. That is B1's
+"stops improving past 16" seen from the other axis, and it is why "more files" stops being the lever while "a
+better boundary" never does.</p>
+
+<p><b>The limit both drafts hit:</b> neither measured a true vertical. Every cut in the table above is a
+contiguous band of lines — B1's at marker boundaries, A1's at hand-chosen ones. A vertical takes a feature's
+state, renderer and handler out of three separate places, and its collision advantage is a hypothesis with a
+plausible mechanism (a median <code>app.js</code> commit edits 3 of 143 sections) and no measurement behind it.
+<span class="src s-a2">A2</span></p>
+
+<h2 id="lock">7. The landing lock: <code>package.json</code></h2>
+
+<p>The guaranteed shared file is not the one anyone expects. <code>package.json</code> is touched by <b>124 of the
+last 200 non-merge commits</b> (B1 measured 120 on its window), and it cannot be avoided: the pre-push hook runs
+the version gate, which refuses a branch that carries commits without a bump, and the repo's own versioning doc
+makes even a document a patch. <span class="src s-b1">B1</span> <span class="src s-a2">A2</span></p>
+
+<div class="verdict">
+<h4>The landing-concurrency rule <span class="src s-a2">A2</span></h4>
+<p><b>Landing concurrency is 1, and <code>package.json</code> is the lock.</b> Bump on the landing tip, in the
+landing commit, after the rebase — never at branch cut. A branch that carries a bump taken from its cut is a
+guaranteed conflict for whoever lands next, and every branch is the next landing. Serialize on the bump, not on
+the code.</p>
+</div>
+
+<p><b>The demonstration is this very branch.</b> Round 1 cut from 0.84.0 and bumped to 0.84.1 in the same commit
+as its document. Main moved to 0.85.2; the pull request came back <span class="bad">CONFLICTING</span> on
+<code>package.json</code> alone, with the document merging cleanly. The fix was a rebase and a re-bump to 0.85.3 —
+one extra conflict resolution, on one file, for one PR. At 124 of 200 commits the repository pays that constantly,
+which is why the project has a landing-turnover model rather than a merge bot.</p>
+
+<p>Three consequences that follow from the measurement rather than from taste:</p>
+<ul>
+<li><b>The bump is a rebase-time edit, not a commit-time edit.</b> It belongs in the commit that is about to be
+pushed onto the current tip.</li>
+<li><b>Two landings cannot be truly parallel.</b> A module split changes what conflicts, never whether the landing
+serializes.</li>
+<li><b>The version is read once, at boot</b>, so a stale version is a board-config-line bug, not a running-process
+bug. That is why "bump at landing" needs no restart story.</li>
+</ul>
+
+<h2 id="list">8. The seam list we sign</h2>
+
+<p>One order, merged from <span class="src s-a2">A2</span> and <span class="src s-b2">B2</span>, with the load
+contract and the marker API as hard gates. Order is <i>contention removed soonest per unit of risk</i>, because
+that is the complaint that opened the review.</p>
+
+<div class="tw">
+<table>
+<thead><tr><th class="num">#</th><th>Cut</th><th>Anchor</th><th class="num">Size</th><th>Why here</th><th>From</th></tr></thead>
+<tbody>
+<tr><td class="num">0</td><td><b>Make the markers honest</b></td>
+    <td>comment-only, <code>public/app.js</code></td><td class="num">—</td>
+    <td>22 of 40 reader files pin this text; two ranges are pinned anchor-to-closer and must be re-expressed
+    first. Makes every later client step reversible.</td><td><span class="src s-both">BOTH</span></td></tr>
+<tr><td class="num">1</td><td><b><code>server.js</code> route chain</b> &rarr; <code>lib/routes/*.js</code></td>
+    <td>from <code>if (route === "/api/health")</code> to the last branch</td><td class="num">3,215 L, 75 branches</td>
+    <td>The only cut that removes a <i>cross-workstream</i> collision: both clusters meet here. One serialized
+    gather — the groups are interleaved, so five PRs conflict with each other.</td><td><span class="src s-both">BOTH</span></td></tr>
+<tr><td class="num">2</td><td><b><code>server.js</code> header</b> &rarr; <code>lib/</code></td>
+    <td>above <code>createServer(</code>: object graph + 44 helpers</td><td class="num">1,957 L band</td>
+    <td>51 of 92 hunks and 21 of 30 commits are above the dispatcher. Without it the file that is #4 by commits
+    stays #4 by commits.</td><td><span class="src s-b2">B2</span></td></tr>
+<tr><td class="num">3</td><td><b><code>app.js</code> settings tail</b> &rarr; <code>features/settings-*.js</code></td>
+    <td><span class="anchor">// ---- the add-agent bar's green</span> &rarr; <span class="anchor">// ---- what the page can see</span></td>
+    <td class="num">2,964 L, 9-name surface</td>
+    <td>The lowest surface in the file (329 lines per published name), zero load-time <code>state</code> writes,
+    and the hottest contiguous block. The first client cut, once step 0 is in.</td><td><span class="src s-both">BOTH</span></td></tr>
+<tr><td class="num">4</td><td><b><code>lib/assistant.js</code></b> &rarr; rules engine, then queue host</td>
+    <td><span class="anchor">// ---- rules</span>, <span class="anchor">// ---- one assistant's task queue</span></td>
+    <td class="num">674 + 1,018 L</td>
+    <td>Inside the assistant vertical, so it belongs to that owner. The rules engine is pure and testable without
+    a clock or a gateway. Not a contention fix — a correctness one.</td><td><span class="src s-a1">A1</span></td></tr>
+<tr><td class="num">5</td><td><b><code>lib/jobs.js</code></b> &rarr; gateway transport</td>
+    <td><span class="anchor">// ---- the POST, with the gateway's own backpressure absorbed</span></td>
+    <td class="num">~850 L</td>
+    <td>Pure move of already-exported retry policy, and 15 test files import the module directly, so the suite
+    proves it.</td><td><span class="src s-a1">A1</span></td></tr>
+<tr><td class="num">6</td><td><b><code>public/assistant.js</code></b> &rarr; pipeline window, queue tab, messages</td>
+    <td><span class="anchor">// ---- the task pipeline window</span>, <span class="anchor">// ---- the queue sub-tab</span></td>
+    <td class="num">459 + 733 + 197 L</td>
+    <td>Already private inside one IIFE; only three globals survive. Must follow step 0 — the queue sub-tab is the
+    most-sliced section in the client.</td><td><span class="src s-a1">A1</span></td></tr>
+<tr><td class="num">7</td><td><b><code>public/style.css</code></b> &rarr; <code>assistant.css</code></td>
+    <td>every <code>as-*</code> rule</td><td class="num">~600 L</td>
+    <td>247 of 248 <code>as-*</code> rule lines are already adjacent and the prefix is a written contract. Small
+    (16% of the sheet) and safe; it does not fix board-chrome contention on its own.</td><td><span class="src s-a1">A1</span></td></tr>
+</tbody>
+</table>
+</div>
+
+<h3>How the two second-round lists were reconciled</h3>
+<ul>
+<li><b>Steps 1 and 2 are two rows and one landing.</b> A2 wrote them as a single serialized PR; B2 wrote them as
+  two steps. Both are right about different risks: the <i>conflict</i> risk is inside the route chain, where the
+  groups interleave, while the header sits above it and does not conflict with it. Sign both, land them
+  <b>never concurrently</b>, and treat the second as a pure shift of the first.</li>
+<li><b>The client moved up, and that is a concession.</b> A1 put every client cut after six server steps; B1
+  argued the client trio is the busiest thing in the repo (41 + 38 + 24 commits against <code>server.js</code>'s
+  31, in the same 200-commit window). A2 moved the settings tail to #2 and B2 put it at #3. The merged list puts it at #3, after the marker work
+  and the one serialized server change — i.e. as soon as it is <i>reversible</i>, which is the disagreement B2
+  said it would not concede, resolved in its favour.</li>
+<li><b><code>style.css</code> is #7, not #3.</b> A2 placed it with the board-chrome vertical. B2 placed it last.
+  The measurement decides: the only signed slice is the <code>as-*</code> block, which belongs to the
+  <i>assistant</i> vertical, not to board chrome — so it does not relieve the 21 <code>app+style</code> pairings
+  that A2 was trying to break. A board-CSS split has not been measured by anyone and is not signed.</li>
+</ul>
+
+<h2 id="contest">9. Dropped, and still contested</h2>
+
+<h3>Dropped: the chart / ranking cut (A2)</h3>
+<p><span class="src s-b2">B2</span> would drop it as a unit, not defer it, and the numbers support that. Its
+sub-region beside the chart-columns section carries 34 hunks while <b>the 119-line chart-columns section itself
+carries 0</b>; its surface is the worst in the file (58 names, 76 outer dependencies); and it contains one of the
+two anchor-to-closer test ranges. A cut that produces "the same file with a longer relative path" — A1's own
+phrase — is not a seam. The honest entry is no entry; the churn band beside it may be re-measured as its own
+candidate before anyone signs it. <span class="src s-a2">A2</span> had it last; adopting the drop.</p>
+
+<h3>Four things A2 will not concede</h3>
+<ol>
+<li><b>That a vertical split buys collision relief.</b> Neither document measured one. At the same part count, a
+  responsibility-aligned contiguous partition is <i>worse</i> on collision (56% vs 51%) and better only on surface
+  (320 vs 444 names).</li>
+<li><b>That <code>public/core/dom-format.js</code> is a leaf or a cut point.</b> It sits inside the 9-file loop —
+  it reads <code>state</code>, <code>normPath</code>, <code>panelFor</code> and <code>isRowLive</code> back out of
+  <code>app.js</code>, as its own header declares — and it is already a separate 183-line file. Its real property
+  is that it is the <i>cheapest member</i> of the loop.</li>
+<li><b>That the cold substrate is healthy.</b> 50 of 83 modules untouched in 49 hours proves they are not where
+  this weekend's contention is; it cannot prove they are sound.</li>
+<li><b>That the 78-name client surface is a number.</b> It is 66 with comments and strings stripped and 78 with
+  them counted; the plan needs the lower one.</li>
+</ol>
+
+<h3>Three things B2 will not concede</h3>
+<ol>
+<li><b>The client cannot be the last thing done.</b> A plan whose first six landings leave the three busiest
+  files untouched has optimized revertibility at the cost of the complaint.</li>
+<li><b>The marker API is larger than 14 files.</b> Own-<code>indexOf</code> cuts and the anchor-to-closer ranges
+  pin text that no <code>sliceRegion</code> count sees.</li>
+<li><b>The header is the other half of <code>server.js</code>.</b> A routes-only plan fixes 35% of the hunks and
+  adds five lines to the block 14 commits already edit.</li>
+</ol>
+
+<h3>Where A2 and B2 still differ, after the merge</h3>
+<div class="tw">
+<table>
+<thead><tr><th>Question</th><th>A2</th><th>B2</th><th>This page</th></tr></thead>
+<tbody>
+<tr><td>Branches to migrate</td><td>72</td><td><b>75</b></td><td class="good">75 — B2 is right; A2 double-subtracted the three factory paths</td></tr>
+<tr><td>The chart cut</td><td>last</td><td><b>drop</b></td><td class="good">dropped as a unit</td></tr>
+<tr><td><code>style.css</code> position</td><td>#3, with the board vertical</td><td>#7</td><td class="good">#7 — the only signed slice is the assistant's</td></tr>
+<tr><td>Routes and header</td><td>one PR</td><td>two steps</td><td class="may">two rows, one landing, never concurrent</td></tr>
+<tr><td>The client's position</td><td>#2</td><td>#3</td><td class="good">#3 — after markers and the server gather</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="numbers">10. The numbers: what reproduces, what drifted, what is stale</h2>
+
+<p>Two documents were measured at <code>cc61bb9</code>, one at 0.85.3, and this page's anchors were re-checked at
+0.87.1. A reader is entitled to know which number came from which tree, so the provenance is stated once here and
+the line numbers live only in the appendix.</p>
+
+<div class="tw">
+<table>
+<thead><tr><th>Claim</th><th>Measured</th><th>Reproduces?</th><th>Use</th></tr></thead>
+<tbody>
+<tr><td>Server internal edges</td><td><b>187</b> over 85 modules</td>
+    <td class="good">yes — B2 withdrew its 184 (line-anchored scrape missed the two <code>;import</code> lines)</td>
+    <td>187</td></tr>
+<tr><td>Import cycles on the server</td><td><b>0</b> SCCs, depth 6</td>
+    <td class="good">yes — DFS and Tarjan, independently</td><td>0</td></tr>
+<tr><td>Modules with in-degree 1</td><td><b>45</b></td><td class="good">yes, exactly, on a later window</td><td>45</td></tr>
+<tr><td>Imported only by <code>server.js</code></td><td><b>32</b></td><td class="good">yes, exactly</td><td>32</td></tr>
+<tr><td><code>package.json</code> churn</td><td><b>120&ndash;124</b> of 200 commits</td>
+    <td class="good">yes, ±4 across windows</td><td>~60%</td></tr>
+<tr><td>Four files' share of source touches</td><td><b>45&ndash;46%</b></td>
+    <td class="good">yes (121 of 267 / 121 of 262)</td><td>~46%</td></tr>
+<tr><td>Source commits touching one of the four</td><td><b>85%</b></td><td class="good">yes, exactly</td><td>85%</td></tr>
+<tr><td><code>app.js</code> top-level statements</td><td><b>222</b>, 24 <code>state</code> writes</td>
+    <td class="good">yes — two independent scanners</td><td>222 / 24</td></tr>
+<tr><td>Pair-collision at K=12</td><td><b>37&ndash;39%</b></td><td class="good">shape reproduces; level ±2 (42 vs 80 commits)</td><td>~39%</td></tr>
+<tr><td class="bad">Branches to migrate</td><td class="bad">72 <span class="src s-a2">A2</span> / 75 <span class="src s-b2">B2</span></td>
+    <td class="bad">A2 is wrong</td>
+    <td>75 — see the box below</td></tr>
+<tr><td class="bad">Files pinning <code>app.js</code> text</td><td class="bad">14 / 19 / 29 depending on definition</td>
+    <td class="bad">all three are true of a different question</td>
+    <td>22 (14 + 9, union), of 40 readers</td></tr>
+<tr><td class="bad"><code>app.js</code> names read from outside</td><td class="bad">66 (stripped) / 78 (textual)</td>
+    <td class="bad">an upper and a lower bound, not one number</td><td>66&ndash;78</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="warn">
+<h4>A number in one input is stale, and here is where</h4>
+<p><b><code>docs/arch-review-r2-a.md</code> §1 says 72 branches remain to migrate; the correct number is 75.</b>
+A2 computed 75 minus the three existing factory paths, but the three factories guard single paths that are
+intercepted <i>before</i> the dispatcher and therefore never appear among the 123 branches in the chain at all.
+They are precedent, not progress. 123 total, 48 stay in <code>server.js</code>, so <b>75 migrate</b>. This page
+uses 75 everywhere and does not restate A2's 72 except here.</p>
+<p>The same is true of every absolute line number in A1, B1 and B2: they were measured at <code>cc61bb9</code>,
+and <code>public/app.js</code> has since grown by 315 lines. That is why §1's anchoring rule forbids this page
+from quoting them as locations — and why <code>docs/architecture.md</code>'s counts, already a fifth out of date
+before any of this, should not be used at all.</p>
+</div>
+
+<h3>What a reader can still trust from the first-round documents</h3>
+<p>Every ratio and every rank: the degree structure (45 / 32 reproduce exactly), the cluster membership
+(board chrome, the assistant vertical), the four-files and 85% figures, the K-curve shape, and the zero-SCC
+result. <b>No absolute line number, and no <code>lib/</code> line total</b> — B1's 83 files / 32,581 lines does not
+reproduce against 84 / 32,947 at the same commit.</p>
+
+<h2 id="gaps">11. What nobody measured</h2>
+<ul>
+<li><b>Runtime.</b> No profile, no frame timing, no memory. The cost side belongs to the efficiency review, and
+  neither lens re-derived it.</li>
+<li><b>The browser harnesses.</b> One document ran the Node suite (1,165 of 1,165, green, 148 seconds); the 120
+  <code>tools/verify-*.mjs</code> harnesses are the only proof of the page's behaviour and were not run.</li>
+<li><b>A true vertical cut.</b> Both rounds measured contiguous bands. §6 states the upper bound and the
+  mechanism; the measurement does not exist yet.</li>
+<li><b>The board CSS.</b> The <code>as-*</code> block is the only measured CSS seam in either lens. A split of the
+  board's own styles — the console, the rows, the chart — has not been measured, and is therefore not signed.</li>
+<li><b>Whether the cold substrate is sound.</b> Two days of history cannot say.</li>
+</ul>
+
+<h2 id="anchors">Appendix A — anchors, with their snapshot line numbers</h2>
+<p class="small">For orientation only. <b>Locate by the marker text</b>; the numbers belong to the snapshot named
+in the heading and will be wrong on any other tree.</p>
+
+<h4>public/app.js @ 0.87.1 (21,682 lines)</h4>
+<div class="tw">
+<table>
+<thead><tr><th>Marker text</th><th class="num">Line</th></tr></thead>
+<tbody>
+<tr><td><code>// ---- conversations</code></td><td class="num">1,517</td></tr>
+<tr><td><code>// ---- the row's own &#10227;</code></td><td class="num">5,087</td></tr>
+<tr><td><code>// ---- approvals</code></td><td class="num">6,624</td></tr>
+<tr><td><code>// ---- thinking</code></td><td class="num">7,192</td></tr>
+<tr><td><code>// ---- copy buttons</code></td><td class="num">8,357</td></tr>
+<tr><td><code>// ---- the model picker</code></td><td class="num">9,718</td></tr>
+<tr><td><code>// ---------------- worktrees</code></td><td class="num">9,977</td></tr>
+<tr><td><code>function verdictHtml</code></td><td class="num">10,956</td></tr>
+<tr><td><code>// ---- end merge control</code></td><td class="num">11,002</td></tr>
+<tr><td><code>// ---- the age column</code></td><td class="num">11,553</td></tr>
+<tr><td><code>const CHART_COLUMNS = [</code></td><td class="num">14,008</td></tr>
+<tr><td><code>// ---- end chart columns</code></td><td class="num">14,108</td></tr>
+<tr><td><code>// ---- how long a red failure stays</code></td><td class="num">15,269</td></tr>
+<tr><td><code>// ---- the add-agent bar's green</code></td><td class="num">18,416</td></tr>
+<tr><td><code>// ---- end agent cleanup</code></td><td class="num">20,811</td></tr>
+<tr><td><code>// ---- what the page can see</code></td><td class="num">21,595</td></tr>
+</tbody>
+</table>
+</div>
+
+<h4>public/assistant.js @ 0.87.1 (4,222 lines)</h4>
+<div class="tw">
+<table>
+<thead><tr><th>Marker text</th><th class="num">Line</th></tr></thead>
+<tbody>
+<tr><td><code>// ---- the float's two rows</code></td><td class="num">33</td></tr>
+<tr><td><code>// ---- dock width</code></td><td class="num">280</td></tr>
+<tr><td><code>// ---- the queue sub-tab</code></td><td class="num">1,997</td></tr>
+<tr><td><code>// ---- the task pipeline window</code></td><td class="num">2,760</td></tr>
+</tbody>
+</table>
+</div>
+
+<h4>server.js @ 0.87.1 (5,435 lines)</h4>
+<div class="tw">
+<table>
+<thead><tr><th>Anchor</th><th class="num">Line</th></tr></thead>
+<tbody>
+<tr><td><code>const store = new Store()</code> — first of the module-scope singletons</td><td class="num">360</td></tr>
+<tr><td><code>const jobs = new Jobs({</code></td><td class="num">478</td></tr>
+<tr><td><code>const server = createServer(async (req, res) =&gt; {</code></td><td class="num">2,071</td></tr>
+<tr><td>first branch, <code>if (route === "/api/health")</code></td><td class="num">2,089</td></tr>
+<tr><td>last <code>if (route …)</code> branch</td><td class="num">5,184</td></tr>
+<tr><td><code>const VERSION = await readFile(… "package.json" …)</code></td><td class="num">132</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="docs">Appendix B — the four sources</h2>
+<div class="tw">
+<table>
+<thead><tr><th>File</th><th class="num">Bytes</th><th class="num">Lines</th><th>Snapshot</th></tr></thead>
+<tbody>
+<tr><td><code>docs/arch-review-r1-a.md</code></td><td class="num">45,432</td><td class="num">609</td><td><code>cc61bb9</code></td></tr>
+<tr><td><code>docs/arch-review-r1-b.md</code></td><td class="num">37,462</td><td class="num">583</td><td><code>cc61bb9</code></td></tr>
+<tr><td><code>docs/arch-review-r2-a.md</code></td><td class="num">21,426</td><td class="num">301</td><td>0.85.3</td></tr>
+<tr><td><code>docs/arch-review-r2-b.md</code></td><td class="num">24,328</td><td class="num">325</td><td><code>cc61bb9</code></td></tr>
+</tbody>
+</table>
+</div>
+<p class="small dim">Sizes are the git blobs, not the CRLF working copies. The four documents are landed verbatim
+beside this page; nothing in them was edited to agree with anything here.</p>
+
+<footer>
+  <p>agent-worktree-gui &middot; architectural review of the six oversized files &middot; folded from four documents
+  across three rounds. No source file was modified; the review is documentation and a version bump.</p>
+  <p>This page is self-contained: no scripts, no fonts, no images, no network. It opens offline and prints
+  without colour loss.</p>
+</footer>
+
+</div>
+</body>
+</html>
