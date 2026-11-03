@@ -57,6 +57,11 @@ const state = {
   // words, a tool's output and the agent's reasoning — like a terminal window; the Settings "Console size" stays the
   // baseline for every card. Kept in memory so a repaint does not undo it (the card re-emits it in its markup).
   consoleZoom: new Map(),
+  // Two per-console views the reader owns, kept by TURN (not on the node): a card is repainted on every job event
+  // and every scan, and a class or an attribute added to the old element dies with it. `consoleRaw` shows the
+  // turn's own bytes; `consoleFocus` hides the tool rows and leaves the prose, the errors and the final message.
+  consoleRaw: new Set(),
+  consoleFocus: new Set(),
   // Hot Agent: the rotation through agents that are waiting for input. `stack` is the visit history (so
   // Alt+Left can walk back), `cursor` points at the one on screen.
   hot: { on: false, stack: [], cursor: -1 },
@@ -1631,7 +1636,11 @@ function lineHtml(l, live = "", cls = "") {
   // words the reader is watching arrive. Every other line — history, a tool line, reasoning — is drawn whole.
   const shown = typedShown(l);
   const text = shown == null ? l.text : shown;
-  return `<div class="jl jl-${esc(kind)}${cls ? ` ${cls}` : ""}" data-lid="${esc(l.lid ?? "")}" data-ltext="${esc(l.text ?? "")}" data-lkind="${esc(kind)}">${linkifyText(text)}${live}</div>`;
+  // The agent's own words are the one kind drawn as markdown (core/console-markdown.js): the markers it writes
+  // are meant to be shapes. A tool line, a panel note and the run protocol keep the plain escaped line they have
+  // always had — a diff's "+ added" is not a list item. Both paths escape first; neither ever injects HTML.
+  const body = consoleMdIsProse(kind) ? consoleMdInline(text) : linkifyText(text);
+  return `<div class="jl jl-${esc(kind)}${cls ? ` ${cls}` : ""}" data-lid="${esc(l.lid ?? "")}" data-ltext="${esc(l.text ?? "")}" data-lkind="${esc(kind)}">${body}${live}</div>`;
 }
 
 function burstGroups(lines) {
@@ -2691,6 +2700,18 @@ function toBottomBtnHtml() {
   return `<button type="button" class="to-bottom" data-to-bottom="1" title="jump to the newest line and follow it again">\u2193</button>`;
 }
 
+// The console's own two views, in a strip at its top-right: RAW restores the turn's text exactly as it arrived,
+// FOCUS drops the tool rows and leaves what the agent said. The state is per TURN (page state), because a card
+// repaint rewrites this markup on every run event and on every scan — a class on the old node would be gone.
+function consoleToolsHtml() {
+  return (
+    `<div class="out-tools" role="group" aria-label="console views">` +
+    `<button type="button" class="out-tool" data-md-raw="1" aria-pressed="false" title="show this turn's text exactly as it arrived, markdown and all">raw</button>` +
+    `<button type="button" class="out-tool" data-md-focus="1" aria-pressed="false" title="hide the tool rows: read the prose, the errors and the final message">focus</button>` +
+    `</div>`
+  );
+}
+
 function paintToBottom(box) {
   const wrap = box?.closest?.(".out-wrap");
   if (!wrap) return;
@@ -2730,6 +2751,14 @@ function streamBodyHtml(turn, lines, windowFull = false) {
   // Its separation is the run's FIRST piece's — `pieces()` decides that, nothing here — and the piece after the run
   // carries its own, which is the blank line under the group.
   let run = null;
+  // A run of the agent's own lines is one markdown block (a paragraph, a list, a fence): the same grouping the
+  // condensed card uses, so the two views cannot disagree about what a list is.
+  let mdRun = null;
+  const flushMd = () => {
+    if (!mdRun) return;
+    parts.push(mdRunHtml(mdRun.lines, mdRun.sep));
+    mdRun = null;
+  };
   const flushRun = () => {
     if (!run) return;
     parts.push(toolGroupHtml(run.lines, `${turn.id}#f${n++}`, "", false, "", run.gofs, { flat: true, sep: run.sep }));
@@ -2748,18 +2777,75 @@ function streamBodyHtml(turn, lines, windowFull = false) {
     if (!seg) continue;
     const sep = seg.sep ? "jl-sep" : "";
     if (!seg.unit) {
-      // A reasoning block is a line of the stream like any other: same markup, its own kind, so a reader can copy or
-      // select across it and the console's own links still work inside it.
       flushRun();
+      // The agent's prose is collected and handed to core/console-markdown.js as one run; anything else (a
+      // reasoning line, a panel note) is the console line it has always been.
+      if (consoleMdIsProse(seg.line.kind)) {
+        if (!mdRun) mdRun = { lines: [], sep };
+        mdRun.lines.push(seg.line);
+        continue;
+      }
+      flushMd();
       parts.push(lineHtml(seg.line, "", sep));
       continue;
     }
     // The stored rows this group pairs from: what the earlier groups of THIS turn already consumed for that tool.
+    flushMd();
     if (!run) run = { lines: [], sep: seg.sep, gofs: Object.fromEntries(storeSeen) };
     run.lines.push(...seg.lines);
   }
+  flushMd();
   flushRun();
   return parts.join("");
+}
+
+// A run of the agent's own lines, drawn as the markdown it is (core/console-markdown.js). The console's lines
+// arrive one per `<div>`, so a paragraph, a list and a fenced block have to be recognised ACROSS lines — the one
+// place that knows how they group is that module, and this hands it a run and takes the markup back. `textOf`
+// keeps the word pacer honest: a line still being typed is drawn up to the words that may be shown now.
+function mdRunHtml(lines, sep = "") {
+  return consoleMdHtml(lines, { sep, textOf: (l) => typedShown(l) });
+}
+
+// The condensed card's console: one row per tool call (the burst, exactly as before), and the prose between the
+// bursts as markdown blocks. Nothing about the tool-group markup moves; the run of prose around it is simply no
+// longer one escaped line per marker.
+function condensedBodyHtml(turn, lines, busy, storeSeen) {
+  const parts = [];
+  let run = null;
+  const flush = () => {
+    if (!run) return;
+    parts.push(mdRunHtml(run));
+    run = null;
+  };
+  burstGroups(lines).forEach((item, gi) => {
+    if (item.group) {
+      flush();
+      const gofs = Object.fromEntries(storeSeen);
+      for (const l of item.lines) {
+        if (l.kind !== "tool-out") continue;
+        const m = TOOL_DONE_RE.exec(String(l.text || ""));
+        if (m) storeSeen.set(m[1], (storeSeen.get(m[1]) || 0) + 1);
+      }
+      // The reader's own answer to "count them, or one line each": with the tally off a burst is drawn as
+      // the same run of rows the 🌊 console draws — no head row, no "all N" button, one press per call —
+      // and the group keeps its two rules, its identity and its store offsets.
+      parts.push(toolGroupHtml(item.lines, `${turn.id}#${gi}`, "", false, "", gofs, toolGroupsOn() ? {} : { flat: true }));
+      return;
+    }
+    const l = item.line;
+    const i = lines.indexOf(l);
+    const live = i === busy ? `<span class="jl-live" data-live-from="${Number(l.at) || Date.now()}">${liveSuffix(Number(l.at) || Date.now())}</span>` : "";
+    if (!live && consoleMdIsProse(l.kind)) {
+      if (!run) run = [];
+      run.push(l);
+      return;
+    }
+    flush();
+    parts.push(lineHtml(l, live));
+  });
+  flush();
+  return parts.join("") || '<div class="jl jl-dim" data-wait="1">waiting for output…</div>';
 }
 
 function turnBody(turn, copy = "") {
@@ -2778,30 +2864,11 @@ function turnBody(turn, copy = "") {
   const storeSeen = new Map();
   const body = stream
     ? streamBodyHtml(turn, lines, lines.length < all.length)
-    : burstGroups(lines)
-        .map((item, gi) => {
-          if (item.group) {
-            const gofs = Object.fromEntries(storeSeen);
-            for (const l of item.lines) {
-              if (l.kind !== "tool-out") continue;
-              const m = TOOL_DONE_RE.exec(String(l.text || ""));
-              if (m) storeSeen.set(m[1], (storeSeen.get(m[1]) || 0) + 1);
-            }
-            // The reader's own answer to "count them, or one line each": with the tally off a burst is drawn as
-            // the same run of rows the 🌊 console draws — no head row, no "all N" button, one press per call —
-            // and the group keeps its two rules, its identity and its store offsets.
-            return toolGroupHtml(item.lines, `${turn.id}#${gi}`, "", false, "", gofs, toolGroupsOn() ? {} : { flat: true });
-          }
-          const l = item.line;
-          const i = lines.indexOf(l);
-          const live = i === busy ? `<span class="jl-live" data-live-from="${Number(l.at) || Date.now()}">${liveSuffix(Number(l.at) || Date.now())}</span>` : "";
-          return lineHtml(l, live);
-        })
-        .join("") || '<div class="jl jl-dim" data-wait="1">waiting for output…</div>';
+    : condensedBodyHtml(turn, lines, busy, storeSeen);
   return (stream ? "" : thinkHtml(turn, copy)) +
     // `out-tab` carries the 18px left tab the console itself has, so the wrapper is the console's box: the chip
     // centred in the wrapper is centred in the console, not 9px off it.
-    `<div class="out-wrap out-tab" data-copy><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${toBottomBtnHtml()}</div>` +
+    `<div class="out-wrap out-tab" data-copy><pre class="job-out" data-out="${esc(turn.id)}${esc(copy)}">${body}</pre>${consoleToolsHtml()}${toBottomBtnHtml()}</div>` +
     // The subagents this turn spawned, right under the console they ran beside: the delegation is the turn's own
     // work, not the card's, and a card with several turns would otherwise show the newest one's children under all
     // of them.
@@ -7524,6 +7591,15 @@ function rowTakesTail(el, next) {
 function drawRowText(el, text) {
   const next = String(text ?? "");
   if (el._drawn === next) return false;
+  // A prose row draws MARKDOWN (core/console-markdown.js). The cheap tail-append below is still correct for a
+  // growing paragraph that has no marker in the part that just arrived; once a marker lands — `**`, a backtick, an
+  // underscore, a link's `[` — the row is rendered again, because the tail may be a marker that closes one already
+  // on screen. Only this one row is re-parsed; the console and its other blocks are untouched.
+  if (el.dataset && el.dataset.lkind === "text" && MD_MARK_RE.test(next.slice(String(el._drawn ?? "").length))) {
+    el.innerHTML = consoleMdInline(next);
+    el._drawn = next;
+    return true;
+  }
   if (rowTakesTail(el, next)) {
     // Grow the text node that is already at the end of the row: a new node per tick would leave a hundred siblings
     // behind for one line, and the reader's selection can sit inside this one and survive.
@@ -7535,6 +7611,192 @@ function drawRowText(el, text) {
   el._drawn = next;
   return true;
 }
+// One character that can begin a markdown marker. A row with none of them in the arriving part is still plain
+// text, which is what keeps a fast stream cheap.
+const MD_MARK_RE = /[*_`[]/;
+
+// ---- markdown prose, appended one line at a time -------------------------------------------------------------
+// A live turn must not be repainted per token: each line is APPENDED, and this works out which block it belongs
+// to (a paragraph, a list, a fence) and puts it there. core/console-markdown.js decides the shape; this does the
+// DOM. A repaint (turnBody) renders the same run through consoleMdHtml, so a live console and its repaint agree
+// about where a paragraph, a list and a fence begin and end.
+function startMdBlock(plan, sep) {
+  const holder = document.createElement("div");
+  holder.innerHTML = consoleMdOpenHtml(plan);
+  const block = holder.firstElementChild;
+  if (block && sep) block.classList.add("jl-sep");
+  return block;
+}
+function appendFenceRow(md, line) {
+  const body = md.el.querySelector(".md-fence-body");
+  if (!body) return;
+  body.insertAdjacentHTML("beforeend", consoleMdAppendRow(line, "fence"));
+  const n = body.children.length;
+  md.el.dataset.mdLines = String(n);
+  const count = md.el.querySelector(".md-fence-n");
+  if (count) count.textContent = `${n} line${n === 1 ? "" : "s"}`;
+}
+// The closing fence. Past the fold the well arrives FOLDED, with the same head a repaint draws, so a fence that
+// grew while the turn streamed ends in the shape the next repaint will give it.
+function finishFence(md) {
+  if (!md || md.type !== "fence" || !md.el) return;
+  const body = md.el.querySelector(".md-fence-body");
+  const n = body ? body.children.length : 0;
+  md.el.dataset.mdLines = String(n);
+  md.el.classList.remove("is-open");
+  if (n <= CONSOLE_MD_FENCE_FOLD) return;
+  md.el.classList.add("is-folded");
+  const head = md.el.querySelector(".md-fence-head");
+  if (!head) return;
+  const holder = document.createElement("div");
+  holder.innerHTML = consoleMdFenceHead(md.lang, n);
+  head.replaceWith(holder.firstElementChild);
+  if (body) body.hidden = true;
+}
+function appendProseLine(out, line, streaming, shown = null) {
+  const prev = out._md || null;
+  const plan = consoleMdPlan(prev, line);
+  if (plan.action === "break") {
+    out._md = null;
+    return;
+  }
+  if (plan.action === "close") {
+    finishFence(prev);
+    out._md = null;
+    return;
+  }
+  if (plan.action === "code" && prev) {
+    appendFenceRow(prev, line);
+    return;
+  }
+  if (prev && (plan.action === "line" || plan.action === "item")) {
+    prev.el.insertAdjacentHTML("beforeend", consoleMdAppendRow(line, prev.type, { textOf: () => shown }));
+    return;
+  }
+  const block = startMdBlock(plan, streaming && Boolean(out.lastElementChild));
+  out.appendChild(block);
+  out._md = { type: plan.type, ordered: Boolean(plan.ordered), lang: plan.lang || "", open: Boolean(plan.open), el: block };
+  // An OPENING fence is a delimiter, not a line of the well: the block is the fence, and the next lines are its
+  // code. (Drawn as a row it would sit inside the body it just opened, which is the shape a repaint never makes.)
+  if (plan.type === "fence") return;
+  block.insertAdjacentHTML("beforeend", consoleMdAppendRow(line, plan.type, { textOf: () => shown }));
+}
+
+// ---- the raw view, and the focus control ---------------------------------------------------------------
+// A turn's raw bytes: the console is handed text, never markup, so the reader who needs the source gets every
+// line exactly as the agent sent it (core/console-markdown.js, consoleMdRawText). `textContent` is the whole
+// safety story here — a `<` in the output is a character, not a tag.
+function consoleRawLines(out) {
+  const id = String(out.dataset.out || "").replace(/@pin$/, "");
+  return jobLines(id).filter((l) => !isBookkeeping(l));
+}
+function paintRawConsole(out) {
+  // The attribute is NOT `data-md-raw`: that one is the reader's button, and a console carrying it would answer its
+  // own selector — a click anywhere on the output would toggle the view it is showing.
+  if (out.dataset.rawView !== "1") out._mdHtml = out.innerHTML;
+  out.dataset.rawView = "1";
+  out._md = null;
+  out.textContent = consoleMdRawText(consoleRawLines(out));
+  const wrap = out.closest(".out-wrap");
+  if (wrap) wrap.classList.add("is-raw");
+}
+function restoreRenderedConsole(out) {
+  delete out.dataset.rawView;
+  out._md = null;
+  if (typeof out._mdHtml === "string") {
+    out.innerHTML = out._mdHtml;
+    delete out._mdHtml;
+    // The rows are fresh nodes: forget what the previous ones had been drawn with, so the next append renders
+    // rather than appending half a line to a node this page no longer holds.
+    for (const row of out.querySelectorAll("[data-lid]")) delete row._drawn;
+    // The open block is deliberately NOT recovered here: the lines that follow the toggle start the next block,
+    // which is the paragraph break a repaint would put there anyway. Joining the restored last paragraph would
+    // splice a sentence into one that had already been read.
+  }
+  const wrap = out.closest(".out-wrap");
+  if (wrap) wrap.classList.remove("is-raw");
+}
+function paintConsoleModes(out) {
+  const wrap = out && out.closest ? out.closest(".out-wrap") : null;
+  if (!wrap) return;
+  const id = String(out.dataset.out || "").replace(/@pin$/, "");
+  const focus = state.consoleFocus.has(id);
+  wrap.classList.toggle("is-focus", focus);
+  const focusBtn = wrap.querySelector("[data-md-focus]");
+  if (focusBtn) {
+    focusBtn.setAttribute("aria-pressed", focus ? "true" : "false");
+    focusBtn.classList.toggle("is-on", focus);
+  }
+  const rawBtn = wrap.querySelector("[data-md-raw]");
+  const raw = state.consoleRaw.has(id);
+  if (rawBtn) rawBtn.setAttribute("aria-pressed", raw ? "true" : "false");
+  // The two views are applied to a console that was just placed, so a repaint keeps what the reader asked for.
+  if (raw && out.dataset.rawView !== "1") paintRawConsole(out);
+  else if (!raw && out.dataset.rawView === "1") restoreRenderedConsole(out);
+}
+
+// Every console showing this turn — the card's own and the pinned copy — is the same reader choice: a toggle is
+// applied to each of them at once, so the pinned strip cannot keep showing the other view.
+function consoleCopies(btn) {
+  const wrap = btn.closest(".out-wrap");
+  const box = wrap && wrap.querySelector("pre.job-out");
+  if (!box) return { id: "", boxes: [] };
+  const id = String(box.dataset.out || "").replace(/@pin$/, "");
+  const boxes = placedNodes("pre.job-out").filter((el) => String(el.dataset.out || "").replace(/@pin$/, "") === id);
+  return { id, boxes: boxes.length ? boxes : [box] };
+}
+function toggleConsoleRaw(btn) {
+  const { id, boxes } = consoleCopies(btn);
+  if (!id) return;
+  const on = !state.consoleRaw.has(id);
+  if (on) state.consoleRaw.add(id);
+  else state.consoleRaw.delete(id);
+  for (const box of boxes) {
+    const wrap = box.closest(".out-wrap");
+    const control = wrap && wrap.querySelector("[data-md-raw]");
+    if (on) paintRawConsole(box);
+    else restoreRenderedConsole(box);
+    if (!control) continue;
+    control.setAttribute("aria-pressed", on ? "true" : "false");
+    control.classList.toggle("is-on", on);
+    control.textContent = on ? "rendered" : "raw";
+    control.title = on ? "back to the rendered view (markdown, links, fences)" : "show this turn's text exactly as it arrived, markdown and all";
+  }
+}
+function toggleConsoleFocus(btn) {
+  const { id, boxes } = consoleCopies(btn);
+  if (!id) return;
+  const on = !state.consoleFocus.has(id);
+  if (on) state.consoleFocus.add(id);
+  else state.consoleFocus.delete(id);
+  for (const box of boxes) {
+    const wrap = box.closest(".out-wrap");
+    if (!wrap) continue;
+    wrap.classList.toggle("is-focus", on);
+    const control = wrap.querySelector("[data-md-focus]");
+    if (control) {
+      control.setAttribute("aria-pressed", on ? "true" : "false");
+      control.classList.toggle("is-on", on);
+      control.title = on ? "show the tool rows again" : "hide the tool rows: read the prose, the errors and the final message";
+    }
+  }
+}
+// A fence past the fold: the head's button opens and shuts that one well. Its own line count is the label, and
+// the caret says which way it points.
+function toggleConsoleFence(btn) {
+  const well = btn.closest(".md-fence");
+  const body = well && well.querySelector(".md-fence-body");
+  if (!body) return;
+  const open = body.hidden;
+  body.hidden = !open;
+  well.classList.toggle("is-folded", !open);
+  const n = Number(well.dataset.mdLines) || body.children.length;
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+  btn.textContent = open ? "collapse" : `show ${n} line${n === 1 ? "" : "s"}`;
+  const caret = well.querySelector(".md-fence-caret");
+  if (caret) caret.textContent = open ? "\u25be" : "\u25b8";
+}
+// ---- end markdown prose
 // ---- end console row text
 
 // ---- console writers
@@ -7569,6 +7831,11 @@ function wireConsole(el) {
     },
     { passive: true },
   );
+  // A console that arrives already in the reader's raw view (or with focus on) is drawn that way once, here: the
+  // state is the page's, so a repaint may replace the node but never the reader's choice. Called guardedly because
+  // this function is READ OUT of the page on its own by test/console-tail-pin.test.js (a vm over the source): a
+  // bare call to a second function would make that region depend on a third, which is not what it is testing.
+  if (typeof paintConsoleModes === "function") paintConsoleModes(el);
   return el;
 }
 
@@ -7897,6 +8164,9 @@ function syncStreamConsole(out, body, stick) {
       if (Math.abs(off - keep.off) >= 2) setScroll(out, out.scrollTop + (off - keep.off));
     }
   }
+  // The rows this paint replaced include the open markdown block (if there was one): the next appended line must
+  // start from the DOM that is actually there, never from a block node this page has just detached.
+  out._md = null;
   return true;
 }
 
@@ -9226,6 +9496,9 @@ function drawJobLine(evt) {
           );
     const openGroup = isTool && tail && tail.classList.contains("tgrp") && joins ? tail : null;
     if (isTool) {
+      // A call ends the prose: the next sentence starts its own block rather than being appended to a paragraph
+      // that sits above a tool row.
+      out._md = null;
       const key = openGroup ? openGroup.dataset.tgrp : `${evt.id}#${Date.now().toString(36)}`;
       // A group that came from a full render has no `_burst`; read its lines back from the DOM so the new call joins
       // the burst the reader is looking at instead of starting a group that shows this line alone.
@@ -9267,13 +9540,22 @@ function drawJobLine(evt) {
         else out.appendChild(fresh);
         rememberToolGroup(fresh);
       }
+    } else if (out.dataset.rawView === "1") {
+      // The raw view is the turn's own bytes, so a line that lands while it is open is part of them: repaint the
+      // text, never append a rendered row beside it.
+      paintRawConsole(out);
     } else {
       const existing = line.lid ? out.querySelector(`[data-lid="${CSS.escape(String(line.lid))}"]`) : null;
       if (line.mode === "set" && existing) {
         // One rule for both writers: append what the row is missing when it can, reparse it only when it must.
         drawRowText(existing, shownText);
         existing.dataset.ltext = String(line.text ?? "");
+      } else if (consoleMdIsProse(line.kind)) {
+        // The agent's own words join the block already open (a paragraph, a list, a fence) or start the next one.
+        // Appending one row is the whole cost of a streamed line: nothing above it is repainted.
+        appendProseLine(out, line, streaming, shownText);
       } else {
+        out._md = null;
         const div = document.createElement("div");
         div.className = `jl jl-${line.kind || "raw"}`;
         // A chunk of normal output is a piece of the stream too: the same blank line above it, unless it is the
@@ -16508,6 +16790,30 @@ document.addEventListener("click", async (e) => {
       // One entry per call the reader ever folded; a long-lived tab should not keep every one of them forever.
       while (state.callFolded.size > 500) state.callFolded.delete(state.callFolded.values().next().value);
     }
+    return;
+  }
+  // The console's own views, before the code-box fold: a fence's "show N lines" button, the raw toggle and focus.
+  // Each is a press on ONE console but the state is the TURN's, so every copy of it (the card's and the pinned
+  // strip's) moves together.
+  const fenceBtn = e.target.closest("[data-md-fence]");
+  if (fenceBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleConsoleFence(fenceBtn);
+    return;
+  }
+  const rawBtn = e.target.closest("[data-md-raw]");
+  if (rawBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleConsoleRaw(rawBtn);
+    return;
+  }
+  const focusBtn = e.target.closest("[data-md-focus]");
+  if (focusBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleConsoleFocus(focusBtn);
     return;
   }
   // A result box inside a burst: a tool's output, folded until the reader asks for it. The fold is remembered by

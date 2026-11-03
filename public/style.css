@@ -1260,6 +1260,127 @@ button.pill-complete.is-asked { color: var(--dim); border-color: var(--line); ba
 .job-out > .jl-sep { margin-top: 1.5em; }
 /* ...except at the very top of a console, where there is nothing above it to be set apart from. */
 .job-out > .jl-sep:first-child { margin-top: 0; }
+
+/* ---- the console's prose, drawn as markdown ----------------------------------------------------------------
+   An agent writes `**PR #279 MERGED**` and `origin/main` in backticks, and the console used to print the
+   punctuation: one grey wall. core/console-markdown.js renders the subset (bold, italic, inline code, fences,
+   headings, lists, links) and everything below is its frame. The rules are deliberately quiet — this is the
+   reading surface of a card, not a document — so the weight of a heading is a couple of points and a fence is a
+   well, never a second console. */
+.md-block { display: block; }
+/* Real paragraph spacing: one block to the next is a gap, not a blank row. */
+.md-block + .md-block { margin-top: .6em; }
+.md-l { display: block; }
+.job-out strong { color: #f4f7fb; font-weight: 650; }
+.job-out em { font-style: italic; color: inherit; }
+/* Inline code as a chip: tinted, monospace, and never so wide it breaks the line's rhythm. */
+.md-code {
+  font-family: var(--term);
+  font-size: .94em;
+  padding: 0 4px;
+  border-radius: 4px;
+  border: 1px solid rgba(120, 150, 190, .22);
+  background: rgba(120, 150, 190, .13);
+  color: #dbe6f5;
+}
+.md-link-url { color: var(--dimmer); font-size: .9em; margin-left: .4em; word-break: break-all; }
+/* Headings: a step up from the prose, not a page title. */
+.md-head { margin: .45em 0 .18em; }
+.md-head:first-child { margin-top: 0; }
+.md-head-l { font-weight: 650; color: #f2f5fa; }
+.md-h1 { font-size: 1.32em; }
+.md-h2 { font-size: 1.2em; }
+.md-h3 { font-size: 1.1em; }
+.md-h4, .md-h5, .md-h6 { font-size: 1em; color: #d8dee8; }
+/* Lists: the marker in its own column so a wrapped item stays aligned under its own text, not under the bullet. */
+.md-list { display: flex; flex-direction: column; gap: 1px; margin: .15em 0; }
+.md-li { display: flex; gap: .45em; align-items: baseline; }
+.md-marker { flex: none; min-width: 1.1em; color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+.md-li-t { flex: 1 1 auto; min-width: 0; }
+/* A fenced block is a WELL: bordered, its own surface, with a head that names the language and counts the lines.
+   Past fifteen lines it arrives folded — the head stays, the body is one press away — because a 200-line build log
+   is not what the reader opened the card to read. */
+.md-fence { border: 1px solid var(--line); border-radius: 6px; background: rgba(255, 255, 255, .025); margin: .45em 0; overflow: hidden; }
+.md-fence-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, .04);
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--dim);
+  white-space: normal;
+}
+.md-fence.is-folded .md-fence-head { border-bottom: 0; }
+.md-fence-caret { color: var(--dimmer); }
+.md-fence-lang { color: #9ecbff; font-weight: 600; letter-spacing: .02em; }
+.md-fence-n { color: var(--dim); }
+.md-fence-btn {
+  margin-left: auto;
+  padding: 1px 6px;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--dim);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.md-fence-btn:hover { color: var(--text); border-color: #3a4353; }
+.md-fence-btn:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+.md-fence-body { padding: 5px 8px; max-height: 360px; overflow: auto; }
+.md-code-l { font-family: var(--term); white-space: pre-wrap; word-break: break-word; color: #cfd8e6; }
+
+/* ---- the console's two views: raw and focus ---------------------------------------------------------------
+   A small strip in the console's top-right, revealed on hover or focus and PINNED while a view is on (the reader
+   must always be able to get back out). It sits left of the copy chip's reserved gutter so the two never stack. */
+.out-tools {
+  position: absolute;
+  top: 3px;
+  right: 28px;
+  z-index: 3;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .12s ease;
+}
+.out-wrap:hover > .out-tools,
+.out-wrap:focus-within > .out-tools,
+.out-wrap.is-focus > .out-tools,
+.out-wrap.is-raw > .out-tools {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.out-tool {
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: rgba(12, 15, 20, .92);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.out-tool:hover { color: var(--text); border-color: #3a4353; }
+.out-tool.is-on { color: #eaf1fb; border-color: #4a90d9; background: rgba(74, 144, 217, .18); }
+.out-tool:focus-visible { outline: 1px solid #4a90d9; outline-offset: 1px; }
+/* Focus: the console stops being a log and becomes the answer. Every tool row goes — the tallied group and a flat
+   run alike — while the agent's prose, the panel's own lines (an error is a `raw` line, a warning too) and the
+   final message stay exactly where they are. */
+.out-wrap.is-focus .job-out > .tgrp,
+.out-wrap.is-focus .job-out > .jl-tool,
+.out-wrap.is-focus .job-out > .jl-tool-out { display: none; }
+/* The raw view is the turn's own bytes: no boxes, no chips, no spacing rules of ours — the text as it arrived. */
+.job-out[data-raw-view="1"] { white-space: pre-wrap; }
+.job-out[data-raw-view="1"] * { display: inline; }
 .tgrp .jl { white-space: pre-wrap; }
 .tgrp-head { display: flex; flex-direction: column; gap: 1px; }
 .tgrp-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; cursor: pointer; border-radius: 3px; }
