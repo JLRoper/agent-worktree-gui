@@ -3266,6 +3266,19 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-task { display: flex; flex-direction: column; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; margin: 0 0 8px; font-size: 11.5px; box-shadow: 0 1px 2px #0006; }
 .as-task:last-child { margin-bottom: 0; }
 .as-task.is-done { opacity: .55; }
+/* A QUEUED card is the one thing the reader can move: running, parked and done keep their own sections, so only these
+   take the grab cursor. The drag lifts the card over its neighbours with a shadow while the pane reflows around it —
+   the card itself is re-inserted, so what the reader sees before the drop is the list the drop sends. */
+.as-task.is-draggable, .as-task.is-draggable .as-task-body { cursor: grab; }
+.as-task.is-dragging { position: relative; z-index: 5; opacity: .97; box-shadow: 0 12px 26px #000a; }
+.as-task.is-dragging, .as-task.is-dragging .as-task-body { cursor: grabbing; }
+.as-qdrag, .as-qdrag * { user-select: none; }
+/* The one line a blocked drop says, above the cards it is about: which row is holding the card, and that it cannot go
+   above it. Amber, the same voice as a note on a card, because nothing failed — the queue refused a move. */
+.as-qdrop { margin: 0 0 8px; padding: 5px 8px; font-size: 10.5px; color: #e0b341; background: #2a2418; border: 1px solid #4a3d1f; border-radius: 7px; }
+/* The badge a card whose hold actually blocks wears — the only card that wears one. A card the drag is not competing
+   with is not greyed: the row it waits on is named in the badge, and everything above it stays legible. */
+.as-task-hold { margin-left: auto; flex: 0 0 auto; font-size: 9px; color: #c4b5fd; background: #241f36; border: 1px solid #3b3358; border-radius: 999px; padding: 1px 6px; white-space: nowrap; }
 /* The body is what opens the console — the head, the agents, the meta line and the note — while the actions row
    below it stays a row of presses. An empty body (no thread to open) is not a target. */
 .as-task-body { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }

@@ -2005,9 +2005,92 @@
   // has not been repainted yet. `at` is the read's clock — a paint re-asks only when the answer is older than a few
   // seconds, which is what keeps the pane's own repaint from becoming a request loop.
   const queueJobs = { at: 0, byThread: new Map(), inflight: null };
+  // The card being dragged (null when no gesture is live), the moment the last drag ENDED, and the one line a refused
+  // drop says. The ended-at stamp is what tells the click the browser fires at the end of a drag from the reader's own
+  // press: a drag must never open a card, and a click must still open its console.
+  let queueDrag = null;
+  let queueDragEnded = 0;
+  const queueDropNotes = new Map(); // assistantId -> the sentence a blocked drop left on the pane
 
   const queueMark = (state) => (state === "done" ? "✓" : state === "parked" ? "⏸" : state === "running" ? "●" : "○");
   const queueStateName = (state) => (state === "running" ? "running" : state === "parked" ? "parked" : state === "done" ? "done" : "queued");
+
+  // ---- the reader's order, and the hold that can block it ---------------------------------------------------------
+  //
+  // The pane groups by STATE first — running, queued, parked, done — and that grouping is not the drag's to change:
+  // a running row is being worked on, a parked one is waiting for somebody, and a done one is the record. Inside a
+  // group the rows are sorted by `order` (the place a card was dragged to, written by the reorder action) and then by
+  // id, which is the order every queue file written before the drag already drew.
+  const QUEUE_BUCKET = { running: 0, queued: 1, parked: 2, done: 3 };
+  const queueOrderOf = (t) => {
+    const n = Number(t?.order);
+    return Number.isFinite(n) && n > 0 ? n : Number(t?.id) || 0;
+  };
+  const queueSorted = (rows) =>
+    (Array.isArray(rows) ? rows : [])
+      .slice()
+      .sort(
+        (a, b) =>
+          (QUEUE_BUCKET[a.state] ?? 9) - (QUEUE_BUCKET[b.state] ?? 9) ||
+          queueOrderOf(a) - queueOrderOf(b) ||
+          Number(a.id) - Number(b.id),
+      );
+  // The row a `task` hold names. Only that kind orders anything on this list: a thread, job, path or manual hold is a
+  // park's release condition and names nothing here.
+  function queueHoldTarget(t) {
+    const hold = t?.hold;
+    if (!hold || hold.kind !== "task") return null;
+    const m = /^\s*#?\s*(\d+)\s*$/.exec(String(hold.value ?? ""));
+    if (!m) return null;
+    const ms = Date.parse(String(hold.since || ""));
+    return { id: Number(m[1]), since: Number.isFinite(ms) ? new Date(ms).toISOString().slice(11, 16) : null };
+  }
+  // The badge a card carries when its hold actually blocks a drop. Only those cards wear one: greying out everything
+  // above the row a card holds for would also grey the running and done rows the drag is not competing with.
+  function queueHoldBadge(t, byId) {
+    const target = queueHoldTarget(t);
+    if (!target) return "";
+    const held = byId && typeof byId.get === "function" ? byId.get(target.id) : null;
+    // A hold whose row is gone from this queue, or reads done, has ended — there is nothing left to hold for.
+    if (byId && typeof byId.get === "function" && (!held || held.state === "done")) return "";
+    const title = `held by #${target.id}${target.since ? ` since ${target.since}` : ""} — this card cannot be dragged above it`;
+    return `<span class="as-task-hold" data-as-qhold="${target.id}" title="${esc(title)}">held by #${target.id}</span>`;
+  }
+  /**
+   * The drop the model refuses, found before the request is sent: a queued row may not sit above a row it holds for
+   * while that row is still open. `ids` is the whole visible list as the drop leaves it, so this is the same rule
+   * `reorderTasks` applies on the server — the pane just answers without a round trip (and the server still refuses a
+   * list that got past a stale pane).
+   */
+  function queueDropBlocked(tasks, ids) {
+    const list = Array.isArray(tasks) ? tasks : [];
+    const order = (Array.isArray(ids) ? ids : []).map((v) => Number(v));
+    const byId = new Map(list.map((t) => [Number(t.id), t]));
+    const pos = new Map(order.map((id, i) => [id, i]));
+    for (const id of order) {
+      const t = byId.get(id);
+      if (!t || t.state !== "queued") continue;
+      const target = queueHoldTarget(t);
+      if (!target || !pos.has(target.id)) continue;
+      const held = byId.get(target.id);
+      if (!held || held.state === "done") continue;
+      if (pos.get(id) < pos.get(target.id)) {
+        return {
+          id,
+          target: target.id,
+          since: target.since,
+          line: `#${id} is held by #${target.id}${target.since ? ` since ${target.since}` : ""} — it cannot move above it`,
+        };
+      }
+    }
+    return null;
+  }
+  const queueCardsIn = (el) => {
+    const pane = el?.closest?.('[data-subpane="queue"]');
+    return pane ? [...pane.querySelectorAll(".as-task")] : [];
+  };
+  // The ids in the order the pane currently draws them — what a drop sends, and what a drag records before it moves.
+  const queueIdsIn = (el) => queueCardsIn(el).map((c) => Number(c.dataset.asQrow)).filter((n) => Number.isFinite(n) && n > 0);
 
   // ---- one agent per task: the threads that carried it, and the status of the RUN each one is on ------------------
   //
@@ -2059,7 +2142,7 @@
   // the meta line; a stale or conflicted task carries its reason under them, because "why is this not moving" is
   // the question a queue exists to answer. A done row stays in place greyed: "it finished" is a record, not a task
   // that vanished. The pane is already scoped to ONE assistant's queue, so the row no longer names an owner.
-  function queueTaskHtml(id, t, jobs) {
+  function queueTaskHtml(id, t, jobs, byId) {
     const mark = queueMark(t.state);
     // `threads` is the record's whole history and `thread` its legacy first entry, so a queue file written before the
     // list existed still draws one agent row. The CURRENT run is the last one, and that is what a click on the body
@@ -2114,12 +2197,13 @@
             .join("")}</span>
         </span>`
       : `<span class="as-hint">no other assistant to move it to</span>`;
-    return `<div class="as-task${t.state === "done" ? " is-done" : ""}" data-as-qrow="${esc(String(t.id))}" data-as-qthread="${esc(current)}">
+    return `<div class="as-task${t.state === "done" ? " is-done" : ""}${t.state === "queued" ? " is-draggable" : ""}" data-as-qrow="${esc(String(t.id))}" data-as-qstate="${esc(queueStateName(t.state))}" data-as-qown="${esc(id)}" data-as-qthread="${esc(current)}">
         <div class="as-task-body"${current ? ` data-as-qopen="${esc(current)}"` : ""}>
           <div class="as-task-head">
             <span class="as-task-mark is-${esc(queueStateName(t.state))}" aria-hidden="true">${mark}</span>
             <b class="mono">#${esc(String(t.id))}</b>
             <span class="as-task-title">${esc(t.title)}</span>
+            ${queueHoldBadge(t, byId)}
           </div>
           <div class="as-task-agents">${agents}</div>
           ${meta.length ? `<div class="as-task-meta">${meta.join(" · ")}</div>` : ""}
@@ -2184,6 +2268,9 @@
   function renderAssistantQueue(id = activeSessionId(), force = false) {
     const host = hostFor(id, "queue");
     if (!host || !state.assistant) return;
+    // A card is being dragged: rebuilding the pane now would take the node out from under the pointer and end the
+    // gesture mid-air. The drag's own drop repaints from the answer, so skipping a paint here costs nothing.
+    if (queueDrag) return;
     if (!force && typingInside(`#${paneIdFor(id, "queue")}`)) return;
     const rec = sessionById(id);
     // Ask for a read BEFORE the paint when the cache is missing or old: the paint then says it is reading instead of
@@ -2204,8 +2291,10 @@
         ? "loading…"
         : "not loaded yet";
     const rows = Array.isArray(view?.tasks) ? view.tasks : [];
-    const order = { running: 0, queued: 1, parked: 2, done: 3 };
-    const sorted = rows.slice().sort((a, b) => (order[a.state] ?? 9) - (order[b.state] ?? 9) || Number(a.id) - Number(b.id));
+    // The pane's order: state bucket first, then the reader's `order` (the place a card was dragged to), then id.
+    const sorted = queueSorted(rows);
+    const byId = new Map(sorted.map((t) => [Number(t.id), t]));
+    const dropNote = queueDropNotes.get(id) || "";
     host.innerHTML = `
       <div class="as-group">
         <h4>Its task queue — ${esc(rec?.name || "this assistant")}'s own</h4>
@@ -2215,7 +2304,9 @@
         another assistant is the <b>Move</b> control on an existing row: the task leaves this queue, arrives in that
         assistant's with an id of its own, and the move is recorded on it as movedFrom. A queued
         task whose files touch a running task's files is shown as skipped with the reason; a running task whose thread
-        has no live run reads STALE rather than showing phantom work in progress.</div>
+        has no live run reads STALE rather than showing phantom work in progress. <b>Drag a queued card</b> to change
+        its place — the order is written to the file and survives the next read, while running, parked and done keep
+        their own sections. A card carrying a <b>held by #N</b> badge waits on that row and cannot be dragged above it.</div>
         <div class="as-line"><b>${esc(head)}</b>${view?.file ? `<code>${esc(view.file)}</code>` : ""}<button type="button" class="primary" data-as-qact="reload" data-as-qown="${esc(id)}">Refresh</button></div>
         <div class="as-line"><label class="as-grow" title="what has to happen — one line is enough">title <input type="text" id="as-qtitle-${esc(n)}" class="as-grow" spellcheck="false" maxlength="200" placeholder="e.g. land the queue sub-tab's PR"></label></div>
         <div class="as-line"><label class="as-grow" title="optional: the detail an assistant needs to do it without asking">detail <input type="text" id="as-qdetail-${esc(n)}" class="as-grow" spellcheck="false" maxlength="400" placeholder="optional"></label></div>
@@ -2224,7 +2315,8 @@
           <span class="as-err" id="as-qerr-${esc(n)}">${cached?.error ? esc(cached.error) : ""}</span>
         </div>
         ${queueStateHtml(pane, { id, n, view, rows: sorted })}
-        ${sorted.map((t) => queueTaskHtml(id, t, queueJobs.byThread)).join("")}
+        ${dropNote ? `<div class="as-qdrop" data-as-qdrop="${esc(id)}" role="status">${esc(dropNote)}</div>` : ""}
+        ${sorted.map((t) => queueTaskHtml(id, t, queueJobs.byThread, byId)).join("")}
         <div class="as-help">The queue lives in <code>state/assistants/${esc(id)}/queue.json</code> beside this assistant's charter.
         It is read on every wake, before the board: the digest names every task's state, thread, worktree and PR, and why
         it is not going (LIVE, STALE or PARKED), so a turn can start whatever can be parallelised. A finished task stays
@@ -2357,6 +2449,118 @@
       setErr(`as-qerr-${String(id).replace(/^assistant-/, "")}`, String((err && err.message) || err));
       return null;
     }
+  }
+
+  // ---- dragging a card into a new place ------------------------------------------------------------
+  //
+  // The order the pane draws is state bucket → `order` → id, so a drag only ever changes the middle term, and only
+  // inside the QUEUED bucket: running, parked and done cards are not `.is-draggable` and never start a gesture. The
+  // card itself is what moves — the pointer crossing a queued card's midpoint re-inserts it before that card, and the
+  // transform keeps it under the pointer across the reflow — so what the reader sees before the drop is the list the
+  // drop sends.
+  //
+  // Two rules make this safe beside a body that is itself a click target:
+  //   - nothing happens until the pointer has TRAVELLED (4 px): a press and a release on the spot is the reader's
+  //     click, and it reaches the opener untouched;
+  //   - the click the browser fires at the end of a drag is swallowed by `queueCardClickGuard`, judged by the clock
+  //     `queueDragEnded` stamps. A drag must never open a card.
+  const QUEUE_DRAG_THRESHOLD = 4;
+
+  function queueCardDown(e) {
+    if (queueDrag || e.button !== 0) return;
+    const el = e.target?.closest?.(".as-task.is-draggable");
+    if (!el) return;
+    // A press on a control is that control's, not the card's: the glyphs, the Move popover, any field.
+    if (e.target.closest("button, a, input, select, textarea, label, .as-qmove-pop")) return;
+    const rect = el.getBoundingClientRect();
+    queueDrag = {
+      el,
+      own: String(el.dataset.asQown || ""),
+      startY: e.clientY,
+      grab: e.clientY - rect.top,
+      translate: 0,
+      moved: false,
+      before: queueIdsIn(el),
+    };
+    // No text selection and no native drag for the length of the press: without this the browser starts selecting the
+    // card's own text the moment the pointer moves.
+    e.preventDefault();
+  }
+
+  function queueCardMove(e) {
+    const d = queueDrag;
+    if (!d) return;
+    if (!d.moved) {
+      if (Math.abs(e.clientY - d.startY) < QUEUE_DRAG_THRESHOLD) return;
+      d.moved = true;
+      d.el.classList.add("is-dragging");
+      d.el.closest('[data-subpane="queue"]')?.classList.add("as-qdrag");
+      queueDropNotes.delete(d.own);
+    }
+    // Where the card would land: before the first queued card whose midpoint the pointer has passed, else after the
+    // last one. Only queued cards take part — the three fixed sections never swap places with the drag.
+    const cards = queueCardsIn(d.el).filter((c) => c !== d.el && c.dataset.asQstate === "queued");
+    const at = cards.find((c) => {
+      const box = c.getBoundingClientRect();
+      return e.clientY < box.top + box.height / 2;
+    });
+    if (at) {
+      if (d.el.nextElementSibling !== at) at.parentElement.insertBefore(d.el, at);
+    } else if (cards.length) {
+      const last = cards[cards.length - 1];
+      if (d.el.previousElementSibling !== last) last.parentElement.insertBefore(d.el, last.nextElementSibling);
+    }
+    // Re-anchor under the pointer: a DOM move changes the card's layout top, and the transform is measured from that
+    // top, so it is recomputed from the box the browser just laid out rather than accumulated from deltas.
+    const layoutTop = d.el.getBoundingClientRect().top - d.translate;
+    d.translate = Math.round(e.clientY - d.grab - layoutTop);
+    d.el.style.transform = `translateY(${d.translate}px)`;
+  }
+
+  async function queueCardUp() {
+    const d = queueDrag;
+    if (!d) return;
+    queueDrag = null;
+    const el = d.el;
+    el.classList.remove("is-dragging");
+    el.style.transform = "";
+    el.closest('[data-subpane="queue"]')?.classList.remove("as-qdrag");
+    // A press that never travelled is the reader's click: the opener on the body gets it, untouched.
+    if (!d.moved) return;
+    // From here on, the click the browser fires at the end of this gesture belongs to the drag.
+    queueDragEnded = Date.now();
+    const ids = queueIdsIn(el);
+    if (!ids.length || ids.join(",") === d.before.join(",")) {
+      // Nothing moved: a paint from the cache is the honest answer, not a write that says "the order did not move".
+      renderAssistantQueue(d.own);
+      return;
+    }
+    const rows = queueCache.get(d.own)?.view?.tasks || [];
+    const blocked = queueDropBlocked(rows, ids);
+    if (blocked) {
+      // Snap back: the cache still holds the order before the drag, so one paint from it restores the list — and the
+      // one line says which row is holding the card that was dropped.
+      queueDropNotes.set(d.own, blocked.line);
+      renderAssistantQueue(d.own);
+      return;
+    }
+    queueDropNotes.delete(d.own);
+    const out = await queueAct(d.own, "reorder", { ids });
+    // A refusal — the server's own copy of the rule, or a list a stale pane got past — snaps back the same way: the
+    // cache is the order the server last confirmed.
+    if (!out) renderAssistantQueue(d.own);
+  }
+
+  // The browser fires a click at the end of a drag as well: the pointer went down and came up over a card, and that is
+  // the whole of its test. This is the one place that knows a drag happened, so it swallows that click in the CAPTURE
+  // phase, before the row body's own opener (a bubble listener on the same float) can see it.
+  function queueCardClickGuard(e) {
+    if (!queueDragEnded) return;
+    if (Date.now() - queueDragEnded > 600) return;
+    if (!(e.target?.closest?.(".as-task"))) return;
+    queueDragEnded = 0;
+    e.preventDefault();
+    e.stopImmediatePropagation();
   }
 
   // ---- end the queue sub-tab --------------------------------------------------------------------
@@ -3046,7 +3250,11 @@
     if (action === "reload") {
       t.disabled = true;
       try {
+        // A refresh is the reader asking the file for the truth: the line a refused drop left is about the order the
+        // pane had before this read, so it does not survive it.
+        queueDropNotes.delete(own);
         await loadQueue(own);
+        renderAssistantQueue(own);
       } finally {
         t.disabled = false;
       }
@@ -3111,6 +3319,23 @@
       return;
     }
   });
+
+  // ---- the queue cards' drag ----------------------------------------------------------------------
+  // Delegated from the float, exactly like the controls above: the pane is rebuilt on every change, so a listener
+  // bound per card would die with the node it was bound to. `pointercancel` is the browser taking the gesture back (a
+  // touch scroll), and it ends the drag the same way a release does. The guard is CAPTURE, because the row body's
+  // opener is a bubble listener on this same element and the click a drag leaves behind must never reach it.
+  //
+  // A fresh PRESS is what tells the two clicks apart: the one a drag leaves behind arrives with no pointerdown of its
+  // own, so any new press clears the stamp and its click belongs to the reader.
+  as$("assistant")?.addEventListener("pointerdown", (e) => {
+    queueDragEnded = 0;
+    queueCardDown(e);
+  });
+  window.addEventListener("pointermove", queueCardMove);
+  window.addEventListener("pointerup", () => void queueCardUp());
+  window.addEventListener("pointercancel", () => void queueCardUp());
+  as$("assistant")?.addEventListener("click", queueCardClickGuard, true);
 
   // The watch countdown: one tick a second, painting only the clocks on screen. It returns immediately when the
   // panel is closed or another tab is showing, so a board of quiet cards pays nothing for it.
