@@ -981,6 +981,20 @@
     jumpToAgent(thread);
   }
 
+  // The HUMAN rotation's way into an assistant's own card. An assistant's turn is not on the board: its card lives
+  // in this float, one session tab and one Chat pane per assistant, so the path is open the float and put THAT
+  // assistant's Chat on screen. The turn's own unfolded/paged state is written by app.js before it calls this,
+  // because `conversationHtml` here reads the same `state.turnOpen` / `state.turnPage` a board card does — the
+  // repaint this triggers is the one that draws the turn the question lives on. False means there is no session
+  // record for the thread (nothing to put on screen), and the rotation steps on instead of flashing a hidden box.
+  function showAssistantThread(thread) {
+    const rec = sessionRecords().find((s) => s.threadId === thread);
+    if (!rec) return false;
+    if (!state.assistantOpen) toggleAssistant(true);
+    setView({ assistant: rec.id, subTab: SUBTABS[0] });
+    return Boolean(hostFor(rec.id, "chat"));
+  }
+
   // A queue row is a CONSOLE row. `openAgentThread` opens the project, the row and the card; the reader asked for the
   // TURN too, because the worst landing is a card header in view with the console it is about somewhere below it. So
   // this unfolds the newest turn (a live one is open by default, but the reader may have folded it), scrolls that
@@ -4171,6 +4185,8 @@
     renderAssistantChat(rec ? rec.id : activeSessionId());
   };
   window.__assistantToggle = toggleAssistant;
+  // app.js's HUMAN rotation: the thread an assistant's question lives on -> that assistant's Chat, on screen.
+  window.__assistantShowThread = showAssistantThread;
   // The task pipeline window's one press, its keys and its clock. Wired once at boot: the dialog lives outside the rail
   // and survives every repaint of the queue pane, so nothing here is per-row.
   pipeWindowWire();

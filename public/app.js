@@ -17756,8 +17756,12 @@ function humanOpenOnTurn(turn, kind) {
   return Boolean(turn.approval) && !turn.approvalDone && approvalLive(turn.approval);
 }
 
-// The name the reader knows an agent by: the card's title, else the label, else the thread id.
+// The name the reader knows an agent by: an assistant's own name, else the card's title, else the label, else the
+// thread id. An assistant's job carries the question it is parked on in its prompt, so its card title would name
+// what was asked rather than who is asking — `assistantSessionFor` is the one lookup that already knows that name.
 function humanAgentName(thread) {
+  const session = assistantSessionFor(thread);
+  if (session) return session.name || thread;
   const job = [...state.jobs.values()].find((j) => (j.thread || j.id) === thread);
   return (job && (job.title || job.label)) || thread || "the dock";
 }
@@ -17766,10 +17770,20 @@ function humanAgentName(thread) {
 // panel sits above the table, so it comes first), then the cards a folded project hides, newest thread first,
 // then the dock's own permission cards, soonest deadline first — the one the gateway refuses soonest is the one
 // to answer next. `deadline` is 0 for a question that carries no window; those sort last.
+//
+// An ASSISTANT's question is one of these. Its turn parks on the reader exactly like a worker's, and the one place
+// it was excluded was this list: an assistant's clarify prompt never entered the rotation, so the badge counted one
+// waiting question fewer than the board held. Its card lives in the float, which is fixed and has no position on
+// the table, so an assistant is deliberately NOT ranked below: it takes its place with the cards a folded project
+// hides, newest thread first.
 function humanQuestions() {
   const out = [];
-  const convs = conversations().filter((c) => !assistantSessionFor(c.thread));
-  const rank = new Map([...document.querySelectorAll(".job[data-thread]")].map((el, i) => [el.dataset.thread, i]));
+  const convs = conversations();
+  const rank = new Map(
+    [...document.querySelectorAll(".job[data-thread]")]
+      .filter((el) => !assistantSessionFor(el.dataset.thread))
+      .map((el, i) => [el.dataset.thread, i]),
+  );
   const onScreen = convs.filter((c) => rank.has(c.thread)).sort((a, b) => rank.get(a.thread) - rank.get(b.thread));
   const hidden = convs
     .filter((c) => !rank.has(c.thread))
@@ -17849,34 +17863,58 @@ function paintHumanButton() {
     : "HUMAN — nothing is waiting on you: no permission or clarify question is open on this board. Click or press H to check again.";
 }
 
-// Open exactly the path to one question and put it in front of the reader: its project and row open, its card
-// unfolded, the turn that owns it unfolded AND paged in (a question can live on a turn that is folded, or on a
-// turn the pager is not currently showing), then the prompt centred, flashed and its control focused. Returns
-// false when the question can no longer be drawn — the caller steps on instead of opening a dead agent.
+// Open exactly the path to one question and put it in front of the reader. A board question: its project and row
+// open, its card unfolded. An assistant's question: the float open, that assistant's own Chat tab on screen. Both:
+// the turn that owns the question unfolded AND paged in (a question can live on a turn that is folded, or on a turn
+// the pager is not currently showing). Then, one landing step for both, the prompt centred, flashed and its control
+// focused. Returns false when the question can no longer be drawn — the caller steps on instead of opening a dead
+// agent.
 function humanShow(q) {
   if (q.dock) return humanShowDock(q);
   const conv = conversations().find((c) => c.thread === q.thread);
   if (!conv) return false;
   const turn = conv.turns.find((t) => t.id === q.turnId);
   if (!turn || !humanOpenOnTurn(turn, q.kind)) return false;
-  // The project and the row first: a card inside a closed row is not on the page at all, and after Collapse all
-  // the project is only open in state while its folder is still shut. hotOpenPath is the NOT-RUNNING stepper's
-  // own opener, so the two rotations cannot drift into two ideas of "open".
-  const row = hotRowFor(q.thread);
-  if (row) hotOpenPath(row);
-  if (state.collapsedJobs.has(q.thread)) state.collapsedJobs.delete(q.thread);
+  // The turn that owns the question, unfolded and paged in. Written before either home is opened, because the float
+  // draws its card with `conversationHtml` too and reads exactly this state: one idea of "this turn is the one".
   const pages = Math.max(1, Math.ceil(conv.turns.length / TURNS_PER_PAGE));
   state.turnOpen.set(turn.id, true);
   state.turnCompact.delete(turn.id);
   state.turnPage.set(q.thread, pages - 1 - Math.floor(conv.turns.indexOf(turn) / TURNS_PER_PAGE));
-  renderConversation(q.thread);
-  let card = document.querySelector(`.job[data-thread="${CSS.escape(q.thread)}"]`);
-  if (!card) {
-    // An unattached card that no render has placed yet: #jobs is the panel's own renderer for that set.
-    renderJobs();
+  const assistant = assistantSessionFor(q.thread);
+  let card;
+  if (assistant) {
+    // An assistant's card is not on the board at all: it lives in the float, one session tab and one Chat pane per
+    // assistant. So the path there is open the float, put THIS assistant's Chat on screen, and let the float's own
+    // renderer draw the card from the fold state just written. A thread whose session record is missing has no pane
+    // to put on screen, and false here is what makes the rotation step on rather than flash a box nobody can see.
+    if (typeof window.__assistantShowThread !== "function" || !window.__assistantShowThread(q.thread)) return false;
+    renderConversation(q.thread);
     card = document.querySelector(`.job[data-thread="${CSS.escape(q.thread)}"]`);
+  } else {
+    // The project and the row first: a card inside a closed row is not on the page at all, and after Collapse all
+    // the project is only open in state while its folder is still shut. hotOpenPath is the NOT-RUNNING stepper's
+    // own opener, so the two rotations cannot drift into two ideas of "open".
+    const row = hotRowFor(q.thread);
+    if (row) hotOpenPath(row);
+    if (state.collapsedJobs.has(q.thread)) state.collapsedJobs.delete(q.thread);
+    renderConversation(q.thread);
+    card = document.querySelector(`.job[data-thread="${CSS.escape(q.thread)}"]`);
+    if (!card) {
+      // An unattached card that no render has placed yet: #jobs is the panel's own renderer for that set.
+      renderJobs();
+      card = document.querySelector(`.job[data-thread="${CSS.escape(q.thread)}"]`);
+    }
   }
   if (!card) return false;
+  return humanLandOnQuestion(card, q);
+}
+
+// The last step of every show path, board or float: find the box that carries the question on the card holding it,
+// and put it in front of the reader — centred, ringed, with the caret on the answer control. ONE implementation on
+// purpose: an assistant's card is drawn by the same renderer as a board card, and a second finder or a second
+// focus path would be a second idea of which box a question is.
+function humanLandOnQuestion(card, q) {
   const turnEl = card.querySelector(`.turn[data-turn="${CSS.escape(q.turnId)}"]`);
   const box = turnEl?.querySelector(q.kind === "question" ? ".turn-question" : ".turn-approval");
   // The gate again, on the DOM this time: the box is drawn only while its turn is live and its carrier is open,
@@ -17890,7 +17928,8 @@ function humanShow(q) {
   for (const el of document.querySelectorAll(".human-flash")) el.classList.remove("human-flash");
   // The PROMPT, not the card: centring the card left the question under the fold, and the console above it is
   // what the reader reads first. programmaticScroll keeps the panel's scroll-follow from reading this as the
-  // reader taking over.
+  // reader taking over. Inside the float this scrolls the float's own chat body and never the page, which is
+  // fixed under it.
   programmaticScroll();
   box.scrollIntoView({ block: "center", behavior: "smooth" });
   box.classList.remove("human-flash");
@@ -17904,9 +17943,10 @@ function humanShow(q) {
   // approvals on pointerup, so a stray key cannot approve a command, and the fail-closed choice is the safe one
   // to leave under the caret. A clarify question gets its first choice (or its typed box when it has none).
   humanFocusNow(box, q.kind);
-  // A row that is opening renders its detail a moment after the press, and that repaint replaces this box: the
-  // target is held for a beat and put back by the next render of this thread (humanRefocus), the same way the
-  // spawn's caret is. Scoped to this one thread and only while nothing else holds the caret.
+  // A row that is opening (or a float being brought to the front) renders its detail a moment after the press, and
+  // that repaint replaces this box: the target is held for a beat and put back by the next render of this thread
+  // (humanRefocus, and the 250 ms humanTick that covers a float repaint) the same way the spawn's caret is. Scoped
+  // to this one thread and only while nothing else holds the caret.
   state.humanFocus = { thread: q.thread, turnId: q.turnId, kind: q.kind, until: Date.now() + 1500 };
   return true;
 }
