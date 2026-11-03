@@ -44,6 +44,8 @@
     "verify:assistant-dock-overlap": "node tools/verify-assistant-dock-overlap.mjs",
     "measure:perf-paths": "node tools/measure-perf-paths.mjs",
     "verify:task-pipeline-window": "node tools/verify-task-pipeline-window.mjs",
+    "verify:action-harvest": "node tools/verify-action-harvest.mjs",
+    "verify:restart-line-harvest": "node tools/verify-restart-line-harvest.mjs",
     "seed:pipeline-bundle": "node tools/seed-pipeline-bundle.mjs",
     "test": "node --test --test-concurrency=4 test/*.test.js",
     "test:e2e:task-window": "node --test --test-reporter=spec test/e2e/task-window.spec.mjs",

@@ -1,3 +1,19 @@
+// HARNESS: LIVE GATE — a RESTART line written under a paragraph that quotes it must still be READ, and the panel
+// must really replace itself.
+//
+// WHY THIS IS A GATE AND NOT FROZEN EVIDENCE. The bug below is fixed on main (`turnProse` tests a prefix, not a
+// containment), but the rule it asserts is live: the harvest reads every action line in a finished turn's whole
+// reply, quotes or no quotes, and a RESTART that was read really bounces the panel. The harness therefore writes a
+// reason on the line — main makes one MANDATORY (`lib/restart.js` `REASON_REQUIRED`, landed by e14e7b7 on
+// 2026-11-02 and tightened by c652f51 on 2026-11-03) — and asserts the reason rides all the way into the parsed
+// action, the queue journal line and the restart record. A bare `RESTART panel` is refused by main, so writing one
+// would only measure the refusal; nothing here is skipped or softened.
+//
+//   npm run verify:restart-line-harvest                 the repo's own name for this gate
+//   node tools/verify.mjs --only restart-line-harvest   the same thing through the runner
+//
+// It is registered in `package.json` and asserted by `test/harness.test.js`, so it cannot rot invisibly again.
+//
 // A RESTART line written under a paragraph that quotes it is DROPPED, and this proves it on a sandbox panel.
 //
 //   node tools/verify-restart-line-harvest.mjs
@@ -67,16 +83,27 @@ const waitFor = async (fn, timeoutMs = 20_000, stepMs = 100) => {
 // ---- the reply, in the two shapes the live turns actually wrote --------------------------------------------
 // Verbatim from the store: turn 3018d5e0 (07:49:20Z) and turn cee6d6dc (07:50:21Z). In both, the turn wrote
 // exactly one RESTART action line, and both turns are in the panel's own `harvested` set — the harvest ran.
+//
+// ONE THING IS NOT VERBATIM, and it is the reason this file is a gate rather than a photograph. Those turns wrote a
+// BARE `RESTART panel`, which main now REFUSES (`lib/restart.js` REASON_REQUIRED): a restart whose reason nobody
+// wrote cannot be explained on the board afterwards. So each line below carries the reason the turn would have to
+// write today, and the reason is quoted in the prose around it — which is what keeps this harness biting. A short
+// line that merely APPEARS inside a longer paragraph is exactly what the old containment test swallowed, so quoting
+// the whole line (reason included) reproduces the incident with the line main insists on.
+const RESTART_WHY = "the quoted-line fix is in this tree's read.js and the panel in front of the reader is still the old one";
+const RESTART_LINE = `RESTART panel | ${RESTART_WHY}`;
+// The written shape main requires: the target after RESTART, the reason after a pipe, and a reason that is not empty.
+const RESTART_LINE_RE = /^\s*RESTART\s+(?:the\s+)?panel\s*\|\s*\S/m;
 const SHAPE_NOTE_AFTER = [
   "The fast-forward card finished clean — 2m 07s, exit 0, nothing committed because it only moves the checkout.",
   "Its most useful paragraph is the split between the two halves, and it is exactly the reason the restart is now due.",
-  "RESTART panel",
-  "NOTE: PR #57's fast-forward card finished clean (2m07s, exit 0): checkout 3470b18 → 4480cf2 by --ff-only. TWO HALVES: the front-end half is live; the server-side half is not — hence the RESTART panel queued this turn.",
+  RESTART_LINE,
+  `NOTE: PR #57's fast-forward card finished clean (2m07s, exit 0): checkout 3470b18 → 4480cf2 by --ff-only. TWO HALVES: the front-end half is live; the server-side half is not — hence ${RESTART_LINE} queued this turn.`,
 ];
 const SHAPE_PROSE_BEFORE = [
   "The hero-resource-pickup card finished and landed — that closes the ask you gave it.",
-  "If it does not take a second time, the mechanism itself is the problem rather than the timing, and the cleanest fallback is yours: press RESTART panel in the panel, or say the word and I will have one worker run the stop/start pair as a one-off.",
-  "RESTART panel",
+  `If it does not take a second time, the mechanism itself is the problem rather than the timing, and the cleanest fallback is yours: press ${RESTART_LINE} in the panel, or say the word and I will have one worker run the stop/start pair as a one-off.`,
+  RESTART_LINE,
   "NOTE: The queued RESTART panel from the previous turn did NOT take: the listener is still the old pid.",
 ];
 
@@ -93,9 +120,9 @@ try {
     const lines = paragraphs.map((text) => ({ kind: "text", text, at: Date.now() }));
     const prose = turnProse(lines);
     const acts = parseActions(prose);
-    ok(`${label}: the turn really wrote a RESTART action line`, /^\s*RESTART\s+(?:the\s+)?panel\s*$/m.test(lines.map((l) => l.text).join("\n")));
-    ok(`…and turnProse still hands it to the parser`, /^\s*RESTART\s+(?:the\s+)?panel\s*$/m.test(prose), `prose lost it; ${prose.length} chars`);
-    check(`…so parseActions sees one panel restart`, acts.restart, [{ target: "panel", reason: "" }]);
+    ok(`${label}: the turn really wrote a RESTART action line, with the reason main requires`, RESTART_LINE_RE.test(lines.map((l) => l.text).join("\n")));
+    ok(`…and turnProse still hands it to the parser`, RESTART_LINE_RE.test(prose), `prose lost it; ${prose.length} chars`);
+    check(`…so parseActions sees one panel restart, carrying the reason the turn wrote`, acts.restart, [{ target: "panel", reason: RESTART_WHY }]);
     ok(`…and the NOTE in the same turn is still read`, acts.note.length === 1);
   }
 
@@ -343,8 +370,12 @@ try {
 
   check("the RESTART line was harvested", queued.length, 1);
   ok("…and was neither refused nor reported unwired", refused.length === 0 && skipped.length === 0, JSON.stringify([...refused, ...skipped].map((e) => e.text)));
+  // The reason is MANDATORY on main, and a queue line that dropped it would be the `"reason": null` entry the
+  // ledger can never explain after a death (`lib/restart.js`). So it is asserted here, on the line the board kept.
+  ok("…and the queue line carries the reason the turn wrote", String(queued[0]?.text || "").includes(RESTART_WHY), String(queued[0]?.text || ""));
   ok("the panel wrote its restart record", Boolean(record), `no ${recordPath}`);
   check("…for a panel restart asked for by the assistant", [record?.target, record?.requestedBy], ["panel", "assistant"]);
+  check("…with the reason on the record, so a bounce that outlives this process can still be explained", record?.reason, RESTART_WHY);
   ok("…and then REALLY replaced itself: a new pid owns the port", Boolean(newPid), `pid ${firstPid} still owns ${panelPort}: no new process was ever started`);
 
   // The old process is gone, and the port is answered by the replacement.
