@@ -67,6 +67,9 @@ import { Assistant, ASSISTANT_THREAD } from "./lib/assistant.js";
 // transitions, the Assistant owns the file path and the read-modify-write, and this composition root only hands both
 // of them the transport helpers.
 import { createQueueRoutes } from "./lib/assistant/queue.js";
+// The task pipeline window's read: a queue row's stages, its current one and the gate that ended the one before it.
+// Mounted beside the queue's own routes because it is the same record, read one stage deeper.
+import { createPipelineWindowRoutes } from "./lib/pipeline-window.js";
 import { childTranscript, collectPrompt, subagentsFor, subagentRoster } from "./lib/subagents.js";
 import { thinkingFor } from "./lib/thinking.js";
 import { modelCatalogue, refreshModelCatalogue } from "./lib/hermes-models.js";
@@ -779,6 +782,10 @@ assistant.start();
 // read-modify-write) and the transport helpers this file already imports, so the module itself knows nothing about
 // HTTP and a test can drive it with stubs. Mounted in the request handler as one line — see "the queue's routes".
 const queueRoutes = createQueueRoutes({ assistant, config, sendJson, readBody, authorised });
+
+// The window one queue row opens: the task's pipeline, stage by stage. Same Assistant, same transport; a GET that
+// writes nothing, and a refusal carried as a value so the dialog can draw the reason.
+const pipelineWindowRoutes = createPipelineWindowRoutes({ assistant, config, sendJson });
 
 // ---- restarting the gateway, or this panel ---------------------------------------------
 // Everything that touches the outside world is injectable (lib/restart.js), which is what lets
@@ -2054,6 +2061,9 @@ const server = createServer(async (req, res) => {
     // One module owns its routes, its transitions and its wire shape (lib/assistant/queue.js); this handler asks it
     // first because its own guard is a string compare. `false` means "not mine" and falls through to the board.
     if (await queueRoutes(req, res, route, url)) return;
+
+    // The task pipeline window's own read, beside the queue's routes: one row's stages, resolved against the bundle.
+    if (await pipelineWindowRoutes(req, res, route, url)) return;
 
     if (route === "/api/health") {
       return sendJson(res, 200, { ok: true, host: config.host, projects: registry.projects.map((p) => p.name), settings: settingsOut(), clients: clients.size });
