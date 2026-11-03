@@ -2517,7 +2517,7 @@
     d.el.style.transform = `translateY(${d.translate}px)`;
   }
 
-  async function queueCardUp() {
+  async function queueCardUp(cancelled = false) {
     const d = queueDrag;
     if (!d) return;
     queueDrag = null;
@@ -2529,6 +2529,13 @@
     if (!d.moved) return;
     // From here on, the click the browser fires at the end of this gesture belongs to the drag.
     queueDragEnded = Date.now();
+    if (cancelled) {
+      // The browser took the gesture back — a touch scroll, a lost pointer. Nothing the reader chose happened, so the
+      // card goes back where it was and NOTHING is written: committing the DOM's half-finished order would reorder the
+      // queue on a scroll.
+      renderAssistantQueue(d.own);
+      return;
+    }
     const ids = queueIdsIn(el);
     if (!ids.length || ids.join(",") === d.before.join(",")) {
       // Nothing moved: a paint from the cache is the honest answer, not a write that says "the order did not move".
@@ -3333,8 +3340,8 @@
     queueCardDown(e);
   });
   window.addEventListener("pointermove", queueCardMove);
-  window.addEventListener("pointerup", () => void queueCardUp());
-  window.addEventListener("pointercancel", () => void queueCardUp());
+  window.addEventListener("pointerup", () => void queueCardUp(false));
+  window.addEventListener("pointercancel", () => void queueCardUp(true));
   as$("assistant")?.addEventListener("click", queueCardClickGuard, true);
 
   // The watch countdown: one tick a second, painting only the clocks on screen. It returns immediately when the
