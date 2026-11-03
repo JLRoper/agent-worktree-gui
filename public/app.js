@@ -18320,7 +18320,9 @@ function paintSettingsSearch() {
         ? paintSkillsSearch(query, matched)
         : panel.dataset.settingsGroup === "permissions"
           ? paintPermissionsSearch(query, matched)
-          : paintSettingsRows([...panel.children], query, matched);
+          : panel.dataset.settingsGroup === "pipeline"
+            ? paintPipelineSearch(query, matched)
+            : paintSettingsRows([...panel.children], query, matched);
     counts.set(panel.dataset.settingsGroup, hits);
   }
   paintSettingsTabCounts(counts, query);
@@ -18917,6 +18919,362 @@ async function loadPermissions() {
   return permissionsLoading;
 }
 
+// ---- settings > pipeline -------------------------------------------------------------------------
+// The Pipeline tab's whole surface: the catalogue the panel holds (the reader's pipelines.json merged per id over
+// pipelines.seed.json), one definition opened for editing, and the validation the server does before a save. It
+// follows the Permissions tab's shape — read on demand, paint from the answer — with one rule the brief names: an
+// open editor with unsaved changes is NOT repainted. A repaint that replaced the form would take the caret and the
+// half-typed sentence with it, so paintPipelines() refreshes the list and the summary and leaves the editor alone
+// while `pipelineDraftDirty` is true; save and reload are the only ways out of a dirty draft. Every input event
+// marks the draft dirty, so a keystroke can never arrive at a form a repaint is about to replace.
+const PIPELINE_PANEL_ID = "settings-panel-pipeline";
+let pipelinesIndex = null;
+let pipelinesLoadedAt = 0;
+let pipelinesLoading = null;
+let pipelineOpenId = null;
+let pipelineDraft = null;
+let pipelineDraftDirty = false;
+let pipelineFindings = [];
+// The closed vocabulary the exit select offers. It is read from the last answer rather than written here, so a
+// check added to lib/pipelines.js reaches the tab without a second copy going stale.
+let pipelineExitChecks = [];
+
+async function loadPipelines() {
+  if (pipelinesLoading) return pipelinesLoading;
+  pipelinesLoading = (async () => {
+    try {
+      const r = await apiFetch("/api/pipelines");
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+      pipelinesIndex = data;
+      pipelinesLoadedAt = Date.now();
+      paintPipelines();
+    } catch (e) {
+      paintPipelines(e.message || String(e));
+    } finally {
+      pipelinesLoading = null;
+    }
+  })();
+  return pipelinesLoading;
+}
+
+// One row per definition. The list is rebuilt on every load; the editor is a SIBLING node, so a repaint of the list
+// cannot touch it. A definition the loader dropped is named under the list with its reason, not hidden.
+function pipelineRowHtml(def) {
+  const stages = Array.isArray(def.stages) ? def.stages.length : 0;
+  const next = def.next ? ` · next ${def.next}` : "";
+  return `<div class="settings-row pipeline-row" data-pipeline-row="${esc(def.id)}" title="${esc(def.description || def.title || def.id)}">
+      <span><strong>${esc(def.title || def.id)}</strong> <span class="mono">${esc(def.id)}</span></span>
+      <span class="settings-unit mono">${esc(def.kind || "?")} · ${stages} stage${stages === 1 ? "" : "s"}${esc(next)}</span>
+      <button type="button" data-pipeline-open="${esc(def.id)}" title="open this definition for editing">edit</button>
+    </div>`;
+}
+
+function paintPipelines(error = null) {
+  const summary = document.getElementById("pipeline-summary");
+  const source = document.getElementById("pipeline-source");
+  const list = document.getElementById("pipeline-list");
+  if (!summary || !list) return;
+  const data = pipelinesIndex;
+  if (error || !data) {
+    summary.textContent = `could not read the pipelines — ${error || "no answer"}`;
+    summary.classList.add("bad");
+    if (source) {
+      source.textContent = "nothing was read, so this tab knows nothing about the catalogue";
+      source.title = source.textContent;
+      source.classList.add("bad");
+    }
+    list.innerHTML = "";
+    return;
+  }
+  summary.classList.remove("bad");
+  const pipelines = data.pipelines || {};
+  const ids = Object.keys(pipelines);
+  const bits = [`${ids.length} definition${ids.length === 1 ? "" : "s"}`];
+  if (data.readOnly) bits.push("read-only");
+  if (data.refused) bits.push("refused whole");
+  if (Array.isArray(data.dropped) && data.dropped.length) bits.push(`${data.dropped.length} dropped`);
+  summary.textContent = bits.join(" · ");
+  if (source) {
+    source.textContent = data.refused
+      ? `${data.file || "pipelines.json"} refused — ${data.refused.why || "the seed is in force read-only"}`
+      : `${data.file || "pipelines.json"} over ${data.seedFile || "pipelines.seed.json"} · version ${data.version ?? "?"} (this panel reads ${data.supported})`;
+    source.title = source.textContent;
+    source.classList.toggle("bad", Boolean(data.refused));
+  }
+  pipelineExitChecks = Array.isArray(data.exitChecks) ? data.exitChecks : pipelineExitChecks;
+  const rows = ids.map((id) => pipelineRowHtml(pipelines[id])).join("");
+  const dropped = (data.dropped || [])
+    .map((d) => `<div class="settings-row pipeline-row bad" data-pipeline-row="${esc(d.id)}" title="${esc(d.why)}"><span>dropped: <span class="mono">${esc(d.id)}</span></span><span class="settings-unit mono">${esc(d.why)}</span></div>`)
+    .join("");
+  list.innerHTML = rows || `<div class="settings-row"><span>no pipeline is in force — the catalogue is empty</span></div>`;
+  if (dropped) list.insertAdjacentHTML("beforeend", dropped);
+  for (const btn of list.querySelectorAll("[data-pipeline-open]")) {
+    btn.addEventListener("click", () => openPipelineEditor(btn.dataset.pipelineOpen));
+  }
+  // A dirty draft is never replaced: the list may repaint as often as it likes, and the form keeps the reader's text.
+  if (!pipelineDraftDirty) {
+    if (pipelineOpenId && pipelines[pipelineOpenId]) {
+      pipelineDraft = JSON.parse(JSON.stringify(pipelines[pipelineOpenId]));
+      paintPipelineEditor();
+    } else if (pipelineOpenId) {
+      closePipelineEditor();
+    }
+  }
+  const box = document.getElementById("settings-search");
+  if (box && box.value) paintSettingsSearch();
+}
+
+function openPipelineEditor(id) {
+  const pipelines = (pipelinesIndex && pipelinesIndex.pipelines) || {};
+  const def = pipelines[id];
+  if (!def) return;
+  if (pipelineDraftDirty && pipelineOpenId && pipelineOpenId !== id) {
+    setPipelineStatus(`"${pipelineOpenId}" has unsaved changes — save or reload it before opening another`, true);
+    return;
+  }
+  pipelineOpenId = id;
+  pipelineDraft = JSON.parse(JSON.stringify(def));
+  pipelineDraftDirty = false;
+  pipelineFindings = [];
+  paintPipelineEditor();
+}
+
+function closePipelineEditor() {
+  pipelineOpenId = null;
+  pipelineDraft = null;
+  pipelineDraftDirty = false;
+  pipelineFindings = [];
+  const editor = document.getElementById("pipeline-editor");
+  if (editor) {
+    editor.hidden = true;
+    editor.innerHTML = "";
+  }
+}
+
+function setPipelineStatus(text, bad = false) {
+  const el = document.getElementById("pipeline-status");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.toggle("bad", Boolean(bad));
+}
+
+function paintPipelineFindings() {
+  const el = document.getElementById("pipeline-findings");
+  if (!el) return;
+  if (!pipelineFindings.length) {
+    el.innerHTML = "";
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML =
+    `<div class="pipeline-finding-head">${pipelineFindings.length} finding${pipelineFindings.length === 1 ? "" : "s"} — nothing was saved</div>` +
+    pipelineFindings.map((f) => `<div class="pipeline-finding mono">${esc(f)}</div>`).join("");
+}
+
+function pipelineStageHtml(stage, index) {
+  const exit = stage.exit && typeof stage.exit === "object" ? stage.exit : {};
+  const check = exit.check || "clean";
+  const params = Object.fromEntries(Object.entries(exit).filter(([k]) => k !== "check"));
+  const options = pipelineExitChecks.map((c) => `<option value="${esc(c)}"${c === check ? " selected" : ""}>${esc(c)}</option>`).join("");
+  return `<div class="pipeline-stage" data-stage-index="${index}">
+      <div class="settings-row">
+        <span class="mono">stage ${index + 1}</span>
+        <input type="text" class="stage-id" value="${esc(stage.id || "")}" placeholder="id" aria-label="stage ${index + 1} id" />
+        <input type="text" class="stage-title" value="${esc(stage.title || "")}" placeholder="title" aria-label="stage ${index + 1} title" />
+        <button type="button" class="stage-remove" title="remove this stage">remove</button>
+      </div>
+      <div class="settings-row">
+        <textarea class="stage-prompt" rows="3" placeholder="the stage's whole instruction to the worker" aria-label="stage ${index + 1} prompt">${esc(stage.prompt || "")}</textarea>
+      </div>
+      <div class="settings-row">
+        <span>exit</span>
+        <select class="stage-exit-check" aria-label="stage ${index + 1} exit check">${options}</select>
+        <input type="text" class="stage-exit-params mono" value="${esc(JSON.stringify(params))}" placeholder="{}" aria-label="stage ${index + 1} exit parameters" title="the check's parameters as JSON, without the check name" />
+      </div>
+    </div>`;
+}
+
+function paintPipelineEditor() {
+  const editor = document.getElementById("pipeline-editor");
+  if (!editor) return;
+  if (!pipelineOpenId || !pipelineDraft) {
+    editor.hidden = true;
+    editor.innerHTML = "";
+    return;
+  }
+  editor.hidden = false;
+  if (pipelineDraftDirty) {
+    paintPipelineFindings();
+    return;
+  }
+  const kinds = Array.isArray(pipelinesIndex?.kinds) ? pipelinesIndex.kinds : ["local", "investigation", "turnover"];
+  const ids = Object.keys((pipelinesIndex && pipelinesIndex.pipelines) || {}).filter((id) => id !== pipelineOpenId);
+  const nextOptions = [`<option value=""${!pipelineDraft.next ? " selected" : ""}>(none)</option>`]
+    .concat(ids.map((id) => `<option value="${esc(id)}"${pipelineDraft.next === id ? " selected" : ""}>${esc(id)}</option>`))
+    .join("");
+  editor.innerHTML = `<div class="settings-row pipeline-editor-head">
+      <span>editing <strong class="mono">${esc(pipelineOpenId)}</strong></span>
+      <button type="button" id="pipeline-editor-close" title="close this definition">close</button>
+    </div>
+    <div class="settings-row"><span>title</span><input type="text" id="pipeline-title" value="${esc(pipelineDraft.title || "")}" aria-label="pipeline title" /></div>
+    <div class="settings-row"><span>kind</span><select id="pipeline-kind" aria-label="pipeline kind">${kinds.map((k) => `<option value="${esc(k)}"${pipelineDraft.kind === k ? " selected" : ""}>${esc(k)}</option>`).join("")}</select></div>
+    <div class="settings-row"><span>description</span><input type="text" id="pipeline-description" value="${esc(pipelineDraft.description || "")}" aria-label="pipeline description" /></div>
+    <div class="settings-row"><span>next</span><select id="pipeline-next" aria-label="pipeline next">${nextOptions}</select></div>
+    <div id="pipeline-stages">${(pipelineDraft.stages || []).map((s, i) => pipelineStageHtml(s, i)).join("")}</div>
+    <div class="settings-row pipeline-editor-actions">
+      <button type="button" id="pipeline-add-stage" title="append a stage">add stage</button>
+      <span class="settings-unit" id="pipeline-status"></span>
+      <button type="button" id="pipeline-reload" title="discard the unsaved edit and read the definition again">reload</button>
+      <button type="button" id="pipeline-save" class="primary" title="validate and save this definition">save</button>
+    </div>
+    <div id="pipeline-findings" class="pipeline-findings" aria-live="polite" hidden></div>`;
+  wirePipelineEditor();
+  paintPipelineFindings();
+  setPipelineStatus("no unsaved changes");
+}
+
+function wirePipelineEditor() {
+  const editor = document.getElementById("pipeline-editor");
+  if (!editor) return;
+  const mark = () => {
+    pipelineDraftDirty = true;
+    setPipelineStatus("unsaved changes");
+  };
+  for (const el of editor.querySelectorAll("#pipeline-title, #pipeline-kind, #pipeline-description, #pipeline-next")) {
+    el.addEventListener("input", () => {
+      mark();
+      updateDraftFromForm();
+    });
+    el.addEventListener("change", () => {
+      mark();
+      updateDraftFromForm();
+    });
+  }
+  for (const stageEl of editor.querySelectorAll(".pipeline-stage")) {
+    for (const el of stageEl.querySelectorAll("input, textarea, select")) {
+      el.addEventListener("input", () => {
+        mark();
+        updateDraftFromForm();
+      });
+      el.addEventListener("change", () => {
+        mark();
+        updateDraftFromForm();
+      });
+    }
+    stageEl.querySelector(".stage-remove")?.addEventListener("click", () => removePipelineStage(Number(stageEl.dataset.stageIndex)));
+  }
+  editor.querySelector("#pipeline-editor-close")?.addEventListener("click", () => {
+    if (pipelineDraftDirty && !confirm(`discard the unsaved changes to "${pipelineOpenId}"?`)) return;
+    closePipelineEditor();
+  });
+  editor.querySelector("#pipeline-add-stage")?.addEventListener("click", addPipelineStage);
+  editor.querySelector("#pipeline-reload")?.addEventListener("click", () => {
+    if (pipelineDraftDirty && !confirm(`discard the unsaved changes to "${pipelineOpenId}"?`)) return;
+    const def = ((pipelinesIndex && pipelinesIndex.pipelines) || {})[pipelineOpenId];
+    if (!def) return closePipelineEditor();
+    pipelineDraft = JSON.parse(JSON.stringify(def));
+    pipelineDraftDirty = false;
+    pipelineFindings = [];
+    paintPipelineEditor();
+  });
+  editor.querySelector("#pipeline-save")?.addEventListener("click", savePipelineEditor);
+}
+
+function updateDraftFromForm() {
+  const editor = document.getElementById("pipeline-editor");
+  if (!editor || !pipelineDraft) return;
+  pipelineDraft.title = editor.querySelector("#pipeline-title")?.value ?? pipelineDraft.title;
+  pipelineDraft.kind = editor.querySelector("#pipeline-kind")?.value ?? pipelineDraft.kind;
+  pipelineDraft.description = editor.querySelector("#pipeline-description")?.value ?? pipelineDraft.description;
+  const next = (editor.querySelector("#pipeline-next")?.value || "").trim();
+  pipelineDraft.next = next || null;
+  pipelineDraft.stages = [...editor.querySelectorAll(".pipeline-stage")].map((stageEl) => {
+    let params = {};
+    try {
+      params = JSON.parse(stageEl.querySelector(".stage-exit-params")?.value || "{}");
+    } catch {
+      params = {};
+    }
+    return {
+      id: (stageEl.querySelector(".stage-id")?.value || "").trim(),
+      title: stageEl.querySelector(".stage-title")?.value || "",
+      prompt: stageEl.querySelector(".stage-prompt")?.value || "",
+      exit: { check: stageEl.querySelector(".stage-exit-check")?.value || "clean", ...(params && typeof params === "object" && !Array.isArray(params) ? params : {}) },
+    };
+  });
+}
+
+function addPipelineStage() {
+  if (!pipelineDraft) return;
+  updateDraftFromForm();
+  pipelineDraft.stages = [...(pipelineDraft.stages || []), { id: "", title: "", prompt: "", exit: { check: "clean" } }];
+  pipelineDraftDirty = true;
+  paintPipelineEditor();
+  setPipelineStatus("unsaved changes — a new stage has no id or prompt yet", false);
+}
+
+function removePipelineStage(index) {
+  if (!pipelineDraft || !Number.isInteger(index)) return;
+  updateDraftFromForm();
+  pipelineDraft.stages = (pipelineDraft.stages || []).filter((_, i) => i !== index);
+  pipelineDraftDirty = true;
+  paintPipelineEditor();
+  setPipelineStatus("unsaved changes");
+}
+
+async function savePipelineEditor() {
+  if (!pipelineDraft) return;
+  updateDraftFromForm();
+  const id = pipelineOpenId;
+  const body = { version: pipelinesIndex?.version ?? 1, pipelines: { [id]: pipelineDraft } };
+  try {
+    const r = await apiFetch("/api/pipelines", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      pipelineFindings = Array.isArray(data.findings) ? data.findings : [data.error || `HTTP ${r.status}`];
+      paintPipelineFindings();
+      setPipelineStatus(`refused — ${data.error || "the panel refused the document"}`, true);
+      return;
+    }
+    pipelinesIndex = { ...(data.state || pipelinesIndex) };
+    pipelineDraft = JSON.parse(JSON.stringify((pipelinesIndex.pipelines || {})[id] || pipelineDraft));
+    pipelineDraftDirty = false;
+    pipelineFindings = [];
+    paintPipelines();
+    paintPipelineEditor();
+    setPipelineStatus(`saved "${id}"`);
+  } catch (e) {
+    pipelineFindings = [e.message || String(e)];
+    paintPipelineFindings();
+    setPipelineStatus("not saved — the panel did not answer", true);
+  }
+}
+
+// The Pipeline panel's own filter. The list is rebuilt markup, so the global search walks the rows here and returns
+// the same per-tab count. The editor is not a settings row: it is the thing being edited, and filtering a form is
+// not filtering settings.
+function paintPipelineSearch(query, matched) {
+  const panel = document.getElementById(PIPELINE_PANEL_ID);
+  if (!panel) return 0;
+  const flat = [...panel.children].filter((node) => node.id !== "pipeline-list" && node.id !== "pipeline-editor");
+  let hits = paintSettingsRows(flat, query, matched);
+  for (const row of panel.querySelectorAll("[data-pipeline-row]")) {
+    const hit = !query || settingsRowText(row).includes(query);
+    row.classList.toggle("search-hidden", !hit);
+    if (hit) {
+      hits += 1;
+      if (query) matched.push(row);
+    }
+  }
+  return hits;
+}
+
 // ---- settings window: move it, size it ------------------------------------------------------------
 // The panel used to be a popover pinned under the top bar: `position: fixed; right: 16px; top: 74px` and no way to
 // move it off what it was covering, nor to see more of a long group than the height it opened at. It is a window
@@ -19139,6 +19497,9 @@ function toggleSettings(open = null) {
   // The permissions inventory reads config.yaml and asks the gateway, so it gets the same treatment:
   // read once when Settings opens, and again only when the answer is old.
   if (Date.now() - permissionsLoadedAt > 15000) void loadPermissions();
+  // The catalogue is a read of two small files, so it gets the same treatment: read once when Settings opens, and
+  // again only when the answer is old. A dirty draft in its editor is never replaced by that read.
+  if (Date.now() - pipelinesLoadedAt > 15000) void loadPipelines();
   // The remote-write setting is the panel's own (config.json), but which trees carry the push guard is a file on
   // disk that another instance or a hand edit can change, so it is re-read every time the panel opens.
   void refreshRemoteGuards();
@@ -19670,6 +20031,9 @@ initSettingsSearch();
 void loadSkills();
 // Same reason for the permissions list: the search counts its rows too, and it must be there before the first press.
 void loadPermissions();
+// And the pipeline catalogue: its rows are searched and counted on every tab's badge, so it is read before the tab is
+// opened rather than when it is selected.
+void loadPipelines();
 // The window's own gestures: the head drags it, the corner grip sizes it, and the rect is remembered in this browser.
 initSettingsWindow();
 // A second way in that is always on screen at the top left: the title opens Settings.

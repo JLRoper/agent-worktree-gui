@@ -339,11 +339,12 @@ whose record cannot be written is a `500`, never a `200` with a record.
 
 ### 4.2 The Pipeline tab is the catalogue editor, never the switch
 
-Settings gains a ninth panel, `data-settings-group="pipeline"`, in the existing tab strip. It is where definitions
-are created and edited: the stage list, each stage's prompt, each stage's exit check and its parameters, `next`, and
-the per-project `defaultTurnover` / `defaultInvestigation` — written to `pipelines.json` and `config.json` by routes
-of their own (`POST /api/settings/pipelines`, `POST /api/settings/pipeline-defaults`), following
-`POST /api/settings/remote-branches`' shape: validate, write, return the whole settings object back.
+Settings gains a tenth panel, `data-settings-group="pipeline"`, in the existing tab strip. It is where definitions
+are edited: the stage list, each stage's prompt, each stage's exit check and its parameters, and `next` — read with
+`GET /api/pipelines` (the merged catalogue, its provenance and the loader's refusals) and written with
+`PUT /api/pipelines`, which validates the whole document with `validatePipeline` and answers 422 with the findings
+un-altered when anything is refused. The per-project `defaultTurnover` / `defaultInvestigation` are not edited here
+yet: `POST /api/settings/pipeline-defaults` is still unbuilt, and the tab never writes `config.json`.
 
 It is not where a tree is switched, and that is a design decision rather than an omission. A switch is a decision
 about ONE piece of work, made while looking at that tree's evidence, and it belongs on the card beside the tree it
@@ -465,20 +466,22 @@ quiet, one short turn when they answer, and never a run that has to stay alive t
 
 ## 8. UNBUILT
 
-Nothing in this page runs today. Explicitly missing:
+The catalogue, the record, the switch route and the Pipeline tab run today. Explicitly missing:
 
 - **No catalogue.** There is no `pipelines.json`, no `pipelines.seed.json`, no `PIPELINES_VERSION` and no loader;
   `lib/paths.js` `statePaths()` has no `pipelinesFile`.
 - **No record.** No `pipeline` field on a job or on a tree; `logs/jobs.json` carries none, and `lib/jobs.js`
   `makeWorktree` writes nothing of the kind.
-- **No route.** There is no `POST /api/worktree/pipeline` and no `POST /api/settings/pipelines` /
-  `/api/settings/pipeline-defaults`.
+- **No defaults route.** `POST /api/settings/pipeline-defaults` does not exist, so a project's `defaultTurnover` /
+  `defaultInvestigation` are read by `defaultForProject` but not edited from the tab. `POST /api/worktree/pipeline`
+  exists, and so do the catalogue's own `GET` / `PUT /api/pipelines` (§4.2).
 - **No chip menu.** The card's chip is drawn (`public/app.js` `pipelineChipHtml`, §4.1): `pipeline: <id> · <stage>`
   from the job row, beside the card's state pill. It is a `span` and carries no `▾` — there is nothing to press until
   `POST /api/worktree/pipeline` can start the first stage as a turn, and no menu is drawn before then.
-- **No tab.** Settings has eight panels (`display`, `cards`, `board`, `branches`, `data`, `gateway`, `skills`,
-  `updates`); there is no `pipeline` group, and `test/settings-tabs.test.js` would fail the moment the markup and the
-  tab strip disagreed about one.
+- **The tab exists, without a defaults editor.** Settings has ten panels (`display`, `cards`, `board`, `branches`,
+  `data`, `gateway`, `skills`, `updates`, `permissions`, `pipeline`); the `pipeline` group lists the merged catalogue
+  and edits one definition's title, kind, description, `next`, stages and exit checks. It does not edit a project's
+  defaults.
 - **No config keys.** `config.json` has `remoteBranchPolicy` and no `defaultTurnover` / `defaultInvestigation`, and
   `policyForProject` has no sibling resolver.
 - **No exit-check evaluator.** Nothing in the panel can answer "is this PR approved at this head" — `lib/project.js`

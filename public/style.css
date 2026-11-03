@@ -3706,3 +3706,21 @@ body.pipew-open { overflow: hidden; }
 .as-msg-copy { border: 1px solid var(--line); background: var(--card); color: var(--dim); font-family: var(--mono); font-size: 10px; border-radius: 5px; padding: 2px 6px; cursor: pointer; }
 .as-msg-copy:hover { color: var(--text); }
 .as-msg-copy.is-copied { color: #7ee787; border-color: #2ea043; }
+
+/* ---- Settings > Pipeline: the catalogue list and its editor ------------------------------------------------ */
+/* The list is rows like every other Settings list. The editor is a card under it: the only place in Settings a
+   textarea appears, because a stage's prompt is prose, not a one-line value. */
+.pipeline-row { gap: 8px; }
+.pipeline-row > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pipeline-row.bad .settings-unit { color: #ff9a9a; }
+.pipeline-editor { margin-top: 10px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+.pipeline-editor .settings-row { flex-wrap: wrap; }
+.pipeline-editor input[type="text"] { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); }
+.pipeline-editor textarea { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; font: 12px var(--mono); resize: vertical; }
+.pipeline-stage { padding: 6px 0; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 6px; }
+.pipeline-stage:first-child { border-top: none; }
+.pipeline-stage .settings-row { gap: 6px; }
+.pipeline-editor-actions { margin-top: 4px; }
+.pipeline-findings { margin-top: 8px; padding: 6px 8px; border: 1px solid #6b2a2a; border-radius: 6px; background: #2a1414; color: #ffb4b4; font-size: 12px; }
+.pipeline-finding-head { font-weight: 600; margin-bottom: 4px; }
+.pipeline-finding { white-space: pre-wrap; word-break: break-word; }
