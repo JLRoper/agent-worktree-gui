@@ -3647,9 +3647,17 @@ body.pipew-open { overflow: hidden; }
    they are reading, and a folded turn has no console on the page to grow). The `flex` half of that rule lives at the
    end of this block, beside the other `flex: 0 0 auto` rules it has to beat. */
 .as-subpane[data-subpane="chat"] > .job > .job-body:has(> .turn.is-slack)::before { content: none; }
+/* The mirror of that case, and the reader's ask: with every turn folded there is no console to read, so the spacer
+   stands down and flex-start leaves the folded rows, the composer and its usage strip directly under the head —
+   the free room falls BELOW them (grey under the block) instead of sitting between the head and the first row.
+   One open turn puts the spacer back and the composer travels down with it, which is the state the rules above
+   were written for. `content: none` takes the pseudo's box out of the flex line entirely, so no basis is left to
+   grow into the slack. */
+.as-subpane[data-subpane="chat"] > .job > .job-body:not(:has(> .turn:not(.folded)))::before { content: none; }
 /* The composer is the last thing in the scrollport and is pinned there: while the conversation is longer
-   than the panel it stays on the scrollport's foot, and the spacer above puts it there when it is shorter.
-   Opaque and above the turns it covers — the box you type in must never be scrollable away. */
+   than the panel it stays on the scrollport's foot, the spacer above puts it there when it is shorter, and with
+   every turn folded it sits high with the free room painted below it. Opaque and above the turns it covers — the
+   box you type in must never be scrollable away. */
 .as-subpane[data-subpane="chat"] > .job > .job-body > .reply { position: sticky; bottom: 0; z-index: 2; flex: none; background: var(--panel); box-shadow: 0 -10px 14px -8px #000c; }
 /* The usage strip stays in flow just above the composer: two items both pinned to `bottom: 0` overlay each
    other, which is how the stats line was drawn underneath the reply box. */

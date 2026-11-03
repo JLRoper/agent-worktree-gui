@@ -129,3 +129,23 @@ test("room the rail gains goes into the open turn's console, not into blank pane
   assert.match(css, /\.job-body:has\(> \.turn\.is-slack\)::before \{ content: none; \}/,
     "the spacer above the turns must stand down when a turn can take the room");
 });
+
+test("with every turn folded the composer block sits under the head and the grey space falls below it", () => {
+  // The spacer before the turns exists so a SHORT, OPEN conversation starts at its foot. With every turn folded there
+  // is no console to read and the thing the card is for is the box the reader types in: the spacer stands down,
+  // flex-start leaves the rows + composer + usage strip under the head, and the free room is painted below them.
+  // tools/verify-composer-top.mjs measures both states in a real browser at two heights; these pin the mechanism.
+  assert.match(css, /\.job-body:not\(:has\(> \.turn:not\(\.folded\)\)\)::before \{ content: none; \}/,
+    "the spacer must stand down when no turn is open, or the composer stays at the foot of an empty panel");
+  assert.match(css, /\.job-body::before \{ content: ""; flex: 1 0 auto; \}/,
+    "and it must still exist for the short, open conversation it was written for");
+  // Both states keep the composer sticky and the strip UNDER the reply box, which is the composer's own child order:
+  // a `column-reverse` or an `order` that moved the figures above the box would read as the strip moving, not the card.
+  assert.match(css, /\.job-body > \.reply \{ position: sticky; bottom: 0;/, "the composer stays pinned in both states");
+  assert.match(css, /\.job-body > \.job-foot \{ position: static; flex: none; \}/,
+    "and the outcome line stays in flow, never a second item pinned to the same edge");
+  const appJs = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+  const boxAt = appJs.indexOf('class="reply-box');
+  const stripAt = appJs.indexOf('class="job-stats-slot"');
+  assert.ok(boxAt > 0 && stripAt > boxAt, "the token strip is the reply box's FOLLOWING sibling, never above it");
+});
