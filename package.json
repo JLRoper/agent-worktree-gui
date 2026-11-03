@@ -26,6 +26,7 @@
     "verify:assistant-2-chat": "node tools/verify-assistant-2-chat.mjs",
     "verify:preamble-cost": "node tools/verify-preamble-cost.mjs",
     "verify:digest-cost": "node tools/verify-digest-cost.mjs",
+    "verify:queue-holds": "node tools/verify-queue-holds.mjs",
     "verify:approvals-dock": "node tools/verify-approvals-dock.mjs",
     "verify:attachment-spawn": "node tools/verify-attachment-spawn.mjs",
     "test": "node --test --test-concurrency=4 test/*.test.js"
