@@ -104,7 +104,7 @@ export function renderChangelog({ releases, repoUrl = null, since = null }) {
       "`npm run changelog:check` fails when it is stale. Do not edit it by hand.",
       "",
     );
-    lines.push("**What changed since the build I am running?** The board's config line names the build (`v0.84.0 · …`).", "Pass that version here and read only what came after it:", "");
+    lines.push(`**What changed since the build I am running?** The board's config line names the build (\`v${newest.version} · …\`).`, "Pass that version here and read only what came after it:", "");
     lines.push("```", "npm run changelog -- --since v0.80.0", "```", "");
     if (all.length) {
       lines.push(
