@@ -32,6 +32,7 @@
     "verify:approvals-dock": "node tools/verify-approvals-dock.mjs",
     "dogfood:chat": "node tools/dogfood-chat.mjs",
     "verify:attachment-spawn": "node tools/verify-attachment-spawn.mjs",
+    "verify:turn-pager": "node tools/verify-turn-pager.mjs",
     "test": "node --test --test-concurrency=4 test/*.test.js"
   },
   "engines": {
