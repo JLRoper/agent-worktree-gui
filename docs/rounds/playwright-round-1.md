@@ -99,7 +99,7 @@ The field is wrong for this repository: `config.json` on `main` gives **both** o
 2. **Make the panel refuse to blank a column on a configured remote that is not in `git remote`.** `projectMeta()` and `ctxFor()` should fall back to the probe's answer (or to the repository's own `origin`/single remote) and say which remote they used, instead of returning a raw git fatal. The head line should name the fix (`the configured remote 'github' is not in this checkout (remotes: origin)`), not quote `git`'s `Needed a single revision`.
 3. While there: the Verdict column ellipsizes its own words — `NO BASE REF` paints as `NO BASE R…` and `MERGED (squash/rebase, 5 commits)` as `MERGED (squash/rebase, …)` — in a 173 px cell. The chart's headers clip too: at 1440 `AHEAD / BEHIND` needs 109 px and gets 66 (`CHERRY` 61/56, `OWNER` 60/58), so the reader sees `AHEAD …`.
 
-The contrast, same project, same build, a second clean instance with `remote: origin`:
+The contrast, same project, same build, a second clean instance on `:7484` with `remote: origin`:
 
 ![The same project once the remote resolves](assets/playwright-round-1-expected.png)
 
