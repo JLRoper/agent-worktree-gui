@@ -1877,8 +1877,11 @@ a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
   font: 11.5px/1.45 var(--term); white-space: pre-wrap; user-select: text; cursor: text;
 }
 /* Send sits inside the input, bottom left: the reply is one gesture, so the control lives in the box
-   it submits. The box keeps a bottom pad so typed text never runs under it. */
-.reply-wrap { position: relative; display: block; }
+   it submits. The box keeps a bottom pad so typed text never runs under it.
+   `container-type` because whether the buttons fit INSIDE the box depends on the box's own width, not the
+   window's: the same card is ~1250px on the board's table, ~330px in a worktree row on a phone, and whatever
+   the assistant's float is dragged to. See the @container rule below the buttons. */
+.reply-wrap { position: relative; display: block; container-type: inline-size; }
 /* Send and Cancel sit side by side inside the box, bottom left: both act on the reply you are writing. */
 .reply-actions { position: absolute; left: 7px; bottom: 8px; display: flex; align-items: center; gap: 6px; z-index: 1; }
 .reply-actions button.btn-reply { position: static; left: auto; bottom: auto; }
@@ -2082,6 +2085,29 @@ button.tq-send:disabled, button.tq-choice:disabled { opacity: .55; cursor: defau
 .reply-row .spacer { flex: 1; }
 button.btn-reply { position: absolute; left: 7px; bottom: 8px; z-index: 1; padding: 1px 9px; font-size: 11px; line-height: 1.5; background: #1d3a57; border-color: #2b5480; color: #cfe6ff; }
 button.btn-reply:hover { background: #24466a; }
+/* ---- a box too narrow to hold its own buttons --------------------------------------------------------------
+   The actions sit inside the box (bottom left) so that sending is one gesture in the control that sends it, and
+   that only works while the box is wider than the row of buttons. It is not: `Steer turn · Queue reply · 1
+   queued · Cancel turn` wants ~330px, and a worktree row's card on a phone is ~330px WIDE including its
+   padding — so the row did not fit. A flex row shrinks its items before it wraps, so instead of spilling the
+   labels broke onto two lines ("Steer / turn"), the row grew taller than the 34px the box reserves for it, and
+   the buttons came up over the placeholder and over whatever had been typed. Under the width they need they
+   leave the box and become an ordinary wrapping row beneath it, and the box stops reserving the strip (the
+   box's own height comes from `growReplyBox`/`growBoxToDraft`, which read the computed padding, so it follows).
+   A container query, not a media query: the box's width is set by the card it sits in — the board's table, a
+   worktree row, the assistant's float, a maximized chat — not by the window.
+   It sits AFTER the box's own `padding-bottom` rule because a `container-type` query adds no specificity: the
+   reduced pad below only beats that declaration on order. Same reason the two wrapping rules are scoped through
+   `.reply-wrap` — each labelled button carries its own size class (`.reply-actions button.btn-cancel` and its
+   siblings, `.reply-actions button.btn-queue`, `.reply-actions button.btn-steer`) at a higher specificity than a
+   bare `.reply-actions button`, so the full-size labels have to be asked for through the wrap. */
+.reply-actions button { white-space: nowrap; }
+@container (max-width: 380px) {
+  .reply-wrap .reply-box { padding-bottom: 7px; }
+  /* Two lines of buttons are two lines of thumb: a little more to hit, and the label back at full size. */
+  .reply-wrap .reply-actions { position: static; flex-wrap: wrap; margin-top: 6px; gap: 6px 8px; }
+  .reply-wrap .reply-actions button { padding: 4px 10px; font-size: 12px; }
+}
 
 /* minimize / expand one job card (click its header) */
 .job-head { cursor: pointer; user-select: none; }
