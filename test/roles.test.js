@@ -154,14 +154,21 @@ test("each assistant's preamble carries only its own charter, so #2 cannot inher
   const first = assistant.preamble(PRIMARY_ASSISTANT);
   assert.ok(first.includes("FIRST-ONLY-TEXT"), "#1's preamble carries its own text");
   assert.match(first, /Your role: Agent Manager — /, "and it names the role it runs");
-  assert.match(first, /Charter — the long tier, read in full on every turn \(role Agent Manager; /, "the briefing is labelled with the role");
+  assert.match(first, /Charter — the long tier, read in full this turn \(role Agent Manager; /, "the briefing is labelled with the role");
   assert.ok(!assistant.preamble("assistant-2").includes("FIRST-ONLY-TEXT"), "#2 does not start with #1's memory");
 
   // The edit that the item is really about.
   assistant.setCharterFor("assistant-2", "SECOND-ONLY-TEXT\n");
   assert.ok(assistant.preamble("assistant-2").includes("SECOND-ONLY-TEXT"), "#2 sees its own edit");
-  assert.ok(!assistant.preamble(PRIMARY_ASSISTANT).includes("SECOND-ONLY-TEXT"), "#1 does not");
-  assert.ok(assistant.preamble(PRIMARY_ASSISTANT).includes("FIRST-ONLY-TEXT"), "and still sees its own");
+  // #1's own bytes did not move, so its next turn is a MARKER — and the sha on it is #1's file, not #2's. That is the
+  // ownership claim now: a withheld turn still names which copy is being withheld.
+  const withheld = assistant.preamble(PRIMARY_ASSISTANT);
+  assert.ok(!withheld.includes("SECOND-ONLY-TEXT"), "#1 does not");
+  assert.match(withheld, /unchanged and withheld this turn/, "its unchanged charter is withheld, not re-sent");
+  assert.ok(withheld.includes(`sha256:${sha("# #1\n\nFIRST-ONLY-TEXT\n").slice(0, 12)}`), "and the marker's sha is #1's own bytes");
+  // A restarted session reads the copy whole again — which is where "it is still #1's text" is proved.
+  assistant.charterSends.clear();
+  assert.ok(assistant.preamble(PRIMARY_ASSISTANT).includes("FIRST-ONLY-TEXT"), "and a fresh session still reads its own");
   assert.match(assistant.preamble("assistant-2"), /You are Assistant #2,/, "a preamble says which assistant it is for");
 });
 
@@ -269,11 +276,17 @@ test("Assistant #1's preamble carries its charter whole, and #2's edit does not 
   assistant.createAssistant({ roleId: "agent-manager" });
   const first = assistant.preamble(PRIMARY_ASSISTANT);
   assert.ok(first.includes(seed.trim()), `the whole file rides in the preamble (${seed.length} chars, unclipped)`);
-  assert.match(first, /Charter — the long tier, read in full on every turn \(role Agent Manager; /, "labelled with the role and the file");
+  assert.match(first, /Charter — the long tier, read in full this turn \(role Agent Manager; /, "labelled with the role and the file");
   assert.ok(first.includes(seed.slice(0, 80)), "…from its first line");
 
   assistant.setCharterFor("assistant-2", "# only #2\n\nSECOND-ONLY-TEXT\n");
   assert.equal(sha(await readFile(charter, "utf8")), before, "#1's charter file is byte for byte what it was");
-  assert.ok(assistant.preamble(PRIMARY_ASSISTANT).includes(seed.trim()), "and #1 is still told the same file");
-  assert.ok(!assistant.preamble(PRIMARY_ASSISTANT).includes("SECOND-ONLY-TEXT"), "the second assistant's edit never reaches it");
+  // Turn 2 for #1 is a marker (its bytes did not move), and the sha it carries is the seed's: the same file, named,
+  // without the 19,956 characters. A restarted session reads it whole again.
+  const withheld = assistant.preamble(PRIMARY_ASSISTANT);
+  assert.ok(withheld.includes(`sha256:${sha(seed).slice(0, 12)}`), "and #1 is still told the same file, by sha");
+  assert.ok(!withheld.includes("SECOND-ONLY-TEXT"), "the second assistant's edit never reaches it");
+  assert.ok(!withheld.includes(seed.trim()), "and the unchanged file is not repeated on the next turn");
+  assistant.charterSends.clear();
+  assert.ok(assistant.preamble(PRIMARY_ASSISTANT).includes(seed.trim()), "a fresh session is handed it whole again");
 });
