@@ -2182,6 +2182,30 @@
           </div>`;
   }
 
+  // The row's pipeline press. It draws what the RECORD says — the contract's `pipelineRun` (lib/task-pipeline.js), as it
+  // is stored — because the row has no bundle: resolving it is the window's read, one press away. Every task gets one.
+  // A task with no assignment is on the DEFAULT path, and the window is where that path is explained; a row with no
+  // press would make the explanation unreachable.
+  function queuePipelineChip(t, id) {
+    const run = t?.pipelineRun;
+    const object = run && typeof run === "object" && !Array.isArray(run) ? run : null;
+    const pipeline = object && typeof object.pipeline === "string" ? object.pipeline.trim() : "";
+    const stage = object && typeof object.stage === "string" ? object.stage.trim() : "";
+    const words = pipeline
+      ? `pipeline ${pipeline}${stage ? ` · ${stage}` : ""}`
+      : run == null
+        ? "pipeline: none"
+        : object
+          ? "pipeline: no pipeline named"
+          : "pipeline: unreadable record";
+    const title = pipeline
+      ? `pipeline ${pipeline}${stage ? `, stage ${stage}` : ""} — open the pipeline window: every stage in order, where this task is, and the gate that ended the stage before it`
+      : run == null
+        ? "no pipeline is assigned — the assistant decides; open the pipeline window to read what the default path means for this task"
+        : `the pipeline record is ${JSON.stringify(run)} — open the pipeline window to see why it cannot be read`;
+    return `<button type="button" class="as-task-pipe" data-as-qpipe="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="${esc(title)}" aria-label="${esc(title)}">${esc(words)}</button>`;
+  }
+
   // One row. The marker, the id and the title are the head; one sub-row per agent under it; PR, tree and files are
   // the meta line; a stale or conflicted task carries its reason under them, because "why is this not moving" is
   // the question a queue exists to answer. A done row stays in place greyed: "it finished" is a record, not a task
@@ -2251,6 +2275,7 @@
             ${queueQuestionChip(t, alerts)}
           </div>
           <div class="as-task-agents">${agents}</div>
+          <div class="as-task-pipeline">${queuePipelineChip(t, id)}</div>
           ${meta.length ? `<div class="as-task-meta">${meta.join(" · ")}</div>` : ""}
           ${note}
         </div>
@@ -2688,6 +2713,319 @@
   }
 
   // ---- end the queue sub-tab --------------------------------------------------------------------
+
+  // ---- the task pipeline window -----------------------------------------------------------------
+  //
+  // What one queue row's pipeline holds, opened from the row. The DATA is the server's (`/api/assistant/task-pipeline`,
+  // lib/pipeline-window.js): every stage in the bundle's order, which one is current, the gate that ended the one before
+  // it, and the time in stage computed from the record's stored `enteredAt` against the request's clock. This file draws
+  // that answer and owns three things the server cannot: the dialog's behaviour, the tick, and the words.
+  //
+  // Three states, and no fourth — the same three lib/task-pipeline.js names:
+  //   pipeline            every stage, the current one marked, its `position of count`, the artifact each produces, the
+  //                       gate that ended the previous stage, and "in this stage 2h30m00s since …";
+  //   assistant-decides   the DEFAULT path in words, with no stage list to mistake for one;
+  //   unresolved          the reason, no stage marked current, and the sentence that says this is NOT the default path.
+  //
+  // The clock is a DISPLAY of stored data. `data-pipew-ms` is the number the server computed from `enteredAt`;
+  // `pipeWindowElapsedAt` adds only the time since that answer (`data-pipew-at`), so a window opened after the panel sat
+  // closed for an hour shows the hour — because the server recomputed on open, not because a timer kept counting.
+  const PIPE_WINDOW_ID = "pipew";
+  const PIPE_CARD_ID = "pipew-card";
+  // What Tab may land on inside the dialog. The card itself has tabindex -1 (it is the thing focused on open), so it is
+  // deliberately not in this list.
+  const PIPE_TABBABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  // The one open window's frame of reference: the row the caret came from, the ids needed to find it again after a
+  // repaint, and the timer. It is a record, not a DOM flag, so the tick can be stopped without reading the page.
+  const pipeWindowState = { opener: null, assistantId: null, taskId: null, at: 0, timer: null, model: null };
+
+  // How long a stage has been lived in, `tick` ms after the answer that said `ms`. The server's number is the base: this
+  // adds nothing but the wall clock since, and a clock that went backwards takes nothing away from the stage.
+  function pipeWindowElapsedAt(ms, at, now) {
+    const base = Number(ms);
+    if (!Number.isFinite(base)) return null;
+    const since = Number(now) - Number(at);
+    return Math.max(0, base + (Number.isFinite(since) ? Math.max(0, since) : 0));
+  }
+
+  function pipeWindowElapsedText(ms) {
+    return ms == null || !Number.isFinite(Number(ms)) ? "—" : fmtDur(ms);
+  }
+
+  // A stamp in the reader's own timezone, with the stored instant in the tooltip: the panel stores UTC, the reader reads
+  // a clock. A date the browser cannot parse is drawn as it was stored, never as "Invalid Date".
+  function pipeWindowStamp(iso) {
+    const ms = Date.parse(String(iso || ""));
+    return Number.isFinite(ms) ? new Date(ms).toLocaleString() : String(iso || "");
+  }
+
+  // What a row's phase means, in the words a reader needs rather than the model's own names.
+  function pipeWindowPhaseWords(phase) {
+    if (phase === "current") return "current stage";
+    if (phase === "before") return "before this stage";
+    if (phase === "after") return "still ahead";
+    return "not in this pipeline";
+  }
+
+  // The gate that ends one stage: its name, the artifact it decides on, and the values a decision can be read back as.
+  // A gate with no decision is a PAUSE (the studio's own word), and saying so is better than an empty line.
+  function pipeWindowGateLine(gate) {
+    if (!gate) return "";
+    const d = gate.decision;
+    const decision = d ? `${esc(d.path)} (${d.outcomes.map((o) => esc(o)).join(", ")})` : "a pause — no decision artifact";
+    return `<span class="pipew-gate">gate <b>${esc(gate.name)}</b> — decides ${decision}</span>`;
+  }
+
+  // The line above the sequence: the gate that ended the stage before this one, or the handoff that joined them when the
+  // bundle draws no gate there. That is the "what came before" a reader cannot get from an index.
+  function pipeWindowPreviousLine(previous) {
+    if (!previous || !previous.stage) return "";
+    if (previous.gate) {
+      const d = previous.gate.decision;
+      const decision = d ? `${esc(d.path)} (${d.outcomes.map((o) => esc(o)).join(", ")})` : "a pause — no decision artifact";
+      return `<div class="pipew-prev">ended the stage before — <b>${esc(previous.gate.name)}</b> on ${esc(previous.gate.artifact)}, decided in ${decision}</div>`;
+    }
+    const hand = previous.handoff;
+    return `<div class="pipew-prev">no gate between <b>${esc(previous.stage.title)}</b> and the current stage — ${hand ? `handoff ${esc(hand.id)} carried ${esc(hand.artifact)}` : "the bundle draws no edge there either"}</div>`;
+  }
+
+  // One stage row. The current one carries the moment it began and the elapsed span the tick advances; every row carries
+  // its position, the artifact it produces, and the gate that ends it.
+  function pipeWindowStageRow(stage, model) {
+    const current = stage.phase === "current";
+    const ms = current && model.elapsed && model.elapsed.ok ? Number(model.elapsed.ms) : null;
+    const at = Date.parse(String(model.computedAt || ""));
+    const live = current
+      ? `<span class="pipew-live">in this stage <b data-pipew-elapsed data-pipew-ms="${esc(String(ms ?? ""))}" data-pipew-at="${esc(String(Number.isFinite(at) ? at : ""))}">${esc(pipeWindowElapsedText(ms))}</b> since <span class="pipew-since" title="${esc(model.enteredAt || "")}">${esc(pipeWindowStamp(model.enteredAt))}</span>${
+          model.elapsed && model.elapsed.future ? ` <span class="pipew-warn">(the stamp is ahead of this clock — shown as 0)</span>` : ""
+        }</span>`
+      : "";
+    return `<li class="pipew-stage is-${esc(stage.phase)}" data-pipew-stage="${esc(stage.id)}" data-pipew-phase="${esc(stage.phase)}">
+        <span class="pipew-n mono">${esc(String(stage.position))}</span>
+        <span class="pipew-name">${esc(stage.title)}</span>
+        <span class="pipew-pos mono">${esc(`${stage.position} of ${model.count}`)}</span>
+        <span class="pipew-phase">${esc(pipeWindowPhaseWords(stage.phase))}</span>
+        ${live}
+        <span class="pipew-artifact">${esc(stage.artifact.id)} → ${esc(stage.artifact.path)} · ${esc(stage.artifact.schema)} · ${esc(stage.artifact.writer)}</span>
+        ${pipeWindowGateLine(stage.gateEnding)}
+      </li>`;
+  }
+
+  // The whole dialog body, from the server's model. `null` is the press's first paint: the read is in flight and the
+  // window is already open, so the reader sees what is happening instead of a dead row.
+  function pipelineWindowHtml(model) {
+    const close = `<button type="button" class="pipew-close" data-pipew-close title="close (Esc) — focus goes back to the task row" aria-label="close the pipeline window">✕</button>`;
+    const bar = (title, sub) =>
+      `<div class="pipew-bar"><span class="pipew-kicker">pipeline window</span><b class="pipew-title" id="pipew-title">${esc(title)}</b>${
+        sub ? `<span class="pipew-sub mono">${esc(sub)}</span>` : ""
+      }<span class="spacer"></span>${close}</div>`;
+
+    if (!model) return `${bar("reading…", "")}<div class="pipew-body"><div class="pipew-note">reading this task's pipeline…</div></div>`;
+
+    const task = model.task || {};
+    const named = `${task.id != null ? `#${task.id} ` : ""}${task.title || "task"}`;
+    const head = (sub) => bar(named, sub);
+
+    if (model.error) {
+      return `${head("")}<div class="pipew-body"><div class="pipew-note is-bad"><b>could not read this task's pipeline</b> — ${esc(model.error)}</div></div>`;
+    }
+
+    if (model.mode === "assistant-decides") {
+      return `${head("no pipeline")}<div class="pipew-body">
+        <div class="pipew-note"><b>This task is on the default path</b> — no pipeline is assigned, so the assistant decides what it does next. There is no stage to be in, and no time in stage to measure.</div>
+      </div>`;
+    }
+
+    if (model.mode !== "pipeline") {
+      const why = model.unresolved ? model.unresolved.reason : model.reason;
+      const rows = (model.stages || []).map((s) => pipeWindowStageRow(s, model)).join("");
+      return `${head("unresolved")}<div class="pipew-body">
+        <div class="pipew-note is-bad"><b>UNRESOLVED</b> — ${esc(why || "this task's pipeline record cannot be read")}</div>
+        <div class="pipew-note"><b>Never treated as the default path</b> — a record the bundle cannot read is shown as it is, because calling it “the assistant decides” would silently drop the pipeline this task was put on. The stages below are the sequence the bundle still holds${rows ? ", with nothing marked current" : ""}.</div>
+        ${model.bundle && model.bundle.ok === false && model.bundle.file ? `<div class="pipew-note mono">bundle ${esc(model.bundle.file)} — ${esc(model.bundle.code || "refused")}${model.bundle.where ? ` at ${esc(model.bundle.where)}` : ""}</div>` : ""}
+        ${rows ? `<ol class="pipew-stages">${rows}</ol>` : ""}
+      </div>`;
+    }
+
+    const current = model.current || {};
+    const count = model.count;
+    const rows = (model.stages || []).map((s) => pipeWindowStageRow(s, model)).join("");
+    const elapsed = model.elapsed && model.elapsed.ok ? pipeWindowElapsedText(model.elapsed.ms) : "—";
+    const entered = model.enteredAt ? pipeWindowStamp(model.enteredAt) : "";
+    return `${head(`${current.position} of ${count} — ${current.title || current.id}`)}<div class="pipew-body">
+      <div class="pipew-meta">
+        <span class="pipew-pipe">${esc(model.pipeline.title || model.pipeline.id)} <code>${esc(model.pipeline.id)}</code></span>
+        <span class="pipew-sub mono">stage ${esc(String(current.position))} of ${esc(String(count))} · ${esc(current.title || current.id)} <code>${esc(current.id)}</code></span>
+        <span class="pipew-since">began ${esc(entered)}</span>
+        <span class="pipew-sub">in this stage ${esc(elapsed)}</span>
+      </div>
+      ${pipeWindowPreviousLine(model.previous)}
+      <ol class="pipew-stages">${rows}</ol>
+    </div>`;
+  }
+
+  // Draw the dialog. `doc` is an argument, not a global, so the whole controller can be driven by a test with a stub
+  // page — the same reason the queue's renderer takes `esc`.
+  function pipeWindowShow({ doc = document, model = null, opener = null, assistantId = null, taskId = null } = {}) {
+    const host = doc.getElementById(PIPE_WINDOW_ID);
+    const card = doc.getElementById(PIPE_CARD_ID);
+    if (!host || !card) return null;
+    host.hidden = false;
+    card.innerHTML = pipelineWindowHtml(model);
+    // The state, on the element: reading / pipeline / assistant-decides / unresolved / error. A harness (and a reader of
+    // the DOM with devtools) can tell a window that is still reading from one that answered without reading the words.
+    card.dataset.pipewMode = model ? (model.error ? "error" : model.mode || "unknown") : "reading";
+    doc.body?.classList?.add("pipew-open");
+    pipeWindowState.opener = opener || pipeWindowState.opener;
+    pipeWindowState.assistantId = assistantId ?? model?.assistantId ?? pipeWindowState.assistantId;
+    pipeWindowState.taskId = taskId ?? model?.task?.id ?? pipeWindowState.taskId;
+    pipeWindowState.at = Date.now();
+    pipeWindowState.model = model;
+    // The dialog takes the caret on open — it is a modal, and the reader's next key must land in it. `preventScroll`
+    // because focusing a fixed card must not move the page behind it.
+    card.focus?.({ preventScroll: true });
+    return pipeWindowState;
+  }
+
+  // Close it, and hand the caret back to the row it came from. The opener is usually still there; after a repaint of the
+  // queue pane it is detached, so the row is found again by the ids it carries (an assistant's queue is the only scope
+  // where a task id is unique).
+  function pipeWindowClose({ doc = document, restore = true } = {}) {
+    const host = doc.getElementById(PIPE_WINDOW_ID);
+    const card = doc.getElementById(PIPE_CARD_ID);
+    if (!host || host.hidden) return false;
+    host.hidden = true;
+    if (card) card.innerHTML = "";
+    doc.body?.classList?.remove("pipew-open");
+    pipeWindowStopClock();
+    const from = pipeWindowState.opener;
+    const ids = { own: pipeWindowState.assistantId, task: pipeWindowState.taskId };
+    pipeWindowState.opener = null;
+    pipeWindowState.model = null;
+    if (restore) {
+      const again = from && from.isConnected !== false
+        ? from
+        : ids.own && ids.task
+          ? doc.querySelector?.(`[data-as-qpipe="${String(ids.task).replace(/"/g, "")}"][data-as-qown="${String(ids.own).replace(/"/g, "")}"]`)
+          : null;
+      (again || doc.getElementById("as-queue") || doc.getElementById("as-queue-0"))?.focus?.({ preventScroll: true });
+    }
+    return true;
+  }
+
+  // Escape closes; Tab cycles inside. Returns true when it handled the key, so the caller knows the press was consumed.
+  // `stopPropagation` on Escape is the load-bearing line: the rail's own Escape handler would otherwise close the whole
+  // assistant panel behind an open dialog.
+  function pipeWindowKey(e, { doc = document } = {}) {
+    const host = doc.getElementById(PIPE_WINDOW_ID);
+    if (!host || host.hidden) return false;
+    if (e.key === "Escape") {
+      e.preventDefault?.();
+      e.stopPropagation?.();
+      pipeWindowClose({ doc });
+      return true;
+    }
+    if (e.key !== "Tab") return false;
+    const card = doc.getElementById(PIPE_CARD_ID);
+    const items = card && typeof card.querySelectorAll === "function" ? [...card.querySelectorAll(PIPE_TABBABLE)] : [];
+    if (!items.length) return false;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && doc.activeElement === first) {
+      e.preventDefault?.();
+      last.focus?.();
+      return true;
+    }
+    if (!e.shiftKey && doc.activeElement === last) {
+      e.preventDefault?.();
+      first.focus?.();
+      return true;
+    }
+    return false;
+  }
+
+  // Advance the one number a tick may advance. It re-reads the span the last answer drew and adds only the wall clock
+  // since that answer, so a stage change on the server is never invented here — reopening is what re-asks.
+  function pipeWindowTick(doc = document) {
+    const el = doc.querySelector?.("[data-pipew-elapsed]");
+    if (!el || !el.dataset) return null;
+    const ms = pipeWindowElapsedAt(Number(el.dataset.pipewMs), Number(el.dataset.pipewAt), Date.now());
+    if (ms == null) return null;
+    el.textContent = pipeWindowElapsedText(ms);
+    return ms;
+  }
+
+  function pipeWindowStopClock() {
+    if (pipeWindowState.timer) {
+      clearInterval(pipeWindowState.timer);
+      pipeWindowState.timer = null;
+    }
+  }
+
+  // One second, and only while the tab is VISIBLE: a background tab repainting a number nobody is reading is the
+  // request-free version of a repaint loop. Coming back to the tab ticks at once, so the number is never stale by a
+  // visible frame.
+  function pipeWindowStartClock(doc = document) {
+    pipeWindowStopClock();
+    pipeWindowState.timer = setInterval(() => {
+      if (doc.hidden) return;
+      pipeWindowTick(doc);
+    }, 1000);
+  }
+
+  // The press: open at once with the reading state, then draw what the server says. A failed read is a window with the
+  // reason in it, never a press that did nothing.
+  async function openTaskPipelineWindow(assistantId, taskId, opener = null) {
+    if (!assistantId || !taskId) return;
+    const doc = document;
+    pipeWindowShow({ doc, model: null, opener, assistantId, taskId });
+    pipeWindowStartClock(doc);
+    let model;
+    try {
+      const r = await apiFetch(`/api/assistant/task-pipeline?assistantId=${encodeURIComponent(assistantId)}&task=${encodeURIComponent(taskId)}`);
+      const body = await r.json().catch(() => null);
+      model = r.ok ? body : { mode: "error", error: (body && body.error) || `the panel answered ${r.status}` };
+    } catch (err) {
+      model = { mode: "error", error: String((err && err.message) || err) };
+    }
+    // The reader may have closed it, or opened another row's, while the read was in flight: only the window that is
+    // still on this task is drawn again.
+    if (!pipeWindowState.opener || String(pipeWindowState.taskId) !== String(taskId)) return;
+    pipeWindowShow({ doc, model, opener: pipeWindowState.opener, assistantId, taskId });
+  }
+
+  // Delegated on the float (the pane is rebuilt on every change, so a per-row listener would die with it) and on the
+  // dialog's own host for the keys. `capture` on the press is what keeps the row body's console opener from also firing:
+  // one press, one window.
+  function pipeWindowWire() {
+    as$("assistant")?.addEventListener(
+      "click",
+      (e) => {
+        const btn = e.target?.closest?.("[data-as-qpipe]");
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        void openTaskPipelineWindow(btn.dataset.asQown, btn.dataset.asQpipe, btn);
+      },
+      true,
+    );
+    const host = document.getElementById(PIPE_WINDOW_ID);
+    host?.addEventListener("keydown", (e) => {
+      if (pipeWindowKey(e)) return;
+    });
+    // A press on the backdrop or the ✕ closes it; a press inside the card does not.
+    host?.addEventListener("click", (e) => {
+      if (e.target === host || e.target?.closest?.("[data-pipew-close]")) {
+        e.preventDefault();
+        pipeWindowClose();
+      }
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) pipeWindowTick(document);
+    });
+  }
+
+  // ---- end the task pipeline window -------------------------------------------------------------
 
   // ---- talking to the server -------------------------------------------------------------------
 
@@ -3686,4 +4024,7 @@
     renderAssistantChat(rec ? rec.id : activeSessionId());
   };
   window.__assistantToggle = toggleAssistant;
+  // The task pipeline window's one press, its keys and its clock. Wired once at boot: the dialog lives outside the rail
+  // and survives every repaint of the queue pane, so nothing here is per-row.
+  pipeWindowWire();
 })();
