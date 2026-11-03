@@ -1,3 +1,18 @@
+// HARNESS: LIVE GATE — a finished assistant turn's actions are read from the WHOLE reply, and each one is carried
+// out on its own.
+//
+// WHY THIS IS A GATE AND NOT FROZEN EVIDENCE. The incident below is history — `lastProse` was replaced by
+// `turnProse` when it was fixed — but the RULE it asserts is live behaviour main still has to keep: every
+// run-creating action in a finished reply starts exactly one job, a line that cannot be carried out is journaled
+// with its reason and does not stop the lines after it, and a handler that throws costs only its own line. Freezing
+// it would keep the story and lose the check, so it tracks main:
+//
+//   npm run verify:action-harvest                    the repo's own name for this gate
+//   node tools/verify.mjs --only action-harvest      the same thing through the runner
+//
+// It is registered in `package.json` and asserted by `test/harness.test.js`, which is what stops it rotting
+// invisibly again: an unwired harness's red is not evidence of a regression and its green is not evidence of a fix.
+//
 // A finished assistant turn's actions are read from the WHOLE reply, and each one is carried out on its own.
 //
 // Measured on the live panel: a SPAWN written in one turn produced no job, no alert and no journal line at all,
@@ -22,10 +37,12 @@
 //   3. a turn whose thread lookup throws inside the injected job store: the two lines that touched it are
 //      journaled with that reason and the spawn written after them still runs.
 //
-// No gateway, no git repo and no browser: the spawner is injected the way server.js injects `assistantSpawnRun`,
-// and it creates its run through the same `jobs.create` the real one uses.
+// No gateway and no browser: the spawner is injected the way server.js injects `assistantSpawnRun`, and it creates
+// its run through the same `jobs.create` the real one uses. The worker's tree IS a real one — a linked worktree of a
+// throwaway repo — because a reply into anything less is refused by main (see the fixture below).
+import { execFileSync } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -41,8 +58,27 @@ const check = (name, got, want) => {
 const ok = (name, got) => check(name, Boolean(got), true);
 
 const dir = mkdtempSync(path.join(tmpdir(), "wtgui-action-harvest-"));
+
+// ---- the tree a worker lives in, which has to be a tree of its OWN ------------------------------------------
+// A `SPAWN IN` line and a `TO` line both name a tree, and `answerThread` walks it before it posts anything: a reply
+// goes into the tree the thread was created for, and only while that is still a tree of its own (`lib/own-tree.js`,
+// the rule landed in 0.62.2). A bare `mkdirSync`'d temp directory is NOT one — it holds no `.git`, so every git call
+// inside it walks up to whatever checkout is above it. A harness that seeds its worker there asks main to post a
+// reply into a leftover directory and gets the (correct) refusal; the wait for that reply then times out, the settle
+// wake fires, and the stub gateway answers the WAKE with the same canned reply, so the turn's spawns are carried
+// twice and the reply reads 0. None of that is about the harvest, which is what this harness is for.
+//
+// So the fixture cuts a real worktree of a throwaway repo and seeds the worker in THAT: the same claim, in a tree a
+// run may actually start in, and `test/harness.test.js`'s family check keeps it that way.
+const repo = path.join(dir, "repo");
+const git = (args, cwd = repo) => execFileSync("git", ["-C", cwd, ...args], { stdio: ["ignore", "pipe", "pipe"] });
+mkdirSync(repo, { recursive: true });
+git(["init", "-q", "-b", "main"]);
+writeFileSync(path.join(repo, "README.md"), "# the harness's throwaway repo\n", "utf8");
+git(["add", "."]);
+git(["-c", "user.email=harness@local", "-c", "user.name=harness", "commit", "-qm", "the harness's throwaway repo"]);
 const existing = path.join(dir, "existing-tree").replace(/\\/g, "/");
-mkdirSync(existing, { recursive: true });
+git(["worktree", "add", "-q", "-b", "worker/a", existing]);
 
 // ---- the reply, in the shape the live stream carries it ------------------------------------------------------
 // The first fragment opens the turn's first text line; every fragment after it begins with a blank line, which
@@ -64,6 +100,13 @@ const REPLY_PARAGRAPHS = [
 // run. Any other route the panel uses is answered with something harmless.
 const runs = new Map();
 let runSeq = 0;
+// A run the PANEL started is not the turn under test. When a worker's reply now lands (which is the whole point of
+// the fixture below), the panel wakes the assistant about it — `origin.kind: "assistant-wake"`, and its prompt opens
+// with `watch: `. Answering a wake with this fixture's canned reply would carry every one of its actions a SECOND
+// time and the harness would be reading the panel's settle path instead of the harvest. So a wake gets a reply with
+// no action lines in it, and the wake is counted and named where the assertions are.
+const isWake = (run) => /^watch:/.test(String(run.input || "").trim());
+const WAKE_REPLY = ["Acknowledged — a worker's turn ended; nothing to carry out."];
 const replyFor = (thread) => (thread === ASSISTANT_THREAD ? REPLY_PARAGRAPHS : ["Acknowledged — I'll do that and report back."]);
 // What the next assistant turn will answer with. Set before the turn is asked, because the stub hands the reply
 // to whichever stream asks for it.
@@ -87,7 +130,7 @@ const server = createServer((req, res) => {
     if (req.method === "GET" && /^\/v1\/runs\/[^/]+\/events$/.test(url)) {
       const id = url.split("/")[3];
       const run = runs.get(id) || { thread: "" };
-      const paragraphs = replyFor(run.thread);
+      const paragraphs = run.thread === ASSISTANT_THREAD && isWake(run) ? WAKE_REPLY : replyFor(run.thread);
       const frames = paragraphs.map((p, i) => ({ event: "message.delta", delta: i === 0 ? p : `\n\n${p}` }));
       const said = paragraphs.join("\n\n");
       frames.push({ event: "run.completed", output: said, usage: { total_tokens: 900, input_tokens: 800, output_tokens: 100 } });
@@ -189,9 +232,12 @@ const settled = (id) => waitFor(() => {
 const jobsIn = (thread) => [...jobs.jobs.values()].filter((j) => j.thread === thread);
 const journal = (kind) => assistant.journal.filter((e) => e.kind === kind);
 
-// A worker thread already on the board: a TO and a WATCH need one to land on.
+// A worker thread already on the board: a TO and a WATCH need one to land on. Its tree is a real one, because the
+// reply below is posted by main's own `answerThread` and main refuses a tree that is not of its own — that refusal
+// is asserted here first, so a fixture that quietly stopped being a worktree cannot read as a harvest failure.
 const seeded = await jobs.create({ prompt: "do the thing", thread: "wtgui-worker-a", cwd: existing, worktree: false, ownerPath: existing });
 await settled(seeded.id);
+ok("the worker's tree is a tree of its own, so a reply into it is allowed", existsSync(path.join(existing, ".git")), `${existing} has no .git`);
 
 try {
   // ---- 1. one turn, one line per paragraph, every action carried out ----------------------------------------
@@ -218,7 +264,16 @@ try {
   const repl = jobsIn("wtgui-worker-a").filter((j) => j.reply);
   check("the TO line became one run in that thread", repl.length, 1);
   check("…carrying what the assistant wrote", /rebuild and re-run it/.test(repl[0]?.prompt || ""), true);
-  check("every run-creating action is one job and nothing else was started", jobsIn(ASSISTANT_THREAD).length, 1);
+  // The assistant's OWN thread: the turn this harness asked for, and nothing else the turn's actions started. The
+  // panel also starts a settle wake here — a worker's reply landed, so there is something to tell the assistant
+  // (origin `assistant-wake`, its prompt opening with `watch: `) — and that job is the PANEL's, not one of these
+  // action lines. It is subtracted and named rather than tolerated: one non-wake job is the claim, and a single wake
+  // is all the panel has a reason to start.
+  const assistantJobs = jobsIn(ASSISTANT_THREAD);
+  const wakes = assistantJobs.filter((j) => j.origin?.kind === "assistant-wake");
+  console.log(`        the assistant's own thread: ${assistantJobs.length} job(s), ${wakes.length} of them the panel's settle wake`);
+  check("every run-creating action is one job and nothing else was started", assistantJobs.length - wakes.length, 1);
+  ok("…and the only other job in that thread is the panel's own settle wake, never a second turn of the harvest's", wakes.length <= 1, `${wakes.length} wakes: ${wakes.map((j) => j.id).join(", ")}`);
 
   check("the NOTE applied", /kept the harness reply short/.test(assistant.state().notes), true);
   check("the RULE applied", assistant.state().rules.some((r) => /gate goes red/.test(r.text)), true);

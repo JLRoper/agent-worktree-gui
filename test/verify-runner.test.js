@@ -97,6 +97,42 @@ test("--json is one object a caller can read, with no child output in it", async
   assert.equal(typeof payload.results[0].ms, "number");
 });
 
+// A harness whose own header says FROZEN EVIDENCE is a record of one commit, not a claim about main: it is named and
+// SKIPPED, and a body that would fail if it ran is the proof that it did not. The fixture is built to fail loudly —
+// if the skip ever regresses, this test's own assertion is the thing that goes red, which is the opposite of the
+// week-long silence a stale harness used to get.
+test("a FROZEN EVIDENCE harness is named and skipped, never run as a gate", async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), "wtgui-runner-frozen-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await writeFile(path.join(dir, "verify-ok.mjs"), '// a harness that measures something and agrees\nconsole.log("measured 1 thing");\n', "utf8");
+  await writeFile(
+    path.join(dir, "verify-frozen.mjs"),
+    '// HARNESS: FROZEN EVIDENCE — it proved 0123456789abcdef, a tree that no longer exists; never run as a gate\nconsole.log("THIS BODY MUST NOT RUN");\nprocess.exit(1);\n',
+    "utf8",
+  );
+
+  const r = await run(["--all", "--dir", dir, "--timeout", "20000"]);
+  assert.equal(r.code, 0, `the frozen fixture did not fail the run: ${r.stdout}`);
+  assert.match(r.stdout, /FROZEN {2}.*verify-frozen\.mjs/, "the frozen harness is named, not silently dropped");
+  assert.doesNotMatch(r.stdout, /THIS BODY MUST NOT RUN/, "a frozen harness's body never executes");
+  assert.match(r.stdout, /1\/1 passed/, "it counts as neither a pass nor a failure");
+  assert.match(r.stdout, /1 frozen \(not run\): .*verify-frozen\.mjs/);
+
+  const json = await run(["--all", "--dir", dir, "--json"]);
+  const payload = JSON.parse(json.stdout);
+  assert.equal(payload.frozen.length, 1);
+  assert.match(payload.frozen[0], /verify-frozen\.mjs$/);
+  assert.equal(payload.ran, 1, "only the live fixture ran");
+
+  // A selector that reaches ONLY frozen artefacts has measured nothing: exit 2, the same as an unmatched selector,
+  // rather than a green run. (`--only verify-frozen`, not `--only frozen`: a selector also matches a DIRECTORY's own
+  // name, and the fixture folder is called wtgui-runner-frozen-…, so the loose form would pick up the live fixture
+  // beside it and measure something after all.)
+  const none = await run(["--only", "verify-frozen", "--dir", dir]);
+  assert.equal(none.code, 2);
+  assert.match(none.stderr, /FROZEN EVIDENCE/);
+});
+
 // Two harnesses that each write a marker and then wait for the OTHER's marker. One at a time the first gives up before
 // the second ever starts; only a runner that has both children live at once lets them meet. That makes "runs them in
 // parallel" a fact the fixtures prove, not a measurement of how fast the machine happens to be.

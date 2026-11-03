@@ -2,12 +2,16 @@
 // One runner for this repo's verification harnesses.
 //
 // WHY. The harnesses are programs, not a framework: each one boots what it needs, prints what it measured and exits
-// non-zero when its claim failed. That is the right shape for an argument, and the wrong shape for a fleet of 28 —
+// non-zero when its claim failed. That is the right shape for an argument, and the wrong shape for a fleet of 120 —
 // there was no way to ask "what is there?", "run the three about the branch column", or "which one is red?" without
 // remembering file names and running them one at a time. This owns the three answers, and nothing else: a harness
 // keeps its own output, its own sandbox and its own exit code.
 //
-//   node tools/verify.mjs --list                 what there is, with the first line of each file
+// Every harness also DECLARES what it is, on a `// HARNESS: LIVE GATE` or `// HARNESS: FROZEN EVIDENCE` line in its
+// own header, and this runner is what reads that declaration: `--list` prints it, and a FROZEN EVIDENCE one is named
+// and skipped rather than run as a gate. See `stateOf` below for why.
+//
+//   node tools/verify.mjs --list                 what there is, with the first line of each file and its state
 //   node tools/verify.mjs --all                  every harness, one child at a time (--jobs <n> for n at once)
 //   node tools/verify.mjs --only branch          the harnesses whose name contains "branch"
 //   node tools/verify.mjs --only pr --all        (--all is implied by a selector; both is harmless)
@@ -25,7 +29,7 @@
 import { spawn } from "node:child_process";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "..");
@@ -42,7 +46,7 @@ function parseArgs(argv) {
     else if (a === "--quiet") opt.quiet = true;
     else if (a === "--only") opt.only = String(argv[(i += 1)] || "");
     else if (a === "--dir") {
-      // --dir means "scan exactly these": a caller pointing at a fixture folder does not also want the 51 real
+      // --dir means "scan exactly these": a caller pointing at a fixture folder does not also want the 120 real
       // harnesses, and a selector like --only ok would otherwise match a name it never meant (verify-token-costs).
       if (!opt.explicitDirs) {
         opt.dirs = [];
@@ -75,6 +79,31 @@ export function discover(dir) {
     }
   }
   return found;
+}
+
+// EVERY HARNESS DECLARES WHAT IT IS, in its own header, and this is the one thing that reads the declaration:
+//
+//   // HARNESS: LIVE GATE        it tracks main, it is wired into this repo's gate list (a `verify:*` script in
+//                              package.json) and `test/harness.test.js` holds it to that.
+//   // HARNESS: FROZEN EVIDENCE  a record of one commit, named in the header — historical, and NEVER to be run as
+//                              a gate. It is reported and skipped here rather than run, because a stale harness's
+//                              red is not evidence of a regression and its green is not evidence of a fix.
+//
+// WHY THE RUNNER READS IT. A decision written only in a file `--all` walks past without looking is a rumour: two
+// harnesses rotted against main for a week and nothing could tell the difference between their red and a real
+// break. A frozen one is now SKIPPED (and said so, in the table and in --json) instead of being measured as if it
+// meant something today. An undeclared harness is still run, exactly as before, so a new file needs no ceremony to
+// work — what the line buys is the state, not permission.
+export function stateOf(file) {
+  let head;
+  try {
+    head = readFileSync(file, "utf8").split(/\n/).slice(0, 40).join("\n");
+  } catch {
+    return "";
+  }
+  if (/^\/\/\s*HARNESS:\s*FROZEN EVIDENCE\b/m.test(head)) return "FROZEN EVIDENCE";
+  if (/^\/\/\s*HARNESS:\s*LIVE GATE\b/m.test(head)) return "LIVE GATE";
+  return "";
 }
 
 // The file's own one-line summary: its first `//` line that is prose, not a usage example or a shebang.
@@ -148,16 +177,18 @@ async function main() {
     }
   }))].sort();
   const selected = opt.only ? files.filter((f) => path.basename(path.dirname(f)).toLowerCase().includes(opt.only.toLowerCase()) || path.basename(f).toLowerCase().includes(opt.only.toLowerCase())) : files;
+  const rel = (f) => path.relative(REPO, f).replace(/\\/g, "/");
 
   if (opt.list || (!opt.all && !opt.only)) {
     if (opt.json) {
-      console.log(JSON.stringify(selected.map((f) => ({ name: path.relative(REPO, f).replace(/\\/g, "/"), summary: summaryOf(f) })), null, 1));
+      console.log(JSON.stringify(selected.map((f) => ({ name: rel(f), state: stateOf(f), summary: summaryOf(f) })), null, 1));
       return selected.length ? 0 : 2;
     }
     for (const f of selected) {
-      const name = path.relative(REPO, f).replace(/\\/g, "/");
+      const name = rel(f);
       const summary = summaryOf(f);
-      console.log(summary ? `${name}\n    ${summary}` : name);
+      const state = stateOf(f);
+      console.log(summary ? `${name}\n    ${summary}${state ? `   [${state}]` : ""}` : `${name}${state ? `   [${state}]` : ""}`);
     }
     console.log(`\n${selected.length} harness${selected.length === 1 ? "" : "es"} in ${opt.dirs.map((d) => path.relative(REPO, d) || ".").join(", ")}${opt.only ? ` matching "${opt.only}"` : ""} — run one with --only <substr>, all with --all`);
     return selected.length ? 0 : 2;
@@ -168,16 +199,28 @@ async function main() {
     return 2;
   }
 
+  // A FROZEN EVIDENCE harness says so in its own header, and that means this: it is a record of one commit, not a
+  // claim about main. Running it as a gate is the rot this runner exists to prevent, so it is NAMED in the table and
+  // SKIPPED — never counted as a pass, never counted as a failure. A selector that reaches only frozen artefacts has
+  // measured nothing, which is exit 2 the way an unmatched selector is, and not a green run.
+  const frozen = selected.filter((f) => stateOf(f) === "FROZEN EVIDENCE");
+  const runnable = selected.filter((f) => stateOf(f) !== "FROZEN EVIDENCE");
+
+  if (!runnable.length) {
+    console.error(`no harness to run${opt.only ? ` for "${opt.only}"` : ""}: ${frozen.map(rel).join(", ")} ${frozen.length === 1 ? "is" : "are"} FROZEN EVIDENCE (historical, never a gate)`);
+    return 2;
+  }
+
   // One lane per job, each taking the next unclaimed harness. `results` is indexed, so the table, the summary and
   // the --json payload stay in discovery order however the children finish.
-  const results = new Array(selected.length);
+  const results = new Array(runnable.length);
   let nextIdx = 0;
   const lane = async () => {
     for (;;) {
       const idx = nextIdx++;
-      if (idx >= selected.length) return;
-      const file = selected[idx];
-      const name = path.relative(REPO, file).replace(/\\/g, "/");
+      if (idx >= runnable.length) return;
+      const file = runnable[idx];
+      const name = rel(file);
       if (!opt.json) process.stdout.write(`… ${name}\n`);
       const result = await runOne(file, opt);
       results[idx] = { ...result, name };
@@ -189,15 +232,27 @@ async function main() {
       }
     }
   };
-  await Promise.all(Array.from({ length: Math.max(1, Math.min(opt.jobs, selected.length)) }, lane));
+  // A frozen artefact is named before the table so a reader sees it beside the results, not instead of them.
+  if (!opt.json && frozen.length) {
+    for (const f of frozen) console.log(`  FROZEN  ${rel(f)}  — FROZEN EVIDENCE: historical, not run as a gate`);
+  }
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(opt.jobs, runnable.length)) }, lane));
 
   const failed = results.filter((r) => !r.ok);
   if (opt.json) {
-    console.log(JSON.stringify({ ran: results.length, failed: failed.length, results: results.map(({ tail, ...r }) => r) }, null, 1));
+    console.log(
+      JSON.stringify({ ran: results.length, failed: failed.length, frozen: frozen.map(rel), results: results.map(({ tail, ...r }) => r) }, null, 1),
+    );
   } else {
-    console.log(`\n${results.length - failed.length}/${results.length} passed${failed.length ? `, ${failed.length} failed: ${failed.map((f) => f.name).join(", ")}` : ""}`);
+    console.log(
+      `\n${results.length - failed.length}/${results.length} passed${failed.length ? `, ${failed.length} failed: ${failed.map((f) => f.name).join(", ")}` : ""}` +
+        `${frozen.length ? ` · ${frozen.length} frozen (not run): ${frozen.map(rel).join(", ")}` : ""}`,
+    );
   }
   return failed.length ? 1 : 0;
 }
 
-process.exitCode = await main();
+// Run the runner only when this file IS the command. `test/harness.test.js` imports `discover` and `stateOf` to hold
+// the family to its own declarations, and a module that ran itself on import would print the whole fleet into that
+// test's output — and set its exit code — for asking a question.
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) process.exitCode = await main();
