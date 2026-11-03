@@ -202,3 +202,58 @@ test("the agent's label is drawn when it is not just the thread id", () => {
   assert.ok(named.includes('<span class="as-task-agent-label">land the queue row</span>'), "a readable label is shown");
   assert.equal((named.match(/class="as-task-agent-label"/g) || []).length, 1, "…and the bare thread id is not printed twice");
 });
+
+// A row parked on a QUESTION is not a lane, and the chip is what says so. The join is by thread — the open alert's
+// thread against the row's whole `threads[]` history — and it reuses the hold badge's own class, so the stylesheet
+// gains nothing for it.
+test("a row whose thread is parked on a question wears one `question` chip, and no other row does", () => {
+  const { queueTaskHtml } = build();
+  const row = { id: 21, title: "carry it", state: "running", files: [], threads: ["T-quiet", "T-asked"] };
+  const asked = {
+    id: "a1b2c3d4",
+    rule: "question",
+    status: "open",
+    parked: true,
+    requestId: "req-7",
+    thread: "T-asked",
+    at: "2026-11-02T10:00:00.000Z",
+    title: "waiting on your answer: which of these?",
+    detail: "worker-3 is parked on a question · waiting 4m · 2 choices",
+    choices: ["ship it", "wait"],
+  };
+  const html = queueTaskHtml("assistant-1", row, new Map(), new Map(), [asked]);
+  const chips = [...html.matchAll(/<button[^>]*class="as-task-hold"[^>]*>question<\/button>/g)];
+  assert.equal(chips.length, 1, "exactly one question chip on the row");
+  assert.ok(chips[0][0].includes('data-as-qopen="T-asked"'), "the chip opens the ALERT's agent, not the task's last thread");
+  assert.ok(chips[0][0].includes('data-as-qquestion="a1b2c3d4"'), "…and names the alert it came from");
+  assert.ok(!html.includes("as-qchip"), "no second class was invented for it: the hold badge's own is reused");
+
+  // The control: every way the same alert can fail to be a question in force.
+  const control = (alerts, name) =>
+    assert.ok(
+      !queueTaskHtml("assistant-1", row, new Map(), new Map(), alerts).includes(">question</button>"),
+      `${name} draws no chip`,
+    );
+  control([], "no alerts at all");
+  control([{ ...asked, status: "answered" }], "an alert that is closed");
+  control([{ ...asked, thread: "T-somebody-else" }], "an alert on another thread");
+  control([{ ...asked, parked: false, requestId: null }], "a prose question that is not parked");
+  control([{ ...asked, rule: "approval" }], "an approval");
+  assert.ok(
+    queueTaskHtml("assistant-1", row, new Map(), new Map(), [{ ...asked, rule: "clarify" }]).includes(">question</button>"),
+    "a clarify-rule alert is a question even without the parked flag",
+  );
+  // A legacy record with only `thread` joins the same way, and a row whose thread nobody asked on stays clean.
+  assert.ok(
+    queueTaskHtml("assistant-1", { id: 22, title: "old", state: "parked", thread: "T-asked", files: [] }, new Map(), new Map(), [asked]).includes(
+      'data-as-qopen="T-asked"',
+    ),
+    "a legacy `thread`-only record joins too",
+  );
+  assert.ok(
+    !queueTaskHtml("assistant-1", { id: 23, title: "quiet", state: "queued", thread: "T-quiet", files: [] }, new Map(), new Map(), [asked]).includes(
+      ">question</button>",
+    ),
+    "the row that was not asked stays clean",
+  );
+});
