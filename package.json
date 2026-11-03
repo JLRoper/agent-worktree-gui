@@ -14,6 +14,7 @@
     "changelog:check": "node tools/changelog.mjs --check",
     "render:pipelines": "node tools/render-pipelines.mjs",
     "verify:pipelines-viz": "node tools/verify-pipelines-viz.mjs",
+    "verify:version-tags": "node tools/verify-version-tags.mjs",
     "audit:child-process": "node tools/child-process-audit.mjs",
     "verify": "node tools/verify.mjs --list",
     "verify:all": "node tools/verify.mjs --all",
