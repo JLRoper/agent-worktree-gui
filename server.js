@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { mkdir, open, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 // The push-guard record is a few hundred bytes read at boot and written on an install: sync is the honest shape
 // for it, and it is the same file the Settings row reports from.
-import { existsSync, mkdirSync, readFileSync, writeFileSync, writeSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { cpus, homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { StringDecoder } from "node:string_decoder";
@@ -1492,6 +1492,69 @@ jobs.deliverables = deliverables;
 // a summary only — the page re-reads the store — and it is wired here so the store never learns what a socket is.
 deliverables.onChange = (entry) =>
   broadcast({ type: "deliverable", seq: entry.seq, kind: entry.kind, title: entry.title, at: entry.at });
+
+// ---- what a deliverable's Open control can open, and as what ----------------------------------------------------
+// One classification, decided HERE and used by both routes, so the page and the server cannot disagree about what a
+// click means:
+//
+//   link           → the URL. A tab in the reader's own browser: the panel never fetches it, never asks whether it
+//                    answered, and never launches a browser for it. `chromeFor` is reached only when the page reports
+//                    that the tab was blocked — the one host the panel still acts for.
+//   served path    → a file under this panel's `public/`, which HAS a URL on the panel. Also a tab.
+//   file in a repo → no URL at all, so the browser cannot render it: the existing route hands it to the OS default
+//                    handler, which is the opener it has always used.
+//   nothing else   → refused, and the reason is said on the card. No second route, no second opener.
+//
+// `href` is the one field the page needs: the tab's URL, or null when there is no tab. No path is ever turned into a
+// URL on the page, and the page never sends a path back.
+function deliverableHref(entry) {
+  if (!entry || !entry.target) return null;
+  if (entry.kind === "link") {
+    try {
+      const url = new URL(String(entry.target));
+      return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : null;
+    } catch {
+      return null;
+    }
+  }
+  const abs = path.resolve(String(entry.target));
+  const rel = path.relative(PUBLIC_DIR, abs);
+  // `..` out of the served root, or the root itself, is not a URL of ours. The file is stat'ed HERE as well: a
+  // served file that is gone must not become a tab to a 404 — the route's own 404 sentence is what the card shows.
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return null;
+  try {
+    if (!statSync(abs).isFile()) return null;
+  } catch {
+    return null;
+  }
+  return `/${rel.split(path.sep).map(encodeURIComponent).join("/")}`;
+}
+
+// The repository a delivered file belongs to: the TREE the store recorded for it, which is the checkout the panel
+// measured when the run settled, and the same base `resolveTarget` resolved a relative target against. A path outside
+// it is refused — a deliverable is the file an agent put in its own tree, never an arbitrary file on the machine.
+// A record with no tree (older than the field, or hand-written) falls back to the nearest checkout above the file;
+// a worktree carries a `.git` FILE and a clone a `.git` DIRECTORY, and both are a repo.
+function deliverableRepoRoot(entry) {
+  const tree = String((entry && entry.treePath) || "").replace(/\/+$/, "");
+  if (tree) return tree;
+  let dir = path.dirname(String((entry && entry.target) || ""));
+  for (;;) {
+    if (existsSync(path.join(dir, ".git"))) return dir;
+    const up = path.dirname(dir);
+    if (up === dir) return null;
+    dir = up;
+  }
+}
+
+// Is `target` the root or under it? Case-folded with forward slashes, the house `pathKey` rule: this panel runs on
+// Windows, where one folder has two spellings, and a boundary that can be dodged by capitalisation is not one.
+function insideRepo(target, root) {
+  const a = path.resolve(String(target || "")).replace(/\\/g, "/").toLowerCase();
+  const b = path.resolve(String(root || "")).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  if (!b) return false;
+  return a === b || a.startsWith(`${b}/`);
+}
 // One sentence for a console line: whitespace collapsed, and cut where the panel always cuts (a trailing ellipsis, so
 // a truncated sentence never reads as a finished one).
 const oneLine = (s, n = 200) => {
@@ -4020,7 +4083,10 @@ const server = createServer(async (req, res) => {
     // and NOT token-gated — the same convention as GET /api/jobs above. A read changes nothing, and a board opened on
     // another machine has to be able to paint the list; the write beside it (the open) is the one that carries a token.
     if (route === "/api/deliverables" && req.method === "GET") {
-      return sendJson(res, 200, deliverables.list());
+      const list = deliverables.list();
+      // One field added per row, and the only one the Open control reads: the URL a tab can open, or null. It is
+      // decided here because this process is the one that knows what it serves and what a repo is.
+      return sendJson(res, 200, { ...list, entries: list.entries.map((e) => ({ ...e, href: deliverableHref(e) })) });
     }
 
     // ---- approvals: the human side of the Hermes approval-transport contract ---------------
@@ -4992,47 +5058,84 @@ const server = createServer(async (req, res) => {
           error: `no deliverable${asked} on this panel — the list was pruned, or this page is older than the store`,
         });
       }
-      let bin;
-      let args;
-      let bytes = null;
-      let chrome = null;
-      if (entry.kind === "link") {
-        // Chrome when this machine has one, the OS default browser when it does not: a missing Chrome must never
-        // become a missing deliverable. `chrome:false` is the page's one banner line.
-        const found = chromeFor(entry.target);
-        chrome = Boolean(found);
-        ({ bin, args } = found || openerFor(entry.target));
-      } else {
-        // What was recorded is what is opened: the store's own absolute path, handed to ShellExecute. A file that has
-        // since been moved or deleted stamps `missingAt` (so the row says `gone` on the next read) and answers 404
-        // with the sentence that says when it was last seen.
-        const info = await stat(entry.target).catch(() => null);
-        if (!info || !info.isFile()) {
-          deliverables.markMissing(entry.seq);
-          return sendJson(res, 404, {
-            error: `no such file: ${entry.target} — it was there when ${entry.agent || "an agent"} delivered it (${entry.at}); it has since been moved or deleted`,
-          });
-        }
-        bytes = info.size;
-        deliverables.clearMissing(entry.seq); // a restored file is not `gone` any more
-        ({ bin, args } = openerFor(entry.target));
-      }
-      try {
-        // Detached, exactly like /api/open-url: neither explorer.exe nor a detached Chrome reports an exit code that
-        // means anything, so the route answers from the spawn and not from the child.
+      // Detached, exactly like /api/open-url: neither explorer.exe nor a detached Chrome reports an exit code that
+      // means anything, so the route answers from the spawn and not from the child.
+      const launch = (bin, args) => {
         const child = spawn(bin, args, { detached: true, stdio: "ignore", windowsHide: true });
         child.on("error", (e) => log(`could not open deliverable ${entry.seq} (${entry.target}): ${String((e && e.message) || e)}`));
         child.unref();
+      };
+      const href = deliverableHref(entry);
+
+      if (entry.kind === "link") {
+        // A link has a URL, so the reader's own browser opens it and this route launches nothing: the page opens the
+        // tab in the click, which is the only way a popup is not blocked. What comes back is the URL — never a
+        // guess about whether it answers, because the panel does not fetch a URL on the reader's behalf.
+        if (!href) {
+          return sendJson(res, 400, {
+            error: `only http(s) links can be opened — “${oneLine(entry.target, 120)}” is not one`,
+          });
+        }
+        if (body.mode !== "launch") {
+          return sendJson(res, 200, { ok: true, kind: "link", target: entry.target, open: "tab", url: href });
+        }
+        // The page's tab was blocked (a host that refuses target=_blank). Chrome when this machine has one, the OS
+        // default browser when it does not: a missing Chrome must never become a missing deliverable. This is the one
+        // case the panel still launches a browser for a link, and `href` above has already proved it is an http(s)
+        // URL — what is handed over is a URL, not a command line.
+        try {
+          const found = chromeFor(entry.target);
+          const { bin, args } = found || openerFor(entry.target);
+          launch(bin, args);
+          return sendJson(res, 200, { ok: true, kind: "link", target: entry.target, open: "launch", opener: path.basename(bin), chrome: Boolean(found) });
+        } catch (e) {
+          return sendJson(res, 500, { error: String((e && e.message) || e) });
+        }
+      }
+
+      // A file or an image, judged by what the filesystem says NOW and in this order: gone, then not-a-file, then
+      // outside the repo, then whether the panel has a URL for it. Every one of those is a refusal the card states,
+      // so none of them may launch anything first.
+      const info = await stat(entry.target).catch(() => null);
+      if (!info) {
+        // What was recorded is what is opened: the store's own absolute path. A file that has since been moved or
+        // deleted stamps `missingAt` (so the row says `gone` on the next read) and answers 404 with the sentence that
+        // says when it was last seen.
+        deliverables.markMissing(entry.seq);
+        return sendJson(res, 404, {
+          error: `no such file: ${entry.target} — it was there when ${entry.agent || "an agent"} delivered it (${entry.at}); it has since been moved or deleted`,
+        });
+      }
+      if (!info.isFile()) {
+        // NOT markMissing: a directory is not a file that vanished. Stamping it `gone` hid a real folder behind a
+        // dead row (measured: the row said `gone` for a directory that was there the whole time).
+        return sendJson(res, 400, {
+          error: `that is a directory, not a file: ${entry.target} — the panel opens files and links, not folders`,
+        });
+      }
+      deliverables.clearMissing(entry.seq); // a restored file is not `gone` any more
+      if (href) {
+        // The panel serves this file, so it has a URL and the browser opens it in a tab. What the panel serves of its
+        // own public/ is not a path the boundary below is holding back; the page normally opens it straight from the
+        // list's `href`, and this answer is for a caller that asked. It spawns nothing.
+        return sendJson(res, 200, { ok: true, kind: entry.kind, target: entry.target, open: "tab", url: href, bytes: info.size });
+      }
+      // Everything else is a file on disk, and the panel opens one only inside the tree that delivered it.
+      const repo = deliverableRepoRoot(entry);
+      if (!repo || !insideRepo(entry.target, repo)) {
+        return sendJson(res, 403, {
+          error: `outside the repo: ${entry.target} — ${repo ? `it is not inside ${repo}` : "it is inside no git checkout"}; a deliverable is the file an agent put in its own tree`,
+        });
+      }
+      // No URL: the browser cannot render it, so the OS default handler is what opens it — the existing route, and
+      // the only opener left for a file the panel does not serve.
+      try {
+        const { bin, args } = openerFor(entry.target);
+        launch(bin, args);
+        return sendJson(res, 200, { ok: true, kind: entry.kind, target: entry.target, open: "handler", opener: path.basename(bin), bytes: info.size });
       } catch (e) {
         return sendJson(res, 500, { error: String((e && e.message) || e) });
       }
-      return sendJson(res, 200, {
-        ok: true,
-        kind: entry.kind,
-        target: entry.target,
-        opener: path.basename(bin),
-        ...(entry.kind === "link" ? { chrome } : { bytes }),
-      });
     }
 
     // Delete a deliverable. The confirmation lives in the UI; this only acts on a path or URL the panel
