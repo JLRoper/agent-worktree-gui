@@ -264,8 +264,7 @@ Before this landing the same case was also red (1345/1094, 3 out).</p>
 <pre><code>cd C:/ProjectDevelopment/agent-worktree-gui/.worktrees/stage-4-make-the-drawing-54293b
 node tools/verify-pipeline-flow-visible.mjs --strict --json out.json --shots shots
 node tools/verify-pipeline-flow.mjs                    # 49/49
-node --test test/*.test.js                             # 1383 tests, 1382 pass, 1 fail before this round's
-                                                       #   test update; 0 after it
+node --test test/*.test.js                             # 1393 tests, 1393 pass, 0 fail
 </code></pre>
 <p>The strict run exits 1 while the thirteen-stage finding stands; every other line is green. The screenshots this page
 shows are the harness's own, copied beside it under <code>docs/reviews/pipeline-flow-visual-round-5b/</code>.</p>
