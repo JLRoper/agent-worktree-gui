@@ -4,16 +4,41 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.8.6 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.9.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-271 releases from v0.1.0 (2026-10-20) to v1.8.6 (2026-11-04), 956 commits between the tags. Every release is anchored by an
+273 releases from v0.1.0 (2026-10-20) to v1.9.0 (2026-11-04), 961 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.9.0 — 2026-11-04 · 2 commits
+
+[`1c9eb24`](https://github.com/JLRoper/agent-worktree-gui/commit/1c9eb2469180266c842fc13416179b964a3e028f) · [compare v1.8.7...v1.9.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.8.7...v1.9.0)
+
+### Other
+
+- Refuse a commit that names a folder on the machine that wrote it ([`f30638f`](https://github.com/JLRoper/agent-worktree-gui/commit/f30638f9ad06895505a64a5c4a8ac2c5f21ceddc))
+- chore: 1.9.0 — the version this landing carries ([`1c9eb24`](https://github.com/JLRoper/agent-worktree-gui/commit/1c9eb2469180266c842fc13416179b964a3e028f))
+
+## v1.8.7 — 2026-11-04 · 3 commits
+
+[`ae32ae5`](https://github.com/JLRoper/agent-worktree-gui/commit/ae32ae56d08a04856cf3951e8e57ae6758115a66) · [compare v1.8.6...v1.8.7](https://github.com/JLRoper/agent-worktree-gui/compare/v1.8.6...v1.8.7)
+
+### Added
+
+- feat: the DELIVERABLES button counts what arrived since the reader last looked ([`655e36a`](https://github.com/JLRoper/agent-worktree-gui/commit/655e36a7d87371713459eec1446335e9a0bedc12))
+
+### Docs & tests
+
+- docs: render the changelog's missing v1.8.6 section ([`7c7eb23`](https://github.com/JLRoper/agent-worktree-gui/commit/7c7eb238d734f7e9b7239a1254a7ec7d98b7941a))
+
+### Other
+
+- chore: 1.8.7 — the version this landing carries ([`ae32ae5`](https://github.com/JLRoper/agent-worktree-gui/commit/ae32ae56d08a04856cf3951e8e57ae6758115a66))
 
 ## v1.8.6 — 2026-11-04 · 5 commits
 
