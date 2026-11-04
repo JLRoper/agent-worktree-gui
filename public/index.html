@@ -520,6 +520,11 @@
           <span class="settings-unit mono" id="pipeline-summary">reading…</span>
         </div>
         <div class="settings-preview mono" id="pipeline-source">…</div>
+        <div class="settings-row" id="pipeline-pick-row" title="The pipeline this tab edits: one definition at a time, chosen here. The editor below is that definition's title, kind, description, next and every stage's prompt and exit check; Save validates the whole document before it writes. The flow button draws the definition as a left-to-right sequence — each stage's exit check is the notch on the connector after it.">
+          <span>Pipeline <span class="settings-info">ⓘ</span></span>
+          <select id="pipeline-select" aria-label="the pipeline to edit"></select>
+          <button type="button" id="pipeline-flow-open" data-pipeline-flow-open title="open the flow — every stage of this definition left to right, with its exit checks as notches on the connectors. A definition has no position, so every stage is drawn not reached.">open the flow</button>
+        </div>
         <div id="pipeline-list"></div>
         <div id="pipeline-editor" class="pipeline-editor" hidden></div>
       </div>
@@ -759,6 +764,12 @@
   <script src="/board/paste-chips.js"></script>
   <script src="/core/transport.js"></script>
   <script src="/core/sse.js"></script>
+  <!-- The pipeline FLOW and the modal that shows it. flow is DATA IN, MARKUP OUT (a definition, a bundle pipeline
+       or the task pipeline window's model, drawn as stages left to right with gates as notches and a capped loop as
+       an arc); modal is the one dialog both call sites open, differing only in mode. Both load before app.js, which
+       wires the Pipeline tab's dropdown and its `open the flow` press at load. -->
+  <script src="/pipeline-flow.js"></script>
+  <script src="/pipeline-modal.js"></script>
   <script src="/app.js"></script>
   <!-- The update check. Loaded after app.js because it reads that file's `state`, `turnLive` and
        the banner helpers by name — at call time, never at load, so nothing here waits on boot. -->

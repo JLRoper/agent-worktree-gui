@@ -29,6 +29,7 @@
     "verify:chart-top-count": "node tools/verify-chart-top-count.mjs",
     "verify:settings-tabs": "node tools/verify-settings-tabs.mjs",
     "verify:pipelines-tab": "node tools/verify-pipelines-tab.mjs",
+    "verify:pipeline-flow": "node tools/verify-pipeline-flow.mjs",
     "verify:bundles-tab": "node tools/verify-bundles-tab.mjs",
     "verify:settings-skills": "node tools/verify-settings-skills.mjs",
     "verify:new-project": "node tools/verify-new-project.mjs",

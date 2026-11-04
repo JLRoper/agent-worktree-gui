@@ -19956,22 +19956,28 @@ async function loadPipelines() {
   return pipelinesLoading;
 }
 
-// One row per definition. The list is rebuilt on every load; the editor is a SIBLING node, so a repaint of the list
-// cannot touch it. A definition the loader dropped is named under the list with its reason, not hidden.
-function pipelineRowHtml(def) {
+// The tab's ONE selector: a dropdown of the definitions the catalogue holds, the editor for the one it names, and the
+// button that draws that definition's flow (public/pipeline-flow.js + public/pipeline-modal.js, in edit mode). The
+// list of rows this replaces was a second way to say "which pipeline"; a dropdown says it once, and the summary above
+// still carries the counts and the file the catalogue was read from.
+//
+// A definition the loader dropped is named under the dropdown with its reason, not hidden: a pipeline missing from a
+// select must say why it is missing. The dropped row is still a settings row, so the tab's own search finds it.
+function pipelineDroppedHtml(def) {
+  const why = String(def.why || "");
+  return `<div class="settings-row pipeline-row bad" data-pipeline-row="${esc(def.id)}" title="${esc(why)}"><span>dropped: <span class="mono">${esc(def.id)}</span></span><span class="settings-unit mono">${esc(why)}</span></div>`;
+}
+
+function pipelineOptionLabel(def) {
   const stages = Array.isArray(def.stages) ? def.stages.length : 0;
-  const next = def.next ? ` · next ${def.next}` : "";
-  return `<div class="settings-row pipeline-row" data-pipeline-row="${esc(def.id)}" title="${esc(def.description || def.title || def.id)}">
-      <span><strong>${esc(def.title || def.id)}</strong> <span class="mono">${esc(def.id)}</span></span>
-      <span class="settings-unit mono">${esc(def.kind || "?")} · ${stages} stage${stages === 1 ? "" : "s"}${esc(next)}</span>
-      <button type="button" data-pipeline-open="${esc(def.id)}" title="open this definition for editing">edit</button>
-    </div>`;
+  return `${def.id} — ${def.title || def.id} (${def.kind || "?"}, ${stages} stage${stages === 1 ? "" : "s"})`;
 }
 
 function paintPipelines(error = null) {
   const summary = document.getElementById("pipeline-summary");
   const source = document.getElementById("pipeline-source");
   const list = document.getElementById("pipeline-list");
+  const pick = document.getElementById("pipeline-select");
   if (!summary || !list) return;
   const data = pipelinesIndex;
   if (error || !data) {
@@ -19983,6 +19989,10 @@ function paintPipelines(error = null) {
       source.classList.add("bad");
     }
     list.innerHTML = "";
+    if (pick) {
+      pick.innerHTML = `<option value="">(no catalogue)</option>`;
+      pick.disabled = true;
+    }
     return;
   }
   summary.classList.remove("bad");
@@ -20001,27 +20011,91 @@ function paintPipelines(error = null) {
     source.classList.toggle("bad", Boolean(data.refused));
   }
   pipelineExitChecks = Array.isArray(data.exitChecks) ? data.exitChecks : pipelineExitChecks;
-  const rows = ids.map((id) => pipelineRowHtml(pipelines[id])).join("");
-  const dropped = (data.dropped || [])
-    .map((d) => `<div class="settings-row pipeline-row bad" data-pipeline-row="${esc(d.id)}" title="${esc(d.why)}"><span>dropped: <span class="mono">${esc(d.id)}</span></span><span class="settings-unit mono">${esc(d.why)}</span></div>`)
-    .join("");
-  list.innerHTML = rows || `<div class="settings-row"><span>no pipeline is in force — the catalogue is empty</span></div>`;
-  if (dropped) list.insertAdjacentHTML("beforeend", dropped);
-  for (const btn of list.querySelectorAll("[data-pipeline-open]")) {
-    btn.addEventListener("click", () => openPipelineEditor(btn.dataset.pipelineOpen));
+  // The dropdown, and the definition it names. The open one is kept while it is still in the catalogue; when nothing
+  // is open (or what was open was dropped) the first definition is selected, because the tab's job is to edit ONE.
+  const wanted = pipelineOpenId && pipelines[pipelineOpenId] ? pipelineOpenId : ids[0] || "";
+  if (pick) {
+    pick.innerHTML = ids.length
+      ? ids.map((id) => `<option value="${esc(id)}"${id === wanted ? " selected" : ""}>${esc(pipelineOptionLabel(pipelines[id]))}</option>`).join("")
+      : `<option value="">(no pipeline is in force)</option>`;
+    pick.disabled = !ids.length;
+    if (pick.value !== wanted) pick.value = wanted;
   }
+  const flowBtn = document.getElementById("pipeline-flow-open");
+  if (flowBtn) flowBtn.disabled = !wanted;
+  list.innerHTML = (data.dropped || []).map(pipelineDroppedHtml).join("") || (ids.length ? "" : `<div class="settings-row"><span>no pipeline is in force — the catalogue is empty</span></div>`);
   // A dirty draft is never replaced: the list may repaint as often as it likes, and the form keeps the reader's text.
   if (!pipelineDraftDirty) {
-    if (pipelineOpenId && pipelines[pipelineOpenId]) {
-      pipelineDraft = JSON.parse(JSON.stringify(pipelines[pipelineOpenId]));
+    if (wanted && (pipelineOpenId !== wanted || !pipelineDraft)) {
+      pipelineOpenId = wanted;
+      pipelineDraft = JSON.parse(JSON.stringify(pipelines[wanted]));
       paintPipelineEditor();
-    } else if (pipelineOpenId) {
+    } else if (wanted && pipelineDraft) {
+      pipelineDraft = JSON.parse(JSON.stringify(pipelines[wanted]));
+      paintPipelineEditor();
+    } else if (!wanted) {
       closePipelineEditor();
     }
   }
   const box = document.getElementById("settings-search");
   if (box && box.value) paintSettingsSearch();
 }
+
+// The dropdown's press: select a definition and edit it. A dirty draft is the one thing that can refuse the change,
+// and the select snaps back to the definition the form is still holding — a dropdown that stayed on "b" while the form
+// showed "a" would be a control that lies about what Save will write.
+function selectPipelineTab(id) {
+  const pipelines = (pipelinesIndex && pipelinesIndex.pipelines) || {};
+  const pick = document.getElementById("pipeline-select");
+  if (!pipelines[id]) {
+    if (pick) pick.value = pipelineOpenId || "";
+    return;
+  }
+  if (pipelineDraftDirty && pipelineOpenId && pipelineOpenId !== id) {
+    setPipelineStatus(`"${pipelineOpenId}" has unsaved changes — save or reload it before switching`, true);
+    if (pick) pick.value = pipelineOpenId;
+    return;
+  }
+  openPipelineEditor(id);
+}
+
+// The control that opens the modal, in edit mode. The DRAFT is what is drawn (so a half-made edit is drawn as it
+// stands), and the flow's marks are all "not reached": a definition has no position — a task carries the position.
+function openPipelineFlow() {
+  const pipelines = (pipelinesIndex && pipelinesIndex.pipelines) || {};
+  const id = pipelineOpenId || (document.getElementById("pipeline-select") || {}).value || "";
+  const def = pipelineDraft || pipelines[id];
+  if (!def || typeof PipelineFlow === "undefined" || typeof PipelineModal === "undefined") return;
+  const flow = PipelineFlow.fromDefinition(def);
+  const stages = flow.stages.length;
+  PipelineModal.open({
+    mode: "edit",
+    title: def.title || def.id || id,
+    subtitle: pipelineDraftDirty ? "unsaved changes" : "",
+    pipeline: flow,
+    position: null,
+    preview: false,
+    facts: [
+      { label: "pipeline", value: id || "—" },
+      { label: "kind", value: def.kind || "?" },
+      { label: "stages", value: String(stages) },
+      { label: "next", value: def.next || "end of the chain" },
+    ],
+    note: stages
+      ? "each notch is the exit check that ends the stage before it — no mark is set, because a definition has no position until a task enters a stage"
+      : "this definition holds no stage, so there is nothing to draw",
+    opener: document.getElementById("pipeline-flow-open"),
+  });
+}
+
+// Wired once, at load: the two controls are static markup (index.html), and the editor they drive is rebuilt under
+// them on every read. `pipeline-select`'s `change` is the press; a keyboard user never has to open the dropdown twice.
+document.getElementById("pipeline-select")?.addEventListener("change", (e) => selectPipelineTab(e.target.value));
+document.getElementById("pipeline-flow-open")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  openPipelineFlow();
+});
+
 
 function openPipelineEditor(id) {
   const pipelines = (pipelinesIndex && pipelinesIndex.pipelines) || {};

@@ -2255,6 +2255,14 @@
     return `<button type="button" class="as-task-pipe" data-as-qpipe="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="${esc(title)}" aria-label="${esc(title)}">${esc(words)}</button>`;
   }
 
+  // The row's FLOW press, beside the pipeline chip. The chip opens the pipeline WINDOW (where the task is assigned and
+  // where every stage's artifact and gate is spelled out); this opens the flow the window cannot draw at row width:
+  // the whole sequence left to right, the gates as notches, a capped loop as an arc, and where this task is. Both
+  // read the same answer; neither writes anything, and the press is a glyph so the row stays narrow.
+  function queueFlowButton(t, id) {
+    return `<button type="button" class="as-qflow" data-as-qflow="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="the pipeline flow — every stage left to right, gates as notches, a capped loop as an arc, and where this task is. It reads only: the chip beside it is where the task is assigned." aria-label="open the pipeline flow">⇢</button>`;
+  }
+
   // The PROJECT a card is about, in one word — the field the panel wrote when it cut the task, else the project the
   // tree path names (everything before `/.worktrees/`, reduced to its directory name), else the board row's own
   // project. Nothing at all when none of the three says anything: a guessed project reads exactly like a fact, and a
@@ -2353,7 +2361,7 @@
             ${queueQuestionChip(t, alerts)}
           </div>
           <div class="as-task-agents">${agents}</div>
-          <div class="as-task-pipeline">${queuePipelineChip(t, id)}</div>
+          <div class="as-task-pipeline">${queuePipelineChip(t, id)}${queueFlowButton(t, id)}</div>
           ${meta.length ? `<div class="as-task-meta">${meta.join(" · ")}</div>` : ""}
           ${note}
         </div>
@@ -3159,6 +3167,89 @@
     pipeWindowShow({ doc, model, catalogue, opener: pipeWindowState.opener, assistantId, taskId });
   }
 
+  // The FLOW press's whole read: one task answer, drawn as the sequence. It is a READ — the modal shows where the record
+  // is and lets the reader step a PREVIEW through the stages (nothing is written, and the preview says so); the chip
+  // beside it opens the window, which is where a task is assigned or moved.
+  async function openTaskPipelineFlow(assistantId, taskId, opener = null) {
+    if (!assistantId || !taskId) return null;
+    const modal = typeof PipelineModal === "undefined" ? null : PipelineModal;
+    const flowApi = typeof PipelineFlow === "undefined" ? null : PipelineFlow;
+    if (!modal || !flowApi) return null;
+    modal.open({ mode: "position", title: `#${taskId}`, loading: true, opener });
+    let model;
+    let catalogue;
+    const readJson = async (url) => {
+      const r = await apiFetch(url);
+      const body = await r.json().catch(() => null);
+      if (!r.ok) throw new Error((body && body.error) || `the panel answered ${r.status}`);
+      return body;
+    };
+    // Two reads, in parallel, both already on the server: the task's own answer (which stage, since when) and the
+    // catalogue (the pipeline's FULL shape — every gate, every handoff, a loop's cap). The window's model carries the
+    // gate that ends each stage but only the joining handoff, so the loops a reader is looking for live in the bundle;
+    // drawing the flow from the catalogue's pipeline is what makes the arcs complete.
+    const [taskRead, catalogueRead] = await Promise.allSettled([
+      readJson(`/api/assistant/task-pipeline?assistantId=${encodeURIComponent(assistantId)}&task=${encodeURIComponent(taskId)}`),
+      readJson(`/api/assistant/pipeline-catalogue?assistantId=${encodeURIComponent(assistantId)}`),
+    ]);
+    if (taskRead.status === "fulfilled") model = taskRead.value;
+    else model = { mode: "error", error: String((taskRead.reason && taskRead.reason.message) || taskRead.reason) };
+    catalogue = catalogueRead.status === "fulfilled" ? catalogueRead.value : null;
+    // The reader may have closed it while the read was in flight: a closed dialog is not repainted.
+    if (!modal.isOpen()) return null;
+    const task = (model && model.task) || { id: taskId, title: null };
+    const title = `${task.id != null ? `#${task.id} ` : `#${taskId} `}${task.title || "task"}`;
+    if (!model || model.error) {
+      modal.open({ mode: "position", title, note: `could not read this task's pipeline — ${(model && model.error) || "the panel answered nothing"}`, facts: [], opener });
+      return null;
+    }
+    const current = model.current || null;
+    const count = model.count;
+    if (model.mode === "assistant-decides") {
+      modal.open({
+        mode: "position",
+        title,
+        subtitle: "no pipeline",
+        facts: [{ label: "path", value: "the assistant decides" }],
+        note: "This task is on the default path — no pipeline is assigned, so there is no sequence and nothing to mark. The chip beside this press opens the window where a pipeline and a stage can be chosen.",
+        opener,
+      });
+      return null;
+    }
+    const bundlePipeline =
+      catalogue && catalogue.ok === true && model.pipeline ? (catalogue.pipelines || []).find((p) => p.id === model.pipeline.id) || null : null;
+    const flow = bundlePipeline ? flowApi.fromBundle(bundlePipeline) : flowApi.fromWindowModel(model);
+    const elapsed = model.elapsed && model.elapsed.ok ? fmtDur(model.elapsed.ms) : "—";
+    const entered = model.enteredAt ? pipeWindowStamp(model.enteredAt) : "—";
+    const placed = model.mode === "pipeline" && current;
+    const note = placed
+      ? "the marks read the record — everything before this stage is done, this one is current, and everything after it is not reached. The preview below moves nothing."
+      : `UNRESOLVED — ${model.unresolved && model.unresolved.reason ? model.unresolved.reason : model.reason || "this task's pipeline record cannot be read"}. The stages are drawn with nothing marked current; this is never read as the default path.`;
+    modal.open({
+      mode: "position",
+      title,
+      subtitle: placed ? `${current.position} of ${count} — ${current.title || current.id}` : "unresolved",
+      pipeline: flow,
+      position: placed ? { stage: current.id } : null,
+      preview: flow.stages.length > 0,
+      facts: placed
+        ? [
+            { label: "pipeline", value: `${model.pipeline.title || model.pipeline.id} (${model.pipeline.id})` },
+            { label: "began", value: entered },
+            { label: "in this stage", value: elapsed },
+            { label: "stages", value: String(count) },
+          ]
+        : [
+            { label: "pipeline", value: (model.unresolved && model.unresolved.pipeline) || "—" },
+            { label: "stage", value: (model.unresolved && model.unresolved.stage) || "—" },
+            { label: "stages", value: String(count || 0) },
+          ],
+      note,
+      opener,
+    });
+    return model;
+  }
+
   // One assignment press: the pipeline and stage the selects hold, or `clear`. It writes through the QUEUE's route (the
   // record's one door), then re-reads the window at the new clock so the stage, its position and its elapsed span come
   // from the record the write just produced — never from the form.
@@ -3210,6 +3301,19 @@
   // dialog's own host for the keys. `capture` on the press is what keeps the row body's console opener from also firing:
   // one press, one window.
   function pipeWindowWire() {
+    // The FLOW press is the row's own: capture, and stop before the row body's console opener can read it too. Two
+    // presses on one row must never do two things.
+    as$("assistant")?.addEventListener(
+      "click",
+      (e) => {
+        const btn = e.target?.closest?.("[data-as-qflow]");
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        void openTaskPipelineFlow(btn.dataset.asQown, btn.dataset.asQflow, btn);
+      },
+      true,
+    );
     as$("assistant")?.addEventListener(
       "click",
       (e) => {

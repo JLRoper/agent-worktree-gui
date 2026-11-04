@@ -3901,3 +3901,115 @@ body.pipew-open { overflow: hidden; }
 #bundle-tasks > .settings-row:last-child { border-bottom: none; }
 #bundle-tasks > .settings-row { cursor: pointer; }
 #bundle-tasks > .settings-row:hover { color: var(--text); }
+
+/* ---- the pipeline flow (public/pipeline-flow.js) and its modal (public/pipeline-modal.js) --------------------- */
+/* The flow is a COLUMN per stage, left to right, inside a horizontal scroller: thirteen stages of a studio bundle do
+   not fit a 340px settings rail, and squeezing them into one is how a sequence becomes an unreadable strip. The
+   connector is the grid's gap, so a gate's notch sits at the middle of the gap and a stage's own column never has to
+   know how wide its neighbour is. The arcs above the track are positioned in CSS calc from --pflow-n (columns),
+   --pflow-i/--pflow-j (the two stage indexes) and the same --pflow-gap the track uses — no measurement, no resize
+   handler, and an arc cannot drift from the stage it joins. */
+.pflow { --pflow-gap: 26px; --pflow-minw: 78px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pflow-scroll { overflow-x: auto; overflow-y: hidden; padding: 0 2px 6px; }
+.pflow-canvas { position: relative; padding-top: var(--pflow-pad, 0px); min-width: 100%; }
+.pflow-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--pflow-n, 1), minmax(var(--pflow-minw), 1fr));
+  gap: var(--pflow-gap);
+  /* A short sequence fills the dialog; a single stage is a card, not a 1120px empty box. The same cap is on the arcs
+     layer below, because the arc geometry is a percentage of THIS box. */
+  max-width: calc(var(--pflow-n) * 240px + (var(--pflow-n) - 1) * var(--pflow-gap));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  align-items: start;
+}
+.pflow-node { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 8px 8px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.pflow-node .pflow-title { font-size: 11.5px; line-height: 1.3; color: var(--dim); overflow-wrap: anywhere; }
+.pflow-node .pflow-n { font-size: 9.5px; color: var(--dimmer); }
+.pflow-node .pflow-art { font-size: 10px; color: var(--dimmer); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pflow-dot { position: absolute; top: -5px; left: 8px; width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); }
+/* The four marks, and no fifth. Colour is the panel's own language: green finished, blue where the work is, grey not
+   yet, red a gate that said no. */
+.pflow-node[data-mark="done"] { border-color: #24452c; }
+.pflow-node[data-mark="done"] .pflow-dot { background: var(--green); border-color: var(--green); }
+.pflow-node[data-mark="done"] .pflow-title { color: var(--dim); }
+.pflow-node[data-mark="current"] { border-color: #2b5480; background: var(--blue-bg); }
+.pflow-node[data-mark="current"] .pflow-dot { background: #58a6ff; border-color: #58a6ff; box-shadow: 0 0 0 3px #58a6ff33; }
+.pflow-node[data-mark="current"] .pflow-title { color: var(--text); font-weight: 600; }
+.pflow-node[data-mark="not-reached"] .pflow-dot { background: var(--panel); border-color: var(--dimmer); }
+.pflow-node[data-mark="not-reached"] .pflow-title { color: var(--dimmer); }
+.pflow-node[data-mark="refused"] { border-color: #6b2a2a; background: var(--red-bg); }
+.pflow-node[data-mark="refused"] .pflow-dot { background: var(--red); border-color: var(--red); }
+.pflow-node[data-mark="refused"] .pflow-title { color: #ff9a9a; }
+/* The connector: the whole gap between two columns, with the gate's notch crossing its middle. */
+.pflow-link { position: absolute; top: 26px; left: 100%; width: var(--pflow-gap); height: 1px; background: var(--line); }
+.pflow-link.is-end { width: 18px; }
+.pflow-link::before { content: ""; position: absolute; left: -3px; top: -2px; width: 6px; height: 5px; border-left: 1px solid var(--line); }
+.pflow-notch { position: absolute; left: 50%; top: -7px; width: 3px; height: 15px; margin-left: -1.5px; border-radius: 2px; background: var(--amber); box-shadow: 0 0 0 2px var(--panel); cursor: help; }
+.pflow-node[data-mark="done"] .pflow-notch { background: #6f8f5a; }
+.pflow-node[data-mark="not-reached"] .pflow-notch { background: #4a5568; }
+/* A capped loop: one arc above the track, in its own lane, and the cap is the only word on it. */
+.pflow-arcs { position: absolute; left: 0; top: 0; height: var(--pflow-pad, 0px); width: 100%; max-width: calc(var(--pflow-n) * 240px + (var(--pflow-n) - 1) * var(--pflow-gap)); pointer-events: none; }
+.pflow-arc {
+  position: absolute;
+  top: calc(18px + var(--pflow-lane, 0) * 26px);
+  left: calc((100% - (var(--pflow-n) - 1) * var(--pflow-gap)) / var(--pflow-n) * (var(--pflow-i) + 0.5) + var(--pflow-i) * var(--pflow-gap));
+  width: calc((100% - (var(--pflow-n) - 1) * var(--pflow-gap)) / var(--pflow-n) * (var(--pflow-j) - var(--pflow-i)));
+  height: 22px;
+  border: 1px solid #55407a;
+  border-bottom: 0;
+  border-radius: 12px 12px 0 0;
+}
+.pflow-arc-label { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); padding: 0 5px; border-radius: 4px; background: var(--panel); color: #b9a2e0; font-size: 9.5px; line-height: 12px; white-space: nowrap; }
+.pflow-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 10.5px; color: var(--dim); }
+.pflow-key { display: inline-flex; align-items: center; gap: 5px; }
+.pflow-key i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); }
+.pflow-key[data-mark="done"] i { background: var(--green); border-color: var(--green); }
+.pflow-key[data-mark="current"] i { background: #58a6ff; border-color: #58a6ff; }
+.pflow-key[data-mark="not-reached"] i { border-color: var(--dimmer); }
+.pflow-key[data-mark="refused"] i { background: var(--red); border-color: var(--red); }
+.pflow-key b { color: var(--text); font-weight: 500; }
+/* Motion is a courtesy, never the meaning: the current stage's dot breathes and an arc fades in. data-motion="off"
+   is what the script sets from the reader's preference, and the media query repeats it for a page whose script never
+   ran — a mark still reads exactly the same either way. */
+@keyframes pflow-breathe { 0%, 100% { box-shadow: 0 0 0 3px #58a6ff22; } 50% { box-shadow: 0 0 0 6px #58a6ff44; } }
+@keyframes pflow-in { from { opacity: 0; } to { opacity: 1; } }
+.pflow[data-motion="on"] .pflow-node[data-mark="current"] .pflow-dot { animation: pflow-breathe 2.6s ease-in-out infinite; }
+.pflow[data-motion="on"] .pflow-arc { animation: pflow-in 0.45s ease-out both; }
+
+/* The dialog. z-index 140 is above the Settings window (120) — the edit-mode press comes FROM that window, and a
+   dialog drawn under the thing that opened it is a press that appears to do nothing. */
+.pmodal { position: fixed; inset: 0; z-index: 140; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 14px 14px; background: #05070ac9; }
+.pmodal[hidden] { display: none; }
+.pmodal-card { display: flex; flex-direction: column; width: min(1120px, 96vw); max-height: 86vh; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 44px #000b; overflow: hidden; outline: none; }
+.pmodal-bar { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.pmodal-kicker { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dimmer); }
+.pmodal-title { font-size: 13px; color: var(--text); }
+.pmodal-sub { font-size: 10.5px; color: var(--dim); }
+.pmodal-bar .spacer { flex: 1; }
+.pmodal-close { border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+.pmodal-close:hover { color: var(--text); border-color: #8fb8ff; }
+.pmodal-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
+.pmodal-facts { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 11px; color: var(--dim); }
+.pmodal-facts i { color: var(--dimmer); font-style: normal; }
+.pmodal-facts b { color: var(--text); font-weight: 500; }
+.pmodal-note { font-size: 11.5px; line-height: 1.5; color: var(--dim); }
+.pmodal-empty { padding: 14px; border: 1px dashed var(--line); border-radius: 8px; color: var(--dimmer); font-size: 11.5px; }
+.pmodal-preview { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11px; color: var(--dim); }
+.pmodal-preview-note { color: var(--dimmer); text-transform: uppercase; letter-spacing: 0.06em; font-size: 9.5px; }
+.pmodal-preview select { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: 11px var(--mono); }
+.pmodal-check { display: inline-flex; align-items: center; gap: 5px; }
+.pmodal-foot { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--panel-2); border-top: 1px solid var(--line); }
+.pmodal-foot .pmodal-status { flex: 1; font-size: 10.5px; color: var(--dim); }
+.pmodal-foot button { border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+.pmodal-foot button:hover { color: var(--text); border-color: #8fb8ff; }
+body.pipeline-modal-open { overflow: hidden; }
+/* The queue row's flow press: a glyph beside the pipeline chip, quiet until it is pointed at. */
+.as-task-pipeline .as-qflow { margin-left: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 5px; padding: 0 7px; font-size: 12px; line-height: 1.5; cursor: pointer; }
+.as-task-pipeline .as-qflow:hover { color: var(--text); border-color: #8fb8ff; }
+@media (prefers-reduced-motion: reduce) {
+  .pflow[data-motion] .pflow-node[data-mark="current"] .pflow-dot,
+  .pflow[data-motion] .pflow-arc { animation: none; }
+}

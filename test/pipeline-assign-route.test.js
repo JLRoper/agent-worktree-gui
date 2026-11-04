@@ -131,6 +131,17 @@ test("a task can be put on a pipeline, read back from disk, and cleared — with
   assert.equal(catalogue.json.ok, true);
   assert.deepEqual(catalogue.json.pipelines.map((p) => p.id), ["poc-to-uat"]);
   assert.deepEqual(catalogue.json.pipelines[0].stages.map((s) => s.position), [1, 2, 3, 4, 5]);
+  // The rest of the pipeline's own shape travels too: the flow modal draws its notches from `gates` and its capped
+  // loops from `handoffs`, and a stage list alone would make it read the bundle twice or draw a sequence with the
+  // gates missing.
+  assert.deepEqual(catalogue.json.pipelines[0].gates.map((g) => [g.id, g.after, g.name]), [["g2", "S2", "contract signed"]]);
+  assert.equal(catalogue.json.pipelines[0].gates[0].decision.outcomes.join(","), "go,no-go", "a gate's decision travels with it");
+  assert.deepEqual(catalogue.json.pipelines[0].handoffs.map((h) => [h.id, h.from, h.to, h.kind]), [
+    ["h1", "S1", "S2", "sequence"],
+    ["h2", "S2", "S3", "sequence"],
+    ["h3", "S3", "S4", "sequence"],
+    ["h4", "S4", "S5", "sequence"],
+  ]);
 
   // ---- assign #7 at S2 ------------------------------------------------------------------------------
   const before = Date.now();

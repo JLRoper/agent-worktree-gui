@@ -853,6 +853,19 @@ disabled and platform-gated names resolved: a row it does not serve says `not se
 carries (a plugin's `plugin:skill`) gets its own Gateway row, and a gateway that cannot answer leaves every row
 `unverified` with its reason. Nothing in the tab edits a skill.
 
+The **Pipeline** tab edits what a worktree is for, one definition at a time: a dropdown selects it (`id — title`,
+with `kind` and the stage count), the form under it is that definition's title, kind, description, `next` and every
+stage's prompt and exit check, and **open the flow** draws it — stages left to right, each stage's exit check as a
+notch on the connector after it, a capped loop as an arc labelled with its cap. A definition has no position, so
+every stage is drawn *not reached*. The dialog is a real modal: it sits above the Settings window, Tab stays inside
+it, `Esc` or a press outside closes it, and focus goes back to the button. A draft with unsaved changes is not
+replaced by a repaint, and switching the dropdown away from it is refused until you save or reload.
+
+The same dialog opens from a **queue row's `⇢`** beside its `pipeline …` chip, in position mode: the task's own
+sequence with its finished stages green, the stage it is in blue, the ones ahead grey, a gate that said no red, and
+the time it entered the stage. The `position` select and the `stage refused` box move that DRAWING only — nothing is
+written, and the chip's window is still where a task is put on a pipeline or moved.
+
 The **Board** tab opens with **Read now**, the two gestures that read the board at once instead of on the clock:
 **Refresh now** re-reads every worktree row of the projects in view (the same cheap pass the board runs every few
 seconds, so a row that already matches stays as it is, and a row whose verdict is stale is read in full), and
