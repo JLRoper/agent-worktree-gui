@@ -19,7 +19,10 @@ import test from "node:test";
 const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8")
   .replace(/\r\n/g, "\n")
   .replace(/\/\*[\s\S]*?\*\//g, "");
-const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+// Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
+// script's names are page-wide, so a rule is read from the script that now carries it.
+const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const app = `${page("public/board/console.js")}\n${page("public/app.js")}`;
 
 const CHIP = ".tail-chip";
 const CONSOLE_CHIP = ".out-wrap > .to-bottom";
