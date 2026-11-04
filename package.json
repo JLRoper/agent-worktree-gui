@@ -51,6 +51,7 @@
     "verify:provider-profiles": "node tools/verify-provider-profiles.mjs",
     "verify:assistant-dock-overlap": "node tools/verify-assistant-dock-overlap.mjs",
     "measure:perf-paths": "node tools/measure-perf-paths.mjs",
+    "capture:pipeline-flow": "node tools/capture-pipeline-flow.mjs",
     "verify:task-pipeline-window": "node tools/verify-task-pipeline-window.mjs",
     "verify:action-harvest": "node tools/verify-action-harvest.mjs",
     "verify:restart-line-harvest": "node tools/verify-restart-line-harvest.mjs",
