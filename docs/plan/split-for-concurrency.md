@@ -1,13 +1,13 @@
 # Splitting for concurrency — the implementation plan
 
-**Measured at `origin/main` `35230cc` (`package.json` 1.6.1), 2026-11-04.** The code tree is identical to `f0b52a3`
-(1.6.0), where the numbers below were read; the only changes since are `package.json` and `CHANGELOG.md`. Every
-number below was re-read in this worktree; §1 marks the cells I could not reproduce, and no stage is ordered by an
-unconfirmed number. Line numbers drift with every landing, so each anchor is given with the text to search for, and
-Stage 0 re-reads them before a stage edits anything.
+**Measured at `origin/main` `6a3de29` (`package.json` 1.7.0), 2026-11-04.** `server.js` and `lib/` are unchanged
+since `f0b52a3` (1.6.0), where their numbers were read; `public/app.js` has grown by 35 lines since (the 1.7.0
+Cards switch). Every number below was re-read in this worktree; §1 marks the cells I could not reproduce, and no
+stage is ordered by an unconfirmed number. Line numbers drift with every landing, so each anchor is given with the
+text to search for, and Stage 0 re-reads them before a stage edits anything.
 
-**The branch carries the bump this PR lands as 1.6.2.** v1.6.1 landed on `main` while this plan was being written
-(and v1.6.1 is already anchored there); 1.6.2 is the next patch above it.
+**The branch carries the bump this PR lands as 1.7.1.** v1.7.0 landed on `main` while this plan was being written
+(and is already anchored there); 1.7.1 is the next patch above it.
 
 **This is the plan the review asks for.** `docs/reviews/split-for-concurrency.md` (364 lines at this tip) aggregates
 `split-server.md`, `split-public-app.md` and `split-lib.md` into three cuts and the collisions they leave. This
@@ -49,27 +49,28 @@ a queue for one file, and the only parallelism is around it, not inside it.
 
 ## 1. What was re-measured, and what was not
 
-Main moved 1.4.2 → 1.6.1 today, and moved twice while this plan was being written: `server.js` and
+Main moved 1.4.2 → 1.7.0 today, and moved three times while this plan was being written: `server.js` and
 `public/app.js` were unchanged between the review's tip `92d5fcc` (1.5.5) and `75ec220` (1.5.6), the 1.6.0 landing
-grew `server.js` by **103** lines and `public/app.js` by **62**, and the 1.6.1 landing touched only `package.json`
-and `CHANGELOG.md`. The review's headline sizes are therefore 103 and 62 lines short at the 1.6.0 code tree, and its
-line-region table is the 1.4.0 page's, 198–201 lines short. §1.1.
+grew `server.js` by **103** lines and `public/app.js` by **62**, the 1.6.1 landing touched only `package.json` and
+`CHANGELOG.md`, and the 1.7.0 landing grew `public/app.js` by **35**. The review's server sizes are therefore 103
+lines short at this code tree, its app sizes 97 short, and its line-region table is the 1.4.0 page's, 198–201 lines
+short. §1.1.
 
-| Number | The review / pages say | At `f0b52a3` | Status |
+| Number | The review / pages say | At `6a3de29` | Status |
 |---|---|---|---|
-| version | 1.5.6 | **1.6.0** | confirmed |
+| version | 1.5.6 | **1.7.0** | confirmed |
 | `server.js` | 5,968 lines; `createServer` at 2,465; 469 `return sendJson(`; 54 static `lib/` specifiers | **6,071 / 2,528 / 476 / 54** (+2 `await import()`) | confirmed |
 | dispatch | 137 conditions (136 `===`, 1 prefix); 138 path mentions; 125 distinct paths | **137 blocks** (136 `===`, 1 `startsWith`), **138 mentions**, **125 distinct**; the two-path block is `/api/state`+`/api/audit` at 3,521; the prefix is `/api/stream` at 5,809; span 2,546–5,809 | confirmed |
 | routes | 132 routes + 5 spine; 141 API paths | **132 group blocks + 5 spine = 137 blocks**; 138 inline mentions + 3 mounted adapters = **141 paths** | confirmed — the 132 counts blocks, not paths |
-| `public/app.js` | 22,818 lines; 1,151 top-level names (790 `function`, 89 `async function`, 199 `const`, 73 `let`); 879 on `window` | **22,880 content lines** (`wc -l` 22,879); **1,154 names (792/90/199/73); 882 on `window`** | confirmed |
-| `public/style.css` | 4,155 lines; 917 classes; 448 only in `app.js`, 154 only in `assistant.js` | **4,181 content lines** (`wc -l` 4,180); my selector parse: **920** classes, **378 / 153** by my name match | line count confirmed; the 917/448/154 split **unconfirmed** — not used below |
+| `public/app.js` | 22,818 lines; 1,151 top-level names (790 `function`, 89 `async function`, 199 `const`, 73 `let`); 879 on `window` | **22,915 content lines** (`wc -l` 22,914); **1,156 names (793/90/200/73); 883 on `window`** | confirmed |
+| `public/style.css` | 4,155 lines; 917 classes; 448 only in `app.js`, 154 only in `assistant.js` | **4,185 content lines** (`wc -l` 4,184); my selector parse: **920** classes, **378 / 153** by my name match | line count confirmed; the 917/448/154 split **unconfirmed** — not used below |
 | `lib/` | 88 files that are not the test; 36,449 lines; 143 import edges | **88** (87 ESM + `panel-restart.cjs`); **36,468 content lines** (`wc -l` 36,467 — `restart.js` has no trailing newline); **143 relative edges under `lib/`** (142 module→module + `jobs.test.js`) **+ 1** to `public/core/steerable.js` = 144 relative specifiers | confirmed |
 | co-change window | 259 commits touching `lib/`; the 28-pair matrix | **260**; every cell reproduced — ASSISTANT+RUNS **17**, `assistant.js`+`jobs.js` **16**, `assistant.js`+`assistant/config.js` **17**, PIPELINES **0** with SERVER/WATCH/INSTALL/LANDING, WATCH+LANDING **4**, RUNS+WATCH **10**, RUNS+SERVER **9**, RUNS+LANDING **9** | confirmed cell for cell |
 | admission | 8 `jobs.create` calls across four clusters, "four routes, four option sets" | **8 calls**: 2 ASSISTANT (`assistant.js:3,733`, `:5,778`), 2 LANDING (`features/spawn.js:236`, `:270`), **3** SERVER routes (`server.js:4,459` `/api/agents`; `:5,468` merge; `:5,600` verify-landed) + **1** in `startThreadReply` (`server.js:1,270`) — a helper shared by the reply route and the stage-timer wake, **not a route**; the definition is `lib/jobs.js:2,375` | count confirmed; "four routes" corrected |
-| `index.html` script block | 782–828 | **789–835**, 17 `<script src>` lines; `/app.js` at **829** | corrected (the review repeated the 1.4.2 range) |
+| `index.html` script block | 782–828 | **795–841**, 17 `<script src>` lines; `/app.js` at **835** | corrected (the review repeated the 1.4.2 range) |
 | server wave 2 regions | 2,476–2,563; 3,895–3,921; 3,928–3,966 | **2,674–2,689 + 2,701–2,761** (pipelines); **4,096–4,122** (approvals); **4,129–4,167** (todos) | corrected, +198/+201 |
 | server wave 4 regions | 3,331–3,412 vs 3,419–3,522; 3,887–3,889 vs 3,864–3,867 | **3,529–3,610** vs **3,617–3,690**; **4,085–4,090** vs **4,062–4,065** | corrected, +198 |
-| console region | 166 units, 2,263 lines; spans 1,521–2,360 / 4,076–4,493 / 7,389–9,648 | spans **unchanged** — the 185 added `app.js` lines since `1e1c595` are all in Settings (19,004, 21,773) and the deliverable list (18,025–18,477); the unit and line counts were **not re-counted** | spans confirmed; counts **unconfirmed** |
+| console region | 166 units, 2,263 lines; spans 1,521–2,360 / 4,076–4,493 / 7,389–9,648 | spans **shifted +20** from the 1.5.6 tree (7,409–9,668); the 220 added `app.js` lines since `1e1c595` are in Settings, the deliverable list and the 1.7.0 Cards switch; the unit and line counts were **not re-counted** | spans confirmed; counts **unconfirmed** |
 | console harnesses | "two tests cut its markers, four more read its helpers, one imports a module" | **16** test files read a console region out of `public/app.js` (§3.1) | corrected |
 | test suite | 168 files | **169** `test/*.test.js` | confirmed |
 | `jobs.test.js` | 449 lines beside `jobs.js` | **449**, its one import at line **29** | confirmed |
@@ -87,10 +88,11 @@ wrong place. Stage 0 re-reads each block by its path, not by a remembered number
 
 ### 1.2 The console's spans survived; its counts did not
 
-`public/app.js` grew by 185 lines since `1e1c595`: 123 in Settings (19,004–19,121 and 21,773–21,775) and 62 in the
-deliverable list (18,025–18,477). The console's markers are still where the public page left them (`// ---- tool
-group key` at 2,225, `// ---- reasoning first` at 7,389, `// ---- console row text` at 7,586, `// ---- console
-writers` at 7,820, `// ---- copy buttons` at 8,361, `// ---- the reader's own input` at 8,578), so the region's shape
+`public/app.js` grew by 220 lines since `1e1c595`: 123 in Settings (19,004–19,121 and 21,773–21,775), 62 in the
+deliverable list (18,025–18,477), and 35 in the 1.7.0 Cards switch (4,668–4,794, 7,243–7,250, 9,159). The console's
+markers have shifted with the insertions before them — `// ---- reasoning first` at 7,409, `// ---- console row
+text` at 7,606, `// ---- console writers` at 7,840, `// ---- copy buttons` at 8,381, `// ---- the reader's own
+input` at 8,598 (the burst key at 2,225 did not move) — and their relative order is unchanged, so the region's shape
 is confirmed. Its **166 units / 2,263 lines** were not re-counted and are marked unconfirmed; the plan never uses
 them as a denominator.
 
@@ -175,11 +177,11 @@ are unconfirmed (§1.2); the spans are confirmed by the markers named there.
 **Edit set.**
 - `public/board/console.js` — new.
 - `public/app.js` — delete those declarations. **Keep** the five `state.*` blocks: `state.collecting` at 4,224; the
-  sub-console fields at 4,440–4,448; `state.thinkCache`… at 7,201–7,206; `state.typePacer`/`state.typeGate` at
-  7,373–7,376; `state.outPinned` at 8,577. They are top-level statements that read `state` and call app.js's
+  sub-console fields at 4,440–4,448; `state.thinkCache`… at 7,207–7,212; `state.typePacer`/`state.typeGate` at
+  7,393–7,396; `state.outPinned` at 8,597. They are top-level statements that read `state` and call app.js's
   `typeWordSpeed`/`typeLineRate` at load, and `console.js` is evaluated **before** `app.js`. They are wiring for
   this landing, not declarations.
-- `public/index.html` — one line, `<script src="/board/console.js"></script>`, at **829**, immediately before
+- `public/index.html` — one line, `<script src="/board/console.js"></script>`, at **835**, immediately before
   `/app.js` and after `/pipeline-modal.js`.
 
 **The ONE shared file.** `public/app.js`. A second worker cannot delete from it at the same time; S1 holds it.
@@ -189,7 +191,7 @@ are unconfirmed (§1.2); the spans are confirmed by the markers named there.
 
 **Why the script order, and what it forbids.** A classic script's top-level `function` is a `window` property and a
 top-level `const`/`let` is a lexical binding a later script can read by bare name; a second top-level `const` of one
-name in a later script is a `SyntaxError` that kills that script alone. `app.js`'s boot IIFE at 22,848 calls the
+name in a later script is a `SyntaxError` that kills that script alone. `app.js`'s boot IIFE at 22,883 calls the
 console's renderers, so `console.js` must be evaluated first — and because it is first, it **may not call an app.js
 name at top level**, and the five `state` initialisations stay behind. Moving declarations only is what makes this
 safe; the page's §6 rule ("a listener that calls a bare name does not care which file declares it") is the licence.
@@ -468,7 +470,7 @@ buys.
 | `board/human.js` | HUMAN's landing helpers and rotation | `public/app.js` | same | declarations only |
 
 **Two rules for all eight.**
-- Each adds **one** `<script>` line to the 789–835 block, before `/app.js`, in an order the crew agrees **before the
+- Each adds **one** `<script>` line to the 795–841 block, before `/app.js`, in an order the crew agrees **before the
   first one lands**; the block is one hunk and two insertions at the same line conflict.
 - Each loads before `app.js` for the same reason as S1: declarations only, no top-level call into `app.js`, the
   `state.*` blocks stay in `app.js`. `board/board.js` — the shell — moves **last**, after all eight, because its
@@ -541,7 +543,7 @@ serialises against every other stage that touches it.
 
 - **`server.js`'s mount table.** Every extraction inserts at the same place. The deletions merge; that hunk does not,
   which is why the server surface lands one group at a time.
-- **`public/index.html`'s 789–835 script block.** Every panel file adds one line in the same block.
+- **`public/index.html`'s 795–841 script block.** Every panel file adds one line in the same block.
 - **`package.json`.** Every landing, of any surface, bumps it. The pre-push hook refuses a branch whose number is not
   above `origin/main`'s, so **landing concurrency is 1** and the queue is the real schedule.
 - **cards ↔ console's 13 alternations.** Until S1 lands, those two cuts conflict line-by-line even though they are
@@ -747,7 +749,8 @@ four-cluster row after S8 (§5.2).
 
 ## 10. What this plan did not do
 
-- **No code moved.** Every number is at `f0b52a3`; this landing touches the plan, the changelog and `package.json`.
+- **No code moved.** The server and library numbers are at `f0b52a3`, the client numbers at `6a3de29`; this landing
+  touches the plan, the changelog and `package.json`.
 - **No trial merge.** "Together" is co-change commits plus import edges, not a simulated merge. The one line-level
   check that goes beyond the review is `lib/jobs.js`'s 29/44/47 spacing (§5.4), and it was read, not merged.
 - **No test run, no boot** for this document. `npm test` is each stage's gate, not this page's.
