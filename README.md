@@ -66,8 +66,12 @@ candidates, none keeps the old wording) and that the card says which tree was pi
 touching what a SPAWN IN line may name.
 
 `node tools/verify-named-tree.mjs` proves the naming ledger (the once-per-tree rename, `lib/tree-names.js`)
-and the `✦` name-from-the-work button against a panel of its own — sandbox `PANEL_CONFIG`, spare port,
-sandbox `$HERMES_HOME`, stub gateway, throwaway repo — useful after touching anything that renames a tree.
+against a panel of its own — sandbox `PANEL_CONFIG`, spare port, sandbox `$HERMES_HOME`, stub gateway,
+throwaway repo — useful after touching anything that renames a tree.
+
+`node tools/verify-worktree-row-actions.mjs` drives the worktree row's own name-cell controls in headless
+Chromium over a sandbox panel: play, name (✎), lock in that order, no ✦, the ✎'s rename prompt, and the
+padlock's lock/unlock — useful after touching the row template in `public/app.js`.
 
 `node tools/verify-description.mjs` proves the `DESCRIPTION` strip above MERGE STATE — the record's earliest-run
 choice, the live half through a real spawn against a stub gateway, and the whole client half in headless Chromium
@@ -364,22 +368,15 @@ its path is gone and the tree was renamed or removed — it never keeps quoting 
 A tree whose directory carries **no `-<hex6>` tag** is never renamed, automatically or by hand: the tag is the
 ledger key and the one part of the name a rename keeps, so a bare name would have to be given an invented tag (a
 second identity for a tree that already had one) and its record keyed on a path the rename then moves out from under
-itself. `POST /api/worktree/rename` and `POST /api/worktree/suggest-name` both answer `400 … carries no -<hex6> tag`,
+itself. `POST /api/worktree/rename` answers `400 … carries no -<hex6> tag`,
 and the automatic half skips the tree entirely (logging the reason once); rename the directory yourself if it needs
 another name. A directory that *is* six hex counts as the tag being named, which is the same answer.
 
-Two buttons sit beside the worktree name, and neither is automatic:
+One button sits beside the worktree name, and it is not automatic:
 
 - `✎` — name it by hand. It opens a box with the session's title offered and takes anything typed; the
   rename itself is `POST /api/worktree/rename` (the branch always, the directory when nothing holds it
   open), and the result is written down as the reader's name.
-- `✦` — name it **from the work**. `POST /api/worktree/suggest-name` reads the branch's own commits
-  against the base branch and its diff (`<base>...HEAD`, plus anything uncommitted), reduces them to a
-  name in the panel's own `<slug>-<tag>` shape (`lib/name-from-work.js`), and renames nothing at all: the
-  name, the commits it came from and what the tree is called now go into a question under the row — the
-  same shape as the delete question, with `Name it`, `✎ edit…` and `Cancel`. `Name it` calls the same
-  rename route, and the record then names the reader instead of the run. Deciding what a thing *is* is not
-  something to guess at from a prompt, which is why this is a button and not a behaviour.
 
 The rename refuses with `409 an agent is running in that worktree (<id>) — stop it first` while a run is
 live in the tree, whichever half asks, and `409 <name> already exists` when the target directory is taken.
@@ -390,8 +387,8 @@ Nothing else about a tree is touched: the branch and the files are always the re
 names the tree, run two into the same tree leaves the name alone, a restarted panel with a *different*
 title for that tree's run still cannot rename it (with a tree nobody has named yet renamed by the same
 sweeper in the same window, so "untouched" cannot mean "the sweeper was asleep"), the 409 holds while an
-agent is running in the tree, and `✦` suggests a name from three real commits, renames once when answered,
-keeps the tag, and records the reader. It prints which parts are driven rather than inspected. Nothing
+agent is running in the tree, and the ✎ renames once by hand, keeps the tag, and records the reader. It
+prints which parts are driven rather than inspected. Nothing
 outside the sandbox is touched: the live panel on 7331 and the gateway on 8642 are never used, and no
 branch of this repository is renamed.
 
@@ -1154,7 +1151,6 @@ Watches without a deadline, and finished ones, say so instead.
 | POST | `/api/agents` | start a run (`{prompt, cwd?, project?, model?, budget?, maxTurns?, existing?}`); `{dryRun:true}` returns the request instead. **503** when the gateway's api_server is unreachable or unkeyed |
 | POST | `/api/agents/reply` | `{thread, text}` → another turn on the same `session_id` |
 | POST | `/api/worktree/rename` | `{project, path, name, by?, how?}` → rename one worktree: the branch always (`wtgui/<slug>-<tag>`, the six-hex tag kept), the directory when nothing holds it open. Writes down who named it and when (`logs/tree-names.json`), which is what stops the automatic rename for good. **400** for the project's own checkout, **404** for a path that is not a row, **409** when an agent is running in the tree or the target directory exists |
-| POST | `/api/worktree/suggest-name` | `{project, path}` → what the tree should be called, read from the work in it: the branch's commits against the base branch and their diff, reduced to a `<slug>-<tag>` name and the evidence behind it. Renames nothing — the row's `✦` puts it in a question and the click answers it through `/api/worktree/rename`. Same **400**/**404** refusals as the rename |
 | POST | `/api/worktree/child` | `{project, path, name?}` → cut a **child worktree** from that row's branch: `git worktree add -b wtgui/<slug>-<tag> .worktrees/<slug>-<tag> <row's branch>` in the project's checkout, the cut recorded as `parentSource: "cut"` with the parent's tip at the moment of the cut, the name settled in `logs/tree-names.json`, and the new row boarded at once. Starts nothing, pushes nothing, writes nothing into the parent's tree. **404** for an unknown project/row, **409** for the project's own checkout, a detached HEAD, a main branch, a branch git does not have, or a name already taken. `docs/child-worktrees-and-rollups.md` |
 | POST | `/api/worktree/rollup` | `{project, path, parent?, confirm}` → merge that child into the branch it was cut from, **inside the parent's own worktree**: `git merge --ff-only`, else `git merge --no-edit`, aborted and reported on a conflict. Serialised per parent branch. Answers `{ok, method: "ff"\|"merge", parentWorktree, childBranch, sha}`. **428** without `confirm` (the preview), **409** for a main/production/guessed parent, a parent with no worktree, a dirty or mis-checked-out parent tree, or a merge that conflicted |
 | POST | `/api/jobs/steer` | `{id, text}` → `POST /v1/runs/{id}/steer`; read at the agent's next tool boundary. 409 when the turn already crossed it |

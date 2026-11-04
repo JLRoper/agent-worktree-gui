@@ -35,7 +35,6 @@ import { Hosts, docOf, prListing, proposeMapping, renderTemplate } from "./lib/h
 // What a worktree is FOR: the definition catalogue (reader-edited over the shipped seed), where each tree stands in
 // one, and the ladder that is the only way a tree's kind may change (docs/pipelines.md §1–§3).
 import { PIPELINES_VERSION, PIPELINE_KINDS, EXIT_CHECKS, Pipelines, PipelineRecords, presumedPipeline, changePipeline, storeSwitch, validatePipelinesDocument, readPipelinesFile, observeGithubPr, observeBitbucketPr } from "./lib/pipelines.js";
-import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
 import { WorktreeNaming } from "./lib/worktree-naming.js";
 import { DEFAULT_OWNER, Locks, describeLock, rebaseKey, writerLocks } from "./lib/locks.js";
@@ -1017,7 +1016,7 @@ const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "
 //
 // A tree is named ONCE, and the record of that (who, when — lib/tree-names.js, constructed above) is what stops a
 // name churning. There are exactly two ways a name is written: the automatic half (`once: true`, from the run that
-// CUT the tree, the moment its session title first exists) and the deliberate half (the ✎ and the ✦ in the row, i.e.
+// CUT the tree, the moment its session title first exists) and the deliberate half (the ✎ in the row, i.e.
 // a reader asking), which may replace a name because replacing a name is the point of it. A tree the panel found
 // rather than cut is seeded under the name it was found with and is never the automatic half's to move. Either way
 // the six-hex tag is kept and the 409 stands while an agent is running in the tree.
@@ -1598,7 +1597,7 @@ async function renameWorktree({ projectName, target, name, by = null, how = null
   // rather than from the store (the store is a scan behind, and a rename is the irreversible half of this):
   //
   //   * the branch is published — it exists on the project's remote. A remote branch and any PR are keyed on the
-  //     name, so moving it silently detaches the row from both. Refused even for the deliberate ✦; the reader can
+  //     name, so moving it silently detaches the row from both. Refused even for the row's ✎; the reader can
   //     still rename it themselves.
   //   * the automatic half (`once`) stops at the branch's first own commit. Measured on this board: one tree's
   //     rename landed 95 seconds AFTER its second commit, leaving a directory named one thing and a branch named
@@ -5323,55 +5322,6 @@ const server = createServer(async (req, res) => {
       });
       if (out.error) return sendJson(res, out.status || 500, { error: out.error });
       return sendJson(res, 200, { ...out, name: path.basename(out.path), namedLine: describeNaming(out.named) });
-    }
-
-    // What the tree should be called, read from the work in it: the branch's own commits and its diff against the
-    // project's base branch. It renames NOTHING - the row's ✦ shows this name, the commits behind it and where they
-    // came from, and the rename itself is the reader's second click on /api/worktree/rename above.
-    if (route === "/api/worktree/suggest-name" && req.method === "POST") {
-      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
-      const body = await readBody(req).catch(() => ({}));
-      const projectName = String(body.project || "").trim();
-      const project = scheduler.getProjects().find((p) => p.name === projectName);
-      if (!project) return sendJson(res, 404, { error: `unknown project: ${projectName}` });
-      const dir = path.resolve(String(body.path || "").trim());
-      // A row, not a free path: the same door the rename uses, so this can only ever read a tree the panel watches.
-      const row = scheduler.store.rowsFor(projectName).find((r) => path.resolve(r.path) === dir);
-      if (!row) return sendJson(res, 404, { error: `not a worktree row of ${projectName}: ${dir}` });
-      if (normPathKey(dir) === normPathKey(project.path) || (await isMainCheckout(dir))) {
-        return sendJson(res, 400, { error: "that is the project's own checkout, not a worktree — its name is the project folder's" });
-      }
-      // The naming path, so it obeys the rename's rule: an untagged directory has no tag for the offered name to
-      // keep, and `Name it` would post a rename that refuses. Say so here rather than offering a name that cannot land.
-      const refusal = renameRefusal(dir);
-      if (refusal) return sendJson(res, 400, { error: refusal });
-      // The tag every rename keeps, so the name this offers is already the whole directory name the row would get.
-      const tag = tagOf(dir) || tagOf(row.branch) || null;
-      const picked = await suggestWorktreeName({
-        dir,
-        base: project.mainBranch || "main",
-        current: row.name || "",
-        tag,
-      });
-      const named = treeNames.forTree({ project: projectName, path: dir, branch: row.branch });
-      return sendJson(res, 200, {
-        ok: true,
-        project: projectName,
-        path: dir.replace(/\\/g, "/"),
-        current: row.name || null,
-        branch: row.branch || null,
-        tag,
-        named: named || null,
-        namedLine: describeNaming(named),
-        name: picked.name,
-        dirName: picked.name && tag ? worktreeDirName(picked.name, tag) : picked.name,
-        why: picked.why,
-        source: picked.source,
-        frame: picked.frame,
-        words: picked.words,
-        note: picked.note,
-        evidence: picked.evidence,
-      });
     }
 
     // Clone a GitHub repo over SSH into ONE of the configured scan roots — what the folder

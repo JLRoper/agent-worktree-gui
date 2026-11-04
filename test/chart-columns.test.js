@@ -136,10 +136,10 @@ test("a config that hides every column still draws one, and it is the actions ce
 });
 
 test("every column-spanning row asks for the shown count, never a literal 10", () => {
-  // Five rows widen to the whole table: the delete question, the lock refusal, the rename offer, the refresh offer
-  // and an expanded worktree's detail. A literal there is what leaves one of them short of the last column.
+  // Four rows widen to the whole table: the delete question, the lock refusal, the refresh offer and an expanded
+  // worktree's detail. A literal there is what leaves one of them short of the last column.
   assert.equal((src.match(/colspan="10"/g) || []).length, 0);
-  assert.equal((src.match(/colspan="\$\{wtColspan\(\)\}"/g) || []).length, 5);
+  assert.equal((src.match(/colspan="\$\{wtColspan\(\)\}"/g) || []).length, 4);
 });
 
 test("POST /api/settings/columns stores the choice in config.json and survives a restart", async (t) => {
