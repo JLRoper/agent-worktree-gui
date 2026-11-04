@@ -911,11 +911,12 @@ button.chip:active { transform: translateY(1px); }
 .agents-block .job:last-child { border-bottom: 1px solid #2f3947; }
 .job-head { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; min-width: 0; padding-bottom: 6px; }
 .job-head .spacer { flex: 1; }
-/* The card's six controls — pin, think, stream, rename, max, clear — are ONE block at the head's right edge. `flex:
-   0 0 auto` keeps every control at its own width, `flex-wrap: nowrap` inside means the cluster cannot break across
-   lines, and `margin-left: auto` pins it to the edge. The head itself is `nowrap` too, so a long title or a long meta
-   line trims instead of pushing the controls onto a second row — which is what a long session name did while it was
-   the head's last item, after the spacer. */
+/* The card's head controls — pin, think, stream (only while the Wave button switch draws it), max, clear — are ONE
+   block at the head's right edge. `flex: 0 0 auto` keeps every control at its own width, `flex-wrap: nowrap` inside
+   means the cluster cannot break across lines, and `margin-left: auto` pins it to the edge. The head itself is `nowrap`
+   too, so a long title or a long meta line trims instead of pushing the controls onto a second row — which is what a
+   long session name did while it was the head's last item, after the spacer. The pencil is not here: it rides the cwd
+   line beside the name it renames. */
 .job-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; flex-wrap: nowrap; margin-left: auto; }
 /* …and with the head unable to wrap, no control may be squeezed into two lines either: a pill's word and the
    attach button's word stay on one line at their own width, so the head trims its TEXT (title, meta) instead of
@@ -970,11 +971,14 @@ button.chip:active { transform: translateY(1px); }
 .job-cwd:hover .cwd-path, .job-cwd:hover .cwd-row, .job-cwd:hover .cwd-run { color: var(--text); }
 .job.collapsed .job-cwd { margin-bottom: 3px; }
 /* The cwd line is the card's SECOND row in both states, and the session's name is its right-hand item: the path and
-   the run/row chips read from the left margin, then the name sits flush with the card's right edge, in the column
-   under the controls. `margin-left: auto` is what right-justifies it now that no buttons follow it, `max-width: none`
-   lifts the head's 320px cap so a wide card gives it the room, and the ellipsis trims its tail. The path keeps its
-   own 96px floor, so neither item squeezes the other to nothing. */
+   the run/row chips read from the left margin, then the name and the pencil that renames it close the row, in the
+   column under the controls. `margin-left: auto` is what right-justifies the pair (no head buttons follow it on this
+   line), `max-width: none` lifts the head's 320px cap so a wide card gives the name room, and the ellipsis trims its
+   tail. The path keeps its own 96px floor, so neither item squeezes the other to nothing. */
 .job-cwd .thread-name { flex: 0 1 auto; min-width: 0; max-width: none; margin-left: auto; }
+/* The pencil is the name's own item: it never gives up width, it sits at the glyph size of the cwd line rather than the
+   head's 11px, and the name's ellipsis is what absorbs a long label beside it. */
+.job-cwd .btn-rename { flex: none; padding: 0 4px; font-size: 10px; line-height: 1.4; }
 /* The rename box replaces the name in place, on this line too — the head's 200px width would overflow the row. */
 .job-cwd input.rename-input { flex: 1 1 auto; min-width: 0; width: auto; }
 /* Subagents a run delegated, under the card's head. The parent's own stream carries a single delegate_task call;
