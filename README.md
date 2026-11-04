@@ -195,6 +195,20 @@ and lands in the same PR as the change —
 and `docs/versioning.md` is the scale. The merge prompt tells the landing agent to do it. Same install covers
 both hooks, and the same `--no-verify` bypasses this one.
 
+`.githooks/pre-push` also refuses a commit that names a folder on the machine that wrote it. A drive-letter path
+— in either separator, in the JSON-escaped form a `.json` file stores, or inside a `file://` URL — resolves on
+one machine only: the next reader cannot open it, a scratch folder like `AppData/Local/Temp` is pruned by the next
+run, and once it is a commit on main it is permanent history nobody corrects without rewriting it. The paths
+arrive by accident — an agent pastes the report it just wrote into a doc, a probe prints the tree it ran in, a
+changelog line quotes the commit subject that named one. `node tools/absolute-paths.mjs` scans the tracked files
+and exits non-zero with the file, line and form of each one; the hook runs it with `--rev` on every ref being
+pushed, so it judges the tree the push would SEND, not the dirty tree beside it. The files that already carried
+one before the gate — landing notes, review captures, test fixtures — are recorded in
+`tools/absolute-paths.allow`, one line each with the count it held and the reason it is there. A file that grows
+past its count is refused, so a frozen record cannot quietly gain a newer path; a file nobody recorded is refused
+outright. `node tools/absolute-paths.mjs --draft` prints the line to paste when a record has to keep one, and an
+entry with no reason is a refusal, not a pass.
+
 A landing's **last step is `npm run land`**, run on the base branch after the merge. It renders `CHANGELOG.md`
 from the base's own history — the shas the merge just made, never the branch's — commits only that file as a
 docs commit (no version, no tag), pushes the base with the render, and proves itself by re-rendering

@@ -644,9 +644,12 @@ non-zero when its claim failed.
 
 The gates are git hooks, not a service: `.githooks/commit-msg` refuses a subject that does not
 name a symptom (because squash-merge composes main's history from branch subjects), and
-`.githooks/pre-push` refuses a bump-worthy branch with no version bump. Both are offline, both are
-installed per clone (`npm run hooks:install`), and both document their own bypass. There is no CI —
-the README says so, and the pre-push hook is what stands in for it.
+`.githooks/pre-push` refuses a bump-worthy branch with no version bump, a base push whose
+changelog is stale, and any commit that names a folder on the machine that wrote it
+(`node tools/absolute-paths.mjs`, with the files that predate it recorded in
+`tools/absolute-paths.allow`). All are offline, all are installed per clone (`npm run
+hooks:install`), and all document their own bypass. There is no CI — the README says so, and the
+pre-push hook is what stands in for it.
 
 ---
 
