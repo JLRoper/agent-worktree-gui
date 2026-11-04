@@ -149,6 +149,17 @@ export function githubRepoUrl(root) {
   }
 }
 
+// One render, from one ref, for both this CLI and tools/land.mjs: the landing's last step has to write byte for
+// byte what `npm run changelog` writes, or the two disagree about the same history. Returns null when the walk
+// comes back empty, so the caller refuses instead of rendering a changelog of nothing.
+export function renderRepo({ root, ref = "HEAD", links = true } = {}) {
+  const history = readReleaseHistory({ root, ref });
+  if (!history.versions.length) return null;
+  const releases = collectReleases(history.versions, (from, to) => listCommits(root, from, to));
+  const repoUrl = links ? githubRepoUrl(root) : null;
+  return { releases, repoUrl, text: renderChangelog({ releases, repoUrl }) };
+}
+
 function listCommits(root, from, to) {
   const range = from ? `${from}..${to}` : to;
   const raw = execFileSync("git", ["log", "--reverse", "--no-merges", "--format=%H%x1f%ad%x1f%s", "--date=short", range], {
@@ -195,13 +206,12 @@ function main(argv) {
   }
 
   const root = repoRoot(process.cwd());
-  const history = readReleaseHistory({ root, ref: "HEAD" });
-  if (!history.versions.length) {
+  const rendered = renderRepo({ root, ref: "HEAD", links: opt.links });
+  if (!rendered) {
     console.error("changelog: package.json's history came back empty — refusing to render a changelog of nothing");
     return 2;
   }
-  const releases = collectReleases(history.versions, (from, to) => listCommits(root, from, to));
-  const repoUrl = opt.links ? githubRepoUrl(root) : null;
+  const { releases, repoUrl, text } = rendered;
 
   if (opt.since) {
     const want = opt.since.replace(/^v/, "");
@@ -213,7 +223,6 @@ function main(argv) {
     return 0;
   }
 
-  const text = renderChangelog({ releases, repoUrl });
   const out = path.resolve(root, opt.out);
   if (opt.check) {
     let disk = null;
