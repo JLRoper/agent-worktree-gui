@@ -18667,6 +18667,10 @@ function paintSettingsTab(key, { save = true, focus = false, scroll = false } = 
 
 function selectSettingsTab(key) {
   paintSettingsTab(key, { save: true, scroll: true });
+  // The Bundles tab is a read of the bundle file and every assistant's queue, so it is refreshed when the reader asks
+  // for it — not on every repaint of the settings window. A tab the reader leaves and comes back to asks again only
+  // when the answer is old; a press on its own re-read row asks at once (initBundlesPanel).
+  if (key === "bundles" && Date.now() - bundlesLoadedAt > 15000) void loadBundles();
 }
 
 // The per-tab counts the search hands over: a badge on the tab's chrome, and the same number in the tab's own
@@ -18789,7 +18793,9 @@ function paintSettingsSearch() {
           ? paintPermissionsSearch(query, matched)
           : panel.dataset.settingsGroup === "pipeline"
             ? paintPipelineSearch(query, matched)
-            : paintSettingsRows([...panel.children], query, matched);
+            : panel.dataset.settingsGroup === "bundles"
+              ? paintBundlesSearch(query, matched)
+              : paintSettingsRows([...panel.children], query, matched);
     counts.set(panel.dataset.settingsGroup, hits);
   }
   paintSettingsTabCounts(counts, query);
@@ -19742,6 +19748,273 @@ function paintPipelineSearch(query, matched) {
   return hits;
 }
 
+// ---- settings > bundles ---------------------------------------------------------------------------
+// The studio pipeline bundle this panel reads — one exported file per install (config.pipelineBundleFile, default
+// state/pipeline-bundle.json) — its pipelines in order, and the queue tasks that sit on them. The tab is a READ of two
+// answers that already exist: GET /api/assistant/pipeline-catalogue (lib/pipeline-bundle.js's readBundle, carried as a
+// value with its own refusal code and locator) and GET /api/assistant/queue (every assistant's queue, decorated).
+//
+// It adds no third answer and no second pipeline drawing. Four rules decide its shape:
+//
+//   1. A refusal is the LOADER's. The catalogue route already answers ok:false with the bundle's code, its reason and
+//      the locator in the exported file; this tab prints that code and sentence. "could not read the pipelines" over a
+//      bundle that is there and broken sends the reader looking for a missing file.
+//   2. The stages are the WINDOW's. A pipeline row names its title, id and stage count and stops there; the stage
+//      sequence, the gate and the time in stage are drawn by the task pipeline window the Queue pane opens. A second
+//      stage list here would be a second representation of one pipeline, and the two would drift.
+//   3. A task with no pipeline is ON the default path. `pipelineRun: null` reads as "assistant decides" — the
+//      contract's own words (lib/task-pipeline.js) — never "unassigned", which would read as a row that lost its
+//      assignment. A record the bundle cannot resolve keeps its own sentence.
+//   4. The press opens the WINDOW. A task row opens the same task pipeline window the Queue pane opens (it is
+//      exposed as window.__openTaskPipelineWindow), so a task is put on a pipeline from the catalogue the window
+//      already offers, with the same write, the same stamp and the same refusal. Nothing here posts anything.
+const BUNDLES_PANEL_ID = "settings-panel-bundles";
+let bundlesIndex = null;
+let bundlesLoadedAt = 0;
+let bundlesLoading = null;
+let bundleQueues = null;
+let bundleQueuesAt = 0;
+// The queue read's own refusal, kept apart from the catalogue's: a refused bundle must not be blamed on the queues,
+// and a failed queue read must not erase a pipeline list that is still true.
+let bundleQueuesError = null;
+
+// A task's place, in the words the contract uses: the pipeline and stage when the record resolves to both, the default
+// path when there is no assignment, and the record's own shape when it is neither. The Queue pane's chip says the same
+// three things; the sentence lives in lib/task-pipeline.js's vocabulary (assistant-decides / pipeline / unresolved).
+function bundleTaskPlace(t) {
+  const run = t?.pipelineRun;
+  const object = run && typeof run === "object" && !Array.isArray(run) ? run : null;
+  const pipeline = object && typeof object.pipeline === "string" ? object.pipeline.trim() : "";
+  const stage = object && typeof object.stage === "string" ? object.stage.trim() : "";
+  if (pipeline) return `pipeline ${pipeline}${stage ? ` · ${stage}` : ""}`;
+  if (run == null) return "assistant decides";
+  return object ? "pipeline: unresolved — no pipeline named" : "pipeline: unresolved — unreadable record";
+}
+
+function bundlePipelineRowHtml(pipeline) {
+  const stages = Array.isArray(pipeline.stages) ? pipeline.stages.length : 0;
+  const title = `${pipeline.title || pipeline.id} — ${stages} stage${stages === 1 ? "" : "s"} in the imported bundle. The stages themselves are drawn by the task pipeline window, not here: open a queue task's window to see them in order.`;
+  return `<div class="settings-row" data-bundle-pipeline="${esc(pipeline.id)}" title="${esc(title)}">
+      <span><strong>${esc(pipeline.title || pipeline.id)}</strong> <span class="mono">${esc(pipeline.id)}</span></span>
+      <span class="settings-unit mono">${stages} stage${stages === 1 ? "" : "s"}</span>
+    </div>`;
+}
+
+// One row per task the panel can see. The unit carries the task's PLACE and its lane, because a row that only said the
+// pipeline would hide a parked task behind a running one. The row is a press: it opens the window that owns the stages
+// and the assignment.
+function bundleTaskRowHtml(queue, t) {
+  const where = bundleTaskPlace(t);
+  const lane = String(t.state || "").trim();
+  const unit = [where, lane].filter(Boolean).join(" · ");
+  const title = `#${t.id} ${t.title || ""} — ${where}${lane ? ` (${lane})` : ""}. Press to open this task's pipeline window: every stage in order, where this task sits, and the control that puts it on a pipeline.`.trim();
+  const own = queue?.assistantId || t.owner || "";
+  return `<div class="settings-row" data-bundle-task="${esc(own)}" data-bundle-task-id="${esc(String(t.id))}" title="${esc(title)}">
+      <span><strong>#${esc(String(t.id))} ${esc(t.title || "")}</strong> <span class="mono">${esc(queue?.name || own)}</span></span>
+      <span class="settings-unit mono">${esc(unit)}</span>
+    </div>`;
+}
+
+// The summary row, the source line and the two lists. Painted from one answer so a refusal cannot leave the summary
+// saying "12 pipelines" beside a list saying "none" — the route's own `ok` decides both.
+function paintBundles(error = null) {
+  const summary = document.getElementById("bundle-summary");
+  const source = document.getElementById("bundle-source");
+  const list = document.getElementById("bundle-list");
+  if (!summary || !list) return;
+  summary.classList.remove("bad");
+  if (source) source.classList.remove("bad");
+  if (error) {
+    summary.textContent = `could not read the pipeline catalogue — ${error}`;
+    summary.classList.add("bad");
+    if (source) {
+      source.textContent = "nothing was read, so this tab knows nothing about the bundle";
+      source.title = source.textContent;
+      source.classList.add("bad");
+    }
+    list.innerHTML = "";
+    paintBundleTasks(bundleQueuesError);
+    return;
+  }
+  const data = bundlesIndex;
+  if (!data) {
+    summary.textContent = "reading…";
+    if (source) source.textContent = "…";
+    return;
+  }
+  if (data.ok !== true) {
+    // The loader's own refusal: its code first (a reader can quote it), then its sentence and its locator. A generic
+    // "no pipelines" here would erase the one fact that fixes it — whether the file is missing or broken.
+    summary.textContent = `refused — ${data.code || "pipeline-bundle"}`;
+    summary.classList.add("bad");
+    if (source) {
+      source.textContent = `${data.reason || "the bundle was refused"}${data.where ? ` (at ${data.where})` : ""}`;
+      source.title = source.textContent;
+      source.classList.add("bad");
+    }
+    list.innerHTML = `<div class="settings-row" title="the bundle was refused whole, so no pipeline from it can be listed — the sentence above names the file and the place in it"><span>no pipeline can be listed — the bundle was refused whole</span><span class="settings-unit mono">${esc(data.code || "pipeline-bundle")}</span></div>`;
+    paintBundleTasks(bundleQueuesError);
+    return;
+  }
+  const pipelines = Array.isArray(data.pipelines) ? data.pipelines : [];
+  const bits = [`${pipelines.length} pipeline${pipelines.length === 1 ? "" : "s"}`];
+  if (data.name) bits.push(data.name);
+  summary.textContent = bits.join(" · ");
+  if (source) {
+    source.textContent = `${data.file || "the pipeline bundle"}${data.name ? ` · ${data.name}` : ""} — this panel imports whatever the studio's export saved there; the task pipeline window draws each pipeline's stages.`;
+    source.title = source.textContent;
+  }
+  list.innerHTML =
+    pipelines.map((pipeline) => bundlePipelineRowHtml(pipeline)).join("") ||
+    `<div class="settings-row"><span>the bundle holds no pipeline — the file was read and is empty</span></div>`;
+  paintBundleTasks(bundleQueuesError);
+}
+
+// The queue half. A read failure is named on its own row — the pipelines above are still true, and a failed queue read
+// must not blank them. A task row is a press into the window, so this list carries no assignment control of its own.
+function paintBundleTasks(error = null) {
+  const summary = document.getElementById("bundle-tasks-summary");
+  const list = document.getElementById("bundle-tasks");
+  if (!summary || !list) return;
+  summary.classList.remove("bad");
+  if (error) {
+    bundleQueuesError = error;
+    summary.textContent = `could not read the queues — ${error}`;
+    summary.classList.add("bad");
+    list.innerHTML = "";
+    return;
+  }
+  const data = bundleQueues;
+  if (!data) {
+    summary.textContent = "reading…";
+    list.innerHTML = "";
+    return;
+  }
+  const queues = Array.isArray(data.queues) ? data.queues : [];
+  const rows = [];
+  let active = 0;
+  let done = 0;
+  for (const queue of queues) {
+    for (const t of queue.tasks || []) {
+      if (String(t.state || "") === "done") {
+        done += 1;
+        continue;
+      }
+      active += 1;
+      rows.push(bundleTaskRowHtml(queue, t));
+    }
+  }
+  const failed = queues.filter((q) => q.error);
+  const bits = [`${active} active task${active === 1 ? "" : "s"}`];
+  if (done) bits.push(`${done} done`);
+  if (failed.length) bits.push(`${failed.length} queue file${failed.length === 1 ? "" : "s"} unreadable`);
+  summary.textContent = bits.join(" · ");
+  if (failed.length) summary.classList.add("bad");
+  list.innerHTML =
+    rows.join("") ||
+    `<div class="settings-row" title="every assistant's queue reads empty — there is no task to put on a pipeline yet"><span>no active queue task — nothing to put on a pipeline</span></div>`;
+  // A re-read can land while the settings search is filtering this tab: the rebuilt rows are filtered by the same pass
+  // the reader's next keystroke would run, so a match does not blink out of the list after a refresh.
+  const box = document.getElementById(SETTINGS_SEARCH_ID);
+  if (box && box.value) paintSettingsSearch();
+}
+
+// The tab's own filter: the flat rows outside the two lists, then each list's rows. The window's card is not part of
+// this panel (it is appended to the document by the task window), so a search never hides a form the reader opened.
+function paintBundlesSearch(query, matched) {
+  const panel = document.getElementById(BUNDLES_PANEL_ID);
+  if (!panel) return 0;
+  const flat = [...panel.children].filter((node) => node.id !== "bundle-list" && node.id !== "bundle-tasks");
+  let hits = paintSettingsRows(flat, query, matched);
+  for (const row of panel.querySelectorAll("[data-bundle-pipeline], [data-bundle-task]")) {
+    const hit = !query || settingsRowText(row).includes(query);
+    row.classList.toggle("search-hidden", !hit);
+    if (hit) {
+      hits += 1;
+      if (query) matched.push(row);
+    }
+  }
+  return hits;
+}
+
+// Two reads in parallel: the bundle's pipelines and every assistant's queue. Either can fail without taking the other
+// with it — a refused bundle still lists its refusal beside whatever the queues say, and a failed queue read leaves
+// the pipelines standing.
+async function loadBundles() {
+  if (bundlesLoading) return bundlesLoading;
+  bundlesLoading = (async () => {
+    let error = null;
+    try {
+      const [catalogue, queues] = await Promise.allSettled([
+        apiFetch("/api/assistant/pipeline-catalogue").then(async (r) => {
+          const body = await r.json().catch(() => null);
+          if (!r.ok) throw new Error((body && body.error) || `the catalogue answered ${r.status}`);
+          return body;
+        }),
+        apiFetch("/api/assistant/queue").then(async (r) => {
+          const body = await r.json().catch(() => null);
+          if (!r.ok) throw new Error((body && body.error) || `the queues answered ${r.status}`);
+          return body;
+        }),
+      ]);
+      if (catalogue.status === "fulfilled") {
+        bundlesIndex = catalogue.value;
+        bundlesLoadedAt = Date.now();
+      } else {
+        error = String((catalogue.reason && catalogue.reason.message) || catalogue.reason);
+      }
+      if (queues.status === "fulfilled") {
+        bundleQueues = queues.value;
+        bundleQueuesAt = Date.now();
+        bundleQueuesError = null;
+      } else {
+        bundleQueuesError = String((queues.reason && queues.reason.message) || queues.reason);
+      }
+      paintBundles(error);
+    } catch (e) {
+      paintBundles(e.message || String(e));
+    } finally {
+      bundlesLoading = null;
+    }
+  })();
+  return bundlesLoading;
+}
+
+// A task row's press: the SAME window the Queue pane opens. The window reads its own model and catalogue, so this
+// handler carries two ids and the row the caret came from — nothing else, and no assignment logic of its own.
+function initBundlesPanel() {
+  const panel = document.getElementById(BUNDLES_PANEL_ID);
+  if (!panel) return;
+  // The task pipeline window's assignment press writes the QUEUE (the record's one door), and this tab's rows are a
+  // read of that queue. So the window's own event is what tells this tab its rows are stale — without it a row keeps
+  // saying "assistant decides" after the reader put the task on a pipeline. The refresh runs whether or not this tab
+  // is on screen: the settings window CLOSES while the task window is up (the window opens over it), so gating on
+  // "visible" would drop the one notice that the data moved, and the next open would read it as too recent to reload.
+  // Two reads behind a closed window are cheaper than a row that contradicts the queue on the next open.
+  document.addEventListener("wtgui:task-pipeline-assigned", () => {
+    void loadBundles();
+  });
+  panel.addEventListener("click", (e) => {
+    const refresh = e.target?.closest?.("[data-bundle-refresh]");
+    if (refresh) {
+      e.preventDefault();
+      void loadBundles();
+      return;
+    }
+    const row = e.target?.closest?.("[data-bundle-task]");
+    if (!row) return;
+    e.preventDefault();
+    const opener = typeof window.__openTaskPipelineWindow === "function" ? window.__openTaskPipelineWindow : null;
+    if (!opener) {
+      paintBundleTasks("this build does not expose the task pipeline window — reload the panel");
+      return;
+    }
+    void opener(row.dataset.bundleTask, row.dataset.bundleTaskId, row);
+  });
+}
+
+// ---- end settings > bundles
+
 // ---- settings window: move it, size it ------------------------------------------------------------
 // The panel used to be a popover pinned under the top bar: `position: fixed; right: 16px; top: 74px` and no way to
 // move it off what it was covering, nor to see more of a long group than the height it opened at. It is a window
@@ -19968,6 +20241,9 @@ function toggleSettings(open = null) {
   // The catalogue is a read of two small files, so it gets the same treatment: read once when Settings opens, and
   // again only when the answer is old. A dirty draft in its editor is never replaced by that read.
   if (Date.now() - pipelinesLoadedAt > 15000) void loadPipelines();
+  // The bundle and every assistant's queue are two more reads the reader may open this window to see: refresh them
+  // when their answer is old, so the tab is current on the first press after a re-export or a task moved elsewhere.
+  if (Date.now() - bundlesLoadedAt > 15000) void loadBundles();
   // The remote-write setting is the panel's own (config.json), but which trees carry the push guard is a file on
   // disk that another instance or a hand edit can change, so it is re-read every time the panel opens.
   void refreshRemoteGuards();
@@ -20747,6 +21023,10 @@ void loadPermissions();
 // And the pipeline catalogue: its rows are searched and counted on every tab's badge, so it is read before the tab is
 // opened rather than when it is selected.
 void loadPipelines();
+// The Bundles tab's rows are searched and counted too — the bundle's pipelines and the queue tasks — so both reads
+// happen at boot. Its task rows open the existing task pipeline window; initBundlesPanel wires that one press.
+void loadBundles();
+initBundlesPanel();
 // The window's own gestures: the head drags it, the corner grip sizes it, and the rect is remembered in this browser.
 initSettingsWindow();
 // A second way in that is always on screen at the top left: the title opens Settings.

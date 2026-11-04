@@ -72,8 +72,8 @@ test("the two read-now buttons are in Settings, not in the top bar", () => {
 });
 
 test("one tab per data-settings-group key, in the markup's own order", () => {
-  assert.equal(tabs.length, 10, `the strip has ten tabs, found ${tabs.length}`);
-  assert.equal(panels.length, 10, `the panel has ten panels, found ${panels.length}`);
+  assert.equal(tabs.length, 11, `the strip has eleven tabs, found ${tabs.length}`);
+  assert.equal(panels.length, 11, `the panel has eleven panels, found ${panels.length}`);
   assert.equal(settings.split('role="tablist"').length - 1, 1, "one tab strip");
   assert.ok(tabs.every((t) => t.key), "each tab carries a stable data-settings-tab key");
   assert.ok(panels.every((p) => p.key), "each panel carries its data-settings-group key");
@@ -88,13 +88,13 @@ test("one tab per data-settings-group key, in the markup's own order", () => {
 });
 
 test("exactly one tab is selected, and only its panel is not hidden", () => {
-  assert.deepEqual(tabs.map((t) => t.selected), ["true", "false", "false", "false", "false", "false", "false", "false", "false", "false"],
+  assert.deepEqual(tabs.map((t) => t.selected), ["true", "false", "false", "false", "false", "false", "false", "false", "false", "false", "false"],
     "Display is the first visit's tab, and it is the only selected one");
   assert.equal(tabs.filter((t) => t.tabindex === "0").length, 1, "the strip is one Tab stop: one tab is reachable");
   assert.equal(tabs[0].tabindex, "0");
   assert.ok(tabs.slice(1).every((t) => t.tabindex === "-1"), "the rest are roving stops");
-  assert.deepEqual(panels.map((p) => p.hidden), [false, true, true, true, true, true, true, true, true, true],
-    "the nine other panels ship hidden, so the page never paints all ten");
+  assert.deepEqual(panels.map((p) => p.hidden), [false, true, true, true, true, true, true, true, true, true, true],
+    "the ten other panels ship hidden, so the page never paints all eleven");
 });
 
 test("the strip is styled by a class of its own, and the fold machinery is gone", () => {

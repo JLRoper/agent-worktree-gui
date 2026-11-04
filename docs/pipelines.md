@@ -478,8 +478,8 @@ The catalogue, the record, the switch route and the Pipeline tab run today. Expl
 - **No chip menu.** The card's chip is drawn (`public/app.js` `pipelineChipHtml`, §4.1): `pipeline: <id> · <stage>`
   from the job row, beside the card's state pill. It is a `span` and carries no `▾` — there is nothing to press until
   `POST /api/worktree/pipeline` can start the first stage as a turn, and no menu is drawn before then.
-- **The tab exists, without a defaults editor.** Settings has ten panels (`display`, `cards`, `board`, `branches`,
-  `data`, `gateway`, `skills`, `updates`, `permissions`, `pipeline`); the `pipeline` group lists the merged catalogue
+- **The tab exists, without a defaults editor.** Settings has eleven panels (`display`, `cards`, `board`, `branches`,
+  `data`, `gateway`, `skills`, `updates`, `permissions`, `pipeline`, `bundles`); the `pipeline` group lists the merged catalogue
   and edits one definition's title, kind, description, `next`, stages and exit checks. It does not edit a project's
   defaults.
 - **No config keys.** `config.json` has `remoteBranchPolicy` and no `defaultTurnover` / `defaultInvestigation`, and

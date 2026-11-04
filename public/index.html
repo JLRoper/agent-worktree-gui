@@ -43,6 +43,7 @@
       <button type="button" class="settings-tab" id="settings-tab-updates" role="tab" aria-controls="settings-panel-updates" aria-selected="false" tabindex="-1" data-settings-tab="updates" title="A panel that restarted (or whose public/ was edited while it ran) serves a new build. This is what this tab does about it — and what it refuses to do while you are mid-sentence or an agent is mid-turn. The tab you choose is remembered in this browser."><span class="settings-tab-label">Updates</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
       <button type="button" class="settings-tab" id="settings-tab-permissions" role="tab" aria-controls="settings-panel-permissions" aria-selected="false" tabindex="-1" data-settings-tab="permissions" title="The permissions actually in force, read-only, and where each one comes from. Five blocks are parsed from the gateway's config.yaml when this tab is read — approvals, the always-ask command list, the tool loop guardrails, platform toolsets and the code-execution sandbox — and every row carries the file and line it was read from. The gateway's advertised surface comes from its own GET /v1/capabilities; a gateway that answers 401 is shown as not exposed, needs a token, never guessed at. The bottom group is this panel's own layer: config.json's remoteBranchPolicy (with each project's override) and lib/remote-writes.js's grant choices and permission window. Nothing here can be edited. The tab you choose is remembered in this browser."><span class="settings-tab-label">Permissions</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
       <button type="button" class="settings-tab" id="settings-tab-pipeline" role="tab" aria-controls="settings-panel-pipeline" aria-selected="false" tabindex="-1" data-settings-tab="pipeline" title="The pipeline catalogue — what a worktree is for, stage by stage. Every definition the panel holds, its kind, its stages and the exit check that ends each one. The list is the merged catalogue: the reader's pipelines.json over the shipped seed, so an edit here overrides the seed per id and a definition the seed ships still arrives. Opening a definition lets you edit its title, kind, description, next and every stage's prompt and exit check; Save validates the whole document against the closed vocabulary first and refuses with the finding sentences when anything is wrong. The tab you choose is remembered in this browser."><span class="settings-tab-label">Pipeline</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
+      <button type="button" class="settings-tab" id="settings-tab-bundles" role="tab" aria-controls="settings-panel-bundles" aria-selected="false" tabindex="-1" data-settings-tab="bundles" title="The studio pipeline bundles this panel has read — one exported file per install, its pipelines in order, and the loader's own refusal when the file is missing or bad. Opening a task's pipeline window draws the stages; this tab names what was imported and what was refused, so a broken export is a code and a sentence rather than a generic error. The tab you choose is remembered in this browser."><span class="settings-tab-label">Bundles</span><span class="settings-tab-count" aria-hidden="true" hidden>0</span></button>
     </div>
     <div class="settings-body">
 
@@ -520,6 +521,19 @@
         <div class="settings-preview mono" id="pipeline-source">…</div>
         <div id="pipeline-list"></div>
         <div id="pipeline-editor" class="pipeline-editor" hidden></div>
+      </div>
+      <div class="settings-group" id="settings-panel-bundles" data-settings-group="bundles" role="tabpanel" aria-labelledby="settings-tab-bundles" hidden>
+        <div class="settings-row" id="bundle-summary-row" title="What this read covers: the studio bundle file this panel reads — its pipelines in order, its name, and the loader's own refusal when the file is missing or bad. Read only; a task's pipeline window is where a stage is assigned.">
+          <span>Pipeline bundles <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono"><span id="bundle-summary">reading…</span> <button type="button" data-bundle-refresh title="re-read the bundle and every assistant's queue now — a bundle re-exported or a task moved in another window is picked up here without closing Settings">re-read</button></span>
+        </div>
+        <div class="settings-preview mono" id="bundle-source">…</div>
+        <div id="bundle-list"></div>
+        <div class="settings-row settings-gap" id="bundle-tasks-row" title="Every active queue task the panel can see, across every assistant, and where each one is: a pipeline and stage when the record resolves to both, or 'assistant decides' when no pipeline is assigned. A press opens the SAME task pipeline window the Queue pane opens — the stages, the gate and the assignment control live there, not here.">
+          <span>Queue tasks on a pipeline <span class="settings-info">ⓘ</span></span>
+          <span class="settings-unit mono" id="bundle-tasks-summary">reading…</span>
+        </div>
+        <div id="bundle-tasks"></div>
       </div>
 
     </div>
