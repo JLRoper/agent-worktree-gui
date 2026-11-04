@@ -12,6 +12,9 @@ review — where a boundary is thin it says so, but it does not propose the fix.
   (where the code lives), `docs/arch-review-efficiency.md` (what the timers cost),
   `docs/arch-review-functional.md` (the board's state machine). `README.md` is the reader's manual;
   `docs/using-the-board.md` is the page, region by region.
+- The lane map: [`docs/reviews/lanes-and-modules.md`](reviews/lanes-and-modules.md) — every module's
+  owner, imports and exports at `1b8b795`, and the file a row must claim when two agents want the
+  same one.
 
 **Contents**
 
@@ -746,6 +749,7 @@ Two decisions the review does not argue, and this map still states:
 | the page | `public/index.html` (script order), `docs/using-the-board.md` |
 | how a change is proven | `tools/verify.mjs`, `tools/panel-testkit.mjs`, `docs/versioning.md` |
 | where the tree can be cut | `docs/reviews/architecture-modules.html` — the signed seam list, costed and ordered |
+| which file a change must claim, and who else is in it | `docs/reviews/lanes-and-modules.md` — the module map with a lane column |
 
 ---
 
