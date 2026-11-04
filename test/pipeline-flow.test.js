@@ -7,7 +7,7 @@
 //
 //   - the sequence reads left to right, one column per stage in the order the document holds;
 //   - every gate is a NOTCH on the connector after its stage — including the gate that ends the last stage, which
-//     gets a stub rather than being dropped because no next column exists;
+//     sits on the track's own closing edge rather than on a stub past it;
 //   - a capped loop is ONE arc above the track, labelled with its cap and nothing else: no handoff id, no stage id
 //     and no stage title reaches the drawing, and two loops that meet on a stage are on different lanes;
 //   - the four marks — not reached, current, done, refused — are `data-mark` on the stage, and the legend counts them;
@@ -54,7 +54,7 @@ test("a bundle pipeline reads left to right, every stage in the document's own o
   assert.deepEqual(nodes.map((n) => n.pos), nodes.map((_, i) => i + 1), "positions ascend 1..n");
 });
 
-test("every gate is a notch on the connector after its stage, and the last stage's gate is a stub", () => {
+test("every gate is a notch on the connector after its stage, and the last stage's gate sits on the closing edge", () => {
   const flow = fromBundle(SEED_BUNDLE);
   const { notches } = flowOf(markup(flow, null));
   assert.deepEqual(
@@ -69,7 +69,17 @@ test("every gate is a notch on the connector after its stage, and the last stage
   );
   const afterLast = flow.stages.find((s) => s.id === SEED_BUNDLE.stages[SEED_BUNDLE.stages.length - 1].id);
   assert.ok(afterLast.gate && afterLast.gate.id === "G4", "the gate after the final stage is carried, not dropped");
-  assert.match(markup(flow, null), /pflow-link is-end/, "and it is drawn as a stub, because there is no next column");
+  // The last gate is a notch ON the track's closing edge — no stub hanging off the last column. The stub was 18 px at
+  // `left: 100%`: it widened the drawing past its own track (scrollWidth 1109 vs clientWidth 1094 at seven stages) and
+  // put the one notch it labelled outside the scroller, so a reader saw no notch at all after the last stage.
+  const html = markup(flow, null);
+  assert.doesNotMatch(html, /pflow-link is-end/, "nothing is drawn past the last column");
+  const styles = [...html.matchAll(/<span class="pflow-notch"[^>]*style="left:([^;]*);/g)].map((m) => m[1]);
+  assert.equal(styles[styles.length - 1], "calc(100% - 1.5px)", "and the closing gate's notch ends at the column's right edge");
+  assert.ok(
+    styles.slice(0, -1).every((s) => s === "calc(100% + var(--pflow-gap) / 2)"),
+    "every other notch still sits at the middle of its gap",
+  );
 });
 
 test("a capped loop is one arc, labelled only with its cap", () => {

@@ -2,6 +2,11 @@
 // Playwright round 5A — BOTH routes into the pipeline flow chart, judged on whether everything is VISIBLE and
 // whether it looks CLEAN. The two verdicts are separate, and a pass with an ugly drawing is a fail.
 //
+// ROUND 5B (the visual layer) runs this same harness with --strict and fixes the lines 5A left red on purpose: C1 now
+// measures the width policy's CENTRING (the capped track is centred, so the space beside it matches on both sides and
+// the 599 px dead band is gone), C3 the titles' contrast, C8 that nothing is painted past the track's own right edge,
+// and the closing gate's notch is inside the scroller instead of on an 18 px stub past it.
+//
 //   node tools/verify-pipeline-flow-visible.mjs                       # print the judgement, write shots to %TEMP%
 //   node tools/verify-pipeline-flow-visible.mjs --shots <dir>         # where the screenshots go
 //   node tools/verify-pipeline-flow-visible.mjs --json <file>         # the raw ledger
@@ -271,6 +276,9 @@ const measure = (page) =>
       keys: [...card.querySelectorAll(".pflow-key")].map((k) => ({ mark: k.dataset.mark, text: k.textContent.trim(), rect: r(k), inCard: r(k).right <= cr.right + 0.5 && r(k).bottom <= cr.bottom + 0.5 })),
       deadRight: +(br.right - tr.right).toFixed(1),
       deadLeft: +(tr.left - br.left).toFixed(1),
+      // The arcs are placed as percentages of THIS layer, so it must be the track's own box in both regimes — the capped,
+      // centred track and a track that fills the card. They were two independently-capped boxes before the width policy.
+      arcsLayer: card.querySelector(".pflow-arcs") ? r(card.querySelector(".pflow-arcs")) : null,
       titleFs: firstTitle ? getComputedStyle(firstTitle).fontSize : null,
       titleContrast: firstTitle ? contrast(colour(firstTitle), colour(first, "backgroundColor")) : null,
       cardFits: cr.top >= -0.5 && cr.left >= -0.5 && cr.right <= innerWidth + 0.5 && cr.bottom <= innerHeight + 0.5,
@@ -329,16 +337,52 @@ const judgeVisibility = (m, where) => {
   for (let i = 0; i < m.nodes.length; i += 1) for (let j = i + 1; j < m.nodes.length; j += 1) if (overlap(m.nodes[i].rect, m.nodes[j].rect) > 0.5) pairs.push(`${m.nodes[i].id}/${m.nodes[j].id}`);
   const arcClash = m.arcs.filter((a) => m.nodes.some((n) => overlap(a.rect, n.rect) > 0.5) || m.nodes.some((n) => overlap(a.label.rect, n.rect) > 0.5));
   judge("V6", pairs.length === 0 && arcClash.length === 0, `${where}: nothing paints under another`, pairs.length ? `stages overlap: ${pairs.join(", ")}` : arcClash.length ? `an arc or its label is over a stage` : "no stage/arc/card overlap");
+  // An arc's geometry is a percentage of the arcs layer, so that layer has to BE the track's box. It used to be a second
+  // box with its own 240 px cap and no centring, which is how a loop could land over the wrong stage.
+  if (m.arcsLayer) {
+    judge(
+      "V7",
+      Math.abs(m.arcsLayer.x - m.track.x) <= 0.5 && Math.abs(m.arcsLayer.w - m.track.w) <= 0.5,
+      `${where}: the arcs layer is the track's own box`,
+      `arcs ${m.arcsLayer.x}+${m.arcsLayer.w} vs track ${m.track.x}+${m.track.w}`,
+    );
+  }
 };
 
 const judgeClean = (m, where) => {
-  judge("C1", m.deadRight <= 80 && m.deadLeft <= 80, `${where}: the track fills the card (no dead band over 80 px)`, `dead space ${m.deadLeft} px left, ${m.deadRight} px right of a ${m.track.w} px track in a ${m.body.w} px body`);
+  // The width policy (docs/reviews/pipeline-flow-integration-plan.md, C5) is `clamp(96, (usable - (n-1)*gap)/n, 400)`
+  // with the capped track CENTRED. A two-stage drawing is 826 px in a 1094 px scroller with the leftover split evenly:
+  // that is a symmetric margin, not the 599 px dead band a left-aligned 506 px track left. So the line judges what the
+  // reader sees — the space beside the track is the same on both sides — and that the track uses the card up to its own
+  // ceiling: from two stages up it is at least 70% of the body; a one-stage definition is ONE card, judged by sitting at
+  // the 400 px ceiling rather than by how much empty card surrounds a single box.
+  const symmetric = Math.abs(m.deadLeft - m.deadRight) <= 8;
+  const widest = m.nodes.length ? Math.max(...m.nodes.map((n) => n.rect.w)) : 0;
+  const fills = m.nodes.length >= 2 ? m.track.w >= 0.7 * m.body.w : Math.abs(widest - 400) <= 1;
+  judge(
+    "C1",
+    symmetric && fills,
+    `${where}: the track is centred and fills the card (no dead band)`,
+    `dead space ${m.deadLeft} px left, ${m.deadRight} px right of a ${m.track.w} px track in a ${m.body.w} px body; widest column ${widest} px`,
+  );
   const small = m.nodes.filter((n) => n.title && parseFloat(n.title.fs) < 11);
   judge("C2", small.length === 0, `${where}: no stage title is set below 11 px`, m.titleFs ? `title ${m.titleFs}` : "no title");
   const lowContrast = m.nodes.filter((n) => n.title && n.title.contrast != null && n.title.contrast < 4.5);
   judge("C3", lowContrast.length === 0, `${where}: stage titles clear 4.5:1`, lowContrast.length ? `${lowContrast.length}/${m.nodes.length} below AA, worst ${Math.min(...lowContrast.map((n) => n.title.contrast))}:1` : `worst ${Math.min(...m.nodes.map((n) => n.title && n.title.contrast).filter((v) => v != null))}:1`);
   const clipped = m.nodes.filter((n) => n.title && n.title.sw > n.title.cw + 1);
   judge("C4", clipped.length === 0, `${where}: no stage title is truncated`, clipped.length ? clipped.map((n) => `${n.id} ${n.title.sw}>${n.title.cw}`).join(", ") : "every title fits its column");
+  // The last stage's gate used to be drawn on an 18 px stub at `left: 100%`, i.e. past the track: the drawing overflowed
+  // its scroller by 15 px and the notch it labelled was clipped away. The line is the direct measurement of that defect,
+  // and it is measured only while the drawing FITS (a long definition's columns legitimately run past the visible box;
+  // V1-V3 judge the scrolling case).
+  const scrolling = m.scrollBox.sw > m.scrollBox.cw + 1;
+  const past = [...m.nodes.map((n) => ({ what: n.id, right: n.rect.right })), ...m.notches.map((n) => ({ what: `notch ${n.gate}`, right: n.rect.right })), ...m.arcs.map((a) => ({ what: `arc ${a.from}→${a.to}`, right: a.rect.right }))].filter((x) => x.right > m.track.right + 0.5);
+  judge(
+    "C8",
+    scrolling || past.length === 0,
+    `${where}: nothing is painted past the track's own right edge`,
+    scrolling ? `not judged: the track scrolls (${m.scrollBox.sw} > ${m.scrollBox.cw})` : past.length ? past.map((x) => `${x.what} at ${x.right}`).join(", ") : `track ends at ${m.track.right}`,
+  );
 };
 
 let browserRun = null;
