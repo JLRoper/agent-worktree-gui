@@ -4,16 +4,35 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.1.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.2.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-248 releases from v0.1.0 (2026-10-20) to v1.1.1 (2026-11-04), 888 commits between the tags. Every release is anchored by an
+249 releases from v0.1.0 (2026-10-20) to v1.2.0 (2026-11-04), 894 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.2.0 — 2026-11-04 · 6 commits
+
+[`a843641`](https://github.com/JLRoper/agent-worktree-gui/commit/a8436412c1db0f3017441fe1c3703cd02b19c326) · [compare v1.1.1...v1.2.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.1.1...v1.2.0)
+
+### Added
+
+- feat: every wait on a person goes out over the bridge that is already running ([`d4fe71a`](https://github.com/JLRoper/agent-worktree-gui/commit/d4fe71aa6726519fc7f58263aee7553bacb676c8))
+
+### Docs & tests
+
+- docs: render the 1.1.1 section on main ([`c404950`](https://github.com/JLRoper/agent-worktree-gui/commit/c404950c69dbcf660e5e512e01a193cd4b672f7c))
+- docs: the round 5B report quotes the suite at the rebased tip ([`f00c0e0`](https://github.com/JLRoper/agent-worktree-gui/commit/f00c0e0cba5570eab1bbaec6505ba9df69aa25ff))
+- docs: the v1.1.0 tag moves onto the commit that declares 1.1.0 ([`1a6c0a5`](https://github.com/JLRoper/agent-worktree-gui/commit/1a6c0a5e799d1961e65286115b3be5fac717c798))
+- docs: retire the two orphan tags, and prove the gate green ([`be17bc6`](https://github.com/JLRoper/agent-worktree-gui/commit/be17bc6fcea7c1fa85c3f2a6d62d94bc40b4a55f))
+
+### Other
+
+- chore: 1.2.0 — the version this landing carries ([`a843641`](https://github.com/JLRoper/agent-worktree-gui/commit/a8436412c1db0f3017441fe1c3703cd02b19c326))
 
 ## v1.1.1 — 2026-11-04 · 6 commits
 
