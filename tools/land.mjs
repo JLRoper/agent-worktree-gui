@@ -117,14 +117,20 @@ export function landPlan({ onBase, base, clean, behind, changed, missing, foreig
   if (!changed) {
     return { action: "current", why: `${FILE} already names every release` };
   }
-  if (mode === "check") return { action: "stale", why: `stale — it would add ${missing.map((r) => `v${r.version}`).join(", ")}` };
+  // "changed" covers two states, and naming the wrong one sends the reader looking for a missing section that is
+  // there: a release the file does not name at all, or a file whose text differs from the render while naming every
+  // release — a section pointing at a sha the base re-created (the branch-render defect), or a moved header.
+  const what = missing.length
+    ? `it would add ${missing.map((r) => `v${r.version}`).join(", ")}`
+    : "every release is named, but the text differs from what the history renders — a section names a sha this base does not carry, or the header moved";
+  if (mode === "check") return { action: "stale", why: `stale — ${what}` };
   if (!onBase) {
     const warn = foreign.length
       ? `, and ${foreign.length} of its commits are not on ${base} yet — those sections name shas the merge re-creates, so re-render after the merge`
       : "";
     return { action: "render", why: `not the base branch, so the file is written and left for the branch's own commit${warn}` };
   }
-  return { action: "commit", why: `writes ${missing.map((r) => `v${r.version}`).join(", ")} and publishes them` };
+  return { action: "commit", why: `it would ${missing.length ? "add" : "rewrite"} ${what.replace(/^it would (add|rewrite) /, "")} and publish the result` };
 }
 
 // ---------- the render ----------
@@ -286,7 +292,8 @@ function main(argv) {
 
   if (plan.action === "render") {
     writeFileSync(path.join(root, FILE), rendered.text);
-    console.log(`land: rendered ${FILE} — ${rendered.releases.length} releases, adding ${missing.map((r) => `v${r.version}`).join(", ")}`);
+    const what = missing.length ? `adding ${missing.map((r) => `v${r.version}`).join(", ")}` : "refreshing the sections whose shas changed";
+    console.log(`land: rendered ${FILE} — ${rendered.releases.length} releases, ${what}`);
     console.log(`land: ${plan.why} (this tree is on ${branch || "a detached HEAD"}) — commit it, do not push ${base} from here`);
     return 0;
   }
@@ -335,6 +342,9 @@ function main(argv) {
     git(root, args);
   } catch (e) {
     console.error(`land: the push was refused — ${String((e.stderr || e.message || "").trim().split("\n").slice(-2).join(" ") || "unknown error")}`);
+    console.error(
+      "land: the render is committed and the tree is clean; the refusal is a hook's, not this tool's. A landing that spends no version (a docs-only merge) is refused by .githooks/pre-push on purpose — push it deliberately with `git push <remote> <base> --no-verify` and say why in the PR, or land a branch that bumps.",
+    );
     return 1;
   }
   console.log(

@@ -44,6 +44,16 @@ test("the harness travels in the change's own commit", () => {
   assert.match(prompt, /not a separate "add harness" or "add report" commit stacked on top/);
 });
 
+test("PHASE 4 runs the landing command instead of a bare push, and the prompt says the render waits for the merge", () => {
+  const prompt = mergePrompt({ ...base, ahead: 1, commits: ["1111111 the change"] });
+  assert.match(prompt, /PHASE 4 - publish, only when the tests passed: the landing's last step renders the changelog/);
+  assert.match(prompt, /npm run land/);
+  assert.doesNotMatch(prompt, /git push origin main/, "the base is published by the command, not by a remembered second step");
+  assert.match(prompt, /Do NOT render the changelog on this branch/);
+  assert.match(prompt, /A bump commit that also carries CHANGELOG\.md folds the\s+render into the commit it describes/);
+  assert.match(prompt, /\.githooks\/pre-push refuses a base push whose changelog is stale/);
+});
+
 test("an unknown count keeps the exception conditional instead of claiming one shape", () => {
   const prompt = mergePrompt({ ...base });
   assert.match(prompt, /only if this repo keeps merge commits/);
