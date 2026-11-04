@@ -4,16 +4,33 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v0.110.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v0.111.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-234 releases from v0.1.0 (2026-10-20) to v0.110.0 (2026-11-03), 845 commits between the tags. Every release is anchored by an
+235 releases from v0.1.0 (2026-10-20) to v0.111.0 (2026-11-03), 849 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v0.111.0 — 2026-11-03 · 4 commits
+
+[`75e648c`](https://github.com/JLRoper/agent-worktree-gui/commit/75e648c3708b9fa5f1d222226b4396e5593f8b1b) · [compare v0.110.0...v0.111.0](https://github.com/JLRoper/agent-worktree-gui/compare/v0.110.0...v0.111.0)
+
+### Added
+
+- feat: a task on a pipeline is driven stage by stage, to the pipeline's own limits ([`a71453c`](https://github.com/JLRoper/agent-worktree-gui/commit/a71453c104355b20bbb2277a9d044d0a948c90e8))
+
+### Docs & tests
+
+- docs: render the 0.110.0 section, after main moved to b662bce ([`43d4b94`](https://github.com/JLRoper/agent-worktree-gui/commit/43d4b948502021f3c3b514c91443995c244b1617))
+- docs: a render is never folded into the bump it describes ([`db52ecd`](https://github.com/JLRoper/agent-worktree-gui/commit/db52ecd4511f8ea88acac42958e7c540af03f5bf))
+
+### Other
+
+- chore: 0.111.0 — the version this landing carries ([`75e648c`](https://github.com/JLRoper/agent-worktree-gui/commit/75e648c3708b9fa5f1d222226b4396e5593f8b1b))
 
 ## v0.110.0 — 2026-11-03 · 5 commits
 
