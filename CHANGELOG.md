@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.4.2 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.5.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-253 releases from v0.1.0 (2026-10-20) to v1.4.2 (2026-11-04), 906 commits between the tags. Every release is anchored by an
+254 releases from v0.1.0 (2026-10-20) to v1.5.0 (2026-11-04), 909 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.5.0 — 2026-11-04 · 3 commits
+
+[`b06feb1`](https://github.com/JLRoper/agent-worktree-gui/commit/b06feb18cd7bc6e3c1845d23c5bf56056941ea99) · [compare v1.4.2...v1.5.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.4.2...v1.5.0)
+
+### Added
+
+- feat: Settings → Updates draws the checkout's own changelog ([`b06feb1`](https://github.com/JLRoper/agent-worktree-gui/commit/b06feb18cd7bc6e3c1845d23c5bf56056941ea99))
+
+### Docs & tests
+
+- docs: render the v1.4.2 and v1.4.1 sections against the commits the rebase merge carried ([`0972094`](https://github.com/JLRoper/agent-worktree-gui/commit/0972094ce18d23c5c168f0ac764609796ead1fe1))
+- docs: record the #359 landing and what the round's ledger is ([`da49821`](https://github.com/JLRoper/agent-worktree-gui/commit/da4982116195908b141ca68e463fbc4d8bb1a7a5))
 
 ## v1.4.2 — 2026-11-04 · 2 commits
 
