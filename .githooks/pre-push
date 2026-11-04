@@ -7,9 +7,11 @@
 # not a pipeline. This hook runs the gate that PR is meant to pass, node tools/version.mjs check, on the
 # branch being pushed, so forgetting it is a refused push rather than a version nobody wanted to move.
 #
-# It is fast and offline: check reads refs and package.json, never the network. It is silent and exit 0 for a
-# branch that already bumped and for a push that carries no new commits; when it refuses it prints the commits
-# it counted and the level it would have suggested, so the refusal says what to do about it.
+# It is fast and offline: check reads refs and package.json, never the network. It compares the branch's
+# committed number with the number at origin/main's current tip, and prints what it compared on both outcomes;
+# the hook discards that line on success, so an allowed push stays quiet, and forwards it on refusal, where it
+# names the commits it counted and the level it would have suggested. A branch that is merely behind main is a
+# refusal too: it still carries the number it was cut at, and "different" is not "bumped".
 # Deliberate bypass: git push --no-verify
 #
 # INSTALL (repo config, so one install covers every worktree of this clone): npm run hooks:install

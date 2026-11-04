@@ -80,7 +80,7 @@ try {
   const checkFailText = out(checkFail);
   step("check refuses an unbumped branch (non-zero)", checkFail.status !== 0, `exit=${checkFail.status}`);
   step("check names the commits it counted", /docs: describe/.test(checkFailText) && /feat\(board\)/.test(checkFailText) && /Tidy the worktree row/.test(checkFailText), "all three commits listed");
-  step("check names the version it compared", /1\.0\.0 — unchanged from github\/main/.test(checkFailText), "package.json: 1.0.0 — unchanged from github/main");
+  step("check names both numbers it compared", /branch\s+1\.0\.0/.test(checkFailText) && /base\s+github\/main\s+1\.0\.0/.test(checkFailText), checkFailText.split("\n").filter((l) => /^\s+(branch|base)/.test(l)).join(" | "));
   step("check suggests a level and calls it advice", /would suggest: minor/.test(checkFailText) && /advice/.test(checkFailText), "suggested minor");
   step("check wrote nothing", version() === "1.0.0", `package.json still ${version()}`);
 
@@ -106,7 +106,13 @@ try {
   git(["add", "--", "package.json"]);
   git(["commit", "-q", "-m", "Bump the version to 1.1.0 for the reattach chip, a new capability"]);
   const checkPass = tool(["check"]);
-  step("check is silent and zero on an already-bumped branch", checkPass.status === 0 && out(checkPass).trim() === "", `exit=${checkPass.status}, output=${JSON.stringify(out(checkPass))}`);
+  const checkPassText = out(checkPass);
+  step("check passes on an already-bumped branch", checkPass.status === 0, `exit=${checkPass.status}`);
+  step(
+    "check says what it compared when it passes (never silent)",
+    /branch\s+1\.1\.0/.test(checkPassText) && /base\s+github\/main\s+1\.0\.0/.test(checkPassText) && /version check: ok/.test(checkPassText),
+    checkPassText.split("\n").filter((l) => /^\s+(branch|base)/.test(l)).join(" | "),
+  );
 
   const pushAllowed = git(["push", "github", "work"]);
   step("pre-push allows the same push once bumped", pushAllowed.status === 0, `exit=${pushAllowed.status}`);
@@ -127,7 +133,32 @@ try {
   // ---- a branch with no commits of its own is never asked to bump -------------------------------------
   git(["checkout", "-q", "main"]);
   const checkMain = tool(["check"]);
-  step("check is quiet on a branch with no commits", checkMain.status === 0 && out(checkMain).trim() === "", `exit=${checkMain.status}, output=${JSON.stringify(out(checkMain))}`);
+  const checkMainText = out(checkMain);
+  step("check passes on main", checkMain.status === 0, `exit=${checkMain.status}`);
+  step(
+    "check says on main that there is nothing to land, and names both numbers",
+    /nothing to land/.test(checkMainText) && /branch\s+1\.0\.0/.test(checkMainText) && /base\s+github\/main\s+1\.0\.0/.test(checkMainText),
+    checkMainText.split("\n").filter((l) => /^\s+(branch|base)/.test(l)).join(" | "),
+  );
+
+  // ---- a branch that is merely BEHIND the base must be refused, not passed ---------------------------
+  // The defect this harness now pins: at 0.84.0 against origin/main's 0.87.0 the old check printed nothing and
+  // exited 0, because any value that was not equal to the base's counted as a bump. Here main moves to 1.2.0
+  // after `work` was cut, so `work` carries a number main has already passed.
+  git(["checkout", "-q", "main"]);
+  write("package.json", readFileSync(path.join(WORK, "package.json"), "utf8").replace(/"version":\s*"[^"]*"/, '"version": "1.2.0"'));
+  git(["commit", "-q", "-am", "Bump the version to 1.2.0 on main"]);
+  git(["push", "-q", "github", "main"]);
+  git(["checkout", "-q", "work"]);
+  const behind = tool(["check"]);
+  const behindText = out(behind);
+  step("check refuses a branch behind the base (non-zero)", behind.status !== 0, `exit=${behind.status}`);
+  step("the behind refusal names the branch's number and the base's", /branch\s+1\.1\.0/.test(behindText) && /base\s+github\/main\s+1\.2\.0/.test(behindText), behindText.split("\n").filter((l) => /^\s+(branch|base)/.test(l)).join(" | "));
+  step("the behind refusal says what to do", /behind github\/main/.test(behindText) && /then bump above 1\.2\.0/.test(behindText), "merge/rebase, then bump above the base");
+  commit("later.txt", "more\n", "fix: keep the chart legend inside its column");
+  const pushBehind = git(["push", "github", "work"]);
+  step("pre-push refuses a real push of a behind branch", pushBehind.status !== 0 && /version check: refused/.test(out(pushBehind)), `exit=${pushBehind.status}`);
+  git(["reset", "-q", "--hard", "HEAD~1"]);
 
   // ---- the prefixes, one branch each ------------------------------------------------------------------
   git(["checkout", "-q", "-b", "breaking", "main"]);

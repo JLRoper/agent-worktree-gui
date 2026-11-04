@@ -133,10 +133,15 @@ answering the box needs `PANEL_TOKEN` and is refused without it.
 
 ## 5. The chained pre-push: the version gate
 
-`.githooks/pre-push` refuses a push that carries commits while `package.json` still holds the base's version — it
-runs `node tools/version.mjs check` on the branch being pushed. It passes silently when the push adds no commits (a
-deletion, a tag, an up-to-date ref), and when the tool or `node` is missing, so a clone that cannot run the check
-still lands. `docs/versioning.md` is the scale; `node tools/version.mjs apply <patch|minor|major>` writes the bump.
+`.githooks/pre-push` refuses a push whose branch is not above its base's version — it runs
+`node tools/version.mjs check` on the branch being pushed, and that check compares HEAD's `package.json` with the
+version at `origin/main`'s current tip (never the merge-base, never the working tree's copy). A branch that did
+not move the number is refused, and so is a branch that is merely behind main: it still holds the number it was
+cut at, and "different from the base" is not "above the base". The check prints the branch version, the base ref
+and the base version on both outcomes, so a pass is a line you can read rather than a silence you have to trust;
+the hook discards that line on success. It passes when the push adds no commits (a deletion, a tag, an
+up-to-date ref), and when the tool or `node` is missing, so a clone that cannot run the check still lands.
+`docs/versioning.md` is the scale; `node tools/version.mjs apply <patch|minor|major>` writes the bump.
 
 The guard never replaces this hook: whatever `pre-push` the worktree had at install time is written into `chain` and
 run from every path that allows a push. But the chain is read ONCE, at install, and a worktree's own
