@@ -132,6 +132,15 @@ const execP = promisify(execFile);
 const VERSION = await readFile(path.join(HERE, "package.json"), "utf8")
   .then((t) => JSON.parse(t).version || null)
   .catch(() => null);
+// The version the CHECKOUT carries NOW, re-read on every request. `VERSION` above is what this process serves and never
+// moves; this is what a restart would put into service, and the two being equal is the only "a bounce for nothing".
+const packageVersion = () => {
+  try {
+    return JSON.parse(readFileSync(path.join(HERE, "package.json"), "utf8")).version || null;
+  } catch {
+    return null;
+  }
+};
 // PANEL_CONFIG lets a second instance run from the same code with its own config and port —
 // a sandbox or a demo you can click around in without touching the real one:
 //   set PANEL_CONFIG=C:\path\to\panel-config.json && node server.js
@@ -865,9 +874,10 @@ restart = new RestartController({
   jobs,
   assistant,
   home: hermesHome(),
-  // The version THIS boot serves. It is read once above, before the file could be bumped on disk: a restart's
-  // reason naming this version is a restart that would change nothing.
+  // The version THIS boot serves. It is read once above, before the file could be bumped on disk: `packageVersion`
+  // hands in the file as it stands at request time, and a restart is refused only when the two are the same version.
   version: VERSION,
+  packageVersion,
   hermesBin: config.hermesBin || null,
   credentials: () => jobs.api,
   log,
@@ -5368,7 +5378,7 @@ const server = createServer(async (req, res) => {
       }
       try {
         const record = restart.request({ target: body.target, reason: body.reason, waitFor: body.waitFor || body.thread });
-        log(`restart queued: ${record.target} (${record.id}) — it runs once ${record.thread} has no turn running`);
+        log(`restart queued: ${record.target} (${record.id}) — ${record.thread ? `it runs once ${record.thread} has no turn running` : "nothing was named to wait for, so it starts now"}`);
         return sendJson(res, 202, { ok: true, restart: record, provider: record.provider, assistant: assistant.state() });
       } catch (e) {
         return sendJson(res, Number(e.status) || 400, { ok: false, error: String((e && e.message) || e), restart: restart.state() });
