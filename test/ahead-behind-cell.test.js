@@ -8,6 +8,14 @@ import { sliceRegion } from "../tools/panel-testkit.mjs";
 
 const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
 const code = sliceRegion(src, "ahead / behind cell");
+// The two pins at the bottom of this file are pins on a SECTION, cut the way every other slice in test/ is cut: a
+// `// ---- name … // ---- end name` pair travels as one, so an anchor cannot end up outside the section whose closer
+// it is glued to. The hand-rolled form they replace — src.slice(src.indexOf(anchor), src.indexOf("// ---- end
+// <section>")) — has no begin marker: a vertical cut that carries the pinned text into the neighbouring section
+// leaves both markers where they were and only GROWS the window over that section's code, so every assertion still
+// passes on a slice that is no longer the section it names. Cut from the region and the text is simply absent.
+const chartColumns = sliceRegion(src, "chart columns");
+const mergeControl = sliceRegion(src, "merge control");
 const esc = (s) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const { aheadBehindCellHtml, vsMainLine } = new Function("esc", `${code}; return { aheadBehindCellHtml, vsMainLine };`)(esc);
@@ -105,13 +113,15 @@ test("vsMainLine: singular and plural, and nothing when there is no base to coun
 test("the column header explains the arrows, and the verdict carries the count against main", () => {
   // The header is built from CHART_COLUMNS now (the reader can hide a column), so the explanation lives on the
   // column's own entry and reaches the <th> through chartHeaderHtml() — the test reads the entry, not the markup.
-  const cols = src.slice(src.indexOf("const CHART_COLUMNS = ["), src.indexOf("// ---- end chart columns"));
-  assert.match(cols, /label: "Ahead \/ Behind"/);
-  assert.match(cols, /title:\s*\n?\s*"↑ commits this branch has that its own copy on the remote does not[^"]*"/);
-  assert.match(cols, /id: "ahead"/);
+  // Each fact is read from the section that owns it, and the section is named first: a cut that carries the list (or
+  // verdictHtml) into a neighbour drains the slice instead of quietly widening it over that neighbour's code.
+  assert.match(chartColumns, /const CHART_COLUMNS = \[/, "CHART_COLUMNS is not in the chart columns section");
+  assert.match(chartColumns, /label: "Ahead \/ Behind"/);
+  assert.match(chartColumns, /title:\s*\n?\s*"↑ commits this branch has that its own copy on the remote does not[^"]*"/);
+  assert.match(chartColumns, /id: "ahead"/);
   assert.match(src, /ahead: `<td class="mono nowrap">\$\{aheadBehindCellHtml\(row\)\}<\/td>`/);
   // verdictHtml keeps the sentence inline so tools/verify-merge-chip.mjs can read its region on its own.
-  const vh = src.slice(src.indexOf("function verdictHtml"), src.indexOf("// ---- end merge control"));
-  assert.match(vh, /Against \$\{row\.baseRef\}: \$\{Number\(row\.ahead\) \|\| 0\} ahead, \$\{Number\(row\.behind\) \|\| 0\} behind\./);
-  assert.equal((vh.match(/withVs\(/g) || []).length, 3, "the merging, dirty and chooser titles all end with it");
+  assert.match(mergeControl, /function verdictHtml\(row\) \{/, "verdictHtml is not in the merge control section");
+  assert.match(mergeControl, /Against \$\{row\.baseRef\}: \$\{Number\(row\.ahead\) \|\| 0\} ahead, \$\{Number\(row\.behind\) \|\| 0\} behind\./);
+  assert.equal((mergeControl.match(/withVs\(/g) || []).length, 3, "the merging, dirty and chooser titles all end with it");
 });
