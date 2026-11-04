@@ -528,6 +528,14 @@ the banner says so, and the panel keeps retrying the empty folder in the backgro
 as soon as the holder exits. A panel started from that very worktree is called out by name, because only a restart
 releases it.
 
+**A `node_modules` that is a junction is unlinked first, on every path that removes a tree.** `git worktree remove`
+recurses *through* a directory link, so a tree prepared by this fleet — `node_modules` junctioned onto the project's
+own checkout — used to come off the disk with the **primary checkout's** `node_modules` emptied: every entry deleted,
+dot-prefixed ones first, with git reporting success. The ✕, the release a `RELEASE` line asks for, and the steward's
+apply now take every link out of the tree before anything walks it, and the removal says so on its own step. A link
+that cannot be unlinked **refuses** the removal instead — the tree stays and the reason names the link, because the
+next thing to touch it would delete through it.
+
 ---
 
 ## Reading an agent card

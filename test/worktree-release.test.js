@@ -278,7 +278,7 @@ test("refused: a job still running or queued in that tree", async () => {
 });
 
 // ---- the removal -----------------------------------------------------------------------------------------------------
-test("the removal runs in the one order: worktree, local branch, remote branch, plain rmdir", async () => {
+test("the removal runs in the one order: the links out first, then worktree, local branch, remote branch, plain rmdir", async () => {
   const run = fakeRun();
   const out = await call({ run });
   assert.equal(out.ok, true);
@@ -287,8 +287,11 @@ test("the removal runs in the one order: worktree, local branch, remote branch, 
   assert.deepEqual(order, [`worktree remove ${TREE}`, `branch -D ${BRANCH}`, `push origin --delete ${BRANCH}`]);
   assert.deepEqual(
     out.steps.map((s) => s.step),
-    ["clean", "pr", "tree", "jobs", "worktree", "branch", "remote", "shell"],
+    ["clean", "pr", "tree", "jobs", "junction", "worktree", "branch", "remote", "shell"],
   );
+  // The link step is the one before the git call that would recurse through a junction, and this tree has none (the
+  // fake run means TREE does not exist on disk): the step still has to be there, and to say so.
+  assert.equal(out.steps.find((s) => s.step === "junction").detail, "no directory link inside the tree");
   assert.equal(out.branch, BRANCH);
   assert.equal(out.pr, 7);
   assert.equal(out.mergeCommit, MERGE);
