@@ -2503,21 +2503,20 @@
         <div class="as-qline">
           <b class="as-qcounts"${view?.file ? ` title="${esc(view.file)}"` : ""}>${esc(head)}</b>
           <button type="button" class="as-qquiet" data-as-qact="reload" data-as-qown="${esc(id)}" title="read this assistant's queue file again">Refresh</button>
+          <button type="button" class="as-qquiet" data-as-qact="pipeline" data-as-qown="${esc(id)}" title="open Settings on its Pipeline tab — the catalogue every task's pipeline is drawn from">Pipeline settings</button>
         </div>
         <details class="as-qhelp">
           <summary title="what this pane draws, how work gets into it, and how the order works">what this pane is</summary>
-          <div class="as-help">What THIS assistant is carrying: queued work it has not started, what is running (with its
-          thread), what it has parked, and what has finished. <b>Add task</b> files work into THIS assistant's queue — the
-          one this page belongs to — so a task cannot be created into a queue nobody is looking at; handing a task to
-          another assistant is the <b>Move</b> control on an existing row: the task leaves this queue, arrives in that
-          assistant's with an id of its own, and the move is recorded on it as movedFrom. A queued
-          task whose files touch a running task's files is shown as skipped with the reason; a running task whose thread
-          has no live run reads STALE rather than showing phantom work in progress. <b>Drag a queued card</b> to change
-          its place — the order is written to the file and survives the next read, while running, parked and done keep
-          their own sections. A card carrying a <b>held by #N</b> badge waits on that row and cannot be dragged above it.
-          The queue lives in <code>state/assistants/${esc(id)}/queue.json</code> beside this assistant's charter; it is read
-          on every wake, before the board, and the digest names every task's state, thread, worktree, PR and why it is not
-          going (LIVE, STALE or PARKED).</div>
+          <div class="as-help">
+            <p class="as-qlead">the work this assistant is carrying — queued, running on its thread, parked, done — and how it gets in and out.</p>
+            <dl class="as-qfacts">
+              <div><dt>Add task</dt><dd>files work into THIS assistant's queue, the one this page belongs to, so a task cannot be created into a queue nobody is watching.</dd></div>
+              <div><dt>Move</dt><dd>the control on an existing row: the task leaves this queue, arrives in that assistant's with an id of its own, recorded as <code>movedFrom</code>.</dd></div>
+              <div><dt>Order</dt><dd>drag a queued card — the order is written to the file and survives the next read; running, parked and done keep their own sections, and a card with a <code>held by #N</code> badge cannot go above that row.</dd></div>
+              <div><dt>Waiting and STALE</dt><dd>a queued task whose files touch a running task's files is shown skipped with its reason; a running task whose thread has no live run reads STALE, not phantom progress.</dd></div>
+              <div><dt>Where it lives</dt><dd><code>state/assistants/${esc(id)}/queue.json</code> beside the charter, read on every wake before the board; the digest names each task's state, thread, worktree, PR and why it is not going (LIVE, STALE or PARKED).</dd></div>
+            </dl>
+          </div>
         </details>
         <details class="as-qadd">
           <summary title="file a task into this assistant's own queue — one press opens the form">+ Add task</summary>
@@ -4111,6 +4110,19 @@
       } finally {
         t.disabled = false;
       }
+      return;
+    }
+    if (action === "pipeline") {
+      // Where a task's pipeline comes from is the Settings Pipeline tab, so this press is that tab's own two calls —
+      // toggleSettings(true) opens a closed Settings (and keeps an open one open), selectSettingsTab("pipeline") lands
+      // it on Pipeline whatever tab it was showing. No route of its own and no second copy of the tab logic.
+      //
+      // The press must not ALSO reach app.js's document listener that closes Settings on a click outside it — this
+      // button IS outside it — so it stops propagating exactly as the panel's own two openers (#btn-settings, the
+      // title) do. Without this the window opens and is closed again inside the same click.
+      e.stopPropagation();
+      toggleSettings(true);
+      selectSettingsTab("pipeline");
       return;
     }
     if (action === "add") {
