@@ -1,5 +1,5 @@
-// Independent check of the panel's merge verdicts: recomputes the expected verdict straight
-// from git (branch reflog + rev-list) and diffs it against what /api/state reports.
+// Independent check of the panel's merge verdicts: recomputes the expected verdict straight from git
+// (branch reflog, rev-list, cherry and a two-tree diff) and diffs it against what /api/state reports.
 //
 //   node tools/verify-verdicts.mjs              # first project, panel on 127.0.0.1:7331
 //   node tools/verify-verdicts.mjs heroes-js    # a named project
@@ -56,9 +56,25 @@ for (const e of entries) {
     const subject = sp < 0 ? "" : l.slice(sp + 1);
     if (/^commit( \(amend\))?:/.test(subject)) own.add(l.slice(0, sp));
   }
+  // The rule the panel's full scan applies, re-derived here: a branch with no `commit:` line of its own
+  // never reads MERGED, whatever its reflog did; with commits of its own, MERGED is proved either by a
+  // patch id in main or by the two trees already matching.
+  const neverCommitted = reflog.length > 0 && own.size === 0;
   let expect;
-  if (ahead === 0) expect = own.size > 0 ? `MERGED (${own.size} commit${own.size === 1 ? "" : "s"})` : "NO COMMITS";
-  else expect = "UNMERGED";
+  if (ahead === 0) {
+    expect = own.size > 0 ? `MERGED (${own.size} commit${own.size === 1 ? "" : "s"})` : "NO COMMITS";
+  } else {
+    const cherry = git(e.dir, ["cherry", base, "HEAD"]).split("\n").filter(Boolean);
+    const plus = cherry.filter((l) => l.startsWith("+")).length;
+    const minus = cherry.filter((l) => l.startsWith("-")).length;
+    if (plus === 0 && minus > 0) {
+      expect = neverCommitted ? "NO COMMITS" : `MERGED (squash/rebase, ${ahead} commit${ahead === 1 ? "" : "s"})`;
+    } else if (git(e.dir, ["diff", "--stat", base, "HEAD"]) === "") {
+      expect = neverCommitted ? "NO COMMITS" : "MERGED (content identical)";
+    } else {
+      expect = "UNMERGED";
+    }
+  }
 
   const row = rows.get(name);
   const got = row ? String(row.verdict) : "(row missing)";
