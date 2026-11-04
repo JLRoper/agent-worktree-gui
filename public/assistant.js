@@ -2063,6 +2063,29 @@
 
   const queueMark = (state) => (state === "done" ? "✓" : state === "parked" ? "⏸" : state === "running" ? "●" : "○");
   const queueStateName = (state) => (state === "running" ? "running" : state === "parked" ? "parked" : state === "done" ? "done" : "queued");
+  // The word in the head is a STATUS, and hover is where it explains itself: a reader who does not know what "parked"
+  // means here gets the rule without a paragraph under every row.
+  const queueStateTitle = (t) =>
+    t.stale
+      ? `stale — the file still says running, but ${String(t.staleWhy || "its thread has no live run").replace(/^that thread/, "its thread")}`
+      : t.state === "running"
+        ? "running — a run is carrying it; its agent's own status is on the facts line"
+        : t.state === "parked"
+          ? "parked — stopped until the condition in the note is released; nothing starts it by itself"
+          : t.state === "done"
+            ? "done — the record of finished work; it stays in place, dimmed, and can be re-queued"
+            : "queued — not started; drag the card to change its place, and a card held by another row cannot go above it";
+  // What a row is waiting on, in the row's head: the lane head that goes first. `waitingOn` and `lane` are DERIVED
+  // by the store (lib/assistant/queue.js's laneInfo) — this draws the fact the digest already carries, in three
+  // words, with the file it shares in title= so the row stays one line.
+  function queueLaneChip(t) {
+    const w = t?.waitingOn;
+    const at = Number(w?.id);
+    if (!Number.isFinite(at) || at <= 0) return "";
+    const lane = String(w?.lane || "").trim();
+    const title = `waiting on #${at}${lane ? ` — #${at} heads this lane (${lane})` : ""}: both rows touch the same file, and it goes first`;
+    return `<span class="as-task-wait" data-as-qwait="${esc(String(at))}" title="${esc(title)}">waiting on #${esc(String(at))}</span>`;
+  }
 
   // ---- the reader's order, and the hold that can block it ---------------------------------------------------------
   //
@@ -2147,7 +2170,7 @@
     const thread = String(alert.thread || "");
     const label = String(assistantThreadName(thread) || "").trim();
     const title = `${label && label !== thread ? `“${label}” ` : ""}(${thread}) has stopped to ask you something — click to open its card; the question, every choice and the answer are in its chat`;
-    return `<button type="button" class="as-task-hold" data-as-qopen="${esc(thread)}" data-as-qid="${esc(String(t.id))}" data-as-qquestion="${esc(alert.id || "")}" title="${esc(title)}" aria-label="${esc(title)}">question</button>`;
+    return `<button type="button" class="as-task-hold as-task-question" data-as-qopen="${esc(thread)}" data-as-qid="${esc(String(t.id))}" data-as-qquestion="${esc(alert.id || "")}" title="${esc(title)}" aria-label="${esc(title)}">question</button>`;
   }
   /**
    * The drop the model refuses, found before the request is sent: a queued row may not sit above a row it holds for
@@ -2288,35 +2311,49 @@
     return leaf(t?.row?.project);
   }
 
-  // One row. The marker, the id and the title are the head; one sub-row per agent under it; PR, tree and files are
-  // the meta line; a stale or conflicted task carries its reason under them, because "why is this not moving" is
-  // the question a queue exists to answer. A done row stays in place greyed: "it finished" is a record, not a task
-  // that vanished. The pane is already scoped to ONE assistant's queue, so the row no longer names an owner.
+  // One row, read in this order: WHAT the row is (its title), its STATE in a word, and WHAT IT IS WAITING ON — a
+  // lane head, a hold, a question, a skipped file, a stopped run. Those are the head, on one line, at full contrast;
+  // the marker is the accent beside them, never the only word for the state. The agents, project and PR follow on
+  // one facts line, and everything a reader needs only after that question — the tree, the files, the attempts and
+  // the task's own detail — sits behind the row's own closed disclosure. Printing all of it is what made one row
+  // 166 px tall and put its reason under a paragraph of rationale.
   function queueTaskHtml(id, t, jobs, byId, alerts) {
     const mark = queueMark(t.state);
+    const state = queueStateName(t.state);
+    // A stale row IS a running row nothing is running any more: the WORD says so where the state is read, instead
+    // of a blue marker contradicting the amber sentence underneath it.
+    const stateWord = t.stale ? "stale" : state;
     // `threads` is the record's whole history and `thread` its legacy first entry, so a queue file written before the
     // list existed still draws one agent row. The CURRENT run is the last one, and that is what a click on the body
     // (rather than on a sub-row) opens.
     const list = Array.isArray(t.threads) && t.threads.length ? t.threads.filter(Boolean) : t.thread ? [t.thread] : [];
     const current = list.length ? list[list.length - 1] : "";
+    // The one line that answers WHERE: the project and the PR. FIRST, because the one word that says where the work
+    // is must never wrap off the bottom of a card.
     const meta = [];
-    // FIRST: `project Menu · files …` places the card before the reader reads anything else about it, and it comes
-    // before the PR and the tree so the one word that says WHERE the work is never wraps off the bottom of the card.
     const project = queueProjectName(t);
     if (project) meta.push(`project ${esc(project)}`);
     if (t.row?.pr?.number) meta.push(`PR #${esc(String(t.row.pr.number))} ${esc(t.row.pr.state || "")}`.trim());
     else if (t.row?.verdict) meta.push(`PR ${esc(t.row.verdict)}`);
-    if (t.worktree) meta.push(`tree ${esc(t.worktree)}`);
-    if (Array.isArray(t.files) && t.files.length) meta.push(`files ${esc(t.files.slice(0, 4).join(", "))}${t.files.length > 4 ? "…" : ""}`);
-    if (Number(t.attempts) > 0) meta.push(`${Number(t.attempts)} attempt${Number(t.attempts) === 1 ? "" : "s"}`);
+    // The second read, folded: the tree (usually a long path), the files, the attempts and the task's own detail.
+    const fold = [];
+    if (t.worktree) fold.push(`<span title="the worktree this task works in">tree ${esc(t.worktree)}</span>`);
+    if (Array.isArray(t.files) && t.files.length)
+      fold.push(
+        `<span title="the files this task claims — a queued task that touches a running task's files is skipped">files ${esc(t.files.slice(0, 4).join(", "))}${t.files.length > 4 ? "…" : ""}</span>`,
+      );
+    if (Number(t.attempts) > 0) fold.push(`<span title="how many times this task has been started">${Number(t.attempts)} attempt${Number(t.attempts) === 1 ? "" : "s"}</span>`);
+    if (t.detail) fold.push(`<span class="as-task-detail" title="the detail written when the task was filed">${esc(t.detail)}</span>`);
+    // The waiting-on sentence, on its own line, in the row's voice: amber for a stop, red for a refusal. It is a
+    // fact, not a description, so it stays printed — with the whole sentence in title= because the line is one line.
     const note = t.stale
-      ? `<div class="as-task-note">STALE — ${esc(t.staleWhy || "its thread has no live run")}</div>`
+      ? `<div class="as-task-note" title="${esc(`STALE — ${t.staleWhy || "its thread has no live run"}`)}">STALE — ${esc(t.staleWhy || "its thread has no live run")}</div>`
       : t.conflict
-        ? `<div class="as-task-note is-bad">SKIPPED — ${esc(t.skipped || "files in use by a running task")}</div>`
+        ? `<div class="as-task-note is-bad" title="${esc(`SKIPPED — ${t.skipped || "files in use by a running task"}`)}">SKIPPED — ${esc(t.skipped || "files in use by a running task")}</div>`
         : t.state === "parked" && t.reason
-          ? `<div class="as-task-note">parked — ${esc(t.reason)}</div>`
+          ? `<div class="as-task-note" title="${esc(`parked — ${t.reason}`)}">parked — ${esc(t.reason)}</div>`
           : t.state === "queued" && t.reason
-            ? `<div class="as-task-note">${esc(t.reason)}</div>`
+            ? `<div class="as-task-note" title="${esc(t.reason)}">${esc(t.reason)}</div>`
             : "";
     const agents = list.length
       ? list.map((th) => queueAgentHtml(id, t, th, jobs)).join("")
@@ -2330,9 +2367,9 @@
     const btn = (act, glyph, word, why) =>
       `<button type="button" class="as-qglyph" data-as-qact="${act}" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" title="${esc(`${word} — ${why}`)}" aria-label="${esc(word)}">${glyph}</button>`;
     const acts = [];
-    if (t.state !== "running") acts.push(btn("running", "▶", "Start", "mark this task running — the thread it names is what carries it"));
-    if (t.state !== "queued") acts.push(btn("queued", t.state === "done" ? "↺" : "⤵", t.state === "done" ? "Requeue" : "Queue", t.state === "done" ? "put it back in the queue — a finished task can be re-queued" : "put it back in the queue"));
-    if (t.state !== "parked") acts.push(btn("parked", "⏸", "Park", "park it — blocked, waiting on something outside this assistant"));
+    if (t.state !== "running") acts.push(btn("running", "▸", "Start", "mark this task running — the thread it names is what carries it"));
+    if (t.state !== "queued") acts.push(btn("queued", t.state === "done" ? "↺" : "⇣", t.state === "done" ? "Requeue" : "Queue", t.state === "done" ? "put it back in the queue — a finished task can be re-queued" : "put it back in the queue"));
+    if (t.state !== "parked") acts.push(btn("parked", "‖", "Park", "park it — blocked, waiting on something outside this assistant"));
     if (t.state !== "done") acts.push(btn("done", "✓", "Done", "mark it finished — this is the reader's judgement, not the panel's"));
     // Move is a POPOVER, not a select that is always on the row: the picker is as wide as the assistant names, and it
     // was the one control on the row that could not be a glyph. ➡️ opens the list; a name in it IS the choice (the
@@ -2343,29 +2380,38 @@
     const open = qmoveOpen.has(mkey);
     const move = others.length
       ? `<span class="as-qmove-wrap">
-          <button type="button" class="as-qglyph" data-as-qmove-open="${esc(mkey)}" data-as-qown="${esc(id)}" data-as-qid="${esc(String(t.id))}" title="Move — hand this task to another assistant; it leaves this queue, arrives in that one's with an id of its own, and the move is recorded on the task (movedFrom)" aria-label="Move" aria-haspopup="menu" aria-expanded="${open ? "true" : "false"}">➡️</button>
+          <button type="button" class="as-qglyph" data-as-qmove-open="${esc(mkey)}" data-as-qown="${esc(id)}" data-as-qid="${esc(String(t.id))}" title="Move — hand this task to another assistant; it leaves this queue, arrives in that one's with an id of its own, and the move is recorded on the task (movedFrom)" aria-label="Move" aria-haspopup="menu" aria-expanded="${open ? "true" : "false"}">→</button>
           <span class="as-qmove-pop" data-as-qmove-pop="${esc(mkey)}" role="menu" aria-label="Move #${esc(String(t.id))} to another assistant"${open ? "" : " hidden"}>${others
             .map((x) =>
               `<button type="button" role="menuitem" class="as-qmove-pick" data-as-qact="reassign" data-as-qid="${esc(String(t.id))}" data-as-qown="${esc(id)}" data-as-qmove-to="${esc(x)}" title="${esc(`Move to ${sessionById(x)?.name || x} — it leaves this queue, arrives in that one's with an id of its own, and the move is recorded on the task (movedFrom)`)}" aria-label="${esc(`Move to ${sessionById(x)?.name || x}`)}">↳ ${esc(sessionById(x)?.name || x)}</button>`,
             )
             .join("")}</span>
         </span>`
-      : `<span class="as-hint">no other assistant to move it to</span>`;
-    return `<div class="as-task${t.state === "done" ? " is-done" : ""}${t.state === "queued" ? " is-draggable" : ""}" data-as-qrow="${esc(String(t.id))}" data-as-qstate="${esc(queueStateName(t.state))}" data-as-qown="${esc(id)}" data-as-qthread="${esc(current)}">
-        <div class="as-task-body"${current ? ` data-as-qopen="${esc(current)}"` : ""}>
-          <div class="as-task-head">
-            <span class="as-task-mark is-${esc(queueStateName(t.state))}" aria-hidden="true">${mark}</span>
-            <b class="mono">#${esc(String(t.id))}</b>
-            <span class="as-task-title">${esc(t.title)}</span>
-            ${queueHoldBadge(t, byId)}
-            ${queueQuestionChip(t, alerts)}
+      : "";
+    // The disclosure is OUTSIDE the body on purpose: the body is the console opener, and a summary inside it would
+    // be swallowed by that press. Closed it is one 9.5 px word; opened it is the tree, the files, the attempts and
+    // the task's own detail.
+    const more = fold.length
+      ? `<details class="as-task-more"><summary title="the tree, the files, the attempts and the detail — folded so the row reads as one line">${t.worktree || (Array.isArray(t.files) && t.files.length) ? "tree · files" : "more"}${Number(t.attempts) > 0 ? " · attempts" : ""}${t.detail ? " · detail" : ""}</summary><div class="as-task-more-body">${fold.join(`<span class="as-task-sep">·</span>`)}</div></details>`
+      : "";
+    return `<div class="as-task${t.state === "done" ? " is-done" : ""}${t.state === "queued" ? " is-draggable" : ""}" data-as-qrow="${esc(String(t.id))}" data-as-qstate="${esc(state)}" data-as-qown="${esc(id)}" data-as-qthread="${esc(current)}">
+        <div class="as-task-main">
+          <div class="as-task-body"${current ? ` data-as-qopen="${esc(current)}"` : ""}>
+            <div class="as-task-head">
+              <span class="as-task-mark is-${esc(state)}" aria-hidden="true">${mark}</span>
+              <b class="mono">#${esc(String(t.id))}</b>
+              <span class="as-task-state is-${esc(stateWord)}" title="${esc(queueStateTitle(t))}">${esc(stateWord)}</span>
+              <span class="as-task-title" title="${esc(t.title)}">${esc(t.title)}</span>
+              ${queueLaneChip(t)}
+              ${queueHoldBadge(t, byId)}
+              ${queueQuestionChip(t, alerts)}
+            </div>
+            <div class="as-task-facts">${agents}${meta.length ? `<span class="as-task-meta">${meta.join(" · ")}</span>` : ""}<span class="as-task-pipeline">${queuePipelineChip(t, id)}${queueFlowButton(t, id)}</span></div>
+            ${note}
           </div>
-          <div class="as-task-agents">${agents}</div>
-          <div class="as-task-pipeline">${queuePipelineChip(t, id)}${queueFlowButton(t, id)}</div>
-          ${meta.length ? `<div class="as-task-meta">${meta.join(" · ")}</div>` : ""}
-          ${note}
+          <div class="as-task-actions">${acts.join("")}${move}${btn("delete", "✕", "Delete", "delete this task — a removed task leaves no ghost in the digest")}</div>
         </div>
-        <div class="as-task-actions">${acts.join("")}${move}${btn("delete", "✕", "Delete", "delete this task — a removed task leaves no ghost in the digest")}</div>
+        ${more}
       </div>`;
   }
 
@@ -2452,31 +2498,39 @@
     const byId = new Map(sorted.map((t) => [Number(t.id), t]));
     const dropNote = queueDropNotes.get(id) || "";
     host.innerHTML = `
-      <div class="as-group">
+      <div class="as-group as-qpane">
         <h4>Its task queue — ${esc(rec?.name || "this assistant")}'s own</h4>
-        <div class="as-help">What THIS assistant is carrying: queued work it has not started, what is running (with its
-        thread), what it has parked, and what has finished. <b>Add task</b> files work into THIS assistant's queue — the
-        one this page belongs to — so a task cannot be created into a queue nobody is looking at; handing a task to
-        another assistant is the <b>Move</b> control on an existing row: the task leaves this queue, arrives in that
-        assistant's with an id of its own, and the move is recorded on it as movedFrom. A queued
-        task whose files touch a running task's files is shown as skipped with the reason; a running task whose thread
-        has no live run reads STALE rather than showing phantom work in progress. <b>Drag a queued card</b> to change
-        its place — the order is written to the file and survives the next read, while running, parked and done keep
-        their own sections. A card carrying a <b>held by #N</b> badge waits on that row and cannot be dragged above it.</div>
-        <div class="as-line"><b>${esc(head)}</b>${view?.file ? `<code>${esc(view.file)}</code>` : ""}<button type="button" class="primary" data-as-qact="reload" data-as-qown="${esc(id)}">Refresh</button></div>
-        <div class="as-line"><label class="as-grow" title="what has to happen — one line is enough">title <input type="text" id="as-qtitle-${esc(n)}" class="as-grow" spellcheck="false" maxlength="200" placeholder="e.g. land the queue sub-tab's PR"></label></div>
-        <div class="as-line"><label class="as-grow" title="optional: the detail an assistant needs to do it without asking">detail <input type="text" id="as-qdetail-${esc(n)}" class="as-grow" spellcheck="false" maxlength="400" placeholder="optional"></label></div>
-        <div class="as-line"><label title="optional: comma-separated paths this task will touch — a queued task that overlaps a running task's files is skipped with the reason">files <input type="text" id="as-qfiles-${esc(n)}" spellcheck="false" maxlength="300" placeholder="lib/assistant/queue.js, public/assistant.js"></label>
-          <button type="button" class="primary" data-as-qact="add" data-as-qown="${esc(id)}" title="add this task to ${esc(rec?.name || "this assistant")}'s own queue">Add task</button>
-          <span class="as-err" id="as-qerr-${esc(n)}">${cached?.error ? esc(cached.error) : ""}</span>
+        <div class="as-qline">
+          <b class="as-qcounts"${view?.file ? ` title="${esc(view.file)}"` : ""}>${esc(head)}</b>
+          <button type="button" class="as-qquiet" data-as-qact="reload" data-as-qown="${esc(id)}" title="read this assistant's queue file again">Refresh</button>
         </div>
+        <details class="as-qhelp">
+          <summary title="what this pane draws, how work gets into it, and how the order works">what this pane is</summary>
+          <div class="as-help">What THIS assistant is carrying: queued work it has not started, what is running (with its
+          thread), what it has parked, and what has finished. <b>Add task</b> files work into THIS assistant's queue — the
+          one this page belongs to — so a task cannot be created into a queue nobody is looking at; handing a task to
+          another assistant is the <b>Move</b> control on an existing row: the task leaves this queue, arrives in that
+          assistant's with an id of its own, and the move is recorded on it as movedFrom. A queued
+          task whose files touch a running task's files is shown as skipped with the reason; a running task whose thread
+          has no live run reads STALE rather than showing phantom work in progress. <b>Drag a queued card</b> to change
+          its place — the order is written to the file and survives the next read, while running, parked and done keep
+          their own sections. A card carrying a <b>held by #N</b> badge waits on that row and cannot be dragged above it.
+          The queue lives in <code>state/assistants/${esc(id)}/queue.json</code> beside this assistant's charter; it is read
+          on every wake, before the board, and the digest names every task's state, thread, worktree, PR and why it is not
+          going (LIVE, STALE or PARKED).</div>
+        </details>
+        <details class="as-qadd">
+          <summary title="file a task into this assistant's own queue — one press opens the form">+ Add task</summary>
+          <div class="as-line"><label class="as-grow" title="what has to happen — one line is enough">title <input type="text" id="as-qtitle-${esc(n)}" class="as-grow" spellcheck="false" maxlength="200" placeholder="e.g. land the queue sub-tab's PR"></label></div>
+          <div class="as-line"><label class="as-grow" title="optional: the detail an assistant needs to do it without asking">detail <input type="text" id="as-qdetail-${esc(n)}" class="as-grow" spellcheck="false" maxlength="400" placeholder="optional"></label></div>
+          <div class="as-line"><label title="optional: comma-separated paths this task will touch — a queued task that overlaps a running task's files is skipped with the reason">files <input type="text" id="as-qfiles-${esc(n)}" spellcheck="false" maxlength="300" placeholder="lib/assistant/queue.js, public/assistant.js"></label>
+            <button type="button" class="primary" data-as-qact="add" data-as-qown="${esc(id)}" title="add this task to ${esc(rec?.name || "this assistant")}'s own queue">Add task</button>
+            <span class="as-err" id="as-qerr-${esc(n)}">${cached?.error ? esc(cached.error) : ""}</span>
+          </div>
+        </details>
         ${queueStateHtml(pane, { id, n, view, rows: sorted })}
         ${dropNote ? `<div class="as-qdrop" data-as-qdrop="${esc(id)}" role="status">${esc(dropNote)}</div>` : ""}
         ${sorted.map((t) => queueTaskHtml(id, t, queueJobs.byThread, byId, state.assistant?.alerts || [])).join("")}
-        <div class="as-help">The queue lives in <code>state/assistants/${esc(id)}/queue.json</code> beside this assistant's charter.
-        It is read on every wake, before the board: the digest names every task's state, thread, worktree and PR, and why
-        it is not going (LIVE, STALE or PARKED), so a turn can start whatever can be parallelised. A finished task stays
-        here greyed — the record, not a ghost.</div>
       </div>`;
   }
 
@@ -2706,8 +2760,9 @@
     if (queueDrag || e.button !== 0) return;
     const el = e.target?.closest?.(".as-task.is-draggable");
     if (!el) return;
-    // A press on a control is that control's, not the card's: the glyphs, the Move popover, any field.
-    if (e.target.closest("button, a, input, select, textarea, label, .as-qmove-pop")) return;
+    // A press on a control is that control's, not the card's: the glyphs, the Move popover, any field — and the
+    // row's own disclosure, whose summary must toggle instead of starting a drag.
+    if (e.target.closest("button, a, input, select, textarea, label, .as-qmove-pop, summary, .as-task-more")) return;
     const rect = el.getBoundingClientRect();
     queueDrag = {
       el,
@@ -3507,7 +3562,7 @@
       return;
     }
     const taskRow = e.target.closest(".as-task");
-    if (taskRow && !e.target.closest("button, a, input, select, textarea, label, .as-qmove-pop")) {
+    if (taskRow && !e.target.closest("button, a, input, select, textarea, label, .as-qmove-pop, summary, .as-task-more")) {
       const thread = String(taskRow.dataset.asQthread || "");
       if (thread) {
         e.preventDefault();

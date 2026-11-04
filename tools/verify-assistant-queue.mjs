@@ -409,8 +409,8 @@ try {
       // Row #2 is the running one, so its Start is not offered (a press that reports "already running" wasted a click).
       rows[0]?.glyphs.map((g) => [g.act, g.text, g.aria]),
       [
-        ["queued", "⤵", "Queue"],
-        ["parked", "⏸", "Park"],
+        ["queued", "⇣", "Queue"],
+        ["parked", "‖", "Park"],
         ["done", "✓", "Done"],
         ["delete", "✕", "Delete"],
       ],
@@ -418,7 +418,7 @@ try {
     check(
       "…and the parked row's ▶ is Start while its ↺-able neighbour says Requeue",
       [rows[1]?.glyphs[0], rows[2]?.glyphs.map((g) => g.text)],
-      [{ act: "running", text: "▶", aria: "Start" }, ["▶", "↺", "⏸", "✕"]],
+      [{ act: "running", text: "▸", aria: "Start" }, ["▸", "↺", "‖", "✕"]],
     );
     ok("…says STALE instead of showing phantom progress", /^STALE — that thread has no live run/.test(rows[0]?.note || ""), rows[0]?.note);
     ok("the parked row carries its reason", /^parked — waiting on the DBA's verify$/.test(rows[1]?.note || ""), rows[1]?.note);

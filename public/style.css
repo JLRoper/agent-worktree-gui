@@ -3662,6 +3662,73 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-qmove-pop[hidden] { display: none; }
 .as-qmove-pop .as-qmove-pick { text-align: left; font-size: 11px; padding: 4px 8px; border: 0; background: transparent; color: var(--text); border-radius: 5px; }
 .as-qmove-pop .as-qmove-pick:hover { background: #20262f; }
+/* ---- the queue pane's own skin: the facts first, the rationale folded --------------------------- */
+/* Every rule below is scoped to `.as-qpane`, the group the Queue sub-tab paints. The board, the chat card and the
+   Settings form keep the skin they had: a later sub-tab cannot inherit one of these by accident. The row reads as
+   three things on one line — what it is, its state in a WORD, what it is waiting on — then one facts line, then the
+   presses. The tree, the files, the attempts and the task's own detail sit behind the row's own closed summary. */
+.as-qpane .as-qline { display: flex; align-items: center; gap: 8px; margin: 0 0 5px; }
+.as-qpane .as-qcounts { flex: 1 1 auto; min-width: 0; font-size: 10.5px; font-weight: 400; letter-spacing: .02em; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-qpane .as-qquiet { flex: none; background: transparent; border: 1px solid var(--line); border-radius: 5px; color: var(--dim); font-size: 10.5px; padding: 2px 7px; }
+.as-qpane .as-qquiet:hover { color: var(--text); border-color: #3a4553; }
+/* The explainer and the add form are DISCLOSURES: closed, each is one line; opened, each is what it was. The summary
+   is the only height the resting pane spends on prose, and it says what is behind it. */
+.as-qpane .as-qhelp, .as-qpane .as-qadd { margin: 0 0 5px; }
+.as-qpane .as-qhelp > summary, .as-qpane .as-qadd > summary { width: fit-content; cursor: pointer; padding: 1px 0; font-size: 10.5px; color: var(--dimmer); user-select: none; }
+.as-qpane .as-qhelp > summary:hover, .as-qpane .as-qhelp[open] > summary,
+.as-qpane .as-qadd > summary:hover, .as-qpane .as-qadd[open] > summary { color: var(--text); }
+.as-qpane .as-qhelp .as-help { margin: 4px 0 0; max-width: 76ch; }
+.as-qpane .as-qadd .as-line { margin-top: 6px; }
+.as-qpane .as-qadd input[type="text"] { min-width: 0; flex: 1 1 220px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; font-family: var(--mono); font-size: 11px; }
+.as-qpane .as-qadd .primary { font-size: 10.5px; padding: 3px 9px; }
+/* The row: a raised surface with one state rail. The rail is the only state colour on the card, so a done record is
+   quiet without becoming unreadable, and a running row is not five different blues. */
+.as-qpane .as-task { padding: 6px 8px 5px 7px; margin: 0 0 6px; border-left: 2px solid #2c3442; }
+.as-qpane .as-task.is-done { opacity: .78; background: var(--card); }
+.as-qpane .as-task.is-done .as-task-title { font-weight: 400; color: var(--dim); }
+.as-qpane .as-task-main { display: flex; align-items: flex-start; gap: 6px; }
+.as-qpane .as-task-body { gap: 2px; }
+.as-qpane .as-task-head { align-items: baseline; gap: 6px; min-width: 0; }
+.as-qpane .as-task-head b { flex: none; font-size: 11px; color: var(--dim); }
+.as-qpane .as-task-mark { align-self: baseline; font-size: 12px; font-variant-emoji: text; }
+.as-qpane .as-task-state { flex: none; font-size: 9px; line-height: 1.5; letter-spacing: .07em; text-transform: uppercase; color: var(--dim); border: 1px solid #2a3341; border-radius: 4px; padding: 0 4px; }
+.as-qpane .as-task-state.is-running { color: #8fb8ff; background: #101d29; border-color: #24384f; }
+.as-qpane .as-task-state.is-stale { color: #e0b341; background: #2a2418; border-color: #4a3d1f; }
+.as-qpane .as-task-state.is-parked { color: #a78bfa; background: #241f36; border-color: #3b3358; }
+.as-qpane .as-task-state.is-done { color: #6fcf97; background: #12261a; border-color: #244a35; }
+.as-qpane .as-task-title { flex: 1 1 auto; min-width: 0; font-size: 11.5px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The two chips are different objects: `waiting on #N` is a fact (a span), `question` is a press (a button) and says
+   so with a pointer and a warmer fill. Neither is pushed to the far edge: they qualify the title beside them. */
+.as-qpane .as-task-wait { flex: none; align-self: center; font-size: 9px; line-height: 1.6; color: #9fd0ff; background: #14202c; border: 1px solid #2b3d57; border-radius: 999px; padding: 0 6px; white-space: nowrap; }
+.as-qpane .as-task-head .as-task-hold { align-self: center; margin-left: 0; }
+.as-qpane .as-task-question { cursor: pointer; color: #ffd7a8; background: #2a2014; border-color: #4a3a1f; }
+.as-qpane .as-task-question:hover { color: #ffe9c9; border-color: #6a5228; }
+.as-qpane .as-task-facts { display: flex; align-items: center; gap: 2px 8px; flex-wrap: wrap; margin: 1px 0 0 18px; min-width: 0; }
+.as-qpane .as-task-agents { display: flex; flex-direction: row; flex-wrap: wrap; gap: 2px 6px; margin: 0; min-width: 0; }
+.as-qpane .as-task-agent { gap: 4px; padding: 0 3px 0 2px; }
+.as-qpane .as-task-agent .as-task-agent-thread { max-width: 210px; font-size: 10px; }
+.as-qpane .as-task-agent .as-task-agent-label { font-size: 10px; }
+.as-qpane .as-task-agent .pill { font-size: 9px; line-height: 1.5; padding: 0 5px; }
+.as-qpane .pill.pill-running { color: #8fb8ff; background: #101d29; border-color: #24384f; }
+.as-qpane .as-task-meta { margin: 0; gap: 0 8px; font-size: 10px; color: var(--dim); }
+.as-qpane .as-task-pipeline { margin: 0; display: inline-flex; align-items: center; gap: 4px; }
+.as-qpane .as-task-pipeline .as-qflow { margin-left: 0; padding: 0 5px; font-size: 9px; line-height: 1.6; border-radius: 999px; }
+.as-qpane .as-task-pipe { font-size: 9px; line-height: 1.6; padding: 0 6px; }
+.as-qpane .as-task-note { margin: 1px 0 0 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The presses sit BESIDE the head, not in a fifth band: six 22 px targets on one line, the destructive one separated
+   by a gap rather than a rule. */
+.as-qpane .as-task-actions { flex: 0 0 auto; flex-wrap: nowrap; align-items: center; gap: 3px; margin: 0; padding: 0; border: 0; font-variant-emoji: text; }
+.as-qpane .as-task-actions button { min-height: 22px; padding: 1px 5px; font-size: 11px; }
+.as-qpane .as-task-actions .as-qglyph { min-width: 21px; padding: 1px 4px; }
+.as-qpane .as-task-actions [data-as-qact="delete"] { margin-left: 3px; color: var(--dimmer); }
+/* The fold: one 9.5 px word when closed; the tree, the files, the attempts and the task's own detail when open. The
+   summary is outside `.as-task-body`, so pressing it toggles instead of opening the console. */
+.as-qpane .as-task-more { margin: 1px 0 0 18px; }
+.as-qpane .as-task-more > summary { width: fit-content; cursor: pointer; padding: 0; font-size: 9.5px; color: var(--dimmer); user-select: none; }
+.as-qpane .as-task-more > summary:hover, .as-qpane .as-task-more[open] > summary { color: var(--dim); }
+.as-qpane .as-task-more-body { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-top: 2px; font-family: var(--mono); font-size: 10px; color: var(--dimmer); overflow-wrap: anywhere; }
+.as-qpane .as-task-more-body .as-task-detail { font-family: inherit; color: var(--dim); }
+.as-qpane .as-task-sep { color: #39424f; }
 /* A rule's own thresholds fold under the row that reads them: a flat block of number inputs above the rules
    said nothing about which bar belonged to which rule. Closed by default, and the summary names the value in
    force, so a folded disclosure still answers "what does this rule fire on". */
