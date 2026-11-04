@@ -7,6 +7,14 @@
 // the 599 px dead band is gone), C3 the titles' contrast, C8 that nothing is painted past the track's own right edge,
 // and the closing gate's notch is inside the scroller instead of on an 18 px stub past it.
 //
+// ROUND 5C (the count and the fit control) answers the six lines 5B left red — the thirteen-stage case. Its unfitted
+// drawing scrolls by design, so the unfitted state is judged on what it OWES the reader: the count it prints (N1 at
+// the start, N2 after the reader scrolls, both built from the measured rects rather than read back) and the control it
+// offers (K1: Tab reaches it inside the dialog and it paints a ring). The FITTED drawing is then judged on visibility
+// like every other case (V1-V6, C1-C4, C8), so the case goes green by the reader's own press rather than by deleting
+// the lines — and N3 keeps the count honest while fitted: "all 13 stages and 13 notches in view". A pass that hides
+// the count is a fail.
+//
 //   node tools/verify-pipeline-flow-visible.mjs                       # print the judgement, write shots to %TEMP%
 //   node tools/verify-pipeline-flow-visible.mjs --shots <dir>         # where the screenshots go
 //   node tools/verify-pipeline-flow-visible.mjs --json <file>         # the raw ledger
@@ -255,14 +263,21 @@ const measure = (page) =>
             : null,
           num: num ? { text: num.textContent.trim(), rect: r(num) } : null,
           dot: dot ? { rect: r(dot), bg: colour(dot, "backgroundColor") } : null,
-          outOfScroller: rect.right > sr.right + 0.5 || rect.left < sr.left - 0.5,
+          // `r()` names the left edge `x` (it is a rect, not a DOMRect); reading `rect.left` here silently made every
+          // LEFT-side clip look visible, which is why the count's scrolled case is judged on both sides.
+          outOfScroller: rect.right > sr.right + 0.5 || rect.x < sr.left - 0.5,
           outOfCard: rect.right > cr.right + 0.5 || rect.bottom > cr.bottom + 0.5,
+          // Which way a clipped stage is: the side the reader has to scroll toward. Used by the count's own judge,
+          // never by the renderer (the drawing does not read this).
+          outSide: rect.right > sr.right + 0.5 ? "right" : rect.x < sr.left - 0.5 ? "left" : "",
+          inScroller: rect.x < sr.right - 0.5 && rect.right > sr.left + 0.5,
         };
       }),
       notches: [...card.querySelectorAll(".pflow-notch")].map((nn) => ({
         gate: nn.dataset.gate,
         rect: r(nn),
-        outOfScroller: r(nn).right > sr.right + 0.5 || r(nn).bottom > cr.bottom + 0.5,
+        outOfScroller: r(nn).right > sr.right + 0.5 || r(nn).x < sr.left - 0.5 || r(nn).bottom > cr.bottom + 0.5,
+        outSide: r(nn).right > sr.right + 0.5 ? "right" : r(nn).x < sr.left - 0.5 ? "left" : "",
       })),
       arcs: [...card.querySelectorAll(".pflow-arc")].map((a) => ({
         from: a.dataset.from,
@@ -274,6 +289,23 @@ const measure = (page) =>
         outOfCard: r(a).right > cr.right + 0.5 || r(a).top < cr.top - 0.5,
       })),
       keys: [...card.querySelectorAll(".pflow-key")].map((k) => ({ mark: k.dataset.mark, text: k.textContent.trim(), rect: r(k), inCard: r(k).right <= cr.right + 0.5 && r(k).bottom <= cr.bottom + 0.5 })),
+      // The count and the `fit` control, as a reader meets them: the sentence the scroller prints, and whether the
+      // control is offered, how it is labelled and what outline the keyboard focus paints on it.
+      view: {
+        fitMode: card.querySelector(".pflow")?.dataset.fit || "",
+        count: card.querySelector("[data-pflow-count]")?.textContent || "",
+        out: card.querySelector("[data-pflow-count]")?.dataset.out || "",
+        row: (() => {
+          const el = card.querySelector("[data-pflow-status]");
+          return el ? { hidden: el.hidden, text: el.textContent.replace(/\s+/g, " ").trim() } : null;
+        })(),
+        fit: (() => {
+          const el = card.querySelector("[data-pflow-fit]");
+          if (!el) return null;
+          const s = getComputedStyle(el);
+          return { label: el.textContent.trim(), hidden: el.hidden, display: s.display, rect: r(el), outline: `${s.outlineStyle}/${s.outlineWidth}` };
+        })(),
+      },
       deadRight: +(br.right - tr.right).toFixed(1),
       deadLeft: +(tr.left - br.left).toFixed(1),
       // The arcs are placed as percentages of THIS layer, so it must be the track's own box in both regimes — the capped,
@@ -297,6 +329,34 @@ const measure = (page) =>
 const marks = (m) => (m ? m.nodes.map((n) => `${n.id}:${n.mark}`) : []);
 const overlap = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
 const centre = (r) => +(r.x + r.w / 2).toFixed(1);
+const cardClip = (m, viewport) => ({
+  x: Math.max(0, m.card.x),
+  y: Math.max(0, m.card.y),
+  width: Math.min(m.card.w, viewport.width - Math.max(0, m.card.x)),
+  height: Math.min(m.card.h, viewport.height - Math.max(0, m.card.y)),
+});
+
+// The sentence the scroller owes its reader, rebuilt HERE from the measured rects rather than read back from the
+// element: a count that disagrees with the drawing has to fail this run, not restate itself.
+const countsOf = (m) => ({
+  stages: m.nodes.filter((n) => n.outOfScroller),
+  notches: m.notches.filter((n) => n.outOfScroller),
+  totalStages: m.nodes.length,
+  totalNotches: m.notches.length,
+  overflow: m.scrollBox.sw > m.scrollBox.cw + 1,
+});
+const expectedCountText = (m) => {
+  const c = countsOf(m);
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  if (!c.stages.length && !c.notches.length) {
+    return `all ${plural(c.totalStages, "stage", "stages")}${c.totalNotches ? ` and ${plural(c.totalNotches, "notch", "notches")}` : ""} in view`;
+  }
+  const shown = m.nodes.filter((n) => !n.outOfScroller).map((n) => Number(n.pos));
+  const range = shown.length ? `showing stages ${Math.min(...shown)}–${Math.max(...shown)} of ${c.totalStages} — ` : "";
+  const said = [`${c.stages.length} of ${c.totalStages} ${c.totalStages === 1 ? "stage" : "stages"}`];
+  if (c.totalNotches) said.push(`${c.notches.length} of ${c.totalNotches} ${c.totalNotches === 1 ? "notch" : "notches"}`);
+  return `${range}${said.join(" and ")} out of view`;
+};
 
 const openRouteB = async (page, id) => {
   await page.selectOption("#pipeline-select", id);
@@ -411,7 +471,9 @@ try {
           { id: "investigate", expect: 2, shots: true },
           { id: "turnover", expect: 3, shots: false },
           { id: "sefl-review-loop", expect: 7, shots: true },
-          { id: THIRTEEN.id, expect: 13, shots: true },
+          // The thirteen-stage acceptance: its own branch below takes both states (unfitted for the count, fitted for
+          // visibility), so it does not use the generic card shot.
+          { id: THIRTEEN.id, expect: 13, shots: false, fit: true },
         ];
         for (const one of cases) {
           if (!options.includes(one.id)) {
@@ -430,10 +492,84 @@ try {
           check(m.nodes.length === one.expect, `${one.id}: the drawn stage count is the declared one`, `${m.nodes.length} drawn, ${one.expect} declared`);
           check(!m.sub, `${one.id}: no position subtitle on a definition`, m.sub || "(none)");
 
-          judgeVisibility(m, `route B/${one.id}`);
-          judgeClean(m, `route B/${one.id}`);
+          if (one.fit) {
+            // ---- the thirteen-stage acceptance: the count, the control, and the fitted drawing --------------------
+            // The unfitted drawing legitimately scrolls; what it owes the reader is the COUNT. The fitted drawing is
+            // then judged on visibility like every other case, so the six red lines this case carried are answered by
+            // the control the plan's C8 names rather than by deleting the lines.
+            const c = countsOf(m);
+            check(c.overflow, `${one.id}: the drawing scrolls unfitted — the case the control exists for`, `${m.scrollBox.sw} > ${m.scrollBox.cw}, ${c.stages.length} stages and ${c.notches.length} notches out`);
+            judge("N1", m.view.count === expectedCountText(m), `${one.id} unfitted: the scroller counts what is out of view`, `"${m.view.count}" against ${c.stages.length} of ${c.totalStages} stages and ${c.notches.length} of ${c.totalNotches} notches measured out`);
+            check(Boolean(m.view.fit && !m.view.fit.hidden), `${one.id}: a fit control is offered while stages are out of view`, m.view.fit ? `"${m.view.fit.label}" ${m.view.fit.rect.w}x${m.view.fit.rect.h}` : "no control");
+            await page.screenshot({ path: path.join(SHOTS, `${label}-route-b-${one.id}-unfitted.png`), clip: cardClip(m, viewport) });
+            // The count follows the reader: scroll to the far end and read the sentence again.
+            await page.evaluate(() => {
+              const s = document.querySelector("#pipeline-modal-card .pflow-scroll");
+              s.scrollLeft = s.scrollWidth;
+            });
+            await page.waitForTimeout(220);
+            const scrolled = await measure(page);
+            judge(
+              "N2",
+              scrolled.view.count === expectedCountText(scrolled) && scrolled.view.count !== m.view.count,
+              `${one.id} scrolled: the count follows the reader`,
+              `start "${m.view.count}" → at scrollLeft ${scrolled.scrollLeft} "${scrolled.view.count}" (expected "${expectedCountText(scrolled)}": ${countsOf(scrolled).stages.length} stages and ${countsOf(scrolled).notches.length} notches out of the box ${scrolled.scroll.x}..${scrolled.scroll.right})`,
+            );
+            // Keyboard reach: Tab from the card, without leaving the dialog, must land on the control, and the ring
+            // has to be painted on it. The scroller is its own tab stop (Chromium makes a scrollable region
+            // focusable), so the press is the third stop, not the second — the run reads where it lands, not a guess.
+            const tabbed = [];
+            for (let i = 0; i < 8; i += 1) {
+              await page.keyboard.press("Tab");
+              const at = await page.evaluate(() => {
+                const card = document.getElementById("pipeline-modal-card");
+                const el = document.activeElement;
+                const s = el ? getComputedStyle(el) : null;
+                return {
+                  inCard: Boolean(el && card.contains(el)),
+                  fit: Boolean(el && el.hasAttribute && el.hasAttribute("data-pflow-fit")),
+                  tag: el?.tagName || "",
+                  outline: s ? `${s.outlineStyle}/${s.outlineWidth}` : "",
+                };
+              });
+              tabbed.push(at);
+              if (at.fit) break;
+            }
+            const atFit = tabbed.find((t) => t.fit);
+            check(tabbed.every((t) => t.inCard) && Boolean(atFit), `${one.id}: Tab reaches the fit control and stays in the dialog`, tabbed.map((t) => `${t.tag}${t.fit ? "(fit)" : ""}`).join(" > "));
+            judge("K1", Boolean(atFit && !/none\/0px/.test(atFit.outline)), `${one.id}: the fit control draws a ring when the keyboard reaches it`, atFit ? atFit.outline : "never reached");
+            await page.keyboard.press("Enter");
+            await page.waitForTimeout(220);
+            const fitted = await measure(page);
+            check(fitted.view.fitMode === "1", `${one.id}: the press fits the drawing`, `data-fit="${fitted.view.fitMode}"`);
+            judge("N3", fitted.view.count === expectedCountText(fitted) && !/out of view/.test(fitted.view.count), `${one.id} fitted: the count still says what is in view`, `"${fitted.view.count}" over ${fitted.scrollBox.sw}/${fitted.scrollBox.cw}`);
+            judgeVisibility(fitted, `route B/${one.id} fitted`);
+            judgeClean(fitted, `route B/${one.id} fitted`);
+            await page.screenshot({ path: path.join(SHOTS, `${label}-route-b-${one.id}-fitted.png`), clip: cardClip(fitted, viewport) });
+            // the closing notch, at the fitted scale: the last gap, the last stage and the card's right edge
+            const last = fitted.nodes[fitted.nodes.length - 1];
+            const prev = fitted.nodes[fitted.nodes.length - 2] || last;
+            if (last) {
+              const left = Math.max(0, prev.rect.x - 24);
+              const top = Math.max(0, last.rect.y - 26);
+              const width = Math.min(viewport.width - left, fitted.card.right - left);
+              const height = Math.min(viewport.height - top, last.rect.bottom - top + 14);
+              await page.screenshot({ path: path.join(SHOTS, `${label}-route-b-${one.id}-fitted-last-notch.png`), clip: { x: left, y: top, width, height } });
+            }
+            // and the press restores the readable columns: the control is a toggle, not a one-way zoom.
+            await page.keyboard.press("Enter");
+            await page.waitForTimeout(220);
+            const restored = await measure(page);
+            check(restored.view.fitMode === "0" && restored.scrollBox.sw > restored.scrollBox.cw + 1, `${one.id}: pressing it again restores the readable columns`, `data-fit="${restored.view.fitMode}", ${restored.scrollBox.sw}/${restored.scrollBox.cw}`);
+            check(restored.nodes.every((n) => n.mark === "not-reached"), `${one.id}: the marks survive the fit and the restore`, restored.nodes.map((n) => n.mark).join(","));
+            out[`${label}/route-b/${one.id}-fitted`] = fitted;
+            out[`${label}/route-b/${one.id}-scrolled`] = scrolled;
+          } else {
+            judgeVisibility(m, `route B/${one.id}`);
+            judgeClean(m, `route B/${one.id}`);
+          }
           if (one.shots) {
-            const clip = { x: Math.max(0, m.card.x), y: Math.max(0, m.card.y), width: Math.min(m.card.w, viewport.width - Math.max(0, m.card.x)), height: Math.min(m.card.h, viewport.height - Math.max(0, m.card.y)) };
+            const clip = cardClip(m, viewport);
             await page.screenshot({ path: path.join(SHOTS, `${label}-route-b-${one.id}.png`), clip });
             // the seven-stage case: the right edge, where the last stage's own notch is drawn
             if (one.id === "sefl-review-loop") {
