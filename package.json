@@ -69,6 +69,7 @@
     "capture:pipeline-flow": "node tools/capture-pipeline-flow.mjs",
     "capture:pipeline-import": "node tools/capture-pipeline-import.mjs",
     "capture:pipeline-readability": "node tools/capture-pipeline-readability.mjs",
+    "capture:settings-pipeline": "node tools/capture-settings-pipeline.mjs",
     "verify:task-pipeline-window": "node tools/verify-task-pipeline-window.mjs",
     "verify:action-harvest": "node tools/verify-action-harvest.mjs",
     "verify:restart-line-harvest": "node tools/verify-restart-line-harvest.mjs",

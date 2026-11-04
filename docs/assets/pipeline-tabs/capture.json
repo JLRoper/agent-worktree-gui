@@ -1,0 +1,223 @@
+{
+  "startedAt": "2026-11-04T15:08:29.628Z",
+  "tree": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6",
+  "shots": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\docs\\assets\\pipeline-tabs",
+  "fixture": {
+    "catalogue": "pipelines.seed.json — seven definitions, no reader pipelines.json",
+    "bundle": "pipeline-bundle.seed.json — POC to UAT, thirteen stages (copied in as pipeline-bundle.json)",
+    "queue": "assistant-1, three tasks: two on poc-to-uat (S3 running, S0 queued) and one assistant-decides",
+    "window": {
+      "x": 12,
+      "y": 12,
+      "w": 1250,
+      "h": 976,
+      "viewport": {
+        "width": 1400,
+        "height": 1000
+      },
+      "deviceScaleFactor": 2
+    }
+  },
+  "panel": {
+    "base": "http://127.0.0.1:52777",
+    "build": "a5f461e3196f",
+    "version": "1.8.0"
+  },
+  "frames": [
+    {
+      "name": "pipeline-tab",
+      "file": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\docs\\assets\\pipeline-tabs\\pipeline-tab.png",
+      "bytes": 161910,
+      "sha256": "6e09bea56e74a8b39f36169f036ccaf0278f20c1d6429e3862d5af00dc9d27db",
+      "viewport": {
+        "width": 1400,
+        "height": 1000
+      },
+      "dsf": 2,
+      "read": {
+        "tab": "pipeline",
+        "window": {
+          "x": 12,
+          "y": 12,
+          "w": 1250,
+          "h": 576
+        },
+        "summary": "7 definitions",
+        "source": "C:\\Users\\roper\\AppData\\Local\\Temp\\wtgui-settings-capture-UV7G8M\\logs\\pipelines.json over C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\pipelines.seed.json · version 1 (this panel reads 1)",
+        "picker": {
+          "value": "local",
+          "options": [
+            "local",
+            "investigate",
+            "turnover",
+            "github-investigate",
+            "sefl-investigate",
+            "github-force-merge",
+            "sefl-review-loop"
+          ]
+        },
+        "flowButton": {
+          "text": "open the flow",
+          "disabled": false
+        },
+        "editor": {
+          "open": true,
+          "head": "editing local close",
+          "title": "Local work",
+          "kind": "local",
+          "description": "Work in this tree and stop. The LANDING paragraph composed into the prompt decides whether that includes a push and a pull request.",
+          "next": "",
+          "status": "no unsaved changes",
+          "stages": 1,
+          "stagesVisible": 1,
+          "editorHeight": 348
+        },
+        "firstStage": {
+          "id": "work",
+          "title": "Work in this tree",
+          "promptChars": 355,
+          "exit": "commits",
+          "promptSize": 12
+        },
+        "scroller": {
+          "top": 0,
+          "height": 497,
+          "content": 499
+        }
+      }
+    },
+    {
+      "name": "pipeline-stages",
+      "file": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\docs\\assets\\pipeline-tabs\\pipeline-stages.png",
+      "bytes": 335893,
+      "sha256": "f8351fe796487ebbaa9444867fb53a9f3372825961f9649c060747e0a8c04a30",
+      "viewport": {
+        "width": 1400,
+        "height": 1000
+      },
+      "dsf": 2,
+      "read": {
+        "tab": "pipeline",
+        "window": {
+          "x": 12,
+          "y": 12,
+          "w": 1250,
+          "h": 976
+        },
+        "summary": "7 definitions",
+        "source": "C:\\Users\\roper\\AppData\\Local\\Temp\\wtgui-settings-capture-UV7G8M\\logs\\pipelines.json over C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\pipelines.seed.json · version 1 (this panel reads 1)",
+        "picker": {
+          "value": "sefl-review-loop",
+          "options": [
+            "local",
+            "investigate",
+            "turnover",
+            "github-investigate",
+            "sefl-investigate",
+            "github-force-merge",
+            "sefl-review-loop"
+          ]
+        },
+        "flowButton": {
+          "text": "open the flow",
+          "disabled": false
+        },
+        "editor": {
+          "open": true,
+          "head": "editing sefl-review-loop close",
+          "title": "SEFL review loop",
+          "kind": "turnover",
+          "description": "Cut a correctly named turnover branch, open a PR for code_review_java, answer what arrives, merge when approved.",
+          "next": "",
+          "status": "no unsaved changes",
+          "stages": 7,
+          "stagesVisible": 6,
+          "editorHeight": 1146
+        },
+        "firstStage": {
+          "id": "branch",
+          "title": "Name the branch",
+          "promptChars": 276,
+          "exit": "branch-name",
+          "promptSize": 12
+        },
+        "scroller": {
+          "top": 309,
+          "height": 897,
+          "content": 1297
+        }
+      }
+    },
+    {
+      "name": "pipeline-flow",
+      "file": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\docs\\assets\\pipeline-tabs\\pipeline-flow.png",
+      "bytes": 61427,
+      "sha256": "325def5fad59f842cd5dbe31de6b64962b509f4d25dfae5ea91da941a330dbb5",
+      "viewport": {
+        "width": 1400,
+        "height": 1000
+      },
+      "dsf": 2,
+      "read": {
+        "mode": "edit",
+        "title": "SEFL review loop",
+        "subtitle": null,
+        "facts": "pipeline sefl-review-loop · kind turnover · stages 7 · next end of the chain",
+        "stages": 7,
+        "stagesVisible": 7,
+        "card": {
+          "w": 1120,
+          "h": 263
+        },
+        "count": "all 7 stages and 7 notches in view",
+        "size": 14
+      }
+    },
+    {
+      "name": "bundles-tab",
+      "file": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\hey-get-me-some-screensh-b7a6e6\\docs\\assets\\pipeline-tabs\\bundles-tab.png",
+      "bytes": 124763,
+      "sha256": "9aef9f0fbf0839007a6eb1429cdb315611b9513bd96cc1c737403b04d57fe68b",
+      "viewport": {
+        "width": 1400,
+        "height": 1000
+      },
+      "dsf": 2,
+      "read": {
+        "tab": "bundles",
+        "window": {
+          "x": 12,
+          "y": 12,
+          "w": 1250,
+          "h": 360
+        },
+        "summary": "1 pipeline · poc-to-uat",
+        "summaryBad": false,
+        "source": "C:\\Users\\roper\\AppData\\Local\\Temp\\wtgui-settings-capture-UV7G8M\\logs\\pipeline-bundle.json · poc-to-uat — this panel imports whatever the studio's export saved there; the task pipeline window draws each pipeline's stages.",
+        "sourceBad": false,
+        "pipelines": [
+          {
+            "id": "poc-to-uat",
+            "text": "POC to UAT poc-to-uat 13 stages"
+          }
+        ],
+        "taskSummary": "3 active tasks",
+        "tasks": [
+          {
+            "id": "1",
+            "text": "#1 Read the stage contract and name what a stage may not do Assistant #1 pipeline poc-to-uat · S3 · running"
+          },
+          {
+            "id": "2",
+            "text": "#2 Draft the charter for the Menu review Assistant #1 pipeline poc-to-uat · S0 · queued"
+          },
+          {
+            "id": "3",
+            "text": "#3 Check the changelog render against main Assistant #1 assistant decides · queued"
+          }
+        ]
+      }
+    }
+  ],
+  "errors": []
+}
