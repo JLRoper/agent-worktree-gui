@@ -219,10 +219,13 @@ test("a frame the page does not want held is never held, thought or no thought",
 });
 
 // ---- the page's wiring ---------------------------------------------------------------------------------------
+// Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
+// script's names are page-wide, so a rule is read from the script that now carries it.
 const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+const con = readFileSync(new URL("../public/board/console.js", import.meta.url), "utf8");
 
 test("the page holds frames before the line gate, and lets the queue go before the turn's last line", () => {
-  const append = app.slice(app.indexOf("function appendJobLine(evt)"), app.indexOf("function recordJobLine(evt)"));
+  const append = con.slice(con.indexOf("function appendJobLine(evt)"), con.indexOf("function recordJobLine(evt)"));
   assert.ok(append.length > 200, "found appendJobLine");
   const hold = append.indexOf("state.typeHold?.push(evt)");
   const gate = append.indexOf("state.typeGate?.push(evt)");
@@ -233,18 +236,18 @@ test("the page holds frames before the line gate, and lets the queue go before t
   const record = append.indexOf("recordJobLine(evt);", gate);
   assert.ok(drain > gate && drain < record, "the held lines go into the console BEFORE the result line is recorded");
 
-  const flush = app.slice(app.indexOf("function flushTypeStream(job)"), app.indexOf("// A background tab has no flow"));
+  const flush = con.slice(con.indexOf("function flushTypeStream(job)"), con.indexOf("function paintStreamSpeed("));
   assert.match(flush, /typeHold\?\.drain/, "a settled turn releases whatever the hold kept");
-  const vis = app.slice(app.indexOf('document.addEventListener("visibilitychange"'), app.indexOf("function paintStreamSpeed"));
+  const vis = app.slice(app.indexOf('document.addEventListener("visibilitychange"'), app.indexOf("// The block scrolls like a console"));
   assert.match(vis, /typeHold\?\.drain\(\)/, "a hidden tab releases it too");
 });
 
 test("the page holds only what a reader is watching: words/s on, turn live, reasoning on screen", () => {
-  const wants = app.slice(app.indexOf("function reasoningWants(evt)"), app.indexOf("// The moment of the last tool result"));
+  const wants = con.slice(con.indexOf("function reasoningWants(evt)"), con.indexOf("// The moment of the last tool result"));
   assert.match(wants, /typePacer\.rate\(\)/, "words/s 0 keeps the console exactly as the run sent it");
   assert.match(wants, /turnLive\(turn\)/);
   assert.match(wants, /reasoningShown\(turn\)/);
-  const shown = app.slice(app.indexOf("function reasoningShown(turn)"), app.indexOf("function reasoningWants(evt)"));
+  const shown = con.slice(con.indexOf("function reasoningShown(turn)"), con.indexOf("function reasoningWants(evt)"));
   assert.match(shown, /thinkingOn\(thread\)/, "reasoning switched off is not drawn, so it is not waited for");
   assert.match(shown, /thinkOpenFor\(turn/, "a folded 🧠 block is typing into nothing: it holds nothing either");
 });

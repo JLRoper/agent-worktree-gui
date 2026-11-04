@@ -5,7 +5,7 @@
 // line died about 25 times a second (measured: median held 33-50 ms) even though the words only ever grew at the end.
 // The rule now lives in one helper, `drawRowText`, which both writers (the pacer's paint and the live append) call.
 //
-// The helper under test is READ OUT of public/app.js between its markers, not copied here, so a change to the page's
+// The helper under test is READ OUT of public/board/console.js between its markers, not copied here, so a change to the page's
 // own rule changes these answers. The model is a just-enough DOM: innerHTML replaces the children and creates a text
 // node for plain text or an element for markup (which is what decides whether a tail may be appended), and
 // linkifyText turns a URL into an element exactly as the page's does.
@@ -14,7 +14,7 @@ import test from "node:test";
 
 import { readSource, sliceRegion } from "../tools/panel-testkit.mjs";
 
-const code = sliceRegion(readSource("public/app.js"), "console row text");
+const code = sliceRegion(readSource("public/board/console.js") + "\n" + readSource("public/app.js"), "console row text");
 const linkifyText = (text) => (/https?:\/\//i.test(text) ? `<a class="out-link">${text}</a>` : String(text));
 const make = new Function("document", "linkifyText", `${code}\nreturn { drawRowText, rowTakesTail };`);
 

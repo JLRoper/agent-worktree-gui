@@ -25,11 +25,24 @@ import { after } from "node:test";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
-const begin = src.indexOf("// ---- the reader's own input, per card");
-const end = src.indexOf("// ---- end the reader's own input, per card");
-assert.ok(begin >= 0 && end > begin, "public/app.js carries the per-card input markers this test reads");
-const code = src.slice(src.indexOf("\n", begin) + 1, end);
+// The region under test lives in public/board/console.js after the console cut; the two page-wide counts below
+// are the shell's (app.js), so the harness reads both scripts in the order index.html loads them.
+const consoleSrc = readFileSync(new URL("../public/board/console.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const src = `${consoleSrc}\n${readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n")}`;
+const begin = consoleSrc.indexOf("// ---- the reader's own input, per card");
+const end = consoleSrc.indexOf("// ---- end the reader's own input, per card");
+assert.ok(begin >= 0 && end > begin, "public/board/console.js carries the per-card input markers this test reads");
+const code = consoleSrc.slice(consoleSrc.indexOf("\n", begin) + 1, end);
+
+// The listener that records the reader's input stayed in app.js with the rest of the page's wiring (this cut
+// moves declarations, not listeners); the guard it writes into moved to console.js. Both halves are read here:
+// the guard by its markers above, the registration by the one line in the page that writes lastInputAt.
+const appSrc = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const setAt = appSrc.indexOf("lastInputAt.set(");
+const wireStart = appSrc.lastIndexOf("for (const ev of", setAt);
+const wire = appSrc.slice(wireStart, appSrc.indexOf("\n}\n", setAt) + 3);
+assert.ok(wireStart > 0 && wire.includes("document.addEventListener"), "the page still registers the scroll listeners");
+
 
 // ---- a just-enough DOM: parent links, a class list and `closest` for the one selector the guard asks for -----------
 class El {
@@ -70,7 +83,7 @@ function page() {
       listeners.get(ev).push(cb);
     },
   };
-  const api = new Function("document", `${code}\nreturn { readerInputHere, lastInputAt, INPUT_WINDOW_MS };`)(document);
+  const api = new Function("document", `${code}\n${wire}\nreturn { readerInputHere, lastInputAt, INPUT_WINDOW_MS };`)(document);
   return {
     ...api,
     fire(ev, target) {

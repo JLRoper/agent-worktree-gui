@@ -5,7 +5,7 @@
 // seconds of that burst were 61% of a streamed window's writes. The head is what a reader watches; past a handful of
 // rows the typing is a delay.
 //
-// The rule is READ OUT of public/app.js between its markers, so a change to the page's own rule changes these answers:
+// The rule is READ OUT of public/board/console.js between its markers, so a change to the page's own rule changes these answers:
 // a row is paced only below RESULT_PACED_ROWS, and a row's index counts from the call's own header — another call's
 // header ends the count, so two results in one burst type the head of each.
 import assert from "node:assert/strict";
@@ -13,7 +13,7 @@ import test from "node:test";
 
 import { readSource, sliceRegion } from "../tools/panel-testkit.mjs";
 
-const code = sliceRegion(readSource("public/app.js"), "result row head");
+const code = sliceRegion(readSource("public/board/console.js") + "\n" + readSource("public/app.js"), "result row head");
 const { resultRowIndex, shouldPaceResultRow, RESULT_PACED_ROWS } = new Function(
   `${code}\nreturn { resultRowIndex, shouldPaceResultRow, RESULT_PACED_ROWS };`,
 )();

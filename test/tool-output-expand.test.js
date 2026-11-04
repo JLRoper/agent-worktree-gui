@@ -6,7 +6,11 @@ import test from "node:test";
 import vm from "node:vm";
 import { linesForEvent } from "../lib/jobs/console-lines.js";
 
-const source = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
+// Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
+// script's names are page-wide, so a region is read from the script that now carries it.
+const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replaceAll("\r\n", "\n");
+const source = `${page("public/board/console.js")}\n${page("public/app.js")}`;
+
 const part = (a, b) => {
   const start = source.indexOf(a);
   const end = source.indexOf(b, start);
@@ -58,7 +62,7 @@ function fixture({ flat = false, trimmed = false, response = null } = {}) {
     part("function groupLines(", "function storeOffsetsBefore("),
     // The hold a fold press takes on its console: the shipped function, with this fixture's control inside none.
     part("function holdConsoleFor(", "\n// Every scroll the panel performs goes through here."),
-    part("const READ_CODE_OPEN =", "// A block the reader has open keeps"),
+    part("const READ_CODE_OPEN =", "async function loadBatchCalls("),
     part("// ---- tool group key", "// ---- end tool group key"),
     part("const BATCH_TAIL_RE =", "function toBottomBtnHtml("),
   ]) vm.runInContext(code, context);
