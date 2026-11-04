@@ -18022,10 +18022,17 @@ try {
 // on the card only (so nothing here invents a row); an image as a glyph plus the OS viewer, with NO new route (Q4);
 // and the paragraph on every tree turn (the backend's half).
 //
-// NO ROUTE OF ITS OWN. A link, a file and an image all open through POST /api/deliverables/open {seq}: the page
-// never sends a path back, so a stray string cannot launch an arbitrary file, and an image needs no thumbnail
-// route to be openable. The title points at the thing; the row points at the AGENT that delivered it — a mis-click
-// in a 200-row list opens a console (cheap, reversible) rather than a browser window (not).
+// ONE OPEN CONTROL PER ROW, and one decision behind it. The store's list carries the URL a tab can open (`href`,
+// decided by the server: a link's own URL, or a file under the panel's served root). A row that has one opens THAT,
+// synchronously in the click, in the reader's own browser — no fetch of the URL on the reader's behalf and no
+// browser launched on this machine. A row with no URL is a file the browser cannot render: it goes through
+// POST /api/deliverables/open {seq}, the route that has always handed a file to the OS default handler. The page
+// still never sends a path back — only a seq — so a stray string cannot launch an arbitrary file.
+//
+// A REFUSAL IS SAID ON THE CARD. Missing, a directory, or outside the repo comes back from that route as the
+// sentence the reader sees under the row; the click never opens a blank tab and never hides the reason in a banner.
+// The title is the row's name now, not a second opener; the row's other control points at the AGENT that delivered
+// it, so a mis-click in a 200-row list opens a console (cheap, reversible) rather than a window (not).
 //
 // WHAT THIS REACHES OUT FOR, by name at call time (all page globals): $, esc, tailPath, keyOf, fmtAgo
 // (core/dom-format.js), apiFetch (core/transport.js), state, conversations, renderConversation, renderJobs,
@@ -18044,6 +18051,7 @@ const deliver = {
   filter: "",
   active: 0,       // index into the FILTERED rows, which is what the combobox drives
   agesTimer: null,
+  why: {},         // seq → the refusal the click was given, said under that row and nowhere else
 };
 
 // The popover, built once. A fixed panel under the button, in the shape `.artifacts-pop` already uses — the
@@ -18072,8 +18080,13 @@ function deliverPopEl() {
     const t = e.target;
     if (t.closest?.("[data-dl-retry]")) return void deliverFetch();
     if (t.closest?.("#dl-close")) return closeDeliverPop({ focus: true });
-    const openTitle = t.closest?.("[data-dl-open]");
-    if (openTitle) return void deliverOpenTarget(Number(openTitle.dataset.dlOpen));
+    // The row's ONE opener, and it never falls through to the row's agent: a press on Open opens the deliverable,
+    // whatever the row click means.
+    const openControl = t.closest?.("[data-dl-open]");
+    if (openControl) {
+      e.stopPropagation();
+      return void deliverOpenTarget(Number(openControl.dataset.dlOpen));
+    }
     const openAgent = t.closest?.("[data-dl-agent]");
     if (openAgent) return void deliverOpenAgent(Number(openAgent.dataset.dlAgent));
     const row = t.closest?.(".dl-row");
@@ -18305,8 +18318,10 @@ function paintDeliverRows({ keepScroll = false } = {}) {
   }
 }
 
-// A row: a glyph by kind, the title (the one thing that opens the target), the last few path segments or the URL's
-// host+path so two reports called "report" are distinguishable, then the agent, the project and the age.
+// A row: a glyph by kind, the name — which is the row's ONE Open control, and says so with the Open tag at its
+// right — the last few path segments or the URL's host+path so two reports called "report" are distinguishable,
+// then the agent, the project and the age. One control opens the target and its title says which of the two things
+// it will do (a tab, or the program this machine uses for that file); nothing else on the row opens it.
 function deliverRowHtml(entry) {
   const kind = entry.kind === "image" ? "image" : entry.kind === "link" ? "link" : "file";
   const glyph = kind === "image" ? "🖼" : kind === "link" ? "🔗" : "📄";
@@ -18318,12 +18333,18 @@ function deliverRowHtml(entry) {
     ? `last seen ${new Date(entry.missingAt).toLocaleString()} — delivered by ${entry.agent || "an agent"}`
     : "";
   const gone = entry.missingAt ? `<span class="dl-gone" title="${esc(lastSeen)}">gone</span>` : "";
+  const why = deliver.why[entry.seq];
+  const whyLine = why ? `<span class="dl-why" role="alert">${esc(why)}</span>` : "";
+  const how = entry.href
+    ? "Open — a new browser tab, in this browser"
+    : "Open — in the program this machine uses for this file";
   return `<div class="dl-row${entry.missingAt ? " is-gone" : ""}" role="option" id="dl-row-${esc(entry.seq)}" data-seq="${esc(entry.seq)}" aria-selected="false" title="${esc(target)}">
       <span class="dl-glyph" aria-hidden="true">${glyph}</span>
       <span class="dl-main">
-        <button type="button" class="dl-name${entry.missingAt ? " is-gone" : ""}" data-dl-open="${esc(entry.seq)}" title="${esc(target)}">${esc(entry.title || "(untitled)")}</button>
+        <button type="button" class="dl-name${entry.missingAt ? " is-gone" : ""}" data-dl-open="${esc(entry.seq)}" title="${esc(`${how}\n${target}`)}"><span class="dl-title">${esc(entry.title || "(untitled)")}</span></button>
         <span class="dl-target mono" title="${esc(target)}">${esc(shown)}</span>
         <span class="dl-meta">${meta}${meta ? " · " : ""}<span class="dl-age" data-at="${esc(entry.at || "")}">${esc(age)}</span></span>
+        ${whyLine}
       </span>
       ${gone}
       <button type="button" class="dl-agent" data-dl-agent="${esc(entry.seq)}" title="open the agent that delivered this">open agent</button>
@@ -18418,29 +18439,69 @@ function deliverKeydown(e) {
   }
 }
 
-// The target, through the panel's route and only for a seq the store holds. The answer says which program opened
-// it; a 404 re-reads the list, which is how a file found gone gets its `gone` chip.
+// THE one Open control's decision, in one place. A row the store gave a URL opens in a tab — synchronously, in the
+// click: an await before window.open is a popup the browser blocks, which is why this is not a fetch. Everything
+// else is a file the browser cannot render, and it goes through the panel's one route to the OS default handler.
 async function deliverOpenTarget(seq) {
+  const entry = deliver.entries.find((x) => Number(x.seq) === Number(seq));
+  if (!entry) return false;
+  if (entry.href) {
+    clearDeliverWhy(entry.seq);
+    const tab = window.open(entry.href, "_blank");
+    if (tab) {
+      // No `noopener` in the feature string: that makes window.open return null even when the tab DID open, and the
+      // handle is how a blocked tab is told from an opened one. Severing `opener` here is the same guarantee.
+      try {
+        tab.opener = null;
+      } catch {
+        /* a cross-origin tab is already its own */
+      }
+      return true;
+    }
+    // Blocked (a host that refuses a new tab). A LINK has one more place to go — the panel launches it, which is the
+    // opener it has always had. A served path has nowhere else: the browser is the only thing that can fetch it, so
+    // the card says what happened instead of opening a blank tab.
+    if (entry.kind === "link") return deliverOpenOnServer(entry, { mode: "launch" });
+    return sayDeliverWhy(entry.seq, "your browser blocked the tab — allow pop-ups for this panel, then press Open again");
+  }
+  return deliverOpenOnServer(entry, {});
+}
+
+// The route, for the one case that needs it: a file with no URL on the panel. Its answer is either "the OS handler
+// has it" (nothing more to say — the program opening IS the answer) or the refusal this row must state.
+async function deliverOpenOnServer(entry, extra) {
   try {
     const r = await apiFetch("/api/deliverables/open", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ seq: Number(seq) }),
+      body: JSON.stringify({ seq: Number(entry.seq), ...extra }),
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) {
-      showBanner(String(d.error || `could not open that deliverable (HTTP ${r.status})`));
+      sayDeliverWhy(entry.seq, String(d.error || `could not open that deliverable (HTTP ${r.status})`));
       if (r.status === 404) void deliverFetch({ quiet: true });
       return false;
     }
-    // `chrome` is a LINK's answer (§7.2): a file/image answer carries no such field, and a missing Chrome has
-    // nothing to do with opening one — only a link that fell back to the OS browser says this.
-    if (d.chrome === false && d.kind === "link") showBanner("Chrome was not found — opened your default browser");
+    clearDeliverWhy(entry.seq);
     return true;
   } catch (e) {
-    showBanner(`could not open that deliverable: ${String((e && e.message) || e)}`);
+    sayDeliverWhy(entry.seq, `could not open that deliverable: ${String((e && e.message) || e)}`);
     return false;
   }
+}
+
+// A refusal belongs to its ROW. The banner is for the board (a failed write, a lost gateway); "no such file" is a
+// fact about one card, and a reader scrolling a 200-row list must see which card it was.
+function sayDeliverWhy(seq, why) {
+  deliver.why[seq] = String(why || "").trim() || "could not open that deliverable";
+  paintDeliverRows({ keepScroll: true });
+  return false;
+}
+
+function clearDeliverWhy(seq) {
+  if (!deliver.why[seq]) return;
+  delete deliver.why[seq];
+  paintDeliverRows({ keepScroll: true });
 }
 
 // Which console a row opens. This is humanShow's own path (public/app.js, "HUMAN" above), copied rather than

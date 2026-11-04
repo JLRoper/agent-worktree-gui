@@ -2085,17 +2085,34 @@ tr.row-confirm .btn-del-yes:hover { background: #3a1d22; }
 .deliver-pop .dl-row[aria-selected="true"] { background: #17202c; box-shadow: inset 0 0 0 1px #2b3b52; }
 .deliver-pop .dl-glyph { flex: none; font-size: 13px; line-height: 1.5; }
 .deliver-pop .dl-main { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
+/* The row's ONE Open control, and it is the name: a card in a 200-row list has one thing that opens it, the line the
+   reader reads first. The Open tag is what makes the affordance visible instead of implied by an underline — and it
+   sits inside the same button, so it is not a second control and cannot disagree with the first. */
 .deliver-pop .dl-name {
-  display: block; min-width: 0; padding: 0;
+  display: flex; align-items: baseline; gap: 8px;
+  width: 100%; min-width: 0; padding: 0;
   border: none; background: none;
   color: var(--text);
   font: 600 12.5px/1.4 var(--ui);
   text-align: left;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   cursor: pointer;
 }
-.deliver-pop .dl-name:hover { color: #fff; text-decoration: underline; }
-.deliver-pop .dl-name.is-gone { text-decoration: line-through; color: var(--dimmer); }
+.deliver-pop .dl-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The Open tag is DRAWN by the button rather than written into it: a `textContent` read of a row's name has to stay
+   the name and nothing else (the row's gate, the copy button and a reader's selection all read that string), and the
+   tag is the button's own affordance, not a second thing to click. */
+.deliver-pop .dl-name::after {
+  content: "Open";
+  flex: none; margin-left: auto;
+  padding: 0 5px;
+  border: 1px solid #2f4664; border-radius: 4px;
+  background: #16202c; color: #cfe6ff;
+  font: 10px/1.6 var(--term);
+}
+.deliver-pop .dl-name:hover .dl-title { color: #fff; text-decoration: underline; }
+.deliver-pop .dl-name:hover::after { background: #1d2b3d; border-color: #3b5680; color: #fff; }
+.deliver-pop .dl-name:focus-visible { outline: 2px solid #3b5680; outline-offset: 2px; border-radius: 3px; }
+.deliver-pop .dl-name.is-gone .dl-title { text-decoration: line-through; color: var(--dimmer); }
 .deliver-pop .dl-target {
   min-width: 0;
   color: var(--dimmer);
@@ -2127,6 +2144,14 @@ tr.row-confirm .btn-del-yes:hover { background: #3a1d22; }
 .deliver-pop .dl-row[aria-selected="true"] .dl-agent,
 .deliver-pop .dl-agent:focus { opacity: 1; }
 .deliver-pop .dl-agent:hover { color: var(--text); border-color: #3b4757; }
+/* `.dl-agent` is the quiet hover twin: it answers the other question (which agent produced this). */
+/* A refusal is said on the ROW it belongs to — never a banner, and never a blank tab opened to find out. */
+.deliver-pop .dl-why {
+  color: #ff9c94;
+  font: 10.5px/1.45 var(--term);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .deliver-pop .dl-empty { padding: 14px 10px; color: var(--dim); font: 12px/1.5 var(--ui); }
 .deliver-pop .dl-hint { padding-top: 0; color: var(--dimmer); }
 .deliver-pop .dl-hint code { display: block; margin-top: 7px; color: #8ee08a; font: 11px/1.5 var(--term); white-space: pre-wrap; }
