@@ -3907,12 +3907,18 @@ body.pipew-open { overflow: hidden; }
 .as-msg-window { font-size: 11.5px; font-weight: 600; color: var(--text); }
 .as-msg-cap { margin: -2px 0 7px; padding: 5px 8px; border: 1px solid #6b4d16; border-radius: 6px; background: var(--amber-bg); color: var(--amber); font-size: 11px; line-height: 1.4; }
 .as-msg-chips, .as-msg-people { display: flex; gap: 5px; margin-bottom: 8px; flex-wrap: wrap; }
-.as-msg-chips button, .as-msg-people button {
+.as-msg-chips button, .as-msg-people button, .as-alert-who button {
   border: 1px solid var(--line); background: var(--card); color: var(--dim);
   font-size: 11px; padding: 3px 9px; border-radius: 999px; cursor: pointer;
 }
-.as-msg-chips button:hover, .as-msg-people button:hover { color: var(--text); }
-.as-msg-chips button.is-on, .as-msg-people button.is-on { color: var(--text); border-color: #8fb8ff; background: #1b2432; }
+.as-msg-chips button:hover, .as-msg-people button:hover, .as-alert-who button:hover { color: var(--text); }
+.as-msg-chips button.is-on, .as-msg-people button.is-on, .as-alert-who button.is-on { color: var(--text); border-color: #8fb8ff; background: #1b2432; }
+/* The Alerts tab's scope row: the same pill chips the message board uses, with the sentence that says what the
+   narrowing hides (and how to undo it) on the same line. */
+.as-alert-who { display: flex; gap: 5px; margin-bottom: 8px; flex-wrap: wrap; align-items: center; }
+.as-alert-who .as-hint { font-size: 11px; color: var(--dim); }
+.as-alert-who .as-hint button { margin-left: 5px; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--dim); cursor: pointer; }
+.as-alert-who .as-hint button:hover { color: var(--text); }
 .as-msg-thread { border: 1px solid var(--line); border-radius: 7px; margin-bottom: 9px; background: var(--card); overflow: hidden; }
 .as-msg-thread.is-assistant { border-color: #3a3450; }
 .as-msg-thread-head { display: flex; align-items: center; gap: 7px; padding: 6px 9px; background: var(--panel-2); border-bottom: 1px solid var(--line); font-size: 11px; }

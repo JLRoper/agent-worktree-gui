@@ -143,9 +143,15 @@ it has no job, no row and no card on the board, so it is shown where you cannot 
   the same action as the button inside the assistant panel; nothing here starts by itself, and a refusal (a dirty
   tree, an unknown project, the gateway down) is printed on the row in red while the card stays for a retry.
 - **The header's ✧ Assistant button** carries two counts: the open alerts, and a violet `N spawn` pill for the
-  cards. The pill turns amber once the oldest card has waited more than two minutes. **Review in Alerts** in the
+  cards. Both are read at the scope the Alerts tab is showing — **All assistants**, the default, counts the whole
+  board. The pill turns amber once the oldest card has waited more than two minutes. **Review in Alerts** in the
   strip opens the panel on its Alerts tab with the card in view.
-- **The Alerts tab** draws spawn cards first, under `spawn cards waiting`, before the other alerts.
+- **The Alerts tab** draws spawn cards first, under `spawn cards waiting`, before the other alerts. Its chips across
+  the top — **All assistants** first and on by default, then one chip per assistant — narrow the list, the two counts
+  on the tab, the header's ✧ Assistant button and the spawn strip itself to a single assistant. An alert fired by a
+  turn of an assistant's own thread is that assistant's, and Assistant #1's alerts are stamped like every other's;
+  a record written before the split carries no owner and is resolved from its thread at read time, falling back to
+  Assistant #1. **All assistants** hides nothing and is always one press away.
 
 Two minutes is a watched deadline, not just a colour: a card still open raises **“spawn card unclicked for 2m”**
 (naming the turn that proposed it and the first 60 characters of its prompt) so the assistant sees it in its own

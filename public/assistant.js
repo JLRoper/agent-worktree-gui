@@ -559,9 +559,10 @@
     if (state.assistantOpen) renderAssistant();
   }
 
-  // The waiting spawn cards, oldest first: the strip and the badges all read this one list.
+  // The waiting spawn cards, oldest first: the strip and the badges all read this one list, narrowed to the assistant
+  // the Alerts tab is showing — "all" keeps every assistant's, and hides nothing.
   function spawnCards() {
-    return (state.assistant?.alerts || []).filter((a) => a.spawn && typeof a.spawn.prompt === "string");
+    return (state.assistant?.alerts || []).filter((a) => a.spawn && typeof a.spawn.prompt === "string" && inAlertScope(a));
   }
   function spawnAge(a) {
     return Date.now() - (Date.parse(a.at) || Date.now());
@@ -575,11 +576,9 @@
     const btn = as$("btn-assistant");
     const badge = as$("assistant-badge");
     if (!btn || !badge) return;
-    const alerts = state.assistant?.alerts || [];
-    // Two numbers for two different things, and neither double-counted: the badge above counts NOTICES (spawn
-    // cards excluded — a card is an act waiting on the reader, not a notice about the board), and the spawn badge
-    // counts cards waiting on a press.
-    const plain = alerts.filter((a) => !a.spawn);
+    // The header's number is this scope's number: the same choice that filters the Alerts tab filters the badge, so
+    // a reader narrowed to #2 is told about #2's notices and not handed a count of every assistant's.
+    const plain = alertsInScope(state.assistant?.alerts || []).filter((a) => !a.spawn);
     const n = plain.length;
     badge.hidden = n === 0;
     badge.textContent = n > 99 ? "99+" : String(n);
@@ -605,11 +604,13 @@
   function paintSpawnBadge() {
     const el = as$("assistant-spawn-badge");
     if (!el) return;
-    const s = state.assistant?.spawnCards || { open: 0, unstarted: 0 };
+    const all = state.assistant?.spawnCards || { open: 0, unstarted: 0 };
+    // The server's numbers are the fallback while its state is the only thing that has arrived (a socket replay of
+    // `state` before any tab repainted its list); the page's own list wins as soon as it has rows. Both are read at
+    // the scope the Alerts tab is showing, so a panel-wide total cannot reappear on a narrowed badge.
+    const s = alertWho === "all" ? all : all.byAssistant?.[alertWho] || { open: 0, unstarted: 0 };
     const stuck = Number(s.unstarted) || 0;
     const cards = spawnCards();
-    // The server's count is the fallback while its state is the only thing that has arrived (a socket replay of
-    // `state` before any tab repainted its list); the page's own list wins as soon as it has rows.
     const m = cards.length || Number(s.open) || 0;
     const oldest = cards.reduce((t, a) => Math.min(t, Date.parse(a.at) || Date.now()), Date.now());
     const late = m > 0 && (cards.length ? Date.now() - oldest >= SPAWN_WATCH_MS : false);
@@ -652,14 +653,15 @@
       return;
     }
     // Repaint only when the strip would look different. The board polls every few seconds, and a button
-    // rebuilt under the reader's pointer is a press that lands on nothing (the panel's own rebuild rule).
-    const sig = cards.map((a) => `${a.id}@${Math.floor(spawnAge(a) / 60_000)}`).join(",");
+    // rebuilt under the reader's pointer is a press that lands on nothing (the panel's own rebuild rule). The
+    // scope is part of the signature: narrowing to #2 with the same cards still has to say whose strip this is.
+    const sig = `${alertWho}|${cards.map((a) => `${a.id}@${Math.floor(spawnAge(a) / 60_000)}`).join(",")}`;
     if (sig === spawnStripSig) return;
     spawnStripSig = sig;
     const late = cards.filter((a) => spawnAge(a) >= SPAWN_WATCH_MS).length;
     host.hidden = false;
     host.innerHTML = `<div class="spawn-strip-head">
-        <span class="spawn-strip-title">${cards.length} spawn card${cards.length === 1 ? "" : "s"} waiting</span>
+        <span class="spawn-strip-title">${cards.length} spawn card${cards.length === 1 ? "" : "s"} waiting${alertWho === "all" ? "" : ` for ${esc(sessionById(alertWho)?.name || alertWho)}`}</span>
         <span class="spawn-strip-note">${late ? `<b>${late} unclicked for over 2 minutes</b> · ` : ""}the assistant proposed ${cards.length === 1 ? "a worker" : "these workers"} — nothing runs until you press Start</span>
         <span class="spacer"></span>
         <button id="btn-spawn-review" type="button" title="open the assistant on its Alerts tab, where the spawn cards are drawn first">Review in Alerts</button>
@@ -683,8 +685,13 @@
   // Open the float on Alerts with one card (or the top of the list) in view. The pane is inside the float's
   // own scroller, so this is a scrollIntoView, not a page jump.
   function openAlertsAt(id = null) {
+    // A card named from somewhere else in the panel — the HUMAN rotation, the approvals dock, a queued row — has to
+    // be ON the tab it lands on: a scope narrowed to another assistant would hide exactly the row the reader asked
+    // for. Naming a card therefore reopens the whole board first; asking for the tab alone leaves the scope alone.
+    if (id) alertWho = "all";
     setView({ assistant: "alerts" }, { render: false });
     toggleAssistant(true);
+    if (id) paintSpawnStrip();
     requestAnimationFrame(() => {
       const sel = id ? `#as-alerts [data-alert="${CSS.escape(id)}"]` : "#as-alerts";
       const el = document.querySelector(sel);
@@ -834,9 +841,9 @@
       modeEl.className = `as-mode mono${mode === "auto" ? " is-auto" : mode === "auto-safe" ? " is-safe" : ""}`;
     }
     // The tab's count is the alert count LESS the spawn cards: the spawn cards have their own strip and badge,
-    // and a number that silently included them is how a card nobody started stayed invisible.
-    const openAlerts = (a?.alerts || []).filter((x) => !x.spawn).length;
-    const spawnOpen = spawnCards().length;
+    // and a number that silently included them is how a card nobody started stayed invisible. Both counts are the
+    // scope the Alerts tab is showing — its chips are the one control, and every number beside them agrees.
+    const { notices: openAlerts, cards: spawnOpen } = alertCounts(a?.alerts || []);
     const liveWatches = (a?.watches || []).filter((w) => w.state !== "done").length;
     if (as$("as-alert-n")) as$("as-alert-n").textContent = String(openAlerts);
     // The Alerts tab carries the same split the header does: how many of the open alerts are spawn cards.
@@ -969,6 +976,29 @@
   }
 
   // ---- alerts ---------------------------------------------------------------------------------
+  //
+  // WHOSE alerts the tab shows. The tab is one panel-wide pane, so it opens on "all" — a reader who never presses a
+  // chip sees every assistant's alerts, exactly as the panel drew them before the split — and a chip narrows the
+  // list, the tab's own count, the header badge and the spawn strip to ONE assistant. The owner is a field on the
+  // record: `fired()` stamps it at fire time, #1's included, and a legacy alert with no stamp is resolved from its
+  // thread by the server (`alertOwnerOf`, lib/assistant.js). This side therefore reads one field and never guesses.
+  let alertWho = "all";
+  const alertOwner = (a) => String(a?.assistantId || "").trim() || FIRST_ASSISTANT;
+  function inAlertScope(a) {
+    return alertWho === "all" || alertOwner(a) === alertWho;
+  }
+  function alertsInScope(list) {
+    return (Array.isArray(list) ? list : []).filter(inAlertScope);
+  }
+  // The two numbers every Alerts surface shows — the tab's count and its spawn badge, and the header button's own
+  // badge — read from ONE scope here, so a number beside the chips cannot disagree with the list under them.
+  function alertCounts(list = state.assistant?.alerts) {
+    const scoped = alertsInScope(list);
+    return {
+      notices: scoped.filter((a) => !a.spawn).length,
+      cards: scoped.filter((a) => a.spawn && typeof a.spawn.prompt === "string").length,
+    };
+  }
 
   function assistantThreadName(thread) {
     const conv = conversations().find((c) => c.thread === thread);
@@ -1147,17 +1177,47 @@
     // A poll must not take the draft the reader is writing: the list is only repainted when nothing in it
     // holds the caret, or when the reader's own action asked for it.
     if (!force && typingInside("#as-alerts")) return;
-    const alerts = [...(state.assistant.alerts || [])].sort(
+    // Whose list, and the chips that say so. "All assistants" is first and on by default, so opening the tab hides
+    // nothing; a named chip is that assistant's list, and every number below it (this pane, the tab count, the
+    // header badge, the spawn strip) is read from the same scope. A record from an assistant this panel no longer
+    // holds is not a scope: fall back to All rather than draw an empty tab nobody can leave.
+    const ids = assistantIds();
+    if (alertWho !== "all" && !ids.includes(alertWho)) alertWho = "all";
+    const everything = state.assistant.alerts || [];
+    const nameOfId = (id) => sessionById(id)?.name || (id === FIRST_ASSISTANT ? "Assistant #1" : id);
+    const counts = { all: everything.length };
+    for (const a of everything) counts[alertOwner(a)] = (counts[alertOwner(a)] || 0) + 1;
+    const whoChips = ["all", ...ids]
+      .map((id) => {
+        const label = id === "all" ? "All assistants" : nameOfId(id);
+        const title =
+          id === "all"
+            ? "every assistant's alerts — nothing is hidden in this view"
+            : `only ${label}'s alerts — the list, the count beside it and the spawn strip`;
+        return `<button type="button" data-as-alertwho="${esc(id)}" aria-pressed="${alertWho === id ? "true" : "false"}" class="${alertWho === id ? "is-on" : ""}" title="${esc(title)}">${esc(label)} <span class="as-n">${counts[id] ?? 0}</span></button>`;
+      })
+      .join("");
+    const whoBar = `<div class="as-alert-who" role="group" aria-label="whose alerts">${whoChips}<span class="as-hint">${
+      alertWho === "all"
+        ? "every assistant — nothing hidden"
+        : `narrowed to ${esc(nameOfId(alertWho))} — ${alertsInScope(everything).length} of ${everything.length} <button type="button" data-as-alertwho="all">Show all</button>`
+    }</span></div>`;
+    const mine = alertsInScope(everything);
+    if (!mine.length) {
+      const w = (state.assistant.watches || []).filter((x) => x.state !== "done").length;
+      const empty =
+        alertWho === "all"
+          ? `Nothing needs you. ${w ? `Watching ${w} thing${w === 1 ? "" : "s"}.` : "No watches either."} It is still reading the board every ${state.assistant.settings?.seconds ?? 5}s.`
+          : `Nothing needs ${esc(nameOfId(alertWho))}. It is still reading the board every ${state.assistant.settings?.seconds ?? 5}s, and the whole board is one press away. <button type="button" data-as-alertwho="all">Show all assistants</button>`;
+      host.innerHTML = `${whoBar}<div class="as-empty">${empty}</div>`;
+      return;
+    }
+    const alerts = [...mine].sort(
       (a, b) =>
         Number(Boolean(b.spawn)) - Number(Boolean(a.spawn)) ||
         Number(Boolean(b.stuck)) - Number(Boolean(a.stuck)) ||
         String(b.at).localeCompare(String(a.at)),
     );
-    if (!alerts.length) {
-      const w = (state.assistant.watches || []).filter((x) => x.state !== "done").length;
-      host.innerHTML = `<div class="as-empty">Nothing needs you. ${w ? `Watching ${w} thing${w === 1 ? "" : "s"}.` : "No watches either."} It is still reading the board every ${state.assistant.settings?.seconds ?? 5}s.</div>`;
-      return;
-    }
     // A card the watchdog has already named goes above everything, in its own words: the reader is being told
     // that a spawn they may believe is running was never started, and that is not a list row to scroll for.
     const stuck = alerts.filter((a) => a.spawn && a.stuck);
@@ -1181,7 +1241,7 @@
       if (spawns.length) parts.push(`<div class="as-group-head">other alerts <span class="as-gap"></span><span>${others.length}</span></div>`);
       parts.push(others.map(alertHtml).join(""));
     }
-    host.innerHTML = `${banner}${parts.join("")}`;
+    host.innerHTML = `${whoBar}${banner}${parts.join("")}`;
   }
 
   // ---- watches --------------------------------------------------------------------------------
@@ -3683,6 +3743,18 @@
     if (!t) return;
     // Tabs are buttons too and are handled above, in their own rows; ignore a second pass here.
     if (t.dataset.asTab || t.dataset.asSubtab) return;
+
+    // The Alerts tab's scope: whose alerts. The pane, the tab's count, the header badge and the spawn strip all read
+    // the one value, so a press moves all four and no round trip is needed — the payload already says whose alert is
+    // whose, and "all" puts every one of them back.
+    if (t.dataset.asAlertwho) {
+      alertWho = t.dataset.asAlertwho;
+      renderAssistant();
+      renderAssistantAlerts(true);
+      paintAssistantBadge();
+      paintSpawnStrip();
+      return;
+    }
 
     // The message board's own controls: whose messages, which direction, and an entry's expander. None is a
     // round trip — the board is already on the page — so all three are a repaint of this pane alone.
