@@ -12,7 +12,7 @@
 // The invariant this test pins is the one that makes both harmless: what a repaint draws is either the record's own
 // text or a prefix the pacer is STILL growing, and once the pacer has nothing left to release the record wins.
 //
-// The rule under test is READ OUT of public/app.js between its markers, and the pacer is the page's own
+// The rule under test is READ OUT of public/board/console.js between its markers, and the pacer is the page's own
 // (public/core/type-stream.js), so a change to either one changes these answers.
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -22,7 +22,7 @@ import { readSource, sliceBetween } from "../tools/panel-testkit.mjs";
 await import("../public/core/type-stream.js");
 const { createPacer } = globalThis.wtType;
 
-const code = sliceBetween(readSource("public/app.js"), "// ---- end result row head", "// ---- console row text");
+const code = sliceBetween(readSource("public/board/console.js") + "\n" + readSource("public/app.js"), "// ---- end result row head", "// ---- console row text");
 // `window` is only used by the "console-format asks the page for the prefix" registration at the end of that region;
 // a bare object satisfies its optional chaining, which is exactly what a harness page without the module looks like.
 const make = new Function("state", "document", "window", `${code}\nreturn { typedText, typedShown };`);

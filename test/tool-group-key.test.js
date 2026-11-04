@@ -1,6 +1,6 @@
 // A tool group's identity, the window that keeps it, and the head row a trimmed burst is still allowed to have.
 //
-// The code under test is READ OUT of public/app.js between its markers, not copied here (the way branch-cell.test.js
+// The code under test is READ OUT of public/board/console.js between its markers, not copied here (the way branch-cell.test.js
 // reads the branch cell): these answers are about the page's own rule, so a rule that goes back to counting raw
 // lines - or to keying a group from whatever line the window left on top of it - fails here.
 //
@@ -18,7 +18,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+// Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
+// script's names are page-wide, so a region is read from the script that now carries it.
+const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replaceAll("\r\n", "\n");
+const src = `${page("public/board/console.js")}\n${page("public/app.js")}`;
+
 const between = (begin, end) => {
   const a = src.indexOf(begin);
   const b = src.indexOf(end);

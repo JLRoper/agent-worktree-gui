@@ -37,7 +37,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+// Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
+// script's names are page-wide, so a region is read from the script that now carries it.
+const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replaceAll("\r\n", "\n");
+const src = `${page("public/board/console.js")}\n${page("public/app.js")}`;
+
 const begin = src.indexOf("// ---- moving nodes without losing what is scrolled inside them");
 const end = src.indexOf("// ---- end moving nodes without losing what is scrolled inside them");
 assert.ok(begin >= 0 && end > begin, "public/app.js carries the moving-nodes markers this test reads");

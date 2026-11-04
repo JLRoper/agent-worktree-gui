@@ -13,14 +13,18 @@
 //                                                             the row may still be written)
 //   3. it has the row                                      -> the row is drawn, and this note is not reached
 //
-// The expression is READ OUT of `public/app.js` (the note is a nested template inside the group renderer, so there is
+// The expression is READ OUT of `public/board/console.js` (the note is a nested template inside the group renderer, so there is
 // no function to call), and evaluated against a store in each state - a change to the rule changes these answers.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 
-const src = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+// Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
+// script's names are page-wide, so a region is read from the script that now carries it.
+const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+const src = `${page("public/board/console.js")}\n${page("public/app.js")}`;
+
 
 // The note is the one template that fills the empty-result fallback box.
 const OPEN = '<div class="jl jl-dim jl-note">  ${';

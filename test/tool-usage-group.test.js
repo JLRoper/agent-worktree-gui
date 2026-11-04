@@ -6,7 +6,11 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import vm from "node:vm";
 
-const source = readFileSync(new URL("../public/app.js", import.meta.url), "utf8").replaceAll("\r\n", "\n");
+// Two classic scripts since the console cut (public/index.html): board/console.js, then app.js. A classic
+// script's names are page-wide, so a region is read from the script that now carries it.
+const page = (rel) => readFileSync(new URL(`../${rel}`, import.meta.url), "utf8").replaceAll("\r\n", "\n");
+const source = `${page("public/board/console.js")}\n${page("public/app.js")}`;
+
 const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8").replaceAll("\r\n", "\n");
 const part = (a, b) => {
   const start = source.indexOf(a);
@@ -62,7 +66,7 @@ function render({ lines = burstLines(), sep = true, open = new Set() } = {}) {
     part("const TOOL_START_RE =", "// Index of the started tool call"),
     part("function toolBurstRows(", "function groupLines("),
     part("function groupLines(", "function storeOffsetsBefore("),
-    part("const READ_CODE_OPEN =", "// A block the reader has open keeps"),
+    part("const READ_CODE_OPEN =", "async function loadBatchCalls("),
     part("// ---- tool group key", "// ---- end tool group key"),
     part("const BATCH_TAIL_RE =", "function toBottomBtnHtml("),
   ]) vm.runInContext(code, context);
@@ -184,7 +188,7 @@ test("the condensed group is untouched: it still opens with a head row and no pe
     part("const TOOL_START_RE =", "// Index of the started tool call"),
     part("function toolBurstRows(", "function groupLines("),
     part("function groupLines(", "function storeOffsetsBefore("),
-    part("const READ_CODE_OPEN =", "// A block the reader has open keeps"),
+    part("const READ_CODE_OPEN =", "async function loadBatchCalls("),
     part("// ---- tool group key", "// ---- end tool group key"),
     part("const BATCH_TAIL_RE =", "function toBottomBtnHtml("),
   ]) vm.runInContext(code, context);
