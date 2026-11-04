@@ -4,16 +4,54 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.0.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.1.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-244 releases from v0.1.0 (2026-10-20) to v1.0.1 (2026-11-04), 874 commits between the tags. Every release is anchored by an
+247 releases from v0.1.0 (2026-10-20) to v1.1.0 (2026-11-04), 882 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.1.0 — 2026-11-04 · 2 commits
+
+[`7e31340`](https://github.com/JLRoper/agent-worktree-gui/commit/7e3134097348f39c6024d8dd8c51998074806741) · [compare v1.0.4...v1.1.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.0.4...v1.1.0)
+
+### Added
+
+- feat: alerts get an owner — stamped at fire time, resolved from the thread, filed under a tab ([`cca003b`](https://github.com/JLRoper/agent-worktree-gui/commit/cca003b0623bf42cdaebd39f922f40f8eed11bab))
+
+### Other
+
+- chore: 1.1.0 — the version this landing carries ([`7e31340`](https://github.com/JLRoper/agent-worktree-gui/commit/7e3134097348f39c6024d8dd8c51998074806741))
+
+## v1.0.4 — 2026-11-04 · 2 commits
+
+[`4c0a52b`](https://github.com/JLRoper/agent-worktree-gui/commit/4c0a52b34fa2c9b1b8e851794b63f15d0536add4) · [compare v1.0.3...v1.0.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.0.3...v1.0.4)
+
+### Other
+
+- Make the drawing and the driver agree about which edge a stage leaves by ([`0ceaa22`](https://github.com/JLRoper/agent-worktree-gui/commit/0ceaa229ea5235a0f61bb3b2305ebd4dd3b7c388))
+- chore: 1.0.4 — the version this landing carries ([`4c0a52b`](https://github.com/JLRoper/agent-worktree-gui/commit/4c0a52b34fa2c9b1b8e851794b63f15d0536add4))
+
+## v1.0.3 — 2026-11-04 · 4 commits
+
+[`5ea54e9`](https://github.com/JLRoper/agent-worktree-gui/commit/5ea54e9e088bfc349dfba1c513724b0a24d4bf97) · [compare v1.0.1...v1.0.3](https://github.com/JLRoper/agent-worktree-gui/compare/v1.0.1...v1.0.3)
+
+### Changed
+
+- style: the queue's three states read green / amber / red ([`53c03ea`](https://github.com/JLRoper/agent-worktree-gui/commit/53c03ea09fa2634c88af04d22331fa7fd6ad66a8))
+
+### Docs & tests
+
+- docs: render the 1.0.1 section, cut by this landing ([`0041b45`](https://github.com/JLRoper/agent-worktree-gui/commit/0041b452163d63d4267117e2f6dcce638e88fc34))
+- docs: render the 1.0.1 section against the commits the rebase merge carried ([`6566499`](https://github.com/JLRoper/agent-worktree-gui/commit/656649968f526ce624b877d25793dad80cac53b0))
+
+### Other
+
+- chore: 1.0.3 — the version this landing carries ([`5ea54e9`](https://github.com/JLRoper/agent-worktree-gui/commit/5ea54e9e088bfc349dfba1c513724b0a24d4bf97))
 
 ## v1.0.1 — 2026-11-04 · 3 commits
 
