@@ -35,6 +35,7 @@ file**, and what a row must declare to avoid colliding with the other one.
 10. [Where the two reports disagree with this tree](#10-where-the-two-reports-disagree-with-this-tree)
 11. [Where to add a new thing](#11-where-to-add-a-new-thing)
 12. [What this page did not measure](#12-what-this-page-did-not-measure)
+13. [Ownership clusters](#13-ownership-clusters)
 - [Appendix A — every tools script](#appendix-a--every-tools-script)
 - [Appendix B — re-measuring this page](#appendix-b--re-measuring-this-page)
 
@@ -150,7 +151,7 @@ These are the files two rows collide on most often, and each collides for a diff
 |---|---|---|---|
 | `server.js` | 5,833 | every route, payload field and boot wiring is a line in it; 33 modules have no other caller | 54 internal imports, 136 dispatch conditions |
 | `lib/jobs.js` | 4,289 | the run state machine: every event's shape passes through the class, and 9 files import it (8 modules plus its own test) | importers: `assistant.js`, `restart.js`, `subagents.js`, `verify-landed.js`, `worktree-naming.js`, `worktree-remove.js`, `worktrees.js`, `jobs.test.js`, `server.js` |
-| `public/app.js` | 22,695 | one file holds every renderer and handler; a client module is a cut through its names, not a dependency edge | 786 top-level functions + 266 `const`/`let`, 148 `// ----` markers, 448 CSS classes appear only in it |
+| `public/app.js` | 22,695 | one file holds every renderer and handler; a client module is a cut through its names, not a dependency edge | 874 function declarations + 266 `const`/`let`, 148 `// ----` markers, 448 CSS classes appear only in it |
 | `public/style.css` | 4,133 | one sheet for the board, the assistant and the pipeline dialog | 917 classes; 154 used only by `assistant.js`, 448 only by `app.js`, 52 by `app.js` + `index.html`, 36 only by the pipeline scripts, 101 by none of them |
 
 Two more files are shared by every landing and are not modules:
@@ -391,6 +392,9 @@ serialise that row behind whoever else is in `server.js`. The doc's two older re
 file as the guaranteed cross-workstream collision; the count that matters at 1.2.0 is 136 conditions,
 not the 123 or 127 they quote (§10).
 
+The route-by-route cut of this file — every block's span, the seam it closes over, the thirteen files
+and the order they can be cut in — is [`split-server.md`](split-server.md).
+
 ---
 
 ## 6. `public/` — 17 classic scripts
@@ -415,7 +419,7 @@ execute; `app.js` is the pivot; the two files after it (`update-check.js`, `assi
 | 12 | `public/core/sse.js` | 253 | the panel's own EventSource and every server frame | `WMApp.core.sse` | app.js names, inside `connect()` |
 | 13 | `public/pipeline-flow.js` | 540 | a pipeline drawn as a left-to-right sequence: data in, markup out | `PipelineFlow` | nothing |
 | 14 | `public/pipeline-modal.js` | 450 | the dialog shell for the two places a pipeline is looked at | `PipelineModal` | `PipelineFlow` at call time |
-| 15 | `public/app.js` | 22,695 | the board: every row, card, console, chart, handler and renderer | nothing — 1,052 top-level names | eleven of the other sixteen scripts' globals: `consoleFormat`, `wtLive`, `wtStream`, `wtType`, `ModelMenu`, `attachments`, `pasteChips`, `transport`, `sse`, `PipelineFlow`, `PipelineModal` |
+| 15 | `public/app.js` | 22,695 | the board: every row, card, console, chart, handler and renderer | nothing by assignment — 1,140 top-level names, 874 of them `window` properties (see §6.1) | eleven of the other sixteen scripts' globals: `consoleFormat`, `wtLive`, `wtStream`, `wtType`, `ModelMenu`, `attachments`, `pasteChips`, `transport`, `sse`, `PipelineFlow`, `PipelineModal` |
 | 16 | `public/core/update-check.js` | 317 | the build this tab runs vs the one the panel serves | `wtUpdateCheck` | the shell's version meta, at call time (phase 3) |
 | 17 | `public/assistant.js` | 4,666 | the assistant's client half: the float, alerts, watchlist, scratchpad and settings — one IIFE, five window functions | `applyAssistant`, `__assistantRenderChat`, `__assistantToggle`, `__assistantShowThread`, `__openTaskPipelineWindow` | app.js renderers (phase 3) |
 
@@ -428,6 +432,43 @@ bare name.
 **A row in this lane must declare** `public/app.js` when it adds a renderer, a handler or a section
 marker, `public/index.html` when it adds a file, and `public/style.css` when it adds a class. A script
 moved between positions in the list is a load-contract change: declare `index.html` and say why.
+
+### 6.1 `public/app.js` — the panel cut, and what it does to the lane
+
+Measured at `1e1c595` (`1.4.2`): 22,695 lines and **1,140 top-level declarations** — 786 `function`,
+88 `async function`, 196 `const`, 70 `let`. The map's earlier count of 1,052 counted only the
+synchronous functions. The file writes **no `window.*` name at all**: 874 declarations become `window`
+properties, 266 are global lexical bindings, and **65 names are read by the other sixteen scripts**
+(`state` by nine of them, `showBanner` by three); three `window.__*` functions come back from
+`assistant.js`.
+
+[`split-public-app.md`](split-public-app.md) cuts it into ten files. The cut keeps every `<script>`
+position, and it names the 44 names the page reads back, so no HTML changes:
+
+| Proposed file | Units | Lines | Page-facing names it must keep |
+|---|---:|---:|---:|
+| `board/board.js` — shell: `state`, boot, render engine, folders/collapse, banner | 222 | 3,065 | 13 |
+| `board/rows.js` — the worktree table, cells, detail, TODO | 98 | 1,856 | 6 |
+| `board/cards.js` — turns, conversation, question box, approvals dock | 188 | 3,218 | 15 |
+| `board/jobs.js` — the jobs board, spawn bar, prompt history | 47 | 740 | 3 |
+| `board/console.js` — tool bursts, console writers, markdown, scroll | 166 | 2,263 | 6 |
+| `board/charts.js` — ranking, top-N, anchor, columns | 131 | 1,277 | 1 |
+| `board/deliverables.js` — the DELIVERABLES button and list | 20 | 411 | 0 |
+| `board/settings.js` — every settings tab but Pipeline/Bundles | 210 | 2,558 | 0 |
+| `board/pipeline.js` — the chip, the Pipeline and Bundles tabs | 43 | 602 | 0 |
+| `board/human.js` — the HUMAN rotation | 15 | 315 | 0 |
+
+Two consequences for this map's lane rule:
+
+- **The lane does not move until the first cut lands.** Any client row still claims `public/app.js`,
+  because the block it edits is still there. The cut's first extraction is `board/console.js`: it is
+  the only pair in the file that alternates line-by-line with another panel (13 flips against
+  `cards.js`), so nothing else can be cut in parallel while it stays. The `state` block is the *last*
+  thing to move, not the first — its literal calls 19 loaders that live in three panels.
+- **Once a panel's file exists, the row names that file.** Two rows in different panel files are in
+  different lanes even though both call `state` and `showBanner`, because a lane is a claimed file, not
+  a read name. The shared claims that remain are `index.html` (one `<script>` line per file) and
+  `package.json` (the version gate).
 
 ---
 
@@ -541,7 +582,7 @@ this page lands on; the server half is byte-identical at `1b8b795`, where the ma
 | `public/style.css` 3,770 lines (`architecture.md` §1) | 0.99.0 | **4,133 lines, 917 classes** | +363 lines |
 | `test/` 153 files, 1,239 tests (`architecture.md` §1) | 0.99.0 | **168 files** (tests not re-run here, §12) | +15 files |
 | `tools/` 156 `.mjs`, 122 `verify-*` (`architecture.md` §1) | 0.99.0 | **166 scripts, 131 `verify*`** | +10 scripts, +9 harnesses |
-| `public/app.js` 21,367 @cc61bb9, 22,055 @0.102.0 (`architecture-modules.html` §2, §10) | cc61bb9 / 0.102.0 | **22,695 lines, 1,052 top-level names, 148 markers** | +640 since 0.102.0 |
+| `public/app.js` 21,367 @cc61bb9, 22,055 @0.102.0 (`architecture-modules.html` §2, §10) | cc61bb9 / 0.102.0 | **22,695 lines, 1,140 top-level names (874 `window`), 148 markers** | +640 since 0.102.0 |
 | `public/assistant.js` 4,177 / 4,268 (`architecture-modules.html` §2, §10) | cc61bb9 / 0.102.0 | **4,666 lines, five window functions** | +398 since 0.102.0 |
 | `lib/assistant.js` 5,192 lines, 147 methods (`architecture-modules.html` §5.3) | cc61bb9 | **6,596 lines** | +1,404 |
 | `lib/jobs.js` 3,829 lines (`architecture-modules.html` §2, §5.4) | cc61bb9 | **4,289 lines** | +460 |
@@ -575,7 +616,7 @@ Two of these deserve a sentence rather than a row:
 | an assistant action | `lib/assistant/actions.js` (grammar) → `lib/assistant/config.js` (the rule table) → `lib/assistant.js` | `lib/assistant.js` |
 | a task-pipeline field | `lib/pipeline-bundle.js` (contract) → `lib/task-pipeline.js` (read) → `lib/pipeline-window.js` → `public/pipeline-flow.js` | `lib/pipelines.js` |
 | a worktree-landing rule | `lib/worktrees.js` or `lib/push-guard.js` → `server.js` → `docs/pushing-to-a-remote.md` | `lib/worktrees.js` |
-| a new client file | `public/<file>.js` → `public/index.html` (script tag in phase 1 or 3) → `public/app.js` (call site) → `public/style.css` | `public/app.js` |
+| a new client file | the panel file under `public/board/` ([`split-public-app.md`](split-public-app.md) §4) → `public/index.html` (script tag in phase 1 or 3, at its phase boundary) → `public/app.js` only while that block still lives there → `public/style.css` for its classes | `public/app.js` until the panel's file exists; that file afterwards |
 | a new harness | `tools/verify-<name>.mjs` with a `// HARNESS:` header; `package.json` only if it becomes an npm script | `tools/verify.mjs` is not edited for a new file |
 | a new state file | `lib/paths.js` (the path helper) → the owning module → `server.js` only if it is boot-loaded | `lib/paths.js` |
 
@@ -593,6 +634,41 @@ Two of these deserve a sentence rather than a row:
 - **Which lane a given row SHOULD be in.** This page says which file a module's work must claim. The
   panel decides the order, and the assistant decides what to start; neither judgement is measured
   here.
+
+---
+
+## 13. Ownership clusters
+
+A lane is named by one claimed file; a **cluster** is the wider unit — the files one worker owns
+together, measured from the same import edges this map counts. [`split-lib.md`](split-lib.md) carries
+the full table (module, cluster, importers, who must touch it), the move order and the collisions, all
+measured at `1e1c595` (`1.4.2`). The summary, over the same 88 modules:
+
+| Cluster | Modules | Lines | Owns | Hot file (commits touching `lib/`) |
+|---|---:|---:|---|---|
+| **SUBSTRATE** | 4 | 1,086 | paths, tree names, is-this-a-tree, `HttpError` — the floor | `paths.js` (9 of 259) |
+| **SERVER** | 10 | 2,268 | HTTP framing, static, the store, boot, restart | `restart.js` (11) |
+| **WATCH** | 11 | 3,933 | git reads, the worker pool, the ticker, projects, hosts, liveness | `scheduler.js` (34) |
+| **RUNS** | 18 | 7,697 | the run state machine, console, usage, approvals, admission | `jobs.js` (89) |
+| **ASSISTANT** | 18 | 11,466 | the assistant vertical: turn, queue, charter, messages, settings | `assistant.js` (78) |
+| **INSTALL** | 6 | 2,203 | the Hermes contract: config, models, permissions, skills | `hermes-config.js` (7) |
+| **PIPELINES** | 6 | 2,604 | catalogue, bundle contract, task position, window | `pipelines.js` (5) |
+| **LANDING** | 15 | 5,192 | worktree lifecycle and landing: cut, rebase, lock, remove, verify, push | `features/spawn.js` (8) |
+| **total** | **88** | **36,449** | | 259 commits touch `lib/` |
+
+Four things in that page are not in this one:
+
+- **The collision answer.** ASSISTANT and RUNS cannot be started at once: 17 commits touch both, and
+  `assistant.js` + `jobs.js` is the tree's hottest module pair at 16. PIPELINES is the safe neighbour —
+  zero co-change commits with SERVER, WATCH, INSTALL or LANDING.
+- **The move order.** PIPELINES → SERVER → INSTALL → WATCH → LANDING → RUNS → ASSISTANT, with SUBSTRATE
+  frozen. `server.js` is edited at every step because all 54 of its specifiers live in one block.
+- **The pure/plumbing splits.** `jobs.js` can shed ≈370 lines of 429 policy and briefs; `scan.js` its
+  row signature; `assistant/queue.js` its admission decision; `todos.js` its formatters. Three hot modules
+  are already pure (`assistant/read.js`, `assistant/config.js`, `tool-text.js`).
+- **The three route adapters that live in domain modules** — `createQueueRoutes` in `queue.js`,
+  `createPipelineWindowRoutes` in `pipeline-window.js`, `createPipelineCatalogueRoutes` in
+  `task-pipeline-assign.js` — which is why "SERVER" is framing and boot, not "the routes".
 
 ---
 
