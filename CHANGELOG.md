@@ -4,16 +4,29 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.8.4 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.8.5 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-269 releases from v0.1.0 (2026-10-20) to v1.8.4 (2026-11-04), 948 commits between the tags. Every release is anchored by an
+270 releases from v0.1.0 (2026-10-20) to v1.8.5 (2026-11-04), 951 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.8.5 — 2026-11-04 · 3 commits
+
+[`3569b94`](https://github.com/JLRoper/agent-worktree-gui/commit/3569b9448af77fdaa56946d9cb9e5a3e39fc61e9) · [compare v1.8.4...v1.8.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.8.4...v1.8.5)
+
+### Docs & tests
+
+- docs: render the changelog — 269 releases ([`4f6c6c3`](https://github.com/JLRoper/agent-worktree-gui/commit/4f6c6c36ccce8ed804a2f9a912e21d900ed6c6eb))
+- docs: PictureViewer + picture-manager-web dev deploy evidence and login walk (DMR-39015) ([`6f31b5c`](https://github.com/JLRoper/agent-worktree-gui/commit/6f31b5c147778535263bd89a30c8acdce6a6f17b))
+
+### Other
+
+- chore: 1.8.5 — the version this landing carries ([`3569b94`](https://github.com/JLRoper/agent-worktree-gui/commit/3569b9448af77fdaa56946d9cb9e5a3e39fc61e9))
 
 ## v1.8.4 — 2026-11-04 · 2 commits
 
