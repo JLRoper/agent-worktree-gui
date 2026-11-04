@@ -758,7 +758,17 @@ shorter than the panel starts at its foot instead of leaving empty panel under i
   only for threads this board is showing), plus `settle` (a worker's run ended `done` and no watch covers its
   thread: the board's default notice, which carries the completion payload so the assistant can say whether that
   branch is ready to land. It never fires for the assistant's own turns, however many runs settle in one pass is
-  one wake, and a thread with an open watch keeps the watch's single notice), plus `exited` (a worker's run ended
+  one wake, and a thread with an open watch keeps the watch's single notice), plus `queuesweep` (a run that ended
+  `done` was carrying a row of that assistant's own queue — the row is the fact this wake is about, and it used to
+  be nobody's: a worker could finish under a row still reading `running`, or land a queued row's work under a row
+  nobody closed, until a person read the tab. The wake is the same four checks every time — every running row
+  against `/api/jobs`, every queued row against main, every parked row against the blocker it names, then start
+  what can be started or say plainly that the queue is clean — because an unconstrained "mind the queue" wake
+  becomes a vibe. One settle is one sweep, keyed on the settle's job id, and it rides the settle's own turn rather
+  than opening a second run on a live thread. Its second trigger is the failsafe: every run of an assistant quiet
+  for `queueIdleMinutes` (default 30, **0** disables the timer) while its queue still holds an open row. It is an
+  event, so the hourly wake budget cannot drop it, and its clock is the rule's own disclosure under **Settings →
+  Per-rule escalation**, beside the other watchdog bars), plus `exited` (a worker's run ended
   `failed` — the card's **EXITED** chip — and no newer run on its thread has taken the failure over. It is the
   failure's own rule, separate from `settle` so the two can be tuned apart, and it carries the same completion
   payload so the assistant can say what died and what to try next. It fires once per run after `exitedSeconds`
