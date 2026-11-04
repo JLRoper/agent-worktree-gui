@@ -4,16 +4,46 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v0.114.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v0.115.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-240 releases from v0.1.0 (2026-10-20) to v0.114.0 (2026-11-03), 862 commits between the tags. Every release is anchored by an
+242 releases from v0.1.0 (2026-10-20) to v0.115.0 (2026-11-04), 869 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v0.115.0 — 2026-11-04 · 4 commits
+
+[`f108689`](https://github.com/JLRoper/agent-worktree-gui/commit/f108689aa6f7ea3d8ada8b80accf71c0625360de) · [compare v0.114.1...v0.115.0](https://github.com/JLRoper/agent-worktree-gui/compare/v0.114.1...v0.115.0)
+
+### Added
+
+- feat: the queue explainer is a lead and five labelled lines, and Settings ships one press away ([`254ad5c`](https://github.com/JLRoper/agent-worktree-gui/commit/254ad5c188313171716940118b7298e5111ecd68))
+
+### Docs & tests
+
+- docs: the plan names the base it is cut from — 0.114.0, and the flow block's last line ([`fe6613a`](https://github.com/JLRoper/agent-worktree-gui/commit/fe6613a20095a6ba25df78ca9cd594e6a222c8e5))
+- docs: the render landed once and the duplicate closed, re-checked at 0.114.0 ([`49f6e4e`](https://github.com/JLRoper/agent-worktree-gui/commit/49f6e4e42203e57e9f767cad930b9f1d2138b42c))
+
+### Other
+
+- chore: 0.115.0 — the version this landing carries ([`f108689`](https://github.com/JLRoper/agent-worktree-gui/commit/f108689aa6f7ea3d8ada8b80accf71c0625360de))
+
+## v0.114.1 — 2026-11-04 · 3 commits
+
+[`698743f`](https://github.com/JLRoper/agent-worktree-gui/commit/698743f96fa9cd83a0a533c7e828f8d6e8759e0d) · [compare v0.114.0...v0.114.1](https://github.com/JLRoper/agent-worktree-gui/compare/v0.114.0...v0.114.1)
+
+### Docs & tests
+
+- docs: render the 0.114.0 and 0.113.0 sections, the two main had not rendered ([`97e6b86`](https://github.com/JLRoper/agent-worktree-gui/commit/97e6b86f166af7231a46f90b7a336484103a2d27))
+- docs: plan the pipeline flow's integration, in the order the comparables justify ([`3326190`](https://github.com/JLRoper/agent-worktree-gui/commit/3326190f1f3703e66b574040ab64c6041d159717))
+
+### Other
+
+- chore: 0.114.1 — the version this landing carries ([`698743f`](https://github.com/JLRoper/agent-worktree-gui/commit/698743f96fa9cd83a0a533c7e828f8d6e8759e0d))
 
 ## v0.114.0 — 2026-11-03 · 2 commits
 
