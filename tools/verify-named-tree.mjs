@@ -12,9 +12,9 @@
 //
 // The fix is a record (lib/tree-names.js) keyed on the six-hex tag every rename keeps, written beside the panel's
 // job store, consulted before any automatic rename: a tree is named once, by the run that gets it first, and every
-// later run — and every later event — leaves the name alone. Replacing that name is now a deliberate act: the ✦ in
-// the row asks the WORK (the branch's commits and its diff against the base branch, via /api/worktree/suggest-name)
-// for a name, shows it with the commits behind it, and renames only when the reader answers the question.
+// later run — and every later event — leaves the name alone. Replacing that name is a deliberate act: the row's ✎
+// asks the reader for a name and posts /api/worktree/rename, and the ledger records the reader as the one who
+// named it.
 //
 // Everything below happens in a sandbox of its own: a throwaway repo, a throwaway HERMES_HOME, its own PANEL_CONFIG
 // with its own port, its own logs, and a STUB gateway on an ephemeral port. The live panel on 7331 and the live
@@ -30,8 +30,7 @@
 //                 DIFFERENT title for that tree's run available — and a positive control in the same window (a tree
 //                 nobody has named, renamed by that same sweeper) so "untouched" cannot mean "the sweeper was asleep"
 //   driven        the 409 while an agent is running in the tree, against a stub run held live
-//   driven        the ✦'s two requests: /api/worktree/suggest-name (renames nothing) and /api/worktree/rename
-//                 (renames once, keeps the tag, and records the reader as the one who named it)
+//   driven        the row's ✎: /api/worktree/rename renames once, keeps the tag, and records the reader
 //   driven        the name stops moving once the branch has work: a tree whose branch already carries a commit of its
 //                 own keeps its directory AND its branch through a real title sweep (the refusal is written into the
 //                 ledger, and the row does not claim to have been named), with a no-commits control tree renamed by
@@ -42,9 +41,8 @@
 //   driven        a published branch is never renamed: the harness pushes a worktree's branch to a bare remote of its
 //                 own before the panel starts, and the deliberate rename answers 409 naming origin/<branch>
 //   driven        the record: who and when, in the panel's own tree-names.json, and the same on the board's row
-//   inspected     the browser half — the ✦ button, its confirm box and the release-time click handling live in
-//                 public/app.js; this script drives the two HTTP requests behind them and asserts their answers,
-//                 it does not click (there is no browser here)
+//   inspected     the browser half — the row's ✎ and its prompt live in public/app.js; this script drives the
+//                 rename route directly, not the prompt, and there is no browser here
 //   inspected     the counterfactual — that the OLD guard would have renamed this tree again in the second-attempt
 //                 phase is stated from reading that code, not shown by running it side by side
 import { execFileSync, spawn } from "node:child_process";
@@ -54,7 +52,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
-import { readWorktreeWork, nameFromWork, slugWords } from "../lib/name-from-work.js";
 import { describeNaming, tagOf, treeKey } from "../lib/tree-names.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -569,7 +566,7 @@ try {
   });
 
   // =============================================================================================
-  phase = "phase 4 — the ✦ button: a name read from the work";
+  phase = "phase 4 — the reader names it by hand (the ✎), and the record says so";
   console.log(`\n== ${phase}`);
   const work = commit(tree1.path, { "lib/retention.js": "export const sweep = () => {};\n" }, "stub the retention seams in the job store");
   const work2 = commit(tree1.path, { "lib/scheduler.js": "// sweep wired in\nexport const tick = () => {};\n" }, "wire the retention sweep into the scheduler");
@@ -577,55 +574,37 @@ try {
   check("the tree has three commits describing its work", [work, work2, work3], [true, true, true]);
   check("its branch is three ahead of main", git(repo, ["rev-list", "--count", `main..${tree1.branch}`]).out, "3");
 
-  const read = await readWorktreeWork({ dir: tree1.path, base: "main" });
-  check("the module reads the branch's own commits", read.commits.length, 3);
-  check("and the diff against main", read.files.map((f) => f.path).sort(), ["lib/retention.js", "lib/scheduler.js", "tools/verify-retention.mjs"]);
-  const pure = nameFromWork({ commits: read.commits, files: read.files });
-  ok("the name comes from the commits, not from the old name", pure.source === "commits" && /retention|sweep|seams/.test(pure.name), pure.name);
-  check("a slug is at most 40 characters and never cut mid-word", slugWords(["a".repeat(50)]) , "a".repeat(40));
-
-  const suggested = await api("/api/worktree/suggest-name", { project: PROJECT, path: tree1.path });
-  check("the suggestion answered", suggested.status, 200);
-  const sug = suggested.body;
-  ok("it offers a name", Boolean(sug.name) && /^[a-z0-9-]+$/.test(sug.name), String(sug.name));
-  ok("built from this branch's work", /retention/.test(String(sug.name)), `${sug.name} (from “${sug.frame}”)`);
-  check("it read three commits against main", sug.evidence?.ahead, 3);
-  check("and names the files it read", (sug.evidence?.files || []).length, 3);
-  ok("it says where the name came from", /commits/.test(String(sug.why)), String(sug.why || ""));
-  check("the offered directory name keeps the tag", sug.dirName, `${sug.name}-${tag1}`);
-  check("the offered branch keeps it too", `wtgui/${sug.dirName}`, `wtgui/${sug.name}-${tag1}`);
-  // The whole point of the button being deliberate: reading the work renames NOTHING.
-  check("asking renamed nothing — the directory is where it was", norm(treeByTag(tag1, [cut3])?.path), norm(tree1.path));
-  check("asking renamed nothing — the branch is the same", branchOf(tree1.path), tree1.branch);
-  check("and the record still names run one", (await settledRecord(tree1.path))?.by?.includes(THREAD1), true);
-
+  // The row's ✎ asks the reader for a name and posts it. There is no suggestion to read first: the name is the
+  // reader's, and the panel keeps the tag and writes down who gave it.
+  const NAME = "retention-sweep";
+  const DIR = `${NAME}-${tag1}`;
   const recBefore = await settledRecord(tree1.path);
   const renamed = await api("/api/worktree/rename", {
     project: PROJECT,
     path: tree1.path,
-    name: sug.dirName,
-    by: "the reader (✦ from the work)",
-    how: `named from the work: ${sug.why}`,
+    name: NAME,
+    by: "the reader (✎)",
+    how: "named by hand from the row",
   });
-  check("answering the question renames it", renamed.status, 200);
+  check("renaming it by hand lands", renamed.status, 200);
   const treeNamed = treeByTag(tag1, [cut3]) || null;
-  check("the directory takes the name read from the work", baseOf(treeNamed?.path || ""), sug.dirName);
-  check("the branch takes it too", treeNamed?.branch, `wtgui/${sug.dirName}`);
+  check("the directory takes the reader's name", baseOf(treeNamed?.path || ""), DIR);
+  check("the branch takes it too", treeNamed?.branch, `wtgui/${DIR}`);
   check("the six-hex tag is still the one it was cut with", tagOf(treeNamed?.path), tag1);
   check("the old directory is gone", existsSync(tree1.path), false);
   const recAfter = await settledRecord(treeNamed.path);
   ok("the record now names the reader", /reader/.test(String(recAfter?.by || "")), describeNaming(recAfter));
   ok("and when — after the run that had it before", Date.parse(recAfter?.at || "") >= Date.parse(recBefore?.at || ""), `${recBefore?.at} → ${recAfter?.at}`);
-  ok("with the work it was read from on the record", /commits/.test(String(recAfter?.how || "")), String(recAfter?.how || ""));
+  ok("with how it was named on the record", /hand/.test(String(recAfter?.how || "")), String(recAfter?.how || ""));
   const rowOk = await waitFor(async () => Boolean((await rowFor(treeNamed.path))?.named?.by), { timeoutMs: 30_000, what: "the board's row to carry the reader's record" });
   const namedRow = await rowFor(treeNamed.path);
-  ok("the board's row says so too", rowOk && String(namedRow?.named?.by) === "the reader (✦ from the work)", String(namedRow?.named?.by || ""));
+  ok("the board's row says so too", rowOk && String(namedRow?.named?.by) === "the reader (✎)", String(namedRow?.named?.by || ""));
 
-  // Renaming once: the same request again is a no-op, not a second slug, and not a second record.
-  const again = await api("/api/worktree/rename", { project: PROJECT, path: treeNamed.path, name: sug.dirName, by: "the reader (✦ from the work)" });
-  check("asking for the same name again changes nothing", [again.status, again.body.unchanged], [200, true]);
-  check("the tag is still kept", tagOf(treeByTag(tag1, [cut3])?.path), tag1);
-  check("exactly one tree, one branch, one name", [treesExcept().length, treeByTag(tag1, [cut3])?.branch], [2, `wtgui/${sug.dirName}`]);
+  // Renaming once: the same request again is a no-op, not a second name and not a second record.
+  const again = await api("/api/worktree/rename", { project: PROJECT, path: treeNamed.path, name: NAME, by: "the reader (✎)" });
+  check("asking for the same name again changes nothing", [again.status, again.body?.unchanged === true], [200, true]);
+  check("the tag is still the one it was cut with", tagOf(treeByTag(tag1, [cut3])?.path || ""), tag1);
+  check("the branch is still the reader's name", treeByTag(tag1, [cut3])?.branch, `wtgui/${DIR}`);
   const strays = treesExcept()
     .filter((t) => t.branch !== `wtgui/${baseOf(t.path)}`)
     .map((t) => `${baseOf(t.path)} on ${t.branch}`);
@@ -637,19 +616,14 @@ try {
   await startPanel();
   await sleep(13_000);
   check("a restarted panel with a fresh title still leaves the reader's name alone", norm(treeByTag(tag1, [cut3])?.path), norm(treeNamed.path));
-  check("and the record is still the reader's", (await settledRecord(treeNamed.path))?.by, "the reader (✦ from the work)");
+  check("and the record is still the reader's", (await settledRecord(treeNamed.path))?.by, "the reader (✎)");
+
 
   // =============================================================================================
-  phase = "phase 5 — the two halves are still two, and the ledger is the only thing that separates them";
+  phase = "phase 5 — the ledger holds one record per tree it has named";
   console.log(`\n== ${phase}`);
-  const refusedUnknown = await api("/api/worktree/suggest-name", { project: PROJECT, path: path.join(repo, "not-a-worktree") });
-  check("a path that is not a row of the project is refused", refusedUnknown.status, 404);
-  const ownCheckout = await api("/api/worktree/suggest-name", { project: PROJECT, path: repo });
-  check("the project's own checkout is never nameable", ownCheckout.status, 400);
-  const unknownProject = await api("/api/worktree/suggest-name", { project: "no-such-project", path: repo });
-  check("an unknown project is refused", unknownProject.status, 404);
-  // Three: the tree cut and pushed by hand before the panel started (seeded), the tree run one cut and the reader
-  // then named, and the phase 2b control tree run three named. The published tree joined this list after the
+  // Three: the tree cut and pushed by hand before the panel started (seeded), the tree run one cut and named by
+  // hand in phase 4, and the phase 2b control tree run three named. The published tree joined this list after the
   // assertion was first written; the count is the number of trees this harness has put on the board.
   check("the ledger has one record per tree it has named", Object.keys(ledger().trees || {}).length, 3);
   ok("each of them names who and when", Object.values(ledger().trees || {}).every((r) => r.by && r.at && r.tag), JSON.stringify(Object.values(ledger().trees || {}).map((r) => r.by)));
@@ -772,7 +746,7 @@ try {
 
 console.log(`\n${checks} checks, ${failures} failed.`);
 console.log("driven end to end in a sandbox of its own (own port, own PANEL_CONFIG, own HERMES_HOME, stub gateway).");
-console.log("the browser half (the ✦ button and its confirm box in public/app.js) and the counterfactual about the old");
-console.log("in-memory guard are the two parts this script states from inspection rather than driving — see the header.");
+console.log("the browser half (the row's ✎ and its prompt) and the counterfactual about the old in-memory guard");
+console.log("are the two parts this script states from inspection rather than driving — see the header.");
 console.log(failures ? `RESULT: ${failures} FAILED` : "RESULT: ALL PASS");
 process.exit(failures ? 1 : 0);

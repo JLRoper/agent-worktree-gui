@@ -148,14 +148,13 @@ test("an untagged directory is refused by the naming path, and an in-project unt
   assert.equal(renameRefusal(`${ROOT}/.worktrees/fix-the-thing-1a2b3c`), "", "a tagged tree may be renamed");
   assert.equal(renameRefusal(`${ROOT}/.worktrees/a1b2c3`), "", "a directory that IS six hex is the tag being named");
 
-  // The guard is worthless if the call sites do not ask it: both rename halves and the suggest-name route do, and the
-  // invented-tag fallback that used to give a bare name a fresh identity is gone.
+  // The guard is worthless if the call sites do not ask it: both rename halves do, and the invented-tag fallback
+  // that used to give a bare name a fresh identity is gone.
   const src = await readFile(new URL("../server.js", import.meta.url), "utf8");
   assert.match(src, /renameRefusal\(oldPath\)/, "renameWorktree (deliberate and automatic) asks before moving anything");
   // The automatic half is the naming sweep (lib/worktree-naming.js), and its only way to move a tree is renameWorktree:
   // so the refusal above is what spares an untagged tree — there is no second, unchecked auto-rename path.
   assert.match(src, /rename: \(args\) => renameWorktree\(args\)/, "the automatic sweep moves trees only through renameWorktree");
   assert.doesNotMatch(src, /autoNameWorktree/, "no second automatic rename path that could skip the refusal");
-  assert.match(src, /renameRefusal\(dir\)/, "suggest-name refuses rather than offering a name the rename would reject");
   assert.doesNotMatch(src, /WORKTREE_TAG_RE/, "no tag is minted from a bare name any more");
 });

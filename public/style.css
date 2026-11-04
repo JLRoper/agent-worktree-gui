@@ -1843,8 +1843,7 @@ tr.row:hover .btn-refresh-tree { opacity: 1; }
   opacity: .55;
 }
 /* Rename a worktree: quiet until the row is under the pointer, so a board of rows is not a board of buttons. */
-.btn-row-rename,
-.btn-row-name-work {
+.btn-row-rename {
   border: 1px solid transparent;
   background: none;
   color: var(--dim);
@@ -1856,12 +1855,9 @@ tr.row:hover .btn-refresh-tree { opacity: 1; }
   opacity: .55;
   vertical-align: 1px;
 }
-.btn-row-rename:hover,
-.btn-row-name-work:hover { background: #232b3a; border-color: var(--line); color: var(--fg); opacity: 1; }
-.btn-row-rename:disabled,
-.btn-row-name-work:disabled { opacity: .3; cursor: progress; }
-tr.row:hover .btn-row-rename,
-tr.row:hover .btn-row-name-work { opacity: .9; }
+.btn-row-rename:hover { background: #232b3a; border-color: var(--line); color: var(--fg); opacity: 1; }
+.btn-row-rename:disabled { opacity: .3; cursor: progress; }
+tr.row:hover .btn-row-rename { opacity: .9; }
 
 /* The reader's lock, on the row itself: an emoji rather than a glyph, because it has to be legible to a person
    scanning a column and to an agent reading the board's own markup. Quiet while unlocked (a board of rows must not
@@ -2771,7 +2767,7 @@ td.owner { overflow: hidden; }
    buttons and chips keep their whole width: what the row is called is the one thing that can afford to lose letters. */
 td.name > .name-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
 td.name .row-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-td.name .btn-row-agent, td.name .btn-row-rename, td.name .btn-row-name-work, td.name .sig { flex: none; }
+td.name .btn-row-agent, td.name .btn-row-rename, td.name .sig { flex: none; }
 
 /* The edge between two header cells is the column's handle. The header is already `position: sticky`, so it is a
    containing block for this absolutely placed strip - no extra positioning of the th is needed (which would break
