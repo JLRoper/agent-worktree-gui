@@ -12,13 +12,16 @@
 // What this file is the contract for:
 //
 //   · #1's notes stay the `notes` string in assistant.json, unmigrated and byte-identical; every other assistant
-//     owns state/assistants/assistant-N/notes.md, starts EMPTY (the shared blob is not copied in) and reads and
-//     writes that file alone — both from its own turn's NOTE lines and from the reader's Pad-tab save.
+//     owns state/assistants/assistant-N/notes.md, seeded ONCE from that string when the split landed, and reads and
+//     writes that file alone — both from its own turn's NOTE lines and from the reader's Pad-tab save. The seed is
+//     create-only: an existing file is never overwritten, so a boot cannot undo a NOTE or a reader's edit.
+//   · the standing rules are COPIED into each other assistant's own record once, with their own ids; #1's list is
+//     never written, and a rule deleted from #2 is not deleted from #1 or #3.
 //   · a watch is stamped with its owner when it is CREATED, from the turn (or the tab) that created it; the legacy
 //     records carry no stamp, are resolved at READ time from the thread and fall back to #1, and the store is never
 //     rewritten.
-//   · the preamble's watch block and the Watches tab are filtered to one assistant, and the other assistants'
-//     watches are still shown — under their own heading, with whose they are on the row.
+//   · the preamble's watch block and the Watches tab are filtered to one assistant — each tab lists its own watches
+//     and nobody else's.
 //
 // The last section drives the two renderers out of public/assistant.js with `sliceRegion`, because "the tab shows
 // the selected assistant's" is a claim about the HTML and not about the store.
@@ -30,18 +33,22 @@ import path from "node:path";
 import test from "node:test";
 import { ASSISTANT_THREAD, Assistant } from "../lib/assistant.js";
 import { parseActions } from "../lib/assistant/actions.js";
-import { notesRelFor, readNotesFile, writeNotesFile } from "../lib/assistant/notes-file.js";
+import { notesRelFor, readNotesFile, seedNotesFile, writeNotesFile } from "../lib/assistant/notes-file.js";
 import { PRIMARY_ASSISTANT, threadFor } from "../lib/assistants.js";
 import { sliceRegion } from "../tools/panel-testkit.mjs";
 
 const SHARED = "SHARED-NOTES: the one 7,999-character string every assistant used to read";
 const iso = (ms = 0) => new Date(1_700_000_000_000 + ms).toISOString();
+const rule = (id, text) => ({ id, text, by: "reader", at: iso(0) });
 
-async function panel(t, { notes = "", watches = [] } = {}) {
+async function panel(t, { notes = "", watches = [], rules = [], assistants = null } = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "wtgui-pad-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const assistantFile = path.join(dir, "assistant.json");
-  await writeFile(assistantFile, JSON.stringify({ version: 2, settings: {}, notes, rules: [], watches, alerts: [], journal: [] }));
+  await writeFile(assistantFile, JSON.stringify({ version: 2, settings: {}, notes, rules, watches, alerts: [], journal: [] }));
+  // A panel that already held extra assistants when the split landed: their records are on disk WITHOUT
+  // `rulesSeededAt` and without a rules.md/notes.md of their own. This is the boot pass's real input.
+  if (assistants) await writeFile(path.join(dir, "assistants.json"), JSON.stringify({ version: 1, assistants }));
   const rows = [];
   const assistant = new Assistant({
     config: { jobsFile: path.join(dir, "jobs.json"), assistantFile },
@@ -66,17 +73,61 @@ async function panel(t, { notes = "", watches = [] } = {}) {
 // A turn of one assistant's own thread, as far as `applyActions` is concerned.
 const turnOf = (assistant, id) => ({ id: `turn-${id}`, thread: assistant.threadOf(id) });
 
-test("#2 starts with an empty pad of its own, and the shared string is not copied into it", async (t) => {
+test("#2's pad is seeded once from the shared text, and a later seed never overwrites it", async (t) => {
   const { assistant, notesFile } = await panel(t, { notes: SHARED });
   const id = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
   assert.equal(id, "assistant-2");
-  // Seeded at CREATE, beside its charter, and empty on purpose: the shared blob is Assistant #1's.
-  assert.equal(await readFile(notesFile(id), "utf8"), "", "its own notes.md exists and is empty");
-  assert.equal(assistant.notesFor(id), "", "and its pad reads empty");
+  // Seeded at CREATE, beside its charter, from the text every assistant used to share.
+  assert.equal(await readFile(notesFile(id), "utf8"), SHARED, "its own notes.md starts from the shared text");
+  assert.equal(assistant.notesFor(id), SHARED, "and its pad reads it");
   assert.equal(assistant.notesFor(PRIMARY_ASSISTANT), SHARED, "#1's notes are where they always were");
   assert.equal(assistant.notesPayloadFor(id).path.replace(/\\/g, "/"), notesFile(id).replace(/\\/g, "/"));
   assert.equal(assistant.notesPayloadFor(id).file, true, "the payload says the pad is a file");
   assert.equal(assistant.notesPayloadFor(PRIMARY_ASSISTANT).file, false, "and that #1's is a field in its store");
+  assert.throws(() => assistant.notesPayloadFor("assistant-99"), /no such assistant/, "an id the roster does not hold never resolves to #1's pad");
+
+  // A pad the assistant has written since is never touched: the seed is CREATE-only, so a boot (or this second
+  // call) cannot put the old shared lines back over it, and cannot undo a NOTE it wrote.
+  assistant.setNotesFor(id, "REVIEWER-PAD: mine now");
+  const again = seedNotesFile(notesFile(id), SHARED);
+  assert.equal(again.seeded, false, "an existing notes.md is not seeded again");
+  assert.equal(await readFile(notesFile(id), "utf8"), "REVIEWER-PAD: mine now");
+});
+
+test("a record that predates the split gets its own rules and pad on the boot pass, once", async (t) => {
+  const rules = [rule("r1", "answer in one line"), rule("r2", "deploy after the suite")];
+  const assistants = [
+    { id: PRIMARY_ASSISTANT, name: "Assistant #1", roleId: "agent-manager", threadId: ASSISTANT_THREAD, rules: [], createdAt: iso() },
+    { id: "assistant-2", name: "Assistant #2", roleId: "agent-manager", threadId: threadFor("assistant-2"), rules: [], createdAt: iso(1) },
+    { id: "assistant-3", name: "Assistant #3", roleId: "agent-manager", threadId: threadFor("assistant-3"), rules: [], createdAt: iso(2) },
+  ];
+  const { assistant, notesFile } = await panel(t, { notes: SHARED, rules, assistants });
+  assert.deepEqual(assistant.assistants.map((a) => a.id), [PRIMARY_ASSISTANT, "assistant-2", "assistant-3"]);
+
+  // The copy is per assistant, and #1's list is the one it always was.
+  for (const id of [PRIMARY_ASSISTANT, "assistant-2", "assistant-3"]) {
+    assert.deepEqual(assistant.rulesFor(id).map((r) => r.text), ["answer in one line", "deploy after the suite"], `${id} carries the standing rules`);
+    assert.ok(assistant.preamble(id).includes("deploy after the suite"), `${id}'s preamble carries them`);
+  }
+  assert.deepEqual(assistant.rules.map((r) => r.id), ["r1", "r2"], "#1's rule ids did not move");
+  // Each copy owns its ids, so deleting one from #2 is not deleting #1's.
+  for (const id of ["assistant-2", "assistant-3"]) {
+    assert.notDeepEqual(assistant.rulesFor(id).map((r) => r.id), ["r1", "r2"], `${id}'s copy has its own ids`);
+  }
+  const second = assistant.rulesFor("assistant-2");
+  assistant.removeRuleFor("assistant-2", second[0].id);
+  assert.deepEqual(assistant.rulesFor("assistant-2").map((r) => r.text), ["deploy after the suite"], "the removal is #2's alone");
+  assert.deepEqual(assistant.rulesFor(PRIMARY_ASSISTANT).map((r) => r.text), ["answer in one line", "deploy after the suite"], "#1's list is untouched");
+  assert.deepEqual(assistant.rulesFor("assistant-3").map((r) => r.text), ["answer in one line", "deploy after the suite"], "#3's copy is untouched");
+
+  // Idempotent: a second boot pass does not copy the rule back, because the record is stamped as seeded.
+  assistant.loadAssistantRules();
+  assert.deepEqual(assistant.rulesFor("assistant-2").map((r) => r.text), ["deploy after the suite"]);
+  // The pad seed is create-only too: a written pad survives a second pass.
+  assistant.setNotesFor("assistant-3", "THIRD-PAD");
+  assistant.loadNotes();
+  assert.equal(await readFile(notesFile("assistant-3"), "utf8"), "THIRD-PAD");
+  assert.equal(await readFile(notesFile("assistant-2"), "utf8"), SHARED, "and the untouched one is still the seeded text");
 });
 
 test("the Pad-tab save writes the assistant it was made for, and nothing else", async (t) => {
@@ -102,8 +153,9 @@ test("each assistant's preamble carries its OWN scratchpad — the eviction the 
   const { assistant } = await panel(t, { notes: long });
   const id = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
 
-  const empty = assistant.preamble(id);
-  assert.match(empty, /Scratchpad \(empty\):/, "a new assistant's pad says it is empty rather than borrowing #1's");
+  // Seeded from the shared text, #2's first turn reads it — and after its first write, only its own line. The
+  // share is the ONE copy; the eviction was every later turn reading the same clipped tail forever.
+  assert.match(assistant.preamble(id), /shared line/, "the new assistant starts from the seeded text");
 
   assistant.setNotesFor(id, "REVIEWER-PAD");
   const mine = assistant.preamble(id);
@@ -116,15 +168,23 @@ test("each assistant's preamble carries its OWN scratchpad — the eviction the 
 
 test("a NOTE lands in the pad of the assistant whose turn wrote it", async (t) => {
   const { assistant, notesFile } = await panel(t, { notes: SHARED });
-  const id = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const two = assistant.createAssistant({ roleId: "agent-manager", name: "Reviewer" }).created.id;
+  const three = assistant.createAssistant({ roleId: "agent-manager", name: "Auditor" }).created.id;
+  assert.deepEqual([two, three], ["assistant-2", "assistant-3"]);
 
-  await assistant.applyActions(turnOf(assistant, id), parseActions("NOTE: the reviewer prefers the short diff"));
-  assert.match(await readFile(notesFile(id), "utf8"), /reviewer prefers the short diff/, "#2's NOTE is in #2's pad");
+  await assistant.applyActions(turnOf(assistant, two), parseActions("NOTE: the reviewer prefers the short diff"));
+  assert.match(await readFile(notesFile(two), "utf8"), /reviewer prefers the short diff/, "#2's NOTE is in #2's pad");
   assert.ok(!assistant.notesFor(PRIMARY_ASSISTANT).includes("reviewer prefers"), "and not in #1's");
+  assert.ok(!(await readFile(notesFile(three), "utf8")).includes("reviewer prefers"), "and not in #3's");
+
+  await assistant.applyActions(turnOf(assistant, three), parseActions("NOTE: the auditor wants the raw log"));
+  assert.match(await readFile(notesFile(three), "utf8"), /auditor wants the raw log/, "#3's NOTE is in #3's pad");
+  assert.ok(!(await readFile(notesFile(two), "utf8")).includes("auditor wants"), "and not in #2's");
 
   await assistant.applyActions({ id: "turn-1", thread: ASSISTANT_THREAD }, parseActions("NOTE: the primary prefers a queue row"));
   assert.match(assistant.notesFor(PRIMARY_ASSISTANT), /primary prefers a queue row/, "#1's NOTE is still #1's string");
-  assert.ok(!(await readFile(notesFile(id), "utf8")).includes("primary prefers"), "and did not leak into #2's file");
+  assert.ok(!(await readFile(notesFile(two), "utf8")).includes("primary prefers"), "and did not leak into #2's file");
+  assert.ok(!(await readFile(notesFile(three), "utf8")).includes("primary prefers"), "nor into #3's");
 });
 
 test("a watch is stamped with the assistant whose turn created it", async (t) => {
@@ -242,23 +302,23 @@ const TWO_WATCHES = [
   { id: "w2", thread: "wtgui-worker-2", title: "the review lands", assistantId: "assistant-2", state: "watching" },
 ];
 
-test("the Watches tab lists the selected assistant's watches first, and the others under their own heading", () => {
+test("the Watches tab is filtered to the selected assistant", () => {
   const forTwo = watchesPane({ who: "assistant-2", watches: TWO_WATCHES });
-  assert.ok(forTwo.indexOf("the review lands") < forTwo.indexOf("the deploy finishes"), "#2's watch is the list; #1's is below it");
-  assert.match(forTwo, /Kept by the other assistants/, "the other assistants' watches are still shown");
-  assert.match(forTwo, /kept by Assistant #1/, "and the row says whose it is");
+  assert.match(forTwo, /the review lands/, "#2's tab has #2's watch");
+  assert.doesNotMatch(forTwo, /data-as-unwatch="w1"/, "#1's watch is on #1's tab, not #2's");
+  assert.doesNotMatch(forTwo, /Kept by the other assistants/, "the tab is one assistant's list, not a combined one");
   assert.match(forTwo, /Assistant #2 will be told when that thread finishes/, "the add form names who will be told");
   assert.doesNotMatch(forTwo, /Nothing on Assistant #2's watchlist/, "a list with a row in it is not empty");
 
   const forOne = watchesPane({ who: "assistant-1", watches: TWO_WATCHES });
-  assert.ok(forOne.indexOf("the deploy finishes") < forOne.indexOf("the review lands"), "#1's tab leads with #1's watch");
-  assert.match(forOne, /kept by Assistant #2/, "and #2's is labelled in the section below");
+  assert.match(forOne, /the deploy finishes/, "#1's tab has #1's watch");
+  assert.doesNotMatch(forOne, /data-as-unwatch="w2"/, "and not #2's");
 });
 
-test("an assistant with nothing of its own says so, without hiding the others", () => {
+test("an assistant with nothing of its own says so", () => {
   const html = watchesPane({ who: "assistant-1", watches: [TWO_WATCHES[1]] });
   assert.match(html, /Nothing on Assistant #1's watchlist/, "the empty list is #1's, in its own words");
-  assert.match(html, /Kept by the other assistants/, "and #2's watch is still on the tab");
+  assert.doesNotMatch(html, /data-as-unwatch="w2"/, "and #2's watch is not drawn in #1's list");
 });
 
 // The pad region: #1 reads the state's string, an extra assistant reads its own file through the route.

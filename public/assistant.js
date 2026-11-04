@@ -1186,10 +1186,9 @@
 
   // ---- watches --------------------------------------------------------------------------------
 
-  // One row of the watchlist. `owner` is drawn only in the OTHER assistants' section: a row in the selected
-  // assistant's own list is already labelled by the section it sits in, and repeating the name on every line is
-  // noise the reader has to read past.
-  function watchRowHtml(w, { owner = false } = {}) {
+  // One row of the watchlist. The list is already filtered to one assistant, so the row does not repeat whose it is:
+  // the section (and the session tab above it) says that once.
+  function watchRowHtml(w) {
     // A watch with a deadline carries a live clock, not a fixed "deadline 30m": the number that matters is
     // how long is left, and the bar is that number running out. Both are painted in place by
     // paintWatchClocks() once a second — a re-render per tick would take the reader's scroll and selection.
@@ -1204,16 +1203,15 @@
           : `<span class="as-until">no deadline</span>`;
     return `<div class="as-row${w.state === "done" ? " is-done" : ""}">
           <button class="as-thread" data-as-open="${esc(w.thread)}" type="button">${esc(assistantThreadName(w.thread))}</button>
-          <span class="as-what">${esc(w.title)}${w.doneWhen ? `<span class="as-hint"> · done when ${esc(w.doneWhen)}</span>` : ""}${owner ? `<span class="as-hint"> · kept by ${esc(sessionById(w.assistantId)?.name || w.assistantId || FIRST_ASSISTANT)}</span>` : ""}</span>
+          <span class="as-what">${esc(w.title)}${w.doneWhen ? `<span class="as-hint"> · done when ${esc(w.doneWhen)}</span>` : ""}</span>
           ${clock}
           <button type="button" data-as-unwatch="${esc(w.id)}" title="stop watching this">✕</button>
         </div>`;
   }
 
-  // The Watches tab is ONE list on the panel, read by owner: the assistant the tab is showing gets the list and the
-  // add form, and every other assistant's watches sit under their own heading below it. Nothing is hidden — a watch
-  // the reader set from #2's tab is still visible from #1's, one line down, with whose it is written on the row —
-  // because a watch that vanishes when the tab moves is a notice the reader cannot find again.
+  // The Watches tab is ONE assistant's list: the watches it set itself (its turn's WATCH line, its spawned workers)
+  // and the ones the reader added from its tab. A watch made by #2 is on #2's tab, not here — the owner is stamped on
+  // the record, so switching session tab switches the list. The add form makes the watch for the tab it is on.
   function renderAssistantWatches(force = false) {
     const host = as$("as-watches");
     if (!host || !state.assistant) return;
@@ -1225,22 +1223,10 @@
     const owner = sessionById(who);
     const name = owner?.name || "Assistant #1";
     const mine = watches.filter((w) => (w.assistantId || FIRST_ASSISTANT) === who);
-    const others = watches.filter((w) => (w.assistantId || FIRST_ASSISTANT) !== who);
-    // The other assistants' watches, grouped by who is keeping them.
-    const groups = new Map();
-    for (const w of others) {
-      const id = w.assistantId || FIRST_ASSISTANT;
-      if (!groups.has(id)) groups.set(id, []);
-      groups.get(id).push(w);
-    }
-    const elsewhere = [...groups.entries()]
-      .map(([id, list]) => `<div class="as-help">${esc(sessionById(id)?.name || id)} — ${list.length} watch${list.length === 1 ? "" : "es"}</div>${list.map((w) => watchRowHtml(w, { owner: true })).join("")}`)
-      .join("");
     const options = conversations()
       .map((c) => `<option value="${esc(c.thread)}">${esc(String(c.latest.label || c.latest.title || c.thread).slice(0, 60))}</option>`)
       .join("");
-    host.innerHTML = `${mine.map((w) => watchRowHtml(w)).join("") || `<div class="as-empty">Nothing on ${esc(name)}'s watchlist. Tell it in Chat (“keep an eye on…”), or add one here.</div>`}
-      ${elsewhere ? `<div class="as-group"><h4>Kept by the other assistants</h4>${elsewhere}</div>` : ""}
+    host.innerHTML = `${mine.map(watchRowHtml).join("") || `<div class="as-empty">Nothing on ${esc(name)}'s watchlist. Tell it in Chat (“keep an eye on…”), or add one here.</div>`}
       <div class="as-form">
         <div class="as-line">
           <select id="as-w-thread" title="which agent to watch">${options || '<option value="">(no agents yet)</option>'}</select>
@@ -1392,7 +1378,7 @@
 
   // ---- end scratchpad ---------------------------------------------------------------------------
 
-  // ---- the message board: what it sent them, and what they sent back ------------------------------
+  // ---- messages ------------------------------------------------------------------------------
 
   // The board is the whole seven-day conversation, so it is NOT in the polled state (which is re-sent on
   // every board event): this pane reads it from its own route, and re-reads it on the panel's refresh
@@ -1407,6 +1393,11 @@
   let msgAt = 0;
   let msgTried = false;
   let msgDir = "all"; // the in-tab chip: all | out | in
+  // WHOSE messages to show. "all" is the default and hides nothing: every entry the window holds, from every
+  // assistant, is on the tab until the reader narrows it. A named id is that assistant's split — the session chip
+  // beside it. This is a CLIENT filter over the one answer the server sends, so the counts and the entry set cannot
+  // disagree about what "all" means.
+  let msgWho = "all"; // all | assistant-1 | assistant-2 | …
   const msgOpen = new Set(); // entries the reader expanded — a repaint must not fold them back up
 
   async function loadMessages(force = false) {
@@ -1558,20 +1549,51 @@
     }
     const scroller = host.closest(".as-body");
     const keepScroll = scroller ? scroller.scrollTop : 0;
+    // Every entry the board holds, with its owner made explicit. The server stamps each one; a payload from an
+    // older panel (or a direct caller of buildMessages) reads as Assistant #1's, which is what absence meant.
+    const all = (b.groups || []).flatMap((g) => g.entries.map((e) => ({ ...e, assistantId: e.assistantId || FIRST_ASSISTANT })));
+    const ids = assistantIds();
+    if (msgWho !== "all" && !ids.includes(msgWho)) msgWho = "all";
+    const nameOfId = (id) => sessionById(id)?.name || (id === FIRST_ASSISTANT ? "Assistant #1" : id);
+    // The one assistant the tab is narrowed to, or the whole board for "all". Both the rows and the counts are read
+    // off this list, so a chip's number is the number of rows pressing it will show.
+    const inWho = msgWho === "all" ? all : all.filter((e) => e.assistantId === msgWho);
     const dirs = ["all", "out", "in"];
     const dirLabel = { all: "All", out: "Sent", in: "Received" };
-    const dirCount = { all: b.shown, out: b.counts?.out ?? 0, in: b.counts?.in ?? 0 };
+    const dirCount = {
+      all: inWho.length,
+      out: inWho.filter((e) => e.dir === "out").length,
+      in: inWho.filter((e) => e.dir === "in").length,
+    };
     const groups = (b.groups || [])
-      .map((g) => ({ ...g, entries: msgDir === "all" ? g.entries : g.entries.filter((e) => e.dir === msgDir) }))
+      .map((g) => ({
+        ...g,
+        entries: g.entries
+          .map((e) => ({ ...e, assistantId: e.assistantId || FIRST_ASSISTANT }))
+          .filter((e) => (msgDir === "all" || e.dir === msgDir) && (msgWho === "all" || e.assistantId === msgWho)),
+      }))
       .filter((g) => g.entries.length);
     const shown = groups.reduce((n, g) => n + g.entries.length, 0);
     const chips = dirs
       .map((d) => `<button type="button" data-as-msgdir="${d}" aria-pressed="${msgDir === d ? "true" : "false"}" class="${msgDir === d ? "is-on" : ""}" title="${d === "all" ? "both directions, thread by thread" : d === "out" ? "what the assistant (or the panel) sent them" : "what they sent back"}">${dirLabel[d]} <span class="as-n">${dirCount[d]}</span></button>`)
       .join("");
+    // The assistant chips: "All" is first and on by default, so opening the tab hides nothing. Each named chip is
+    // that assistant's own split — the run's stamp, the thread's owner, then #1 — over the same one payload.
+    const whoCount = { all: all.length };
+    for (const id of ids) whoCount[id] = 0;
+    for (const e of all) whoCount[e.assistantId] = (whoCount[e.assistantId] || 0) + 1;
+    const whoChips = ["all", ...ids]
+      .map((id) => {
+        const label = id === "all" ? "All assistants" : nameOfId(id);
+        const title = id === "all" ? "every assistant's messages — nothing is hidden in this view" : `only ${label}'s messages`;
+        return `<button type="button" data-as-msgwho="${esc(id)}" aria-pressed="${msgWho === id ? "true" : "false"}" class="${msgWho === id ? "is-on" : ""}" title="${esc(title)}">${esc(label)} <span class="as-n">${whoCount[id] ?? 0}</span></button>`;
+      })
+      .join("");
     const windowLine = `<div class="as-msg-bar">
       <span class="as-msg-window" title="the window is fixed at seven days, computed from each message's own timestamp — nothing older is shown here, whatever the store still holds">the last ${b.windowDays} days</span>
       <span class="as-hint">since ${esc(new Date(b.since).toLocaleString())}</span>
       <span class="as-hint">${b.shown} entr${b.shown === 1 ? "y" : "ies"} in ${b.counts?.threads ?? 0} thread${(b.counts?.threads ?? 0) === 1 ? "" : "s"} · ${b.counts?.out ?? 0} sent · ${b.counts?.in ?? 0} received</span>
+      <span class="as-hint">${msgWho === "all" ? "every assistant, nothing hidden" : `narrowed to ${esc(nameOfId(msgWho))} — ${shown} of ${b.shown}`}</span>
       <span class="as-hint" title="what the view was built from: the runs this panel still holds, and the assistant's own journal. An entry the store no longer holds is marked 'from the journal' where it appears.">from ${b.counts?.jobs ?? 0} runs and ${b.counts?.journal ?? 0} journal lines${b.counts?.fromJournal ? ` · ${b.counts.fromJournal} journal-only` : ""}</span>
     </div>`;
     const capLine = b.capped
@@ -1579,15 +1601,21 @@
       : "";
     let list;
     if (!shown) {
-      list = msgDir === "all"
-        ? `<div class="as-empty">Nothing in the last ${b.windowDays} days (since ${esc(new Date(b.since).toLocaleString())}). The panel holds ${b.counts?.jobs ?? 0} run${(b.counts?.jobs ?? 0) === 1 ? "" : "s"} and the assistant's journal ${b.counts?.journal ?? 0} line${(b.counts?.journal ?? 0) === 1 ? "" : "s"}, and not one of them is a message newer than that — an empty tab here is not an empty board.</div>`
-        : `<div class="as-empty">No ${msgDir === "out" ? "sent" : "received"} messages in the last ${b.windowDays} days. ${b.shown} message${b.shown === 1 ? "" : "s"} exist in this window in the other direction. <button type="button" data-as-msgdir="all">Show all</button></div>`;
+      if (msgWho !== "all") {
+        list = `<div class="as-empty">Nothing from ${esc(nameOfId(msgWho))} in the last ${b.windowDays} days${msgDir === "all" ? "" : ` (${msgDir === "out" ? "sent" : "received"})`}. The whole board is still on this tab — nothing is hidden behind this view. <button type="button" data-as-msgwho="all">Show all assistants</button></div>`;
+      } else if (msgDir !== "all") {
+        list = `<div class="as-empty">No ${msgDir === "out" ? "sent" : "received"} messages in the last ${b.windowDays} days. ${b.shown} message${b.shown === 1 ? "" : "s"} exist in this window in the other direction. <button type="button" data-as-msgdir="all">Show all</button></div>`;
+      } else {
+        list = `<div class="as-empty">Nothing in the last ${b.windowDays} days (since ${esc(new Date(b.since).toLocaleString())}). The panel holds ${b.counts?.jobs ?? 0} run${(b.counts?.jobs ?? 0) === 1 ? "" : "s"} and the assistant's journal ${b.counts?.journal ?? 0} line${(b.counts?.journal ?? 0) === 1 ? "" : "s"}, and not one of them is a message newer than that — an empty tab here is not an empty board.</div>`;
+      }
     } else {
       list = groups.map(msgGroupHtml).join("");
     }
-    host.innerHTML = `${windowLine}${capLine}<div class="as-msg-chips" role="group" aria-label="which direction to show">${chips}</div>${list}`;
+    host.innerHTML = `${windowLine}${capLine}<div class="as-msg-people" role="group" aria-label="whose messages to show">${whoChips}</div><div class="as-msg-chips" role="group" aria-label="which direction to show">${chips}</div>${list}`;
     if (scroller) scroller.scrollTop = keepScroll;
   }
+
+  // ---- end messages ---------------------------------------------------------------------------
 
   // ---- the role: the job an assistant runs, and the charter it carries --------------------------
 
@@ -3656,8 +3684,13 @@
     // Tabs are buttons too and are handled above, in their own rows; ignore a second pass here.
     if (t.dataset.asTab || t.dataset.asSubtab) return;
 
-    // The message board's own two controls: the direction chips, and an entry's expander. Neither is a
-    // round trip — the board is already on the page — so both are a repaint of this pane alone.
+    // The message board's own controls: whose messages, which direction, and an entry's expander. None is a
+    // round trip — the board is already on the page — so all three are a repaint of this pane alone.
+    if (t.dataset.asMsgwho) {
+      msgWho = t.dataset.asMsgwho;
+      renderAssistantMessages();
+      return;
+    }
     if (t.dataset.asMsgdir) {
       msgDir = t.dataset.asMsgdir;
       renderAssistantMessages();
@@ -3877,7 +3910,8 @@
         // The save goes to the assistant the pad is showing. #1 keeps its store's string; an extra assistant writes
         // its own notes.md, and the answer carries the text it actually kept (the cap trims the oldest lines).
         const d = await asPost("/api/assistant/notes", { text, assistantId: who });
-        if (who !== FIRST_ASSISTANT) padNotes.set(who, { ...d, at: Date.now() });
+        // The answer carries the whole assistant state beside the pad; the cache keeps only the pad.
+        if (who !== FIRST_ASSISTANT) padNotes.set(who, { ...d, assistant: undefined, at: Date.now() });
         renderAssistantPad(true);
       } catch (err) {
         setErr("as-pad-err", err.message);

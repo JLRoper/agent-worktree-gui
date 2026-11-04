@@ -67,6 +67,10 @@ async function board(t, { rows = [], stop = null } = {}) {
   t.after(async () => {
     if (assistant.wakeTimer) clearTimeout(assistant.wakeTimer);
     if (assistant.timer) clearInterval(assistant.timer);
+    // The store's debounce is a 400 ms timer and this test's own wait is 300: left armed it fires WHILE the directory
+    // is being removed, and Windows answers `ENOTEMPTY: directory not empty` — a red run that says nothing about the
+    // ladder. Clear it before the rm, the same way the two clocks above are cleared.
+    if (assistant.persistTimer) clearTimeout(assistant.persistTimer);
     await rm(dir, { recursive: true, force: true });
   });
   return { assistant, said, stopped, rows, stop };
