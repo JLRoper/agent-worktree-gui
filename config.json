@@ -26,7 +26,8 @@
   "matrix": {
     "scriptPath": "C:/Users/roper/matrix-hermes-bridge/hermes_matrix_bridge.py",
     "pythonPath": "C:/Users/roper/matrix-hermes-bridge/.venv/Scripts/python.exe",
-    "roomId": ""
+    "roomId": "!MhEkAdgpCRtqFDHyxy0O4wY1QAsTo5U0s8WyKV1IhyY",
+    "autoStart": true
   },
   "remoteBranchPolicy": "local-only",
   "defaultTurnover": null,

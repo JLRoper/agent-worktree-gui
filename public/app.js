@@ -21474,18 +21474,29 @@ function paintMatrix(note = "", bad = false) {
   const roomEl = $("matrix-room");
   if (roomEl) {
     const bits = [
-      s.roomId ? `room ${s.roomId}` : "room not set — add matrix.roomId to config.json (the bridge keeps its own in bridge.env, which this panel never reads)",
+      s.roomId ? `room ${s.roomId}` : "NO ROOM SET — Start and Run self-test refuse until the Room field below has an !id:server address",
       s.credentialsPresent ? "bridge.env present" : "bridge.env missing — the bridge will refuse to log in",
+      s.autoStart ? "auto-start with the panel on" : "auto-start with the panel off",
     ];
     if (s.running) bits.push(`pid ${s.pid}`);
     else if (s.stalePid) bits.push(`pid ${s.stalePid} is stale — a stale record is not a running bridge`);
+    if (s.boot && s.boot.note) bits.push(`boot: ${s.boot.note}`);
     roomEl.textContent = bits.join(" · ");
     roomEl.title = roomEl.textContent;
   }
-  const scriptEl = $("matrix-script");
-  if (scriptEl) {
-    scriptEl.textContent = `script ${s.scriptPath || "(not set)"}${s.scriptPath && !s.scriptPresent ? "  — not on disk" : ""}\ninterpreter ${s.pythonPath || "(not set)"}${s.pythonPath && !s.pythonPresent ? "  — not on disk" : ""}\npid file ${s.pidFile || "(not derived)"} · log ${s.logFile || "(not derived)"}`;
-    scriptEl.title = "the two paths config.json's matrix block names, and the panel's own pid file and log. Read-only: nothing on this tab writes any of them.";
+  // The four fields the save route owns. A focused input is never overwritten under the reader's cursor, and the
+  // save's answer is this same state, so a repaint after a save shows what the server actually stored.
+  const fields = { "matrix-script-path": s.scriptPath, "matrix-python-path": s.pythonPath, "matrix-room-id": s.roomId };
+  for (const [id, value] of Object.entries(fields)) {
+    const el = $(id);
+    if (el && document.activeElement !== el) el.value = value || "";
+  }
+  const auto = $("matrix-autostart");
+  if (auto) auto.checked = Boolean(s.autoStart);
+  const pathsEl = $("matrix-paths");
+  if (pathsEl) {
+    pathsEl.textContent = `pid file ${s.pidFile || "(not derived)"} · log ${s.logFile || "(not derived)"}`;
+    pathsEl.title = "The panel's own pid file and log. The four fields above are the only matrix settings this page writes; these two paths are derived from the panel's state folder.";
   }
   const start = $("btn-matrix-start");
   if (start) {
@@ -21499,7 +21510,9 @@ function paintMatrix(note = "", bad = false) {
             ? "no interpreter configured — set matrix.pythonPath in config.json"
             : !s.pythonPresent
               ? `the interpreter is not at ${s.pythonPath} — set matrix.pythonPath in config.json`
-              : null;
+              : !s.roomId
+                ? "no room set — put the bridge's room in the Room field below (an !id:server address) and press Save"
+                : null;
     start.disabled = Boolean(why) || Boolean(matrixBusy);
     start.title = why ? `${matrixTitle("btn-matrix-start")} — UNAVAILABLE: ${why}` : matrixTitle("btn-matrix-start");
   }
@@ -21527,10 +21540,14 @@ function paintMatrix(note = "", bad = false) {
       : st.ok === false
         ? `self-test FAILED${st.exitCode == null ? "" : ` — exit ${st.exitCode}`}`
         : "self-test has not been run in this panel — press Run self-test";
-    preview.textContent = bad ? `NOT DONE — ${note}` : note ? `${note}\n${summary}` : summary;
+    // A boot spawn that failed is the one line this block must never swallow: it happened before the page was
+    // open, so nothing else would ever say it.
+    const bootLine = s.boot && s.boot.error ? `AUTO-START FAILED at boot — ${s.boot.error}` : "";
+    const head = bad ? `NOT DONE — ${note}` : note ? `${note}\n${summary}` : summary;
+    preview.textContent = [bootLine, head].filter(Boolean).join("\n");
     if (st.output) preview.textContent += `\n${st.output}`;
-    preview.classList.toggle("bad", Boolean(bad) || st.ok === false);
-    preview.title = "The last --self-test this panel ran, and everything it printed.";
+    preview.classList.toggle("bad", Boolean(bad) || st.ok === false || Boolean(s.boot && s.boot.error));
+    preview.title = "The last --self-test this panel ran, everything it printed, and a boot spawn that failed.";
   }
   const logEl = $("matrix-log");
   if (logEl) {
@@ -21580,6 +21597,44 @@ async function matrixPress(route, busy, timeoutMs = 20000) {
   } finally {
     // A throw after the busy flag was cleared must not leave the buttons dead.
     if (!settled) matrixBusy = "";
+  }
+}
+
+// The save the four fields write through. One POST, one answer: the route replies with the GET shape, so the block
+// repaints from what the server stored rather than from what was typed. A refusal (a field the route does not
+// accept, a config.json another process holds open) keeps the typed values on screen with the reason beside them,
+// because silently reverting a field the reader just edited is how a save gets pressed twice.
+async function matrixSave() {
+  if (matrixBusy) return;
+  // Read the four fields BEFORE the busy repaint. paintMatrix() refills every input from the last state the server
+  // sent, and pressing this button has already moved the focus off them — reading after that repaint would save what
+  // the panel already had and silently drop the edit. (Measured in a browser probe: the room field was cleared, Save
+  // was pressed, and the answer came back with the old room.)
+  const body = {
+    scriptPath: $("matrix-script-path")?.value ?? "",
+    pythonPath: $("matrix-python-path")?.value ?? "",
+    roomId: $("matrix-room-id")?.value ?? "",
+    autoStart: Boolean($("matrix-autostart")?.checked),
+  };
+  matrixBusy = "saving…";
+  paintMatrix();
+  try {
+    const r = await apiFetch("/api/settings/matrix", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json().catch(() => ({}));
+    matrixBusy = "";
+    if (typeof d.running === "boolean") matrixState = d;
+    if (!r.ok) {
+      paintMatrix(d.error || `HTTP ${r.status}`, true);
+      return;
+    }
+    paintMatrix(d.note || "saved");
+  } catch (e) {
+    matrixBusy = "";
+    paintMatrix(e.message, true);
   }
 }
 
@@ -22623,6 +22678,17 @@ $("btn-matrix-start")?.addEventListener("click", () => void matrixPress("/api/se
 $("btn-matrix-stop")?.addEventListener("click", () => void matrixPress("/api/settings/matrix/stop", "stopping…", 30000));
 // The self-test runs a whole Python process whose own budget is 45 s, so the page's deadline is longer than it.
 $("btn-matrix-test")?.addEventListener("click", () => void matrixPress("/api/settings/matrix/test", "running self-test…", 60000));
+// The four settings fields save through the one route, which answers with the read's own shape so the block
+// repaints from what was stored. Enter in any of them saves too: the row is a form in everything but markup.
+$("btn-matrix-save")?.addEventListener("click", () => void matrixSave());
+for (const id of ["matrix-script-path", "matrix-python-path", "matrix-room-id"]) {
+  $(id)?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void matrixSave();
+    }
+  });
+}
 $("btn-session-limit-save")?.addEventListener("click", () => void saveSessionSetting());
 $("btn-provider-save")?.addEventListener("click", () => void saveProviderSetting());
 $("btn-provider-clear")?.addEventListener("click", (e) => void clearProviderKey(e.currentTarget));

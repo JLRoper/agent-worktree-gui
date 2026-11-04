@@ -57,7 +57,7 @@ import { errorStatus } from "./lib/errors.js";
 import { readSkillsIndex } from "./lib/skills.js";
 // The Matrix bridge's process lifecycle (start / stop / liveness / one --self-test). The protocol itself is the
 // standalone Python program's; this module only ever owns a child process, its pid file and its log.
-import { MatrixBridge, matrixConfig } from "./lib/matrix-bridge.js";
+import { MatrixBridge, matrixBlock, matrixConfig, matrixPatchFrom } from "./lib/matrix-bridge.js";
 import { readPermissions } from "./lib/gateway-permissions.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
@@ -1002,8 +1002,9 @@ const settingsOut = () => ({
 });
 
 // The Matrix bridge the Gateway tab owns. One instance, constructed once: the pid file, the log and the last
-// `--self-test` are facts about THIS process's child, so a second object would be a second truth. Nothing above
-// touches it — the bridge is never started at boot.
+// `--self-test` are facts about THIS process's child, so a second object would be a second truth. Its boot spawn
+// is fired from the listen callback below, once the port is bound — the panel comes up first, and a bridge that
+// cannot start surfaces as `state().boot` on the Gateway tab rather than in a log line nobody reads.
 const matrixBridge = new MatrixBridge({ config, onLog: log });
 
 const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
@@ -2705,13 +2706,39 @@ const server = createServer(async (req, res) => {
 
     // ---- the Matrix bridge: a process this panel starts and stops ------------------------------
     // The bridge is a standalone Python program (Matrix sync + E2EE + the Hermes CLI), with its credentials in
-    // bridge.env beside it. These four routes are the whole of the panel's involvement. Nothing here opens that
+    // bridge.env beside it. These routes are the whole of the panel's involvement. Nothing here opens that
     // file: `credentialsPresent` is whether it exists, and no answer carries a value from it.
     //
     // Liveness is the OS's answer for the pid this panel recorded, never the pid file's existence — a record
     // outlives the process it names (a crash, a reboot), and a stale one must never read as a running bot.
     if (route === "/api/settings/matrix" && req.method === "GET") {
       return sendJson(res, 200, matrixBridge.state());
+    }
+
+    // The four fields beside Start/Stop write through here. It accepts ONLY the keys lib/matrix-bridge.js names
+    // (scriptPath, pythonPath, roomId, autoStart) and writes ONLY those into config.json's `matrix` block — a
+    // `password` in the body is ignored and has nowhere to reappear, because the answer is the GET shape and the
+    // written block is the whitelist. An empty roomId is saved as "no room set": start and self-test refuse loudly
+    // rather than launching the bridge into nothing.
+    if (route === "/api/settings/matrix" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const { values, error } = matrixPatchFrom(body);
+      if (error) return sendJson(res, 400, { ...matrixBridge.state(), error });
+      const next = matrixBlock(config.matrix, values);
+      try {
+        await patchPanelConfig({ matrix: next });
+      } catch (e) {
+        return sendJson(res, 500, { ...matrixBridge.state(), error: `could not write config.json: ${String((e && e.message) || e)}` });
+      }
+      // The running panel answers from the same object the file now holds: a GET straight after the save reads the
+      // new room, and the next boot spawn uses it too.
+      config.matrix = next;
+      log(`matrix bridge settings saved: script ${next.scriptPath || "(none)"} | interpreter ${next.pythonPath || "(none)"} | room ${next.roomId || "(none)"} | auto-start ${next.autoStart ? "on" : "off"}`);
+      return sendJson(res, 200, {
+        ...matrixBridge.state(),
+        note: `saved — ${next.roomId ? `room ${next.roomId}` : "no room set, so Start and Run self-test will refuse"} · auto-start ${next.autoStart ? "on" : "off"}`,
+      });
     }
 
     if (route === "/api/settings/matrix/start" && req.method === "POST") {
@@ -5689,6 +5716,12 @@ server.once("error", onListenError);
 server.listen(config.port, config.host, () => {
   server.off("error", onListenError);
   log(`agent-worktree-gui on http://${config.host}:${config.port}`);
+  // The bridge's boot spawn (matrix.autoStart, on by default) — fired, never awaited: the panel must come up even
+  // when the bridge cannot, and a failure is kept in state().boot for the Gateway tab instead of ending a
+  // background promise in silence.
+  void matrixBridge.autoStart().then((boot) => {
+    if (boot && boot.note) log(`matrix bridge at boot: ${boot.note}`);
+  }).catch((e) => log(`matrix bridge auto-start threw: ${String((e && e.message) || e)}`));
   log(`static build ${buildAtBoot.version || "(unversioned)"} — ${Object.keys(buildAtBoot.files).length} file(s) hashed; the shell is no-store, its assets carry ?v= and are cached hard`);
   // Binding off loopback is a deliberate act, so say out loud what it opens and whether the token that
   // guards it is there at all. Reads are still open to anyone who can reach the port.
