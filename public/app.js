@@ -18207,6 +18207,531 @@ try {
   applyZoom(100, { save: false });
 }
 
+// ---- deliverables: one button, one list, everything an agent handed back -------------------------
+// A worker hands something back with one line in its FINAL message — `DELIVER <kind> <target> | <title>` — and
+// the panel reads it at settle (lib/deliverables.js), validates that the target is openable NOW, and keeps one row
+// per target. This is the reader's way in: one header button beside HUMAN, and one popover listing every
+// deliverable this panel has recorded, newest first, each row carrying its age. The plan is
+// docs/plan/deliverables-handback.md and its five DECIDED choices are what this block implements: the word
+// DELIVERABLES; one row updated in place (so the page paints the store, never a second row); a malformed line said
+// on the card only (so nothing here invents a row); an image as a glyph plus the OS viewer, with NO new route (Q4);
+// and the paragraph on every tree turn (the backend's half).
+//
+// NO ROUTE OF ITS OWN. A link, a file and an image all open through POST /api/deliverables/open {seq}: the page
+// never sends a path back, so a stray string cannot launch an arbitrary file, and an image needs no thumbnail
+// route to be openable. The title points at the thing; the row points at the AGENT that delivered it — a mis-click
+// in a 200-row list opens a console (cheap, reversible) rather than a browser window (not).
+//
+// WHAT THIS REACHES OUT FOR, by name at call time (all page globals): $, esc, tailPath, keyOf, fmtAgo
+// (core/dom-format.js), apiFetch (core/transport.js), state, conversations, renderConversation, renderJobs,
+// assistantSessionFor, hotRowFor, hotOpenPath, flashHotCard, scrollCardUnderBar, showBanner, toggleProject,
+// humanTextEntry and TURNS_PER_PAGE (this file).
+
+const DELIVER_DEFAULT_CAP = 200;
+const deliver = {
+  el: null,        // the popover, built once and reused; the board repaint never owns it
+  open: false,
+  loading: false,
+  error: "",
+  entries: [],     // the store's order — newest first — untouched by this file
+  cap: DELIVER_DEFAULT_CAP,
+  kept: 0,
+  filter: "",
+  active: 0,       // index into the FILTERED rows, which is what the combobox drives
+  agesTimer: null,
+};
+
+// The popover, built once. A fixed panel under the button, in the shape `.artifacts-pop` already uses — the
+// panel's own idiom for a list that hangs off a control.
+function deliverPopEl() {
+  if (deliver.el && deliver.el.isConnected) return deliver.el;
+  const pop = document.createElement("div");
+  pop.id = "deliver-pop";
+  pop.className = "deliver-pop";
+  pop.hidden = true;
+  pop.setAttribute("role", "dialog");
+  pop.setAttribute("aria-label", "every deliverable produced on this panel, newest first");
+  pop.innerHTML = `
+    <div class="dl-head">
+      <span class="dl-count" id="dl-count">deliverables — newest first</span>
+      <input id="dl-filter" class="dl-filter" type="search" autocomplete="off" spellcheck="false" placeholder="filter…" role="combobox" aria-label="filter deliverables" aria-autocomplete="list" aria-controls="dl-list" aria-expanded="true" />
+      <button id="dl-close" type="button" class="dl-close" title="close (Esc)">✕</button>
+    </div>
+    <div class="dl-body" id="dl-list" role="listbox" aria-label="deliverables"></div>
+    <div class="dl-foot" id="dl-foot" hidden></div>
+  `;
+  document.body.append(pop);
+  deliver.el = pop;
+
+  pop.addEventListener("click", (e) => {
+    const t = e.target;
+    if (t.closest?.("[data-dl-retry]")) return void deliverFetch();
+    if (t.closest?.("#dl-close")) return closeDeliverPop({ focus: true });
+    const openTitle = t.closest?.("[data-dl-open]");
+    if (openTitle) return void deliverOpenTarget(Number(openTitle.dataset.dlOpen));
+    const openAgent = t.closest?.("[data-dl-agent]");
+    if (openAgent) return void deliverOpenAgent(Number(openAgent.dataset.dlAgent));
+    const row = t.closest?.(".dl-row");
+    if (row) return void deliverOpenAgent(Number(row.dataset.seq));
+  });
+
+  const filter = pop.querySelector("#dl-filter");
+  filter.addEventListener("input", (e) => {
+    deliver.filter = e.target.value;
+    deliver.active = 0;
+    paintDeliverRows();
+  });
+  filter.addEventListener("keydown", deliverKeydown);
+  // Tab is the way out: a header popover must not trap focus. Everything else is the filter's own handler.
+  pop.addEventListener("keydown", (e) => {
+    if (e.key === "Tab") closeDeliverPop();
+  });
+  return pop;
+}
+
+// The anchor is the header button, and the top bar is sticky, so its rect is the same wherever the page has
+// scrolled to — which is why this only has to run on open and on resize. The panel is WIDER than the button, so
+// it hangs from the button's right edge when that fits and from its left edge when it does not: a 560px popover
+// right-aligned to a button at x=440 started off the left of the screen (measured on the real page).
+function deliverPosition() {
+  const btn = $("btn-deliver");
+  const pop = deliver.el;
+  if (!btn || !pop) return;
+  const r = btn.getBoundingClientRect();
+  const w = pop.offsetWidth || Math.min(560, Math.round(window.innerWidth * 0.92));
+  const rightEdge = Math.round(r.right - w);
+  const wanted = rightEdge >= 8 ? rightEdge : Math.round(r.left);
+  const left = Math.max(8, Math.min(wanted, window.innerWidth - w - 8));
+  pop.style.top = `${Math.round(r.bottom + 6)}px`;
+  pop.style.left = `${left}px`;
+  pop.style.right = "auto";
+}
+
+function openDeliverPop() {
+  const pop = deliverPopEl();
+  pop.hidden = false; // before the measure: offsetWidth is 0 on a hidden element
+  deliverPosition();
+  deliver.open = true;
+  $("btn-deliver")?.setAttribute("aria-expanded", "true");
+  deliverHookStream();
+  // Paint what was last read immediately, then re-read: the list is an archive, and a stale row for a second is
+  // better than an empty popover. A failed read replaces it with the sentence, never a blank list.
+  paintDeliverRows();
+  void deliverFetch({ quiet: deliver.entries.length > 0 });
+  clearInterval(deliver.agesTimer);
+  deliver.agesTimer = setInterval(paintDeliverAges, 30_000);
+  requestAnimationFrame(() => $("dl-filter")?.focus({ preventScroll: true }));
+}
+
+function closeDeliverPop({ focus = false } = {}) {
+  if (!deliver.open && (!deliver.el || deliver.el.hidden)) return;
+  deliver.open = false;
+  if (deliver.el) deliver.el.hidden = true;
+  $("btn-deliver")?.setAttribute("aria-expanded", "false");
+  clearInterval(deliver.agesTimer);
+  deliver.agesTimer = null;
+  if (focus) $("btn-deliver")?.focus({ preventScroll: true });
+}
+
+function toggleDeliverPop() {
+  if (deliver.open) closeDeliverPop({ focus: true });
+  else openDeliverPop();
+}
+
+$("btn-deliver")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleDeliverPop();
+});
+
+// A second press of the button, an outside click, Esc, or a press of D closes it. mousedown, not click: the
+// reader's next click lands where they aimed, not on the popover that was covering it.
+document.addEventListener("mousedown", (e) => {
+  if (!deliver.open) return;
+  if (deliver.el?.contains(e.target)) return;
+  if (e.target.closest?.("#btn-deliver")) return; // the button's own click toggles
+  closeDeliverPop();
+});
+
+// Esc clears the filter if it has text, then closes and puts the reader back on the button.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !deliver.open) return;
+  const filter = $("dl-filter");
+  if (filter && filter.value) {
+    e.preventDefault();
+    filter.value = "";
+    deliver.filter = "";
+    deliver.active = 0;
+    paintDeliverRows();
+    filter.focus({ preventScroll: true });
+    return;
+  }
+  e.preventDefault();
+  closeDeliverPop({ focus: true });
+});
+
+// D is the list's key. It copies HUMAN's guard exactly — no modifiers, no e.repeat (holding the key must not
+// race the toggle), and a caret in ANY text field owns the keystroke, so a `d` typed into a reply box, a
+// Settings search or an answer box never jumps the page.
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key !== "d" && e.key !== "D") return;
+  if (e.repeat) return;
+  if (humanTextEntry(document.activeElement)) return;
+  e.preventDefault();
+  toggleDeliverPop();
+});
+
+window.addEventListener("resize", deliverPosition);
+
+// One SSE frame per delivery, so a list open in this tab (or another) gains its row without a reload. Attached to
+// the EventSource app.js already holds; EventSource reconnects on the same object, so one listener outlives a
+// dropped stream. The frame carries a summary only — the list is re-read from the store.
+function deliverHookStream() {
+  if (!state.es || state.es.__deliverableHook) return;
+  state.es.__deliverableHook = true;
+  state.es.addEventListener("deliverable", () => {
+    if (deliver.open) void deliverFetch({ quiet: true });
+  });
+}
+
+// The store writes itself newest-first and this file does not re-order it; the filter narrows by what the reader
+// can see — title, target, agent, project.
+function deliverList() {
+  const q = deliver.filter.trim().toLowerCase();
+  if (!q) return deliver.entries;
+  return deliver.entries.filter((e) =>
+    [e.title, e.target, e.agent, e.project].some((v) => String(v ?? "").toLowerCase().includes(q)),
+  );
+}
+
+async function deliverFetch({ quiet = false } = {}) {
+  const activeSeq = deliverList()[deliver.active]?.seq;
+  if (!quiet) {
+    deliver.loading = true;
+    deliver.error = "";
+    paintDeliverRows();
+  }
+  try {
+    const r = await apiFetch("/api/deliverables");
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(String(d.error || `HTTP ${r.status}`));
+    deliver.entries = Array.isArray(d.entries) ? d.entries : [];
+    const cap = Number(d.cap);
+    deliver.cap = Number.isFinite(cap) && cap > 0 ? cap : DELIVER_DEFAULT_CAP;
+    const kept = Number(d.kept);
+    deliver.kept = Number.isFinite(kept) ? kept : deliver.entries.length;
+    deliver.loading = false;
+    deliver.error = "";
+    if (quiet) {
+      const i = deliverList().findIndex((x) => x.seq === activeSeq);
+      if (i >= 0) deliver.active = i;
+    }
+    paintDeliverRows({ keepScroll: quiet });
+  } catch (e) {
+    deliver.loading = false;
+    deliver.error = String((e && e.message) || e);
+    paintDeliverRows();
+  }
+}
+
+function paintDeliverRows({ keepScroll = false } = {}) {
+  const pop = deliver.el;
+  if (!pop) return;
+  const body = pop.querySelector("#dl-list");
+  const foot = pop.querySelector("#dl-foot");
+  const head = pop.querySelector("#dl-count");
+  const scrollTop = body.scrollTop;
+
+  if (deliver.loading && !deliver.entries.length) {
+    head.textContent = "reading…";
+    body.innerHTML = `<div class="dl-empty">reading the list…</div>`;
+    foot.hidden = true;
+    return;
+  }
+  if (deliver.error) {
+    head.textContent = "deliverables";
+    body.innerHTML = `<div class="dl-empty dl-err">could not read the list: ${esc(deliver.error)}</div>
+      <button type="button" class="dl-retry" data-dl-retry="1">retry</button>`;
+    foot.hidden = true;
+    return;
+  }
+
+  const rows = deliverList();
+  const kept = deliver.kept || deliver.entries.length;
+  head.textContent = deliver.filter.trim()
+    ? `${rows.length} of ${kept} — newest first`
+    : `${kept} ${kept === 1 ? "deliverable" : "deliverables"} — newest first`;
+
+  if (!deliver.entries.length) {
+    body.innerHTML = `<div class="dl-empty">Nothing has been delivered yet.</div>
+      <div class="dl-empty dl-hint">An agent hands something back with one line in its final message:
+        <code>DELIVER file C:/path/to/report.html | The report</code></div>`;
+    foot.hidden = true;
+    return;
+  }
+  if (!rows.length) {
+    body.innerHTML = `<div class="dl-empty">nothing matches “${esc(deliver.filter.trim())}”.</div>`;
+    foot.hidden = true;
+    return;
+  }
+
+  let markup = "";
+  let day = "";
+  for (const entry of rows) {
+    const label = deliverDayLabel(entry.at);
+    if (label !== day) {
+      day = label;
+      markup += `<div class="dl-day" role="presentation">${esc(label)}</div>`;
+    }
+    markup += deliverRowHtml(entry);
+  }
+  body.innerHTML = markup;
+  if (deliver.active >= rows.length) deliver.active = rows.length - 1;
+  if (deliver.active < 0) deliver.active = 0;
+  deliverMarkActive({ scroll: !keepScroll });
+  if (keepScroll) body.scrollTop = scrollTop;
+
+  // The cap line appears only AT the cap: below it there is nothing to explain.
+  if (deliver.kept >= deliver.cap && deliver.cap > 0) {
+    foot.hidden = false;
+    foot.textContent = `${deliver.cap} kept — older rows are forgotten; the files stay on disk.`;
+  } else {
+    foot.hidden = true;
+  }
+}
+
+// A row: a glyph by kind, the title (the one thing that opens the target), the last few path segments or the URL's
+// host+path so two reports called "report" are distinguishable, then the agent, the project and the age.
+function deliverRowHtml(entry) {
+  const kind = entry.kind === "image" ? "image" : entry.kind === "link" ? "link" : "file";
+  const glyph = kind === "image" ? "🖼" : kind === "link" ? "🔗" : "📄";
+  const target = String(entry.target || "");
+  const shown = kind === "link" ? deliverLinkLabel(target) : tailPath(target, 3);
+  const meta = [entry.agent, entry.project].filter(Boolean).map((v) => esc(v)).join(" · ");
+  const age = fmtAgo(entry.at);
+  const lastSeen = entry.missingAt
+    ? `last seen ${new Date(entry.missingAt).toLocaleString()} — delivered by ${entry.agent || "an agent"}`
+    : "";
+  const gone = entry.missingAt ? `<span class="dl-gone" title="${esc(lastSeen)}">gone</span>` : "";
+  return `<div class="dl-row${entry.missingAt ? " is-gone" : ""}" role="option" id="dl-row-${esc(entry.seq)}" data-seq="${esc(entry.seq)}" aria-selected="false" title="${esc(target)}">
+      <span class="dl-glyph" aria-hidden="true">${glyph}</span>
+      <span class="dl-main">
+        <button type="button" class="dl-name${entry.missingAt ? " is-gone" : ""}" data-dl-open="${esc(entry.seq)}" title="${esc(target)}">${esc(entry.title || "(untitled)")}</button>
+        <span class="dl-target mono" title="${esc(target)}">${esc(shown)}</span>
+        <span class="dl-meta">${meta}${meta ? " · " : ""}<span class="dl-age" data-at="${esc(entry.at || "")}">${esc(age)}</span></span>
+      </span>
+      ${gone}
+      <button type="button" class="dl-agent" data-dl-agent="${esc(entry.seq)}" title="open the agent that delivered this">open agent</button>
+    </div>`;
+}
+
+// A URL as a row can afford to show it: host and path, no scheme — the title's tooltip carries the whole thing.
+function deliverLinkLabel(target) {
+  try {
+    const u = new URL(target);
+    return `${u.host}${u.pathname === "/" ? "" : u.pathname}${u.search}${u.hash}`;
+  } catch {
+    return target;
+  }
+}
+
+// TODAY / YESTERDAY / 2026-11-01, so a long scroll has landmarks. Local time, because that is the clock the
+// reader reads "3m ago" against.
+function deliverDayLabel(iso) {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return "";
+  const sameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const now = new Date();
+  if (sameDay(d, now)) return "TODAY";
+  if (sameDay(d, new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))) return "YESTERDAY";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// The active row is the combobox's `aria-activedescendant`: one active row, scrolled into view inside the body
+// (never the page — the popover is fixed).
+function deliverMarkActive({ scroll = true } = {}) {
+  const pop = deliver.el;
+  if (!pop) return;
+  const rows = [...pop.querySelectorAll(".dl-row")];
+  const input = pop.querySelector("#dl-filter");
+  if (!rows.length) {
+    input?.removeAttribute("aria-activedescendant");
+    return;
+  }
+  const i = Math.min(Math.max(0, deliver.active), rows.length - 1);
+  deliver.active = i;
+  rows.forEach((row, n) => row.setAttribute("aria-selected", n === i ? "true" : "false"));
+  input?.setAttribute("aria-activedescendant", rows[i].id);
+  if (!scroll) return;
+  const body = pop.querySelector("#dl-list");
+  const view = body.getBoundingClientRect();
+  const rowRect = rows[i].getBoundingClientRect();
+  if (rowRect.top < view.top) body.scrollTop -= view.top - rowRect.top;
+  else if (rowRect.bottom > view.bottom) body.scrollTop += rowRect.bottom - view.bottom;
+}
+
+function paintDeliverAges() {
+  for (const el of document.querySelectorAll("#deliver-pop .dl-age[data-at]")) {
+    el.textContent = fmtAgo(el.dataset.at);
+  }
+}
+
+// ↓/↑ move one row, Home/End jump, PageDown/PageUp move ten, Enter opens the target and Alt+Enter the agent. It
+// stops at the ends on purpose: a 200-row list that wraps is a list the reader cannot tell the end of.
+function deliverKeydown(e) {
+  const rows = deliverList();
+  if (!rows.length) return;
+  const move = (n) => {
+    deliver.active = Math.min(rows.length - 1, Math.max(0, deliver.active + n));
+    deliverMarkActive();
+  };
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    move(1);
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    move(-1);
+  } else if (e.key === "Home") {
+    e.preventDefault();
+    move(-rows.length);
+  } else if (e.key === "End") {
+    e.preventDefault();
+    move(rows.length);
+  } else if (e.key === "PageDown") {
+    e.preventDefault();
+    move(10);
+  } else if (e.key === "PageUp") {
+    e.preventDefault();
+    move(-10);
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    const entry = rows[deliver.active];
+    if (!entry) return;
+    if (e.altKey) void deliverOpenAgent(entry.seq);
+    else void deliverOpenTarget(entry.seq);
+  }
+}
+
+// The target, through the panel's route and only for a seq the store holds. The answer says which program opened
+// it; a 404 re-reads the list, which is how a file found gone gets its `gone` chip.
+async function deliverOpenTarget(seq) {
+  try {
+    const r = await apiFetch("/api/deliverables/open", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ seq: Number(seq) }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showBanner(String(d.error || `could not open that deliverable (HTTP ${r.status})`));
+      if (r.status === 404) void deliverFetch({ quiet: true });
+      return false;
+    }
+    // `chrome` is a LINK's answer (§7.2): a file/image answer carries no such field, and a missing Chrome has
+    // nothing to do with opening one — only a link that fell back to the OS browser says this.
+    if (d.chrome === false && d.kind === "link") showBanner("Chrome was not found — opened your default browser");
+    return true;
+  } catch (e) {
+    showBanner(`could not open that deliverable: ${String((e && e.message) || e)}`);
+    return false;
+  }
+}
+
+// Which console a row opens. This is humanShow's own path (public/app.js, "HUMAN" above), copied rather than
+// extracted: the plan's §8 says this feature edits no other module's renderer, and an extraction here would be a
+// second idea of "this turn is the one". The steps are the same five — find the conversation, page the turn in by
+// JOB ID, open the float for an assistant or the row for a board card, re-query the card the render replaced,
+// scroll it under the bar and flash it.
+function deliverOpenAgent(seq) {
+  const entry = deliver.entries.find((x) => Number(x.seq) === Number(seq));
+  if (!entry) return false;
+  const thread = entry.thread;
+  if (!thread) {
+    showBanner("that deliverable's agent and worktree are both gone");
+    return false;
+  }
+  const conv = conversations().find((c) => c.thread === thread);
+  const assistant = assistantSessionFor(thread);
+  const noRun = "the run that delivered this is no longer on the board — opened its worktree";
+  if (!conv && !assistant) return deliverOpenWorktree(entry, noRun);
+
+  // The turn is found by JOB ID, never by the `turn` counter: `turn` is siblings.length + 1 and moves BACKWARDS
+  // when old jobs are trimmed, so an entry keyed by it would open the wrong turn or none (the review's M7).
+  let jobId = entry.jobId;
+  let trimmed = false;
+  if (conv && jobId && !conv.turns.some((t) => t.id === jobId)) {
+    const newest = conv.turns[conv.turns.length - 1];
+    if (newest) {
+      jobId = newest.id;
+      trimmed = true;
+    }
+  }
+  if (conv && jobId) {
+    const turn = conv.turns.find((t) => t.id === jobId);
+    const index = conv.turns.indexOf(turn);
+    const pages = Math.max(1, Math.ceil(conv.turns.length / TURNS_PER_PAGE));
+    state.turnOpen.set(jobId, true);
+    state.turnCompact.delete(jobId);
+    state.turnPage.set(thread, pages - 1 - Math.floor(Math.max(0, index) / TURNS_PER_PAGE));
+  }
+
+  let card;
+  if (assistant) {
+    // An assistant's card is not on the board at all: it lives in the float, one Chat pane per assistant.
+    if (typeof window.__assistantShowThread !== "function" || !window.__assistantShowThread(thread)) {
+      return deliverOpenWorktree(entry, noRun);
+    }
+    renderConversation(thread);
+    card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+  } else {
+    const row = hotRowFor(thread);
+    if (row) hotOpenPath(row);
+    if (state.collapsedJobs.has(thread)) state.collapsedJobs.delete(thread);
+    renderConversation(thread);
+    card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+    if (!card) {
+      renderJobs();
+      card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+    }
+  }
+  if (!card) return deliverOpenWorktree(entry, noRun);
+
+  // Closed before the scroll, so the popover cannot cover the card it just opened.
+  closeDeliverPop();
+  scrollCardUnderBar(card);
+  flashHotCard(thread);
+  if (trimmed) showBanner("that turn is no longer on the board — opened the newest one");
+  return true;
+}
+
+// The last fallback: the thread is gone from the store, so open the worktree whose row the entry names — by
+// project+path first, then by the branch the delivery recorded.
+function deliverOpenWorktree(entry, why) {
+  const gone = "that deliverable's agent and worktree are both gone";
+  if (!entry.project) {
+    showBanner(gone);
+    return false;
+  }
+  const want = keyOf(entry.project, entry.treePath || "");
+  const rows = [...state.rows.values()];
+  const row =
+    rows.find((r) => keyOf(entry.project, r.path) === want) ||
+    (entry.branch ? rows.find((r) => r.project === entry.project && r.branch === entry.branch) : null);
+  if (!row) {
+    showBanner(gone);
+    return false;
+  }
+  hotOpenPath(row);
+  closeDeliverPop();
+  document
+    .querySelector(`tr.row[data-key="${CSS.escape(keyOf(entry.project, row.path))}"]`)
+    ?.scrollIntoView({ block: "center" });
+  showBanner(why || "the run that delivered this is no longer on the board — opened its worktree");
+  return true;
+}
+// ---- end deliverables
+
 // ---- fonts: two settings, not one ----------------------------------------------
 // Panel font: the page's own labels, headings and buttons (--ui).
 // Terminal font: the text inside an agent card — transcript, prompt, reply box, command preview
