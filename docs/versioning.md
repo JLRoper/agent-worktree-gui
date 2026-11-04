@@ -37,8 +37,9 @@ It tags every version in `package.json`'s history that has none, at the commit t
 and sends only the tags it created. An already-anchored version is counted and skipped, so a second run creates
 nothing and exits 0 — it never duplicates a tag, and it will not rewrite a pushed one.
 
-The rendered changelog gains that section at the next `npm run changelog`. Commit the render with the next
-release's bump rather than as a release of its own, so a housekeeping render never spends a version number.
+The rendered changelog gains that section at the next `npm run changelog`, which is made on `main` after the
+merge rather than on the branch — the rule below says why. It is its own docs commit: it spends no version
+number and creates no tag, so a housekeeping render never becomes a release of its own.
 
 **The housekeeping render is made after the merge, never on the branch.** Every section links the shas of the
 commits it lists, and a rebase or squash merge re-creates those commits on `main` with new ones — so a render
@@ -55,10 +56,11 @@ ancestor of `main` is a 404 for the reader who follows it:
     git merge-base --is-ancestor <sha> origin/main
 
 A render is a docs commit (`docs: render the changelog …`): it spends no version number, creates no tag, and
-leaves `package.json` alone. Because its own commit sits after the newest tag, no section describes it, so
-landing the render through a PR is safe even though the merge rewrites that commit's sha. Folding it into the
-next bump is still fine; waiting is not free — the file is stale until then, and `npm run changelog:check` says
-so.
+leaves `package.json` alone. Because its own commit comes after the newest version's bump commit, no section
+describes it, so landing the render through a PR is safe even though the merge rewrites that commit's sha.
+What is not safe is folding the render into the bump commit it would describe: that render is written on the
+branch, so its newest section names a sha the merge is about to re-create — the defect above. Waiting costs
+nothing but a red `npm run changelog:check`: the file is stale until the render lands, and the check says so.
 
 ## The bump is a judgement, made by the agent landing the change
 
