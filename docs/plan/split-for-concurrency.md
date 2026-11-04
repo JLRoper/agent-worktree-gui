@@ -427,7 +427,7 @@ revisited.
 
 **Produces.** `lib/routes/panel-io.js` (7 routes, 164 body lines), `lib/routes/projects.js` (11 / 232).
 
-**Edit set.** `server.js`: panel-io's four regions (six blocks) — **3,529–3,554** (`/api/paths/open`), **3,561–3,589**
+**Edit set.** `server.js`: panel-io's four regions (seven blocks) — **3,529–3,554** (`/api/paths/open`), **3,561–3,589**
 (`/api/scratch/clean`), **3,595–3,610** (`/api/cleanup`), **4,085–4,090** (`/api/deliverables`),
 **5,028–5,139** (`/api/open-url`, `/api/deliverables/open`), **5,190–5,210** (`/api/open-path`) — and projects' four
 regions — **3,617–3,720** (hosts/steward), **4,062–4,065** (`/api/parents`), **4,466–4,500**
