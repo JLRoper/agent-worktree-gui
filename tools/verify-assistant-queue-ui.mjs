@@ -10,7 +10,10 @@
 // slicing the renderer's string. In order, this gate:
 //
 //   1. the CHROME: the explainer and the add form are closed disclosures, the counts are a caption and the queue's
-//      path is hover text, and the first task starts inside the first screenful (< 140 px of chrome, not 285);
+//      path is hover text, and the first task starts inside the first screenful (< 140 px of chrome, not 285); its
+//      EXPLAINER is a one-line lead plus five labelled <dl> entries, each at most two lines, with every fact the old
+//      nine-line paragraph carried still in its own entry — and the qline's PIPELINE BUTTON opens a CLOSED Settings on
+//      its Pipeline tab, and switches one already open on another tab rather than closing it;
 //   2. the ROW: one head line per task with the state word (STALE for a running row nothing is running), the title,
 //      the waiting-on sentence and the lane/hold chips; the second read folded and closed; row height <= 92 px;
 //   3. the HOVER TEXT the fold replaced: `title=` carries the whole sentence for a line that is one line, the state
@@ -231,14 +234,149 @@ try {
       hasPrimaryRefresh: Boolean(pane?.querySelector(".as-qline .primary")),
       printedPath: Boolean(pane?.innerText.includes("queue.json")),
       helpChars: (helpBody?.textContent || "").trim().length,
+      // The rewrite's SHAPE: a lead sentence, then a real <dl> of labelled entries — not the nine-line paragraph and
+      // not that paragraph with <b> sprinkled through it.
+      helpLead: (helpBody?.querySelector(".as-qlead")?.textContent || "").trim(),
+      helpLabelCount: helpBody?.querySelectorAll("dl dt").length || 0,
+      helpLabels: [...(helpBody?.querySelectorAll("dl dt") || [])].map((d) => d.textContent.trim()),
+      helpPairs: helpBody?.querySelectorAll("dl > div").length || 0,
+      helpBold: helpBody?.querySelectorAll("b").length ?? -1,
+      helpDl: Boolean(helpBody?.querySelector("dl")),
+      pipelineBtn: (() => {
+        const b = pane?.querySelector('.as-qline [data-as-qact="pipeline"]');
+        if (!b) return null;
+        return { text: b.textContent.trim(), quiet: b.classList.contains("as-qquiet"), tag: b.tagName };
+      })(),
+      pipelineAfterRefresh: Boolean(pane?.querySelector('.as-qline [data-as-qact="reload"]')?.nextElementSibling?.matches('[data-as-qact="pipeline"]')),
     };
   });
   ok("the first task starts inside the first screenful", chrome.chrome !== null && chrome.chrome <= 140, `${chrome.chrome}px of chrome before row 1 (was 285 px)`);
   check("the explainer is a CLOSED disclosure", [chrome.helpOpen, chrome.helpFolded], [false, true]);
   check("the add form is a CLOSED disclosure", [chrome.addOpen, chrome.addFolded], [false, true]);
-  ok("…and its prose is still there when it is opened", chrome.helpChars > 800, `${chrome.helpChars} characters behind the summary`);
+  // The rewrite: a lead sentence and a real <dl> of labelled entries, not the nine-line paragraph and not that
+  // paragraph with <b> sprinkled through it.
+  ok(
+    "the explainer is a lead plus a real <dl>, with no <b> soup left",
+    chrome.helpDl && chrome.helpBold === 0 && chrome.helpLead.length > 0,
+    JSON.stringify({ dl: chrome.helpDl, bold: chrome.helpBold, lead: chrome.helpLead.slice(0, 70) }),
+  );
+  ok(
+    "…and the lead is ONE sentence that says what the pane is carrying",
+    /^the work this assistant is carrying/.test(chrome.helpLead) && !/[.!?]\s+\S/.test(chrome.helpLead) && chrome.helpLead.length <= 140,
+    `${chrome.helpLead.length} chars: ${chrome.helpLead}`,
+  );
+  check("…then the five labelled lines the brief names, each a dt/dd pair", [chrome.helpLabels, chrome.helpPairs], [["Add task", "Move", "Order", "Waiting and STALE", "Where it lives"], 5]);
+
+  // The entries' own heights are layout px, and a CLOSED details lays its content out under `content-visibility` — so
+  // the "at most two lines" claim is measured with the explainer opened, then put back to rest.
+  const explainer = await page.evaluate(() => {
+    const help = document.querySelector("#as-queue details.as-qhelp");
+    help?.querySelector("summary")?.click();
+    const body = help?.querySelector(".as-help");
+    const lines = (el) => (el ? Math.round(el.getBoundingClientRect().height / (parseFloat(getComputedStyle(el).lineHeight) || 15)) : 0);
+    return {
+      open: Boolean(help?.open),
+      leadLines: lines(body?.querySelector(".as-qlead")),
+      entries: [...(body?.querySelectorAll("dl > div") || [])].map((row) => {
+        const dd = row.querySelector("dd");
+        return {
+          label: row.querySelector("dt")?.textContent.trim() || "",
+          chars: (dd?.textContent || "").replace(/\s+/g, " ").trim().length,
+          text: (dd?.textContent || "").replace(/\s+/g, " ").trim(),
+          lines: lines(row),
+        };
+      }),
+    };
+  });
+  ok("pressing the summary opens the explainer, lead first", explainer.open && explainer.leadLines >= 1 && explainer.leadLines <= 2, `lead ${explainer.leadLines} line(s), ${explainer.entries.length} entries`);
+  ok("…and each labelled entry is at most TWO lines", explainer.entries.every((e) => e.lines <= 2), JSON.stringify(explainer.entries.map((e) => [e.label, e.lines, e.chars])));
+  const entryText = (label) => (explainer.entries.find((e) => e.label === label) || { text: "" }).text;
+  const required = [
+    ["Add task", /THIS assistant's queue/],
+    ["Add task", /the one this page belongs to/],
+    ["Add task", /queue nobody is watching/],
+    ["Move", /leaves this queue/],
+    ["Move", /an id of its own/],
+    ["Move", /movedFrom/],
+    ["Order", /drag a queued card/i],
+    ["Order", /written to the file/],
+    ["Order", /survives the next read/],
+    ["Order", /running, parked and done keep their own sections/i],
+    ["Order", /held by #N/],
+    ["Order", /cannot go above that row/],
+    ["Waiting and STALE", /touch a running task's files/],
+    ["Waiting and STALE", /skipped with its reason/],
+    ["Waiting and STALE", /no live run reads STALE/],
+    ["Waiting and STALE", /phantom progress/],
+    ["Where it lives", /state\/assistants\/assistant-1\/queue\.json/],
+    ["Where it lives", /beside the charter/],
+    ["Where it lives", /every wake before the board/],
+    ["Where it lives", /state, thread, worktree, PR/],
+    ["Where it lives", /LIVE, STALE or PARKED/],
+  ];
+  const lost = required.filter(([label, re]) => !re.test(entryText(label)));
+  ok("…and every fact the old paragraph carried is still there, in its own entry", lost.length === 0, lost.map(([l, re]) => `${l} ${re}`).join(" | ") || `${required.length}/${required.length} facts`);
+  await page.evaluate(() => document.querySelector("#as-queue details.as-qhelp")?.removeAttribute("open"));
+
+  // ---- 1b. the pane's way into Settings → Pipeline ------------------------------------------------
+  console.log("\n== 1b. the Pipeline button lands Settings on its own tab ==");
+  check(
+    "the button sits in the qline beside Refresh, in the pane's existing quiet class",
+    [chrome.pipelineBtn?.text, chrome.pipelineBtn?.quiet, chrome.pipelineAfterRefresh],
+    ["Pipeline settings", true, true],
+  );
+  const settingsState = () =>
+    page.evaluate(() => {
+      const panel = document.querySelector("#settings");
+      const selected = document.querySelector('#settings-tabs [role="tab"][aria-selected="true"]');
+      const pipeline = document.querySelector("#settings-panel-pipeline");
+      return {
+        open: Boolean(panel) && !panel.classList.contains("hidden"),
+        tab: selected ? selected.dataset.settingsTab : "",
+        pipelineShown: Boolean(pipeline) && !pipeline.hidden,
+        saved: localStorage.getItem("wtgui.settingsTab") || "",
+      };
+    });
   ok("the counts are a caption, not a primary button row", !chrome.hasPrimaryRefresh, chrome.counts);
   ok("the queue's path is hover text, not printed", !chrome.printedPath && chrome.countsTitle.endsWith("queue.json"), chrome.countsTitle);
+
+  check("Settings is closed before the press", (await settingsState()).open, false);
+  await page.click('#as-queue .as-qline [data-as-qact="pipeline"]');
+  const landedClosed = await waitFor(async () => {
+    const s = await settingsState();
+    return s.open && s.tab === "pipeline" && s.pipelineShown ? s : null;
+  }, { timeoutMs: 10_000, stepMs: 150, what: "Settings to open on the Pipeline tab" });
+  ok(
+    "a CLOSED Settings opens straight on Pipeline, and the tab is remembered",
+    Boolean(landedClosed) && landedClosed.saved === "pipeline",
+    JSON.stringify(landedClosed),
+  );
+
+  // The second half of the claim: Settings ALREADY OPEN, on another tab. The window opens at the right edge over the
+  // float, so it is dragged clear first — otherwise the press would land on the window, not the button.
+  const movedTo = await page.evaluate(() => {
+    const head = document.querySelector("#settings > .settings-head");
+    const r = head?.getBoundingClientRect();
+    return r ? { x: r.x + 12, y: r.y + r.height / 2 } : null;
+  });
+  if (!movedTo) throw new Error("no Settings head to move");
+  await page.mouse.move(movedTo.x, movedTo.y);
+  await page.mouse.down();
+  await page.mouse.move(movedTo.x - 760, movedTo.y, { steps: 14 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  await page.click('#settings-tabs [data-settings-tab="display"]');
+  const onDisplay = await settingsState();
+  check("…and the reader can leave Settings open on another tab", [onDisplay.open, onDisplay.tab], [true, "display"]);
+  await page.click('#as-queue .as-qline [data-as-qact="pipeline"]');
+  const landedOpen = await waitFor(async () => {
+    const s = await settingsState();
+    return s.open && s.tab === "pipeline" && s.pipelineShown ? s : null;
+  }, { timeoutMs: 10_000, stepMs: 150, what: "an already-open Settings to switch to Pipeline" });
+  ok("a Settings already open elsewhere switches to Pipeline instead of closing", Boolean(landedOpen), JSON.stringify(landedOpen));
+  await page.click("#btn-settings-close");
+  const closedAfter = await settingsState();
+  check("…and its own ✕ still closes it, with the queue pane where it was", [closedAfter.open, await page.locator("#as-queue").isVisible()], [false, true]);
 
   // ---- 2/3. the row: head, state word, waiting-on, hover text, fold ---------------------------------
   console.log("\n== 2. the rows: facts first, one line of head, the second read folded ==");
@@ -403,8 +541,10 @@ try {
 console.log("\n== summary ==");
 console.log(`${checks} checks, ${failures} failed`);
 console.log("WHAT WAS DRIVEN: a real panel process over its own data directory and a seeded six-row queue, then headless");
-console.log("Chromium on the real float: the closed explainer and add form, the counts' hover text, one head line per row");
-console.log("with its state word and waiting-on sentence, the folded second read, the seeded order, a real ✓ Done, a real");
-console.log("pointer drag, a real ➡️ Move and the folded add form — with the pane folded afterwards and no page errors.");
+console.log("Chromium on the real float: the closed explainer and add form, its lead and five labelled lines (each at most");
+console.log("two lines, every old fact kept), the Pipeline button landing Settings on its own tab from closed AND from");
+console.log("another tab, the counts' hover text, one head line per row with its state word and waiting-on sentence, the");
+console.log("folded second read, the seeded order, a real ✓ Done, a real pointer drag, a real ➡️ Move and the folded add");
+console.log("form — with the pane folded afterwards and no page errors.");
 if (!failures) console.log("ASSISTANT-QUEUE-UI-OK");
 process.exitCode = failures ? 1 : 0;

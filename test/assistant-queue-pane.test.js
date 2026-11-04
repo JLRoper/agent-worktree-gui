@@ -194,9 +194,65 @@ test("the add form has no owner picker: a task is created into the assistant who
   assert.doesNotMatch(html, /<label[^>]*>\s*owner\b/, "and no owner label either");
   assert.match(html, /data-as-qact="add"/, "Add task is still the one control that creates a task");
   assert.match(html, /files work into THIS assistant's queue/, "the help says where the work goes");
-  assert.match(html, /the <b>Move<\/b> control on an existing row/, "and that moving work is the explicit action on a task");
+  assert.match(html, /<dt>Move<\/dt><dd>the control on an existing row/, "and that moving work is the explicit action on a task");
   // A handler that still read a control the pane no longer draws would throw on the first press, so the page must not
   // name the picker at all.
   assert.doesNotMatch(assistant, /as-qowner/, "nothing in the page still looks for the owner picker");
   assert.match(assistant, /owner: own,/, "and the add sends the page's own assistant as the owner");
+});
+
+// The explainer's SHAPE. It was one nine-line paragraph with <b> sprinkled through it; the rewrite is a one-line lead
+// and five labelled entries in a real <dl>. Every fact the paragraph carried has to survive that re-shape, so the
+// facts are pinned here by the words that state them — a shorter rewrite that drops one is a red test, not a tidy-up.
+test("the explainer is a lead and five labelled lines, every fact kept", async () => {
+  const { api, host } = pane({ read: async () => reply({ queue: view(), assistant: {} }) });
+  api.renderAssistantQueue("assistant-1", true);
+  const html = host().innerHTML;
+  const help = html.slice(html.indexOf('<div class="as-help">'), html.indexOf("</details>", html.indexOf('<div class="as-help">')));
+
+  assert.match(help, /<p class="as-qlead">the work this assistant is carrying — queued, running on its thread, parked, done — and how it gets in and out\.<\/p>/, "one sentence of lead");
+  assert.equal(help.split("<dt>").length - 1, 5, "five labelled lines");
+  assert.deepEqual([...help.matchAll(/<dt>([^<]+)<\/dt>/g)].map((m) => m[1]), ["Add task", "Move", "Order", "Waiting and STALE", "Where it lives"]);
+  assert.doesNotMatch(help, /<b>/, "the labels are <dt>s, not bold inside another paragraph");
+  for (const fact of [
+    /the one this page belongs to/,
+    /queue nobody is watching/,
+    /leaves this queue/,
+    /an id of its own/,
+    /movedFrom/,
+    /drag a queued card/i,
+    /written to the file/,
+    /survives the next read/,
+    /running, parked and done keep their own sections/i,
+    /held by #N/,
+    /cannot go above that row/,
+    /touch a running task's files/,
+    /skipped with its reason/,
+    /no live run reads STALE/,
+    /phantom progress/,
+    /<code>state\/assistants\/assistant-1\/queue\.json<\/code>/,
+    /beside the charter/,
+    /every wake before the board/,
+    /state, thread, worktree, PR/,
+    /LIVE, STALE or PARKED/,
+  ]) {
+    assert.match(help, fact, `the rewrite dropped a fact: ${fact}`);
+  }
+});
+
+// The pane's way into Settings → Pipeline: the same class the pane already styles, beside Refresh, and the press is
+// the settings tab strip's own two calls. The outside-click closer is the trap (app.js closes Settings on a click
+// that did not land inside it), so the opener stops propagating exactly as #btn-settings does.
+test("the qline's Pipeline button is the quiet class beside Refresh, and presses the tab strip's own two calls", async () => {
+  const { api, host } = pane({ read: async () => reply({ queue: view(), assistant: {} }) });
+  api.renderAssistantQueue("assistant-1", true);
+  const html = host().innerHTML;
+  assert.match(html, /data-as-qact="reload"[^>]*>Refresh<\/button>\s*<button type="button" class="as-qquiet" data-as-qact="pipeline"/, "immediately after Refresh, in the existing quiet class");
+  assert.match(html, /class="as-qquiet" data-as-qact="pipeline" data-as-qown="assistant-1"[^>]*>Pipeline settings<\/button>/, "and it belongs to this pane's assistant");
+  assert.doesNotMatch(html, /as-qpipeline/, "no new class was invented for it");
+  const handler = assistant.slice(assistant.indexOf('if (action === "pipeline")'));
+  const body = handler.slice(0, handler.indexOf('if (action === "add")'));
+  assert.match(body, /e\.stopPropagation\(\);/, "the press stops before app.js's outside-click closer");
+  assert.match(body, /toggleSettings\(true\);/, "and opens a closed Settings");
+  assert.match(body, /selectSettingsTab\("pipeline"\);/, "on the Pipeline tab, with the tab strip's own call");
 });

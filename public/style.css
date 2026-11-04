@@ -3677,7 +3677,17 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-qpane .as-qhelp > summary, .as-qpane .as-qadd > summary { width: fit-content; cursor: pointer; padding: 1px 0; font-size: 10.5px; color: var(--dimmer); user-select: none; }
 .as-qpane .as-qhelp > summary:hover, .as-qpane .as-qhelp[open] > summary,
 .as-qpane .as-qadd > summary:hover, .as-qpane .as-qadd[open] > summary { color: var(--text); }
-.as-qpane .as-qhelp .as-help { margin: 4px 0 0; max-width: 76ch; }
+.as-qpane .as-qhelp .as-help { margin: 4px 0 0; }
+/* The explainer is a LEAD and a labelled list, not a paragraph: each label sits inline at the head of its own entry
+   and the sentence runs on across the pane's whole width. A 480px pane is narrower than 76ch, so a label COLUMN would
+   wrap every line early and push the longest entries to three lines — the one thing this block must not be. */
+.as-qpane .as-qhelp .as-qlead { margin: 0 0 4px; }
+.as-qpane .as-qhelp dl { margin: 0; }
+.as-qpane .as-qhelp dl > div { margin: 0 0 2px; }
+.as-qpane .as-qhelp dt { display: inline; font-weight: 600; color: var(--text); }
+.as-qpane .as-qhelp dt::after { content: " — "; font-weight: 400; color: var(--dimmer); }
+.as-qpane .as-qhelp dd { display: inline; margin: 0; }
+.as-qpane .as-qhelp code { font-family: var(--mono); font-size: 10px; color: var(--dim); }
 .as-qpane .as-qadd .as-line { margin-top: 6px; }
 .as-qpane .as-qadd input[type="text"] { min-width: 0; flex: 1 1 220px; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; font-family: var(--mono); font-size: 11px; }
 .as-qpane .as-qadd .primary { font-size: 10.5px; padding: 3px 9px; }
