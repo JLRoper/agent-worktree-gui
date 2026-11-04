@@ -23,10 +23,16 @@
 //                      deliberately; never by check and never by a hook. In a tree that already carries other
 //                      changes it writes the number and stops — no commit, no tag — because a tag belongs to a
 //                      commit that carries the bump and nothing else; it says which of the two happened.
-//   tag                anchor the commit package.json's version names with an annotated tag. This is the
-//                      post-merge step: a rebase merge re-creates the commit, so the tag is moved onto the one
-//                      main carries (node tools/version.mjs tag --ref origin/main --force). Refuses a dirty
-//                      tree when the commit is HEAD, and refuses to move an existing tag without --force.
+//   tag                anchor the commit whose package.json patch FIRST declared the version the ref's tree
+//                      carries — not the ref's tip. A changelog render commit on top of a bump still reads the
+//                      bumped number, and tagging the tip names a commit whose diff touches only
+//                      CHANGELOG.md; v1.5.0 was anchored that way on 5234a3c and the gate refused it. The
+//                      declaration comes from the same walk the gate reads (tools/release-history.mjs), and
+//                      when no commit reachable from the ref writes the number it refuses and says what it
+//                      looked for. This is the post-merge step: a rebase merge re-creates the commit, so the
+//                      tag is moved onto the one main carries (node tools/version.mjs tag --ref origin/main
+//                      --force). Refuses a dirty tree when the declaring commit is HEAD, and refuses to move
+//                      an existing tag without --force.
 //   backfill           create the annotated tag for every version in package.json's history that has none, at
 //                      the commit that first declared it. Idempotent: an anchored version is skipped, never
 //                      duplicated, and a second run creates nothing and exits 0. --push sends only the tags
@@ -41,7 +47,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { readReleaseHistory } from "./release-history.mjs";
+import { findDeclaration, readReleaseHistory } from "./release-history.mjs";
 
 const LEVELS = ["patch", "minor", "major"];
 const RANK = { patch: 0, minor: 1, major: 2 };
@@ -528,9 +534,13 @@ function modeApply(level) {
   return 0;
 }
 
-// Anchor an existing commit with the version package.json declares at it. Two callers: a dirty-tree apply, after
-// the agent has committed the change by hand, and the post-merge step, where a rebase merge has re-created the
-// bump commit under a new sha and the tag has to move with it.
+// Anchor the commit that FIRST declared the version the ref's tree carries. The ref is resolved only to read
+// the number out of that tree; the commit to name comes from the same history walk the gate judges
+// (tools/release-history.mjs), because a ref's tip is not where a version began. A changelog render commit on
+// top of a bump still reads the bumped number, and tagging it names a commit whose patch touches only
+// CHANGELOG.md — the mis-anchor that put v1.5.0 on 5234a3c. Two callers: a dirty-tree apply, after the agent
+// has committed the change by hand, and the post-merge step, where a rebase merge has re-created the bump
+// commit under a new sha and the tag has to move with it.
 function modeTag(argv) {
   let ref = "HEAD";
   let force = false;
@@ -543,17 +553,51 @@ function modeTag(argv) {
       return 2;
     }
   }
-  const commit = gitOk(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
-  if (!commit) {
+  const tip = gitOk(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
+  if (!tip) {
     console.error(`version tag: ${ref} is not a commit in this repository`);
     return 2;
   }
-  const at = gitOk(["show", `${commit}:package.json`]);
+  const at = gitOk(["show", `${tip}:package.json`]);
   const version = at === null ? null : versionIn(at);
   if (!version) {
-    console.error(`version tag: package.json at ${commit.slice(0, 10)} has no readable "version" — nothing to anchor`);
+    console.error(`version tag: package.json at ${tip.slice(0, 10)} has no readable "version" — nothing to anchor`);
     return 1;
   }
+
+  // The number comes from the ref's tree; the commit comes from the walk. Reading the tree and tagging the tip
+  // is what mis-anchored v1.5.0 on the render commit above its bump.
+  let found;
+  try {
+    found = findDeclaration({ root: ROOT, ref: tip, version });
+  } catch (e) {
+    console.error(
+      `version tag: refused — could not walk package.json's history at ${ref} (${tip.slice(0, 10)}) — ` +
+        String(e.stderr || e.message).trim(),
+    );
+    console.error("  nothing was tagged: without the walk there is no commit that can be shown to declare the number.");
+    return 1;
+  }
+  const declared = found.declaration;
+  if (!declared) {
+    const seen = found.versions;
+    const range = seen.length ? `v${seen[0].version} .. v${seen[seen.length - 1].version}` : "none";
+    console.error("");
+    console.error(`version tag: refused — no commit reachable from ${ref} (${tip.slice(0, 8)}) first carries ${version}`);
+    console.error("");
+    console.error(`  package.json at that ref's tip reads ${version}, but the walk found ${seen.length} version`);
+    console.error(`  bump${seen.length === 1 ? "" : "s"} (${range}) and none of them writes ${version} to the version line.`);
+    console.error("  the tip's tree showing the number is not the same thing as the history carrying it: a merge");
+    console.error("  resolution, a shallow clone or a graft can leave the value with no commit that wrote it.");
+    console.error("");
+    console.error(`  looked for: the commit whose package.json patch first writes "version": "${version}",`);
+    console.error(`             in git log --follow -p -- package.json reachable from ${ref}`);
+    console.error(`             (${seen.length} bump${seen.length === 1 ? "" : "s"} seen there: ${range})`);
+    console.error("  nothing was tagged.");
+    console.error("");
+    return 1;
+  }
+  const commit = declared.sha;
   if (commit === gitOk(["rev-parse", "HEAD"])) {
     const dirty = dirtyFiles();
     if (dirty.length) {
@@ -569,14 +613,28 @@ function modeTag(argv) {
   }
   const name = `v${version}`;
   const existing = tagAt(name);
+  // Said out loud whenever the anchor is not the ref's tip, so a reader who resolved origin/main can see the
+  // tag followed the declaration and not the render commit.
+  const namedTip = /^[0-9a-f]{4,40}$/i.test(ref) && tip.toLowerCase().startsWith(ref.toLowerCase())
+    ? `the tip ${tip.slice(0, 8)}`
+    : `${ref}'s tip ${tip.slice(0, 8)}`;
+  const pastTip = commit === tip ? "" : ` — the commit that first declared ${version}, not ${namedTip}`;
   if (existing && existing.commit === commit && existing.annotated) {
-    console.log(`version tag: ${name} is already an annotated tag at ${commit.slice(0, 10)} — nothing to do`);
+    console.log(`version tag: ${name} is already an annotated tag at ${commit.slice(0, 10)}${pastTip} — nothing to do`);
     return 0;
+  }
+  if (existing && existing.commit === commit && !existing.annotated && !force) {
+    console.error(
+      `version tag: ${name} exists at ${commit.slice(0, 10)} as a lightweight tag and carries no message — ` +
+        "pass --force to recreate it annotated",
+    );
+    return 1;
   }
   if (existing && !force) {
     console.error(
       `version tag: ${name} already exists at ${existing.commit.slice(0, 10)}` +
-        `${existing.annotated ? "" : " (lightweight)"}, and ${ref} is ${commit.slice(0, 10)} — pass --force to move it`,
+        `${existing.annotated ? "" : " (lightweight)"}, but ${ref}'s history first declares ${version} at ` +
+        `${commit.slice(0, 10)} (${declared.subject}) — pass --force to move it`,
     );
     return 1;
   }
@@ -585,7 +643,10 @@ function modeTag(argv) {
     console.error(`version tag: git tag refused — ${made.err}`);
     return 1;
   }
-  console.log(`version tag: ${name} (annotated) at ${commit.slice(0, 10)}${existing ? ` — moved from ${existing.commit.slice(0, 10)}` : ""}`);
+  console.log(
+    `version tag: ${name} (annotated) at ${commit.slice(0, 10)}` +
+      `${existing ? ` — moved from ${existing.commit.slice(0, 10)}` : ""}${pastTip}`,
+  );
   return 0;
 }
 
@@ -675,8 +736,8 @@ const code =
               "  node tools/version.mjs suggest                     print the level the commits read as (advice; writes nothing)",
               "  node tools/version.mjs check [--base <ref>]        exit 1 unless HEAD's version is above the base ref's",
               "  node tools/version.mjs apply <patch|minor|major>   write the new version, commit it and tag that commit",
-              "  node tools/version.mjs tag [--ref <ref>] [--force] anchor an existing commit with package.json's version",
-              "                                                    (--ref origin/main --force: the post-merge move)",
+              "  node tools/version.mjs tag [--ref <ref>] [--force] anchor the commit that first declared the version",
+              "                                                    in <ref>'s tree (--ref origin/main --force: the post-merge move)",
               "  node tools/version.mjs backfill [--ref <ref>] [--push]",
               "                                                    tag every untagged version at the commit that declared it",
               "",
