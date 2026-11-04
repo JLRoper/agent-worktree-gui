@@ -195,6 +195,17 @@ and lands in the same PR as the change —
 and `docs/versioning.md` is the scale. The merge prompt tells the landing agent to do it. Same install covers
 both hooks, and the same `--no-verify` bypasses this one.
 
+A landing's **last step is `npm run land`**, run on the base branch after the merge. It renders `CHANGELOG.md`
+from the base's own history — the shas the merge just made, never the branch's — commits only that file as a
+docs commit (no version, no tag), pushes the base with the render, and proves itself by re-rendering
+(`changelog: CHANGELOG.md is current — N releases`). It refuses on a branch, on a dirty tree, on a base that has
+moved, and on a render that would name commits the base lacks; a second run prints `nothing to render`, commits
+nothing and leaves the tree clean. `npm run land:check` is the gate shape and writes nothing. This is the whole
+step: it replaces "now remember to run `npm run changelog` and commit it" with one command the landing path runs.
+The hook enforces it: a push that would land the base branch while `CHANGELOG.md` is stale is refused by
+`.githooks/pre-push`, and the refusal names `npm run land`. A worktree branch's changelog is the base's business,
+so only a base push is gated.
+
 Those two hooks are the repo's own; the panel adds three more gates on top of them — the project's
 `remoteBranchPolicy`, the pre-push hook it installs into `<git-common-dir>/wtgui-hooks/`, and the permission box
 that hook parks a push on — plus the host's ruleset on the default branch. All of them, in the order a `git push`
