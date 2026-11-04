@@ -18,7 +18,8 @@
 //     host; this one cannot, because its actions come from two windows with different handlers;
 //   - Tab wraps inside the card, and the card takes focus on open, so the reader's next key lands in the dialog;
 //   - a press on the backdrop closes it; a press inside the card does not, including a press that begins inside and
-//     is released outside;
+//     is released outside — and neither press reaches the page, which closes Settings for any click outside its own
+//     panel (public/app.js). Without that stop one press closed two surfaces (round 5A's finding 5);
 //   - focus returns to the control that opened it (found again by `data-pipe-flow` when a repaint replaced it);
 //   - `prefers-reduced-motion: reduce` turns the marks' animation off by `data-motion="off"`, and the stylesheet
 //     restates the same rule inside a media query for a page whose script never ran.
@@ -330,8 +331,15 @@
       (e) => {
         const host = doc.getElementById(OVERLAY_ID);
         if (!state.open || !host || host.hidden) return;
-        if (e.target !== host || !state.pressedOnBackdrop) return;
+        if (e.target !== host) return;
         e.preventDefault?.();
+        // A press on the backdrop belongs to THIS dialog and to nothing under it. The page closes Settings for any click
+        // whose path does not include it (public/app.js, the #settings outside-press handler), so without this one press
+        // closed two surfaces and the reader lost the tab they were editing in (round 5A's finding 5). It stops on the
+        // DRAG-OUT press as well as the closing one: a press that begins in the card and ends on the backdrop is not a
+        // dismissal, but it is still this dialog's press, and it used to close Settings on its way past.
+        e.stopPropagation?.();
+        if (!state.pressedOnBackdrop) return;
         close({ doc });
       },
       true,

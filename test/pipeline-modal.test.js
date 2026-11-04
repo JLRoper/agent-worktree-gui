@@ -51,9 +51,14 @@ test("the key handler runs in the capture phase and consumes the key it owns", (
   assert.match(keyBlock, /\},\s*\n?\s*true,\s*\n?\s*\);/, "registered with capture = true");
 });
 
-test("the backdrop closes only a press that BEGAN on it", () => {
+test("the backdrop closes only a press that BEGAN on it, and the press stops at this dialog", () => {
   assert.match(source, /state\.pressedOnBackdrop = Boolean\(host && e\.target === host\)/, "the press remembers where it started");
-  assert.match(source, /if \(e\.target !== host \|\| !state\.pressedOnBackdrop\) return;/, "a drag out of the card is not a dismissal");
+  assert.match(source, /if \(e\.target !== host\) return;/, "only a press on the backdrop itself is a backdrop press");
+  assert.match(
+    source,
+    /e\.stopPropagation\?\.\(\);\s*\n\s*if \(!state\.pressedOnBackdrop\) return;/,
+    "a drag out of the card is not a dismissal — and no backdrop press reaches the page's Settings outside-press handler (one press, one surface)",
+  );
 });
 
 test("it is a real modal: role, aria-modal, its own focus, a scroll lock and focus restored to the opener", () => {
