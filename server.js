@@ -13,7 +13,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "./lib/pool.js";
 import { portHolder, refusalLine } from "./lib/port-guard.js";
-import { worktreeList } from "./lib/project.js";
+import { worktreeList, prIndex, prFor } from "./lib/project.js";
 import { Store } from "./lib/store.js";
 import { Scheduler } from "./lib/scheduler.js";
 import { ProjectRegistry } from "./lib/projects.js";
@@ -30,10 +30,10 @@ import { verifyLabel, verifyPrompt } from "./lib/verify-prompt.js";
 import { answerDeletes, answerLine, answeredChecks } from "./lib/verify-landed.js";
 import { deleteWorktreeRow } from "./lib/worktree-remove.js";
 import { ReleaseRequests, agentCleanupFrom, releaseWorktree, releasesEnabled } from "./lib/worktrees.js";
-import { Hosts, proposeMapping } from "./lib/hosts.js";
+import { Hosts, docOf, prListing, proposeMapping, renderTemplate } from "./lib/hosts.js";
 // What a worktree is FOR: the definition catalogue (reader-edited over the shipped seed), where each tree stands in
 // one, and the ladder that is the only way a tree's kind may change (docs/pipelines.md §1–§3).
-import { PIPELINES_VERSION, PIPELINE_KINDS, EXIT_CHECKS, Pipelines, PipelineRecords, presumedPipeline, changePipeline, storeSwitch, validatePipelinesDocument, readPipelinesFile } from "./lib/pipelines.js";
+import { PIPELINES_VERSION, PIPELINE_KINDS, EXIT_CHECKS, Pipelines, PipelineRecords, presumedPipeline, changePipeline, storeSwitch, validatePipelinesDocument, readPipelinesFile, observeGithubPr, observeBitbucketPr } from "./lib/pipelines.js";
 import { suggestWorktreeName } from "./lib/name-from-work.js";
 import { TreeNames, describeNaming, tagOf, treeKey, autoNameRefusal, namingState, renameRefusal } from "./lib/tree-names.js";
 import { WorktreeNaming } from "./lib/worktree-naming.js";
@@ -1099,6 +1099,189 @@ function panelTrees() {
   return out;
 }
 
+// ---- a turn on an existing thread, and the stage timer's wake -------------------------------------------------------
+// A reply continues the SAME agent: same thread, same tree, same model, and the same paragraph about where that tree's
+// branch goes. The stage timer's wake is that turn too (docs/pipelines.md §6), so both go through this one function —
+// a wake that went through a second copy of the reply path would be a turn with a different tree, model or landing
+// paragraph than a reader's reply. `{status, body}` is exactly what the route sends.
+async function startThreadReply({ thread = "", text = "", displayPrompt = null, origin = null, model = undefined, budget = undefined, maxTurns = undefined, yolo = undefined } = {}) {
+  const said = String(text || "").trim();
+  if (!said) return { status: 400, body: { error: "reply text is required" } };
+  const first = jobs.firstOfThread(String(thread || ""));
+  if (!first) return { status: 404, body: { error: `unknown thread: ${thread}` } };
+
+  // Run where the agent actually is: the tree that agent was created for, and only while that is still a tree of its
+  // own. This used to be a `stat(…).isDirectory()` test with a fall back to `first.cwd` — the same dead path — which
+  // is how a reply started a run in a released tree whose shell then worked in the PRIMARY checkout (0.62.1 boot: job
+  // 5ba56bf1). 409 is the shape the busy-thread refusal already uses: the request is well formed, it just cannot run
+  // in that tree. See lib/own-tree.js.
+  const tree = await replyTree(first);
+  if (!tree.ok) {
+    return {
+      status: 409,
+      body: {
+        error: `${first.thread}: ${tree.refusal} — nothing was sent and no run was started. A resume is not a new tree.`,
+        code: "tree_released",
+        tree: tree.named,
+        checkout: tree.instead || tree.outer || null,
+      },
+    };
+  }
+  const dir = tree.dir;
+  const home = projectOfTree(dir);
+  const job = await jobs.create({
+    prompt: said,
+    displayPrompt: displayPrompt ? String(displayPrompt) : null,
+    thread: first.thread,
+    reply: true,
+    // Set when the panel is delivering subagent results, or when the stage timer's wake caused this turn: the card
+    // says what caused it.
+    origin,
+    resumeDir: dir,
+    cwd: dir,
+    // A model picked on the card wins; otherwise the thread's own choice, then whatever the first turn used.
+    model: model ?? jobs.modelFor(first.thread) ?? first.model,
+    budget: budget ?? first.budget ?? 1800,
+    maxTurns: maxTurns ?? first.maxTurns,
+    yolo: yolo ?? first.yolo,
+    // A reply continues the SAME agent, so it keeps the tree that agent was created for.
+    ownerPath: first.ownerPath || null,
+    // …and the paragraph about where that tree's branch goes has to quote the policy of ITS project, and its remote,
+    // the way the spawn did. A reply that carried neither fell back to the global default and told a worker in a
+    // project that ALLOWS pushes that a push "will park and then fail".
+    branchPolicy: policyForProjectPath(home?.path || dir, home),
+    remote: home?.remote || null,
+  });
+  // A delivery turn closes the offer on the turn it answers, for every reader and every reload.
+  if (origin && origin.fromTurn) jobs.markCollected(origin.fromTurn, job.id);
+  return { status: 202, body: { job } };
+}
+
+// ---- the stage timer: the host read, the wake, and the one ticker ---------------------------------------------------
+// A waiting stage costs a host read and, when there is something to answer, one short turn. Nothing here holds a run
+// slot, sleeps or polls in a loop: the record's own `every` (1h → 2h → 4h) is the clock, and a tick that finds no due
+// record is one walk of the tree book.
+
+// What the PR says, for one due wait. The PR is found by the branch stored WITH the wait (lib/pipelines.js
+// `reviewWaitFor`), through the same index the board's PR cell uses; the state and the comments are the host's own
+// answer, normalised to the one observation shape by lib/pipelines.js. Every failure is `{ok:false, why}` — never an
+// empty PR, which would read as "nothing arrived" and back a reviewer off for hours on a response we could not parse.
+async function readReviewForPipelineWait({ tree, record, stage, wait }) {
+  const project = projectOfTree(tree);
+  if (!project) return { ok: false, why: `${tree} is not inside a known project, so the PR its branch has cannot be read` };
+  const branch = String(wait?.branch || "").trim();
+  if (!branch) return { ok: false, why: "the wait record names no branch, so its pull request cannot be found" };
+  let pr = null;
+  try {
+    const index = await prIndex(project, 60, hosts);
+    pr = prFor(index, branch, { tip: await jobs.headSha(tree), base: project.mainBranch });
+  } catch (error) {
+    return { ok: false, why: `the PR list for ${project.name} could not be read (${String((error && error.message) || error)})` };
+  }
+  if (!pr || pr.number == null) return { ok: false, why: `no pull request for ${branch} in ${project.name}` };
+
+  const listing = prListing(docOf(hosts), project);
+  if (!listing.url) return { ok: false, why: listing.why || `host "${project.host || "?"}" has no pull-request endpoint` };
+  const coords = listing.coordinates || {};
+  try {
+    if (listing.transport === "gh") {
+      if (!coords.owner || !coords.repo) return { ok: false, why: `gh needs owner and repo coordinates, the host record supplies ${JSON.stringify(coords)}` };
+      const { stdout } = await execP(
+        "gh",
+        ["pr", "view", String(pr.number), "--json", "state,headRefOid,reviewRequests,reviews,comments", "--repo", `${coords.owner}/${coords.repo}`],
+        { cwd: project.path, timeout: 30000, windowsHide: true, maxBuffer: 8 * 1024 * 1024 },
+      );
+      return observeGithubPr(JSON.parse(stdout || "{}"), { number: pr.number });
+    }
+    const token = listing.tokenEnv ? process.env[listing.tokenEnv] : null;
+    if (!token) return { ok: false, why: `no token in ${listing.tokenEnv || "(api.tokenEnv is not set)"} — the pull request cannot be read` };
+    const values = { base: listing.mapping?.base, projectKey: coords.projectKey, repoSlug: coords.repoSlug, pr: pr.number };
+    const base = renderTemplate("{base}/rest/api/1.0/projects/{projectKey}/repos/{repoSlug}/pull-requests/{pr}", values);
+    const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+    const [recordRes, activitiesRes] = await Promise.all([
+      fetch(base, { headers, signal: AbortSignal.timeout(20000) }),
+      fetch(`${base}/activities?limit=100`, { headers, signal: AbortSignal.timeout(20000) }),
+    ]);
+    if (!recordRes.ok) return { ok: false, why: `HTTP ${recordRes.status} from ${base}` };
+    if (!activitiesRes.ok) return { ok: false, why: `HTTP ${activitiesRes.status} from ${base}/activities` };
+    return observeBitbucketPr(await recordRes.json(), await activitiesRes.json());
+  } catch (error) {
+    return { ok: false, why: `the pull request could not be read: ${String((error && error.message) || error)}` };
+  }
+}
+
+// The holes a stage's prompt is rendered with (§1.4, the closed list). Everything here is read from the tree and its
+// project; `pr` and `sha` come from the read that caused the advance. `desc`/`ticket` are NOT invented: a stage that
+// needs one of them refuses to start (lib/pipelines.js `renderPrompt`) and the log names the hole, which is the rule
+// for every rendered prompt in this panel.
+function pipelinePromptValues({ tree, record, stage, next, observation, wait }) {
+  const project = projectOfTree(tree) || {};
+  const listing = project.name ? prListing(docOf(hosts), project) : { id: null };
+  return {
+    tree,
+    branch: String(wait?.branch || "").trim() || null,
+    main: project.mainBranch || null,
+    project: project.name || null,
+    remote: project.remote || null,
+    host: listing.id || project.host || null,
+    pr: observation?.pr?.number ?? null,
+    sha: observation?.pr?.headRefOid || null,
+    lastSeen: String(wait?.lastSeen || record?.since || "").trim() || null,
+  };
+}
+
+// The wake: the reply path above, and a refusal is a value the sweep logs rather than a 500. The turn is marked as
+// caused by the stage timer, so a card that seems to answer itself says who did it.
+async function wakePipelineThread({ thread, text, displayPrompt, reason }) {
+  if (!thread) return { ok: false, code: "no-thread", error: "the wait record names no thread — there is nothing on the board to wake" };
+  try {
+    const out = await startThreadReply({ thread, text, displayPrompt, origin: { pipelineWait: true, reason: String(reason || "") } });
+    if (out.status !== 202) return { ok: false, code: out.body?.code || `http-${out.status}`, error: String(out.body?.error || "") };
+    return { ok: true, job: out.body.job };
+  } catch (error) {
+    return { ok: false, code: "threw", error: String((error && error.message) || error) };
+  }
+}
+
+// ONE interval for every waiting tree — never one timer per tree, the way the scheduler drives the scans. A minute is
+// fine grain: the record's own `every` is the real clock, and a tick that finds nothing is a walk of the tree book. The
+// timer is unref'd, so it never keeps the process (or a test) alive on its own.
+const PIPELINE_WAIT_TICK_MS = 60 * 1000;
+let pipelineWaitTimer = null;
+async function tickPipelineWaits({ now = Date.now() } = {}) {
+  try {
+    const out = await jobs.sweepPipelineWaits({
+      now,
+      readReview: readReviewForPipelineWait,
+      wake: wakePipelineThread,
+      promptValues: pipelinePromptValues,
+    });
+    if (out.checked || out.errors.length) {
+      log(
+        `pipeline waits: ${out.checked} due — ${out.advanced} advanced, ${out.woke} woke, ${out.rescheduled} rescheduled, ${out.closed} closed, ${out.refused} refused` +
+          `${out.errors.length ? `, ${out.errors.length} error(s): ${out.errors.map((e) => e.error).join("; ")}` : ""}`,
+      );
+    }
+    return out;
+  } catch (error) {
+    log(`pipeline wait tick failed: ${String((error && error.message) || error)}`);
+    return null;
+  }
+}
+
+function startPipelineWaitTicker() {
+  if (pipelineWaitTimer) return;
+  pipelineWaitTimer = setInterval(() => void tickPipelineWaits(), PIPELINE_WAIT_TICK_MS);
+  if (typeof pipelineWaitTimer.unref === "function") pipelineWaitTimer.unref();
+  log(`pipeline waits: one ticker every ${PIPELINE_WAIT_TICK_MS / 1000}s — a waiting stage costs a host read, never a parked run`);
+}
+
+function stopPipelineWaitTicker() {
+  if (!pipelineWaitTimer) return;
+  clearInterval(pipelineWaitTimer);
+  pipelineWaitTimer = null;
+}
+
 // ---- the TODO list of each worktree --------------------------------------------------------------------------------
 // Written by the assistant (a `TODO <text>` line, normally under the SPAWN that starts the work), kept current by
 // every agent in the tree (a run's FINAL message is harvested when it settles), and read by the row. ONE store for
@@ -1121,6 +1304,10 @@ jobs.parents = parents;
 // The pipeline record book: the cut writes `{id: "local", stage: "work", …}` into it before the run is posted, a
 // switch rewrites it through POST /api/worktree/pipeline, and every card reads its tree's entry back.
 jobs.pipelineRecords = pipelineRecords;
+// …and the catalogue, because a stage timer has to read the stage's EXIT before it can know the stage is waiting on a
+// reviewer at all (lib/jobs.js `registerPipelineWait`). Injected here rather than imported there: lib/jobs.js owns no
+// catalogue file, the same way it owns no worktree.
+jobs.pipelines = pipelines;
 scheduler.parents = parents;
 if (assistant) {
   assistant.todos = todos;
@@ -4010,50 +4197,19 @@ const server = createServer(async (req, res) => {
       if (assistantThread) {
         return sendJson(res, 400, { error: "the assistant's thread is answered through /api/assistant/say" });
       }
-      const first = jobs.firstOfThread(String(body.thread || ""));
-      if (!first) return sendJson(res, 404, { error: `unknown thread: ${body.thread}` });
-
-      // Run where the agent actually is: the tree that agent was created for, and only while that is still a tree of
-      // its own. This used to be a `stat(…).isDirectory()` test with a fall back to `first.cwd` — the same dead path
-      // — which is how a reply started a run in a released tree whose shell then worked in the PRIMARY checkout
-      // (0.62.1 boot: job 5ba56bf1). 409 is the shape the busy-thread refusal already uses: the request is well
-      // formed, it just cannot run in that tree. See lib/own-tree.js.
-      const tree = await replyTree(first);
-      if (!tree.ok) {
-        return sendJson(res, 409, {
-          error: `${first.thread}: ${tree.refusal} — nothing was sent and no run was started. A resume is not a new tree.`,
-          code: "tree_released",
-          tree: tree.named,
-          checkout: tree.instead || tree.outer || null,
-        });
-      }
-      const dir = tree.dir;
       const origin = body.origin && typeof body.origin === "object" ? body.origin : null;
-      const home = projectOfTree(dir);
-      const job = await jobs.create({
-        prompt: text,
-        thread: first.thread,
-        reply: true,
-        // Set when the panel is delivering subagent results: the card says what caused this turn.
+      // The turn itself is `startThreadReply`, shared with the stage timer's wake: a wake that went through a second
+      // copy of this path would be a turn with a different tree, model or landing paragraph than a reader's reply.
+      const out = await startThreadReply({
+        thread: String(body.thread || ""),
+        text,
         origin,
-        resumeDir: dir,
-        cwd: dir,
-        // A model picked on the card wins; otherwise the thread's own choice, then whatever the first turn used.
-        model: body.model ?? jobs.modelFor(first.thread) ?? first.model,
-        budget: body.budget ?? first.budget ?? 1800,
-        maxTurns: body.maxTurns ?? first.maxTurns,
-        yolo: body.yolo ?? first.yolo,
-        // A reply continues the SAME agent, so it keeps the tree that agent was created for.
-        ownerPath: first.ownerPath || null,
-        // …and the paragraph about where that tree's branch goes has to quote the policy of ITS project, and its remote,
-        // the way the spawn did. A reply that carried neither fell back to the global default and told a worker in a
-        // project that ALLOWS pushes that a push "will park and then fail".
-        branchPolicy: policyForProjectPath(home?.path || dir, home),
-        remote: home?.remote || null,
+        model: body.model,
+        budget: body.budget,
+        maxTurns: body.maxTurns,
+        yolo: body.yolo,
       });
-      // A delivery turn closes the offer on the turn it answers, for every reader and every reload.
-      if (origin && origin.fromTurn) jobs.markCollected(origin.fromTurn, job.id);
-      return sendJson(res, 202, { job });
+      return sendJson(res, out.status, out.body);
     }
 
     if (route === "/api/jobs/cancel" && req.method === "POST") {
@@ -5449,6 +5605,10 @@ try {
   for (const p of registry.projects) store.ensureProject(p);
   if (!config.defaultCwd) config.defaultCwd = registry.projects[0]?.path || process.cwd();
   await scheduler.start();
+  // The stage timer's ticker (docs/pipelines.md §6): one interval for every waiting tree, started after the first
+  // sweep so a boot that is still reading git does not also read a host. A wait registered before this restart is due
+  // here too — it is in the tree book, not in the process.
+  startPipelineWaitTicker();
   void sweepCheckedLandings();
   void sweepReleases("boot").catch(() => {});
   // The sweep that finds repos created since the last run is not a boot dependency when a cached project
@@ -5470,6 +5630,7 @@ function shutdown(code = 0) {
   } catch {
     /* an already-stopped scheduler is not a failure */
   }
+  stopPipelineWaitTicker();
   clearInterval(heartbeat);
   try {
     pool.close();
