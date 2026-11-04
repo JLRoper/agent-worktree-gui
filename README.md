@@ -180,10 +180,13 @@ repo has **no CI**, so nothing refuses a bad subject at PR time either; its own 
 `git commit --no-verify`. The index stores the script executable (mode 100755), so a non-Windows clone runs
 it without a manual `chmod`; if a checkout ever loses the bit, `chmod +x .githooks/commit-msg`.
 
-`.githooks/pre-push` refuses a push that carries commits with no version bump: it runs
-`node tools/version.mjs check` (a branch whose `package.json` version is still its base's, and which carries
-commits of its own, is refused; an already-bumped branch and a branch with nothing on it pass silently). The
-level is a judgement the landing agent makes from the diff and lands in the same PR as the change —
+`.githooks/pre-push` refuses a push whose branch is not above its base's version: it runs
+`node tools/version.mjs check`, which compares HEAD's `package.json` with the version at `origin/main`'s current
+tip. A branch that carries commits and did not move the number is refused, and so is a branch that is merely
+behind main (it still holds the number it was cut at); a branch above the base passes, and main itself passes
+because it has nothing to land. A pass prints what it compared — branch version, base ref, base version — so a
+run that says nothing is never read as a pass. The level is a judgement the landing agent makes from the diff
+and lands in the same PR as the change —
 `node tools/version.mjs suggest` advises, `apply <patch|minor|major>` writes the one place the version lives,
 and `docs/versioning.md` is the scale. The merge prompt tells the landing agent to do it. Same install covers
 both hooks, and the same `--no-verify` bypasses this one.

@@ -58,7 +58,16 @@ try {
     copyFileSync(path.join(REPO, ".githooks", h), path.join(WORK, ".githooks", h));
     chmodSync(path.join(WORK, ".githooks", h), 0o755);
   }
-  copyFileSync(path.join(REPO, "tools", "version.mjs"), path.join(WORK, "tools", "version.mjs"));
+  for (const f of ["version.mjs", "release-history.mjs"]) {
+    copyFileSync(path.join(REPO, "tools", f), path.join(WORK, "tools", f));
+  }
+  // The tool and the hooks are part of main before any branch is cut: `apply` only commits and tags on a clean
+  // tree (a tag belongs to a commit that carries the bump and nothing else), and untracked fixture files would
+  // otherwise be somebody else's work under the version number. The hook is installed AFTER this push: it would
+  // (correctly) refuse main's own fixture commit, which carries no bump.
+  git(["add", "-A"]);
+  git(["commit", "-q", "-m", "Add the version tool and this repo's hooks to the sandbox"]);
+  git(["push", "-q", "github", "main"]);
   git(["config", "core.hooksPath", ".githooks"]);
 
   // ---- a branch that carries a doc, a feature, and one commit with no prefix at all ------------------
@@ -80,7 +89,7 @@ try {
   const checkFailText = out(checkFail);
   step("check refuses an unbumped branch (non-zero)", checkFail.status !== 0, `exit=${checkFail.status}`);
   step("check names the commits it counted", /docs: describe/.test(checkFailText) && /feat\(board\)/.test(checkFailText) && /Tidy the worktree row/.test(checkFailText), "all three commits listed");
-  step("check names the version it compared", /1\.0\.0 — unchanged from github\/main/.test(checkFailText), "package.json: 1.0.0 — unchanged from github/main");
+  step("check names both numbers it compared", /branch\s+1\.0\.0/.test(checkFailText) && /base\s+github\/main\s+1\.0\.0/.test(checkFailText), checkFailText.split("\n").filter((l) => /^\s+(branch|base)/.test(l)).join(" | "));
   step("check suggests a level and calls it advice", /would suggest: minor/.test(checkFailText) && /advice/.test(checkFailText), "suggested minor");
   step("check wrote nothing", version() === "1.0.0", `package.json still ${version()}`);
 
@@ -92,21 +101,29 @@ try {
   step("nothing reached the remote", (git(["ls-remote", "github", "refs/heads/work"]).stdout || "").trim() === "", "refs/heads/work absent on the remote");
 
   // ---- apply writes the one place the version lives ---------------------------------------------------
+  // In a clean tree apply writes the number, commits that write as its own commit and tags the commit; the
+  // version-anchor suite (test/version-tags.test.js) owns the tag rules, so this asserts the write and the fact
+  // that the bump is the only thing in the commit.
   const apply = tool(["apply", "minor"]);
   const applyText = out(apply);
   step("apply writes the level asked for", apply.status === 0 && version() === "1.1.0", `exit=${apply.status}, version=${version()}`);
   step("apply prints the old and the new value", /1\.0\.0 -> 1\.1\.0/.test(applyText), applyText.split("\n")[1]);
-  const changed = git(["diff", "--name-only"]).stdout.trim().split("\n").filter(Boolean);
-  step("apply changed only package.json", changed.length === 1 && changed[0] === "package.json", `git diff --name-only -> ${changed.join(", ")}`);
+  const changed = (git(["show", "--name-only", "--format=", "HEAD"]).stdout || "").trim().split("\n").filter(Boolean);
+  step("apply committed only package.json", changed.length === 1 && changed[0] === "package.json", `git show --name-only HEAD -> ${changed.join(", ")}`);
+  step("apply tagged the commit it made", (git(["tag", "--list", "v1.1.0"]).stdout || "").trim() === "v1.1.0" && git(["status", "--porcelain"]).stdout.trim() === "", "v1.1.0 exists and the tree is clean");
   const hookSrc = readFileSync(path.join(REPO, ".githooks", "pre-push"), "utf8");
   const invocations = hookSrc.match(/node "\$TOOL"[^\n]*/g) || [];
   step("the hook invokes the tool with check, never apply", invocations.length === 1 && /check/.test(invocations[0]), invocations.join(" | "));
 
-  // ---- the bump in the same branch: check is quiet, the push is allowed -------------------------------
-  git(["add", "--", "package.json"]);
-  git(["commit", "-q", "-m", "Bump the version to 1.1.0 for the reattach chip, a new capability"]);
+  // ---- the bump in the same branch: check passes and the push is allowed ------------------------------
   const checkPass = tool(["check"]);
-  step("check is silent and zero on an already-bumped branch", checkPass.status === 0 && out(checkPass).trim() === "", `exit=${checkPass.status}, output=${JSON.stringify(out(checkPass))}`);
+  const checkPassText = out(checkPass);
+  step("check passes on an already-bumped branch", checkPass.status === 0, `exit=${checkPass.status}`);
+  step(
+    "check says what it compared when it passes (never silent)",
+    /branch\s+1\.1\.0/.test(checkPassText) && /base\s+github\/main\s+1\.0\.0/.test(checkPassText) && /version check: ok/.test(checkPassText),
+    checkPassText.split("\n").filter((l) => /^\s+(branch|base)/.test(l)).join(" | "),
+  );
 
   const pushAllowed = git(["push", "github", "work"]);
   step("pre-push allows the same push once bumped", pushAllowed.status === 0, `exit=${pushAllowed.status}`);
@@ -127,7 +144,32 @@ try {
   // ---- a branch with no commits of its own is never asked to bump -------------------------------------
   git(["checkout", "-q", "main"]);
   const checkMain = tool(["check"]);
-  step("check is quiet on a branch with no commits", checkMain.status === 0 && out(checkMain).trim() === "", `exit=${checkMain.status}, output=${JSON.stringify(out(checkMain))}`);
+  const checkMainText = out(checkMain);
+  step("check passes on main", checkMain.status === 0, `exit=${checkMain.status}\n${checkMainText}`);
+  step(
+    "check says on main that there is nothing to land, and names both numbers",
+    /nothing to land/.test(checkMainText) && /branch\s+1\.0\.0/.test(checkMainText) && /base\s+github\/main\s+1\.0\.0/.test(checkMainText),
+    checkMainText.split("\n").filter((l) => /^\s+(branch|base)/.test(l)).join(" | "),
+  );
+
+  // ---- a branch that is merely BEHIND the base must be refused, not passed ---------------------------
+  // The defect this harness now pins: at 0.84.0 against origin/main's 0.87.0 the old check printed nothing and
+  // exited 0, because any value that was not equal to the base's counted as a bump. Here main moves to 1.2.0
+  // after `work` was cut, so `work` carries a number main has already passed.
+  git(["checkout", "-q", "main"]);
+  write("package.json", readFileSync(path.join(WORK, "package.json"), "utf8").replace(/"version":\s*"[^"]*"/, '"version": "1.2.0"'));
+  git(["commit", "-q", "-am", "Bump the version to 1.2.0 on main"]);
+  git(["push", "-q", "github", "main"]);
+  git(["checkout", "-q", "work"]);
+  const behind = tool(["check"]);
+  const behindText = out(behind);
+  step("check refuses a branch behind the base (non-zero)", behind.status !== 0, `exit=${behind.status}`);
+  step("the behind refusal names the branch's number and the base's", /branch\s+1\.1\.0/.test(behindText) && /base\s+github\/main\s+1\.2\.0/.test(behindText), behindText.split("\n").filter((l) => /^\s+(branch|base)/.test(l)).join(" | "));
+  step("the behind refusal says what to do", /behind github\/main/.test(behindText) && /then bump above 1\.2\.0/.test(behindText), "merge/rebase, then bump above the base");
+  commit("later.txt", "more\n", "fix: keep the chart legend inside its column");
+  const pushBehind = git(["push", "github", "work"]);
+  step("pre-push refuses a real push of a behind branch", pushBehind.status !== 0 && /version check: refused/.test(out(pushBehind)), `exit=${pushBehind.status}`);
+  git(["reset", "-q", "--hard", "HEAD~1"]);
 
   // ---- the prefixes, one branch each ------------------------------------------------------------------
   git(["checkout", "-q", "-b", "breaking", "main"]);

@@ -201,10 +201,14 @@ Then open **http://127.0.0.1:7331**.
   nothing refuses a bad subject at PR time either — and its own author can bypass it with
   `git commit --no-verify`. On a non-Windows clone also check `ls -l .githooks/commit-msg` for the
   executable bit.
-- **`pre-push: refused — <branch> would go out with no version bump`** — this branch's own commits carry a
-  code change but `package.json` still holds the version its base has: decide the level from the diff
-  (`docs/versioning.md`), run `node tools/version.mjs apply <patch|minor|major>`, commit it, push again. That
-  is deliberate, not something to go around: `git push --no-verify` bypasses it if the refusal is wrong.
+- **`pre-push: refused — <branch> would go out with no version bump`** — the check compares HEAD's
+  `package.json` with the version at `origin/main`'s current tip, and the refusal prints both numbers. Either
+  this branch's commits carry a code change but the number still holds its base's value, or the branch is
+  merely **behind** main (it still carries the number it was cut at, which main has already passed). In the
+  first case decide the level from the diff (`docs/versioning.md`), run
+  `node tools/version.mjs apply <patch|minor|major>`, commit it, push again. In the second, merge or rebase
+  `origin/main` first and then bump above its number. That is deliberate, not something to go around:
+  `git push --no-verify` bypasses it if the refusal is wrong.
 - **A row shows `ERROR`** — that worktree could not be read; the row detail names the reason.
 - **Windows-only bits**: the `:port` / `● board` liveness signals read `netstat` / `tasklist`. Off
   Windows those two stay dark; scanning, verdicts, spawning and replies all still work.

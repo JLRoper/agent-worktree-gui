@@ -9,9 +9,14 @@
 //
 //   suggest            read the branch's commits against its base (and the PR's title and body, when gh has
 //                      them) and print a level with the reason for each commit. ADVISORY: writes nothing.
-//   check              exit non-zero when the branch carries commits and package.json still holds the base's
-//                      version, naming the commits. Silent and zero on an already-bumped branch and on a
-//                      branch with no commits. This is the pipeline's gate — the pre-push hook calls it.
+//   check              the landing gate. It compares the number this branch would push (HEAD's package.json)
+//                      with the number at the base ref's CURRENT tip (origin/main's tree — never the merge-base,
+//                      never this checkout's own file) and refuses unless the branch is strictly above it.
+//                      "Behind" is a refusal too: a branch cut before main moved carries main's old number, and
+//                      that is not a bump. It prints what it compared — branch version, base ref, base version —
+//                      on BOTH outcomes, so silence can never be read as either. Exit 0 only when the branch's
+//                      number is above the base's, or when the branch adds no commits and its number equals the
+//                      base's (main itself: nothing to land, nothing to bump). The pre-push hook calls it.
 //                      It never writes.
 //   apply <level>      write the new version to package.json (the one place it lives), commit that write as the
 //                      bump, and anchor the commit with an annotated v<version> tag. Run by the landing agent,
@@ -27,9 +32,11 @@
 //                      duplicated, and a second run creates nothing and exits 0. --push sends only the tags
 //                      this run created.
 //
-// The scale these read is docs/versioning.md. The base ref is $VERSION_BASE when set, otherwise the
-// remotes' own HEAD (github/main, origin/main, ...), otherwise main, otherwise master. The repository is the
-// one the current directory is in (`git rev-parse --show-toplevel`), so the tool works from a worktree.
+// The scale these read is docs/versioning.md. The base ref is --base when given, otherwise $VERSION_BASE,
+// otherwise the remotes' own HEAD (github/main, origin/main, ...), otherwise main, otherwise master. The base's
+// version is read out of THAT ref's tree, and the branch's out of HEAD — the two commits a push compares. The
+// repository is the one the current directory is in (`git rev-parse --show-toplevel`), so the tool works from a
+// worktree.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -179,6 +186,28 @@ function versionAt(ref) {
   return text === null ? null : versionIn(text);
 }
 
+// The number a push would carry: HEAD's file, not the working tree's. An uncommitted bump is not in the push, and
+// a gate that read the file on disk would pass a branch whose pushed number never moved.
+function versionAtHead() {
+  const text = gitOk(["show", "HEAD:package.json"]);
+  return text === null ? null : versionIn(text);
+}
+
+// Versions as numbers, so "behind" is a comparison rather than an inequality: the old check treated every value
+// that was not equal as a bump, which is how 0.84.0 passed against main's 0.87.0.
+function semver(v) {
+  const m = String(v == null ? "" : v).trim().match(/^(\d+)\.(\d+)\.(\d+)/);
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+function compareVersions(a, b) {
+  const x = semver(a);
+  const y = semver(b);
+  if (!x || !y) return null;
+  for (let i = 0; i < 3; i += 1) if (x[i] !== y[i]) return x[i] > y[i] ? 1 : -1;
+  return 0;
+}
+
 function nextVersion(current, level) {
   const m = String(current || "").match(/^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/);
   if (!m) return null;
@@ -282,39 +311,127 @@ function modeSuggest() {
 
 function modeCheck(argv) {
   const baseFlag = argv.indexOf("--base");
-  const base = baseFlag >= 0 && argv[baseFlag + 1] ? argv[baseFlag + 1] : resolveBase().ref;
-  if (!base) {
-    console.error(`version check: no base ref found (looked for: ${resolveBase().tried.join(", ")}) — nothing compared`);
-    return 0;
-  }
-  const commits = branchCommits(base);
-  if (!commits.length) return 0; // a branch with nothing on it cannot be asked to bump anything
+  const asked = baseFlag >= 0 ? String(argv[baseFlag + 1] || "").trim() : "";
+  const { ref: base, tried } = asked
+    ? { ref: gitOk(["rev-parse", "--verify", "--quiet", `${asked}^{commit}`]) ? asked : null, tried: [asked] }
+    : resolveBase();
 
-  const text = readWorking();
-  const here = versionIn(text || "");
-  const there = versionAt(base);
-  if (here === null) {
-    console.error(`version check: refused — package.json has no readable "version" (${PKG})`);
+  // A gate that cannot say what it measured has not passed anything: this used to print a note and return 0,
+  // which is a pass nobody could tell from a real one.
+  if (!base) {
+    console.error([
+      "",
+      "version check: refused — nothing was compared",
+      "",
+      `  no base ref resolved (looked for: ${tried.join(", ")})`,
+      "  a gate that cannot name the branch's base cannot pass it. Fetch the remote, or name the ref:",
+      "",
+      "    node tools/version.mjs check --base origin/main",
+      "",
+    ].join("\n"));
     return 1;
   }
-  if (there === null || here !== there) return 0; // bumped (or nothing at the base to compare with): quiet
 
+  const baseSha = gitOk(["rev-parse", "--short", base]) || "?";
+  const there = versionAt(base);
+  const here = versionAtHead();
+  const work = versionIn(readWorking() || "");
+
+  if (here === null) {
+    console.error(`version check: refused — HEAD's package.json has no readable "version" (${PKG})`);
+    return 1;
+  }
+  if (there === null) {
+    console.error([
+      "",
+      `version check: refused — ${base} carries no readable package.json "version"`,
+      "",
+      `  branch  ${here}  (HEAD's package.json)`,
+      `  base    ${base}  (${baseSha})  — no package.json "version" in that tree`,
+      "",
+      "  nothing was compared, so nothing was proven. Fix the base's package.json, or name another ref.",
+      "",
+    ].join("\n"));
+    return 1;
+  }
+
+  const commits = branchCommits(base);
+  const order = compareVersions(here, there);
+  const note = work !== null && work !== here
+    ? `  (the working tree's package.json reads ${work}; HEAD is what a push carries, so HEAD was compared — commit it)`
+    : null;
+
+  if (order === null) {
+    console.error([
+      "",
+      "version check: refused — a version that cannot be compared",
+      "",
+      `  branch  ${here}  (HEAD's package.json)`,
+      `  base    ${base}  ${there}  (${baseSha})`,
+      "",
+      "  both sides must be major.minor.patch numbers for \"above the base\" to mean anything.",
+      "",
+    ].join("\n"));
+    return 1;
+  }
+
+  // ---- the pass: the branch's number is above the base's, and it says what it compared ----
+  if (order > 0) {
+    console.log(`version check: ok — the branch's number is above ${base}'s`);
+    console.log(`  branch  ${here}  (HEAD's package.json)`);
+    console.log(`  base    ${base}  ${there}  (${baseSha})`);
+    console.log(`  ${commits.length
+      ? `${commits.length} commit${commits.length === 1 ? "" : "s"} to land on top of ${base}`
+      : `no commits of its own on top of ${base}`}`);
+    if (note) console.log(note);
+    return 0;
+  }
+
+  // ---- the other pass: main itself, or a branch with nothing on it at the base's number ----
+  if (order === 0 && !commits.length) {
+    console.log("version check: ok — nothing to land, so nothing to bump");
+    console.log(`  branch  ${here}  (HEAD's package.json)`);
+    console.log(`  base    ${base}  ${there}  (${baseSha})`);
+    console.log(`  this branch adds no commits on top of ${base}; there is no change here for a number to name`);
+    if (note) console.log(note);
+    return 0;
+  }
+
+  // ---- the refusal: unchanged with commits to land, or behind a base that has moved ----
+  const behind = order < 0;
   const read = commits.map((c) => ({ ...c, ...classify(c.subject, c.body) }));
   const { level } = overall(read);
   const lines = [
     "",
-    `version check: refused — ${commits.length} commit${commits.length === 1 ? " is" : "s are"} about to land with no version bump`,
+    behind
+      ? `version check: refused — this branch's version is behind ${base}'s`
+      : `version check: refused — ${commits.length} commit${commits.length === 1 ? " is" : "s are"} about to land with no version bump`,
     "",
-    `  package.json: ${here} — unchanged from ${base}`,
-    "  commits this branch adds:",
-    ...read.map((c) => `    ${c.sha.slice(0, 8)}  ${(c.level || "?").padEnd(5)} ${c.subject.slice(0, 68)}`),
+    `  branch  ${here}  (HEAD's package.json)`,
+    `  base    ${base}  ${there}  (${baseSha})`,
+    ...(note ? [note] : []),
     "",
+    ...(read.length
+      ? [
+        "  commits this branch adds:",
+        ...read.map((c) => `    ${c.sha.slice(0, 8)}  ${(c.level || "?").padEnd(5)} ${c.subject.slice(0, 68)}`),
+        "",
+      ]
+      : []),
     level
       ? `  the tool would suggest: ${level}  (advice — the level is the landing agent's judgement)`
       : "  no commit here carries a prefix this scale reads — read the diff and decide the level",
     "",
-    "  a version that does not move with its change tells a reader nothing moved, and the squash merge puts",
-    "  this branch's own subjects into main's history. Fix it in the same PR as the change:",
+    ...(behind
+      ? [
+        `  a branch cut before ${base} moved still carries the number it was cut at, so "unchanged" is not a bump:`,
+        `  ${base} already reads ${there}, and landing this branch would carry a number main has passed. Merge or`,
+        `  rebase ${base} into this branch, then bump above ${there} in this PR:`,
+      ]
+      : [
+        "  a version that does not move with its change tells a reader nothing moved, and the squash merge puts",
+        "  this branch's own subjects into main's history. Fix it in the same PR as the change:",
+      ]),
     "",
     `    node tools/version.mjs apply ${level || "patch|minor|major"}`,
     "",
@@ -556,7 +673,7 @@ const code =
               "tools/version.mjs — the panel's one version number: advice, gate, write, anchor, backfill.",
               "",
               "  node tools/version.mjs suggest                     print the level the commits read as (advice; writes nothing)",
-              "  node tools/version.mjs check [--base <ref>]        exit 1 when the branch carries commits with no bump",
+              "  node tools/version.mjs check [--base <ref>]        exit 1 unless HEAD's version is above the base ref's",
               "  node tools/version.mjs apply <patch|minor|major>   write the new version, commit it and tag that commit",
               "  node tools/version.mjs tag [--ref <ref>] [--force] anchor an existing commit with package.json's version",
               "                                                    (--ref origin/main --force: the post-merge move)",
