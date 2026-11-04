@@ -2,7 +2,8 @@
 
 A queue task is either on a pipeline or it is not. "Not" is not an empty state — it is **assistant-decides**, the
 default the panel has always had, and every existing task is on it. This document is the panel side of that choice: the
-field, the three answers a record can give, the one write that changes it, and the bundle the answers are read against.
+field, the three answers a record can give, the one write that changes it, the driver that carries a row from one stage
+to the next, and the bundle the answers are read against.
 
 The tree ladder in [`docs/pipelines.md`](pipelines.md) is a DIFFERENT object. A tree's `pipeline` says which rung of
 local → investigation → turnover it stands on and what it may do with a branch. A task's `pipelineRun` says which
@@ -62,6 +63,61 @@ repaint, exactly as it does for `state` and `reassign`. Three rules decide its s
 Every refusal is named (`pipeline-bundle`, `pipeline-id`, `pipeline-stage`) and says what the bundle does hold, so the
 control prints the sentence rather than guessing.
 
+## Driving it: one stage, then the next
+
+Assigning a pipeline is not a label any more: a row that carries one is **driven**. `Assistant.sweepQueues` — the
+queue's own tick — asks `lib/task-pipeline-drive.js` three questions about every queue, and acts on the answers:
+
+- **what starts.** The row at the FRONT of the queue (`byQueueOrder` over the queued and running rows), when it
+  carries a pipeline that resolves. The stage's prompt is the turn; it runs in the row's tree when the row has one and
+  in its project when it does not. A row with NO pipeline is not started here and has no stage invented for it — that
+  row is the assistant's to start, exactly as it was before this driver existed.
+- **what moves.** A `running` row whose current thread is not live and whose last run reads `done` has settled its
+  STAGE. The row is written forward to the next stage in one write — `queued`, a fresh `enteredAt`, and the edge it
+  crossed counted in `crossings` — and the settle does not see it again until that stage has a run of its own.
+- **what stops it.** A capped loop at its cap, a gate that declares a decision record, a failed run, or an assignment
+  the bundle cannot resolve. Each is a value with a named code; the row parks on the sentence, or stays unresolved.
+
+Unattended starts are the assistant's own switch (`spawn`, in Settings → Assistant): **`auto`** is "start it at once"
+and is the only value the driver starts a stage under. `ask` and `off` still let a settled row advance — the work is
+not lost, it simply waits for a person, which is what those two settings say.
+
+### The limits the pipeline itself declares
+
+**A cap is a count of crossings.** `cap: "3 rounds"` on a loop edge allows three crossings of that edge; the fourth
+parks the row ("… is at its cap of 3 rounds"). The count lives on the record, `pipelineRun.crossings["H-62-60"]`,
+because a panel restart between two passes is exactly what a loop must survive. A loop whose cap is missing, or is not
+a whole number, is **not crossed at all**: the panel does not read "no cap" as "unlimited", the same fail-closed rule
+the tree ladder applies to an exit check it cannot evaluate.
+
+**A gate with a decision is a barrier.** When a gate sits `after` the settled stage and declares a `decision`, the
+driver looks for that decision's own file in the row's tree and does nothing until it is there. `{{hole}}` segments
+match one path segment, so `ledger/gates/G60-{{finding_id}}.json` is whichever record the seat actually wrote. The row
+parks naming the path, the wait is kept on the record (`pipelineRun.waitingFor`), and **the record's arrival is what
+moves it** — the panel never writes that file, never reads its value, and never decides the gate by finishing the
+stage before it.
+
+### What the last stage does, and what stays open
+
+The settle's landing rule is unchanged. At the last stage the driver has nothing to advance to, so the queue's own
+settle finishes the row: a row with a tree is `done` when that tree's PR reads **MERGED**, and a row with no tree is
+done when its run settles. That is what keeps a pipeline row open through every stage and closed only when the work
+has actually landed — the same bar every other row has.
+
+### The keys the driver keeps on the record
+
+| key | written when | cleared |
+|---|---|---|
+| `pipelineRun.crossings` | an edge is crossed | never — a new assignment starts a new record |
+| `pipelineRun.startingAt` | the stage's worker is asked for | when the row moves to another stage |
+| `pipelineRun.waitingFor` | a gate stops the row | when the decision record arrives |
+
+`startingAt` exists because the tick is faster than a spawn: the sweep asks for a stage's worker, the spawner takes
+longer than one tick (a gateway probe, a `git worktree add`, the start), and without the marker the next pass would
+start the same stage twice. It is written with the row BEFORE the start is attempted, and a start still unlinked after
+three minutes is asked for again. A start the spawner refuses parks the row with the refusal instead: a stage that
+cannot be started is a decision, not a retry.
+
 ## The bundle, and the seed
 
 `config.pipelineBundleFile` (default `state/pipeline-bundle.json`, beside the job store) is a file exported from the
@@ -89,3 +145,6 @@ the reader can fix; pretending the assignment was the default path would silentl
 4. the row's chip updates; reopen the window to see the stage marked `position of 13`, the moment it began, and the
    elapsed span — recomputed on open, and ticked while the window is open
 5. **clear** sends it back to the default path
+6. with the assistant's `spawn` switch on **auto**, the row at the front of the queue is started by the panel at its
+   stage, and each stage that settles writes the row forward to the next one; on **ask** or **off** the row advances the
+   same way but waits for you to start it, which is what those settings say
