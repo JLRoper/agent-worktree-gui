@@ -62,6 +62,11 @@
     wired: false,
     motion: true,
     media: null,
+    // `fit` is this dialog's reader-owned layout choice, not the drawing's: the renderer only turns it into a
+    // data attribute, and the modal remembers it across a re-render (a position change, a motion change) so a
+    // press is not undone by the next frame.
+    fit: false,
+    flowWatch: null,
   };
 
   // Tab and Escape, decided without a page: the index of the focused item and how many there are is the whole input.
@@ -112,11 +117,11 @@
       .join("")}</div>`;
   }
 
-  function flowHtml(flow, position, motion) {
+  function flowHtml(flow, position, motion, fit = false) {
     if (!flow || !Array.isArray(flow.stages) || !flow.stages.length) {
       return `<div class="pmodal-empty">this pipeline holds no stage, so there is nothing to draw</div>`;
     }
-    return global.PipelineFlow.markup(flow, position, { motion });
+    return global.PipelineFlow.markup(flow, position, { motion, fit });
   }
 
   function previewHtml(flow, position) {
@@ -137,7 +142,7 @@
     const body = state.loading
       ? `<div class="pmodal-note">reading this task's pipeline…</div>`
       : `${factsHtml(state.facts)}${state.note ? `<div class="pmodal-note">${esc(state.note)}</div>` : ""}${
-          state.flow ? `<div class="pmodal-flow" data-pm-flow>${flowHtml(state.flow, state.position, state.motion)}</div>` : ""
+          state.flow ? `<div class="pmodal-flow" data-pm-flow>${flowHtml(state.flow, state.position, state.motion, state.fit)}</div>` : ""
         }${previewHtml(state.flow, state.position)}`;
     return `<div class="pmodal-bar">
         <span class="pmodal-kicker">${esc(kicker)}</span>
@@ -165,11 +170,64 @@
   function paintFlow(doc = document) {
     const box = doc.querySelector("[data-pm-flow]");
     if (!box) return;
-    box.innerHTML = flowHtml(state.flow, state.position, state.motion);
+    box.innerHTML = flowHtml(state.flow, state.position, state.motion, state.fit);
     // The flow's own position, on its OWN attributes: `data-pm-*` names belong to the preview controls, and a wrapper
     // that carried one of them made `[data-pm-refused]` select two elements (the checkbox and this div).
     box.dataset.flowPosition = String((state.position && state.position.stage) || "");
     box.dataset.flowRefused = String((state.position && state.position.refused) || "");
+    // The count is a measurement of the painting, so it is taken (and re-taken on every scroll) from the new subtree;
+    // the press listener belongs to the button the renderer just built, not to the one it replaced.
+    wireFlow(doc);
+  }
+
+  // The count under the drawing, and the `fit` press. Both are measurements, never guesses: every stage and every
+  // notch is read against the scroller's own box, so the number a reader sees is the number the browser clipped. The
+  // same pass decides whether the control has anything to do — a drawing that fits does not offer it, and the row is
+  // hidden rather than printing "all 3 stages in view" under a picture that obviously holds them.
+  function readView(doc) {
+    const flowEl = doc.querySelector("[data-pm-flow] .pflow");
+    const count = flowEl && flowEl.querySelector("[data-pflow-count]");
+    if (!flowEl || !count || !global.PipelineFlow || typeof global.PipelineFlow.viewCount !== "function") return;
+    const said = global.PipelineFlow.viewCount(flowEl);
+    if (!said) return;
+    count.textContent = said.text;
+    count.dataset.out = String(said.stages.out + said.notches.out);
+    const show = said.overflow || state.fit;
+    for (const selector of ["[data-pflow-status]", "[data-pflow-fit]"]) {
+      const el = flowEl.querySelector(selector);
+      if (el) el.hidden = !show;
+    }
+  }
+
+  function wireFlow(doc) {
+    if (state.flowWatch) {
+      state.flowWatch();
+      state.flowWatch = null;
+    }
+    const flowEl = doc.querySelector("[data-pm-flow] .pflow");
+    if (!flowEl) return;
+    const scroll = flowEl.querySelector(".pflow-scroll");
+    const onScroll = () => readView(doc);
+    scroll?.addEventListener?.("scroll", onScroll, { passive: true });
+    // The card is 96vw up to its cap, so a window resize changes how much of a long definition fits; a count taken
+    // once and left to rot is the same lie as no count at all.
+    const win = doc.defaultView;
+    const onResize = () => readView(doc);
+    win?.addEventListener?.("resize", onResize);
+    const fit = flowEl.querySelector("[data-pflow-fit]");
+    fit?.addEventListener("click", (e) => {
+      e.preventDefault?.();
+      state.fit = !state.fit;
+      paintFlow(doc);
+      // The press rebuilds the flow, so the button under the reader's finger is a new element: hand the focus back to
+      // it rather than dropping them at the top of the page (and so a keyboard press keeps its ring).
+      doc.querySelector("[data-pm-flow] [data-pflow-fit]")?.focus?.({ preventScroll: true });
+    });
+    state.flowWatch = () => {
+      scroll?.removeEventListener?.("scroll", onScroll);
+      win?.removeEventListener?.("resize", onResize);
+    };
+    readView(doc);
   }
 
   function focusables(doc) {
@@ -194,6 +252,10 @@
     if (!host || host.hidden) return false;
     const wasMode = state.mode;
     const onClose = state.onClose;
+    if (state.flowWatch) {
+      state.flowWatch();
+      state.flowWatch = null;
+    }
     host.hidden = true;
     host.setAttribute("data-mode", "edit");
     if (card) card.innerHTML = "";
@@ -210,6 +272,7 @@
       status: "",
       loading: false,
       preview: false,
+      fit: false,
       onClose: null,
     });
     if (restoreFocus) restore(doc);
@@ -243,6 +306,8 @@
     state.status = String(options.status || "");
     state.loading = Boolean(options.loading);
     state.preview = options.preview == null ? mode === "position" : Boolean(options.preview);
+    // Every open starts at the readable column width; `fit` is a reader's choice for the drawing they are looking at.
+    state.fit = false;
     state.onClose = typeof options.onClose === "function" ? options.onClose : null;
     state.motion = matchMotion(doc);
     state.open = true;
@@ -289,6 +354,7 @@
     };
     if (stage) stage.addEventListener("change", read);
     if (refused) refused.addEventListener("change", read);
+    wireFlow(doc);
   }
 
   function wire(doc) {
@@ -344,6 +410,13 @@
       },
       true,
     );
+    // A press INSIDE the card belongs to this dialog as much as a backdrop press does. The page closes the Settings
+    // window for any click whose path does not include it (public/app.js, the #settings outside-press handler), and
+    // this dialog is opened FROM Settings — so a press on one of its own controls (the fit control, the preview
+    // select, close) used to close the window the reader was editing in, leaving the dialog over a bare board. It is
+    // bound on the CARD, not as a capture stop on document: capture at document runs BEFORE the button's own handler
+    // and a stop there is the press never arriving at all.
+    doc.getElementById(CARD_ID)?.addEventListener("click", (e) => e.stopPropagation?.());
   }
 
   function watchMotion(doc) {
