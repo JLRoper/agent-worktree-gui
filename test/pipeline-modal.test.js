@@ -127,11 +127,11 @@ test("the page loads the renderer, then the modal, then the app that wires both"
 
 test("the dialog is as wide as its drawing: one stage is a small panel, thirteen a wide one", () => {
   // The width is one policy, written in the stylesheet and fed by the modal's own stage count: a column at the
-  // track's 96 px floor, the 26 px gaps between them, and the body's 24 px of padding plus the card's 2 px border.
+  // track's 96 px floor, the 26 px gaps between them, and the body's 16 px of padding plus the card's 2 px border.
   const width = /\.pmodal-card \{[^}]*width: ([^;]+);/.exec(css)?.[1] || "";
   assert.match(width, /--pflow-card-n/, "the card's width is a function of the drawing's stage count");
   assert.match(width, /\* 96px/, "the track's own readable floor");
-  assert.match(width, /\+ 26px/, "the body's padding and border, which the track does not get");
+  assert.match(width, /\+ 18px/, "the body's 16 px of padding and the card's 2 px border, which the track does not get");
   assert.match(width, /96vw/, "and the viewport is still the ceiling");
   assert.doesNotMatch(css, /width: min\(1120px, 96vw\)/, "the fixed 1120 px frame is gone");
   // paint() owns the number, from the flow it is holding, and close() clears it so a reuse cannot inherit a width.
@@ -139,9 +139,9 @@ test("the dialog is as wide as its drawing: one stage is a small panel, thirteen
   assert.match(source, /function stageCount\(flow\) \{/);
   assert.match(source, /setProperty\?\.\("--pflow-card-n", "1"\)/, "close() resets it");
   // A one-stage definition and a thirteen-stage one land on the two ends the brief asked for.
-  const w = (n) => Math.min(Math.max(340, n * 96 + (n - 1) * 26 + 26), 1824 * 0.96);
+  const w = (n) => Math.min(Math.max(340, n * 96 + (n - 1) * 26 + 18), 1824 * 0.96);
   assert.equal(w(1), 340, "one stage is a 340 px panel, not a 1120 px frame");
-  assert.ok(w(2) < 500 && w(7) === 854 && w(13) > 1200, `2 → ${w(2)}, 7 → ${w(7)}, 13 → ${Math.round(w(13))}`);
+  assert.ok(w(2) < 500 && w(7) === 846 && w(13) > 1200, `2 → ${w(2)}, 7 → ${w(7)}, 13 → ${Math.round(w(13))}`);
 });
 
 test("the header names what is drawn, not an edit this dialog does not offer", () => {

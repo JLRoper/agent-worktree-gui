@@ -4067,17 +4067,17 @@ body.pipew-open { overflow: hidden; }
    know how wide its neighbour is. The arcs above the track are positioned in CSS calc from --pflow-n (columns),
    --pflow-i/--pflow-j (the two stage indexes) and the same --pflow-gap the track uses — no measurement, no resize
    handler, and an arc cannot drift from the stage it joins. */
-.pflow { --pflow-gap: 26px; --pflow-minw: 96px; --pflow-maxw: 400px; --pflow-ink-quiet: #8b96a5; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pflow { --pflow-gap: 26px; --pflow-minw: 96px; --pflow-maxw: 400px; --pflow-ink-quiet: #8b96a5; --pflow-min-h: 100px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 /* `fit`: the SAME grid one step narrower, for a definition too long for the card at the readable floor. Thirteen
    columns at 56 px with a 12 px gap are 872 px of content in a 1090 px track — the whole chain visible, the titles
    wrapped instead of the reader losing four stages off the edge. This is the deliberate trade the integration plan's
    C8 states ("legibility for overview"), and it is a press rather than a resize: a reader who wants the 96 px
    columns back presses the control again. Nothing else re-lays out. */
 .pflow[data-fit="1"] { --pflow-gap: 12px; --pflow-minw: 56px; }
-/* No horizontal padding inside the scroller: padding counts toward scrollWidth, so a drawing that fits its
-   card still produced a scrollbar by 4 px (2 each side) and the reader saw a scrollbar under a picture that
-   obviously held every stage. The body's own 12 px padding is the breathing room. */
-.pflow-scroll { overflow-x: auto; overflow-y: hidden; padding: 0 0 4px; }
+/* No padding inside the scroller: horizontal padding counts toward scrollWidth (it produced a scrollbar under a
+   drawing that fitted, by 4 px), and vertical padding was a band under the drawing that held nothing. The body's own
+   8 px across and 2 px above and below is the frame. */
+.pflow-scroll { overflow-x: auto; overflow-y: hidden; padding: 0; }
 .pflow-canvas { position: relative; padding-top: var(--pflow-pad, 0px); min-width: 100%; }
 .pflow-track {
   position: relative;
@@ -4094,17 +4094,26 @@ body.pipew-open { overflow: hidden; }
   margin: 0 auto;
   padding: 0;
   list-style: none;
-  align-items: start;
+  /* Every tile in a row is as tall as the tallest one: a drawing whose stages are ragged strips reads as a broken
+     table, and the shorter tiles leave a band of card under themselves that nothing paints. */
+  align-items: stretch;
 }
-.pflow-node { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 8px 8px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
-/* 13 px at 500 is the readable floor the round asked for: the title is the one word a reader came to read, and
+/* The stage card is a TILE, not a strip: the ordinal and the title share one baseline at its top, and the one line of
+   meta (what the stage writes, or the exit check that ends it) sits on the tile's floor. `--pflow-min-h` is what makes
+   the drawing the bigger half of the dialog: a card whose content is one 17 px line is 35 px tall, and a dialog 340 px
+   wide then spends four fifths of its height on its own header — the 26% this round exists to fix. The height is the
+   drawing's, not a frame's: the card still sizes to the drawing it holds. */
+.pflow-node { position: relative; display: flex; flex-direction: column; justify-content: space-between; gap: 7px; min-width: 0; min-height: var(--pflow-min-h); padding: 10px 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+/* The ordinal is an index PREFACE: it opens the title's first line and the words after it keep the whole column, so a
+   narrow column wraps like a sentence rather than like a column squeezed beside a numeral. */
+/* 13 px at 500 is the readable floor the width audit set: the title is the one word a reader came to read, and
    11.5 px at 400 made a definition's quietest mark look like disabled text. The hierarchy still comes from the
-   mark's colour and the ordinal/artifact being a step quieter, not from shrinking the title below the body's size. */
-.pflow-node .pflow-title { font-size: 13px; font-weight: 500; line-height: 1.32; color: var(--dim); overflow-wrap: anywhere; }
-/* The ordinal and the artifact are the stage's own meta, one step quieter than its title — but still ABOVE the AA line:
-   #8b96a5 on --surface is 6.05:1 (5.45:1 on the 100% contrast theme's surface), where --dimmer measured 3.77:1. */
-.pflow-node .pflow-n { font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--pflow-ink-quiet); }
-.pflow-node .pflow-art { font-size: 11px; color: var(--pflow-ink-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+   mark's colour and the ordinal/detail line, never from shrinking the title. */
+.pflow-title { display: block; min-width: 0; font-size: 13px; line-height: 1.35; font-weight: 500; color: var(--text); overflow-wrap: anywhere; }
+/* The ordinal and the detail line are the stage's meta, one step quieter than its title — but still above the AA
+   floor: #8b96a5 on --surface is 6.05:1 (5.45:1 on the 100% contrast theme's surface), where --dimmer measured 3.77:1. */
+.pflow-node .pflow-art { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 11px; line-height: 1.25; color: var(--pflow-ink-quiet); overflow: hidden; overflow-wrap: anywhere; }
+.pflow-node .pflow-n { margin-inline-end: 4px; font-size: 11px; line-height: 1.25; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--pflow-ink-quiet); }
 .pflow-dot { position: absolute; top: -5px; left: 8px; width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); }
 /* The four marks, and no fifth. Colour is the panel's own language: green finished, blue where the work is, grey not
    yet, red a gate that said no. */
@@ -4122,8 +4131,10 @@ body.pipew-open { overflow: hidden; }
 .pflow-node[data-mark="refused"] { border-color: #6b2a2a; background: var(--red-bg); }
 .pflow-node[data-mark="refused"] .pflow-dot { background: var(--red); border-color: var(--red); }
 .pflow-node[data-mark="refused"] .pflow-title { color: #ff9a9a; }
-/* The connector: the whole gap between two columns, with the gate's notch crossing its middle. */
-.pflow-link { position: absolute; top: 26px; left: 100%; width: var(--pflow-gap); height: 1px; background: var(--line); }
+/* The connector: the whole gap between two columns, with the gate's notch crossing its middle. `top: 19px` is the
+   middle of the stage card's title line (10 px of padding + half of the 17.6 px line), so the hairline meets the
+   title it joins rather than floating below it — the notch's inline top is 19 px for the same reason. */
+.pflow-link { position: absolute; top: 19px; left: 100%; width: var(--pflow-gap); height: 1px; background: var(--line); }
 /* There is no end stub: a gate after the LAST stage draws its notch ON the track's closing edge (pipeline-flow.js, the
    inline `left`), so nothing hangs past the last column. The 18 px stub that used to live here widened the drawing past
    its own track — 15 px of scrollbar-producing decoration, and the notch it labelled was clipped away (round 5A's
@@ -4180,32 +4191,42 @@ body.pipew-open { overflow: hidden; }
 .pmodal { position: fixed; inset: 0; z-index: 140; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 14px 14px; background: #05070ac9; }
 .pmodal[hidden] { display: none; }
 /* The card is as wide as the drawing it holds, not as wide as a desktop: one stage is a small panel (the 340 px
-   floor keeps the facts and title readable), seven stages take 854 px, thirteen take 1586 px. The arithmetic is the
-   track's own policy — n columns at the 96 px floor plus n-1 26 px gaps plus the body's 26 px of padding and border —
-   so a definition that fits is a card that fits, and only a drawing wider than 96vw scrolls. `--pflow-card-n` is set
-   by PipelineModal.paint() from the flow it is drawing. */
-.pmodal-card { display: flex; flex-direction: column; width: min(max(340px, calc(var(--pflow-card-n, 1) * 96px + (var(--pflow-card-n, 1) - 1) * 26px + 26px)), 96vw); max-height: 86vh; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 44px #000b; overflow: hidden; outline: none; }
-.pmodal-bar { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
-.pmodal-kicker { font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dimmer); }
-.pmodal-title { font-size: 13px; color: var(--text); }
-.pmodal-sub { font-size: 11px; color: var(--dim); }
-.pmodal-bar .spacer { flex: 1; }
-.pmodal-close { border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+   floor keeps the facts and title readable), seven stages take 846 px, thirteen take 1578 px. The arithmetic is the
+   track's own policy — n columns at the 96 px floor plus n-1 26 px gaps plus the body's 16 px of horizontal padding
+   and 2 px of border — so a definition that fits is a card that fits, and only a drawing wider than 96vw scrolls.
+   `--pflow-card-n` is set by PipelineModal.paint() from the flow it is drawing. */
+.pmodal-card { display: flex; flex-direction: column; width: min(max(340px, calc(var(--pflow-card-n, 1) * 96px + (var(--pflow-card-n, 1) - 1) * 26px + 18px)), 96vw); max-height: 86vh; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 44px #000b; overflow: hidden; outline: none; }
+/* The header is ONE band of two rows, not a bar plus a facts strip: the kicker, the title and the single close control
+   share the first row; the facts — what the definition is, its kind, its stage count and its next gate — are the second
+   row, full width. Wrapping to the next line was the old header's way of turning a 300 px title into a 40 px band, and
+   the facts' own band then cost the drawing another 30 px of card. */
+.pmodal-bar { display: flex; align-items: center; gap: 2px 8px; flex-wrap: wrap; padding: 3px 9px 3px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.pmodal-kicker { flex: 0 1 auto; min-width: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dimmer); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pmodal-title { flex: 0 0 auto; font-size: 13px; color: var(--text); }
+.pmodal-sub { flex: 0 0 auto; font-size: 11px; color: var(--dim); }
+.pmodal-bar .spacer { flex: 1 1 0; }
+/* The status moved out of the deleted footer and onto the header's first row: a "2 stages" that describes the drawing
+   belongs beside the title, and the footer it used to sit in was 30 px of band under a 130 px drawing. */
+.pmodal-status { flex: 0 1 auto; min-width: 0; font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pmodal-status:empty { display: none; }
+.pmodal-close { flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 1px 6px; font: inherit; font-size: 12px; line-height: 16px; cursor: pointer; }
 .pmodal-close:hover { color: var(--text); border-color: #8fb8ff; }
-.pmodal-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow: auto; }
-.pmodal-facts { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 11px; color: var(--dim); }
+.pmodal-facts { flex: 0 0 100%; display: flex; flex-wrap: wrap; gap: 1px 12px; font-size: 11px; line-height: 1.2; color: var(--dim); }
+.pmodal-facts > * { flex: 0 0 auto; white-space: nowrap; }
 .pmodal-facts i { color: var(--dimmer); font-style: normal; }
 .pmodal-facts b { color: var(--text); font-weight: 500; }
+/* The body's padding is the drawing's frame and nothing more: 16 px across (it is in the card's width arithmetic), 2 px
+   above and below. It used to be 12 px all round plus a 10 px gap under a facts strip — 40 px of frame for a card whose
+   drawing was 130 px tall. */
+.pmodal-body { padding: 2px 8px 2px; display: flex; flex-direction: column; gap: 5px; overflow: auto; }
 .pmodal-note { font-size: 11.5px; line-height: 1.5; color: var(--dim); }
-.pmodal-empty { padding: 14px; border: 1px dashed var(--line); border-radius: 8px; color: var(--dimmer); font-size: 11.5px; }
-.pmodal-preview { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11px; color: var(--dim); }
+.pmodal-empty { padding: 10px; border: 1px dashed var(--line); border-radius: 8px; color: var(--dimmer); font-size: 11.5px; }
+.pmodal-preview { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 4px; border-top: 1px solid var(--line); font-size: 11px; color: var(--dim); }
 .pmodal-preview-note { color: var(--dimmer); text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; }
-.pmodal-preview select { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: 11px var(--mono); }
+.pmodal-preview select { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; font: 11px var(--mono); }
 .pmodal-check { display: inline-flex; align-items: center; gap: 5px; }
-.pmodal-foot { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--panel-2); border-top: 1px solid var(--line); }
-.pmodal-foot .pmodal-status { flex: 1; font-size: 11px; color: var(--dim); }
-.pmodal-foot button { border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
-.pmodal-foot button:hover { color: var(--text); border-color: #8fb8ff; }
+/* There is no `.pmodal-foot`: the close control and the status are in the header, so the card's last band is the
+   drawing's own bottom edge. */
 body.pipeline-modal-open { overflow: hidden; }
 /* The queue row's flow press: a glyph beside the pipeline chip, quiet until it is pointed at. */
 .as-task-pipeline .as-qflow { margin-left: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 5px; padding: 0 7px; font-size: 12px; line-height: 1.5; cursor: pointer; }

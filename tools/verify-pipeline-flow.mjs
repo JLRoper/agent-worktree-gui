@@ -282,7 +282,7 @@ try {
     check(/4 of 5/.test(pos.sub), "its subtitle says where the task is", pos.sub);
     equal("the five stages are drawn left to right", pos.nodes.map((n) => n.id), ["S0", "S1", "S2", "S3", "S4"]);
     equal("three done, one current, one not reached", marks(pos), ["S0:done", "S1:done", "S2:done", "S3:current", "S4:not-reached"]);
-    equal("the legend counts the marks on screen, and only those", pos.legend, ["not-reached:not reached 1", "current:current 1", "done:done 3"]);
+    equal("the legend counts the marks on screen, and only those", pos.legend, ["not-reached:not reached 1 stage", "current:current 1 stage", "done:done 3 stages"]);
     equal("the gate that ends S2 is one notch", pos.notches, ["g2"]);
     equal("the capped loop is one arc, labelled with its cap only", pos.arcs, [{ cap: "2 rounds", from: "S4", to: "S2", label: "2 rounds" }]);
     check(pos.arcAboveTrack, "and it is drawn above the track, not over the stages");
@@ -297,13 +297,13 @@ try {
     await page.waitForTimeout(150);
     const moved = await readModal(page);
     equal("S1 is now the current stage", marks(moved), ["S0:done", "S1:current", "S2:not-reached", "S3:not-reached", "S4:not-reached"]);
-    equal("the legend followed", moved.legend, ["not-reached:not reached 3", "current:current 1", "done:done 1"]);
+    equal("the legend followed", moved.legend, ["not-reached:not reached 3 stages", "current:current 1 stage", "done:done 1 stage"]);
 
     await page.click(".pmodal-check input[data-pm-refused]");
     await page.waitForTimeout(150);
     const refused = await readModal(page);
     equal("`stage refused` marks that stage refused", marks(refused), ["S0:done", "S1:refused", "S2:not-reached", "S3:not-reached", "S4:not-reached"]);
-    equal("and the legend says one refused, and no current stage", refused.legend, ["not-reached:not reached 3", "done:done 1", "refused:refused 1"]);
+    equal("and the legend says one refused, and no current stage", refused.legend, ["not-reached:not reached 3 stages", "done:done 1 stage", "refused:refused 1 stage"]);
     const queueOnDisk = JSON.parse(readFileSync(path.join(logs, "assistants", "assistant-1", "queue.json"), "utf8"));
     check(queueOnDisk.tasks[0].pipelineRun.stage === "S3", "nothing was written: the record still says S3", queueOnDisk.tasks[0].pipelineRun.stage);
     await page.screenshot({ path: path.join(SHOTS, "refused.png") });

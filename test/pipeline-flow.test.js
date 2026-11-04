@@ -226,14 +226,19 @@ test("markup carries the count and the fit control, and `fit` changes only the r
   assert.deepEqual(b.notches, a.notches, "and the same gate notches");
 });
 
-test("the legend lists only the states this drawing actually shows, and counts them", () => {
+test("the legend lists only the states this drawing actually shows, and counts them in stages", () => {
   const keys = (html) => {
     const legend = (html.match(/<div class="pflow-legend"[\s\S]*?<\/div>/) || [""])[0];
-    return [...legend.matchAll(/data-mark="([^"]+)"><i aria-hidden="true"><\/i>([^<]*)(?:<b class="mono">(\d+)<\/b>)?/g)].map((m) => ({ mark: m[1], text: m[2].trim(), count: m[3] ? Number(m[3]) : null }));
+    return [...legend.matchAll(/data-mark="([^"]+)"><i aria-hidden="true"><\/i>([^<]*)<b class="mono">(\d+) (stage|stages)<\/b>/g)].map((m) => ({
+      mark: m[1],
+      text: m[2].trim(),
+      count: Number(m[3]),
+      noun: m[4],
+    }));
   };
   // A definition has no position: one state, said once — not four keys the reader cannot find on the picture.
   const def = fromDefinition(SEED_DEFS.find((p) => p.id === "local"));
-  assert.deepEqual(keys(markup(def, null)), [{ mark: "not-reached", text: "not reached", count: 1 }]);
+  assert.deepEqual(keys(markup(def, null)), [{ mark: "not-reached", text: "not reached", count: 1, noun: "stage" }]);
   const thirteen = fromDefinition(SEED_DEFS.find((p) => p.id === "sefl-review-loop"));
   assert.deepEqual(
     keys(markup(thirteen, null)).map((k) => k.mark),
@@ -248,6 +253,12 @@ test("the legend lists only the states this drawing actually shows, and counts t
   assert.deepEqual(live.map((k) => k.mark).sort(), [...new Set(drawn.map((n) => n.mark))].sort(), "one key per state on screen, and no other");
   assert.ok(!live.some((k) => k.mark === "refused"), "no gate refused on this row, so the legend offers no refusal key");
   for (const k of live) assert.equal(k.count, drawn.filter((n) => n.mark === k.mark).length, `${k.mark} is counted from the drawing`);
+  // Every key is a PHRASE WITH ITS NOUN — "3 stages", never a bare numeral — so the reader is never left to infer what
+  // the number counts. One stage is singular; the noun follows the number it belongs to.
+  for (const k of [...keys(markup(def, null)), ...live]) {
+    assert.equal(k.noun, k.count === 1 ? "stage" : "stages", `${k.mark}: ${k.count} ${k.noun}`);
+    assert.ok(k.text && /\p{L}/u.test(k.text), `${k.mark} names the state in words`);
+  }
   // A refused preview is the only producer of the fourth state, and it appears only there.
   const refused = keys(markup(row, { stage: "S6", refused: "S3" })).map((k) => k.mark);
   assert.ok(refused.includes("refused"), "a refusal on screen gets its key");

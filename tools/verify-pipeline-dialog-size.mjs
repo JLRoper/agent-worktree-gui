@@ -13,7 +13,9 @@
 //
 // It exits non-zero when a case breaks the round's own rules: a drawing scrolled while nothing overflows, type below
 // 11 px, a stage title below 13 px or lighter than 500, a legend naming a state that is not on screen, a caption
-// apologising for the picture, or a card whose width ignores the drawing it holds.
+// apologising for the picture, or a card whose width ignores the drawing it holds. Since the density round it also
+// refuses a drawing under 55% of the card's area, a strip of the card taller than 8 px that holds nothing, a second
+// close control, a stage ordinal that is not on its title's line, and a legend key whose number has no noun.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -164,8 +166,49 @@ const measure = (page) =>
     const tcs = title ? getComputedStyle(title) : null;
     const legendEl = card.querySelector(".pflow-legend");
     const legendBox = legendEl ? rect(legendEl) : null;
-    const footBox = rect(card.querySelector(".pmodal-foot"));
+    // The card's own bottom is the last band there is: the footer that used to sit under the drawing is gone, so the
+    // slack under the drawing is what the card keeps below its lowest painted box (the legend, the count row, a notch).
     const lastInk = ink.length ? Math.max(...ink.map((b) => b.bottom)) : cardBox.bottom;
+    // Bands of the card that hold nothing. A strip is EMPTY when no holding box covers it: the drawing's own boxes
+    // (stage cards, notches, arcs, legend, count row), every element that paints a word, and every control. A stage
+    // tile's painted surface is not a band of the card — the space inside a tile IS the tile — so the room a tall tile
+    // keeps between its title and its detail line is the drawing, not chrome.
+    const holds = [...ink];
+    for (const el of card.querySelectorAll("*")) {
+      if (!el.getClientRects().length) continue;
+      const cs = getComputedStyle(el);
+      if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) === 0) continue;
+      const ownWords = [...el.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && norm(n.textContent));
+      if (!ownWords && !/^(BUTTON|SELECT|INPUT|TEXTAREA)$/.test(el.tagName)) continue;
+      const r = rect(el);
+      if (r.w > 0 && r.h > 0) holds.push(r);
+    }
+    const emptyBands = [];
+    let openBand = null;
+    for (let y = Math.ceil(cardBox.y) + 1; y < Math.floor(cardBox.bottom); y += 1) {
+      if (!holds.some((b) => b.y <= y && b.bottom > y)) {
+        if (!openBand) openBand = { top: Math.round(y - cardBox.y), h: 0 };
+        openBand.h += 1;
+      } else if (openBand) {
+        emptyBands.push(openBand);
+        openBand = null;
+      }
+    }
+    if (openBand) emptyBands.push(openBand);
+    const tallestBand = emptyBands.reduce((a, b) => (b.h > a.h ? b : a), { top: 0, h: 0 });
+    // The ordinal has to sit ON its title's line, not in a line of its own: one row of numerals above one row of
+    // words is two bands for one idea, and the numeral's band holds a single character.
+    const ordinals = nodes.map((n) => {
+      const num = n.querySelector(".pflow-n");
+      const ttl = n.querySelector(".pflow-title");
+      if (!num || !ttl) return { sameLine: false, why: "no ordinal or no title" };
+      const a = num.getBoundingClientRect();
+      const b = ttl.getBoundingClientRect();
+      // The two boxes share the line when they OVERLAP vertically — baseline alignment puts an 11 px numeral's box a
+      // few px lower than a 13 px title's, which is the same line, not a second one.
+      const overlap = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      return { sameLine: overlap >= 0.8 * Math.min(a.height, b.height), numTop: +a.top.toFixed(1), titleTop: +b.top.toFixed(1) };
+    });
     const keys = [...card.querySelectorAll(".pflow-key")].map((k) => ({ mark: k.dataset.mark, text: norm(k.textContent) }));
     const status = card.querySelector("[data-pflow-status]");
     const fit = status && status.querySelector("[data-pflow-fit]");
@@ -179,8 +222,11 @@ const measure = (page) =>
       stages: nodes.length,
       card: { w: +cardBox.w.toFixed(1), h: +cardBox.h.toFixed(1) },
       legendBox: legendBox ? { y: Math.round(legendBox.y), h: Math.round(legendBox.h) } : null,
-      footTop: Math.round(footBox.y),
-      slack: Math.round(footBox.y - lastInk),
+      slack: Math.round(cardBox.bottom - lastInk),
+      emptyBands,
+      tallestBand,
+      closeControls: card.querySelectorAll("[data-pm-close]").length,
+      ordinals,
       body: { w: +rect(body).w.toFixed(1) },
       track: { w: +track.w.toFixed(1) },
       column: nodes.length ? +nodes[0].getBoundingClientRect().width.toFixed(1) : 0,
@@ -272,7 +318,8 @@ try {
           say(`   count: ${m.count ? (m.count.hidden ? "(row hidden)" : `${JSON.stringify(m.count.text)} · ${JSON.stringify(m.count.button)}`) : "(no row)"}`);
           say(`   type: title ${m.titleFont?.size}/${m.titleFont?.weight} · smallest ${m.minFont}px ${JSON.stringify(m.minText)}`);
           say(`   kicker ${JSON.stringify(m.kicker)} · note ${JSON.stringify(m.note || "")} · slack under the drawing ${m.slack}px`);
-          say(`   legend ${m.legend.map((k) => k.mark).join(", ") || "(none)"} · marks on screen ${m.marks.join(", ")}`);
+          say(`   empty bands ${m.emptyBands.length ? m.emptyBands.map((b) => `${b.top}px@${b.h}`).join(" ") : "none"} · TALLEST ${m.tallestBand.h}px at ${m.tallestBand.top}px · close controls ${m.closeControls}`);
+          say(`   ordinals on the title line: ${m.ordinals.filter((o) => o.sameLine).length}/${m.ordinals.length} · legend ${m.legend.map((k) => JSON.stringify(k.text)).join(", ") || "(none)"}`);
           await shot(page, `${label}-${m.stages}-stages.png`);
 
           const fail = (why) => out.failures.push(`${m.case}: ${why}`);
@@ -286,6 +333,15 @@ try {
           if (!m.hiddenPx && m.scroll.width > m.scroll.client + 1) fail(`a scrollbar under a drawing that fits`);
           if (one.expect === 1 && m.card.w > 380) fail(`one stage opens a ${m.card.w}px card — the dialog is not sizing to its content`);
           if (m.card.w > Math.min(1586, viewport.width * 0.96) + 1) fail(`the card is ${m.card.w}px, past its own ceiling`);
+
+          // ---- the density rules this round adds, beside the thresholds the shape round already set ------------------
+          // The drawing is the bigger half of the card, no strip of the card taller than 8 px holds nothing, ONE control
+          // closes it, the ordinal shares its title's line, and every legend key names what its number counts.
+          if (m.share < 55) fail(`the drawing is ${m.share}% of the card, under this round's 55% floor`);
+          if (m.tallestBand.h > 8) fail(`a ${m.tallestBand.h}px band of the card holds nothing (at ${m.tallestBand.top}px)`);
+          if (m.closeControls !== 1) fail(`the card offers ${m.closeControls} close controls, not one`);
+          if (m.ordinals.some((o) => !o.sameLine)) fail(`a stage ordinal is not on its title's line: ${JSON.stringify(m.ordinals.filter((o) => !o.sameLine).slice(0, 2))}`);
+          for (const k of m.legend) if (!/\d+ stages?$/.test(k.text)) fail(`the legend key ${JSON.stringify(k.text)} does not end in a count of stages`);
 
           // The fitted press: the long definition's other half of the promise.
           if (m.hiddenPx > 0) {

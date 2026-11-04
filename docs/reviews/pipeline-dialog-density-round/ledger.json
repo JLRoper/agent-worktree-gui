@@ -1,0 +1,1117 @@
+{
+ "tree": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\make-the-pipeline-dialog-2009e1",
+ "at": "2026-11-04T21:12:30.828Z",
+ "viewports": [
+  "1280x800",
+  "1824x900"
+ ],
+ "cases": [
+  {
+   "vw": 1280,
+   "vh": 800,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Local work",
+   "note": "",
+   "stages": 1,
+   "card": {
+    "w": 340,
+    "h": 184.2
+   },
+   "legendBox": {
+    "y": 212,
+    "h": 17
+   },
+   "slack": 3,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 3
+    },
+    {
+     "top": 24,
+     "h": 1
+    },
+    {
+     "top": 40,
+     "h": 1
+    },
+    {
+     "top": 56,
+     "h": 6
+    },
+    {
+     "top": 162,
+     "h": 2
+    },
+    {
+     "top": 182,
+     "h": 2
+    }
+   ],
+   "tallestBand": {
+    "top": 56,
+    "h": 6
+   },
+   "closeControls": 1,
+   "ordinals": [
+    {
+     "sameLine": true,
+     "numTop": 124.8,
+     "titleTop": 120.8
+    }
+   ],
+   "body": {
+    "w": 338
+   },
+   "track": {
+    "w": 322
+   },
+   "column": 322,
+   "scroll": {
+    "client": 322,
+    "width": 322
+   },
+   "hiddenPx": 0,
+   "drawnArea": 37800,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 1 stage"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 1 stage and 1 notch in view",
+    "button": "fit"
+   },
+   "case": "1280x800/local",
+   "expect": 1,
+   "share": 60.4,
+   "before": {
+    "w": 1120,
+    "h": 168.8,
+    "share": 31.3
+   }
+  },
+  {
+   "vw": 1280,
+   "vh": 800,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Investigation",
+   "note": "",
+   "stages": 2,
+   "card": {
+    "w": 340,
+    "h": 184.2
+   },
+   "legendBox": {
+    "y": 212,
+    "h": 17
+   },
+   "slack": 3,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 3
+    },
+    {
+     "top": 24,
+     "h": 1
+    },
+    {
+     "top": 40,
+     "h": 1
+    },
+    {
+     "top": 56,
+     "h": 6
+    },
+    {
+     "top": 162,
+     "h": 2
+    },
+    {
+     "top": 182,
+     "h": 2
+    }
+   ],
+   "tallestBand": {
+    "top": 56,
+    "h": 6
+   },
+   "closeControls": 1,
+   "ordinals": [
+    {
+     "sameLine": true,
+     "numTop": 124.8,
+     "titleTop": 120.8
+    },
+    {
+     "sameLine": true,
+     "numTop": 124.8,
+     "titleTop": 120.8
+    }
+   ],
+   "body": {
+    "w": 338
+   },
+   "track": {
+    "w": 322
+   },
+   "column": 148,
+   "scroll": {
+    "client": 322,
+    "width": 322
+   },
+   "hiddenPx": 0,
+   "drawnArea": 35245,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 2 stages"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 2 stages and 2 notches in view",
+    "button": "fit"
+   },
+   "case": "1280x800/investigate",
+   "expect": 2,
+   "share": 56.3,
+   "before": {
+    "w": 1120,
+    "h": 168.8,
+    "share": 52.5
+   }
+  },
+  {
+   "vw": 1280,
+   "vh": 800,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "SEFL review loop",
+   "note": "",
+   "stages": 7,
+   "card": {
+    "w": 846,
+    "h": 168.8
+   },
+   "legendBox": {
+    "y": 196,
+    "h": 17
+   },
+   "slack": 3,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 3
+    },
+    {
+     "top": 24,
+     "h": 1
+    },
+    {
+     "top": 40,
+     "h": 7
+    },
+    {
+     "top": 147,
+     "h": 2
+    },
+    {
+     "top": 166,
+     "h": 2
+    }
+   ],
+   "tallestBand": {
+    "top": 40,
+    "h": 7
+   },
+   "closeControls": 1,
+   "ordinals": [
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    }
+   ],
+   "body": {
+    "w": 844
+   },
+   "track": {
+    "w": 828
+   },
+   "column": 96,
+   "scroll": {
+    "client": 828,
+    "width": 828
+   },
+   "hiddenPx": 0,
+   "drawnArea": 81869,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 7 stages"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 7 stages and 7 notches in view",
+    "button": "fit"
+   },
+   "case": "1280x800/sefl-review-loop",
+   "expect": 7,
+   "share": 57.3,
+   "before": {
+    "w": 1120,
+    "h": 168.8,
+    "share": 60.3
+   }
+  },
+  {
+   "vw": 1280,
+   "vh": 800,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Acceptance thirteen",
+   "note": "",
+   "stages": 13,
+   "card": {
+    "w": 1228.8,
+    "h": 191.8
+   },
+   "legendBox": {
+    "y": 219,
+    "h": 17
+   },
+   "slack": 3,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 3
+    },
+    {
+     "top": 24,
+     "h": 1
+    },
+    {
+     "top": 40,
+     "h": 7
+    },
+    {
+     "top": 147,
+     "h": 2
+    },
+    {
+     "top": 170,
+     "h": 2
+    },
+    {
+     "top": 189,
+     "h": 2
+    }
+   ],
+   "tallestBand": {
+    "top": 40,
+    "h": 7
+   },
+   "closeControls": 1,
+   "ordinals": [
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    }
+   ],
+   "body": {
+    "w": 1226.8
+   },
+   "track": {
+    "w": 1210.8
+   },
+   "column": 96,
+   "scroll": {
+    "client": 1211,
+    "width": 1560
+   },
+   "hiddenPx": 349,
+   "drawnArea": 142933,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 13 stages"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": false,
+    "text": "showing stages 1–10 of 13 — 3 of 13 stages and 3 of 13 notches out of view",
+    "button": "fit"
+   },
+   "case": "1280x800/acceptance-thirteen",
+   "expect": 13,
+   "share": 60.6,
+   "before": {
+    "w": 1120,
+    "h": 191.8,
+    "share": 60.3
+   }
+  },
+  {
+   "vw": 1280,
+   "vh": 800,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Acceptance thirteen",
+   "note": "",
+   "stages": 13,
+   "card": {
+    "w": 1228.8,
+    "h": 202.1
+   },
+   "legendBox": {
+    "y": 230,
+    "h": 17
+   },
+   "slack": 3,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 3
+    },
+    {
+     "top": 24,
+     "h": 1
+    },
+    {
+     "top": 40,
+     "h": 7
+    },
+    {
+     "top": 157,
+     "h": 2
+    },
+    {
+     "top": 180,
+     "h": 2
+    },
+    {
+     "top": 200,
+     "h": 2
+    }
+   ],
+   "tallestBand": {
+    "top": 40,
+    "h": 7
+   },
+   "closeControls": 1,
+   "ordinals": [
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 109.4,
+     "titleTop": 105.4
+    }
+   ],
+   "body": {
+    "w": 1226.8
+   },
+   "track": {
+    "w": 1210.8
+   },
+   "column": 82,
+   "scroll": {
+    "client": 1211,
+    "width": 1211
+   },
+   "hiddenPx": 0,
+   "drawnArea": 164736,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 13 stages"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": false,
+    "text": "all 13 stages and 13 notches in view",
+    "button": "actual size"
+   },
+   "case": "1280x800/acceptance-thirteen-fit",
+   "share": 66.3
+  },
+  {
+   "vw": 1824,
+   "vh": 900,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Local work",
+   "note": "",
+   "stages": 1,
+   "card": {
+    "w": 340,
+    "h": 184.2
+   },
+   "legendBox": {
+    "y": 218,
+    "h": 17
+   },
+   "slack": 3,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 3
+    },
+    {
+     "top": 24,
+     "h": 1
+    },
+    {
+     "top": 40,
+     "h": 1
+    },
+    {
+     "top": 56,
+     "h": 6
+    },
+    {
+     "top": 162,
+     "h": 2
+    },
+    {
+     "top": 182,
+     "h": 2
+    }
+   ],
+   "tallestBand": {
+    "top": 56,
+    "h": 6
+   },
+   "closeControls": 1,
+   "ordinals": [
+    {
+     "sameLine": true,
+     "numTop": 130.8,
+     "titleTop": 126.8
+    }
+   ],
+   "body": {
+    "w": 338
+   },
+   "track": {
+    "w": 322
+   },
+   "column": 322,
+   "scroll": {
+    "client": 322,
+    "width": 322
+   },
+   "hiddenPx": 0,
+   "drawnArea": 37800,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 1 stage"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 1 stage and 1 notch in view",
+    "button": "fit"
+   },
+   "case": "1824x900/local",
+   "expect": 1,
+   "share": 60.4,
+   "before": {
+    "w": 1120,
+    "h": 168.8,
+    "share": 31.3
+   }
+  },
+  {
+   "vw": 1824,
+   "vh": 900,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Investigation",
+   "note": "",
+   "stages": 2,
+   "card": {
+    "w": 340,
+    "h": 184.2
+   },
+   "legendBox": {
+    "y": 218,
+    "h": 17
+   },
+   "slack": 3,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 3
+    },
+    {
+     "top": 24,
+     "h": 1
+    },
+    {
+     "top": 40,
+     "h": 1
+    },
+    {
+     "top": 56,
+     "h": 6
+    },
+    {
+     "top": 162,
+     "h": 2
+    },
+    {
+     "top": 182,
+     "h": 2
+    }
+   ],
+   "tallestBand": {
+    "top": 56,
+    "h": 6
+   },
+   "closeControls": 1,
+   "ordinals": [
+    {
+     "sameLine": true,
+     "numTop": 130.8,
+     "titleTop": 126.8
+    },
+    {
+     "sameLine": true,
+     "numTop": 130.8,
+     "titleTop": 126.8
+    }
+   ],
+   "body": {
+    "w": 338
+   },
+   "track": {
+    "w": 322
+   },
+   "column": 148,
+   "scroll": {
+    "client": 322,
+    "width": 322
+   },
+   "hiddenPx": 0,
+   "drawnArea": 35245,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 2 stages"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 2 stages and 2 notches in view",
+    "button": "fit"
+   },
+   "case": "1824x900/investigate",
+   "expect": 2,
+   "share": 56.3,
+   "before": {
+    "w": 1120,
+    "h": 168.8,
+    "share": 52.5
+   }
+  },
+  {
+   "vw": 1824,
+   "vh": 900,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "SEFL review loop",
+   "note": "",
+   "stages": 7,
+   "card": {
+    "w": 846,
+    "h": 168.8
+   },
+   "legendBox": {
+    "y": 202,
+    "h": 17
+   },
+   "slack": 3,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 3
+    },
+    {
+     "top": 24,
+     "h": 1
+    },
+    {
+     "top": 40,
+     "h": 7
+    },
+    {
+     "top": 147,
+     "h": 2
+    },
+    {
+     "top": 166,
+     "h": 2
+    }
+   ],
+   "tallestBand": {
+    "top": 40,
+    "h": 7
+   },
+   "closeControls": 1,
+   "ordinals": [
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    }
+   ],
+   "body": {
+    "w": 844
+   },
+   "track": {
+    "w": 828
+   },
+   "column": 96,
+   "scroll": {
+    "client": 828,
+    "width": 828
+   },
+   "hiddenPx": 0,
+   "drawnArea": 81869,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 7 stages"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 7 stages and 7 notches in view",
+    "button": "fit"
+   },
+   "case": "1824x900/sefl-review-loop",
+   "expect": 7,
+   "share": 57.3,
+   "before": {
+    "w": 1120,
+    "h": 168.8,
+    "share": 60.3
+   }
+  },
+  {
+   "vw": 1824,
+   "vh": 900,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Acceptance thirteen",
+   "note": "",
+   "stages": 13,
+   "card": {
+    "w": 1578,
+    "h": 168.8
+   },
+   "legendBox": {
+    "y": 202,
+    "h": 17
+   },
+   "slack": 3,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 3
+    },
+    {
+     "top": 24,
+     "h": 1
+    },
+    {
+     "top": 40,
+     "h": 7
+    },
+    {
+     "top": 147,
+     "h": 2
+    },
+    {
+     "top": 166,
+     "h": 2
+    }
+   ],
+   "tallestBand": {
+    "top": 40,
+    "h": 7
+   },
+   "closeControls": 1,
+   "ordinals": [
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    },
+    {
+     "sameLine": true,
+     "numTop": 115.4,
+     "titleTop": 111.4
+    }
+   ],
+   "body": {
+    "w": 1576
+   },
+   "track": {
+    "w": 1560
+   },
+   "column": 96,
+   "scroll": {
+    "client": 1560,
+    "width": 1560
+   },
+   "hiddenPx": 0,
+   "drawnArea": 152469,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 13 stages"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 13 stages and 13 notches in view",
+    "button": "fit"
+   },
+   "case": "1824x900/acceptance-thirteen",
+   "expect": 13,
+   "share": 57.2,
+   "before": {
+    "w": 1120,
+    "h": 168.8,
+    "share": 56.3
+   }
+  }
+ ],
+ "failures": [],
+ "pageErrors": []
+}

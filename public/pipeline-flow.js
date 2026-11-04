@@ -77,7 +77,9 @@
     if (!check) return null;
     const params = Object.entries(exit).filter(([key]) => key !== "check");
     const said = params.length ? params.map(([key, value]) => `${key}=${Array.isArray(value) ? value.join(",") : String(value)}`).join(" ") : "no parameters";
-    return { id: `exit:${text(stage.id)}`, name: check, title: `exit check ${check} — ${said}`, artifact: null, decider: null, decision: null };
+    // `params` is the short form a stage card can print beside the check's name ("min=1"), and `title` is the long
+    // sentence the notch's tooltip keeps. One reader of `exit` decides both, so the two cannot disagree.
+    return { id: `exit:${text(stage.id)}`, name: check, params: params.length ? said : "", title: `exit check ${check} — ${said}`, artifact: null, decider: null, decision: null };
   }
 
   function bundleGate(gate) {
@@ -293,6 +295,25 @@
     return `<span class="pflow-notch" role="note" data-gate="${esc(gate.id || "")}" data-gate-name="${esc(gate.name || "")}" data-state="${esc(state)}" aria-label="${esc(name)}" title="${esc(gateTitle(gate))}" style="left:${at};top:19px"></span>`;
   }
 
+  // The one line a stage card prints under its title: what the stage writes, or the gate/exit check that ends it. It
+  // reads the same objects the notch and the arcs carry and never parses them a second time — a definition's `exit`
+  // is read once, by exitGate, and a bundle gate's decision artifact and the stage's own artifact come straight off
+  // the normalised shape. Null where the stage carries nothing to say, so a bare definition does not print a word.
+  function stageDetail(stage) {
+    if (!stage) return null;
+    const gate = stage.gate;
+    if (stage.artifact) return { kind: "artifact", text: `writes ${stage.artifact}`, title: `this stage writes ${stage.artifact}` };
+    if (!gate) return null;
+    const target = text(gate.decision && gate.decision.path) || text(gate.artifact);
+    if (target) return { kind: "gate", text: `${gate.name || "gate"} → ${target}`, title: gateTitle(gate) };
+    if (!gate.name) return null;
+    // A definition's exit check prints its own name and parameters — `commits min=1` — and not a prefix word: in the
+    // 96 px column the prefix pushed the check past a line and a half, so `branch-exists` read `exit branch-…`. The
+    // notch IS the exit check, and its tooltip is gateTitle(gate), so the sentence is a hover away.
+    const short = /^exit:/.test(text(gate.id)) ? `${gate.name}${gate.params ? ` ${gate.params}` : ""}` : gate.name;
+    return { kind: "exit", text: short, title: gateTitle(gate) };
+  }
+
   // A gate after the LAST stage has no next column to reach: its notch is drawn ON the track's closing edge, so the
   // check that ends the whole pipeline (a UAT sign-off) is still a notch on the track rather than a fact the drawing
   // dropped — and nothing hangs past the last column. The stub that used to sit here was 18 px of decorative line at
@@ -304,15 +325,15 @@
     const link = last ? "" : `<span class="pflow-link" aria-hidden="true"></span>`;
     const state = gate ? gateStateOf(gate, { index, count, currentIndex, position }) : null;
     const notch = gate ? notchHtml(gate, { state, name: gateAria(gate, stage, state, position), last }) : "";
-    const artifact = stage.artifact ? `<span class="pflow-art mono" title="the artifact this stage writes">${esc(stage.artifact)}</span>` : "";
+    const detail = stageDetail(stage);
+    const line = detail ? `<span class="pflow-art mono" data-detail="${detail.kind}" title="${esc(detail.title)}">${esc(detail.text)}</span>` : "";
     // `aria-current="step"` is the one thing a screen reader needs to find the row's place, and it is a fact about the
     // record rather than a colour. The stage's own `title` still carries the long form.
     const here = mark === MARK.CURRENT ? ' aria-current="step"' : "";
     return `<li class="pflow-node" data-stage="${esc(stage.id)}" data-pos="${index + 1}" data-mark="${esc(mark)}"${gate ? ` data-gate="${esc(gate.id || "")}"` : ""}${here} title="${esc(`${index + 1} of ${count} · ${stage.title} · ${MARK_WORDS[mark] || mark}`)}">
         <span class="pflow-dot" aria-hidden="true"></span>
-        <span class="pflow-n mono" aria-hidden="true">${index + 1}</span>
-        <span class="pflow-title">${esc(stage.title)}</span>
-        ${artifact}
+        <span class="pflow-title"><span class="pflow-n mono" aria-hidden="true">${index + 1}</span> ${esc(stage.title)}</span>
+        ${line}
         ${link}${notch}
       </li>`;
   }
@@ -407,9 +428,11 @@
     // live row lists the marks it carries, refused included only where a gate said no.
     const present = MARK_ORDER.filter((mark) => counts.get(mark));
     if (!present.length) return "";
+    // Every key is a PHRASE WITH ITS NOUN — `not reached 7 stages` — never a mark followed by a bare numeral. "done 5"
+    // reads as five of something the reader has to infer; the drawing counts stages, so the key says stages.
     return `<div class="pflow-legend" data-pflow-legend>${present.map(
       (mark) =>
-        `<span class="pflow-key" data-mark="${mark}"><i aria-hidden="true"></i>${MARK_WORDS[mark]}${counts.get(mark) ? ` <b class="mono">${counts.get(mark)}</b>` : ""}</span>`,
+        `<span class="pflow-key" data-mark="${mark}"><i aria-hidden="true"></i>${MARK_WORDS[mark]} <b class="mono">${counts.get(mark)} ${counts.get(mark) === 1 ? "stage" : "stages"}</b></span>`,
     ).join("")}</div>`;
   }
 
