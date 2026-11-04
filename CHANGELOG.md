@@ -4,28 +4,70 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.5.5 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.6.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-257 releases from v0.1.0 (2026-10-20) to v1.5.5 (2026-11-04), 917 commits between the tags. Every release is anchored by an
+260 releases from v0.1.0 (2026-10-20) to v1.6.0 (2026-11-04), 926 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
 
-## v1.5.5 — 2026-11-04 · 2 commits
+## v1.6.0 — 2026-11-04 · 5 commits
 
-[`2161023`](https://github.com/JLRoper/agent-worktree-gui/commit/21610239034afcf727752043dc489387270f0f86) · [compare v1.5.4...v1.5.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.5.4...v1.5.5)
+[`eec5251`](https://github.com/JLRoper/agent-worktree-gui/commit/eec525149a485597863c5f8025574edd94ec75d0) · [compare v1.5.7...v1.6.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.5.7...v1.6.0)
+
+### Added
+
+- feat: the landing renders the changelog as its last step ([`4ba98d6`](https://github.com/JLRoper/agent-worktree-gui/commit/4ba98d6172284bd17a9c7501461317fd72082978))
+- feat: the landing path runs land, and a base push with a stale changelog is refused ([`0bc3cf2`](https://github.com/JLRoper/agent-worktree-gui/commit/0bc3cf2273e8ce2db382ad031882826dad0c6e6f))
+
+### Fixed
+
+- fix: the land tool names a sha-only stale file, and its tests pin the case ([`edb25b3`](https://github.com/JLRoper/agent-worktree-gui/commit/edb25b30740dbc0eeb98a71934cbbbf5d2173332))
 
 ### Docs & tests
 
-- docs: the 1.4.2 usability ledger page, salvaged from PR #360 ([`b0a9b21`](https://github.com/JLRoper/agent-worktree-gui/commit/b0a9b213ebde6e7f04a61a6bcec03564db12f4c6))
+- docs: the landing's render, proven at 250 releases on main's own tip ([`cf922f4`](https://github.com/JLRoper/agent-worktree-gui/commit/cf922f4615a571e714bf0ab3440afa20294e7fd4))
 
 ### Other
 
-- chore: 1.5.5 — the version this landing carries ([`2161023`](https://github.com/JLRoper/agent-worktree-gui/commit/21610239034afcf727752043dc489387270f0f86))
+- chore: 1.6.0 — the version this landing carries ([`eec5251`](https://github.com/JLRoper/agent-worktree-gui/commit/eec525149a485597863c5f8025574edd94ec75d0))
+
+## v1.5.7 — 2026-11-04 · 1 commit
+
+[`6be1978`](https://github.com/JLRoper/agent-worktree-gui/commit/6be197804cdd7d4a9d243d3c652ff1019cce3ebe) · [compare v1.5.6...v1.5.7](https://github.com/JLRoper/agent-worktree-gui/compare/v1.5.6...v1.5.7)
+
+### Fixed
+
+- fix: tag the commit that declared the version, never the ref's tip (#368) ([`6be1978`](https://github.com/JLRoper/agent-worktree-gui/commit/6be197804cdd7d4a9d243d3c652ff1019cce3ebe))
+
+## v1.5.6 — 2026-11-04 · 3 commits
+
+[`75ec220`](https://github.com/JLRoper/agent-worktree-gui/commit/75ec220506001ff79ad43e33f3ce064f5e9f0d2d) · [compare v1.5.5...v1.5.6](https://github.com/JLRoper/agent-worktree-gui/compare/v1.5.5...v1.5.6)
+
+### Docs & tests
+
+- docs: render the v1.5.5, v1.5.4 and v1.5.2 sections at this tip ([`92d5fcc`](https://github.com/JLRoper/agent-worktree-gui/commit/92d5fcc6e6c7f352262537932f9c605785d40c8a))
+- docs: one entry point for the three split cuts, and the map reconciled ([`16ef146`](https://github.com/JLRoper/agent-worktree-gui/commit/16ef1462fc612a8a7de8f7a0e04d5fdad2d2d2ee))
+
+### Other
+
+- chore: 1.5.6 — the version this landing carries ([`75ec220`](https://github.com/JLRoper/agent-worktree-gui/commit/75ec220506001ff79ad43e33f3ce064f5e9f0d2d))
+
+## v1.5.5 — 2026-11-04 · 2 commits
+
+[`c7188bf`](https://github.com/JLRoper/agent-worktree-gui/commit/c7188bf20afd8bf7675841e40076794ea1c6bb07) · [compare v1.5.4...v1.5.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.5.4...v1.5.5)
+
+### Docs & tests
+
+- docs: the 1.4.2 usability ledger page, salvaged from PR #360 ([`1e8959c`](https://github.com/JLRoper/agent-worktree-gui/commit/1e8959cd21f8b69d5710a2dc4b986c17cb2eea31))
+
+### Other
+
+- chore: 1.5.5 — the version this landing carries ([`c7188bf`](https://github.com/JLRoper/agent-worktree-gui/commit/c7188bf20afd8bf7675841e40076794ea1c6bb07))
 
 ## v1.5.4 — 2026-11-04 · 2 commits
 
