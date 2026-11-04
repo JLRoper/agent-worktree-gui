@@ -4,16 +4,41 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v0.111.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v0.111.3 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-236 releases from v0.1.0 (2026-10-20) to v0.111.1 (2026-11-03), 852 commits between the tags. Every release is anchored by an
+238 releases from v0.1.0 (2026-10-20) to v0.111.3 (2026-11-03), 857 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v0.111.3 — 2026-11-03 · 2 commits
+
+[`4ebaa62`](https://github.com/JLRoper/agent-worktree-gui/commit/4ebaa6261b80a5a0fd563c9355e07027771271d4) · [compare v0.111.2...v0.111.3](https://github.com/JLRoper/agent-worktree-gui/compare/v0.111.2...v0.111.3)
+
+### Docs & tests
+
+- docs: the critique counts its own findings, and its two findings that need geometry ([`1036d5d`](https://github.com/JLRoper/agent-worktree-gui/commit/1036d5d641f83640c188333f6fab1f4f59bafcc6))
+
+### Other
+
+- chore: 0.111.3 — the version this landing carries ([`4ebaa62`](https://github.com/JLRoper/agent-worktree-gui/commit/4ebaa6261b80a5a0fd563c9355e07027771271d4))
+
+## v0.111.2 — 2026-11-03 · 3 commits
+
+[`a980b30`](https://github.com/JLRoper/agent-worktree-gui/commit/a980b30988c29e0006a0bfec8b80237e355ed925) · [compare v0.111.1...v0.111.2](https://github.com/JLRoper/agent-worktree-gui/compare/v0.111.1...v0.111.2)
+
+### Docs & tests
+
+- docs: render the 0.111.1 section, after main carried d3b3954 ([`19879ba`](https://github.com/JLRoper/agent-worktree-gui/commit/19879ba5a920540636f6b1e01f6b08e5ab48f0cc))
+- docs: critique the pipeline flow's architecture — the diagnosis holds, the price does not ([`34c2f54`](https://github.com/JLRoper/agent-worktree-gui/commit/34c2f5475f8c2e60a68b1db66baa6cbdeaaf6ec4))
+
+### Other
+
+- chore: 0.111.2 — the version this landing carries ([`a980b30`](https://github.com/JLRoper/agent-worktree-gui/commit/a980b30988c29e0006a0bfec8b80237e355ed925))
 
 ## v0.111.1 — 2026-11-03 · 3 commits
 
