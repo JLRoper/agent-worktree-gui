@@ -4,16 +4,46 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.2.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.4.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-249 releases from v0.1.0 (2026-10-20) to v1.2.0 (2026-11-04), 894 commits between the tags. Every release is anchored by an
+251 releases from v0.1.0 (2026-10-20) to v1.4.0 (2026-11-04), 901 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.4.0 — 2026-11-04 · 5 commits
+
+[`db8dc06`](https://github.com/JLRoper/agent-worktree-gui/commit/db8dc06328bc95252543e45f30f382e465424c78) · [compare v1.3.0...v1.4.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.3.0...v1.4.0)
+
+### Added
+
+- feat: each assistant owns its alerts, watches, messages and pad ([`d8068c0`](https://github.com/JLRoper/agent-worktree-gui/commit/d8068c046d8418bf75b05827a200d3c3a2d85318))
+
+### Docs & tests
+
+- test: pin the count's sentence, the fit control, and the fitted drawing ([`5cd412e`](https://github.com/JLRoper/agent-worktree-gui/commit/5cd412efbe0ecbe82ae765d3daadd3ca85c94771))
+- test: the thirteen-stage case goes green on the fitted drawing, and the count is judged in both states ([`9a521e6`](https://github.com/JLRoper/agent-worktree-gui/commit/9a521e612787e0dd42abb690b37d058e04db8559))
+- docs: the round's report, with the four shots that decided it ([`58ab40a`](https://github.com/JLRoper/agent-worktree-gui/commit/58ab40a5550218552b2de771e58aad01189174b8))
+
+### Other
+
+- chore: 1.4.0 — the version this landing carries ([`db8dc06`](https://github.com/JLRoper/agent-worktree-gui/commit/db8dc06328bc95252543e45f30f382e465424c78))
+
+## v1.3.0 — 2026-11-04 · 2 commits
+
+[`6ba1e85`](https://github.com/JLRoper/agent-worktree-gui/commit/6ba1e8571a0990a44d3fa414bf438c5595a6f494) · [compare v1.2.0...v1.3.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.2.0...v1.3.0)
+
+### Added
+
+- feat: thirteen stages fit the card, and the scroller says what it hides ([`6ba1e85`](https://github.com/JLRoper/agent-worktree-gui/commit/6ba1e8571a0990a44d3fa414bf438c5595a6f494))
+
+### Docs & tests
+
+- docs: render the v1.2.0 section on main ([`1b8b795`](https://github.com/JLRoper/agent-worktree-gui/commit/1b8b795682253956e029936956e3e63c0b452456))
 
 ## v1.2.0 — 2026-11-04 · 6 commits
 
