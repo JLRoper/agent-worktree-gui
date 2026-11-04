@@ -37,10 +37,10 @@ each taken from the document's own findings:
    record. F2 (a gate with no state, no accessible name) is markup and a `data-` attribute. F3 (a cap that cannot
    say "2 of 3") is a field the model does not carry. F4 (nothing focusable) is `tabindex` and a focus card. Not
    one of them is fixed by `x(i)`, and all four are fixed without it.
-2. **The one finding that does need geometry is priced at one pseudo-element.** F5 (`return` edges) and F8 (the
-   stub's 18 px) are the only two that are genuinely about owning coordinates, and F8 is a one-line CSS fix while
-   F5 is one more shape below the rail. The document says this itself, under alternative 1, and then does not let
-   it move the verdict.
+2. **The two findings that do need geometry are priced at one pseudo-element each.** F5 (`return` edges) and F8
+   (the stub's 18 px) are the only two that are genuinely about owning coordinates, and F8 is a one-line CSS fix
+   while F5 is one more shape below the rail. The document says this itself, under alternative 1, and then does not
+   let it move the verdict.
 3. **The document already concedes the point and buries the concession.** "If only one phase can land, land 3: a
    plainer drawing that tells the truth beats a beautiful one that draws a looped pipeline wrong." That sentence is
    the plan. It appears at the end of the migration section as a hedge, when it should be the first line of the
@@ -86,12 +86,12 @@ The document's cost accounting is the part a reader is most likely to act on, so
 
 | the document says | what the code says | effect |
 |---|---|---|
-| "about 95 of the renderer's 297 lines are rewritten (`stageHtml`, `arcsHtml`, `markup`)" | `stageHtml` 23 lines (`:183-205`), `arcsHtml` 10 (`:236-245`), `markup` 19 (`:256-274`) = **52**; with `layout` 19 (`:216-234`) = **71** | the deletion is overstated by a third |
-| "the three adapters and `marksFor` (≈120 lines) survive untouched" | adapters `:56-143` = 88, `marksFor` `:149-163` = 15 = **103** | the survivor is overstated by a sixth |
+| "about 95 of the renderer's 297 lines are rewritten (`stageHtml`, `arcsHtml`, `markup`)" | `stageHtml` 23 lines (`:183-205`), `arcsHtml` 10 (`:236-245`), `markup` 19 (`:256-274`) = **52**; with `layout` 19 (`:216-234`) = **71** | overstated by 24–43 lines |
+| "the three adapters and `marksFor` (≈120 lines) survive untouched" | adapters `:56-143` = 88, `marksFor` `:149-163` = 15 = **103** | understated by 17 lines |
 | "The modal's 369 lines are not touched at all." | its own keyboard phase edits the Escape handler (`public/pipeline-modal.js:298-316`, which closes unconditionally today), the Tab trap's `TABBABLE` list (`:36`), and `paintFlow` (`:164-172`), which replaces the flow subtree and so cannot preserve a cursor inside it | the single largest line item in the recommendation is priced at zero |
 | no figure at all for new code | an SVG builder, hit areas and `<g>` tabindex, a focus card (markup, wiring, CSS), zoom and `fit` controls, a scroll affordance, and — see below — a width policy that needs the container measured | the additions are not counted |
 
-Two sentences, then the error itself.
+The deleted lines are the small half of it. What the table has no row for is the code the recommendation adds.
 
 The arithmetic on deletions is a small thing on its own; the omission of additions is not. A layout that returns
 `{columns, lanes, arcs, width, height}` needs `usable` to compute `colW = clamp(minColumn(n), usable / n,
@@ -109,7 +109,7 @@ reader comparing 1 and 2 is comparing a bill with a brochure.
 
 ---
 
-## Three defects the document does not have, and one of them changes the verdict
+## Three defects the document does not name, and one of them changes the verdict
 
 ### 1. The driver walks a different graph than the picture draws — on the seed, at three stages
 
