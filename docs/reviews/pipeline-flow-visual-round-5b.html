@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playwright round 5B — the pipeline flow, visible and clean</title>
+
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a21; --panel2: #1b212a; --line: #2a3340; --text: #e6e9ef; --dim: #9aa5b4;
+    --dimmer: #6f7a89; --green: #7ee787; --red: #ff9c94; --amber: #f0c674; --blue: #9ecbff; --purple: #c8a6ff;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 15px/1.62 var(--ui); }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 30px 24px 72px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1 { font-size: 27px; line-height: 1.22; margin: 4px 0 8px; letter-spacing: -0.2px; }
+  h2 { font-size: 19px; margin: 44px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 15.5px; margin: 26px 0 8px; color: var(--blue); }
+  h4 { font-size: 12px; margin: 18px 0 6px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.07em; }
+  p { margin: 9px 0; }
+  ul, ol { margin: 8px 0 8px 22px; padding: 0; }
+  li { margin: 5px 0; }
+  code, .mono { font-family: var(--mono); font-size: 12.8px; }
+  code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .kicker { color: var(--dimmer); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
+  .sub { color: var(--dim); font-size: 16px; margin: 0 0 14px; max-width: 940px; }
+  .meta { color: var(--dim); font-size: 12.5px; }
+  .meta code { font-size: 12px; }
+  .anchor { font-family: var(--mono); font-size: 12.2px; color: var(--purple); background: #1d1826;
+            border: 1px solid #3d3352; border-radius: 4px; padding: 0 5px; white-space: nowrap; }
+  nav { margin: 18px 0 8px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line);
+        border-radius: 8px; font-size: 13px; line-height: 1.9; }
+  nav b { color: var(--dimmer); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
+  nav a { margin: 0 10px 0 0; white-space: nowrap; }
+  .lead { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--blue);
+          border-radius: 8px; padding: 14px 18px; margin: 18px 0; }
+  .lead p { margin: 5px 0; }
+  .verdict { background: #13261a; border: 1px solid #2f5f38; border-left: 4px solid var(--green);
+             border-radius: 8px; padding: 13px 18px; margin: 18px 0; }
+  .verdict h4 { color: var(--green); margin: 0 0 4px; }
+  .failbox { background: #2a1414; border: 1px solid #6b2a2a; border-left: 4px solid var(--red);
+             border-radius: 8px; padding: 13px 18px; margin: 18px 0; }
+  .failbox h4 { color: var(--red); margin: 0 0 4px; }
+  .warn { background: #2a2414; border: 1px solid #5c4d22; border-left: 4px solid var(--amber);
+          border-radius: 8px; padding: 12px 18px; margin: 16px 0; }
+  .warn h4 { color: var(--amber); margin: 0 0 4px; }
+  .not { background: #1f1a26; border: 1px solid #44395a; border-left: 4px solid var(--purple);
+         border-radius: 8px; padding: 12px 18px; margin: 16px 0; }
+  .not h4 { color: var(--purple); margin: 0 0 4px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 18px; margin: 14px 0; }
+  .tw { overflow-x: auto; margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--panel2); color: var(--dim); font-weight: 600; font-size: 12px;
+       text-transform: uppercase; letter-spacing: 0.05em; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .good { color: var(--green); font-weight: 600; }
+  .bad { color: var(--red); font-weight: 600; }
+  .may { color: var(--amber); }
+  .dim { color: var(--dim); }
+  .small { font-size: 12.5px; }
+  figure { margin: 16px 0 22px; }
+  figure img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #0b0e12; }
+  figure.small img { width: auto; max-width: 100%; }
+  figure.zoom img { width: 220px; image-rendering: pixelated; }
+  figcaption { color: var(--dim); font-size: 12.5px; margin-top: 6px; }
+  .finding { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 34px; }
+  .tag { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+         border-radius: 999px; padding: 1px 8px; border: 1px solid var(--line); color: var(--dim); }
+  .tag.high { color: #ff9c94; border-color: #6b2a2a; background: #2a1414; }
+  .tag.med { color: #f0c674; border-color: #5c4d22; background: #2a2414; }
+  .tag.low { color: #9ecbff; border-color: #2b5480; background: #141f2c; }
+  footer { margin-top: 54px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--dimmer); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="kicker">agent-worktree-gui · playwright round 5B · the visual layer</div>
+<h1>The drawing now fills its card, its words clear AA, and nothing hangs past the track</h1>
+<p class="sub">Round 5A measured six findings. Stage 3 fixed the arc geometry (its finding 6) in the truth layer; this round takes
+the three the brief names — the 18 px stub past the track, the dead band at one to three stages, and the titles at
+3.77:1 — plus the backdrop press that closed two surfaces, and re-runs the same harness with <code>--strict</code>.</p>
+<p class="meta">Branch <code>wtgui/stage-4-make-the-drawing-54293b</code>, measured at <code>origin/main</code>
+<code>4073d27</code> (<code>1.1.0</code>) plus this branch's commits <code>89188bc</code> (<code>public/style.css</code>,
+<code>public/pipeline-flow.js</code>) and <code>f857269</code> (<code>public/pipeline-modal.js</code>) ·
+this landing carries <strong>1.1.1</strong> ·
+harness <code>tools/verify-pipeline-flow-visible.mjs</code>, extended ·
+2026-11-04 06:54 UTC (2026-11-04 01:54 EST) ·
+headless Chromium via Playwright · viewports 1280×800 and 1821×700 ·
+throwaway panel, own config/stores/catalogue, assistant and gateway off</p>
+
+<div class="lead"><p><strong>134/140 judge lines and 129/129 contract checks.</strong> Round 5A read 94/126 and 129/129 on
+the same harness. The three findings are closed, each with the number that decided it: a two-stage definition is an
+<strong>826 px track with 146 px either side</strong> where it was 506 px with 598 px empty on the right; the
+seven-stage drawing is <strong>1094 px of content in a 1094 px scroller</strong> with all seven notches inside, where
+it was 1109 against 1094 and the last notch was clipped away; and every stage title clears AA at
+<strong>5.94:1</strong> where it was 3.77:1. The six lines still red are round 5A's finding 2 — thirteen stages,
+<strong>four columns and their notches out of view, 468 px hidden</strong>, no count and no <code>fit</code> control —
+which the architecture review's acceptance gives to the plan's C8 phase and which this row did not take.</p></div>
+
+<h2>1. The two verdicts, separately</h2>
+<table>
+<tr><th>question</th><th>route A — queue row, position mode</th><th>route B — Settings &gt; Pipeline, edit mode</th></tr>
+<tr><td><strong>Is everything visible at 1280 and at 1821?</strong><br><span class="dim">every stage, gate notch, loop arc, legend mark, position token; no clipping, no overflow, nothing painting under another</span></td>
+<td><strong>PASS.</strong> 5 of 5 stages, 1 notch, 1 arc, 4 legend marks, the position token and the
+<code>4 of 5 — Build it</code> subtitle are inside the scroller and the card; <code>scrollWidth</code> 1094 =
+<code>clientWidth</code> 1094; the arc is on the stage centres it joins; the arcs layer is the track's own box
+(V1–V7).</td>
+<td><strong>PASS at 1, 2, 3 and 7 stages</strong> — every stage and every notch inside the scroller, no overflow.
+<strong>Still FAIL at 13</strong> (finding 2, below): 4 stages and 4 notches out, 468 px hidden.</td></tr>
+<tr><td><strong>Does it look clean and crisp?</strong><br><span class="dim">spacing, alignment, contrast, no dead space, visible focus ring</span></td>
+<td><strong>PASS.</strong> Titles 5.94:1, no dead band (1090 px track in a 1118 px body), the loop arc
+<code>S4→S2 on centre</code>, the focus ring visible (<code>auto/1px</code>).</td>
+<td><strong>PASS at 1, 2, 3 and 7 stages.</strong> 1 stage: a 400 px column centred (359 px either side) where it was
+a 240 px card with 864 px empty; 2: 826 px centred (146/146) where it was 506 px with 598 px empty; 3 and 7 fill the
+card (1090 px, 14 px either side); every title 5.94:1; the closing gate's notch is on the track's edge, inside the
+scroller. The backdrop press no longer closes Settings (finding 5).</td></tr>
+</table>
+
+<h2>2. How it was measured</h2>
+<p><code>tools/verify-pipeline-flow-visible.mjs</code> is round 5A's harness, extended rather than replaced. It boots a
+throwaway panel of this checkout — its own <code>PANEL_CONFIG</code>, jobs store, <code>pipelines.json</code>, an
+ephemeral port, a dead <code>apiServer</code>, the board assistant off — and drives it with Chromium. Route B is
+Settings &gt; Pipeline &gt; a definition &gt; <em>open the flow</em>; route A is a queue row's ⇢ press. Every value is
+read from the DOM in the page: <code>getBoundingClientRect</code> against the scroller's client box and the track's own
+box, <code>scrollWidth</code>/<code>clientWidth</code>, pairwise intersections, the arc's ends against the stage
+centres it joins, the painted colours as a contrast ratio, the computed outline of whatever the keyboard focused.</p>
+<p>Three judge lines are new or re-stated, because the width policy moved the meaning of two of them:</p>
+<ul>
+<li><strong>C1</strong> now measures the policy itself: the capped track is <strong>centred</strong> (the space beside
+it matches within 8 px) and uses the card up to its ceiling — at least 70% of the body from two stages up, and for a
+one-stage definition a 400 px column. The architecture review's line was "no dead band wider than 80 px beside the
+track at two stages", written about a left-aligned track; the plan (C5) amends it to a symmetric margin, because a
+centred 826 px track in a 1094 px scroller leaves 133 px each side and that is a margin, not a band. The line says so
+in its label.</li>
+<li><strong>C8</strong> (new) is finding 1's direct measurement: nothing — no stage, no notch, no arc — is painted past
+the track's own right edge. It is measured while the drawing fits; a long definition's columns legitimately run past
+the visible box and V1–V3 judge that case.</li>
+<li><strong>V7</strong> (new) is the premise the arcs rest on: the arcs layer <em>is</em> the track's box
+(<code>arcs 95+1090 vs track 95+1090</code>), in both the capped and the filling regime. Two independently capped boxes
+is how a loop lands over the wrong stage.</li>
+</ul>
+
+<h3>The cases, before and after (identical at 1280×800 and 1821×700)</h3>
+<table>
+<tr><th>case</th><th>stages</th><th>track / body</th><th>dead space L / R</th><th>column</th><th>scrollWidth / clientWidth</th><th>worst title</th></tr>
+<tr><td>route B · <code>local</code></td><td>1</td><td>before 240 / 1118 → <strong>400 / 1118</strong></td><td>864 right → <strong>359 / 359</strong></td><td>240 → <strong>400</strong></td><td>1094 / 1094 (both)</td><td>3.77:1 → <strong>5.94:1</strong></td></tr>
+<tr><td>route B · <code>investigate</code></td><td>2</td><td>506 / 1118 → <strong>826 / 1118</strong></td><td>598 right → <strong>146 / 146</strong></td><td>240 → <strong>400</strong></td><td>1094 / 1094 (both)</td><td>3.77:1 → <strong>5.94:1</strong></td></tr>
+<tr><td>route B · <code>turnover</code></td><td>3</td><td>772 / 1118 → <strong>1090 / 1118</strong></td><td>332 right → <strong>14 / 14</strong></td><td>240 → <strong>346</strong></td><td>1094 / 1094 (both)</td><td>3.77:1 → <strong>5.94:1</strong></td></tr>
+<tr><td>route B · <code>sefl-review-loop</code></td><td>7</td><td>1090 / 1118 (both)</td><td>14 / 14</td><td>133.4 → <strong>133.4</strong></td><td><strong>1109 / 1094 → 1094 / 1094</strong></td><td>3.77:1 → <strong>5.94:1</strong></td></tr>
+<tr><td>route B · <code>acceptance-thirteen</code></td><td>13</td><td>1090 / 1118</td><td>14 / 14</td><td>78 → <strong>96</strong></td><td><strong>1345 / 1094 → 1562 / 1094</strong> (finding 2)</td><td>3.77:1 → <strong>5.94:1</strong></td></tr>
+<tr><td>route A · <code>poc-flow</code> at S3</td><td>5</td><td>1090 / 1118</td><td>14 / 14</td><td>197.2 → <strong>197.2</strong></td><td>1094 / 1094 (both)</td><td>3.77:1 → <strong>5.94:1</strong></td></tr>
+</table>
+<p class="dim">"Dead space" is the body's edge minus the track's edge, per side. The two-stage and one-stage rows are
+where finding 3 was; the thirteen-stage row is where finding 2 still is — the 96 px floor makes the columns legible
+(11.5 px titles, no truncation, C2 and C4 pass) and the track scrolls sooner, which is the trade the plan states
+explicitly.</p>
+
+<h2>3. The three findings, and the number that closed each</h2>
+
+<h3>Finding 1 — the notch after the last stage was clipped away, and the drawing overflowed by 15 px</h3>
+<p><strong>Before.</strong> Seven stages: the drawing carried seven notches in the DOM, the last at x 1191.5–1194.5, and
+the scroller's client box ended at 1187 — the whole 3 px notch was clipped, so a reader saw six. The end stub also
+widened the content to <code>scrollWidth</code> 1109 against <code>clientWidth</code> 1094.</p>
+<p><strong>Mechanism.</strong> <code>stageHtml()</code> gave the last stage an <code>18 px</code> decorative stub
+(<code>.pflow-link.is-end</code>, <code>left: 100%</code>) and <code>notchHtml()</code> put its notch at
+<code>calc(100% + 9px)</code> — both past the last column, while the track's own max-width ends the last column flush
+with the scroller.</p>
+<p><strong>Now.</strong> The closing gate's notch is drawn ON the track's closing edge
+(<code>left: calc(100% - 1.5px)</code>, its 3 px end at the column's right border) and the stub is gone. The gate is
+still carried, still named, still a notch: what left is the decoration that produced a scrollbar. Seven stages read
+<code>1109 / 1094 → 1094 / 1094</code>, all seven notches inside the scroller, and C8 measures nothing past the
+track's right edge. <code>test/pipeline-flow.test.js</code> pins the new shape instead of the stub.</p>
+<figure><img src="pipeline-flow-visual-round-5b/05-after-seven-last-notch-1280.png" alt="Crop of the right edge at seven stages: stage 6, the notch in the gap, stage 7 Merge, and the closing notch on Merge's right border">
+<figcaption>The right edge at seven stages, after. The gap after stage 6 carries its notch; <em>Merge</em> now carries
+the closing gate's notch on its own right border, inside the card. Before, there was no tick after <em>Merge</em> and
+the card edge cut the seventh notch in half.</figcaption></figure>
+
+<h3>Finding 3 — one to three stages left most of a 1120 px card empty</h3>
+<p><strong>Before.</strong> Dead space to the right of the track: 864 px (1 stage, a 240 px card), 598 px (2 stages,
+a 506 px track) and 332 px (3 stages, a 772 px track) in a 1118 px body. The tab opens on <code>local</code>, so the
+first drawing a reader meets was a 240 px island.</p>
+<p><strong>Mechanism.</strong> Three unreconciled widths — <code>minmax(78px, 1fr)</code> columns, a 240 px cap on the
+track, a second 240 px cap on the arcs layer — with the track left-aligned at its natural width.</p>
+<p><strong>Now.</strong> One policy for both boxes: <code>1fr</code> columns that share what the card gives them, a
+96 px floor (<code>--pflow-minw</code>) and a 400 px ceiling (<code>--pflow-maxw</code>) written once in the
+<code>max-width</code>, and <code>margin: 0 auto</code> centres the capped track. That is
+<code>clamp(96, (usable - (n - 1) * gap) / n, 400)</code> — the function the integration plan states — evaluated by the
+grid itself at whatever width the card is: no measurement, no resize handler, and the same rule at 96vw. Measured:
+1 stage 400 px centred at 359/359; 2 stages 826 px at 146/146; 3 stages 1090 px at 14/14.</p>
+<figure><img src="pipeline-flow-visual-round-5b/01-before-two-1280.png" alt="Before: two 240px stage cards on the left, the right 598px of the dialog empty">
+<figcaption><code>investigate</code>, two stages, before: 506 px of track against 1120 px of card.</figcaption></figure>
+<figure><img src="pipeline-flow-visual-round-5b/02-after-two-1280.png" alt="After: two 400px stage cards centred in the dialog, equal space either side">
+<figcaption>The same definition after: 826 px of track, centred, and the leftover is 146 px on each side — a margin,
+not a dead band.</figcaption></figure>
+
+<h3>Finding 4 — every title in edit mode was painted at 3.77:1</h3>
+<p><strong>Before.</strong> A definition has no position, so every stage is <code>not-reached</code>, and that mark's
+title colour was <code>var(--dimmer)</code>: rgb(107,116,130) on rgb(19,24,31) = 3.77:1 at 11.5 px — below AA, and in
+edit mode it was <em>all</em> the words in the drawing (1/1, 2/2, 3/3, 7/7, 13/13). On the live route the
+not-reached stage was the one affected (1 of 5).</p>
+<p><strong>Now.</strong> <code>--pflow-ink-quiet: #8b96a5</code>, 6.05:1 on the resting surface and 5.45:1 at the
+100% panel-contrast surface, still quieter than <code>done</code>'s <code>--dim</code> so the hierarchy survives. The
+ordinal and the artifact id moved with it — they were <code>--dimmer</code> too, at 9.5 px and 10 px.</p>
+<figure><img src="pipeline-flow-visual-round-5b/04-after-seven-1280.png" alt="Seven-stage definition at 1280: seven equal columns filling the card, titles legible">
+<figcaption>Seven stages, edit mode, after: the track fills the card, every title clears AA, and the closing notch
+sits on <em>Merge</em>'s right border.</figcaption></figure>
+
+<h3>Finding 5 — a backdrop press closed the Settings window as well as the dialog</h3>
+<p><strong>Before.</strong> One press on the flow's backdrop left <code>#pipeline-modal</code> hidden <em>and</em>
+<code>#settings</code> hidden; the reader lost the tab they were editing in. The Escape path was already correct.</p>
+<p><strong>Mechanism.</strong> The dialog's click handler called <code>preventDefault()</code> and closed but never
+stopped the event, and the page closes Settings for any click whose path does not include its panel
+(<code>public/app.js</code>, the <code>#settings</code> outside-press handler). It stops on the drag-out press as well
+as the closing one: a press that begins in the card and ends on the backdrop is not a dismissal — that rule is
+unchanged — but it is still this dialog's press.</p>
+<p><strong>Now.</strong> C7 reads "Settings still open" at both viewports, where it read "Settings was closed by the
+same press"; the dialog still closes on a press that begins and ends on the backdrop, and the drag still does not
+dismiss it (both are checks in the same run).</p>
+
+<h2>3b. The four shots the brief asks for — two stages and seven, at both widths</h2>
+<p>Each is the harness's own card capture, taken in the same run as the numbers above. The card is 1120 px at both
+viewports (96vw is larger than the cap at each), so the two widths differ in where the card sits on screen and not in
+the drawing — which is what makes a width-only defect impossible to hide at one size.</p>
+<figure><img src="pipeline-flow-visual-round-5b/02-after-two-1280.png" alt="Two-stage definition at 1280x800: two 400px cards centred">
+<figcaption>2 stages, 1280×800.</figcaption></figure>
+<figure><img src="pipeline-flow-visual-round-5b/06-after-two-1821.png" alt="Two-stage definition at 1821x700: the same two 400px cards, centred">
+<figcaption>2 stages, 1821×700.</figcaption></figure>
+<figure><img src="pipeline-flow-visual-round-5b/04-after-seven-1280.png" alt="Seven-stage definition at 1280x800: seven columns filling the card">
+<figcaption>7 stages, 1280×800.</figcaption></figure>
+<figure><img src="pipeline-flow-visual-round-5b/07-after-seven-1821.png" alt="Seven-stage definition at 1821x700: seven columns filling the card">
+<figcaption>7 stages, 1821×700.</figcaption></figure>
+<figure><img src="pipeline-flow-visual-round-5b/03-before-seven-1280.png" alt="Before: the same seven-stage definition, with the last notch clipped and a 15px overflow">
+<figcaption>The same seven stages <em>before</em> this round: the last notch is past the clip edge and the content is
+15 px wider than the scroller. Compare with the pair above.</figcaption></figure>
+<figure><img src="pipeline-flow-visual-round-5b/08-after-one-1280.png" alt="One-stage definition at 1280: a single 400px card centred">
+<figcaption>1 stage (the dropdown's default): a 400 px card centred, where it was 240 px against the left edge with
+864 px empty.</figcaption></figure>
+<figure><img src="pipeline-flow-visual-round-5b/10-after-route-a-1280.png" alt="Route A, position mode: five stages, one gate notch, one capped loop arc above the track">
+<figcaption>Route A (a queue row's ⇢), 5 stages: the loop arc is on the stage centres it joins and the arcs layer is the
+track's own box.</figcaption></figure>
+
+<h2>4. What is still red, and why it is a different row</h2>
+<p><strong>Finding 2 — thirteen stages: four columns and their notches are outside the picture.</strong> 13 columns at
+the 96 px floor and a 26 px gap are <code>1562 px</code> of content in a 1094 px scroller: <code>st10</code> is sliced
+and <code>st11</code>–<code>st13</code> are absent, with no count of what is hidden and no <code>fit</code> control. The
+architecture review's acceptance asks for exactly those two things, and the integration plan gives them to its C8
+phase ("<code>fit</code>, the scroll affordance, and the legend's counts"). This row is the width policy, the palette
+and the two edge defects; C8 is a control the reader presses and a payload the markup does not carry yet, so it is
+filed as its own row rather than folded into this one. The floor did make the thirteen-stage drawing more legible —
+96 px columns, titles unclipped, C2 and C4 green — and it scrolls sooner; that trade is the plan's, stated in C5.
+Before this landing the same case was also red (1345/1094, 3 out).</p>
+<figure><img src="pipeline-flow-visual-round-5b/09-thirteen-still-scrolls-1280.png" alt="Thirteen-stage definition: ten and a part columns visible, the rest past the card's right edge">
+<figcaption>Thirteen stages, after: 4 columns are still past the card's edge. The next row is the count and the
+<code>fit</code> control the acceptance names.</figcaption></figure>
+
+<h2>5. Reproduce</h2>
+<pre><code>cd C:/ProjectDevelopment/agent-worktree-gui/.worktrees/stage-4-make-the-drawing-54293b
+node tools/verify-pipeline-flow-visible.mjs --strict --json out.json --shots shots
+node tools/verify-pipeline-flow.mjs                    # 49/49
+node --test test/*.test.js                             # 1383 tests, 1382 pass, 1 fail before this round's
+                                                       #   test update; 0 after it
+</code></pre>
+<p>The strict run exits 1 while the thirteen-stage finding stands; every other line is green. The screenshots this page
+shows are the harness's own, copied beside it under <code>docs/reviews/pipeline-flow-visual-round-5b/</code>.</p>
+
+<h2>6. Limits</h2>
+<ul>
+<li>The card is <code>min(1120px, 96vw)</code>, and 96vw is 1229 px at 1280 and 1748 px at 1821, so the 1120 px cap
+binds at both widths: every number here is identical to the pixel at the two sizes the brief names. A viewport narrower
+than 1167 px would exercise the 96vw branch, which this round does not measure.</li>
+<li>No fixture carries a capped loop on a track short enough to be centred. The definition route cannot carry a loop
+(a definition has an exit check, not a handoff), so the arcs layer's identity with the track (V7) is measured on the
+five-stage bundle and the formula is pinned by <code>test/pipeline-truth.test.js</code>; the two would have to disagree
+for a centred short track with a loop to land an arc wrong.</li>
+<li>The 13-stage case is measured, and left red on purpose — see §4.</li>
+</ul>
+</div>
