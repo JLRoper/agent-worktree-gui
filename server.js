@@ -4,12 +4,13 @@
 import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 // The push-guard record is a few hundred bytes read at boot and written on an install: sync is the honest shape
 // for it, and it is the same file the Settings row reports from.
 import { existsSync, mkdirSync, readFileSync, writeFileSync, writeSync } from "node:fs";
 import { cpus, homedir, tmpdir } from "node:os";
 import path from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import { Pool } from "./lib/pool.js";
 import { portHolder, refusalLine } from "./lib/port-guard.js";
@@ -144,6 +145,92 @@ const packageVersion = () => {
     return null;
   }
 };
+
+// ---- the checkout's own changelog -------------------------------------------------------------
+// Settings → Updates answers "what changed since the build I am running?" from CHANGELOG.md at the panel
+// root — the file `npm run changelog` renders from the tags. The file is ~230 KB and the tab draws ten
+// releases, so the read stops at the (limit + 1)th release heading: everything below it is history the
+// answer would throw away, and a panel that restarted should not parse 251 releases to draw ten.
+const CHANGELOG_FILE = "CHANGELOG.md";
+const CHANGELOG_DEFAULT = 10;
+const CHANGELOG_MAX = 50;
+// The one shape `tools/changelog.mjs` writes, and the only one this parses. A file of prose carries no
+// heading and is answered as EMPTY, never as a blank box: the two states mean different things to a reader.
+const CHANGELOG_HEADING = /^##\s+v(\d+\.\d+\.\d+)\s+—\s+(\d{4}-\d{2}-\d{2})\s+·\s+(\d+)\s+commits?\s*$/;
+const CHANGELOG_CHUNK = 64 * 1024;
+
+// A limit the tab asked for: absent is the default, an unreadable one is the default too (never 0, which
+// would draw an empty box and read exactly like a file with nothing in it), and past the cap is the cap.
+function changelogLimitFrom(value) {
+  const raw = value == null ? "" : String(value).trim();
+  if (!raw) return CHANGELOG_DEFAULT;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return CHANGELOG_DEFAULT;
+  return Math.min(CHANGELOG_MAX, Math.max(1, Math.trunc(n)));
+}
+
+// Read only the head of the file, in 64 KiB reads. The count is taken over what has arrived so far, so a
+// heading split across a chunk boundary is counted one read later — the stop is never EARLIER than the
+// (limit + 1)th heading, which is the only direction that matters here.
+async function readChangelogHead(file, limit, size) {
+  const handle = await open(file, "r");
+  try {
+    const decoder = new StringDecoder("utf8");
+    const buf = Buffer.alloc(CHANGELOG_CHUNK);
+    let text = "";
+    let read = 0;
+    while (read < size) {
+      const { bytesRead } = await handle.read(buf, 0, Math.min(buf.length, size - read), read);
+      if (!bytesRead) break;
+      read += bytesRead;
+      text += decoder.write(buf.subarray(0, bytesRead));
+      if ((text.match(/^##\s+v/gm) || []).length > limit) break;
+    }
+    return text + decoder.end();
+  } finally {
+    await handle.close();
+  }
+}
+
+// One release's body as the tab draws it: the group headings and the bullets, with the commit link's
+// markdown reduced to the short sha a reader can say out loud. The sha/compare line immediately under the
+// heading is metadata for GitHub's web view, not something the panel repeats.
+function changelogBodyLines(body) {
+  const out = [];
+  for (const raw of body) {
+    const line = raw.trim();
+    if (!line || line.startsWith("[`")) continue;
+    if (line.startsWith("### ")) {
+      out.push(`### ${line.slice(4).trim()}`);
+      continue;
+    }
+    if (!/^[-*]\s+/.test(line)) continue;
+    out.push(`- ${line.replace(/^[-*]\s+/, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/`/g, "")}`);
+  }
+  return out;
+}
+
+// Newest-first, because the file is written that way and a reader wants the top: the first heading is the
+// release the panel serves, the ones below it are what it replaced.
+function parseChangelogSections(text, limit) {
+  const sections = [];
+  let current = null;
+  for (const line of text.split("\n")) {
+    const heading = CHANGELOG_HEADING.exec(line);
+    if (heading) {
+      if (current) sections.push(current);
+      if (sections.length >= limit) {
+        current = null;
+        break;
+      }
+      current = { version: heading[1], date: heading[2], commits: Number(heading[3]), lines: [] };
+      continue;
+    }
+    if (current) current.lines.push(line);
+  }
+  if (current) sections.push(current);
+  return sections.slice(0, limit).map((section) => ({ ...section, lines: changelogBodyLines(section.lines) }));
+}
 // PANEL_CONFIG lets a second instance run from the same code with its own config and port —
 // a sandbox or a demo you can click around in without touching the real one:
 //   set PANEL_CONFIG=C:\path\to\panel-config.json && node server.js
@@ -2401,6 +2488,54 @@ const server = createServer(async (req, res) => {
     // and offers (or takes) a reload when the two part company. A read, like every other GET here.
     if (route === "/api/build" && req.method === "GET") {
       return sendJson(res, 200, await build.info());
+    }
+
+    // The checkout's own changelog: what Settings → Updates draws under the build row. One file at the panel
+    // root, read only as far as the tab needs, and the limit is the tab's — capped so a hand-edited URL cannot
+    // ask the server to format all 251 releases. The THREE states are distinct on purpose: `ok` (headings
+    // parsed), `empty` (the file is there and carries none) and `missing` (there is no file) are different
+    // things to a reader, and a blank box says none of them.
+    if (route === "/api/changelog" && req.method === "GET") {
+      const limit = changelogLimitFrom(url.searchParams.get("limit"));
+      const file = path.join(HERE, CHANGELOG_FILE);
+      const answer = (state, reason, info = null, sections = []) => ({
+        file: CHANGELOG_FILE,
+        path: file,
+        limit,
+        cap: CHANGELOG_MAX,
+        serving: VERSION,
+        state,
+        reason: reason || null,
+        mtime: info ? info.mtime.toISOString() : null,
+        size: info ? info.size : null,
+        sections,
+      });
+      let info;
+      try {
+        info = await stat(file);
+      } catch (e) {
+        const missing = e && e.code === "ENOENT";
+        return sendJson(
+          res,
+          200,
+          answer(
+            missing ? "missing" : "unreadable",
+            missing
+              ? `${CHANGELOG_FILE} is not in the panel's root (${HERE})`
+              : `cannot read ${CHANGELOG_FILE}: ${String((e && e.message) || e)}`,
+          ),
+        );
+      }
+      let sections = [];
+      try {
+        sections = parseChangelogSections(await readChangelogHead(file, limit, info.size), limit);
+      } catch (e) {
+        return sendJson(res, 200, answer("unreadable", `cannot read ${CHANGELOG_FILE}: ${String((e && e.message) || e)}`, info));
+      }
+      const reason = sections.length
+        ? null
+        : `${CHANGELOG_FILE} is ${info.size} bytes and carries no "## vX.Y.Z — date · N commits" heading`;
+      return sendJson(res, 200, answer(sections.length ? "ok" : "empty", reason, info, sections));
     }
 
     if (route === "/api/config") {

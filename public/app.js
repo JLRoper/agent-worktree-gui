@@ -19001,6 +19001,9 @@ function selectSettingsTab(key) {
   // for it — not on every repaint of the settings window. A tab the reader leaves and comes back to asks again only
   // when the answer is old; a press on its own re-read row asks at once (initBundlesPanel).
   if (key === "bundles" && Date.now() - bundlesLoadedAt > 15000) void loadBundles();
+  // The release notes are a file read on the server too. A tab the reader comes back to re-asks when the answer
+  // is old; the first answer is fetched at boot, beside the other tabs' reads, so the search sees its rows.
+  if (key === "updates" && Date.now() - changelogLoadedAt > 15000) void loadChangelog();
 }
 
 // The per-tab counts the search hands over: a badge on the tab's chrome, and the same number in the tab's own
@@ -19058,6 +19061,123 @@ function initSettingsTabs() {
 }
 
 // ---- end settings tabs
+
+// ---- settings > updates: the release notes ----------------------------------------------------------------
+// The tab answers "what changed since the build I am running?" from the checkout's own CHANGELOG.md, read
+// through GET /api/changelog. The newest release is open with its bullets, the ones below it fold, and the
+// version the panel serves is marked so the reader can see where they are in the list. The answer carries its
+// own state — ok / empty / missing — and the last two are SAID in as many words: a file with no release
+// headings and no file at all are different things to a reader, and neither one is a blank box.
+const RELEASE_NOTES_ID = "release-notes";
+const RELEASE_NOTES_SOURCE_ID = "release-notes-source";
+const RELEASE_NOTES_ROW_ID = "release-notes-row";
+let changelogIndex = null;
+let changelogLoadedAt = 0;
+let changelogLoading = null;
+
+function changelogWhen(mtime) {
+  const at = new Date(mtime);
+  if (!mtime || Number.isNaN(at.getTime())) return "mtime unknown";
+  return at.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
+
+function changelogBytes(size) {
+  return `${Number(size || 0).toLocaleString()} bytes`;
+}
+
+// One release: the summary IS the heading (version, date, commit count), so the folded state already answers
+// the three facts a reader scans for; the body is the bullets the changelog groups them under.
+function releaseNotesSectionHtml(section, serving, index) {
+  const version = String(section.version || "");
+  const commits = Number(section.commits) || 0;
+  const count = `${commits} commit${commits === 1 ? "" : "s"}`;
+  const servingHere = serving && version === String(serving);
+  const body = (Array.isArray(section.lines) ? section.lines : [])
+    .map((line) =>
+      line.startsWith("### ")
+        ? `<div class="release-group">${esc(line.slice(4))}</div>`
+        : `<div class="release-bullet">${esc(line.replace(/^-\s+/, ""))}</div>`,
+    )
+    .join("");
+  return (
+    `<details class="release" data-release-version="${esc(version)}"${index === 0 ? " open" : ""}>` +
+    `<summary class="release-head" title="${esc(`v${version} · ${section.date} · ${count}${servingHere ? " · the version this panel serves" : ""}`)}">` +
+    `<span class="release-version mono">v${esc(version)}</span>` +
+    `<span class="release-date mono">${esc(String(section.date || ""))}</span>` +
+    `<span class="release-commits mono">${esc(count)}</span>` +
+    (servingHere ? `<span class="release-mark">serving</span>` : "") +
+    `</summary>` +
+    `<div class="release-body">${body || `<div class="release-bullet">this release carries no grouped commits</div>`}</div>` +
+    `</details>`
+  );
+}
+
+function paintChangelog(error = null) {
+  const list = document.getElementById(RELEASE_NOTES_ID);
+  const source = document.getElementById(RELEASE_NOTES_SOURCE_ID);
+  const row = document.getElementById(RELEASE_NOTES_ROW_ID);
+  if (!list) return;
+  const say = (html, line, title) => {
+    list.innerHTML = html;
+    if (source) {
+      source.textContent = line;
+      source.title = title || line;
+    }
+    if (row) row.classList.remove("search-hidden");
+  };
+  if (error) return say(`<div class="release-state bad">${esc(`the panel could not answer for CHANGELOG.md — ${error}`)}</div>`, "CHANGELOG.md · not read");
+  const data = changelogIndex;
+  if (!data) return say(`<div class="release-state bad">${esc("the panel has not answered for CHANGELOG.md yet")}</div>`, "CHANGELOG.md · not read");
+  const file = data.file || "CHANGELOG.md";
+  const where = data.path || file;
+  if (data.state === "missing") {
+    return say(
+      `<div class="release-state bad">${esc(`${file} is missing — there is no file at the panel root (${where}). The panel is serving v${data.serving || "unknown"}; no release notes are on disk.`)}</div>`,
+      `${file} · not on disk`,
+      where,
+    );
+  }
+  if (data.state === "empty") {
+    return say(
+      `<div class="release-state">${esc(`${file} is present (${changelogBytes(data.size)}, modified ${changelogWhen(data.mtime)}) but carries no "## vX.Y.Z — date · N commits" heading — there is nothing to list. The panel is serving v${data.serving || "unknown"}.`)}</div>`,
+      `${file} · modified ${changelogWhen(data.mtime)} · ${changelogBytes(data.size)}`,
+      where,
+    );
+  }
+  if (data.state !== "ok" || !Array.isArray(data.sections) || !data.sections.length) {
+    return say(
+      `<div class="release-state bad">${esc(data.reason || `the panel answered ${file} with no releases and no reason`)}</div>`,
+      `${file} · no releases`,
+      where,
+    );
+  }
+  say(
+    data.sections.map((section, i) => releaseNotesSectionHtml(section, data.serving, i)).join(""),
+    `${file} · modified ${changelogWhen(data.mtime)} · ${changelogBytes(data.size)}`,
+    where,
+  );
+}
+
+async function loadChangelog() {
+  if (changelogLoading) return changelogLoading;
+  changelogLoading = (async () => {
+    try {
+      const r = await apiFetch("/api/changelog");
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+      changelogIndex = data;
+      changelogLoadedAt = Date.now();
+      paintChangelog();
+    } catch (e) {
+      paintChangelog(e.message || String(e));
+    } finally {
+      changelogLoading = null;
+    }
+  })();
+  return changelogLoading;
+}
+
+// ---- end settings > updates
 
 // ---- settings search -------------------------------------------------------------------------------------
 // The panel is a long list of rows spread over eight tabs, so the way to a setting is the search box the panel's
@@ -21650,6 +21770,9 @@ void loadPipelines();
 // happen at boot. Its task rows open the existing task pipeline window; initBundlesPanel wires that one press.
 void loadBundles();
 initBundlesPanel();
+// And the release notes: CHANGELOG.md at the panel root is the answer to "what changed since my build", and it is
+// read before the tab is opened for the same reason the other tabs are — the settings search counts every tab.
+void loadChangelog();
 // The window's own gestures: the head drags it, the corner grip sizes it, and the rect is remembered in this browser.
 initSettingsWindow();
 // A second way in that is always on screen at the top left: the title opens Settings.
