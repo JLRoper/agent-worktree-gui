@@ -102,8 +102,8 @@ test("every press is a glyph carrying the real word in title= and aria-label=", 
   // A queued row offers the most presses at once: Start, Park, Done, Move and Delete.
   const html = queueTaskHtml("assistant-1", { id: 8, title: "g", state: "queued", files: [], threads: [] });
   const wanted = [
-    ["running", "▶", "Start"],
-    ["parked", "⏸", "Park"],
+    ["running", "▸", "Start"],
+    ["parked", "‖", "Park"],
     ["done", "✓", "Done"],
     ["delete", "✕", "Delete"],
   ];
@@ -119,13 +119,13 @@ test("every press is a glyph carrying the real word in title= and aria-label=", 
   const mv = /<button[^>]*data-as-qmove-open[^>]*>/.exec(html);
   assert.ok(mv, "Move is offered when another assistant exists");
   assert.ok(mv[0].includes('aria-label="Move"') && mv[0].includes('title="Move — '), "Move: title and aria-label carry the word");
-  assert.ok(html.includes(">➡️</button>"), "Move is the ➡️ glyph");
+  assert.ok(html.includes(">→</button>"), "Move is the → glyph");
   // A done row's queue press is Requeue, and it says so.
   const done = queueTaskHtml("assistant-1", { id: 9, title: "d", state: "done", files: [] });
   assert.ok(done.includes('aria-label="Requeue"') && done.includes(">↺</button>"), "a done row's ↺ is Requeue");
   // …and a parked row's queue press is the ⤵ Queue one.
   const parked = queueTaskHtml("assistant-1", { id: 10, title: "p", state: "parked", files: [] });
-  assert.ok(parked.includes('aria-label="Queue"') && parked.includes(">⤵</button>"), "a parked row's ⤵ is Queue");
+  assert.ok(parked.includes('aria-label="Queue"') && parked.includes(">⇣</button>"), "a parked row's ⇣ is Queue");
 });
 
 test("Move is a popover, not an always-visible select", () => {
@@ -141,12 +141,13 @@ test("Move is a popover, not an always-visible select", () => {
   assert.ok(html.includes('data-as-qact="reassign"'), "a pick is the same reassign press the button was");
 });
 
-test("a row with no other assistant offers no move", () => {
+test("a row with no other assistant offers no move, and no sentence about the deployment", () => {
   const solo = build({ ids: ["assistant-1"] });
   const html = solo.queueTaskHtml("assistant-1", { id: 6, title: "solo", state: "queued", files: [] });
-  assert.ok(html.includes("no other assistant to move it to"), "a lone assistant cannot move work to itself");
-  assert.ok(!html.includes('data-as-qact="reassign"'), "and no pick is drawn");
+  assert.ok(!html.includes('data-as-qact="reassign"'), "a lone assistant cannot move work to itself");
   assert.ok(!html.includes("data-as-qmove-open"), "and no ➡️ either");
+  // The sentence used to be printed in every row of a one-assistant board, where it read as a disabled control.
+  assert.ok(!html.includes("no other assistant to move it to"), "the repeated hint is gone; the control's title says it");
 });
 
 test("one sub-row per agent, each with its own mark and the card's own pill", () => {
@@ -222,7 +223,7 @@ test("a row whose thread is parked on a question wears one `question` chip, and 
     choices: ["ship it", "wait"],
   };
   const html = queueTaskHtml("assistant-1", row, new Map(), new Map(), [asked]);
-  const chips = [...html.matchAll(/<button[^>]*class="as-task-hold"[^>]*>question<\/button>/g)];
+  const chips = [...html.matchAll(/<button[^>]*class="as-task-hold as-task-question"[^>]*>question<\/button>/g)];
   assert.equal(chips.length, 1, "exactly one question chip on the row");
   assert.ok(chips[0][0].includes('data-as-qopen="T-asked"'), "the chip opens the ALERT's agent, not the task's last thread");
   assert.ok(chips[0][0].includes('data-as-qquestion="a1b2c3d4"'), "…and names the alert it came from");
@@ -258,41 +259,43 @@ test("a row whose thread is parked on a question wears one `question` chip, and 
   );
 });
 
-// ---- the project word: first in the meta line, short, derived, or absent -------------------------------------
-// The card's meta line is the row's own string (`project Menu · PR #12 open · tree … · files …`), so the assertions
-// read that div's text rather than the whole markup: a `project` anywhere else on the row (a title, a reason) must not
-// pass for the meta word.
+// ---- the facts line: WHERE on one line, the second read folded -------------------------------------
+// The card's facts line is the row's own string (`project Menu · PR #12 open`), and the tree, files, attempts and
+// detail are the row's closed disclosure. The assertions read those two containers rather than the whole markup: a
+// path anywhere else on the row (a title, a reason) must not pass for the fact under test.
 const metaOf = (html) => {
-  const m = /<div class="as-task-meta">([\s\S]*?)<\/div>/.exec(html);
+  const m = /<span class="as-task-meta">([\s\S]*?)<\/span>/.exec(html);
+  return m ? m[1] : "";
+};
+const foldOf = (html) => {
+  const m = /<div class="as-task-more-body">([\s\S]*?)<\/div>/.exec(html);
   return m ? m[1] : "";
 };
 
-test("the card's meta reads `project Menu · files …` with the project FIRST", () => {
+test("the facts line is the project and the PR, and the files are one press away", () => {
   const { queueTaskHtml } = build();
   const html = queueTaskHtml(
     "assistant-1",
     { id: 1, title: "carry it", state: "queued", project: "Menu", files: ["lib/assistant/queue.js", "public/assistant.js"] },
     new Map(),
   );
-  const meta = metaOf(html);
-  assert.match(meta, /^project Menu · /, "the project is the first thing in the meta line");
-  assert.match(meta, /files lib\/assistant\/queue\.js, public\/assistant\.js/, "…and the files follow it");
-  assert.equal(meta.includes("tree "), false, "a queued row with no worktree carries no tree word");
+  assert.equal(metaOf(html), "project Menu", "the project is the whole facts line when there is no PR");
+  assert.match(foldOf(html), /files lib\/assistant\/queue\.js, public\/assistant\.js/, "…and the files are in the fold");
+  assert.equal(metaOf(html).includes("files"), false, "the files are not printed on the facts line");
 });
 
-test("an old row with no project derives one from its worktree, as a NAME", () => {
+test("an old row with no project derives one from its worktree, as a NAME, and the path is folded", () => {
   const { queueTaskHtml } = build();
   const html = queueTaskHtml(
     "assistant-1",
     { id: 2, title: "old row", state: "running", worktree: "C:/ProjectDevelopment/Menu/.worktrees/put-a-thing-1234", files: [] },
     new Map(),
   );
-  const meta = metaOf(html);
-  assert.match(meta, /^project Menu · tree /, "the segment before /.worktrees/, reduced to its directory name");
-  assert.match(meta, /^project Menu · tree C:\/ProjectDevelopment\/Menu\/\.worktrees\//, "the tree word keeps the path; the project word does not");
+  assert.equal(metaOf(html), "project Menu", "the segment before /.worktrees/, reduced to its directory name");
+  assert.match(foldOf(html), /tree C:\/ProjectDevelopment\/Menu\/\.worktrees\/put-a-thing-1234/, "the tree word keeps the path, in the fold");
 });
 
-test("a tree outside .worktrees/ falls back to the row's own project", () => {
+test("a tree outside .worktrees/ falls back to the row's own project, and the PR stays on the facts line", () => {
   const { queueTaskHtml } = build();
   const html = queueTaskHtml(
     "assistant-1",
@@ -306,22 +309,17 @@ test("a tree outside .worktrees/ falls back to the row's own project", () => {
     },
     new Map(),
   );
-  assert.match(metaOf(html), /^project Menu · PR ON MAIN/);
+  assert.equal(metaOf(html), "project Menu · PR ON MAIN");
 });
 
-test("nothing to derive draws NO project word, and the files stay on the card", () => {
+test("nothing to derive draws NO project word, and the files are still on the row", () => {
   const { queueTaskHtml } = build();
-  const html = queueTaskHtml(
-    "assistant-1",
-    { id: 4, title: "loose work", state: "queued", worktree: "C:/scratch/a-loose-tree", files: ["lib/x.js"] },
-    new Map(),
-  );
-  const meta = metaOf(html);
-  assert.equal(meta.includes("project"), false, "a row that cannot say where it is says nothing");
-  assert.match(meta, /files lib\/x\.js/, "…and the files are still there");
+  const html = queueTaskHtml("assistant-1", { id: 4, title: "loose work", state: "queued", worktree: "C:/scratch/a-loose-tree", files: ["lib/x.js"] }, new Map());
+  assert.equal(metaOf(html), "", "a row that cannot say where it is says nothing");
+  assert.match(foldOf(html), /files lib\/x\.js/, "…and the files are in the fold");
 });
 
-test("a long project name never pushes the files off the card", () => {
+test("a long project name never pushes the row around, and the fold keeps the first four files", () => {
   const { queueTaskHtml } = build();
   const files = ["lib/a.js", "lib/b.js", "public/c.js", "test/d.test.js", "tools/e.mjs"];
   const html = queueTaskHtml(
@@ -329,7 +327,65 @@ test("a long project name never pushes the files off the card", () => {
     { id: 5, title: "many files", state: "queued", project: "C:/ProjectDevelopment/a-very-long-project-directory-name-that-would-wrap", files },
     new Map(),
   );
-  const meta = metaOf(html);
-  assert.match(meta, /^project a-very-long-project-directory-name-that-would-wrap · /, "the name is the directory, however long");
-  assert.match(meta, /files lib\/a\.js, lib\/b\.js, public\/c\.js, test\/d\.test\.js…/, "the first four files and the ellipsis are intact");
+  assert.equal(metaOf(html), "project a-very-long-project-directory-name-that-would-wrap", "the name is the directory, however long");
+  assert.match(foldOf(html), /files lib\/a\.js, lib\/b\.js, public\/c\.js, test\/d\.test\.js…/, "the first four files and the ellipsis");
+});
+
+// ---- the head: the state in a word, the row's own hover text, and what it is waiting on -----------
+test("the head says the state in a word, and a stale row says stale while its data state stays running", () => {
+  const { queueTaskHtml } = build();
+  const base = { id: 1, title: "carry it", files: [] };
+  for (const state of ["queued", "running", "parked", "done"]) {
+    const html = queueTaskHtml("assistant-1", { ...base, state }, new Map());
+    assert.ok(html.includes(`<span class="as-task-state is-${state}"`), `${state} carries its word`);
+    assert.ok(html.includes(`>${state}</span>`), `…and prints it`);
+    assert.ok(html.includes(`data-as-qstate="${state}"`), "the data state the drag reads is unchanged");
+  }
+  const stale = queueTaskHtml("assistant-1", { ...base, id: 2, state: "running", stale: true, staleWhy: "that thread has no live run" }, new Map());
+  assert.ok(stale.includes('<span class="as-task-state is-stale"'), "a stale row's word is stale");
+  assert.ok(stale.includes(">stale</span>"), "…and it is the word a reader sees");
+  assert.ok(stale.includes('data-as-qstate="running"'), "…while the stored state is still running");
+  assert.match(stale, /title="stale — the file still says running, but its thread has no live run"/, "the word explains itself on hover");
+});
+
+test("the row's description, tree, files and attempts sit behind one closed disclosure", () => {
+  const { queueTaskHtml } = build();
+  const html = queueTaskHtml(
+    "assistant-1",
+    {
+      id: 7,
+      title: "fold it",
+      state: "queued",
+      worktree: "C:/ProjectDevelopment/Menu/.worktrees/fold-1",
+      files: ["lib/a.js"],
+      attempts: 2,
+      detail: "the paragraph a reader only needs after the first question",
+      project: "Menu",
+    },
+    new Map(),
+  );
+  assert.ok(html.includes('<details class="as-task-more">'), "the disclosure exists");
+  assert.ok(!/<details class="as-task-more" open/.test(html), "…and starts closed");
+  const fold = foldOf(html);
+  assert.match(fold, /tree C:\/ProjectDevelopment\/Menu\/\.worktrees\/fold-1/, "the tree is folded");
+  assert.match(fold, /files lib\/a\.js/, "the files are folded");
+  assert.match(fold, /2 attempts/, "the attempts are folded");
+  assert.match(fold, /the paragraph a reader only needs after the first question/, "the detail is folded");
+  assert.ok(!metaOf(html).includes("tree "), "none of it is printed on the facts line");
+  assert.match(html, /<summary title="the tree, the files, the attempts and the detail/, "the summary explains the fold on hover");
+});
+
+test("the waiting-on chip draws the lane head the store derived, naming the lane in its hover text", () => {
+  const { queueTaskHtml } = build();
+  const html = queueTaskHtml(
+    "assistant-1",
+    { id: 8, title: "behind the head", state: "queued", files: ["lib/assistant.js"], waitingOn: { id: 3, lane: "lib/assistant.js" } },
+    new Map(),
+  );
+  assert.ok(html.includes('data-as-qwait="3"'), "the chip names the row it waits on");
+  assert.ok(html.includes(">waiting on #3</span>"), "…in three words a reader can scan");
+  assert.ok(/title="waiting on #3 — #3 heads this lane \(lib\/assistant\.js\)/.test(html), "…with the lane file on hover");
+
+  const quiet = queueTaskHtml("assistant-1", { id: 9, title: "no lane", state: "queued", files: [] }, new Map());
+  assert.ok(!quiet.includes("as-task-wait"), "a row with no lane head wears no chip");
 });

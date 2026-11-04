@@ -40,6 +40,7 @@
     "verify:queue-holds": "node tools/verify-queue-holds.mjs",
     "verify:spawn-links-queue": "node tools/verify-spawn-links-queue.mjs",
     "verify:queue-drag": "node tools/verify-queue-drag.mjs",
+    "verify:assistant-queue-ui": "node tools/verify-assistant-queue-ui.mjs",
     "verify:approvals-dock": "node tools/verify-approvals-dock.mjs",
     "dogfood:chat": "node tools/dogfood-chat.mjs",
     "verify:attachment-spawn": "node tools/verify-attachment-spawn.mjs",
