@@ -9,6 +9,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "hooks:install": "git config core.hooksPath .githooks",
+    "absolute-paths": "node tools/absolute-paths.mjs",
+    "absolute-paths:list": "node tools/absolute-paths.mjs --list",
     "branches": "node tools/merged-branches.mjs",
     "changelog": "node tools/changelog.mjs",
     "changelog:check": "node tools/changelog.mjs --check",

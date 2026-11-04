@@ -1,0 +1,218 @@
+# tools/absolute-paths.allow — the absolute local paths this repository already carried, and why.
+#
+# tools/absolute-paths.mjs refuses a commit that names a folder on the machine that wrote it. Every file below
+# was written before that gate existed, and its content is a record: rewriting a landing note to scrub a path
+# would change what it says happened. So they are allowed, one line each, and the gate still refuses anything
+# NEW. Nothing here is a place a reader can open, and nothing here is a template to copy.
+#
+#   <path> | <count> | <reason>
+#
+#   <path>   repo-relative, forward slashes, EXACT — no globs, because a glob allows the next file too.
+#   <count>  the paths that file held when it was recorded. The gate fails when a file holds MORE than this,
+#            so a frozen record cannot quietly grow a second, newer path. Removing one is always allowed:
+#            lower the count to match and the record stays true.
+#   <reason> one line saying why the path is there. An empty reason is a refusal, not a pass.
+#
+# A new landing does not belong here. Take the path out of the line, or describe the file instead of naming
+# where it sat. `node tools/absolute-paths.mjs --draft` prints the lines for anything it found.
+
+README.md | 4 | example: the panel's own folders, in the notes that say how it finds them
+SETUP.md | 1 | example: a placeholder a reader replaces with their own path
+config.json | 6 | config: this project's own folders — the file the panel is meant to read
+data/openrouter-model-prices.json | 1 | data: the provider cache path this file was generated beside
+data/roles/agent-manager.md | 2 | seed: the copy of a charter that quoted the folders it worked in
+docker/PLAN.md | 12 | record: the host paths this deployment plan was written against
+docs/arch-review-functional.md | 1 | review record: the checkout it read, as it was
+docs/arch-review-organization.md | 4 | review record: the checkout it read, as it was
+docs/arch-review-r1-b.md | 1 | review record: the checkout it read, as it was
+docs/architecture.md | 1 | doc: the example or the tree it walks the reader through, as it was
+docs/clarify-over-the-runs-api.md | 1 | doc: the example or the tree it walks the reader through, as it was
+docs/console-bounce-column-fit.html | 2 | measurement record: the scratch tree the run measured, as it was
+docs/console-combined-first-line.md | 1 | measurement record: the scratch tree the run measured, as it was
+docs/console-frames-7393-0461.md | 2 | measurement record: the scratch tree the run measured, as it was
+docs/console-lag.md | 1 | measurement record: the scratch tree the run measured, as it was
+docs/console-live-observation.md | 1 | measurement record: the scratch tree the run measured, as it was
+docs/console-popping-a.md | 13 | measurement record: the scratch tree the run measured, as it was
+docs/console-popping-b.md | 8 | measurement record: the scratch tree the run measured, as it was
+docs/console-popping-c.md | 12 | measurement record: the scratch tree the run measured, as it was
+docs/console-rebuild-built-card.md | 1 | measurement record: the scratch tree the run measured, as it was
+docs/cwd-the-run-does-not-have.md | 15 | doc: the example or the tree it walks the reader through, as it was
+docs/gateway-usage-changes.html | 1 | state record: the files it read on this machine, as they were
+docs/gateway-usage-review.html | 5 | state record: the files it read on this machine, as they were
+docs/hermes-runs-api-knobs.diff | 1 | doc: the example or the tree it walks the reader through, as it was
+docs/jitter-sources.md | 1 | measurement record: the scratch tree the run measured, as it was
+docs/jitter-static.md | 2 | measurement record: the scratch tree the run measured, as it was
+docs/jitter-streaming.md | 2 | measurement record: the scratch tree the run measured, as it was
+docs/jitter-synthesis.md | 1 | measurement record: the scratch tree the run measured, as it was
+docs/landing-assistant-queue-2026-11-02.md | 1 | landing record: the tree the landing was done in, as it was
+docs/landing-boot-replay-settled-2026-11-02.md | 2 | landing record: the tree the landing was done in, as it was
+docs/landing-combined-output-default-2026-11-01.md | 1 | landing record: the tree the landing was done in, as it was
+docs/landing-console-grab-2026-11-01.md | 3 | landing record: the tree the landing was done in, as it was
+docs/landing-pictureviewer-pmw-sso-deploy-2026-11-04.html | 5 | landing record: the tree the landing was done in, as it was
+docs/landing-unified-console-size-2026-11-01.md | 2 | landing record: the tree the landing was done in, as it was
+docs/landing-worktree-assistant-owner-2026-11-01.md | 2 | landing record: the tree the landing was done in, as it was
+docs/pipeline-integration/analysis-stage-contract.md | 1 | doc: the example or the tree it walks the reader through, as it was
+docs/pipelines-audit.md | 6 | doc: the example or the tree it walks the reader through, as it was
+docs/pipelines.md | 1 | doc: the example or the tree it walks the reader through, as it was
+docs/pipelines/viz/pipelines-0.68.3.html | 3 | doc: the example or the tree it walks the reader through, as it was
+docs/plan/deliverables-handback-review.md | 2 | plan: the tree it was written against, as it was
+docs/plan/deliverables-handback.md | 19 | plan: the tree it was written against, as it was
+docs/pushing-to-a-remote.md | 1 | doc: the example or the tree it walks the reader through, as it was
+docs/queue-park-release.md | 9 | state record: the files it read on this machine, as they were
+docs/queue-tab-review.md | 2 | state record: the files it read on this machine, as they were
+docs/reviews/lanes-and-modules.md | 1 | review record: the checkout it read, as it was
+docs/reviews/pipeline-flow-usability-ledger.md | 1 | review record: the checkout it read, as it was
+docs/reviews/pipeline-flow-usability-round/ledger.json | 1 | review record: the checkout it read, as it was
+docs/reviews/pipeline-flow-visual-round-5b.html | 1 | review record: the checkout it read, as it was
+docs/reviews/pipeline-flow-visual-round-5c.html | 1 | review record: the checkout it read, as it was
+docs/reviews/pipeline-flow-vs-studio-2026-11-04/capture.json | 40 | review record: the checkout it read, as it was
+docs/reviews/split-public-app.md | 2 | review record: the checkout it read, as it was
+docs/rounds/perf-075-vs-078.md | 2 | round record: the tree the round ran in, as it was
+docs/rounds/perf-hot-paths-078.md | 3 | round record: the tree the round ran in, as it was
+docs/rounds/playwright-round-1.md | 6 | round record: the tree the round ran in, as it was
+docs/runs-api-phase1.md | 4 | doc: the example or the tree it walks the reader through, as it was
+docs/skill-audit-2026-10-30.md | 2 | doc: the example or the tree it walks the reader through, as it was
+docs/steer-refusal.md | 4 | doc: the example or the tree it walks the reader through, as it was
+docs/thinking-block-live-observation.md | 1 | measurement record: the scratch tree the run measured, as it was
+docs/tool-output-truncation.md | 7 | measurement record: the scratch tree the run measured, as it was
+docs/using-the-board.md | 1 | doc: the example or the tree it walks the reader through, as it was
+harness/playwright-lane-c/README.md | 3 | record: the lane notes, quoting the checkout they ran in
+harness/playwright-lane-c/verify.mjs | 2 | record: the lane notes, quoting the checkout they ran in
+lib/assistant/actions.js | 1 | example: a comment or a prompt's sample path — no code here opens it
+lib/assistant/queue.js | 1 | example: a comment or a prompt's sample path — no code here opens it
+lib/charter.js | 3 | example: a comment or a prompt's sample path — no code here opens it
+lib/hosts.js | 1 | example: a comment or a prompt's sample path — no code here opens it
+lib/jobs.js | 2 | example: a comment or a prompt's sample path — no code here opens it
+lib/project.js | 2 | example: a comment or a prompt's sample path — no code here opens it
+lib/push-guard.js | 2 | example: a comment or a prompt's sample path — no code here opens it
+lib/verify-prompt.js | 1 | example: a comment or a prompt's sample path — no code here opens it
+public/app.js | 5 | example: a comment or a prompt's sample path — no code here opens it
+public/index.html | 2 | example: a comment or a prompt's sample path — no code here opens it
+server.js | 3 | defaults: the editor the panel tries to open, and a placeholder in a usage comment
+test/activity.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/assistant-digest.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/assistant-event-wakes.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/assistant-pad-and-watches.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/assistant-profile.test.js | 4 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/assistant-queue-directive.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/assistant-queue-pane.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/assistant-queue-ui.test.js | 8 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/assistant-queue.test.js | 20 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/base-ref.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/board-lookups.test.js | 8 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/branch-cell.test.js | 3 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/brief-follows-the-policy.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/browser-module.test.js | 7 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/changelog-links.test.js | 1 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/chart-columns.test.js | 3 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/child-worktree.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/collapse-cascade.test.js | 15 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/console-height-store.test.js | 1 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/console-output-box.test.js | 3 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/console-tail-pin.test.js | 1 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/deliverables-ui.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/deliverables.test.js | 18 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/exited-wake.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/gateway-permissions.test.js | 4 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/harness.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/harvest-gate.test.js | 2 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/hosts.test.js | 7 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/junctioned-node-modules.test.js | 8 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/matrix-bridge.test.js | 14 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/merge-prompt.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/new-agent-reasoning.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/open-url.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/paths.test.js | 24 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/pipeline-wait.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/pipelines.test.js | 14 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/pr-cell-none.test.js | 1 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/pr-cell.test.js | 3 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/project-event.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/push-guard.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/queue-sweep.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/refresh-row.test.js | 3 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/release-request.test.js | 13 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/remote-writes-review.test.js | 3 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/restart-stop.test.js | 3 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/settle-wake.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/single-stream.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/skills.test.js | 4 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/spawn-cards.test.js | 2 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/spawn-queue-link.test.js | 6 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/steward.test.js | 6 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/store.test.js | 5 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/sync-store.test.js | 3 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/task-pipeline-assign.test.js | 3 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/task-pipeline-drive.test.js | 1 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/task-pipeline-sweep.test.js | 1 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/task-pipeline-window-ui.test.js | 3 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/tiered-collapse.test.js | 19 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/tool-call-rows.test.js | 2 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/verify-landed.test.js | 6 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/worktree-assistant.test.js | 4 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/worktree-board.test.js | 4 | fixture: the tree the test builds or asserts on, named by hand so the comparison is readable
+test/worktree-lifecycle.test.js | 7 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+test/worktree-release.test.js | 5 | fixture: a drive path the test compares against — it builds its own temp tree instead of opening one
+tools/dogfood-chat.mjs | 4 | probe: the tree this script was last run against, kept as its default argument
+tools/e2e-aggressive-http.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/measure-console-drift.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/measure-console-live.mjs | 2 | probe: the tree this script was last run against, kept as its default argument
+tools/measure-console-scroll-hop.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/measure-thinking-live.mjs | 2 | probe: the tree this script was last run against, kept as its default argument
+tools/measure-whole-tool-stream.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/pop-a.mjs | 3 | probe: the tree this script was last run against, kept as its default argument
+tools/pop-b.mjs | 6 | probe: the tree this script was last run against, kept as its default argument
+tools/pop-c.mjs | 7 | probe: the tree this script was last run against, kept as its default argument
+tools/probe_run_stats.py | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-agent-card-chrome.mjs | 8 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-ahead-behind.mjs | 3 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-artifact-scope.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-assistant-hotkey.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-assistant-queue-ui.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-assistant-subtabs.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-assistant.mjs | 16 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-branch-links-local-only.mjs | 2 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-branch-unknown-chip.mjs | 2 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-card-header-layout.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-chart-columns.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-chart-top-count.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-collapsed-row.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-completion.mjs | 15 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-console-boxes.mjs | 5 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-console-diff.mjs | 7 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-console-flicker.mjs | 2 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-console-fold-hold.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-console-height.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-console-jitter.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-console-lost-text.mjs | 1 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-copy-buttons.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-deliverables-ui.mjs | 1 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-digest-cost.mjs | 3 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-fold-note-parity.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-lane-a-burst.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-leftover-holder.mjs | 2 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-merge-chip.mjs | 6 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-merge-state.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-messages-tab.mjs | 5 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-model-prices.mjs | 2 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-new-project.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-output-boxes.mjs | 3 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-paste-chips.mjs | 4 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-pipeline-chip.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-queue-cards.mjs | 1 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-ranking-scopes.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-reasoning-first.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-reattach-chip.mjs | 3 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-restart.mjs | 1 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-restored-turns.mjs | 1 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-row-rank-smoothing.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-row-reconcile.mjs | 7 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-rw-keep-bar.mjs | 1 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-stream-mode.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-token-costs.mjs | 2 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-tool-glyphs.mjs | 1 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-tool-output.mjs | 7 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-turn-pager.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify-wake-ladder.mjs | 1 | fixture: a fake drive path the probe compares against — nothing opens it
+tools/verify-whole-tool-stream.mjs | 1 | probe: the tree this script was last run against, kept as its default argument
+tools/verify_cli_session_limit.py | 1 | probe: the tree this script was last run against, kept as its default argument

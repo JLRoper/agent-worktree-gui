@@ -1,6 +1,6 @@
 #!/bin/sh
-# .githooks/pre-push — a push cannot carry a bump-worthy branch with no version bump, and a push of the base
-# branch cannot carry a stale CHANGELOG.md.
+# .githooks/pre-push — a push cannot carry a bump-worthy branch with no version bump, a push of the base
+# branch cannot carry a stale CHANGELOG.md, and no push may carry a path that exists on one machine.
 #
 # WHY: the version lives once, in package.json, and it is the only thing that tells the board's own config
 # line (and a reader) which build is running. Which level it moves by is a judgement the LANDING AGENT makes
@@ -33,11 +33,15 @@ TOOL="$ROOT/tools/version.mjs"
 command -v node >/dev/null 2>&1 || exit 0
 
 # git hands this hook one line per ref on stdin: <local ref> <local sha> <remote ref> <remote sha>.
-# Only a push that actually adds commits is worth checking — a deletion and an up-to-date ref are not.
+# Only a push that actually adds commits is worth checking — a deletion and an up-to-date ref are not. Each ref
+# that adds commits is remembered by its sha: the absolute-path gate below reads THAT tree, which is what the
+# push would send, rather than whatever happens to be checked out.
 new_commits=0
 base_push=0
+pushed_shas=""
 if [ -t 0 ]; then
     new_commits=1                                            # run by hand with nothing on stdin: check anyway
+    pushed_shas=$(git rev-parse HEAD 2>/dev/null || true)
     case "$(git symbolic-ref --short -q HEAD 2>/dev/null || true)" in main|master) base_push=1 ;; esac
 else
     while read -r lref lsha rref rsha; do
@@ -48,8 +52,9 @@ else
         case "${rsha:-}" in
             ""|0000000000000000000000000000000000000000) new_commits=$((new_commits + 1)) ;;   # a new ref
             *) n=$(git rev-list --count "$rsha..$lsha" 2>/dev/null) || n=1
-               [ "${n:-0}" -gt 0 ] && new_commits=$((new_commits + 1)) ;;
+               if [ "${n:-0}" -gt 0 ]; then new_commits=$((new_commits + 1)); else continue; fi ;;
         esac
+        pushed_shas="$pushed_shas $lsha"
     done
 fi
 [ "$new_commits" -gt 0 ] || exit 0
@@ -68,6 +73,35 @@ if [ "$status" -ne 0 ]; then
             ""
     } >&2
     exit 1
+fi
+
+# A LANDING MAY NOT NAME A FOLDER ON THE MACHINE THAT WROTE IT. A drive-letter path is evidence only for the
+# author: the next reader cannot open it, and a scratch folder is gone by the next run anyway — but once it is a
+# commit on main it is history nobody corrects without rewriting it. Main already carries hundreds of them, from
+# before this gate; tools/absolute-paths.allow records those by path and count, and the tool refuses anything
+# NEW, including a new path in a file already on the list. It reads the tree of the commit being pushed (`--rev`),
+# so it judges what would LAND, not the dirty tree beside it — and the allowlist it reads is that commit's own, so
+# a branch that widens the list shows the widening in its diff. Only the "found one" answer (exit 1) refuses: a
+# tool that cannot run its check does not block a push.
+if [ -f "$ROOT/tools/absolute-paths.mjs" ]; then
+    for sha in ${pushed_shas:-}; do
+        abs_out=$(node "$ROOT/tools/absolute-paths.mjs" --rev "$sha" 2>&1)
+        abs_status=$?
+        if [ "$abs_status" -eq 1 ]; then
+            {
+                printf '%s\n' "pre-push: refused — a commit being pushed names a folder on this machine"
+                printf '%s\n' "$abs_out"
+                printf '%s\n' \
+                    "Nothing was pushed. The fix is to take the path out of the line — name the file relatively, or" \
+                    "describe it. If the line is a record that has to keep the path, the allowlist line above, with its" \
+                    "reason, is the way to say so:" \
+                    "  node tools/absolute-paths.mjs --draft    (the lines to paste into tools/absolute-paths.allow)" \
+                    "  git push --no-verify                     (deliberate bypass of this hook)" \
+                    ""
+            } >&2
+            exit 1
+        fi
+    done
 fi
 
 # A BASE PUSH THAT LEAVES CHANGELOG.md STALE IS A LANDING NOBODY RENDERED. The render is the base's LAST step
