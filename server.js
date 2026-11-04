@@ -3072,10 +3072,27 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { rules: assistant.removeRuleFor(body.assistantId, String(body.id || "")), assistant: assistant.state() });
     }
 
+    // The scratchpad of ONE assistant. GET carries the text (the polled state carries Assistant #1's string only —
+    // an extra assistant's pad is a file, and the Pad tab reads it when the reader opens the tab); POST is the
+    // reader's save. `assistantId` says whose pad, #1 by default, so every old caller keeps meaning the assistant the
+    // panel has always had. A save in #2's pane writes #2's notes.md and nothing else.
+    if (route === "/api/assistant/notes" && req.method === "GET") {
+      const q = new URL(req.url, "http://127.0.0.1").searchParams;
+      try {
+        return sendJson(res, 200, { ...assistant.notesPayloadFor(q.get("assistantId") || undefined), assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, 404, { error: String((e && e.message) || e) });
+      }
+    }
     if (route === "/api/assistant/notes" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req);
-      return sendJson(res, 200, { notes: assistant.setNotes(body.text), assistant: assistant.state() });
+      try {
+        const notes = assistant.setNotesFor(body.assistantId, body.text);
+        return sendJson(res, 200, { ...notes, assistant: assistant.state() });
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
+      }
     }
 
     // One sentry pass on demand. Used by the page after a change that should be judged at once, and by

@@ -1186,37 +1186,61 @@
 
   // ---- watches --------------------------------------------------------------------------------
 
+  // One row of the watchlist. `owner` is drawn only in the OTHER assistants' section: a row in the selected
+  // assistant's own list is already labelled by the section it sits in, and repeating the name on every line is
+  // noise the reader has to read past.
+  function watchRowHtml(w, { owner = false } = {}) {
+    // A watch with a deadline carries a live clock, not a fixed "deadline 30m": the number that matters is
+    // how long is left, and the bar is that number running out. Both are painted in place by
+    // paintWatchClocks() once a second — a re-render per tick would take the reader's scroll and selection.
+    const clock =
+      w.state === "done"
+        ? `<span class="as-until">done</span>`
+        : w.minutes
+          ? `<span class="as-watch-timer" data-watch-timer="${esc(w.id)}" data-watch-at="${esc(w.at || "")}" data-watch-min="${esc(w.minutes)}">
+                   <span class="as-watch-left" data-watch-left>…</span>
+                   <span class="as-bar"><i data-watch-bar style="width:100%"></i></span>
+                 </span>`
+          : `<span class="as-until">no deadline</span>`;
+    return `<div class="as-row${w.state === "done" ? " is-done" : ""}">
+          <button class="as-thread" data-as-open="${esc(w.thread)}" type="button">${esc(assistantThreadName(w.thread))}</button>
+          <span class="as-what">${esc(w.title)}${w.doneWhen ? `<span class="as-hint"> · done when ${esc(w.doneWhen)}</span>` : ""}${owner ? `<span class="as-hint"> · kept by ${esc(sessionById(w.assistantId)?.name || w.assistantId || FIRST_ASSISTANT)}</span>` : ""}</span>
+          ${clock}
+          <button type="button" data-as-unwatch="${esc(w.id)}" title="stop watching this">✕</button>
+        </div>`;
+  }
+
+  // The Watches tab is ONE list on the panel, read by owner: the assistant the tab is showing gets the list and the
+  // add form, and every other assistant's watches sit under their own heading below it. Nothing is hidden — a watch
+  // the reader set from #2's tab is still visible from #1's, one line down, with whose it is written on the row —
+  // because a watch that vanishes when the tab moves is a notice the reader cannot find again.
   function renderAssistantWatches(force = false) {
     const host = as$("as-watches");
     if (!host || !state.assistant) return;
     if (!force && typingInside("#as-watches")) return;
     const watches = state.assistant.watches || [];
-    const rows = watches
-      .map((w) => {
-        // A watch with a deadline carries a live clock, not a fixed "deadline 30m": the number that matters is
-        // how long is left, and the bar is that number running out. Both are painted in place by
-        // paintWatchClocks() once a second — a re-render per tick would take the reader's scroll and selection.
-        const clock =
-          w.state === "done"
-            ? `<span class="as-until">done</span>`
-            : w.minutes
-              ? `<span class="as-watch-timer" data-watch-timer="${esc(w.id)}" data-watch-at="${esc(w.at || "")}" data-watch-min="${esc(w.minutes)}">
-                   <span class="as-watch-left" data-watch-left>…</span>
-                   <span class="as-bar"><i data-watch-bar style="width:100%"></i></span>
-                 </span>`
-              : `<span class="as-until">no deadline</span>`;
-        return `<div class="as-row${w.state === "done" ? " is-done" : ""}">
-          <button class="as-thread" data-as-open="${esc(w.thread)}" type="button">${esc(assistantThreadName(w.thread))}</button>
-          <span class="as-what">${esc(w.title)}${w.doneWhen ? `<span class="as-hint"> · done when ${esc(w.doneWhen)}</span>` : ""}</span>
-          ${clock}
-          <button type="button" data-as-unwatch="${esc(w.id)}" title="stop watching this">✕</button>
-        </div>`;
-      })
+    // Whose list this is: a list tab belongs to no session, so it falls back to the session the reader was last on
+    // — the same fallback the Role pane and the frame use.
+    const who = frameSessionId();
+    const owner = sessionById(who);
+    const name = owner?.name || "Assistant #1";
+    const mine = watches.filter((w) => (w.assistantId || FIRST_ASSISTANT) === who);
+    const others = watches.filter((w) => (w.assistantId || FIRST_ASSISTANT) !== who);
+    // The other assistants' watches, grouped by who is keeping them.
+    const groups = new Map();
+    for (const w of others) {
+      const id = w.assistantId || FIRST_ASSISTANT;
+      if (!groups.has(id)) groups.set(id, []);
+      groups.get(id).push(w);
+    }
+    const elsewhere = [...groups.entries()]
+      .map(([id, list]) => `<div class="as-help">${esc(sessionById(id)?.name || id)} — ${list.length} watch${list.length === 1 ? "" : "es"}</div>${list.map((w) => watchRowHtml(w, { owner: true })).join("")}`)
       .join("");
     const options = conversations()
       .map((c) => `<option value="${esc(c.thread)}">${esc(String(c.latest.label || c.latest.title || c.thread).slice(0, 60))}</option>`)
       .join("");
-    host.innerHTML = `${rows || `<div class="as-empty">Nothing on the watchlist. Tell it in Chat (“keep an eye on…”), or add one here.</div>`}
+    host.innerHTML = `${mine.map((w) => watchRowHtml(w)).join("") || `<div class="as-empty">Nothing on ${esc(name)}'s watchlist. Tell it in Chat (“keep an eye on…”), or add one here.</div>`}
+      ${elsewhere ? `<div class="as-group"><h4>Kept by the other assistants</h4>${elsewhere}</div>` : ""}
       <div class="as-form">
         <div class="as-line">
           <select id="as-w-thread" title="which agent to watch">${options || '<option value="">(no agents yet)</option>'}</select>
@@ -1225,7 +1249,7 @@
         <div class="as-line">
           <label>deadline <input id="as-w-min" type="number" min="1" max="1440" placeholder="minutes" /></label>
           <button id="btn-as-watch" type="button" class="primary">Add watch</button>
-          <span class="as-hint">it tells you when that thread finishes, or when the deadline passes</span>
+          <span class="as-hint">${esc(name)} will be told when that thread finishes, or when the deadline passes</span>
         </div>
         <span class="as-err" id="as-w-err"></span>
       </div>`;
@@ -1272,7 +1296,53 @@
     }
   }
 
+  // ---- end watches ------------------------------------------------------------------------------
+
   // ---- scratchpad -----------------------------------------------------------------------------
+
+  // The Pad tab shows the SELECTED assistant's notes. #1's is the `notes` string the polled state carries; an extra
+  // assistant's is its own notes.md, read when the tab is open — the same reason the Role tab fetches its charter
+  // instead of carrying it in the poll. `padNotes` is that read, keyed by assistant id; the save's own answer
+  // refreshes it, and a read older than a few seconds is re-taken so a NOTE a turn harvested while the pad is open
+  // shows up without the reader reloading.
+  const PAD_FRESH_MS = 10_000;
+  const padNotes = new Map();
+  const padInflight = new Map();
+
+  function loadPadNotes(id) {
+    if (id === FIRST_ASSISTANT) return null;
+    if (padInflight.has(id)) return padInflight.get(id);
+    const hit = padNotes.get(id);
+    if (hit && !hit.error && Date.now() - Number(hit.at || 0) < PAD_FRESH_MS) return null;
+    const read = apiFetch(`/api/assistant/notes?assistantId=${encodeURIComponent(id)}`)
+      .then(async (r) => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+        padNotes.set(id, { ...d, at: Date.now() });
+      })
+      .catch((err) => padNotes.set(id, { assistantId: id, notes: "", error: String((err && err.message) || err), at: Date.now() }))
+      .finally(() => {
+        padInflight.delete(id);
+        // One repaint of the pane on screen, WITHOUT force: a forced paint asks for a read, and a read that repaints
+        // itself by force is a spinner with no end.
+        if (state.assistantView?.assistant === "pad") renderAssistantPad();
+      });
+    padInflight.set(id, read);
+    return read;
+  }
+
+  // The pad for one assistant, or null while its file is being read. #1 never needs a read: its text is in the state
+  // every paint already carries.
+  function padFor(id) {
+    if (id === FIRST_ASSISTANT) return { assistantId: id, notes: state.assistant?.notes || "", file: false, path: "", exists: true, error: null };
+    const hit = padNotes.get(id);
+    if (hit) {
+      loadPadNotes(id); // a stale hit re-reads behind this paint
+      return hit;
+    }
+    loadPadNotes(id);
+    return null;
+  }
 
   function renderAssistantPad(force = false) {
     const host = as$("as-pad");
@@ -1280,16 +1350,26 @@
     if (!force && typingInside("#as-pad")) return;
     const a = state.assistant;
     const rules = a.rules || [];
-    host.innerHTML = `
-      <div class="as-group">
+    // Whose pad this is. A list tab belongs to no session, so it falls back to the session the reader was last on.
+    const who = frameSessionId();
+    const owner = sessionById(who);
+    const pad = padFor(who);
+    const notesGroup = pad
+      ? `<div class="as-group">
         <h4>Notes — read on every turn</h4>
-        <textarea class="as-note-box" id="as-notes" rows="6" placeholder="What it should remember: how this project deploys, which agents are doing what, an answer you gave today…">${esc(a.notes || "")}</textarea>
+        <textarea class="as-note-box" id="as-notes" rows="6" placeholder="What it should remember: how this project deploys, which agents are doing what, an answer you gave today…">${esc(pad.notes || "")}</textarea>
         <div class="as-actions">
           <button id="btn-as-notes" type="button" class="primary">Save notes</button>
-          <span class="as-hint">kept on the server in assistant.json</span>
-          <span class="as-err" id="as-pad-err"></span>
+          <span class="as-hint" title="${esc(pad.path || "")}">${pad.file ? "kept in this assistant's own notes.md" : "kept on the server in assistant.json"}</span>
+          <span class="as-err" id="as-pad-err">${esc(pad.error || "")}</span>
         </div>
-      </div>
+      </div>`
+      : `<div class="as-group">
+        <h4>Notes — read on every turn</h4>
+        <div class="as-help">reading ${esc(owner?.name || who)}'s pad…</div>
+      </div>`;
+    host.innerHTML = `
+      ${notesGroup}
       <div class="as-group">
         <h4>Standing rules — its only confident answers</h4>
         ${rules.map((r) => `<div class="as-rule-row${r.by === "assistant" ? " is-by-assistant" : ""}"><span class="as-rule-name">${esc(r.text)}${r.by === "assistant" ? `<i class="as-rule-by" title="the assistant wrote this one; delete it if it is wrong">assistant</i>` : ""}</span><button type="button" data-as-unrule="${esc(r.id)}" title="remove this rule">✕</button></div>`).join("") || `<div class="as-help">None yet. A rule is an answer you have given once and do not want to give twice.</div>`}
@@ -1309,6 +1389,8 @@
         }</div>
       </div>`;
   }
+
+  // ---- end scratchpad ---------------------------------------------------------------------------
 
   // ---- the message board: what it sent them, and what they sent back ------------------------------
 
@@ -3760,7 +3842,9 @@
       if (!thread || !title) return setErr("as-w-err", "pick an agent and say what to watch for");
       t.disabled = true;
       try {
-        await asPost("/api/assistant/watch", { thread, title, minutes });
+        // The watch belongs to the assistant the tab is showing: the server stamps it from this id, so it lands in
+        // THAT assistant's list and its notice wakes that assistant, not #1.
+        await asPost("/api/assistant/watch", { thread, title, minutes, assistantId: frameSessionId() });
         renderAssistantWatches(true);
       } catch (err) {
         setErr("as-w-err", err.message);
@@ -3787,9 +3871,13 @@
 
     if (t.id === "btn-as-notes") {
       const text = String(as$("as-notes")?.value || "");
+      const who = frameSessionId();
       t.disabled = true;
       try {
-        await asPost("/api/assistant/notes", { text });
+        // The save goes to the assistant the pad is showing. #1 keeps its store's string; an extra assistant writes
+        // its own notes.md, and the answer carries the text it actually kept (the cap trims the oldest lines).
+        const d = await asPost("/api/assistant/notes", { text, assistantId: who });
+        if (who !== FIRST_ASSISTANT) padNotes.set(who, { ...d, at: Date.now() });
         renderAssistantPad(true);
       } catch (err) {
         setErr("as-pad-err", err.message);
