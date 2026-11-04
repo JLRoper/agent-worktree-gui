@@ -4,16 +4,34 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.8.5 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.8.6 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-270 releases from v0.1.0 (2026-10-20) to v1.8.5 (2026-11-04), 951 commits between the tags. Every release is anchored by an
+271 releases from v0.1.0 (2026-10-20) to v1.8.6 (2026-11-04), 956 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.8.6 — 2026-11-04 · 5 commits
+
+[`49b1176`](https://github.com/JLRoper/agent-worktree-gui/commit/49b117610258c33c6ed8e67c3b9e7fcae3efc1f5) · [compare v1.8.5...v1.8.6](https://github.com/JLRoper/agent-worktree-gui/compare/v1.8.5...v1.8.6)
+
+### Fixed
+
+- fix: the flow's type sizes and its scroller's padding ([`8639e40`](https://github.com/JLRoper/agent-worktree-gui/commit/8639e401ad92d6302acdf7cbd45d08bf893418a9))
+- fix: the pipeline dialog is as wide as its drawing ([`2700930`](https://github.com/JLRoper/agent-worktree-gui/commit/270093040de12c7df87c5499de3d49221aeec3bb))
+
+### Docs & tests
+
+- docs: render the changelog — 270 releases ([`ec77f35`](https://github.com/JLRoper/agent-worktree-gui/commit/ec77f353b92c2c5cb972994288199a51c4d1aa9c))
+- docs: the pipeline-dialog shape round, with the 1/2/7/13 shots at 1280 and 1824 ([`bb8c32a`](https://github.com/JLRoper/agent-worktree-gui/commit/bb8c32a3b0e837b88e3a295546631753ab11e0c7))
+
+### Other
+
+- chore: 1.8.6 — the version this branch lands on ([`49b1176`](https://github.com/JLRoper/agent-worktree-gui/commit/49b117610258c33c6ed8e67c3b9e7fcae3efc1f5))
 
 ## v1.8.5 — 2026-11-04 · 3 commits
 
