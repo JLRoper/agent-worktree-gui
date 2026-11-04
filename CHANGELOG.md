@@ -17,16 +17,16 @@ has no tag.
 
 ## v1.0.1 — 2026-11-04 · 3 commits
 
-[`88a6715`](https://github.com/JLRoper/agent-worktree-gui/commit/88a67155569974d5acf8ad6cfc9b5f75e7e4ec51) · [compare v1.0.0...v1.0.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.0.0...v1.0.1)
+[`0b0ff0b`](https://github.com/JLRoper/agent-worktree-gui/commit/0b0ff0b3446580dfee06eafdfa3e5c42a41a4c1d) · [compare v1.0.0...v1.0.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.0.0...v1.0.1)
 
 ### Added
 
-- feat: each assistant owns its rules and its pad, and the message board names whose message is whose ([`278c788`](https://github.com/JLRoper/agent-worktree-gui/commit/278c78811d7ed2895b6a54ba9bdc0031df4b4fe3))
+- feat: each assistant owns its rules and its pad, and the message board names whose message is whose ([`3c8e36e`](https://github.com/JLRoper/agent-worktree-gui/commit/3c8e36e1d1932501411550a4d51d26bd2bb7e9ab))
 
 ### Other
 
-- wip: per-assistant split in progress (notes file, pad routing, watch owners) ([`c79bc3f`](https://github.com/JLRoper/agent-worktree-gui/commit/c79bc3f7a8fe06600e49c763d4aed195c0fdb572))
-- chore: 1.0.1 — the version this landing carries ([`88a6715`](https://github.com/JLRoper/agent-worktree-gui/commit/88a67155569974d5acf8ad6cfc9b5f75e7e4ec51))
+- wip: per-assistant split in progress (notes file, pad routing, watch owners) ([`5d8e5d5`](https://github.com/JLRoper/agent-worktree-gui/commit/5d8e5d5cb3e1141da852aa7592a2e48c98da0ef8))
+- chore: 1.0.1 — the version this landing carries ([`0b0ff0b`](https://github.com/JLRoper/agent-worktree-gui/commit/0b0ff0b3446580dfee06eafdfa3e5c42a41a4c1d))
 
 ## v1.0.0 — 2026-11-04 · 2 commits
 
