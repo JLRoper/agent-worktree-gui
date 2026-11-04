@@ -346,6 +346,24 @@ are edited: the stage list, each stage's prompt, each stage's exit check and its
 un-altered when anything is refused. The per-project `defaultTurnover` / `defaultInvestigation` are not edited here
 yet: `POST /api/settings/pipeline-defaults` is still unbuilt, and the tab never writes `config.json`.
 
+**One definition is selected, and the dropdown is what selects it.** The tab used to draw one row per definition with
+its own `edit` press; a dropdown saying `id — title (kind, N stages)` says the same thing once, and the editor below
+is always the definition it names — so the form and the selector cannot disagree about what Save will write. A
+definition the loader dropped is still named under it, with its reason: a pipeline missing from a select has to say
+why it is missing. A dirty draft is the one thing that refuses a change of selection (the select springs back and the
+status says why), because replacing the form would take the half-typed sentence with it.
+
+**The flow is the definition, drawn.** `open the flow` opens the same dialog a queue row opens (the task pipeline
+window's own answer, `docs/task-pipeline.md`), in edit mode (`public/pipeline-flow.js` renders,
+`public/pipeline-modal.js` is the shell): stages left to right in document order,
+each stage's `exit.check` as a notch on the connector after it (the last stage's as a stub, because the gate that ends
+the pipeline has no next stage), and a capped loop as an arc labelled with its cap and nothing else. A definition has
+no position, so every stage is drawn **not reached** — the marks are `data-mark` (`not-reached`, `current`, `done`,
+`refused`) and only a task carries a position to set them. The dialog mounts outside `#settings` and above it
+(z-index 140 over 120), takes the caret, traps Tab, closes on Escape or a backdrop press, and hands focus back; the
+Settings window's own bubble-phase Escape never sees the key. It reads `pipelines[id]` from the answer this tab already
+holds — no second endpoint, and no write.
+
 It is not where a tree is switched, and that is a design decision rather than an omission. A switch is a decision
 about ONE piece of work, made while looking at that tree's evidence, and it belongs on the card beside the tree it
 applies to. A catalogue edit is a decision about every tree that will ever use the definition. Putting the switch in

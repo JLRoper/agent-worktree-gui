@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Settings > Pipeline in a real browser: the catalogue list, one definition opened for editing, a keystroke that
-// survives a repaint, a save that reaches the live file, and a refusal whose findings land inline without losing the
-// draft.
+// Settings > Pipeline in a real browser: the catalogue in a dropdown, one definition opened for editing, a keystroke
+// that survives a repaint, a save that reaches the live file, and a refusal whose findings land inline without losing
+// the draft. The flow modal the tab opens has its own gate: tools/verify-pipeline-flow.mjs.
 //
 //   node tools/verify-pipelines-tab.mjs
 //
@@ -81,19 +81,21 @@ try {
     return el && !/reading/.test(el.textContent);
   }, null, { timeout: 20_000 });
 
-  // (2) The catalogue is listed from the merged answer.
+  // (2) The catalogue is listed from the merged answer, in the dropdown the tab selects one definition with.
   const summary = (await page.textContent("#pipeline-summary")) || "";
   check(/\d+ definitions?/.test(summary), "the summary names the catalogue's size", summary);
-  const rows = await page.$$eval("#pipeline-list [data-pipeline-row]", (els) => els.map((el) => el.dataset.pipelineRow));
+  const options = await page.$$eval("#pipeline-select option", (els) => els.map((el) => el.value));
   check(
-    ["local", "investigate", "turnover"].every((id) => rows.includes(id)),
-    "the list carries the seed's built-in definitions",
-    rows.join(","),
+    ["local", "investigate", "turnover"].every((id) => options.includes(id)),
+    "the dropdown carries the seed's built-in definitions",
+    options.join(","),
   );
 
-  // (3) One definition opens, and its stage prompt is the text the seed ships.
-  await page.click('#pipeline-list [data-pipeline-open="local"]');
+  // (3) One definition opens from the dropdown, and its stage prompt is the text the seed ships.
+  await page.selectOption("#pipeline-select", "local");
   await page.waitForSelector("#pipeline-editor:not([hidden]) textarea.stage-prompt", { timeout: 10_000 });
+  const selected = await page.evaluate(() => ({ pick: document.getElementById("pipeline-select").value, head: document.querySelector("#pipeline-editor .pipeline-editor-head")?.textContent || "" }));
+  check(selected.pick === "local" && /editing\s*local/.test(selected.head.replace(/\s+/g, " ")), "the editor edits the definition the dropdown names", `${selected.pick} — ${selected.head.replace(/\s+/g, " ").trim()}`);
   const original = await page.inputValue("#pipeline-editor textarea.stage-prompt");
   check(original.length > 20, "the editor carries the stage's prompt", `${original.length} chars`);
 
