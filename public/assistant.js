@@ -734,9 +734,9 @@
     }
   }
 
-  // The header's aggressive switch. The SERVER owns the record of what the mode changed — this only paints what
-  // the server says and asks it to change. The pill reads on/off so the state is legible without colour alone,
-  // and the title carries the plain description of the cost.
+  // The aggressive switch, at the top of an assistant's Settings sub-pane. The SERVER owns the record of what the
+  // mode changed — this only paints what the server says and asks it to change. The pill reads on/off so the state
+  // is legible without colour alone, and the title carries the plain description of the cost.
   function paintAggressive() {
     const btn = as$("btn-aggressive");
     const pill = as$("aggressive-state");
@@ -752,8 +752,32 @@
       : "aggressive assistant — spends more tokens: the assistant wakes on everything, monitors and checks every live card, and keeps pushing until the fleet is waiting on something outside. Your own settings are saved while it is on and put back exactly when you switch it off (Alt+Shift+A)";
   }
 
-  // Say something briefly beside the header button without opening a panel: a no-op press (on twice, or off when
-  // it was never on) has to be acknowledged, or the button reads as broken.
+  // ONE control for ONE mode, moved to the top of whichever assistant's Settings sub-pane is on screen. A copy per
+  // pane would be several controls (and several elements under one id) for one state; the same node keeps the
+  // reader's place and its listener across a repaint. It is created on the first pane that needs it, and
+  // renderAssistantSettings() re-inserts it after that pane's markup has been rebuilt.
+  let aggressiveBlockEl = null;
+  function aggressiveBlock() {
+    if (aggressiveBlockEl) return aggressiveBlockEl;
+    const wrap = document.createElement("div");
+    wrap.className = "as-group as-aggressive";
+    wrap.id = "as-aggressive";
+    wrap.innerHTML = `
+      <div class="as-line">
+        <button type="button" id="btn-aggressive" class="btn-aggressive" aria-pressed="false">⚡ Aggressive<span id="aggressive-state">off</span></button>
+        <span class="as-hint">Alt+Shift+A</span>
+      </div>
+      <div class="as-help">The aggressive profile: the assistant wakes on everything, checks every live card and keeps
+      pushing until the fleet is waiting on something outside. While it is on it holds the waking, monitoring and acting
+      settings; switching it off puts your own values back exactly.</div>`;
+    wrap.querySelector("#btn-aggressive").addEventListener("click", () => setAggressiveMode(!state.assistant?.aggressive?.on));
+    aggressiveBlockEl = wrap;
+    return wrap;
+  }
+
+  // Say something briefly beside the aggressive switch without opening a panel: a no-op press (on twice, or off
+  // when it was never on) has to be acknowledged, or the switch reads as broken. The note is a fixed toast, so the
+  // pane's own repaint after the press cannot wipe it.
   let aggressiveMsgTimer = null;
   function aggressiveNote(text) {
     const el = as$("aggressive-msg");
@@ -779,7 +803,8 @@
       if (d && d.changed === false) aggressiveNote(d.reason || "no change");
       else aggressiveNote(on ? "aggressive mode on — your settings are saved" : "aggressive mode off — your settings are back");
       paintAggressive();
-      renderAssistantSettings(FIRST_ASSISTANT, true);
+      // The switch lives in the pane that is on screen, so repaint THAT one — not Assistant #1's hidden pane.
+      renderAssistantSettings(activeSessionId(), true);
     } catch (err) {
       aggressiveNote(err.message);
     } finally {
@@ -828,7 +853,7 @@
         a?.running ? `<span class="chip warn" title="its own turn is running">thinking</span>` : "",
         a && a.enabled === false ? `<span class="chip" title="the sentry is off — no rule is being evaluated">off</span>` : "",
         a?.aggressive?.on
-          ? `<span class="chip warn" title="aggressive mode is on — the assistant wakes on everything, checks every live card and keeps pushing until the fleet is waiting on something outside. Switch it off in the header (Alt+Shift+A)">⚡ aggressive</span>`
+          ? `<span class="chip warn" title="aggressive mode is on — the assistant wakes on everything, checks every live card and keeps pushing until the fleet is waiting on something outside. Switch it off in its Settings tab (Alt+Shift+A)">⚡ aggressive</span>`
           : "",
         sentryState(a?.health) ? `<span class="chip warn" title="the sentry's clock is not running or has not ticked — the server watchdog restarts it, and this goes green again">sentry ${sentryState(a?.health)}</span>` : "",
         a ? `<span class="chip" title="sweep wakes in the last hour — the budgeted class (a polled condition like quiet or loop). An event — a settle, an exit, a question, a watch finishing — is never refused">${a.sweeps?.lastHour ?? 0}/${a.sweeps?.limit ?? 0} sweeps</span>` : "",
@@ -1750,8 +1775,8 @@
         <h4>⚡ Aggressive mode is holding these</h4>
         <div class="as-help">The settings and rules marked <b>held</b> ${button ? "below" : "in this tab"} are set to the aggressive profile and cannot be changed${
           button
-            ? ` from this tab. Switch aggressive mode off with the <b>⚡ Aggressive</b> button in the header (Alt+Shift+A) and they are put back exactly as you had them — ${esc(savedLine)}`
-            : `. Switch it off with the <b>⚡ Aggressive</b> button in the header (Alt+Shift+A), or from the <b>Watchdog</b> tab`
+            ? ` from this tab. Switch aggressive mode off with the button below (Alt+Shift+A works too) and they are put back exactly as you had them${savedLine ? ` — ${esc(savedLine)}` : ""}`
+            : `. Switch it off with the <b>⚡ Aggressive</b> switch at the top of this tab (Alt+Shift+A) and they are put back exactly as you had them${savedLine ? ` — ${esc(savedLine)}` : ""}`
         }</div>
         ${button ? `<div class="as-line"><button type="button" id="btn-as-aggressive-off" title="switch aggressive mode off and put your own settings back">Switch aggressive mode off</button></div>` : ""}
       </div>`;
@@ -1775,8 +1800,8 @@
     const hs = sentryState(health);
     const lastPass = health.lastTickAt ? `${Math.max(0, Math.round((Date.now() - health.lastTickAt) / 1000))}s ago` : "not yet";
     const { agg, knobs, rules: heldRules } = heldSets(a);
-    const dis = (key) => (knobs.has(key) ? ' disabled title="aggressive mode holds this setting — switch it off in the header to change it"' : "");
-    const disRule = (id) => (heldRules.has(id) ? ' disabled title="aggressive mode holds this rule — switch it off in the header to change it"' : "");
+    const dis = (key) => (knobs.has(key) ? ' disabled title="aggressive mode holds this setting — switch it off with the ⚡ Aggressive switch in its Settings tab to change it"' : "");
+    const disRule = (id) => (heldRules.has(id) ? ' disabled title="aggressive mode holds this rule — switch it off with the ⚡ Aggressive switch in its Settings tab to change it"' : "");
     // Read once per paint: a repaint recreates every disclosure, so the remembered ones are reopened from here
     // rather than from a class left behind on an element that no longer exists.
     const openThresholds = thresholdsOpen();
@@ -1879,7 +1904,7 @@
       auto: "auto — send any draft it has text for",
     };
     const { agg, knobs } = heldSets(a);
-    const dis = (key) => (knobs.has(key) ? ' disabled title="aggressive mode holds this setting — switch it off in the header to change it"' : "");
+    const dis = (key) => (knobs.has(key) ? ' disabled title="aggressive mode holds this setting — switch it off with the ⚡ Aggressive switch above to change it"' : "");
     const owned = new Set(Object.keys(a.settingScope || {}).filter((k) => !ownsWatchdog(k)));
     const n = String(id).replace(/^assistant-/, "");
     const nameOf = (x) => sessionById(x)?.name || String(x);
@@ -1982,6 +2007,11 @@
       one watchdog — they are in the <b>Watchdog</b> tab. This assistant's default role prompt is in the <b>Role</b> tab
       and the worktrees it owns are in its <b>Worktrees</b> tab. Its thread is
       <code>${esc(rec?.threadId || "")}</code>.</div>`;
+    // The aggressive switch is one control for one mode, and its place is the top of whichever assistant's
+    // Settings sub-pane is on screen. Inserted after the pane's markup so a repaint cannot leave a stale copy
+    // behind, and painted from the server's state here (a hidden pane's copy is never what the reader sees).
+    host.insertBefore(aggressiveBlock(), host.firstElementChild || null);
+    paintAggressive();
     // The model field is the shared picker (core/model-menu.js), not a native select: a select can only print
     // text, so it can never show a row's price, coding rating or context window — and a popup opened inside this
     // float would be clipped by its overflow instead of painting over it. The select stays in the DOM as the
@@ -3293,9 +3323,8 @@
     }
     if (b.id === "btn-spawn-review") openAlertsAt();
   });
-  // The aggressive switch is its own button beside the Assistant one: it does not open the float, it changes how
-  // the assistant behaves. The server answers whether anything changed, and the note beside it says so.
-  as$("btn-aggressive")?.addEventListener("click", () => setAggressiveMode(!state.assistant?.aggressive?.on));
+  // The aggressive switch is created by aggressiveBlock() and moved into the Settings sub-pane that is on screen;
+  // its listener travels with that one element. Alt+Shift+A still throws it from anywhere (see the keys section).
   as$("btn-as-close")?.addEventListener("click", () => toggleAssistant(false));
   as$("as-tabs")?.addEventListener("click", (e) => {
     const b = e.target.closest("[data-as-tab]");

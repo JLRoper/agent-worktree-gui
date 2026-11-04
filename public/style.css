@@ -113,16 +113,9 @@ button, select, input, textarea { font-family: var(--ui); }
 /* zoom control: the page owns a scale factor so Ctrl +/- keeps working inside a host that
    swallows the browser's own zoom shortcuts */
 .zoom { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--line); border-radius: 6px; padding: 1px; }
-/* NOT-RUNNING: a caution light, because it takes the window and the caret from wherever they were. Off it is a
-   quiet button; on it is amber and says where in the rotation you are. */
-#btn-hot { border-color: #6b4d16; background: #241d10; color: #ffd479; }
-#btn-hot:hover { border-color: #8a611c; background: #2c2312; }
-#btn-hot.on { background: #ffb545; border-color: #ffb545; color: #241a05; font-weight: 700; box-shadow: 0 0 0 2px rgba(255, 181, 69, .28); }
-#btn-hot.on:hover { background: #ffc163; border-color: #ffc163; }
-
-/* HUMAN: the other waiting list — every open permission and clarify question, wherever it is. Quiet until
-   something is waiting; then the red count and the red border are what say a human is needed. Red, not the
-   amber of NOT-RUNNING: a stopped agent is a state, a question is an interruption. */
+/* HUMAN: every open permission and clarify question, wherever it is. Quiet until something is waiting; then the
+   red count and the red border are what say a human is needed. Red, not the amber a card flash uses: a stopped
+   agent is a state, a question is an interruption. */
 #btn-human { display: inline-flex; align-items: center; gap: 6px; }
 #btn-human.has-questions { border-color: #7a3138; background: #241012; color: #ffb3ad; }
 #btn-human.has-questions:hover { border-color: #a03c44; background: #2d1518; }
@@ -135,8 +128,8 @@ button, select, input, textarea { font-family: var(--ui); }
 #human-badge[hidden] { display: none; }
 
 /* The question a HUMAN hop landed on: a red ring, on the prompt box itself, that dies back to the box's own
-   border. It rides beside the amber card ring (the NOT-RUNNING stepper's), so "this agent" and "this box" are
-   two different marks and the eye goes to the box. */
+   border. It rides beside the amber card ring HUMAN also draws, so "this agent" and "this box" are two different
+   marks and the eye goes to the box. */
 @keyframes humanflash {
   0% { box-shadow: 0 0 0 3px #e5534bcc, 0 0 24px rgba(229, 83, 75, .22); border-color: #e5534b; }
   70% { box-shadow: 0 0 0 2px #e5534b55, 0 0 10px rgba(229, 83, 75, .12); border-color: #b8433c; }
@@ -147,9 +140,9 @@ button, select, input, textarea { font-family: var(--ui); }
 .approval.human-flash,
 #approval-list .turn-approval.human-flash { animation: humanflash var(--flash-ring, 1700ms) ease-out; }
 
-/* The whole card flashes amber when NOT-RUNNING lands on it, and fades back to the panel it always was. Amber,
-   not the green a jump uses: this is a prompt to answer, not a confirmation. The last frame matches the card's
-   resting border and background, so it settles instead of snapping. */
+/* The whole card flashes amber when HUMAN lands on one of its questions, and fades back to the panel it always
+   was. Amber, not the green a jump uses: this is a prompt to answer, not a confirmation. The last frame matches
+   the card's resting border and background, so it settles instead of snapping. */
 @keyframes hotflash {
   0% { border-color: #ffb545; box-shadow: 0 0 0 2px rgba(255, 181, 69, .55), 0 0 20px rgba(255, 181, 69, .18); background: rgba(255, 181, 69, .055); }
   65% { border-color: #ffb545; box-shadow: 0 0 0 2px rgba(255, 181, 69, .28), 0 0 12px rgba(255, 181, 69, .09); background: rgba(255, 181, 69, .03); }
@@ -3222,8 +3215,11 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .spawn-strip-err { flex: 1 1 100%; font-size: 11px; color: var(--red); }
 .spawn-strip .spacer { flex: 1; }
 
-/* Aggressive mode: the header's second assistant button. It reads as a switch, not a link — the pill beside
-   the label says which way it is thrown, so the state is legible without colour alone. */
+/* Aggressive mode: one switch at the top of whichever assistant's Settings sub-pane is on screen. It reads as a
+   switch, not a link — the pill beside the label says which way it is thrown, so the state is legible without
+   colour alone. */
+.as-aggressive { border-color: #ffb36b40; }
+.as-aggressive .as-line { margin-bottom: 4px; }
 .btn-aggressive { display: inline-flex; align-items: center; gap: 6px; }
 .btn-aggressive #aggressive-state {
   display: inline-block; min-width: 22px; padding: 0 5px;
@@ -3234,7 +3230,7 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .btn-aggressive.is-on #aggressive-state { opacity: 1; background: #ffb36b; border-color: #ffb36b; color: #2a1c0c; }
 
 /* The settings a running aggressive mode holds. Greyed, with the reason on the label, so the reader can tell a
-   disabled knob from a knob they set themselves — and the note at the top of the tab says where to switch it off. */
+   disabled knob from a knob they set themselves — and the switch at the top of the tab is where it is turned off. */
 .as-held { border-color: #ffb36b55; }
 .as-held h4 { color: #ffb36b; }
 .as-held-label { opacity: .55; }
