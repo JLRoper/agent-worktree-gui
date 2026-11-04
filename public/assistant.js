@@ -3157,6 +3157,14 @@
         return null;
       }
       await openTaskPipelineWindow(assistantId, taskId, opener);
+      // A successful assignment/clear is a QUEUE write, and any surface drawing a task's place from the queue has just
+      // gone stale. One event on the document, carrying only the ids the window already holds: the Settings > Bundles
+      // tab listens for it and re-reads when it is the tab on screen. A page with no such listener ignores it.
+      try {
+        document.dispatchEvent(new CustomEvent("wtgui:task-pipeline-assigned", { detail: { assistantId, taskId } }));
+      } catch {
+        /* an environment without CustomEvent (a stub document in a unit test) needs no notice */
+      }
       return out;
     } finally {
       pipeWindowState.busy = false;
@@ -4216,6 +4224,10 @@
   window.__assistantToggle = toggleAssistant;
   // app.js's HUMAN rotation: the thread an assistant's question lives on -> that assistant's Chat, on screen.
   window.__assistantShowThread = showAssistantThread;
+  // The task pipeline window's opener, for the ONE surface outside this rail that lists queue tasks: Settings > Bundles.
+  // Its task rows press into this same window rather than growing a second assignment form, so a task is put on a
+  // pipeline from the catalogue this window already reads, through the same queue write and the same stamp.
+  window.__openTaskPipelineWindow = openTaskPipelineWindow;
   // The task pipeline window's one press, its keys and its clock. Wired once at boot: the dialog lives outside the rail
   // and survives every repaint of the queue pane, so nothing here is per-row.
   pipeWindowWire();

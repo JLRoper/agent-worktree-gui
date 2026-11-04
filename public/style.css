@@ -3772,3 +3772,14 @@ body.pipew-open { overflow: hidden; }
 .pipeline-findings { margin-top: 8px; padding: 6px 8px; border: 1px solid #6b2a2a; border-radius: 6px; background: #2a1414; color: #ffb4b4; font-size: 12px; }
 .pipeline-finding-head { font-weight: 600; margin-bottom: 4px; }
 .pipeline-finding { white-space: pre-wrap; word-break: break-word; }
+
+/* ---- Settings > Bundles: the imported pipeline list and the tasks on it -------------------------------------- */
+/* The two lists are rebuilt markup inside their own containers, so their rows carry the divider rather than the
+   group: one thin line between entries makes a list of pipelines or tasks readable without turning each row into a
+   card. The press target is the row itself (a task row opens the task pipeline window), so the hover state says so. */
+#bundle-list > .settings-row,
+#bundle-tasks > .settings-row { padding: 4px 0; border-bottom: 1px solid var(--line); }
+#bundle-list > .settings-row:last-child,
+#bundle-tasks > .settings-row:last-child { border-bottom: none; }
+#bundle-tasks > .settings-row { cursor: pointer; }
+#bundle-tasks > .settings-row:hover { color: var(--text); }
