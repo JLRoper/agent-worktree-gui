@@ -17,7 +17,7 @@ has no tag.
 
 ## v1.6.1 — 2026-11-04 · 3 commits
 
-[`e6b80d7`](https://github.com/JLRoper/agent-worktree-gui/commit/e6b80d7de762edb2abc591843f6d5c2f27da69f1) · [compare v1.6.0...v1.6.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.6.0...v1.6.1)
+[`0507237`](https://github.com/JLRoper/agent-worktree-gui/commit/0507237f79e7c2bf74aa819ce1a5d9f1bda166d7) · [compare v1.6.0...v1.6.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.6.0...v1.6.1)
 
 ### Added
 
@@ -29,7 +29,7 @@ has no tag.
 
 ### Other
 
-- chore: 1.6.1 — the version this landing carries ([`e6b80d7`](https://github.com/JLRoper/agent-worktree-gui/commit/e6b80d7de762edb2abc591843f6d5c2f27da69f1))
+- chore: 1.6.1 — the version this landing carries ([`0507237`](https://github.com/JLRoper/agent-worktree-gui/commit/0507237f79e7c2bf74aa819ce1a5d9f1bda166d7))
 
 ## v1.6.0 — 2026-11-04 · 5 commits
 
