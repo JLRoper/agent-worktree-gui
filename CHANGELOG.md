@@ -4,31 +4,36 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.7.1 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.7.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-263 releases from v0.1.0 (2026-10-20) to v1.7.1 (2026-11-04), 938 commits between the tags. Every release is anchored by an
+264 releases from v0.1.0 (2026-10-20) to v1.7.2 (2026-11-04), 936 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
 
-## v1.7.1 — 2026-11-04 · 5 commits
+## v1.7.2 — 2026-11-04 · 2 commits
 
-[`81d5d01`](https://github.com/JLRoper/agent-worktree-gui/commit/81d5d01332d89e3a6e18f634ea3b04195185b158) · [compare v1.7.0...v1.7.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.7.0...v1.7.1)
+[`fd39414`](https://github.com/JLRoper/agent-worktree-gui/commit/fd394140fdc917375ea99c3fc7fb3f149c6034e7) · [compare v1.7.1...v1.7.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.7.1...v1.7.2)
 
-### Docs & tests
+### Fixed
 
-- docs: order the split into ten landable stages ([`9a063c6`](https://github.com/JLRoper/agent-worktree-gui/commit/9a063c6cfaf6d0a948ede646542044aa56a8cb88))
-- docs: count panel-io's seven route blocks ([`a2423a1`](https://github.com/JLRoper/agent-worktree-gui/commit/a2423a1519853e9a77fee63a228022241b645985))
-- docs: name the tip the plan was measured at ([`c72f2e1`](https://github.com/JLRoper/agent-worktree-gui/commit/c72f2e1d969b4380c8713661dbccf5c7c0e0ef54))
-- docs: re-measure the plan at the 1.7.0 tip ([`e1216bf`](https://github.com/JLRoper/agent-worktree-gui/commit/e1216bf46632f90cd482838ded8a34e6b94f3e73))
+- fix: a junctioned node_modules is unlinked before any worktree removal ([`a31d45f`](https://github.com/JLRoper/agent-worktree-gui/commit/a31d45fbc0ac0ff3f5298ae362d21834b44b063a))
 
 ### Other
 
-- chore: 1.7.1 — the version this landing carries ([`81d5d01`](https://github.com/JLRoper/agent-worktree-gui/commit/81d5d01332d89e3a6e18f634ea3b04195185b158))
+- chore: 1.7.2 — the version this landing carries ([`fd39414`](https://github.com/JLRoper/agent-worktree-gui/commit/fd394140fdc917375ea99c3fc7fb3f149c6034e7))
+
+## v1.7.1 — 2026-11-04 · 1 commit
+
+[`81ad614`](https://github.com/JLRoper/agent-worktree-gui/commit/81ad61457751a849c86378dcdf4609ce7af61644) · [compare v1.7.0...v1.7.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.7.0...v1.7.1)
+
+### Docs & tests
+
+- docs: order the split into ten landable stages (#373) ([`81ad614`](https://github.com/JLRoper/agent-worktree-gui/commit/81ad61457751a849c86378dcdf4609ce7af61644))
 
 ## v1.7.0 — 2026-11-04 · 4 commits
 
