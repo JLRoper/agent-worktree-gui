@@ -343,6 +343,28 @@ button.primary:hover { background: #24466a; }
 .settings-row input[type="url"]::placeholder, .settings-row input[type="password"]::placeholder, .settings-row input[type="text"]::placeholder { color: var(--dimmer); }
 .settings-row input[type="number"]:disabled { color: var(--dimmer); background: #0e1218; }
 .settings-unit { font-size: 11px; color: var(--dimmer); }
+/* Settings → Updates > Release notes. One folded block per release, the newest open. The summary IS the heading a
+   reader scans — version, date, commit count — so a folded release still answers the three facts; the body is the
+   changelog's own group headings and bullets. `serving` marks the release this panel runs, which is the reader's
+   place in the list. */
+.release-notes { margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+.release-notes-source { margin-top: 4px; font-size: 10.5px; color: var(--dimmer); overflow-wrap: anywhere; }
+.release-notes .release { border: 1px solid var(--line); border-radius: 6px; background: var(--panel-2); }
+.release-notes .release-head { display: flex; align-items: baseline; gap: 10px; padding: 6px 9px; cursor: pointer; list-style: none; font-size: 12px; color: var(--dim); user-select: none; }
+.release-notes .release-head::-webkit-details-marker { display: none; }
+.release-notes .release-head::before { content: "\25b8"; color: var(--dimmer); font-size: 9px; }
+.release-notes .release[open] > .release-head::before { content: "\25be"; }
+.release-notes .release-version { color: var(--text); font-weight: 600; }
+.release-notes .release-date, .release-notes .release-commits { font-size: 11px; color: var(--dimmer); }
+.release-notes .release-mark { margin-left: auto; padding: 1px 7px; border: 1px solid #2c8148; border-radius: 999px; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: #9fe0b4; }
+.release-notes .release-body { padding: 2px 9px 9px 24px; font-size: 12px; }
+.release-notes .release-group { margin: 8px 0 3px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--dimmer); }
+.release-notes .release-bullet { position: relative; padding: 2px 0 2px 12px; color: var(--text); overflow-wrap: anywhere; }
+.release-notes .release-bullet::before { content: "·"; position: absolute; left: 2px; color: var(--dimmer); }
+.release-notes .release-state { padding: 9px 10px; border: 1px dashed var(--line); border-radius: 6px; font-size: 12.5px; color: var(--text); }
+.release-notes .release-state.bad { border-color: #57262a; color: #ff9c94; }
+.release-notes-raw { margin-left: auto; font-size: 10.5px; color: var(--dimmer); text-decoration: none; }
+.release-notes-raw:hover { color: var(--text); text-decoration: underline; }
 /* The Matrix bridge's log tail: a `pre` so its own line breaks are the log's, capped and scrolling so forty
    lines never grow the tab, and wrapping so one long line cannot push the panel sideways. */
 #matrix-log { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 168px; overflow: auto; font: 11px/1.5 var(--mono); color: var(--dim); }

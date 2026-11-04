@@ -548,6 +548,13 @@
           <button id="btn-check-update" type="button" title="ask GET /api/build now and offer the reload if the answer is a different build — works even with Update check set to off">Check now</button>
         </div>
         <div class="settings-preview mono" id="update-preview">…</div>
+
+        <div class="settings-row settings-gap" id="release-notes-row" title="Every release the checkout's CHANGELOG.md carries, newest first: version, date, how many commits it carried and what a reader gets from them. The release this panel serves is marked; older ones are folded. The read stops at the tab's limit, and the link at the right is that same answer, raw, at the 50-release cap.">
+          <span>Release notes <span class="settings-info">ⓘ</span></span>
+          <a class="release-notes-raw mono" id="release-notes-raw" href="/api/changelog?limit=50" title="GET /api/changelog?limit=50 — the raw answer this block draws, capped at 50 releases">raw · limit=50</a>
+        </div>
+        <div class="release-notes-source mono" id="release-notes-source">reading CHANGELOG.md…</div>
+        <div class="release-notes" id="release-notes"></div>
       </div>
 
       <div class="settings-group" id="settings-panel-permissions" data-settings-group="permissions" role="tabpanel" aria-labelledby="settings-tab-permissions" hidden>
