@@ -332,7 +332,9 @@ test("an env-granted push neither asks the panel nor parks", { skip: NO_SH }, as
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // A clone of the shape that matters: a bare origin, a main branch already on it, and the real .githooks/pre-push and
-// tools/version.mjs copied in — the gate under test is the shipped one, not a stub of it.
+// tools/version.mjs copied in — the gate under test is the shipped one, not a stub of it. version.mjs imports the
+// version walk from tools/release-history.mjs, so that module travels with it; a fixture missing it runs no check at
+// all and the hook's own "a tool that cannot run its check does not block the push" branch would pass the test.
 async function gateFixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "wtgui-gate-"));
   t.after(() => rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }));
@@ -347,6 +349,7 @@ async function gateFixture(t) {
   await mkdir(path.join(work, "tools"), { recursive: true });
   await writeFile(path.join(work, ".githooks", "pre-push"), await readFile(path.join(REPO_ROOT, ".githooks", "pre-push")));
   await writeFile(path.join(work, "tools", "version.mjs"), await readFile(path.join(REPO_ROOT, "tools", "version.mjs")));
+  await writeFile(path.join(work, "tools", "release-history.mjs"), await readFile(path.join(REPO_ROOT, "tools", "release-history.mjs")));
   await writeFile(path.join(work, "package.json"), `${JSON.stringify({ name: "gate-fixture", version: "0.34.0" }, null, 2)}\n`, "utf8");
   await writeFile(path.join(work, "README.md"), "fixture\n", "utf8");
   git(work, "add", "-A");
