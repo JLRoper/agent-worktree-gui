@@ -79,6 +79,16 @@ test("landPlan is idempotent by construction: an unchanged render is current and
   assert.match(current.why, /already names every release/);
 });
 
+test("a changed file that names every release is a sha change, and the message says so instead of naming no release", () => {
+  const stale = landPlan({ ...base, missing: [], mode: "check" });
+  assert.equal(stale.action, "stale");
+  assert.match(stale.why, /every release is named, but the text differs/);
+  assert.doesNotMatch(stale.why, /it would add\s*$/);
+  const commit = landPlan({ ...base, missing: [] });
+  assert.equal(commit.action, "commit");
+  assert.match(commit.why, /it would rewrite/);
+});
+
 test("landPlan's gate writes nothing and names what it would add", () => {
   const stale = landPlan({ ...base, mode: "check" });
   assert.equal(stale.action, "stale");
@@ -101,7 +111,7 @@ test("landPlan renders on a branch and commits on the base", () => {
 
   const commit = landPlan({ ...base, mode: "base" });
   assert.equal(commit.action, "commit");
-  assert.match(commit.why, /writes v1\.2\.0/);
+  assert.match(commit.why, /it would add v1\.2\.0 and publish the result/);
 });
 
 // ---------- the real half: one sandbox, two runs ----------
