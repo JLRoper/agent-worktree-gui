@@ -4063,7 +4063,10 @@ body.pipew-open { overflow: hidden; }
    C8 states ("legibility for overview"), and it is a press rather than a resize: a reader who wants the 96 px
    columns back presses the control again. Nothing else re-lays out. */
 .pflow[data-fit="1"] { --pflow-gap: 12px; --pflow-minw: 56px; }
-.pflow-scroll { overflow-x: auto; overflow-y: hidden; padding: 0 2px 6px; }
+/* No horizontal padding inside the scroller: padding counts toward scrollWidth, so a drawing that fits its
+   card still produced a scrollbar by 4 px (2 each side) and the reader saw a scrollbar under a picture that
+   obviously held every stage. The body's own 12 px padding is the breathing room. */
+.pflow-scroll { overflow-x: auto; overflow-y: hidden; padding: 0 0 4px; }
 .pflow-canvas { position: relative; padding-top: var(--pflow-pad, 0px); min-width: 100%; }
 .pflow-track {
   position: relative;
@@ -4083,11 +4086,14 @@ body.pipew-open { overflow: hidden; }
   align-items: start;
 }
 .pflow-node { position: relative; display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 8px 8px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
-.pflow-node .pflow-title { font-size: 11.5px; line-height: 1.3; color: var(--dim); overflow-wrap: anywhere; }
+/* 13 px at 500 is the readable floor the round asked for: the title is the one word a reader came to read, and
+   11.5 px at 400 made a definition's quietest mark look like disabled text. The hierarchy still comes from the
+   mark's colour and the ordinal/artifact being a step quieter, not from shrinking the title below the body's size. */
+.pflow-node .pflow-title { font-size: 13px; font-weight: 500; line-height: 1.32; color: var(--dim); overflow-wrap: anywhere; }
 /* The ordinal and the artifact are the stage's own meta, one step quieter than its title — but still ABOVE the AA line:
    #8b96a5 on --surface is 6.05:1 (5.45:1 on the 100% contrast theme's surface), where --dimmer measured 3.77:1. */
-.pflow-node .pflow-n { font-size: 9.5px; color: var(--pflow-ink-quiet); }
-.pflow-node .pflow-art { font-size: 10px; color: var(--pflow-ink-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pflow-node .pflow-n { font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--pflow-ink-quiet); }
+.pflow-node .pflow-art { font-size: 11px; color: var(--pflow-ink-quiet); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pflow-dot { position: absolute; top: -5px; left: 8px; width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); }
 /* The four marks, and no fifth. Colour is the panel's own language: green finished, blue where the work is, grey not
    yet, red a gate that said no. */
@@ -4129,8 +4135,8 @@ body.pipew-open { overflow: hidden; }
   border-bottom: 0;
   border-radius: 12px 12px 0 0;
 }
-.pflow-arc-label { position: absolute; top: -14px; left: 50%; transform: translateX(-50%); padding: 0 5px; border-radius: 4px; background: var(--panel); color: #b9a2e0; font-size: 9.5px; line-height: 12px; white-space: nowrap; }
-.pflow-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 10.5px; color: var(--dim); }
+.pflow-arc-label { position: absolute; top: -15px; left: 50%; transform: translateX(-50%); padding: 0 5px; border-radius: 4px; background: var(--panel); color: #b9a2e0; font-size: 11px; line-height: 14px; white-space: nowrap; }
+.pflow-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--dim); }
 .pflow-key { display: inline-flex; align-items: center; gap: 5px; }
 .pflow-key i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel); }
 .pflow-key[data-mark="done"] i { background: var(--green); border-color: var(--green); }
@@ -4143,11 +4149,11 @@ body.pipew-open { overflow: hidden; }
    definition is not given a sentence in place of a picture, and the thirteen-stage case keeps the count under the
    drawing it is describing. The explicit `[hidden]` rules are needed: `display: flex/inline-flex` would otherwise
    override the user agent's `[hidden] { display: none }`. */
-.pflow-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 10.5px; line-height: 16px; color: var(--dim); }
+.pflow-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 11px; line-height: 17px; color: var(--dim); }
 .pflow-status[hidden], .pflow-fit[hidden] { display: none; }
 .pflow-count { font-variant-numeric: tabular-nums; }
 .pflow-count[data-out="0"] { color: var(--pflow-ink-quiet); }
-.pflow-fit { border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 1px 9px; font-family: inherit; font-size: 10.5px; line-height: 15px; cursor: pointer; }
+.pflow-fit { border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 1px 9px; font-family: inherit; font-size: 11px; line-height: 17px; cursor: pointer; }
 .pflow-fit:hover { color: var(--text); border-color: #8fb8ff; }
 .pflow-fit:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
 /* Motion is a courtesy, never the meaning: the current stage's dot breathes and an arc fades in. data-motion="off"
@@ -4162,11 +4168,16 @@ body.pipew-open { overflow: hidden; }
    dialog drawn under the thing that opened it is a press that appears to do nothing. */
 .pmodal { position: fixed; inset: 0; z-index: 140; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 14px 14px; background: #05070ac9; }
 .pmodal[hidden] { display: none; }
-.pmodal-card { display: flex; flex-direction: column; width: min(1120px, 96vw); max-height: 86vh; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 44px #000b; overflow: hidden; outline: none; }
+/* The card is as wide as the drawing it holds, not as wide as a desktop: one stage is a small panel (the 340 px
+   floor keeps the facts and title readable), seven stages take 854 px, thirteen take 1586 px. The arithmetic is the
+   track's own policy — n columns at the 96 px floor plus n-1 26 px gaps plus the body's 26 px of padding and border —
+   so a definition that fits is a card that fits, and only a drawing wider than 96vw scrolls. `--pflow-card-n` is set
+   by PipelineModal.paint() from the flow it is drawing. */
+.pmodal-card { display: flex; flex-direction: column; width: min(max(340px, calc(var(--pflow-card-n, 1) * 96px + (var(--pflow-card-n, 1) - 1) * 26px + 26px)), 96vw); max-height: 86vh; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 44px #000b; overflow: hidden; outline: none; }
 .pmodal-bar { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 10px 12px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
-.pmodal-kicker { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dimmer); }
+.pmodal-kicker { font-size: 11px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--dimmer); }
 .pmodal-title { font-size: 13px; color: var(--text); }
-.pmodal-sub { font-size: 10.5px; color: var(--dim); }
+.pmodal-sub { font-size: 11px; color: var(--dim); }
 .pmodal-bar .spacer { flex: 1; }
 .pmodal-close { border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
 .pmodal-close:hover { color: var(--text); border-color: #8fb8ff; }
@@ -4177,11 +4188,11 @@ body.pipew-open { overflow: hidden; }
 .pmodal-note { font-size: 11.5px; line-height: 1.5; color: var(--dim); }
 .pmodal-empty { padding: 14px; border: 1px dashed var(--line); border-radius: 8px; color: var(--dimmer); font-size: 11.5px; }
 .pmodal-preview { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--line); font-size: 11px; color: var(--dim); }
-.pmodal-preview-note { color: var(--dimmer); text-transform: uppercase; letter-spacing: 0.06em; font-size: 9.5px; }
+.pmodal-preview-note { color: var(--dimmer); text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; }
 .pmodal-preview select { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font: 11px var(--mono); }
 .pmodal-check { display: inline-flex; align-items: center; gap: 5px; }
 .pmodal-foot { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--panel-2); border-top: 1px solid var(--line); }
-.pmodal-foot .pmodal-status { flex: 1; font-size: 10.5px; color: var(--dim); }
+.pmodal-foot .pmodal-status { flex: 1; font-size: 11px; color: var(--dim); }
 .pmodal-foot button { border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
 .pmodal-foot button:hover { color: var(--text); border-color: #8fb8ff; }
 body.pipeline-modal-open { overflow: hidden; }
