@@ -1,12 +1,13 @@
 # Splitting for concurrency — the implementation plan
 
-**Measured at `origin/main` `f0b52a3` (`package.json` 1.6.0), 2026-11-04.** This branch is cut from that tip.
-Every number below was re-read in this worktree; §1 marks the cells I could not reproduce, and no stage is ordered
-by an unconfirmed number. Line numbers drift with every landing, so each anchor is given with the text to search
-for, and Stage 0 re-reads them before a stage edits anything.
+**Measured at `origin/main` `35230cc` (`package.json` 1.6.1), 2026-11-04.** The code tree is identical to `f0b52a3`
+(1.6.0), where the numbers below were read; the only changes since are `package.json` and `CHANGELOG.md`. Every
+number below was re-read in this worktree; §1 marks the cells I could not reproduce, and no stage is ordered by an
+unconfirmed number. Line numbers drift with every landing, so each anchor is given with the text to search for, and
+Stage 0 re-reads them before a stage edits anything.
 
-**The branch carries the bump this PR lands as 1.6.2.** v1.6.1 is already anchored by a live sibling branch
-(`wtgui/give-pr-369-s-landed-fea-72dc53`), and a version is anchored once.
+**The branch carries the bump this PR lands as 1.6.2.** v1.6.1 landed on `main` while this plan was being written
+(and v1.6.1 is already anchored there); 1.6.2 is the next patch above it.
 
 **This is the plan the review asks for.** `docs/reviews/split-for-concurrency.md` (364 lines at this tip) aggregates
 `split-server.md`, `split-public-app.md` and `split-lib.md` into three cuts and the collisions they leave. This
@@ -48,11 +49,11 @@ a queue for one file, and the only parallelism is around it, not inside it.
 
 ## 1. What was re-measured, and what was not
 
-Main moved 1.4.2 → 1.6.0 today, and moved again while this plan was being written: `server.js` and
-`public/app.js` were unchanged between the review's tip `92d5fcc` (1.5.5) and `75ec220` (1.5.6), and then the
-1.6.0 landing grew `server.js` by **103** lines and `public/app.js` by **62**. The review's headline sizes are
-therefore 103 and 62 lines short at this tip, and its line-region table is the 1.4.0 page's, 198–201 lines short.
-§1.1.
+Main moved 1.4.2 → 1.6.1 today, and moved twice while this plan was being written: `server.js` and
+`public/app.js` were unchanged between the review's tip `92d5fcc` (1.5.5) and `75ec220` (1.5.6), the 1.6.0 landing
+grew `server.js` by **103** lines and `public/app.js` by **62**, and the 1.6.1 landing touched only `package.json`
+and `CHANGELOG.md`. The review's headline sizes are therefore 103 and 62 lines short at the 1.6.0 code tree, and its
+line-region table is the 1.4.0 page's, 198–201 lines short. §1.1.
 
 | Number | The review / pages say | At `f0b52a3` | Status |
 |---|---|---|---|
