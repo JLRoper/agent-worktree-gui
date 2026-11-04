@@ -125,6 +125,37 @@ test("the page loads the renderer, then the modal, then the app that wires both"
   assert.ok(appAt > modalAt, "app.js wires the tab's press, so it loads after both");
 });
 
+test("the dialog is as wide as its drawing: one stage is a small panel, thirteen a wide one", () => {
+  // The width is one policy, written in the stylesheet and fed by the modal's own stage count: a column at the
+  // track's 96 px floor, the 26 px gaps between them, and the body's 24 px of padding plus the card's 2 px border.
+  const width = /\.pmodal-card \{[^}]*width: ([^;]+);/.exec(css)?.[1] || "";
+  assert.match(width, /--pflow-card-n/, "the card's width is a function of the drawing's stage count");
+  assert.match(width, /\* 96px/, "the track's own readable floor");
+  assert.match(width, /\+ 26px/, "the body's padding and border, which the track does not get");
+  assert.match(width, /96vw/, "and the viewport is still the ceiling");
+  assert.doesNotMatch(css, /width: min\(1120px, 96vw\)/, "the fixed 1120 px frame is gone");
+  // paint() owns the number, from the flow it is holding, and close() clears it so a reuse cannot inherit a width.
+  assert.match(source, /card\.style\?\.setProperty\?\.\("--pflow-card-n", String\(stageCount\(state\.flow\)\)\)/);
+  assert.match(source, /function stageCount\(flow\) \{/);
+  assert.match(source, /setProperty\?\.\("--pflow-card-n", "1"\)/, "close() resets it");
+  // A one-stage definition and a thirteen-stage one land on the two ends the brief asked for.
+  const w = (n) => Math.min(Math.max(340, n * 96 + (n - 1) * 26 + 26), 1824 * 0.96);
+  assert.equal(w(1), 340, "one stage is a 340 px panel, not a 1120 px frame");
+  assert.ok(w(2) < 500 && w(7) === 854 && w(13) > 1200, `2 → ${w(2)}, 7 → ${w(7)}, 13 → ${Math.round(w(13))}`);
+});
+
+test("the header names what is drawn, not an edit this dialog does not offer", () => {
+  assert.doesNotMatch(source, /pipeline flow · editing/, "no EDITING over a surface with no edit control");
+  assert.match(source, /pipeline flow · definition/);
+  assert.match(source, /pipeline flow · position/);
+  // The apology caption that explained the absence of marks is gone; the legend says the state once instead.
+  const app = dropCR(readFileSync(new URL("../public/app.js", import.meta.url), "utf8"));
+  assert.doesNotMatch(app, /each notch is the exit check that ends the stage before it/, "the caption is deleted");
+  const at = app.indexOf("function openPipelineFlow()");
+  assert.ok(at > 0, "the control's handler is in app.js");
+  assert.doesNotMatch(app.slice(at, at + 1400), /\bnote:/, "the modal is opened without a note to explain the picture");
+});
+
 test("the Pipeline tab has the dropdown, the editor and the control that opens the modal", () => {
   assert.match(html, /id="pipeline-select"/, "the dropdown");
   assert.match(html, /id="pipeline-flow-open" data-pipeline-flow-open/, "the control");

@@ -402,7 +402,12 @@
   function legendHtml(marks) {
     const counts = new Map(MARK_ORDER.map((mark) => [mark, 0]));
     for (const m of marks || []) counts.set(m.mark, (counts.get(m.mark) || 0) + 1);
-    return `<div class="pflow-legend" data-pflow-legend>${MARK_ORDER.map(
+    // Only the states this drawing actually shows. A definition has no position, so every one of its stages is `not
+    // reached` and the legend says that once instead of listing three marks the reader cannot find on the picture; a
+    // live row lists the marks it carries, refused included only where a gate said no.
+    const present = MARK_ORDER.filter((mark) => counts.get(mark));
+    if (!present.length) return "";
+    return `<div class="pflow-legend" data-pflow-legend>${present.map(
       (mark) =>
         `<span class="pflow-key" data-mark="${mark}"><i aria-hidden="true"></i>${MARK_WORDS[mark]}${counts.get(mark) ? ` <b class="mono">${counts.get(mark)}</b>` : ""}</span>`,
     ).join("")}</div>`;

@@ -391,7 +391,12 @@ const judgeVisibility = (m, where) => {
   judge("V1", outNodes.length === 0, `${where}: every stage is inside the scroller`, `${m.nodes.length} stages, ${outNodes.length} out (${outNodes.map((n) => n.id).join(",") || "none"})`);
   judge("V2", outNotches.length === 0, `${where}: every gate notch is inside the scroller`, `${m.notches.length} notches, ${outNotches.length} out (${outNotches.map((n) => n.gate).join(",") || "none"})`);
   judge("V3", hidden <= 1, `${where}: the drawing does not overflow its scroller`, `scrollWidth ${m.scrollBox.sw} vs clientWidth ${m.scrollBox.cw}${hidden > 1 ? ` — ${hidden} px hidden at scrollLeft ${m.scrollLeft}` : ""}`);
-  judge("V4", m.keys.length === 4 && m.keys.every((k) => k.inCard), `${where}: every legend mark is inside the card`, m.keys.map((k) => `${k.mark}${k.inCard ? "" : "(out)"}`).join(" "));
+  judge(
+    "V4",
+    m.keys.every((k) => k.inCard) && m.keys.map((k) => k.mark).sort().join() === [...new Set(m.nodes.map((n) => n.mark))].sort().join(),
+    `${where}: the legend lists exactly the marks on screen, inside the card`,
+    m.keys.map((k) => `${k.mark}${k.inCard ? "" : "(out)"}`).join(" ") || "(no key)",
+  );
   judge("V5", m.cardFits, `${where}: the card itself fits the viewport`, `card ${m.card.w}x${m.card.h} at ${m.card.x},${m.card.y} in ${m.vw}x${m.vh}`);
   const pairs = [];
   for (let i = 0; i < m.nodes.length; i += 1) for (let j = i + 1; j < m.nodes.length; j += 1) if (overlap(m.nodes[i].rect, m.nodes[j].rect) > 0.5) pairs.push(`${m.nodes[i].id}/${m.nodes[j].id}`);
@@ -418,7 +423,10 @@ const judgeClean = (m, where) => {
   // the 400 px ceiling rather than by how much empty card surrounds a single box.
   const symmetric = Math.abs(m.deadLeft - m.deadRight) <= 8;
   const widest = m.nodes.length ? Math.max(...m.nodes.map((n) => n.rect.w)) : 0;
-  const fills = m.nodes.length >= 2 ? m.track.w >= 0.7 * m.body.w : Math.abs(widest - 400) <= 1;
+  // The card is now as wide as its drawing, so "fills the body" is the rule at EVERY stage count: the track takes the
+  // body's content box (its 12 px padding on each side is the card's breathing room, not a dead band). The old 400 px
+  // ceiling only applied while the card was always 1120 px wide and a single stage had to be parked at its cap.
+  const fills = m.track.w >= m.body.w - m.deadLeft - m.deadRight - 1 || m.track.w >= 0.7 * m.body.w;
   judge(
     "C1",
     symmetric && fills,
@@ -484,7 +492,10 @@ try {
           const m = await measure(page);
           const defined = await page.evaluate(async (id) => (await (await fetch("/api/pipelines")).json()).pipelines[id], one.id);
           check(m.mode === "edit", `${one.id}: the dialog is in edit mode`, m.mode);
-          check(/pipeline flow · editing/.test(m.kicker), `${one.id}: the dialog says it is editing`, m.kicker);
+          check(/pipeline flow · definition/.test(m.kicker), `${one.id}: the header names the definition it draws`, m.kicker);
+          check(!/editing/i.test(m.kicker), `${one.id}: the header does not claim an edit it does not offer`, m.kicker);
+          check(!m.note, `${one.id}: no apology caption explaining the absence of marks`, m.note || "(none)");
+          equal(`${one.id}: the legend lists only the states on screen`, m.keys.map((k) => k.mark), [...new Set(m.nodes.map((n) => n.mark))]);
           check(m.title === (defined.title || one.id), `${one.id}: it names the definition`, m.title);
           equal(`${one.id}: every stage of the definition is drawn, in order`, m.nodes.map((n) => n.id), defined.stages.map((s) => s.id));
           equal(`${one.id}: every stage's exit check is a notch`, m.notches.map((n) => n.gate), defined.stages.map((s) => `exit:${s.id}`));
@@ -498,6 +509,17 @@ try {
             // then judged on visibility like every other case, so the six red lines this case carried are answered by
             // the control the plan's C8 names rather than by deleting the lines.
             const c = countsOf(m);
+            // The card is sized from the drawing it holds now, so at a viewport wide enough thirteen stages fit
+            // outright. That is the round's first promise; the count and the press are the second half, for the
+            // widths where they do not. The gate reads which case it is instead of insisting on the narrow one.
+            if (c.stages.length === 0 && !c.overflow) {
+              check(!c.overflow, `${one.id}: thirteen stages fit the card at this width — nothing is hidden`, `${m.scrollBox.sw} <= ${m.scrollBox.cw}`);
+              check(m.view.fit === null || m.view.fit.hidden, `${one.id}: no fit control is offered for a drawing that fits`, m.view.fit ? `"${m.view.fit.label}" hidden=${Boolean(m.view.fit.hidden)}` : "no control");
+              judge("N1", m.view.count === expectedCountText(m), `${one.id}: the count agrees with the box it measured`, `"${m.view.count}" against 0 of ${c.totalStages} stages and 0 of ${c.totalNotches} notches measured out`);
+              judgeVisibility(m, `route B/${one.id}`);
+              judgeClean(m, `route B/${one.id}`);
+              await page.screenshot({ path: path.join(SHOTS, `${label}-route-b-${one.id}-unfitted.png`), clip: cardClip(m, viewport) });
+            } else {
             check(c.overflow, `${one.id}: the drawing scrolls unfitted — the case the control exists for`, `${m.scrollBox.sw} > ${m.scrollBox.cw}, ${c.stages.length} stages and ${c.notches.length} notches out`);
             judge("N1", m.view.count === expectedCountText(m), `${one.id} unfitted: the scroller counts what is out of view`, `"${m.view.count}" against ${c.stages.length} of ${c.totalStages} stages and ${c.notches.length} of ${c.totalNotches} notches measured out`);
             check(Boolean(m.view.fit && !m.view.fit.hidden), `${one.id}: a fit control is offered while stages are out of view`, m.view.fit ? `"${m.view.fit.label}" ${m.view.fit.rect.w}x${m.view.fit.rect.h}` : "no control");
@@ -564,6 +586,7 @@ try {
             check(restored.nodes.every((n) => n.mark === "not-reached"), `${one.id}: the marks survive the fit and the restore`, restored.nodes.map((n) => n.mark).join(","));
             out[`${label}/route-b/${one.id}-fitted`] = fitted;
             out[`${label}/route-b/${one.id}-scrolled`] = scrolled;
+            }
           } else {
             judgeVisibility(m, `route B/${one.id}`);
             judgeClean(m, `route B/${one.id}`);
@@ -690,7 +713,7 @@ try {
         equal("the gate that ends S2 is one notch", pos.notches.map((n) => n.gate), ["g2"]);
         equal("the capped loop is one arc, labelled with its cap only", pos.arcs.map((a) => ({ cap: a.cap, label: a.label.text, from: a.from, to: a.to })), [{ cap: "2 rounds", label: "2 rounds", from: "S4", to: "S2" }]);
         check(pos.arcs[0]?.aboveTrack, "the arc is drawn above the track", pos.arcs[0] ? `arc bottom ${pos.arcs[0].rect.bottom} vs track top ${pos.track.y}` : "no arc");
-        equal("the legend counts the marks", pos.keys.map((k) => `${k.mark}:${k.text}`), ["not-reached:not reached 1", "current:current 1", "done:done 3", "refused:refused"]);
+        equal("the legend counts the marks on screen, and only those", pos.keys.map((k) => `${k.mark}:${k.text}`), ["not-reached:not reached 1", "current:current 1", "done:done 3"]);
         const token = pos.nodes.find((n) => n.mark === "current");
         check(Boolean(token && token.num && token.dot && token.dot.bg !== "rgba(0, 0, 0, 0)"), "the current stage carries a position token and a painted dot", token ? `${token.id} #${token.num?.text} dot ${token.dot?.bg}` : "no current stage");
 
