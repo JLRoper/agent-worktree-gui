@@ -52,6 +52,13 @@ piped, redirected or under the runner — but a shell that aliases `node` to a p
 per-gate scripts beside it (`npm run verify:flicker -- --only repainters`) go through npm's own shell and the
 real node binary, which is the way in from such a shell.
 
+`npm run doctor` (`tools/check-env.mjs`) is the environment preflight, and the first thing to run on a new
+machine or when a fetch or a start misbehaves: node against the engines floor, git, *the ssh git itself will
+run* and the `known_hosts` that ssh reads, this checkout's origin (one `git ls-remote`), the panel's port and
+pid (a stale `server.pid` is named), and the gateway. Every failed line carries its fix — the ssh/remote
+section is what a "my fetch will not work" report should have pasted into it. Warnings (the panel not
+running, the gateway down) are named but do not fail the run.
+
 `node tools/verify-verdicts.mjs [project]` re-derives every row's merge verdict straight from git and
 diffs it against the panel (exit 1 on any mismatch) — useful after touching the scan logic.
 
@@ -1258,3 +1265,12 @@ Watches without a deadline, and finished ones, say so instead.
   `hermes config set OPENROUTER_API_KEY <key>` puts it in `$HERMES_HOME/.env` — and ask again. `GET /api/restart`
   reports the same check, plus the queue and the last action, so a refused request is visible without reading a log.
 - **Port already in use** — `stop-background.cmd`, or `netstat -ano | grep 7331` and kill the PID.
+- **`ssh -T git@github.com` authenticates, but `git fetch` / `git pull` fails with `Host key
+  verification failed`** — git runs the ssh it bundles, and that ssh resolves `~` from `HOME` (falling
+  back to the Windows home variables), while Windows' own ssh resolves it from `%USERPROFILE%`. On a
+  machine with a redirected home folder the two disagree, and git's ssh reads a `.ssh` with no
+  `known_hosts`, no config and no keys. `npm run doctor` names the ssh git will use and the file it
+  reads; the short fix is to run git — and start the panel — in a shell with `HOME` pointed at the
+  profile (`set HOME=%USERPROFILE%` in cmd, `$env:HOME=$env:USERPROFILE` in PowerShell), or to pin it for
+  every command: `git config --global core.sshCommand "ssh -o UserKnownHostsFile=<profile-path>/.ssh/known_hosts"`
+  (add `-o IdentityFile=…` when the key is not under that `.ssh` either).

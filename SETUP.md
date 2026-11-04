@@ -141,6 +141,10 @@ Then open **http://127.0.0.1:7331**.
 
 ## 5. Verify — do not assume
 
+`npm run doctor` runs the environment preflight first — node, git, the ssh git resolves and whether it can
+read this checkout's remote, the panel's port and pid, the gateway. Every failed line carries its fix; settle
+those before trusting anything below.
+
 1. `curl -s http://127.0.0.1:7331/api/health` → `{"ok":true,...}`
 2. `curl -s http://127.0.0.1:7331/api/state` → your projects are listed and `worktrees` is non-empty
    for the ones that have worktrees.
@@ -209,6 +213,11 @@ Then open **http://127.0.0.1:7331**.
   `node tools/version.mjs apply <patch|minor|major>`, commit it, push again. In the second, merge or rebase
   `origin/main` first and then bump above its number. That is deliberate, not something to go around:
   `git push --no-verify` bypasses it if the refusal is wrong.
+- **`ssh -T <host>` works, but a fetch fails with `Host key verification failed`** — git runs the ssh it
+  bundles, and that ssh resolves `~` from `HOME` / the Windows home variables, not `%USERPROFILE%`; on a
+  redirected profile it reads a `.ssh` with no `known_hosts`/config/keys. `npm run doctor` names the ssh and
+  the file it reads; the short fix: run git, and start the panel, with `HOME` at the profile
+  (`set HOME=%USERPROFILE%` / `$env:HOME=$env:USERPROFILE`).
 - **A row shows `ERROR`** — that worktree could not be read; the row detail names the reason.
 - **Windows-only bits**: the `:port` / `● board` liveness signals read `netstat` / `tasklist`. Off
   Windows those two stay dark; scanning, verdicts, spawning and replies all still work.
