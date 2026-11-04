@@ -62,12 +62,11 @@ const state = {
   // turn's own bytes; `consoleFocus` hides the tool rows and leaves the prose, the errors and the final message.
   consoleRaw: new Set(),
   consoleFocus: new Set(),
-  // Hot Agent: the rotation through agents that are waiting for input. `stack` is the visit history (so
-  // Alt+Left can walk back), `cursor` points at the one on screen.
-  hot: { on: false, stack: [], cursor: -1 },
-  // The amber flash is held here, not only on the DOM node: opening a project or a row repaints the card, and a
-  // class added to the old element dies with it. The renderer re-applies it until the window closes.
+  // HUMAN's amber ring on a card: held here, not only on the DOM node, because opening a project or a row
+  // repaints the card and a class added to the old element dies with it. The renderer re-applies it until the
+  // window closes. (The NOT-RUNNING rotation that first drew this ring is gone; HUMAN kept the ring.)
   hotFlash: { thread: null, until: 0 },
+  hotFlashTimer: null,
   // HUMAN: the rotation through every OPEN permission and clarify question. `key` is the question last shown
   // and `at` its place in that sample; `sig` is what was last painted on the button. The list itself is never
   // stored — it is rebuilt from live state on every press, so an answered question cannot linger in it.
@@ -186,7 +185,7 @@ const state = {
   collapsedFixed: loadCollapsedFixed(),
   collapsedRoots: loadCollapsedRoots(),
   recentRoots: loadRecentRoots(),
-  // Which projects' charts are showing every tree, threshold or not (see the age collapse below). Per project,
+  // Which projects' charts are showing every tree, count or not (see the top-N collapse below). Per project,
   // because one board holds a hundred of them.
   showOldProjects: loadShowOldProjects(),
   // Per-folder project search ("root" -> query). Not persisted: a filter is a moment's narrowing, and a
@@ -284,6 +283,10 @@ const state = {
   flashSeconds: loadFlashSeconds(),
   cloneStatus: {},
   approvals: new Map(),
+  // Instrumentation for the permission-prompt proof: the last count `/api/state` carried in `approvals`, when it
+  // changed, and the ids. An empty `/api/approvals` beside a non-zero count here says the page's own run feed
+  // carried the prompt and the plugin's long-poll feed was simply never used.
+  approvalsSeen: { at: 0, count: -1, ids: [] },
   scanRoots: [],
   pollGap: new Map(), // key -> observed seconds between that row's scans, smoothed
   lastScanAt: new Map(), // key -> ms of the previous scan we rendered
@@ -593,12 +596,13 @@ function saveRecentRoots() {
 
 const RECENT_DAYS = 7;
 
-// The chart's "older than N days" collapse. Rows whose LAST ACTIVITY is older than the threshold in the panel's
-// config.json (`hideOlderThanDays`) are held out of the chart, and one arrow at the bottom of that chart shows
-// every tree again. Both halves of that choice are remembered where a reload keeps them: the DAYS in the panel's
-// own config.json (so they apply to every browser, and to the panel after a restart), and which charts are showing
-// everything in this browser, per project, exactly like the folder-level All/7d choice above. The key itself is
-// declared above `state`, which is what reads it.
+// The chart's top-N collapse. A chart draws the first `chartTopCount` rows of `chartTopOrder` — last activity newest
+// first, then by name — and one arrow at the bottom of that chart lists the rest in that same order. Both halves of
+// that choice are remembered where a reload keeps them: the COUNT in the panel's own config.json (so it applies to
+// every browser, and to the panel after a restart), and which charts are showing everything in this browser, per
+// project, exactly like the folder-level All/7d choice above. The key itself is declared above `state`, which is what
+// reads it — and it is deliberately still called "old" because the reader's remembered charts are the same choice,
+// whatever the chart was holding them back by.
 function loadShowOldProjects() {
   try {
     return new Set(JSON.parse(localStorage.getItem(SHOW_OLD_KEY) || "[]"));
@@ -11587,7 +11591,7 @@ function lifeAtFor(row) {
   return Math.max(eventLifeAt(row), Date.parse(row.lastAliveAt || "") || 0);
 }
 
-// ---- the age collapse: which rows a chart is holding back --------------------------------------
+// ---- the top-N collapse: which rows a chart is holding back ------------------------------------
 // The newest moment this row's WORK moved: its last commit, its last edited file (the server folds both into
 // lastEdit, and keeps lastCommit beside it), the last moment the panel saw it alive, and any event we received
 // about one of its agents — an event is a fresh look at the tree, which is why noteEventLife counts it as life too.
@@ -11595,95 +11599,129 @@ function rowActivityAt(row) {
   return Math.max(lifeAtFor(row), Date.parse(row.lastEdit || "") || 0, Date.parse(row.lastCommit || "") || 0);
 }
 
-// The threshold, as a number of days. 0 (or anything unreadable) means nothing is held back — the same reading the
-// server gives the key, so a config.json that says "off" beats a client that thinks it read a number.
-function ageHideDays() {
-  const n = Number(state.settings?.hideOlderThanDays);
-  return Number.isFinite(n) && n > 0 ? n : 0;
+// How many rows a chart draws before the reader opens the rest. 0 (or anything unreadable) means every row is
+// drawn — the same reading the server gives the key, so a config.json that says "off" beats a client that thinks
+// it read a number.
+const CHART_TOP_DEFAULT = 10;
+function chartTopLimit() {
+  const n = Number(state.settings?.chartTopCount);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : CHART_TOP_DEFAULT;
 }
 
-// A row the chart holds back: its last activity is older than the threshold. Deliberately NOT the age of the
-// directory — a tree cut months ago that somebody is working in right now measures as active and stays, which is
-// the whole point of measuring activity. Four things are never held back: the project's own checkout (the chart is
-// of the worktrees CUT from it), a row that is live right now, a row the reader has open (it must not vanish under
-// them), and a row with nothing to measure at all — "no evidence" is not "abandoned", and hiding a fresh tree that
-// has not committed or saved anything yet would be the worst of the two mistakes.
-function rowAgeStale(row) {
-  const days = ageHideDays();
-  if (!days || !row) return false;
-  if (isProjectRootRow(row) || isRowLive(row)) return false;
-  if (state.expanded.has(keyOf(row.project, row.path))) return false;
-  const at = rowActivityAt(row);
-  return Boolean(at) && at < Date.now() - days * 864e5;
+const chartTopName = (row) => String(row?.name || "").trim();
+
+// The ONE order "top" means, and the order the held-back rows are listed in once a chart is opened: last activity,
+// newest first, then by name. Deliberately NOT the chart's live ranking (`applyRowRank`): that order is smoothed over
+// events and moves as they arrive, so taking the first N of it would draw a different set from one scan to the next.
+// This is a total order over the rows as they stand — activity, then name, then path — so the same rows always give
+// the same top N whatever order the scan (or a fixture) happened to hand them over in.
+function chartTopOrder(rows) {
+  return [...rows].sort((a, b) => {
+    const byActivity = rowActivityAt(b) - rowActivityAt(a);
+    if (byActivity) return byActivity;
+    const byName = chartTopName(a).localeCompare(chartTopName(b), undefined, { sensitivity: "base" });
+    if (byName) return byName;
+    return String(a.path || "").localeCompare(String(b.path || ""));
+  });
 }
 
-// ...and the rows the chart is actually not drawing: stale ones, unless the reader asked this project's chart for
-// everything.
-function rowAgeHidden(row) {
-  return rowAgeStale(row) && !state.showOldProjects.has(row?.project);
+// One project's rows, split the way its chart draws them: `top` is the first N of chartTopOrder, `held` the rest in
+// that same order, and `all` the whole list. The sort comes BEFORE the slice on purpose — a slice of the array the
+// server happened to send is the bug this shape exists to prevent.
+function chartTopSplit(rows) {
+  const all = chartTopOrder(rows);
+  const limit = chartTopLimit();
+  if (!limit) return { all, top: all, held: [] };
+  return { all, top: all.slice(0, limit), held: all.slice(limit) };
 }
 
-function staleRowCount(project) {
-  return [...state.rows.values()].filter((r) => r.project === project && rowAgeStale(r)).length;
+// A row this project's chart is holding back, unless the reader asked that chart for everything. Measured from
+// ACTIVITY, never from when the directory was created: a tree cut months ago that somebody is working in right now
+// has the newest activity there is, so it is the first row drawn rather than a row held back.
+function rowTopHidden(row) {
+  if (!row?.project || state.showOldProjects.has(row.project)) return false;
+  const mine = [...state.rows.values()].filter((r) => r.project === row.project);
+  const key = keyOf(row.project, row.path);
+  return chartTopSplit(mine).held.some((r) => keyOf(r.project, r.path) === key);
 }
 
-function ageToggleTitle(project, days, stale, showing) {
-  const n = `${stale} worktree${stale === 1 ? "" : "s"}`;
-  if (!days) return "every worktree is drawn: no age threshold is set (Settings → Hide stale worktrees)";
+// How many of a project's rows are below its chart's top N, whether or not that chart is currently showing them.
+function heldRowCount(project) {
+  const mine = [...state.rows.values()].filter((r) => r.project === project);
+  return chartTopSplit(mine).held.length;
+}
+
+// The rows one project's chart draws, in the order it draws them: the top N in the chart's usual live ranking, then —
+// once the reader has opened the chart — the held-back remainder in chartTopOrder itself, so "show the rest" lists
+// them the way they were chosen (newest activity first, then by name) rather than in scan order.
+function chartDrawOrder(project) {
+  const mine = [...state.rows.values()].filter((r) => r.project === project);
+  const split = chartTopSplit(mine);
+  const head = applyRowRank(split.top);
+  return state.showOldProjects.has(project) ? [...head, ...split.held] : head;
+}
+
+function topToggleTitle(project, count, held, showing) {
+  const n = `${held} worktree${held === 1 ? "" : "s"}`;
+  if (!count) return "every worktree is drawn: no count limit is set (Settings → Top worktrees per chart)";
   if (showing) {
-    return stale
-      ? `hold back the ${n} whose last activity is older than ${days} day${days === 1 ? "" : "s"} again`
-      : `nothing here is older than ${days} day${days === 1 ? "" : "s"} — this chart is showing every worktree`;
+    return held
+      ? `hold back the ${n} below the top ${count} again`
+      : `nothing here is below the top ${count} — this chart is showing every worktree`;
   }
-  return stale
-    ? `show the ${n} whose last activity is older than ${days} day${days === 1 ? "" : "s"} — this chart is holding them back`
-    : `nothing here is older than ${days} day${days === 1 ? "" : "s"} — every worktree is on the chart`;
+  return held
+    ? `show the ${n} below the top ${count} — newest activity first, then by name`
+    : `nothing here is below the top ${count} — every worktree is on the chart`;
 }
 
-// The chart's arrow: the same little circular chip the console uses to jump back to its newest line, sitting at the
-// bottom of the worktree chart, pointing down when it will show you more rows and up once it is showing them. It
-// lives in the legend line rather than in the chart box itself because that line is the one box under the chart
-// that neither scrolls sideways nor clips its children — the chart does both the moment the card is narrower than
-// its columns — so the arrow stays on the chart's bottom edge at every width. It is invisible unless the pointer is
-// over the chart (public/style.css), and it is not rendered at all while the threshold is off.
-function ageSlotHtml(project) {
-  const days = ageHideDays();
-  if (!days) return "";
+// The chart's arrow: the same little chip the console uses to jump back to its newest line, sitting at the bottom of
+// the worktree chart, pointing down when it will show you more rows and up once it is showing them. Its label carries
+// the real number — "show 15 more" is what says how much is behind it — so it is a pill rather than a circle
+// (public/style.css `.wt-age-labeled`). It lives in the legend line rather than in the chart box itself because that
+// line is the one box under the chart that neither scrolls sideways nor clips its children — the chart does both the
+// moment the card is narrower than its columns — so the arrow stays on the chart's bottom edge at every width. It is
+// invisible unless the pointer is over the chart (public/style.css), and it is not rendered at all while the count is
+// off.
+function topSlotHtml(project) {
+  const count = chartTopLimit();
+  if (!count) return "";
   const showing = state.showOldProjects.has(project);
-  const stale = staleRowCount(project);
+  const held = heldRowCount(project);
   // Nothing held back and nothing shown: there is no choice to offer here, so this chart draws no arrow at all.
-  if (!showing && !stale) return "";
-  return `<button type="button" class="tail-chip wt-age-toggle${showing ? " is-on" : ""}" data-age-toggle="${esc(project)}" aria-pressed="${showing ? "true" : "false"}" title="${esc(ageToggleTitle(project, days, stale, showing))}">${showing ? "\u2191" : "\u2193"}</button>`;
+  if (!showing && !held) return "";
+  const label = showing ? `↑ show top ${count}` : `↓ show ${held} more`;
+  return `<button type="button" class="tail-chip wt-age-toggle wt-age-labeled${showing ? " is-on" : ""}" data-age-toggle="${esc(project)}" aria-pressed="${showing ? "true" : "false"}" title="${esc(topToggleTitle(project, count, held, showing))}">${label}</button>`;
 }
 
 // The arrow's own state, in place. The rows are re-rendered by the caller, and this is the button that asked for
 // it: keeping the same node means the pointer does not fall off a control that just moved under it.
-function paintAgeToggle(project) {
+function paintTopToggle(project) {
   const btn = projectNode("data-age-toggle", project);
   if (!btn) return;
-  const days = ageHideDays();
+  const count = chartTopLimit();
   const showing = state.showOldProjects.has(project);
+  const held = heldRowCount(project);
   btn.classList.toggle("is-on", showing);
   btn.setAttribute("aria-pressed", showing ? "true" : "false");
-  btn.textContent = showing ? "\u2191" : "\u2193";
-  btn.title = ageToggleTitle(project, days, staleRowCount(project), showing);
+  btn.textContent = showing ? `↑ show top ${count}` : `↓ show ${held} more`;
+  btn.title = topToggleTitle(project, count, held, showing);
 }
 
 // The legend is built ONCE, when the section's markup is created - before the first snapshot's rows are in
-// `state`, so a stale count taken then is always zero and a button decided then would never appear. The arrow is
+// `state`, so a count taken then is always zero and a button decided then would never appear. The arrow is
 // therefore filled into this slot on every rows change instead (refreshChips below calls straight through): the
 // chart draws an arrow exactly while it has something held back or is showing everything, and none otherwise.
-function refreshAgeToggle(project) {
+function refreshTopToggle(project) {
   const slot = projectNode("data-age-slot", project);
   if (!slot) return;
-  const want = ageSlotHtml(project);
+  const want = topSlotHtml(project);
   if (!want) {
     if (slot.firstElementChild) slot.innerHTML = "";
     return;
   }
   // Same button: keep the node so the pointer does not fall off a control that just moved under it.
   if (!slot.firstElementChild) slot.innerHTML = want;
-  else paintAgeToggle(project);
+  else paintTopToggle(project);
 }
 
 // One chart, shown in full or held back again. The choice is this project's alone and it is remembered.
@@ -11692,7 +11730,7 @@ function toggleShowOld(project) {
   if (state.showOldProjects.has(project)) state.showOldProjects.delete(project);
   else state.showOldProjects.add(project);
   saveShowOldProjects();
-  refreshAgeToggle(project);
+  refreshTopToggle(project);
   renderProjectRows(project);
   refreshChips(project);
 }
@@ -13455,12 +13493,12 @@ function chipsHtml(name) {
   const panelRunningCount = panelAgents.filter(convLive).length;
   const stale = rows.filter((r) => r.verdictStale).length;
   // What the chart is holding back, so a collapsed project cannot silently under-report its trees: the count is of
-  // rows this project's chart is not drawing because their last activity is older than the threshold, and it goes
-  // away the moment that chart is asked for everything.
-  const held = rows.filter(rowAgeHidden).length;
-  const ageDays = ageHideDays();
+  // rows below this project's top N (chartTopOrder: newest activity first, then by name), and it goes away the moment
+  // that chart is asked for everything.
+  const topCount = chartTopLimit();
+  const held = state.showOldProjects.has(name) ? 0 : chartTopSplit(rows).held.length;
   const out = [`<span class="chip">${rows.length} worktrees</span>`];
-  if (held) out.push(`<span class="chip" title="${esc(`${held} worktree${held === 1 ? "" : "s"} whose last activity is older than ${ageDays} day${ageDays === 1 ? "" : "s"} — the chart is holding ${held === 1 ? "it" : "them"} back; the arrow at the bottom of the chart shows every tree`)}">${held} older hidden</span>`);
+  if (held) out.push(`<span class="chip" title="${esc(`${held} worktree${held === 1 ? "" : "s"} below the top ${topCount} — newest activity first, then by name; the arrow at the bottom of the chart shows ${held === 1 ? "it" : "them"} in that same order`)}">${held} more hidden</span>`);
   if (merged) out.push(`<span class="chip good">${merged} merged</span>`);
   if (noCommits) out.push(`<span class="chip">${noCommits} no commits</span>`);
   if (unmerged) out.push(`<span class="chip bad">${unmerged} unmerged</span>`);
@@ -13965,13 +14003,13 @@ function refreshChips(name) {
       el._chipsHtml = html;
     }
   }
-  // The age arrow's presence depends on the same rows, so it is refreshed from the same place.
-  refreshAgeToggle(name);
+  // The chart's arrow (top-N collapse) depends on the same rows, so it is refreshed from the same place.
+  refreshTopToggle(name);
 }
 
 // One project's node by its attribute (its chip strip, its age slot, its age button). A lookup by attribute value
 // walks the whole document, and refreshChips runs on every row placed - about 340 calls a minute on the reader's
-// board, three lookups each: about 300 ms a minute of querySelector under refreshChips and refreshAgeToggle in a
+// board, three lookups each: about 300 ms a minute of querySelector under refreshChips and refreshTopToggle in a
 // read-only profile of it. The node found is kept and checked before each use - still in the page, still carrying this
 // name - so a section rebuilt from scratch, or a strip some other attribute owner reuses, is simply looked up again.
 // The cache hangs off the function itself, so it exists from the first line of this file (a top-level `const` here
@@ -14533,10 +14571,10 @@ function reorder(name) {
   // the open one the reader is typing in, and a detached box cannot keep focus. That is the cursor going missing
   // when a row flashes green - the flash touches nothing, the re-sort under it moves everything.
   const typing = $("projects") ? captureTyping($("projects")) : null;
-  const mine = [...state.rows.values()].filter((r) => r.project === name);
   // The order if nothing were pinned: our running agents first, then everything by how recently it
-  // showed life. This is what "latest movement at the top" means once all the accordions are closed.
-  const ranked = applyRowRank([...mine]).map((r) => keyOf(name, r.path));
+  // showed life. This is what "latest movement at the top" means once all the accordions are closed — and the rows
+  // below the chart's top N are not in it at all, so a re-rank can never pull one into a drawn row's slot.
+  const ranked = chartDrawOrder(name).map((r) => keyOf(name, r.path));
   // An open row keeps its exact slot — opening it is you saying "I am reading this". Everything closed
   // sorts into the gaps around it, exactly how closed projects sort around an open one in a folder.
   const slotKeys = [...tbody.children].filter((el) => el.classList.contains("row")).map((el) => el.dataset.key);
@@ -14719,10 +14757,10 @@ function placeRow(project, row, { flash = false } = {}) {
   holder.innerHTML = rowHtml(row);
   const newTr = holder.firstElementChild;
   // A row the chart is holding back is not on the chart, so nothing of it may be drawn - the state, the chips and
-  // the agents still know the row (they always did; the row is only held out of the drawing). The threshold can have
-  // just crossed this row's activity, or the reader can have just asked this chart to hold the stale ones back, and
+  // the agents still know the row (they always did; the row is only held out of the drawing). A newer activity can
+  // have moved this row below another one, or the reader can have just asked this chart to hold the rest back, and
   // either way the row has to leave the DOM here rather than wait for the next full rebuild of the project.
-  if (rowAgeHidden(row)) {
+  if (rowTopHidden(row)) {
     const gone = state.rowEls.get(key);
     if (gone) {
       state.detailEls.get(key)?.remove();
@@ -14912,10 +14950,10 @@ function renderProjectRows(name, { typing = null } = {}) {
   // Stabilized: while a row of this project is open, the rows keep the order they are already in on screen (a row
   // that is genuinely new goes last). Only the painting order changes - the ranking is still there for when the
   // reader closes everything.
-  // Rows older than the age threshold are not built at all: the chart draws what it is showing, and the arrow in the
-  // legend below it is what brings the rest back (see rowAgeHidden). The ranking above still sees them, so a row that
-  // comes back to life takes its place in the order the moment it is drawn again.
-  const rowsInOrder = applyRowRank([...state.rows.values()].filter((r) => r.project === name && !rowAgeHidden(r)));
+  // Rows below the chart's top N are not built at all: the chart draws what it is showing, and the arrow in the
+  // legend below it is what brings the rest back, in the same order they were chosen (see rowTopHidden). The ranking
+  // above still sees them, so a row that comes back to life takes its place in the order the moment it is drawn again.
+  const rowsInOrder = chartDrawOrder(name);
   if (stabilizeOn() && projectHasOpenRow(name) && prevRowKeys.length) {
     const pos = new Map(prevRowKeys.map((k, i) => [k, i]));
     rowsInOrder.sort(
@@ -15180,6 +15218,14 @@ function applySnapshot(data) {
   if (Array.isArray(data.approvals)) {
     state.approvals.clear();
     for (const r of data.approvals) if (r && r.id) state.approvals.set(r.id, r);
+    // Instrumented on purpose (0.91.0): `/api/approvals` is the approval-transport plugin's own long-poll feed,
+    // while this is what the page's snapshot carried. When the two disagree — the plugin feed empty while a
+    // worker is genuinely parked — this line and `state.approvalsSeen` say which feed the reader's card came from.
+    const count = state.approvals.size;
+    if (count !== state.approvalsSeen.count) {
+      state.approvalsSeen = { at: Date.now(), count, ids: [...state.approvals.keys()] };
+      console.info(`panel: approvals from /api/state: ${count} pending${count ? ` (${state.approvalsSeen.ids.join(", ")})` : ""}`);
+    }
     renderApprovals();
   }
   // The panel's own permission requests travel with the snapshot like the CLI-transport approvals: a reload comes
@@ -17235,7 +17281,6 @@ document.addEventListener("keydown", async (e) => {
       }
     }
     void sendReply(thread);
-    if (state.hot.on) hotAfterSend(thread);
   }
 });
 // A press on the merge chip is remembered until the release: the verdict cell above is rebuilt on every scan.
@@ -17726,23 +17771,64 @@ document.addEventListener(
   { passive: false },
 );
 
-window.addEventListener("keydown", (e) => {
-  if (!state.hot.on || !e.altKey) return;
-  if (e.key === "ArrowRight") {
-    e.preventDefault();
-    hotStep(1);
-  } else if (e.key === "ArrowLeft") {
-    e.preventDefault();
-    hotStep(-1);
+
+
+// ---- HUMAN's landing helpers (they outlived the NOT-RUNNING rotation) -------------------------
+// These three were board/hot.js. The NOT-RUNNING button and its rotation are gone; HUMAN still lands a question
+// by opening the same path (hotOpenPath), finds the row a thread lives in (hotRowFor) and rings the card amber
+// (flashHotCard, kept in state.hotFlash so a repaint re-applies it). Same code, one caller now.
+function hotRowFor(thread) {
+  for (const row of state.rows.values()) {
+    if (agentsFor(row).some((c) => c.thread === thread)) return row;
   }
-});
+  return null;
+}
+
+// Open exactly the path to one card and close everything else: after Collapse all the project is only "open"
+// in state, and the folder holding it is still shut - an open project inside a closed folder is not on screen,
+// which is why the counter moved and nothing appeared. The rotation keeps one project visible at a time.
+function hotOpenPath(row) {
+  const project = row.project;
+  for (const name of [...state.expandedProjects]) {
+    if (name !== project) toggleProject(name);
+  }
+  const sec = document.querySelector(`section.project[data-project="${CSS.escape(project)}"]`);
+  const root = sec?.closest("section.root-group")?.dataset.root;
+  if (root && state.collapsedRoots.has(root)) {
+    state.collapsedRoots.delete(root);
+    saveCollapsedRoots();
+    applyRootCollapse(root);
+    paintCollapseAll();
+  }
+  if (!state.expandedProjects.has(project)) toggleProject(project);
+  const key = keyOf(project, row.path);
+  if (!state.expanded.has(key)) {
+    document.querySelector(`tr.row[data-key="${CSS.escape(key)}"]`)?.click();
+  }
+}
+
+// The whole card flashes, not just the box: the rotation moves the reader's attention to a panel, and a ring
+// around the panel is what says "this one". The caret still lands in the prompt's answer control.
+function flashHotCard(thread) {
+  const card = document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`);
+  if (!card) return;
+  const until = Date.now() + 1300;
+  state.hotFlash = { thread, until };
+  card.classList.remove("hot-flash");
+  void card.offsetWidth; // restart it even when the last flash is still fading
+  card.classList.add("hot-flash");
+  clearTimeout(state.hotFlashTimer);
+  state.hotFlashTimer = setTimeout(() => {
+    state.hotFlash = { thread: null, until: 0 };
+    document.querySelector(`.job[data-thread="${CSS.escape(thread)}"]`)?.classList.remove("hot-flash");
+  }, 1300);
+}
 
 // ---- HUMAN (the question rotation) -----------------------------------------------------------
-// NOT-RUNNING steps through agents that are not running. This is the other waiting list: every OPEN question
-// on the board — a turn parked on a permission request, an agent parked on its own `clarify` question, and the
-// dock's own permission cards (a CLI approval, or the panel's remote-write request). An agent can be RUNNING and
-// still hold a question, and that is exactly the case NOT-RUNNING cannot reach — it is how permissions and
-// clarify questions kept being missed.
+// Every OPEN question on the board, in one rotation — a turn parked on a permission request, an agent parked on
+// its own `clarify` question, and the dock's own permission cards (a CLI approval, or the panel's remote-write
+// request). An agent can be RUNNING and still hold a question, which is why a rotation over stopped agents could
+// never reach them.
 //
 // THE LIST IS NEVER CACHED. It is rebuilt from live state on every press, so a question that was answered, timed
 // out, or whose turn ended is simply not in the next list. What IS remembered is the KEY of the question last
@@ -17893,8 +17979,8 @@ function humanShow(q) {
     card = document.querySelector(`.job[data-thread="${CSS.escape(q.thread)}"]`);
   } else {
     // The project and the row first: a card inside a closed row is not on the page at all, and after Collapse all
-    // the project is only open in state while its folder is still shut. hotOpenPath is the NOT-RUNNING stepper's
-    // own opener, so the two rotations cannot drift into two ideas of "open".
+    // the project is only open in state while its folder is still shut. hotOpenPath is HUMAN's own opener, so the
+    // rotation and the board cannot drift into two ideas of "open".
     const row = hotRowFor(q.thread);
     if (row) hotOpenPath(row);
     if (state.collapsedJobs.has(q.thread)) state.collapsedJobs.delete(q.thread);
@@ -17920,7 +18006,7 @@ function humanLandOnQuestion(card, q) {
   // The gate again, on the DOM this time: the box is drawn only while its turn is live and its carrier is open,
   // and a question that closed between the sample and this paint has no box to show.
   if (!box || box.classList.contains("is-expired")) return false;
-  // The card wears the NOT-RUNNING stepper's own amber ring (state-held, so a repaint keeps it), and the prompt
+  // The card wears HUMAN's amber ring (state-held, so a repaint keeps it), and the prompt
   // itself gets a red ring: this is a question, and the box is what the reader was brought here to read. ONE box
   // carries it: a ring left on the previous prompt would say two questions are current, and every reader of the
   // class (this page, the gate) counts exactly one.
@@ -20810,100 +20896,107 @@ $("agent-cleanup")?.addEventListener("change", async (e) => {
 
 // ---- end agent cleanup
 
-// ---- how old a worktree may be before the chart holds its row back ---------------------------------
-// The threshold lives in this panel's config.json (POST /api/settings/age), like the refresh mode above: one
+// ---- how many worktrees a chart draws before its arrow shows the rest -----------------------------
+// The count lives in this panel's config.json (POST /api/settings/chart-top), like the refresh mode above: one
 // number for every browser, and it survives a restart. The per-chart "show all" arrow is the one half of this that
 // is per-browser (state.showOldProjects). Moving the number redraws the board, because rows leave and come back the
-// instant the line moves - waiting for the next scan would show the change one project at a time.
-const AGE_DAYS_MAX_UI = 3650;
+// instant the count moves - waiting for the next scan would show the change one project at a time.
+const CHART_TOP_MAX_UI = 5000;
 
-function ageDaysStored() {
-  const n = Number(state.settings?.hideOlderThanDays);
-  return Number.isFinite(n) && n >= 0 ? Math.round(n) : 7;
+function chartTopStored() {
+  const n = Number(state.settings?.chartTopCount);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : CHART_TOP_DEFAULT;
 }
 
-function ageDaysSentence(days) {
-  return days > 0
-    ? `hold back worktrees whose last activity is older than ${days} day${days === 1 ? "" : "s"}`
-    : "hold nothing back - every worktree is on its chart";
+function chartTopSentence(count) {
+  return count > 0
+    ? `draw the top ${count} worktree${count === 1 ? "" : "s"} of every chart — last activity newest first, then by name`
+    : "draw every worktree of every chart — no count limit";
 }
 
-function paintAgeSetting(note = "", bad = false) {
-  const stored = ageDaysStored();
-  const input = $("hide-older-days");
+// A config.json that still carries the retired age threshold is ignored, never read as "0" (which would draw every
+// tree) and never a crash: the count above is what the chart obeys. The sentence says so, with the key's own name,
+// because the leftover key is the one thing a reader can delete.
+function legacyAgeNote() {
+  return state.settings?.hideOlderDaysIgnored
+    ? " · config.json still carries hideOlderThanDays, which is ignored now — delete it when convenient"
+    : "";
+}
+
+function paintTopSetting(note = "", bad = false) {
+  const stored = chartTopStored();
+  const input = $("chart-top-count");
   // A rejected save leaves what was typed in the box: snapping back to the stored number reads as "it saved that",
   // when the save is exactly what failed.
   if (input && !bad && document.activeElement !== input) input.value = String(stored);
-  for (const btn of document.querySelectorAll("[data-age-set]")) {
-    btn.classList.toggle("on", Number(btn.dataset.ageSet) === stored);
+  for (const btn of document.querySelectorAll("[data-top-set]")) {
+    btn.classList.toggle("on", Number(btn.dataset.topSet) === stored);
   }
-  const preview = $("hide-older-preview");
+  const preview = $("chart-top-preview");
   if (preview) {
     const live = input && document.activeElement === input ? Math.round(Number(input.value)) : stored;
-    const days = Number.isFinite(live) && live >= 0 ? live : stored;
+    const count = Number.isFinite(live) && live >= 0 ? live : stored;
     const bits = [
-      `${ageDaysSentence(days)} · set in config.json, so it applies to every browser and survives a restart`,
-      "the arrow at the bottom of a chart shows that chart's held-back trees",
+      `${chartTopSentence(count)} · set in config.json, so it applies to every browser and survives a restart`,
+      "the arrow at the bottom of a chart shows the rest, in that same order",
     ];
     preview.textContent = bad
-      ? `NOT SAVED - ${note}. config.json still says: ${ageDaysSentence(stored)}.`
-      : note
-        ? `${note} - ${bits.join(" · ")}`
-        : bits.join(" · ");
+      ? `NOT SAVED - ${note}. config.json still says: ${chartTopSentence(stored)}.`
+      : `${note ? `${note} - ` : ""}${bits.join(" · ")}${legacyAgeNote()}`;
     preview.classList.toggle("bad", bad);
   }
 }
 
-async function saveAgeSetting(days) {
-  const stored = ageDaysStored();
-  const want = Number(days);
-  const n = Number.isFinite(want) ? Math.max(0, Math.min(AGE_DAYS_MAX_UI, Math.round(want))) : stored;
-  const preview = $("hide-older-preview");
+async function saveTopSetting(count) {
+  const stored = chartTopStored();
+  const want = Number(count);
+  const n = Number.isFinite(want) ? Math.max(0, Math.min(CHART_TOP_MAX_UI, Math.round(want))) : stored;
+  const preview = $("chart-top-preview");
   if (preview) {
     preview.textContent = "saving…";
     preview.classList.remove("bad");
   }
   try {
     const r = await apiFetch(
-      "/api/settings/age",
+      "/api/settings/chart-top",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ days: n }),
+        body: JSON.stringify({ count: n }),
       },
       { timeoutMs: 10000 },
     );
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
-    state.settings.hideOlderThanDays = Number.isFinite(Number(d.days)) ? Number(d.days) : n;
+    state.settings.chartTopCount = Number.isFinite(Number(d.count)) ? Number(d.count) : n;
     // The line moved, so which rows every chart draws moved with it: rebuild the board rather than let the next
     // scan trickle it in one project at a time.
     renderAll();
-    paintAgeSetting(ageDaysSentence(state.settings.hideOlderThanDays));
-    showBanner(ageDaysSentence(state.settings.hideOlderThanDays));
+    paintTopSetting(chartTopSentence(state.settings.chartTopCount));
+    showBanner(chartTopSentence(state.settings.chartTopCount));
   } catch (err) {
-    paintAgeSetting(String((err && err.message) || err), true);
+    paintTopSetting(String((err && err.message) || err), true);
   }
 }
 
-$("hide-older-days")?.addEventListener("change", (e) => void saveAgeSetting(e.target.value));
+$("chart-top-count")?.addEventListener("change", (e) => void saveTopSetting(e.target.value));
 // Enter is this box's other way out, the same bargain every other number row in Settings makes (banner-seconds,
 // stream-words, stream-lines, reorder-every, rank-window): the reader who types a number and presses Enter means
 // "save this", and without this handler the field can only be left by a click somewhere else. The blur is half of
 // the gesture, not tidying after it — the save is async, so the field holds the focus until it is given up, and
-// paintAgeSetting deliberately leaves a focused box's value alone.
-$("hide-older-days")?.addEventListener("keydown", (e) => {
+// paintTopSetting deliberately leaves a focused box's value alone.
+$("chart-top-count")?.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   e.preventDefault();
-  void saveAgeSetting(e.target.value);
+  void saveTopSetting(e.target.value);
   e.target.blur();
 });
-for (const btn of document.querySelectorAll("[data-age-set]")) {
+for (const btn of document.querySelectorAll("[data-top-set]")) {
   btn.addEventListener("click", (e) => {
     e.preventDefault();
-    const input = $("hide-older-days");
-    if (input) input.value = btn.dataset.ageSet;
-    void saveAgeSetting(btn.dataset.ageSet);
+    const input = $("chart-top-count");
+    if (input) input.value = btn.dataset.topSet;
+    void saveTopSetting(btn.dataset.topSet);
   });
 }
 
@@ -21665,7 +21758,7 @@ startVisibilityReporting();
     startAnchorObserver();
     updateColorsRow();
     paintAnchorSettings();
-    paintAgeSetting();
+    paintTopSetting();
     paintCollapseAfterSetting();
     paintChartColumns();
     paintRemotePolicy();

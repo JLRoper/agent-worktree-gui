@@ -58,7 +58,16 @@ try {
     copyFileSync(path.join(REPO, ".githooks", h), path.join(WORK, ".githooks", h));
     chmodSync(path.join(WORK, ".githooks", h), 0o755);
   }
-  copyFileSync(path.join(REPO, "tools", "version.mjs"), path.join(WORK, "tools", "version.mjs"));
+  for (const f of ["version.mjs", "release-history.mjs"]) {
+    copyFileSync(path.join(REPO, "tools", f), path.join(WORK, "tools", f));
+  }
+  // The tool and the hooks are part of main before any branch is cut: `apply` only commits and tags on a clean
+  // tree (a tag belongs to a commit that carries the bump and nothing else), and untracked fixture files would
+  // otherwise be somebody else's work under the version number. The hook is installed AFTER this push: it would
+  // (correctly) refuse main's own fixture commit, which carries no bump.
+  git(["add", "-A"]);
+  git(["commit", "-q", "-m", "Add the version tool and this repo's hooks to the sandbox"]);
+  git(["push", "-q", "github", "main"]);
   git(["config", "core.hooksPath", ".githooks"]);
 
   // ---- a branch that carries a doc, a feature, and one commit with no prefix at all ------------------
@@ -92,19 +101,21 @@ try {
   step("nothing reached the remote", (git(["ls-remote", "github", "refs/heads/work"]).stdout || "").trim() === "", "refs/heads/work absent on the remote");
 
   // ---- apply writes the one place the version lives ---------------------------------------------------
+  // In a clean tree apply writes the number, commits that write as its own commit and tags the commit; the
+  // version-anchor suite (test/version-tags.test.js) owns the tag rules, so this asserts the write and the fact
+  // that the bump is the only thing in the commit.
   const apply = tool(["apply", "minor"]);
   const applyText = out(apply);
   step("apply writes the level asked for", apply.status === 0 && version() === "1.1.0", `exit=${apply.status}, version=${version()}`);
   step("apply prints the old and the new value", /1\.0\.0 -> 1\.1\.0/.test(applyText), applyText.split("\n")[1]);
-  const changed = git(["diff", "--name-only"]).stdout.trim().split("\n").filter(Boolean);
-  step("apply changed only package.json", changed.length === 1 && changed[0] === "package.json", `git diff --name-only -> ${changed.join(", ")}`);
+  const changed = (git(["show", "--name-only", "--format=", "HEAD"]).stdout || "").trim().split("\n").filter(Boolean);
+  step("apply committed only package.json", changed.length === 1 && changed[0] === "package.json", `git show --name-only HEAD -> ${changed.join(", ")}`);
+  step("apply tagged the commit it made", (git(["tag", "--list", "v1.1.0"]).stdout || "").trim() === "v1.1.0" && git(["status", "--porcelain"]).stdout.trim() === "", "v1.1.0 exists and the tree is clean");
   const hookSrc = readFileSync(path.join(REPO, ".githooks", "pre-push"), "utf8");
   const invocations = hookSrc.match(/node "\$TOOL"[^\n]*/g) || [];
   step("the hook invokes the tool with check, never apply", invocations.length === 1 && /check/.test(invocations[0]), invocations.join(" | "));
 
-  // ---- the bump in the same branch: check is quiet, the push is allowed -------------------------------
-  git(["add", "--", "package.json"]);
-  git(["commit", "-q", "-m", "Bump the version to 1.1.0 for the reattach chip, a new capability"]);
+  // ---- the bump in the same branch: check passes and the push is allowed ------------------------------
   const checkPass = tool(["check"]);
   const checkPassText = out(checkPass);
   step("check passes on an already-bumped branch", checkPass.status === 0, `exit=${checkPass.status}`);
@@ -134,7 +145,7 @@ try {
   git(["checkout", "-q", "main"]);
   const checkMain = tool(["check"]);
   const checkMainText = out(checkMain);
-  step("check passes on main", checkMain.status === 0, `exit=${checkMain.status}`);
+  step("check passes on main", checkMain.status === 0, `exit=${checkMain.status}\n${checkMainText}`);
   step(
     "check says on main that there is nothing to land, and names both numbers",
     /nothing to land/.test(checkMainText) && /branch\s+1\.0\.0/.test(checkMainText) && /base\s+github\/main\s+1\.0\.0/.test(checkMainText),

@@ -691,9 +691,9 @@ try {
             projects: state.projects ? [...state.projects.keys()] : null,
             expanded: state.expandedProjects ? [...state.expandedProjects] : null,
             tbody: state.tbodyEls ? [...state.tbodyEls.keys()] : null,
-            ageDays: typeof ageHideDays === "function" ? ageHideDays() : null,
-            hidden: state.rows ? [...state.rows.values()].filter((r) => rowAgeHidden(r)).length : null,
-            built: state.rows ? [...state.rows.values()].filter((r) => !rowAgeHidden(r)).length : null,
+            chartTopCount: typeof chartTopLimit === "function" ? chartTopLimit() : null,
+            hidden: state.rows ? [...state.rows.values()].filter((r) => rowTopHidden(r)).length : null,
+            built: state.rows ? [...state.rows.values()].filter((r) => !rowTopHidden(r)).length : null,
           },
         }));
         throw new Error(`no row painted: ${JSON.stringify(diag)}\n${String((e && e.message) || e)}`);

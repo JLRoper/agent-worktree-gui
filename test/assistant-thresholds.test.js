@@ -39,6 +39,7 @@ const PASS_THRESHOLD = {
   loop: "repeatLimit",
   approval: "approvalSeconds",
   exited: "exitedSeconds",
+  queuesweep: "queueIdleMinutes",
   context: "contextPercent",
   repeat: "repeatTurns",
   leftover: "leftoverMinutes",
@@ -55,6 +56,7 @@ const BOUNDS = {
   quietSeconds: [30, 3600],
   approvalSeconds: [15, 3600],
   exitedSeconds: [0, 3600],
+  queueIdleMinutes: [0, 1440],
   contextPercent: [50, 100],
   leftoverMinutes: [1, 240],
   childQuietSeconds: [60, 3600],
@@ -66,13 +68,14 @@ const PHRASE = {
   loop: (v) => `same call × ${v}`,
   approval: (v) => `approval waiting ${v} s`,
   exited: (v) => `exited for ${v} s`,
+  queuesweep: (v) => `idle for ${v} min`,
   context: (v) => `context over ${v} %`,
   repeat: (v) => `same failure × ${v}`,
   leftover: (v) => `leftover work ${v} min`,
 };
 // The keys each pane draws, written out: a control that quietly stops rendering is a failure too. `rearmSeconds` is a
 // knob with no control (it has always been one), which is why it is in the table and not in this list.
-const WATCHDOG_DRAWN = ["approvalSeconds", "commandAudit", "contextPercent", "enabled", "exitedSeconds", "leftoverMinutes", "repeatLimit", "repeatTurns", "seconds", "spawnAutoStart"];
+const WATCHDOG_DRAWN = ["approvalSeconds", "commandAudit", "contextPercent", "enabled", "exitedSeconds", "leftoverMinutes", "queueIdleMinutes", "repeatLimit", "repeatTurns", "seconds", "spawnAutoStart"];
 const ASSISTANT_DRAWN = ["autonomy", "childQuietSeconds", "cwd", "maxWakesPerHour", "model", "quietSeconds", "spawn"];
 
 const esc = (v) =>
@@ -86,7 +89,10 @@ function page({ settings: own = {}, aggressive = null, open = null, second = fal
     setItem: (k, v) => void store.set(k, String(v)),
   };
   const hosts = new Map();
-  const host = (id) => ({ innerHTML: "", querySelector: () => null, querySelectorAll: () => [] });
+  // The settings pane is also where the aggressive switch is inserted (one node, moved into whichever pane is
+  // showing), so the stub host takes an insertion and reports no first child. The painters themselves are handed
+  // in below; this test asserts the settings markup, not the switch.
+  const host = (id) => ({ innerHTML: "", firstElementChild: null, insertBefore() {}, querySelector: () => null, querySelectorAll: () => [] });
   for (const id of ["as-settings", "as-settings-2", "as-watchdog"]) hosts.set(id, host(id));
   const document = { getElementById: (id) => hosts.get(id) || null, activeElement: null };
   const records = assistants || [
@@ -125,8 +131,10 @@ function page({ settings: own = {}, aggressive = null, open = null, second = fal
     "sentryState",
     "ModelMenu",
     "as$",
+    "aggressiveBlock",
+    "paintAggressive",
     `${region}; return { renderAssistantSettings, renderWatchdog, FIRST_ASSISTANT, RULE_THRESHOLDS, THRESHOLDS_OPEN_KEY, thresholdsOpen, saveThresholdsOpen, rememberThresholdOpen, thresholdSummary, ownsWatchdog, scopeOfKey };`,
-  )(document, localStorage, state, esc, () => false, () => null, { attach() {} }, (id) => document.getElementById(id));
+  )(document, localStorage, state, esc, () => false, () => null, { attach() {} }, (id) => document.getElementById(id), () => ({ nodeType: 1 }), () => {});
   return { ...api, hosts, host, store, state };
 }
 

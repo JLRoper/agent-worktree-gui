@@ -172,7 +172,7 @@ try {
       dormantSeconds: 5,
       slowSeconds: 5,
       refreshSeconds: 30,
-      hideOlderThanDays: 0,
+      chartTopCount: 0,
     },
   });
   say(`sandbox panel on ${panel.base}`);

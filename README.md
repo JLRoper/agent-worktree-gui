@@ -185,8 +185,8 @@ it without a manual `chmod`; if a checkout ever loses the bit, `chmod +x .githoo
 tip. A branch that carries commits and did not move the number is refused, and so is a branch that is merely
 behind main (it still holds the number it was cut at); a branch above the base passes, and main itself passes
 because it has nothing to land. A pass prints what it compared — branch version, base ref, base version — so a
-run that says nothing is never read as a pass. The
-level is a judgement the landing agent makes from the diff and lands in the same PR as the change —
+run that says nothing is never read as a pass. The level is a judgement the landing agent makes from the diff
+and lands in the same PR as the change —
 `node tools/version.mjs suggest` advises, `apply <patch|minor|major>` writes the one place the version lives,
 and `docs/versioning.md` is the scale. The merge prompt tells the landing agent to do it. Same install covers
 both hooks, and the same `--no-verify` bypasses this one.
@@ -204,17 +204,18 @@ harvest, a standing rule changing) and both refusals (over the cap, and a save t
 boots a real instance on a scratch port and exercises `GET` and `PUT /api/assistant/charter` over HTTP,
 including the `413` and the `409`, without touching the live panel — useful after touching the continuity file.
 
-`node tools/verify-age-collapse.mjs` builds a throwaway repo with three worktrees whose activity ages are known
-to the minute (one committed 45 days ago and left alone since, one committed 45 days ago but worked in half an
-hour ago, one committed today) and drives a sandbox panel plus a headless Chromium over it: the default the
-panel applies with no key in `config.json`, the chart at rest holding the stale tree back and saying so in a
-chip, the arrow invisible and unclickable until the chart is hovered — with its computed style compared against
-the console's own tail chip, built on the page by the panel's own renderer — one click drawing every tree, the
-reload that has to come back with that choice, the Settings control writing `config.json` and the chart
-redrawing from it, and `0` putting every tree back with no arrow left behind. Point it at a Playwright install
+`node tools/verify-chart-top-count.mjs` builds a throwaway repo with 25 worktrees whose activity ages are known
+to the day — created in name order, with a scrambled set of commit dates, so a chart that draws "the first N the
+scan returned" fails — and drives a sandbox panel plus a headless Chromium over it: the fallback a `config.json`
+still carrying the retired `hideOlderThanDays` gets (10, never 0), the ignored legacy key named in the settings
+sentence, the top 10 at the default with a same-timestamp tie at the boundary decided by name, the arrow invisible
+and unclickable until the chart is hovered — a labelled pill carrying the real count ("show 16 more") — one click
+drawing every row in the same order they were chosen, the reload that has to come back with that choice, the
+Settings control writing `config.json` and the chart redrawing from it (10 → 3 → 12), a count larger than the list
+drawing all of it, and `0` putting every row back with no arrow left behind. Point it at a Playwright install
 with `PANEL_PLAYWRIGHT_ROOT=<dir with node_modules/playwright>` (e.g. the `heroes-js` checkout on this box);
 without one it prints `BROWSER-HALF-NOT-RUN` and **fails** rather than passing on a half that never ran —
-useful after touching the chart or the age threshold.
+useful after touching the chart or the count.
 
 ## Two halves
 
@@ -760,7 +761,17 @@ shorter than the panel starts at its foot instead of leaving empty panel under i
   only for threads this board is showing), plus `settle` (a worker's run ended `done` and no watch covers its
   thread: the board's default notice, which carries the completion payload so the assistant can say whether that
   branch is ready to land. It never fires for the assistant's own turns, however many runs settle in one pass is
-  one wake, and a thread with an open watch keeps the watch's single notice), plus `exited` (a worker's run ended
+  one wake, and a thread with an open watch keeps the watch's single notice), plus `queuesweep` (a run that ended
+  `done` was carrying a row of that assistant's own queue — the row is the fact this wake is about, and it used to
+  be nobody's: a worker could finish under a row still reading `running`, or land a queued row's work under a row
+  nobody closed, until a person read the tab. The wake is the same four checks every time — every running row
+  against `/api/jobs`, every queued row against main, every parked row against the blocker it names, then start
+  what can be started or say plainly that the queue is clean — because an unconstrained "mind the queue" wake
+  becomes a vibe. One settle is one sweep, keyed on the settle's job id, and it rides the settle's own turn rather
+  than opening a second run on a live thread. Its second trigger is the failsafe: every run of an assistant quiet
+  for `queueIdleMinutes` (default 30, **0** disables the timer) while its queue still holds an open row. It is an
+  event, so the hourly wake budget cannot drop it, and its clock is the rule's own disclosure under **Settings →
+  Per-rule escalation**, beside the other watchdog bars), plus `exited` (a worker's run ended
   `failed` — the card's **EXITED** chip — and no newer run on its thread has taken the failure over. It is the
   failure's own rule, separate from `settle` so the two can be tuned apart, and it carries the same completion
   payload so the assistant can say what died and what to try next. It fires once per run after `exitedSeconds`
@@ -1107,7 +1118,7 @@ Watches without a deadline, and finished ones, say so instead.
 | `refreshSeconds` | 30 | client resync interval |
 | `liveMinutes` | 5 | how recent activity counts as live |
 | `collapseAfterSeconds` | 30 | how long a parent — a project, a worktree row, a folder root or a fixed folder — may stay **collapsed** before every card under it is written into the persisted collapsed set (`wm.collapsedJobs`), so the next expand renders its descendants minimized. The clock is per parent and starts when that parent folds; expanding it again cancels the clock and writes nothing. Expanding a parent never clears a child's own fold. `0` disables the cascade. Written back by `POST /api/settings/collapse-after` (Settings → Board → **Collapse children after**) |
-| `hideOlderThanDays` | 7 | how old a worktree's **last activity** has to be before its chart stops drawing it. Activity, never the age of the directory: the newest of its last commit, its last edited file, the last moment the panel saw it alive and any event received about its agents — so a tree cut months ago that somebody is working in today stays. Nothing is lost: the arrow at the bottom of that project's chart (visible while the pointer is over it) shows every tree again, and each `older hidden` chip says how many are held back. `0` shows everything. Written back by `POST /api/settings/age` (Settings → **Hide stale worktrees**) |
+| `chartTopCount` | 10 | how many of a project's worktrees its chart draws on first paint. The top rows are the first N of one total order — **last activity newest first, then by name** — never the order the scan returned them in: activity is the newest of the row's last commit, its last edited file, the last moment the panel saw it alive and any event received about its agents. Nothing is lost: the arrow at the bottom of that project's chart (visible while the pointer is over it) lists the rest in that same order and its label carries the count (`show 15 more`), and each `more hidden` chip says how many are held back. `0` draws every tree. Written back by `POST /api/settings/chart-top` (Settings → **Top worktrees per chart**). The retired `hideOlderThanDays` is ignored — not read as `0` — and the settings sentence names it |
 | `threads` | 4 (capped) | scan worker threads |
 | `discovery.worktreeSource` | `git` | `git` probes each repo (6-7 calls, ~0.8s, the default) or `hermes` runs `hermes worktree list --json` (5.5-7.2s per repo, measured on Windows). `hermes` additionally reports per-tree `locked`/`missing` and a per-branch keep/reap verdict; it is opt-in because discovery sweeps every repo on `slowSeconds`. Either way `/api/cleanup?project=NAME` gives the full audit for one repo on demand |
 | `remoteBranchPolicy` | `local-only` | whether a branch may exist on a **remote** at all, GLOBALLY. `local-only` (the default): every tree the panel cuts stays on this box — the pre-push hook it installs refuses a `git push` out of one and asks you through the permission box instead (Allow once / this session / Always allow / Deny), and the panel's own merge flow asks before it starts. `allow`: remote writes go through without asking (this is what **Always allow** in the box writes, so the box and the setting are one fact). `deny`: refused outright, and the box is not even offered. Written back by `POST /api/settings/remote-branches` (Settings → **Branches on the remote**), so it survives a restart. **A project overrides it** — see `projects[].remoteBranchPolicy` | 
@@ -1168,7 +1179,7 @@ Watches without a deadline, and finished ones, say so instead.
 | POST | `/api/refresh` `/api/fetch` `/api/reload` | force a fast pass / fetch remotes / re-read config |
 | POST | `/api/settings/cleanup` | `{agentCleanup:boolean}` → whether an agent may take its own worktree off this disk once the work has landed (`config.json`'s `agentCleanup`). A VETO: `false` closes every project at once, `true` leaves each project's own `releaseWorktrees` grant deciding. A body that names no boolean writes OFF. Rewrites only that key, answers with the settings the page then redraws from, and broadcasts them to every open board |
 | POST | `/api/settings/collapse-after` | `{seconds}` → how long a parent may stay collapsed before its descendant cards are written into the persisted collapsed set (`config.json`'s `collapseAfterSeconds`; `0` disables it). Answers with the number it stored — an unreadable or negative body falls back to 30 and anything above 3600 is clamped. Rewrites only that key and broadcasts the settings the page then redraws from |
-| POST | `/api/settings/age` | `{days}` → how old a worktree's last activity must be before the worktree chart holds its row back (`config.json`'s `hideOlderThanDays`; `0` shows everything). Rewrites only that key, answers with the settings the page then redraws from, and broadcasts the new snapshot to every open board |
+| POST | `/api/settings/chart-top` | `{count}` → how many of a project's worktrees its chart draws before the arrow lists the rest (`config.json`'s `chartTopCount`; `0` draws every tree). Rewrites only that key, answers with the settings the page then redraws from, and broadcasts the new snapshot to every open board |
 | GET | `/api/remote-write/state` | the remote-write policy, what is parked on the permission box, which trees have a standing grant, and `guards` (which worktrees carry the pre-push hook, and where) |
 | POST | `/api/remote-write/request` | **the guard asking.** `{worktree, branch, remote, refs, remoteUrl}` → `{allowed:true}` (the setting allows it, the tree was started to land, or a grant stands), `{refused:true}` (`deny` — no question is offered), or `{id, deadline}` — a question parked on the box. Local-only by nature: the hook runs on this machine, so it needs no token |
 | GET | `/api/remote-write/status?id=` | what a parked hook long-polls: `pending`, or `answered` with the choice. A request nobody answered reads `deny` once its window closes |

@@ -242,7 +242,7 @@ try {
         scanRoots: [scanRoot],
         projects: [],
         defaultCwd: scanRoot,
-        hideOlderThanDays: 0,
+        chartTopCount: 0,
         apiServer: { url: stubUrl, key: "stub-key" },
         assistant: { enabled: true, autonomy: "draft", spawn: "off", seconds: 5 },
       },

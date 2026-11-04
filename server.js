@@ -4,7 +4,7 @@
 import { createServer } from "node:http";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 // The push-guard record is a few hundred bytes read at boot and written on an install: sync is the honest shape
 // for it, and it is the same file the Settings row reports from.
 import { existsSync, mkdirSync, readFileSync, writeFileSync, writeSync } from "node:fs";
@@ -154,20 +154,20 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const build = createBuild({ publicDir: PUBLIC_DIR, log });
 const buildAtBoot = await build.current();
 
-// How old a worktree's last activity has to be before the chart holds its row out of the view it opens on (the row
-// is never lost — one arrow on that chart shows every tree again). Measured from ACTIVITY, never from when the
-// directory was created: a tree cut months ago that somebody is working in right now is not stale, and hiding it
-// would be the one thing this setting must not do. 0 shows everything.
+// How many of a project's worktrees its chart draws on first paint. The top-N projection itself is the client's
+// (public/app.js `chartTopOrder`: last activity newest first, then by name), because that is where the rows and their
+// activity live; this is only the number, kept in the panel's own config.json so it survives a restart and applies
+// to every browser. 0 draws every tree.
 //
-// A value that cannot be read as a number or a count of days falls back to the DEFAULT rather than to 0: an
-// unreadable number must never silently switch a filter off (and Number(null) is 0, so "absent" is handled first).
-const AGE_DAYS_DEFAULT = 7;
-const AGE_DAYS_MAX = 3650;
-function ageDaysFrom(value) {
-  if (value == null || value === "") return AGE_DAYS_DEFAULT;
+// A value that cannot be read as a number or a count falls back to the DEFAULT rather than to 0: an unreadable
+// number must never silently switch a limit off (and Number(null) is 0, so "absent" is handled first).
+const CHART_TOP_DEFAULT = 10;
+const CHART_TOP_MAX = 5000;
+function chartTopCountFrom(value) {
+  if (value == null || value === "") return CHART_TOP_DEFAULT;
   const n = Number(value);
-  if (!Number.isFinite(n) || n < 0) return AGE_DAYS_DEFAULT;
-  return Math.min(AGE_DAYS_MAX, Math.round(n));
+  if (!Number.isFinite(n) || n < 0) return CHART_TOP_DEFAULT;
+  return Math.min(CHART_TOP_MAX, Math.round(n));
 }
 
 // How long a parent the reader collapsed stays a decision about everything under it before the page writes every
@@ -222,9 +222,12 @@ async function loadConfig() {
   cfg.collapseAfterSeconds = collapseAfterSecondsFrom(cfg.collapseAfterSeconds);
   cfg.fetchSeconds = Number(cfg.fetchSeconds ?? 600);
   cfg.threads = Number(cfg.threads) || Math.max(1, Math.min(4, cpus().length - 1));
-  // How old a worktree's last activity has to be before the chart hides its row. Server-side, like scanMode below:
-  // it lives in this file so it survives a restart and applies to every browser.
-  cfg.hideOlderThanDays = ageDaysFrom(cfg.hideOlderThanDays);
+  // How many of a project's worktrees its chart draws before the reader opens the rest. Server-side, like scanMode
+  // below: it lives in this file so it survives a restart and applies to every browser. The retired
+  // `hideOlderThanDays` is NOT read: a file that still carries it keeps to the default (or its own chartTopCount),
+  // never to "0", and the settings sentence names the ignored key so the reader can delete it.
+  cfg.chartTopCount = chartTopCountFrom(cfg.chartTopCount);
+  cfg.hideOlderDaysIgnored = Object.prototype.hasOwnProperty.call(cfg, "hideOlderThanDays");
   // Which of the worktree chart's columns are drawn, also server-side and for the same reason: the reader can hide a
   // column in any browser and every one of them draws the same chart. The stored value is the columns to HIDE, so a
   // column the page adds later starts visible for a reader who has already hidden some; lib/chart-columns.js drops
@@ -302,6 +305,54 @@ async function loadConfig() {
 
 // Write one setting into the panel's own config.json, leaving every other key exactly as it was. Only the key being
 // changed is written: dumping the in-memory config would bake computed defaults into the file.
+//
+// `config.json` is read by more than this writer: the next settings route, a harness, the reader's own editor, and
+// a poller beside it. Writing it IN PLACE truncates the file before the new bytes land, so a reader that gets there
+// in between parses an empty or half-written file and throws `Unexpected end of JSON input` — a torn read that
+// looks like the READER's bug, which is how this class of defect hides. A sibling temp file plus a rename fixes it:
+// the rename is atomic on this filesystem precisely because the temp file is in the SAME directory (a different
+// directory could be a different volume, and a cross-volume move is a copy), so every reader sees the whole old file
+// or the whole new one and never a third thing. The bytes, the key order and the 2-space formatting are unchanged —
+// only HOW the file is replaced is.
+const CONFIG_WRITE_TRIES = 40;
+const CONFIG_WRITE_RETRY_MS = 1;
+// The codes Windows reports for "somebody else has this file open": EPERM for the plain concurrent read, EBUSY for a
+// handle that cannot be deleted at all, EACCES for a file marked read-only.
+const CONFIG_WRITE_BUSY = new Set(["EPERM", "EBUSY", "EACCES"]);
+
+let configWriteSeq = 0;
+async function writeConfigAtomic(text) {
+  // A name of this process's own, so two saves racing in one panel cannot write the same temp file, and it ends in
+  // `.tmp` so a run that dies between the write and the rename leaves something nobody mistakes for the config.
+  const tmp = path.join(CONFIG_DIR, `${path.basename(CONFIG_PATH)}.${process.pid}.${++configWriteSeq}.tmp`);
+  await writeFile(tmp, text, "utf8");
+  // Windows refuses a rename whose DESTINATION another handle is reading, even when that handle is a plain
+  // `readFile` — measured on this box, one reader looping over the target refused 244 of 300 replaces, and one handle
+  // held open refused all 300, while the same loop against another file refused none. The read it competes with lasts
+  // a fraction of a millisecond, so the refusal is TRANSIENT and a bounded retry is what turns it into a save that
+  // lands: without it this fix would trade a torn read for a 500 on the save. A reader that holds the file open for
+  // good (an editor, a `tail -f`) still exhausts the retries and gets the error, which is the honest answer — the
+  // alternative is writing in place again and handing back the torn read. The budget is 40 attempts a millisecond
+  // apart: measured under a reader looping over the target, every save landed in ~5-15 ms, and a reader that never
+  // lets go costs that route at most ~40 ms before the error.
+  let last = null;
+  for (let attempt = 0; attempt < CONFIG_WRITE_TRIES; attempt++) {
+    try {
+      await rename(tmp, CONFIG_PATH);
+      return;
+    } catch (e) {
+      if (!CONFIG_WRITE_BUSY.has(e && e.code)) {
+        await unlink(tmp).catch(() => {});
+        throw e;
+      }
+      last = e;
+      await new Promise((r) => setTimeout(r, CONFIG_WRITE_RETRY_MS));
+    }
+  }
+  await unlink(tmp).catch(() => {});
+  throw last;
+}
+
 async function patchPanelConfig(patch) {
   let raw = {};
   try {
@@ -310,7 +361,7 @@ async function patchPanelConfig(patch) {
     raw = {};
   }
   Object.assign(raw, patch);
-  await writeFile(CONFIG_PATH, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+  await writeConfigAtomic(`${JSON.stringify(raw, null, 2)}\n`);
 }
 
 let config = await loadConfig();
@@ -896,7 +947,12 @@ const settingsOut = () => ({
   collapseAfterSeconds: config.collapseAfterSeconds,
   fetchSeconds: config.fetchSeconds,
   liveMinutes: config.liveMinutes ?? 5,
-  hideOlderThanDays: config.hideOlderThanDays,
+  // How many of a project's worktrees its chart draws before the reader opens the rest. It travels with every
+  // snapshot for the same reason the collapse cascade does: the count decides which rows are in the DOM, and a tab
+  // opened before the number moved has to agree with the file. `hideOlderDaysIgnored` is the retired age key's
+  // presence, so the settings sentence can name it instead of ignoring the reader's file in silence.
+  chartTopCount: config.chartTopCount,
+  hideOlderDaysIgnored: config.hideOlderDaysIgnored === true,
   // The chart's hidden columns travel with every snapshot for the same reason the age threshold does: the table's
   // header and rows are built from this list, and a page that opened before the setting moved has to agree with it.
   hiddenColumns: config.hiddenColumns,
@@ -4383,23 +4439,23 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, agentCleanup: allowed, settings: settingsOut() });
     }
 
-    // How old a worktree has to be before the chart holds its row back, so the board can open on the trees that
-    // are still being worked in. Server-side for the same reason the refresh mode is: the number goes into this
-    // panel's own config.json, so it survives a restart and applies to whichever browser is open — and it is the
-    // config.json the reader edits by hand. `days: 0` shows everything.
-    if (route === "/api/settings/age" && req.method === "POST") {
+    // How many worktrees a project's chart draws before its arrow lists the rest, so the board can open on the top
+    // of each chart. Server-side for the same reason the refresh mode is: the number goes into this panel's own
+    // config.json, so it survives a restart and applies to whichever browser is open — and it is the config.json the
+    // reader edits by hand. `count: 0` draws every tree.
+    if (route === "/api/settings/chart-top" && req.method === "POST") {
       if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
       const body = await readBody(req).catch(() => ({}));
-      const days = ageDaysFrom(body.days);
+      const count = chartTopCountFrom(body.count);
       try {
-        await patchPanelConfig({ hideOlderThanDays: days });
+        await patchPanelConfig({ chartTopCount: count });
       } catch (e) {
         return sendJson(res, 500, { error: `could not write config.json: ${String((e && e.message) || e)}` });
       }
-      config.hideOlderThanDays = days;
-      log(`worktrees older than: ${days ? `${days} day${days === 1 ? "" : "s"} held back (the chart's arrow shows them)` : "none held back"}`);
+      config.chartTopCount = count;
+      log(`chart: ${count ? `the top ${count} worktree${count === 1 ? "" : "s"} drawn (the chart's arrow shows the rest)` : "every worktree drawn"}`);
       broadcast({ type: "snapshot", data: snapshot() });
-      return sendJson(res, 200, { ok: true, days, settings: settingsOut() });
+      return sendJson(res, 200, { ok: true, count, settings: settingsOut() });
     }
 
     // How long a parent the reader collapsed keeps the cards under it as they were before the page writes every one

@@ -172,14 +172,14 @@ vm.createContext(chips);
 let chipsLoaded = false;
 function project() {
   if (!chipsLoaded) {
-    const names = ["refreshChips", "refreshAgeToggle", "paintAgeToggle", ...(has("projectNode") ? ["projectNode"] : [])];
+    const names = ["refreshChips", "refreshTopToggle", "paintTopToggle", ...(has("projectNode") ? ["projectNode"] : [])];
     vm.runInContext(names.map(grab).join("\n"), chips);
     chipsLoaded = true;
   }
   doc.reset();
   chips.html = "<span class=chip>3 worktrees</span>";
   chips.chipsHtml = () => chips.html;
-  chips.ageSlotHtml = () => ""; // nothing held back: no arrow
+  chips.topSlotHtml = () => ""; // nothing held back: no arrow
   const strip = doc.add(new Node({ "data-chips": "alpha" }));
   const slot = doc.add(new Node({ "data-age-slot": "alpha" }));
   return { strip, slot };

@@ -4,16 +4,119 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v0.85.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v0.91.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-206 releases from v0.1.0 (2026-10-20) to v0.85.0 (2026-11-03), 785 commits between the tags. Every release is anchored by an
+216 releases from v0.1.0 (2026-10-20) to v0.91.0 (2026-11-03), 803 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v0.91.0 — 2026-11-03 · 1 commit
+
+[`f8d63c0`](https://github.com/JLRoper/agent-worktree-gui/commit/f8d63c047c67b489ffae35435da1341ebb5299e3) · [compare v0.90.2...v0.91.0](https://github.com/JLRoper/agent-worktree-gui/compare/v0.90.2...v0.91.0)
+
+### Added
+
+- feat: the chart draws the top N worktrees, and its arrow says how many are behind it ([`f8d63c0`](https://github.com/JLRoper/agent-worktree-gui/commit/f8d63c047c67b489ffae35435da1341ebb5299e3))
+
+## v0.90.2 — 2026-11-03 · 1 commit
+
+[`c7b6912`](https://github.com/JLRoper/agent-worktree-gui/commit/c7b6912c0b3158c5ce0d55427470d2aa0d38f53c) · [compare v0.90.1...v0.90.2](https://github.com/JLRoper/agent-worktree-gui/compare/v0.90.1...v0.90.2)
+
+### Fixed
+
+- fix: config.json is written atomically, so a reader never sees it torn (#304) ([`c7b6912`](https://github.com/JLRoper/agent-worktree-gui/commit/c7b6912c0b3158c5ce0d55427470d2aa0d38f53c))
+
+## v0.90.1 — 2026-11-03 · 2 commits
+
+[`9474bf1`](https://github.com/JLRoper/agent-worktree-gui/commit/9474bf15c3aa45cd1b7e3a916905a5d08a3bc30a) · [compare v0.90.0...v0.90.1](https://github.com/JLRoper/agent-worktree-gui/compare/v0.90.0...v0.90.1)
+
+### Fixed
+
+- fix: size an approval card from approvals.timeout, not a copied 600 s ([`4e36aa6`](https://github.com/JLRoper/agent-worktree-gui/commit/4e36aa66efe7973ba5425ef54515f656283b4716))
+
+### Other
+
+- chore: 0.90.1 — the review finding over 0.90.0 ([`9474bf1`](https://github.com/JLRoper/agent-worktree-gui/commit/9474bf15c3aa45cd1b7e3a916905a5d08a3bc30a))
+
+## v0.90.0 — 2026-11-03 · 2 commits
+
+[`b8106ed`](https://github.com/JLRoper/agent-worktree-gui/commit/b8106ed5a284707c2a5030b30efd2505d7004e6b) · [compare v0.87.2...v0.90.0](https://github.com/JLRoper/agent-worktree-gui/compare/v0.87.2...v0.90.0)
+
+### Fixed
+
+- fix: an approval card keeps the whole window the gateway waits, 600 s by default ([`add38f3`](https://github.com/JLRoper/agent-worktree-gui/commit/add38f3137a1ae3316b187761d280938baae3472))
+
+### Other
+
+- chore: 0.90.0 — the version this landing carries over 0.87.0 ([`b8106ed`](https://github.com/JLRoper/agent-worktree-gui/commit/b8106ed5a284707c2a5030b30efd2505d7004e6b))
+
+## v0.87.2 — 2026-11-03 · 2 commits
+
+[`2e444e0`](https://github.com/JLRoper/agent-worktree-gui/commit/2e444e0ca4abeb17cabeac2e298d486a09947c46) · [compare v0.87.1...v0.87.2](https://github.com/JLRoper/agent-worktree-gui/compare/v0.87.1...v0.87.2)
+
+### Docs & tests
+
+- docs: adjudicate the two architectural reviews into one costed seam list ([`3592b1e`](https://github.com/JLRoper/agent-worktree-gui/commit/3592b1e7a623891906817ee790dfe1aec8d842de))
+- docs: fold the four reviews into one offline page, and land both missing inputs ([`2e444e0`](https://github.com/JLRoper/agent-worktree-gui/commit/2e444e0ca4abeb17cabeac2e298d486a09947c46))
+
+## v0.87.1 — 2026-11-03 · 1 commit
+
+[`e6e11fb`](https://github.com/JLRoper/agent-worktree-gui/commit/e6e11fbaa5bb1f3ebff204a61e507cfe5616ccaf) · [compare v0.87.0...v0.87.1](https://github.com/JLRoper/agent-worktree-gui/compare/v0.87.0...v0.87.1)
+
+### Docs & tests
+
+- docs: measure the top-down architectural review and name every seam of the split ([`e6e11fb`](https://github.com/JLRoper/agent-worktree-gui/commit/e6e11fbaa5bb1f3ebff204a61e507cfe5616ccaf))
+
+## v0.87.0 — 2026-11-03 · 1 commit
+
+[`4f660d2`](https://github.com/JLRoper/agent-worktree-gui/commit/4f660d2ca84278fc4e1bf648d4218a4ab055ea5c) · [compare v0.86.0...v0.87.0](https://github.com/JLRoper/agent-worktree-gui/compare/v0.86.0...v0.87.0)
+
+### Added
+
+- feat: every queue card names its project beside the files ([`4f660d2`](https://github.com/JLRoper/agent-worktree-gui/commit/4f660d2ca84278fc4e1bf648d4218a4ab055ea5c))
+
+## v0.86.0 — 2026-11-03 · 2 commits
+
+[`489389d`](https://github.com/JLRoper/agent-worktree-gui/commit/489389d9094e350030acce89d13cce2fe61bf3a9) · [compare v0.85.2...v0.86.0](https://github.com/JLRoper/agent-worktree-gui/compare/v0.85.2...v0.86.0)
+
+### Added
+
+- feat: the HUMAN rotation includes an assistant's own question, and opens its float ([`489389d`](https://github.com/JLRoper/agent-worktree-gui/commit/489389d9094e350030acce89d13cce2fe61bf3a9))
+
+### Docs & tests
+
+- docs: 0.85.2 — Assistant-2's task-queue assessment, copied verbatim ([`42ccec4`](https://github.com/JLRoper/agent-worktree-gui/commit/42ccec4c210a7694e7c6f99674d42df2815a40b9))
+
+## v0.85.2 — 2026-11-03 · 4 commits
+
+[`97b17e1`](https://github.com/JLRoper/agent-worktree-gui/commit/97b17e13907664779c35ecbf453e7916593df309) · [compare v0.85.1...v0.85.2](https://github.com/JLRoper/agent-worktree-gui/compare/v0.85.1...v0.85.2)
+
+### Added
+
+- feat: tag every version bump, and render CHANGELOG.md between the tags ([`956cb71`](https://github.com/JLRoper/agent-worktree-gui/commit/956cb71e2b70573786ab01300fff35787bdd8049))
+- feat: a gate that fails when a version bump has no tag ([`129f81d`](https://github.com/JLRoper/agent-worktree-gui/commit/129f81d981e70736b7b0087431ee935a5cb48ff0))
+
+### Docs & tests
+
+- docs: re-render the changelog on 0.85.0, and anchor the bump main picked up ([`bf41b2f`](https://github.com/JLRoper/agent-worktree-gui/commit/bf41b2f67c000ccb4a8437ee1ce13c627963ed07))
+- test: the two rotted harnesses are live gates again, and wired into the runner (#299) ([`97b17e1`](https://github.com/JLRoper/agent-worktree-gui/commit/97b17e13907664779c35ecbf453e7916593df309))
+
+## v0.85.1 — 2026-11-03 · 2 commits
+
+[`163fed3`](https://github.com/JLRoper/agent-worktree-gui/commit/163fed33db6966505c086bc1f134aae56e4a78be) · [compare v0.85.0...v0.85.1](https://github.com/JLRoper/agent-worktree-gui/compare/v0.85.0...v0.85.1)
+
+### Added
+
+- feat: Settings → Gateway saves OpenRouter profiles and restarts either process on its own press ([`03b3ff0`](https://github.com/JLRoper/agent-worktree-gui/commit/03b3ff0b07674fe9c401c94a7e2250aa0006238d))
+
+### Fixed
+
+- fix: the stale-worktree threshold commits on Enter, and the tail chip is written once (#295) ([`163fed3`](https://github.com/JLRoper/agent-worktree-gui/commit/163fed33db6966505c086bc1f134aae56e4a78be))
 
 ## v0.85.0 — 2026-11-03 · 1 commit
 

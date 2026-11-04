@@ -22,6 +22,17 @@ import { ROOT, configureRepo, git } from "../tools/panel-testkit.mjs";
 const CR = String.fromCharCode(13);
 const LF = String.fromCharCode(10);
 
+function copyTool(dest) {
+  mkdirSync(path.join(dest, "tools"), { recursive: true });
+  for (const f of ["version.mjs", "release-history.mjs"]) {
+    writeFileSync(
+      path.join(dest, "tools", f),
+      readFileSync(path.join(ROOT, "tools", f), "utf8").split(CR + LF).join(LF),
+      "utf8",
+    );
+  }
+}
+
 function sandbox() {
   const dir = mkdtempSync(path.join(os.tmpdir(), "wtgui-vcheck-"));
   const work = path.join(dir, "work");
@@ -31,12 +42,7 @@ function sandbox() {
   git(work, ["init", "-q", "-b", "main"]);
   configureRepo(work);
   git(work, ["config", "core.autocrlf", "false"]);
-  mkdirSync(path.join(work, "tools"), { recursive: true });
-  writeFileSync(
-    path.join(work, "tools", "version.mjs"),
-    readFileSync(path.join(ROOT, "tools", "version.mjs"), "utf8").split(CR + LF).join(LF),
-    "utf8",
-  );
+  copyTool(work);
   writeFileSync(path.join(work, "package.json"), `{\n  "name": "sandbox",\n  "version": "1.0.0",\n  "private": true\n}\n`, "utf8");
   git(work, ["add", "-A"]);
   git(work, ["commit", "-q", "-m", "Add the manifest so the version has one home"]);
@@ -92,10 +98,9 @@ test("check refuses unchanged, allows bumped, and refuses behind — in one tree
     assert.match(unchanged.text, new RegExp(`base\\s+origin/main\\s+1\\.1\\.0\\s+\\(${base.slice(0, 7)}`));
 
     // ---- an uncommitted bump is not a bump: HEAD is what a push carries ----
-    const applied = spawnSync(process.execPath, [path.join(work, "tools", "version.mjs"), "apply", "minor"], {
-      cwd: work, encoding: "utf8", env: { ...process.env, VERSION_NO_GH: "1" }, windowsHide: true,
-    });
-    assert.equal(applied.status, 0, applied.stderr);
+    // Written straight into the file (not through `apply`, which commits and tags its own write): the point is a
+    // number that exists only in the working tree.
+    setVersion(work, "1.2.0");
     const uncommitted = check(work);
     assert.equal(uncommitted.status, 1, `an uncommitted bump must not pass\n${uncommitted.text}`);
     assert.match(uncommitted.text, /working tree's package\.json reads 1\.2\.0/);
@@ -143,12 +148,7 @@ test("check refuses rather than passing when it cannot name the base", () => {
   const dir = mkdtempSync(path.join(os.tmpdir(), "wtgui-vcheck-nobase-"));
   try {
     const work = path.join(dir, "work");
-    mkdirSync(path.join(work, "tools"), { recursive: true });
-    writeFileSync(
-      path.join(work, "tools", "version.mjs"),
-      readFileSync(path.join(ROOT, "tools", "version.mjs"), "utf8").split(CR + LF).join(LF),
-      "utf8",
-    );
+    copyTool(work);
     writeFileSync(path.join(work, "package.json"), `{\n  "name": "sandbox",\n  "version": "1.0.0"\n}\n`, "utf8");
     git(work, ["init", "-q", "-b", "trunk"]);
     configureRepo(work);
