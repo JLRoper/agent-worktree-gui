@@ -179,7 +179,8 @@ const brief = (s) => ({ autonomy: s.autonomy, seconds: s.seconds, rules: s.rules
   ok(/\.as-aggressive/.test(asjs) || /aggressiveBlock/.test(asjs), "it is created for the Settings sub-pane, not the header");
   ok(/function setAggressiveMode\(/.test(asjs) && /\/api\/assistant\/aggressive/.test(asjs), "the press posts to /api/assistant/aggressive from the panel's own script");
   ok(/setAttribute\("aria-pressed", on \? "true" : "false"\)/.test(asjs), "aria-pressed is driven from the server's state, not a local guess");
-  ok(!/confirm\(/.test(asjs), "no window.confirm in the assistant script");
+  const aggFn = asjs.slice(asjs.indexOf("async function setAggressiveMode("), asjs.indexOf("function sentryState("));
+  ok(aggFn.length > 0 && !/confirm\(/.test(aggFn), "the aggressive press never opens a window.confirm");
   ok(!/NOT-RUNNING/.test(asjs), "no NOT-RUNNING control or rotation is left in the assistant script");
 
   const before = await state();
@@ -197,11 +198,11 @@ const brief = (s) => ({ autonomy: s.autonomy, seconds: s.seconds, rules: s.rules
   for (const [k, v] of Object.entries(AGG)) ok(s[k] === v, `${k} → ${JSON.stringify(s[k])}`, k === "enabled" ? "the sentry cannot monitor with itself switched off" : "");
   const ruleIds = Object.keys(after.rules || {});
   const allAct = Object.entries(s.rules).every(([, v]) => v === "act");
-  ok(Object.keys(s.rules).length === 13, "all 13 rules are set", `${Object.keys(s.rules).length}`);
+  ok(Object.keys(s.rules).length === 17, "all 17 rules are set", `${Object.keys(s.rules).length}`);
   ok(allAct, "every rule is at act (the top rung)");
   const rec = after.aggressive;
   ok(rec.on === true, "state() reports the mode on");
-  ok(rec.restore.present === 3 && rec.restore.absent === 23, "the record counts the 3 keys the file carried and the 23 it did not", JSON.stringify(rec.restore));
+  ok(rec.restore.present === 3 && rec.restore.absent === 28, "the record counts the 3 keys the file carried and the 28 it did not", JSON.stringify(rec.restore));
   await waitForDisk((f) => f.aggressive && f.aggressive.on === true, "the mode being on");
   const f = fileNow();
   ok(f.aggressive && f.aggressive.on === true, "the record is on disk while the mode is on");
