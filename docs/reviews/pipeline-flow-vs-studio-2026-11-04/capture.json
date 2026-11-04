@@ -1,0 +1,8705 @@
+{
+ "startedAt": "2026-11-04T08:43:36.615Z",
+ "tree": "C:\\ProjectDevelopment\\agent-worktree-gui\\.worktrees\\capture-the-panel-s-flow-c6aef5",
+ "studio": {
+  "url": "http://127.0.0.1:8095/",
+  "reachable": true,
+  "runs": [
+   {
+    "viewport": {
+     "width": 1280,
+     "height": 800
+    },
+    "scheme": "dark",
+    "surface": "studio",
+    "shots": {
+     "fit": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-dark-1280-fit.png",
+     "actual": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-dark-1280-actual.png",
+     "end": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-dark-1280-end.png",
+     "page": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-dark-1280-page.png"
+    },
+    "fit": {
+     "surface": "studio",
+     "viewport": {
+      "w": 1280,
+      "h": 800
+     },
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "scale": 0.6046,
+     "zoom": "60%",
+     "colW": 130.6,
+     "gap": 20.6,
+     "gapRatio": 0.158,
+     "canvas": {
+      "w": 648,
+      "h": 616,
+      "scrollW": 906,
+      "scrollH": 628,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 7.86,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 5.74,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 6.05
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": true
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:40 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 339.5,
+       "y": 171.8,
+       "w": 130.6,
+       "h": 63.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 490.7,
+       "y": 171.8,
+       "w": 130.6,
+       "h": 63.4,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 641.9,
+       "y": 171.8,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 339.5,
+       "y": 274.6,
+       "w": 130.6,
+       "h": 63.4,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 490.7,
+       "y": 274.6,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 641.9,
+       "y": 274.6,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 339.5,
+       "y": 377.4,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 490.7,
+       "y": 377.4,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 641.9,
+       "y": 377.4,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 339.5,
+       "y": 480.2,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 490.7,
+       "y": 480.2,
+       "w": 130.6,
+       "h": 63.4,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 641.9,
+       "y": 480.2,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 339.5,
+       "y": 583,
+       "w": 130.6,
+       "h": 63.4,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "actual": {
+     "surface": "studio",
+     "viewport": {
+      "w": 1280,
+      "h": 800
+     },
+     "total": 13,
+     "visible": 6,
+     "partlyVisible": 12,
+     "scale": 1,
+     "zoom": "100%",
+     "colW": 216,
+     "gap": 34,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 648,
+      "h": 616,
+      "scrollW": 1459,
+      "scrollH": 1032,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 13,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 9.5,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 10
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": true
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:40 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 371.2,
+       "y": 203.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 621.2,
+       "y": 203.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 871.2,
+       "y": 203.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 371.2,
+       "y": 373.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 621.2,
+       "y": 373.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 871.2,
+       "y": 373.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 371.2,
+       "y": 543.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 621.2,
+       "y": 543.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 871.2,
+       "y": 543.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 371.2,
+       "y": 713.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 621.2,
+       "y": 713.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 871.2,
+       "y": 713.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 371.2,
+       "y": 883.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    },
+    "panDelta": 231,
+    "end": {
+     "surface": "studio",
+     "viewport": {
+      "w": 1280,
+      "h": 800
+     },
+     "total": 13,
+     "visible": 6,
+     "partlyVisible": 12,
+     "scale": 1,
+     "zoom": "100%",
+     "colW": 216,
+     "gap": 34,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 648,
+      "h": 616,
+      "scrollW": 1228,
+      "scrollH": 1032,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 13,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 9.5,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 10
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": true
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:40 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 140,
+       "y": 203.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 390,
+       "y": 203.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 640,
+       "y": 203.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 140,
+       "y": 373.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 390,
+       "y": 373.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 640,
+       "y": 373.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 140,
+       "y": 543.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 390,
+       "y": 543.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 640,
+       "y": 543.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 140,
+       "y": 713.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 390,
+       "y": 713.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 640,
+       "y": 713.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 140,
+       "y": 883.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    }
+   },
+   {
+    "viewport": {
+     "width": 1280,
+     "height": 800
+    },
+    "scheme": "light",
+    "surface": "studio",
+    "shots": {
+     "fit": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-light-1280-fit.png",
+     "actual": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-light-1280-actual.png",
+     "end": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-light-1280-end.png"
+    },
+    "fit": {
+     "surface": "studio",
+     "viewport": {
+      "w": 1280,
+      "h": 800
+     },
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "scale": 0.6046,
+     "zoom": "60%",
+     "colW": 130.6,
+     "gap": 20.6,
+     "gapRatio": 0.158,
+     "canvas": {
+      "w": 648,
+      "h": 616,
+      "scrollW": 906,
+      "scrollH": 628,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 7.86,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 5.74,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 6.05
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": false
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:45 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 339.5,
+       "y": 171.8,
+       "w": 130.6,
+       "h": 63.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 490.7,
+       "y": 171.8,
+       "w": 130.6,
+       "h": 63.4,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 641.9,
+       "y": 171.8,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 339.5,
+       "y": 274.6,
+       "w": 130.6,
+       "h": 63.4,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 490.7,
+       "y": 274.6,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 641.9,
+       "y": 274.6,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 339.5,
+       "y": 377.4,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 490.7,
+       "y": 377.4,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 641.9,
+       "y": 377.4,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 339.5,
+       "y": 480.2,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 490.7,
+       "y": 480.2,
+       "w": 130.6,
+       "h": 63.4,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 641.9,
+       "y": 480.2,
+       "w": 130.6,
+       "h": 63.1,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 339.5,
+       "y": 583,
+       "w": 130.6,
+       "h": 63.4,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "actual": {
+     "surface": "studio",
+     "viewport": {
+      "w": 1280,
+      "h": 800
+     },
+     "total": 13,
+     "visible": 6,
+     "partlyVisible": 12,
+     "scale": 1,
+     "zoom": "100%",
+     "colW": 216,
+     "gap": 34,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 648,
+      "h": 616,
+      "scrollW": 1459,
+      "scrollH": 1032,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 13,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 9.5,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 10
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": false
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:45 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 371.2,
+       "y": 203.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 621.2,
+       "y": 203.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 871.2,
+       "y": 203.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 371.2,
+       "y": 373.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 621.2,
+       "y": 373.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 871.2,
+       "y": 373.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 371.2,
+       "y": 543.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 621.2,
+       "y": 543.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 871.2,
+       "y": 543.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 371.2,
+       "y": 713.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 621.2,
+       "y": 713.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 871.2,
+       "y": 713.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 371.2,
+       "y": 883.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    },
+    "panDelta": 231,
+    "end": {
+     "surface": "studio",
+     "viewport": {
+      "w": 1280,
+      "h": 800
+     },
+     "total": 13,
+     "visible": 6,
+     "partlyVisible": 12,
+     "scale": 1,
+     "zoom": "100%",
+     "colW": 216,
+     "gap": 34,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 648,
+      "h": 616,
+      "scrollW": 1228,
+      "scrollH": 1032,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 13,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 9.5,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 10
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": false
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:45 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 140,
+       "y": 203.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 390,
+       "y": 203.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 640,
+       "y": 203.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 140,
+       "y": 373.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 390,
+       "y": 373.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 640,
+       "y": 373.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 140,
+       "y": 543.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 390,
+       "y": 543.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 640,
+       "y": 543.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 140,
+       "y": 713.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 390,
+       "y": 713.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 640,
+       "y": 713.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 140,
+       "y": 883.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    }
+   },
+   {
+    "viewport": {
+     "width": 1824,
+     "height": 1000
+    },
+    "scheme": "dark",
+    "surface": "studio",
+    "shots": {
+     "fit": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-dark-1824-fit.png",
+     "actual": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-dark-1824-actual.png",
+     "end": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-dark-1824-end.png"
+    },
+    "fit": {
+     "surface": "studio",
+     "viewport": {
+      "w": 1824,
+      "h": 1000
+     },
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "scale": 0.8664,
+     "zoom": "87%",
+     "colW": 187.1,
+     "gap": 29.4,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 1100,
+      "h": 830,
+      "scrollW": 1384,
+      "scrollH": 874,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 11.26,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 8.23,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 8.66
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": true
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:49 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 503.8,
+       "y": 171.8,
+       "w": 187.1,
+       "h": 90.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 720.4,
+       "y": 171.8,
+       "w": 187.1,
+       "h": 90.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 937,
+       "y": 171.8,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 503.8,
+       "y": 319.1,
+       "w": 187.1,
+       "h": 90.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 720.4,
+       "y": 319.1,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 937,
+       "y": 319.1,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 503.8,
+       "y": 466.4,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 720.4,
+       "y": 466.4,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 937,
+       "y": 466.4,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 503.8,
+       "y": 613.7,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 720.4,
+       "y": 613.7,
+       "w": 187.1,
+       "h": 90.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 937,
+       "y": 613.7,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 503.8,
+       "y": 761,
+       "w": 187.1,
+       "h": 90.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "actual": {
+     "surface": "studio",
+     "viewport": {
+      "w": 1824,
+      "h": 1000
+     },
+     "total": 13,
+     "visible": 12,
+     "partlyVisible": 13,
+     "scale": 1,
+     "zoom": "100%",
+     "colW": 216,
+     "gap": 34,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 1100,
+      "h": 830,
+      "scrollW": 1571,
+      "scrollH": 1011,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 13,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 9.5,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 10
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": true
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:49 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 514.5,
+       "y": 182.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 764.5,
+       "y": 182.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 1014.5,
+       "y": 182.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 514.5,
+       "y": 352.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 764.5,
+       "y": 352.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 1014.5,
+       "y": 352.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 514.5,
+       "y": 522.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 764.5,
+       "y": 522.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 1014.5,
+       "y": 522.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 514.5,
+       "y": 692.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 764.5,
+       "y": 692.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 1014.5,
+       "y": 692.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 514.5,
+       "y": 862.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    },
+    "panDelta": 0,
+    "end": {
+     "surface": "studio",
+     "viewport": {
+      "w": 1824,
+      "h": 1000
+     },
+     "total": 13,
+     "visible": 12,
+     "partlyVisible": 13,
+     "scale": 1,
+     "zoom": "100%",
+     "colW": 216,
+     "gap": 34,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 1100,
+      "h": 830,
+      "scrollW": 1571,
+      "scrollH": 1011,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 13,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 9.5,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 10
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": true
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:49 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 514.5,
+       "y": 182.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 764.5,
+       "y": 182.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 1014.5,
+       "y": 182.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 514.5,
+       "y": 352.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 764.5,
+       "y": 352.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 1014.5,
+       "y": 352.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 514.5,
+       "y": 522.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 764.5,
+       "y": 522.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 1014.5,
+       "y": 522.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 514.5,
+       "y": 692.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 764.5,
+       "y": 692.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 1014.5,
+       "y": 692.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 514.5,
+       "y": 862.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    }
+   },
+   {
+    "viewport": {
+     "width": 1824,
+     "height": 1000
+    },
+    "scheme": "light",
+    "surface": "studio",
+    "shots": {
+     "fit": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-light-1824-fit.png",
+     "actual": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-light-1824-actual.png",
+     "end": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-light-1824-end.png"
+    },
+    "fit": {
+     "surface": "studio",
+     "viewport": {
+      "w": 1824,
+      "h": 1000
+     },
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "scale": 0.8664,
+     "zoom": "87%",
+     "colW": 187.1,
+     "gap": 29.4,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 1100,
+      "h": 830,
+      "scrollW": 1384,
+      "scrollH": 874,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 11.26,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 8.23,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 8.66
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": false
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:53 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 503.8,
+       "y": 171.8,
+       "w": 187.1,
+       "h": 90.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 720.4,
+       "y": 171.8,
+       "w": 187.1,
+       "h": 90.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 937,
+       "y": 171.8,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 503.8,
+       "y": 319.1,
+       "w": 187.1,
+       "h": 90.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 720.4,
+       "y": 319.1,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 937,
+       "y": 319.1,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 503.8,
+       "y": 466.4,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 720.4,
+       "y": 466.4,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 937,
+       "y": 466.4,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 503.8,
+       "y": 613.7,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 720.4,
+       "y": 613.7,
+       "w": 187.1,
+       "h": 90.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 937,
+       "y": 613.7,
+       "w": 187.1,
+       "h": 90.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 503.8,
+       "y": 761,
+       "w": 187.1,
+       "h": 90.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "actual": {
+     "surface": "studio",
+     "viewport": {
+      "w": 1824,
+      "h": 1000
+     },
+     "total": 13,
+     "visible": 12,
+     "partlyVisible": 13,
+     "scale": 1,
+     "zoom": "100%",
+     "colW": 216,
+     "gap": 34,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 1100,
+      "h": 830,
+      "scrollW": 1571,
+      "scrollH": 1011,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 13,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 9.5,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 10
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": false
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:53 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 514.5,
+       "y": 182.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 764.5,
+       "y": 182.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 1014.5,
+       "y": 182.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 514.5,
+       "y": 352.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 764.5,
+       "y": 352.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 1014.5,
+       "y": 352.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 514.5,
+       "y": 522.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 764.5,
+       "y": 522.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 1014.5,
+       "y": 522.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 514.5,
+       "y": 692.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 764.5,
+       "y": 692.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 1014.5,
+       "y": 692.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 514.5,
+       "y": 862.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    },
+    "panDelta": 0,
+    "end": {
+     "surface": "studio",
+     "viewport": {
+      "w": 1824,
+      "h": 1000
+     },
+     "total": 13,
+     "visible": 12,
+     "partlyVisible": 13,
+     "scale": 1,
+     "zoom": "100%",
+     "colW": 216,
+     "gap": 34,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 1100,
+      "h": 830,
+      "scrollW": 1571,
+      "scrollH": 1011,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 13,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 9.5,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 10
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": false
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:53 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 514.5,
+       "y": 182.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 764.5,
+       "y": 182.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 1014.5,
+       "y": 182.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 514.5,
+       "y": 352.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 764.5,
+       "y": 352.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 1014.5,
+       "y": 352.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 514.5,
+       "y": 522.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 764.5,
+       "y": 522.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 1014.5,
+       "y": 522.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 514.5,
+       "y": 692.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 764.5,
+       "y": 692.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 1014.5,
+       "y": 692.5,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 514.5,
+       "y": 862.5,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    }
+   },
+   {
+    "viewport": {
+     "width": 2560,
+     "height": 1200
+    },
+    "scheme": "dark",
+    "surface": "studio",
+    "shots": {
+     "fit": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-dark-2560-fit.png",
+     "actual": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-dark-2560-actual.png",
+     "end": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-dark-2560-end.png"
+    },
+    "fit": {
+     "surface": "studio",
+     "viewport": {
+      "w": 2560,
+      "h": 1200
+     },
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "scale": 1.1103,
+     "zoom": "111%",
+     "colW": 239.8,
+     "gap": 37.8,
+     "gapRatio": 0.158,
+     "canvas": {
+      "w": 1836,
+      "h": 1030,
+      "scrollW": 1986,
+      "scrollH": 1104,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 14.43,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 10.55,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 11.1
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": true
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:57 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 784.5,
+       "y": 171.8,
+       "w": 239.8,
+       "h": 116.5,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 1062.1,
+       "y": 171.8,
+       "w": 239.8,
+       "h": 116.5,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 1339.7,
+       "y": 171.8,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 784.5,
+       "y": 360.6,
+       "w": 239.8,
+       "h": 116.5,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 1062.1,
+       "y": 360.6,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 1339.7,
+       "y": 360.6,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 784.5,
+       "y": 549.4,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 1062.1,
+       "y": 549.4,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 1339.7,
+       "y": 549.4,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 784.5,
+       "y": 738.1,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 1062.1,
+       "y": 738.1,
+       "w": 239.8,
+       "h": 116.5,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 1339.7,
+       "y": 738.1,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 784.5,
+       "y": 926.9,
+       "w": 239.8,
+       "h": 116.5,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "actual": {
+     "surface": "studio",
+     "viewport": {
+      "w": 2560,
+      "h": 1200
+     },
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "scale": 1,
+     "zoom": "100%",
+     "colW": 216,
+     "gap": 34,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 1836,
+      "h": 1030,
+      "scrollW": 1836,
+      "scrollH": 1030,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 13,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 9.5,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 10
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": true
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:57 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 775.7,
+       "y": 163,
+       "w": 216,
+       "h": 104.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 1025.7,
+       "y": 163,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 1275.7,
+       "y": 163,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 775.7,
+       "y": 333,
+       "w": 216,
+       "h": 104.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 1025.7,
+       "y": 333,
+       "w": 216,
+       "h": 104.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 1275.7,
+       "y": 333,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 775.7,
+       "y": 503,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 1025.7,
+       "y": 503,
+       "w": 216,
+       "h": 104.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 1275.7,
+       "y": 503,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 775.7,
+       "y": 673,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 1025.7,
+       "y": 673,
+       "w": 216,
+       "h": 104.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 1275.7,
+       "y": 673,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 775.7,
+       "y": 843,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "panDelta": 0,
+    "end": {
+     "surface": "studio",
+     "viewport": {
+      "w": 2560,
+      "h": 1200
+     },
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "scale": 1,
+     "zoom": "100%",
+     "colW": 216,
+     "gap": 34,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 1836,
+      "h": 1030,
+      "scrollW": 1836,
+      "scrollH": 1030,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 13,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 9.5,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 10
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": true
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:43:57 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 775.7,
+       "y": 163,
+       "w": 216,
+       "h": 104.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 1025.7,
+       "y": 163,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 1275.7,
+       "y": 163,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 775.7,
+       "y": 333,
+       "w": 216,
+       "h": 104.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 1025.7,
+       "y": 333,
+       "w": 216,
+       "h": 104.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 1275.7,
+       "y": 333,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 775.7,
+       "y": 503,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 1025.7,
+       "y": 503,
+       "w": 216,
+       "h": 104.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 1275.7,
+       "y": 503,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 775.7,
+       "y": 673,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 1025.7,
+       "y": 673,
+       "w": 216,
+       "h": 104.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 1275.7,
+       "y": 673,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 775.7,
+       "y": 843,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    }
+   },
+   {
+    "viewport": {
+     "width": 2560,
+     "height": 1200
+    },
+    "scheme": "light",
+    "surface": "studio",
+    "shots": {
+     "fit": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-light-2560-fit.png",
+     "actual": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-light-2560-actual.png",
+     "end": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\studio-light-2560-end.png"
+    },
+    "fit": {
+     "surface": "studio",
+     "viewport": {
+      "w": 2560,
+      "h": 1200
+     },
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "scale": 1.1103,
+     "zoom": "111%",
+     "colW": 239.8,
+     "gap": 37.8,
+     "gapRatio": 0.158,
+     "canvas": {
+      "w": 1836,
+      "h": 1030,
+      "scrollW": 1986,
+      "scrollH": 1104,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 14.43,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 10.55,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 11.1
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": false
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:44:02 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 784.5,
+       "y": 171.8,
+       "w": 239.8,
+       "h": 116.5,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 1062.1,
+       "y": 171.8,
+       "w": 239.8,
+       "h": 116.5,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 1339.7,
+       "y": 171.8,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 784.5,
+       "y": 360.6,
+       "w": 239.8,
+       "h": 116.5,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 1062.1,
+       "y": 360.6,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 1339.7,
+       "y": 360.6,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 784.5,
+       "y": 549.4,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 1062.1,
+       "y": 549.4,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 1339.7,
+       "y": 549.4,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 784.5,
+       "y": 738.1,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 1062.1,
+       "y": 738.1,
+       "w": 239.8,
+       "h": 116.5,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 1339.7,
+       "y": 738.1,
+       "w": 239.8,
+       "h": 115.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 784.5,
+       "y": 926.9,
+       "w": 239.8,
+       "h": 116.5,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "actual": {
+     "surface": "studio",
+     "viewport": {
+      "w": 2560,
+      "h": 1200
+     },
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "scale": 1,
+     "zoom": "100%",
+     "colW": 216,
+     "gap": 34,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 1836,
+      "h": 1030,
+      "scrollW": 1836,
+      "scrollH": 1030,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 13,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 9.5,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 10
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": false
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:44:02 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 775.7,
+       "y": 163,
+       "w": 216,
+       "h": 104.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 1025.7,
+       "y": 163,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 1275.7,
+       "y": 163,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 775.7,
+       "y": 333,
+       "w": 216,
+       "h": 104.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 1025.7,
+       "y": 333,
+       "w": 216,
+       "h": 104.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 1275.7,
+       "y": 333,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 775.7,
+       "y": 503,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 1025.7,
+       "y": 503,
+       "w": 216,
+       "h": 104.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 1275.7,
+       "y": 503,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 775.7,
+       "y": 673,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 1025.7,
+       "y": 673,
+       "w": 216,
+       "h": 104.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 1275.7,
+       "y": 673,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 775.7,
+       "y": 843,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "panDelta": 0,
+    "end": {
+     "surface": "studio",
+     "viewport": {
+      "w": 2560,
+      "h": 1200
+     },
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "scale": 1,
+     "zoom": "100%",
+     "colW": 216,
+     "gap": 34,
+     "gapRatio": 0.157,
+     "canvas": {
+      "w": 1836,
+      "h": 1030,
+      "scrollW": 1836,
+      "scrollH": 1030,
+      "overflow": "hidden"
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 13,
+      "painted": 13,
+      "weight": "650",
+      "color": "#101828",
+      "bg": "#ffffff",
+      "contrast": 17.75
+     },
+     "secondary": {
+      "text": "charter",
+      "size": 9.5,
+      "painted": 9.5,
+      "contrast": 4.97
+     },
+     "idLabel": {
+      "size": 10,
+      "painted": 10
+     },
+     "words": {
+      "median": 9,
+      "min": 8,
+      "max": 12,
+      "total": 123
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 1,
+      "max": 1
+     },
+     "page": {
+      "bodyBg": "#f8f9fa",
+      "colorScheme": "normal",
+      "prefersDark": false
+     },
+     "hint": "Drag a type to place · drag a card to move · drag the port to hand off · click a card to open its contract · Delete removes",
+     "status": "13 stages · 15 handoffs · 5 gates · 28 rolesno errorsrubric 15.8/167/7 stopssaved 3:44:02 AM",
+     "rowCount": 5,
+     "perCard": [
+      {
+       "id": "S0",
+       "title": "Intake and charter",
+       "x": 775.7,
+       "y": 163,
+       "w": 216,
+       "h": 104.9,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S1",
+       "title": "POC build",
+       "x": 1025.7,
+       "y": 163,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S2",
+       "title": "Freeze and export",
+       "x": 1275.7,
+       "y": 163,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S3",
+       "title": "Reverse-engineer",
+       "x": 775.7,
+       "y": 333,
+       "w": 216,
+       "h": 104.9,
+       "words": 8,
+       "titleWords": 1,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S4",
+       "title": "Work breakdown",
+       "x": 1025.7,
+       "y": 333,
+       "w": 216,
+       "h": 104.4,
+       "words": 8,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S5",
+       "title": "Instantiate the model",
+       "x": 1275.7,
+       "y": 333,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S6",
+       "title": "Implement per module",
+       "x": 775.7,
+       "y": 503,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S7",
+       "title": "DAL review and SQL verify",
+       "x": 1025.7,
+       "y": 503,
+       "w": 216,
+       "h": 104.4,
+       "words": 12,
+       "titleWords": 5,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S8",
+       "title": "Code review rounds",
+       "x": 1275.7,
+       "y": 503,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S9",
+       "title": "Rewrite to green",
+       "x": 775.7,
+       "y": 673,
+       "w": 216,
+       "h": 104.4,
+       "words": 9,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S10",
+       "title": "Playwright UI parity",
+       "x": 1025.7,
+       "y": 673,
+       "w": 216,
+       "h": 104.9,
+       "words": 11,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S11",
+       "title": "Delivery to UAT",
+       "x": 1275.7,
+       "y": 673,
+       "w": 216,
+       "h": 104.4,
+       "words": 10,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "S12",
+       "title": "UAT sign-off",
+       "x": 775.7,
+       "y": 843,
+       "w": 216,
+       "h": 104.9,
+       "words": 9,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    }
+   }
+  ],
+  "schemeIdentity": [
+   {
+    "width": 1280,
+    "state": "fit",
+    "dark": "f91badb4a872bc65",
+    "light": "f91badb4a872bc65",
+    "identical": true
+   },
+   {
+    "width": 1280,
+    "state": "actual",
+    "dark": "bfe731ab98e2ba86",
+    "light": "bfe731ab98e2ba86",
+    "identical": true
+   },
+   {
+    "width": 1280,
+    "state": "end",
+    "dark": "7657e3d918656261",
+    "light": "7657e3d918656261",
+    "identical": true
+   },
+   {
+    "width": 1824,
+    "state": "fit",
+    "dark": "3e0404a149110f70",
+    "light": "3e0404a149110f70",
+    "identical": true
+   },
+   {
+    "width": 1824,
+    "state": "actual",
+    "dark": "881c0532ecc618e5",
+    "light": "881c0532ecc618e5",
+    "identical": true
+   },
+   {
+    "width": 1824,
+    "state": "end",
+    "dark": "881c0532ecc618e5",
+    "light": "881c0532ecc618e5",
+    "identical": true
+   },
+   {
+    "width": 2560,
+    "state": "fit",
+    "dark": "72a43663908d703b",
+    "light": "72a43663908d703b",
+    "identical": true
+   },
+   {
+    "width": 2560,
+    "state": "actual",
+    "dark": "73a8783bc4004574",
+    "light": "73a8783bc4004574",
+    "identical": true
+   },
+   {
+    "width": 2560,
+    "state": "end",
+    "dark": "73a8783bc4004574",
+    "light": "73a8783bc4004574",
+    "identical": true
+   }
+  ]
+ },
+ "shots": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2",
+ "fixture": "poc-to-uat (13 stages, five gates) — the studio's own seed, in the panel's definition schema (stage ids are slugs: the panel refuses S0)",
+ "panel": {
+  "base": "http://127.0.0.1:63721",
+  "runs": [
+   {
+    "viewport": {
+     "width": 1280,
+     "height": 800
+    },
+    "scheme": "dark",
+    "surface": "panel",
+    "shots": {
+     "unfitted": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-dark-1280-unfitted.png",
+     "end": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-dark-1280-end.png",
+     "fitted": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-dark-1280-fitted.png",
+     "page": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-dark-1280-page.png"
+    },
+    "unfitted": {
+     "surface": "panel",
+     "viewport": {
+      "w": 1280,
+      "h": 800
+     },
+     "mode": "edit",
+     "fitMode": "0",
+     "total": 13,
+     "visible": 9,
+     "partlyVisible": 9,
+     "firstVisible": "1",
+     "lastVisible": "9",
+     "colW": 96,
+     "gap": 26,
+     "gapRatio": 0.271,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1562,
+      "scrollLeft": 0,
+      "hiddenPx": 468
+     },
+     "card": {
+      "x": 80,
+      "y": 48,
+      "w": 1120,
+      "h": 289.7,
+      "right": 1200,
+      "bottom": 337.7
+     },
+     "scroller": {
+      "x": 93,
+      "y": 158.6,
+      "w": 1094,
+      "h": 72.6,
+      "right": 1187,
+      "bottom": 231.3
+     },
+     "count": {
+      "text": "showing stages 1–9 of 13 — 4 of 13 stages and 4 of 13 notches out of view",
+      "out": "8",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 6.78
+     },
+     "fitButton": {
+      "text": "fit",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 2
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 96,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 96,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 96,
+       "h": 66.6,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 96,
+       "h": 51.7,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    },
+    "end": {
+     "surface": "panel",
+     "viewport": {
+      "w": 1280,
+      "h": 800
+     },
+     "mode": "edit",
+     "fitMode": "0",
+     "total": 13,
+     "visible": 9,
+     "partlyVisible": 9,
+     "firstVisible": "5",
+     "lastVisible": "13",
+     "colW": 96,
+     "gap": 26,
+     "gapRatio": 0.271,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1562,
+      "scrollLeft": 468,
+      "hiddenPx": 468
+     },
+     "card": {
+      "x": 80,
+      "y": 48,
+      "w": 1120,
+      "h": 289.7,
+      "right": 1200,
+      "bottom": 337.7
+     },
+     "scroller": {
+      "x": 93,
+      "y": 158.6,
+      "w": 1094,
+      "h": 72.6,
+      "right": 1187,
+      "bottom": 231.3
+     },
+     "count": {
+      "text": "showing stages 5–13 of 13 — 4 of 13 stages and 3 of 13 notches out of view",
+      "out": "7",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 6.78
+     },
+     "fitButton": {
+      "text": "fit",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 2
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 96,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 96,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 96,
+       "h": 66.6,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 96,
+       "h": 51.7,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "fitted": {
+     "surface": "panel",
+     "viewport": {
+      "w": 1280,
+      "h": 800
+     },
+     "mode": "edit",
+     "fitMode": "1",
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "firstVisible": "1",
+     "lastVisible": "13",
+     "colW": 72.8,
+     "gap": 12,
+     "gapRatio": 0.165,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1094,
+      "scrollLeft": 0,
+      "hiddenPx": 0
+     },
+     "card": {
+      "x": 80,
+      "y": 48,
+      "w": 1120,
+      "h": 319.5,
+      "right": 1200,
+      "bottom": 367.5
+     },
+     "scroller": {
+      "x": 93,
+      "y": 158.6,
+      "w": 1094,
+      "h": 102.5,
+      "right": 1187,
+      "bottom": 261.2
+     },
+     "count": {
+      "text": "all 13 stages and 13 notches in view",
+      "out": "0",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 5.7
+     },
+     "fitButton": {
+      "text": "actual size",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 4
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 72.8,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 72.8,
+       "h": 96.5,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 4,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      }
+     ]
+    }
+   },
+   {
+    "viewport": {
+     "width": 1280,
+     "height": 800
+    },
+    "scheme": "light",
+    "surface": "panel",
+    "shots": {
+     "unfitted": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-light-1280-unfitted.png",
+     "end": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-light-1280-end.png",
+     "fitted": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-light-1280-fitted.png"
+    },
+    "unfitted": {
+     "surface": "panel",
+     "viewport": {
+      "w": 1280,
+      "h": 800
+     },
+     "mode": "edit",
+     "fitMode": "0",
+     "total": 13,
+     "visible": 9,
+     "partlyVisible": 9,
+     "firstVisible": "1",
+     "lastVisible": "9",
+     "colW": 96,
+     "gap": 26,
+     "gapRatio": 0.271,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1562,
+      "scrollLeft": 0,
+      "hiddenPx": 468
+     },
+     "card": {
+      "x": 80,
+      "y": 48,
+      "w": 1120,
+      "h": 289.7,
+      "right": 1200,
+      "bottom": 337.7
+     },
+     "scroller": {
+      "x": 93,
+      "y": 158.6,
+      "w": 1094,
+      "h": 72.6,
+      "right": 1187,
+      "bottom": 231.3
+     },
+     "count": {
+      "text": "showing stages 1–9 of 13 — 4 of 13 stages and 4 of 13 notches out of view",
+      "out": "8",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 6.78
+     },
+     "fitButton": {
+      "text": "fit",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 2
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 96,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 96,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 96,
+       "h": 66.6,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 96,
+       "h": 51.7,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    },
+    "end": {
+     "surface": "panel",
+     "viewport": {
+      "w": 1280,
+      "h": 800
+     },
+     "mode": "edit",
+     "fitMode": "0",
+     "total": 13,
+     "visible": 9,
+     "partlyVisible": 9,
+     "firstVisible": "5",
+     "lastVisible": "13",
+     "colW": 96,
+     "gap": 26,
+     "gapRatio": 0.271,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1562,
+      "scrollLeft": 468,
+      "hiddenPx": 468
+     },
+     "card": {
+      "x": 80,
+      "y": 48,
+      "w": 1120,
+      "h": 289.7,
+      "right": 1200,
+      "bottom": 337.7
+     },
+     "scroller": {
+      "x": 93,
+      "y": 158.6,
+      "w": 1094,
+      "h": 72.6,
+      "right": 1187,
+      "bottom": 231.3
+     },
+     "count": {
+      "text": "showing stages 5–13 of 13 — 4 of 13 stages and 3 of 13 notches out of view",
+      "out": "7",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 6.78
+     },
+     "fitButton": {
+      "text": "fit",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 2
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 96,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 96,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 96,
+       "h": 66.6,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 96,
+       "h": 51.7,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "fitted": {
+     "surface": "panel",
+     "viewport": {
+      "w": 1280,
+      "h": 800
+     },
+     "mode": "edit",
+     "fitMode": "1",
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "firstVisible": "1",
+     "lastVisible": "13",
+     "colW": 72.8,
+     "gap": 12,
+     "gapRatio": 0.165,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1094,
+      "scrollLeft": 0,
+      "hiddenPx": 0
+     },
+     "card": {
+      "x": 80,
+      "y": 48,
+      "w": 1120,
+      "h": 319.5,
+      "right": 1200,
+      "bottom": 367.5
+     },
+     "scroller": {
+      "x": 93,
+      "y": 158.6,
+      "w": 1094,
+      "h": 102.5,
+      "right": 1187,
+      "bottom": 261.2
+     },
+     "count": {
+      "text": "all 13 stages and 13 notches in view",
+      "out": "0",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 5.7
+     },
+     "fitButton": {
+      "text": "actual size",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 4
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 72.8,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 72.8,
+       "h": 96.5,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 4,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      }
+     ]
+    }
+   },
+   {
+    "viewport": {
+     "width": 1824,
+     "height": 1000
+    },
+    "scheme": "dark",
+    "surface": "panel",
+    "shots": {
+     "unfitted": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-dark-1824-unfitted.png",
+     "end": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-dark-1824-end.png",
+     "fitted": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-dark-1824-fitted.png"
+    },
+    "unfitted": {
+     "surface": "panel",
+     "viewport": {
+      "w": 1824,
+      "h": 1000
+     },
+     "mode": "edit",
+     "fitMode": "0",
+     "total": 13,
+     "visible": 9,
+     "partlyVisible": 9,
+     "firstVisible": "1",
+     "lastVisible": "9",
+     "colW": 96,
+     "gap": 26,
+     "gapRatio": 0.271,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1562,
+      "scrollLeft": 0,
+      "hiddenPx": 468
+     },
+     "card": {
+      "x": 352,
+      "y": 60,
+      "w": 1120,
+      "h": 289.7,
+      "right": 1472,
+      "bottom": 349.7
+     },
+     "scroller": {
+      "x": 365,
+      "y": 170.6,
+      "w": 1094,
+      "h": 72.6,
+      "right": 1459,
+      "bottom": 243.3
+     },
+     "count": {
+      "text": "showing stages 1–9 of 13 — 4 of 13 stages and 4 of 13 notches out of view",
+      "out": "8",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 6.78
+     },
+     "fitButton": {
+      "text": "fit",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 2
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 96,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 96,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 96,
+       "h": 66.6,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 96,
+       "h": 51.7,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    },
+    "end": {
+     "surface": "panel",
+     "viewport": {
+      "w": 1824,
+      "h": 1000
+     },
+     "mode": "edit",
+     "fitMode": "0",
+     "total": 13,
+     "visible": 9,
+     "partlyVisible": 9,
+     "firstVisible": "5",
+     "lastVisible": "13",
+     "colW": 96,
+     "gap": 26,
+     "gapRatio": 0.271,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1562,
+      "scrollLeft": 468,
+      "hiddenPx": 468
+     },
+     "card": {
+      "x": 352,
+      "y": 60,
+      "w": 1120,
+      "h": 289.7,
+      "right": 1472,
+      "bottom": 349.7
+     },
+     "scroller": {
+      "x": 365,
+      "y": 170.6,
+      "w": 1094,
+      "h": 72.6,
+      "right": 1459,
+      "bottom": 243.3
+     },
+     "count": {
+      "text": "showing stages 5–13 of 13 — 4 of 13 stages and 3 of 13 notches out of view",
+      "out": "7",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 6.78
+     },
+     "fitButton": {
+      "text": "fit",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 2
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 96,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 96,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 96,
+       "h": 66.6,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 96,
+       "h": 51.7,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "fitted": {
+     "surface": "panel",
+     "viewport": {
+      "w": 1824,
+      "h": 1000
+     },
+     "mode": "edit",
+     "fitMode": "1",
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "firstVisible": "1",
+     "lastVisible": "13",
+     "colW": 72.8,
+     "gap": 12,
+     "gapRatio": 0.165,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1094,
+      "scrollLeft": 0,
+      "hiddenPx": 0
+     },
+     "card": {
+      "x": 352,
+      "y": 60,
+      "w": 1120,
+      "h": 319.5,
+      "right": 1472,
+      "bottom": 379.5
+     },
+     "scroller": {
+      "x": 365,
+      "y": 170.6,
+      "w": 1094,
+      "h": 102.5,
+      "right": 1459,
+      "bottom": 273.2
+     },
+     "count": {
+      "text": "all 13 stages and 13 notches in view",
+      "out": "0",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 5.7
+     },
+     "fitButton": {
+      "text": "actual size",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 4
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 72.8,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 72.8,
+       "h": 96.5,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 4,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      }
+     ]
+    }
+   },
+   {
+    "viewport": {
+     "width": 1824,
+     "height": 1000
+    },
+    "scheme": "light",
+    "surface": "panel",
+    "shots": {
+     "unfitted": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-light-1824-unfitted.png",
+     "end": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-light-1824-end.png",
+     "fitted": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-light-1824-fitted.png"
+    },
+    "unfitted": {
+     "surface": "panel",
+     "viewport": {
+      "w": 1824,
+      "h": 1000
+     },
+     "mode": "edit",
+     "fitMode": "0",
+     "total": 13,
+     "visible": 9,
+     "partlyVisible": 9,
+     "firstVisible": "1",
+     "lastVisible": "9",
+     "colW": 96,
+     "gap": 26,
+     "gapRatio": 0.271,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1562,
+      "scrollLeft": 0,
+      "hiddenPx": 468
+     },
+     "card": {
+      "x": 352,
+      "y": 60,
+      "w": 1120,
+      "h": 289.7,
+      "right": 1472,
+      "bottom": 349.7
+     },
+     "scroller": {
+      "x": 365,
+      "y": 170.6,
+      "w": 1094,
+      "h": 72.6,
+      "right": 1459,
+      "bottom": 243.3
+     },
+     "count": {
+      "text": "showing stages 1–9 of 13 — 4 of 13 stages and 4 of 13 notches out of view",
+      "out": "8",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 6.78
+     },
+     "fitButton": {
+      "text": "fit",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 2
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 96,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 96,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 96,
+       "h": 66.6,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 96,
+       "h": 51.7,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    },
+    "end": {
+     "surface": "panel",
+     "viewport": {
+      "w": 1824,
+      "h": 1000
+     },
+     "mode": "edit",
+     "fitMode": "0",
+     "total": 13,
+     "visible": 9,
+     "partlyVisible": 9,
+     "firstVisible": "5",
+     "lastVisible": "13",
+     "colW": 96,
+     "gap": 26,
+     "gapRatio": 0.271,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1562,
+      "scrollLeft": 468,
+      "hiddenPx": 468
+     },
+     "card": {
+      "x": 352,
+      "y": 60,
+      "w": 1120,
+      "h": 289.7,
+      "right": 1472,
+      "bottom": 349.7
+     },
+     "scroller": {
+      "x": 365,
+      "y": 170.6,
+      "w": 1094,
+      "h": 72.6,
+      "right": 1459,
+      "bottom": 243.3
+     },
+     "count": {
+      "text": "showing stages 5–13 of 13 — 4 of 13 stages and 3 of 13 notches out of view",
+      "out": "7",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 6.78
+     },
+     "fitButton": {
+      "text": "fit",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 2
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 96,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 96,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 96,
+       "h": 66.6,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 96,
+       "h": 51.7,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "fitted": {
+     "surface": "panel",
+     "viewport": {
+      "w": 1824,
+      "h": 1000
+     },
+     "mode": "edit",
+     "fitMode": "1",
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "firstVisible": "1",
+     "lastVisible": "13",
+     "colW": 72.8,
+     "gap": 12,
+     "gapRatio": 0.165,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1094,
+      "scrollLeft": 0,
+      "hiddenPx": 0
+     },
+     "card": {
+      "x": 352,
+      "y": 60,
+      "w": 1120,
+      "h": 319.5,
+      "right": 1472,
+      "bottom": 379.5
+     },
+     "scroller": {
+      "x": 365,
+      "y": 170.6,
+      "w": 1094,
+      "h": 102.5,
+      "right": 1459,
+      "bottom": 273.2
+     },
+     "count": {
+      "text": "all 13 stages and 13 notches in view",
+      "out": "0",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 5.7
+     },
+     "fitButton": {
+      "text": "actual size",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 4
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 72.8,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 72.8,
+       "h": 96.5,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 4,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      }
+     ]
+    }
+   },
+   {
+    "viewport": {
+     "width": 2560,
+     "height": 1200
+    },
+    "scheme": "dark",
+    "surface": "panel",
+    "shots": {
+     "unfitted": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-dark-2560-unfitted.png",
+     "end": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-dark-2560-end.png",
+     "fitted": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-dark-2560-fitted.png"
+    },
+    "unfitted": {
+     "surface": "panel",
+     "viewport": {
+      "w": 2560,
+      "h": 1200
+     },
+     "mode": "edit",
+     "fitMode": "0",
+     "total": 13,
+     "visible": 9,
+     "partlyVisible": 9,
+     "firstVisible": "1",
+     "lastVisible": "9",
+     "colW": 96,
+     "gap": 26,
+     "gapRatio": 0.271,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1562,
+      "scrollLeft": 0,
+      "hiddenPx": 468
+     },
+     "card": {
+      "x": 720,
+      "y": 72,
+      "w": 1120,
+      "h": 289.7,
+      "right": 1840,
+      "bottom": 361.7
+     },
+     "scroller": {
+      "x": 733,
+      "y": 182.6,
+      "w": 1094,
+      "h": 72.6,
+      "right": 1827,
+      "bottom": 255.3
+     },
+     "count": {
+      "text": "showing stages 1–9 of 13 — 4 of 13 stages and 4 of 13 notches out of view",
+      "out": "8",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 6.78
+     },
+     "fitButton": {
+      "text": "fit",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 2
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 96,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 96,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 96,
+       "h": 66.6,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 96,
+       "h": 51.7,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    },
+    "end": {
+     "surface": "panel",
+     "viewport": {
+      "w": 2560,
+      "h": 1200
+     },
+     "mode": "edit",
+     "fitMode": "0",
+     "total": 13,
+     "visible": 9,
+     "partlyVisible": 9,
+     "firstVisible": "5",
+     "lastVisible": "13",
+     "colW": 96,
+     "gap": 26,
+     "gapRatio": 0.271,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1562,
+      "scrollLeft": 468,
+      "hiddenPx": 468
+     },
+     "card": {
+      "x": 720,
+      "y": 72,
+      "w": 1120,
+      "h": 289.7,
+      "right": 1840,
+      "bottom": 361.7
+     },
+     "scroller": {
+      "x": 733,
+      "y": 182.6,
+      "w": 1094,
+      "h": 72.6,
+      "right": 1827,
+      "bottom": 255.3
+     },
+     "count": {
+      "text": "showing stages 5–13 of 13 — 4 of 13 stages and 3 of 13 notches out of view",
+      "out": "7",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 6.78
+     },
+     "fitButton": {
+      "text": "fit",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 2
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 96,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 96,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 96,
+       "h": 66.6,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 96,
+       "h": 51.7,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "fitted": {
+     "surface": "panel",
+     "viewport": {
+      "w": 2560,
+      "h": 1200
+     },
+     "mode": "edit",
+     "fitMode": "1",
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "firstVisible": "1",
+     "lastVisible": "13",
+     "colW": 72.8,
+     "gap": 12,
+     "gapRatio": 0.165,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1094,
+      "scrollLeft": 0,
+      "hiddenPx": 0
+     },
+     "card": {
+      "x": 720,
+      "y": 72,
+      "w": 1120,
+      "h": 319.5,
+      "right": 1840,
+      "bottom": 391.5
+     },
+     "scroller": {
+      "x": 733,
+      "y": 182.6,
+      "w": 1094,
+      "h": 102.5,
+      "right": 1827,
+      "bottom": 285.2
+     },
+     "count": {
+      "text": "all 13 stages and 13 notches in view",
+      "out": "0",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 5.7
+     },
+     "fitButton": {
+      "text": "actual size",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 4
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 72.8,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 72.8,
+       "h": 96.5,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 4,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      }
+     ]
+    }
+   },
+   {
+    "viewport": {
+     "width": 2560,
+     "height": 1200
+    },
+    "scheme": "light",
+    "surface": "panel",
+    "shots": {
+     "unfitted": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-light-2560-unfitted.png",
+     "end": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-light-2560-end.png",
+     "fitted": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\033c9d1b\\shots2\\panel-light-2560-fitted.png"
+    },
+    "unfitted": {
+     "surface": "panel",
+     "viewport": {
+      "w": 2560,
+      "h": 1200
+     },
+     "mode": "edit",
+     "fitMode": "0",
+     "total": 13,
+     "visible": 9,
+     "partlyVisible": 9,
+     "firstVisible": "1",
+     "lastVisible": "9",
+     "colW": 96,
+     "gap": 26,
+     "gapRatio": 0.271,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1562,
+      "scrollLeft": 0,
+      "hiddenPx": 468
+     },
+     "card": {
+      "x": 720,
+      "y": 72,
+      "w": 1120,
+      "h": 289.7,
+      "right": 1840,
+      "bottom": 361.7
+     },
+     "scroller": {
+      "x": 733,
+      "y": 182.6,
+      "w": 1094,
+      "h": 72.6,
+      "right": 1827,
+      "bottom": 255.3
+     },
+     "count": {
+      "text": "showing stages 1–9 of 13 — 4 of 13 stages and 4 of 13 notches out of view",
+      "out": "8",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 6.78
+     },
+     "fitButton": {
+      "text": "fit",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 2
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 96,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 96,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 96,
+       "h": 66.6,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 96,
+       "h": 51.7,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      }
+     ]
+    },
+    "end": {
+     "surface": "panel",
+     "viewport": {
+      "w": 2560,
+      "h": 1200
+     },
+     "mode": "edit",
+     "fitMode": "0",
+     "total": 13,
+     "visible": 9,
+     "partlyVisible": 9,
+     "firstVisible": "5",
+     "lastVisible": "13",
+     "colW": 96,
+     "gap": 26,
+     "gapRatio": 0.271,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1562,
+      "scrollLeft": 468,
+      "hiddenPx": 468
+     },
+     "card": {
+      "x": 720,
+      "y": 72,
+      "w": 1120,
+      "h": 289.7,
+      "right": 1840,
+      "bottom": 361.7
+     },
+     "scroller": {
+      "x": 733,
+      "y": 182.6,
+      "w": 1094,
+      "h": 72.6,
+      "right": 1827,
+      "bottom": 255.3
+     },
+     "count": {
+      "text": "showing stages 5–13 of 13 — 4 of 13 stages and 3 of 13 notches out of view",
+      "out": "7",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 6.78
+     },
+     "fitButton": {
+      "text": "fit",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 2
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": false
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 96,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": false
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 96,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 96,
+       "h": 66.6,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 96,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 96,
+       "h": 51.7,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 96,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      }
+     ]
+    },
+    "fitted": {
+     "surface": "panel",
+     "viewport": {
+      "w": 2560,
+      "h": 1200
+     },
+     "mode": "edit",
+     "fitMode": "1",
+     "total": 13,
+     "visible": 13,
+     "partlyVisible": 13,
+     "firstVisible": "1",
+     "lastVisible": "13",
+     "colW": 72.8,
+     "gap": 12,
+     "gapRatio": 0.165,
+     "scroll": {
+      "clientW": 1094,
+      "scrollW": 1094,
+      "scrollLeft": 0,
+      "hiddenPx": 0
+     },
+     "card": {
+      "x": 720,
+      "y": 72,
+      "w": 1120,
+      "h": 319.5,
+      "right": 1840,
+      "bottom": 391.5
+     },
+     "scroller": {
+      "x": 733,
+      "y": 182.6,
+      "w": 1094,
+      "h": 102.5,
+      "right": 1827,
+      "bottom": 285.2
+     },
+     "count": {
+      "text": "all 13 stages and 13 notches in view",
+      "out": "0",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 5.7
+     },
+     "fitButton": {
+      "text": "actual size",
+      "shown": true,
+      "size": 10.5,
+      "contrast": 7.07
+     },
+     "label": {
+      "text": "Intake and charter",
+      "size": 11.5,
+      "weight": "400",
+      "color": "#8b96a5",
+      "bg": "#13181f",
+      "contrast": 5.94,
+      "lineHeight": "14.95px"
+     },
+     "secondary": null,
+     "ordinal": {
+      "size": 9.5,
+      "contrast": 5.94
+     },
+     "words": {
+      "median": 4,
+      "min": 2,
+      "max": 6,
+      "total": 49
+     },
+     "titleWords": {
+      "median": 3,
+      "min": 1,
+      "max": 5
+     },
+     "titleLines": {
+      "median": 2,
+      "max": 4
+     },
+     "page": {
+      "bodyBg": "#10141a",
+      "colorScheme": "normal"
+     },
+     "perCard": [
+      {
+       "id": "s0",
+       "pos": "1",
+       "mark": "not-reached",
+       "title": "Intake and charter",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s1",
+       "pos": "2",
+       "mark": "not-reached",
+       "title": "POC build",
+       "w": 72.8,
+       "h": 51.7,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 1,
+       "fullyVisible": true
+      },
+      {
+       "id": "s2",
+       "pos": "3",
+       "mark": "not-reached",
+       "title": "Freeze and export",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s3",
+       "pos": "4",
+       "mark": "not-reached",
+       "title": "Reverse-engineer",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 2,
+       "titleWords": 1,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s4",
+       "pos": "5",
+       "mark": "not-reached",
+       "title": "Work breakdown",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s5",
+       "pos": "6",
+       "mark": "not-reached",
+       "title": "Instantiate the model",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s6",
+       "pos": "7",
+       "mark": "not-reached",
+       "title": "Implement per module",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s7",
+       "pos": "8",
+       "mark": "not-reached",
+       "title": "DAL review and SQL verify",
+       "w": 72.8,
+       "h": 96.5,
+       "words": 6,
+       "titleWords": 5,
+       "lines": 4,
+       "fullyVisible": true
+      },
+      {
+       "id": "s8",
+       "pos": "9",
+       "mark": "not-reached",
+       "title": "Code review rounds",
+       "w": 72.8,
+       "h": 81.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 3,
+       "fullyVisible": true
+      },
+      {
+       "id": "s9",
+       "pos": "10",
+       "mark": "not-reached",
+       "title": "Rewrite to green",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s10",
+       "pos": "11",
+       "mark": "not-reached",
+       "title": "Playwright UI parity",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s11",
+       "pos": "12",
+       "mark": "not-reached",
+       "title": "Delivery to UAT",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 4,
+       "titleWords": 3,
+       "lines": 2,
+       "fullyVisible": true
+      },
+      {
+       "id": "s12",
+       "pos": "13",
+       "mark": "not-reached",
+       "title": "UAT sign-off",
+       "w": 72.8,
+       "h": 66.6,
+       "words": 3,
+       "titleWords": 2,
+       "lines": 2,
+       "fullyVisible": true
+      }
+     ]
+    }
+   }
+  ],
+  "theme": {
+   "sheets": 1,
+   "darkQueries": 0,
+   "mediaQueries": [],
+   "rootColorScheme": "normal",
+   "themeAttr": null,
+   "bodyBg": "rgb(16, 20, 26)",
+   "bodyColor": "rgb(230, 233, 239)",
+   "rootBg": "rgba(0, 0, 0, 0)"
+  },
+  "schemeIdentity": [
+   {
+    "width": 1280,
+    "state": "unfitted",
+    "dark": "8884054ec2cb5d5b",
+    "light": "8884054ec2cb5d5b",
+    "identical": true
+   },
+   {
+    "width": 1280,
+    "state": "fitted",
+    "dark": "9766ab6cc6b0a1dd",
+    "light": "9766ab6cc6b0a1dd",
+    "identical": true
+   },
+   {
+    "width": 1280,
+    "state": "end",
+    "dark": "edf105ab6c8bdc20",
+    "light": "edf105ab6c8bdc20",
+    "identical": true
+   },
+   {
+    "width": 1824,
+    "state": "unfitted",
+    "dark": "3056e3d8284369ea",
+    "light": "3056e3d8284369ea",
+    "identical": true
+   },
+   {
+    "width": 1824,
+    "state": "fitted",
+    "dark": "b1ad4e5439163083",
+    "light": "b1ad4e5439163083",
+    "identical": true
+   },
+   {
+    "width": 1824,
+    "state": "end",
+    "dark": "372661b21ff9b0b6",
+    "light": "372661b21ff9b0b6",
+    "identical": true
+   },
+   {
+    "width": 2560,
+    "state": "unfitted",
+    "dark": "5ca2c66d274192bf",
+    "light": "5ca2c66d274192bf",
+    "identical": true
+   },
+   {
+    "width": 2560,
+    "state": "fitted",
+    "dark": "939dcff36a2f010f",
+    "light": "939dcff36a2f010f",
+    "identical": true
+   },
+   {
+    "width": 2560,
+    "state": "end",
+    "dark": "52c9a61dee90198a",
+    "light": "52c9a61dee90198a",
+    "identical": true
+   }
+  ]
+ },
+ "notes": [],
+ "errors": [],
+ "studioTheme": {
+  "sheets": 1,
+  "darkQueries": 0,
+  "mediaQueries": [],
+  "rootColorScheme": "normal",
+  "themeAttr": null,
+  "bodyBg": "rgb(248, 249, 250)",
+  "bodyColor": "rgb(16, 24, 40)",
+  "rootBg": "rgba(0, 0, 0, 0)"
+ },
+ "finishedAt": "2026-11-04T08:44:04.079Z",
+ "shotCount": 38
+}

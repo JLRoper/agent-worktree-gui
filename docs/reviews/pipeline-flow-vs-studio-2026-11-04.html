@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The panel's flow chart and the Pipeline Studio, side by side — thirteen stages at three widths</title>
+
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a21; --panel2: #1b212a; --line: #2a3340; --text: #e6e9ef; --dim: #9aa5b4;
+    --dimmer: #6f7a89; --green: #7ee787; --red: #ff9c94; --amber: #f0c674; --blue: #9ecbff; --purple: #c8a6ff;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 15px/1.62 var(--ui); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 30px 24px 72px; }
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  h1 { font-size: 27px; line-height: 1.22; margin: 4px 0 8px; letter-spacing: -0.2px; }
+  h2 { font-size: 19px; margin: 44px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h3 { font-size: 15.5px; margin: 26px 0 8px; color: var(--blue); }
+  h4 { font-size: 12px; margin: 18px 0 6px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.07em; }
+  p { margin: 9px 0; }
+  ul, ol { margin: 8px 0 8px 22px; padding: 0; }
+  li { margin: 5px 0; }
+  code, .mono { font-family: var(--mono); font-size: 12.8px; }
+  code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .kicker { color: var(--dimmer); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; }
+  .sub { color: var(--dim); font-size: 16px; margin: 0 0 14px; max-width: 980px; }
+  .meta { color: var(--dim); font-size: 12.5px; }
+  .meta code { font-size: 12px; }
+  nav { margin: 18px 0 8px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line);
+        border-radius: 8px; font-size: 13px; line-height: 1.9; }
+  nav b { color: var(--dimmer); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.1em; }
+  nav a { margin: 0 10px 0 0; white-space: nowrap; }
+  .lead { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--blue);
+          border-radius: 8px; padding: 14px 18px; margin: 18px 0; }
+  .lead p { margin: 5px 0; }
+  .verdict { background: #13261a; border: 1px solid #2f5f38; border-left: 4px solid var(--green);
+             border-radius: 8px; padding: 13px 18px; margin: 18px 0; }
+  .verdict h4 { color: var(--green); margin: 0 0 4px; }
+  .warn { background: #2a2414; border: 1px solid #5c4d22; border-left: 4px solid var(--amber);
+          border-radius: 8px; padding: 12px 18px; margin: 16px 0; }
+  .warn h4 { color: var(--amber); margin: 0 0 4px; }
+  .not { background: #1f1a26; border: 1px solid #44395a; border-left: 4px solid var(--purple);
+         border-radius: 8px; padding: 12px 18px; margin: 16px 0; }
+  .not h4 { color: var(--purple); margin: 0 0 4px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 18px; margin: 14px 0; }
+  .tw { overflow-x: auto; margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--panel2); color: var(--dim); font-weight: 600; font-size: 12px;
+       text-transform: uppercase; letter-spacing: 0.05em; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .good { color: var(--green); font-weight: 600; }
+  .bad { color: var(--red); font-weight: 600; }
+  .may { color: var(--amber); }
+  .dim { color: var(--dim); }
+  .small { font-size: 12.5px; }
+  /* One figure per row: a thirteen-column drawing at half width is a thumbnail, not evidence. The studio shots
+     are capped so a square canvas does not become a 1 100 px-tall wall. */
+  .pair { display: grid; grid-template-columns: 1fr; gap: 18px; margin: 16px 0 22px; }
+  .pair figure.studio img { max-width: 820px; }
+  .pair figure.studio.wide img { max-width: 100%; }
+  figure a { display: block; }
+  figure { margin: 0; }
+  figure img { display: block; width: 100%; height: auto; margin: 0 auto; border: 1px solid var(--line); border-radius: 8px; background: #0b0e12; }
+  figcaption { color: var(--dim); font-size: 12.5px; margin-top: 6px; }
+  figcaption b { color: var(--text); font-weight: 600; }
+  pre { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+        overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; }
+  footer { margin-top: 54px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--dimmer); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker">agent-worktree-gui · a side-by-side capture · the flow chart against the pipeline studio</div>
+<h1>One chart spends the window, the other spends a 1120 px dialog</h1>
+<p class="sub">The same pipeline — thirteen stages, five gates, the studio's own <code>poc-to-uat</code> seed — drawn by the
+panel's flow chart and by the Pipeline Studio, photographed at 1280×800, 1824×1000 and 2560×1200 in both colour
+schemes. Six numbers per surface: column width, painted label size, label contrast, stages visible before scrolling,
+the gap-to-card ratio, and the words a card carries. The studio is the legible one at 1824 and 2560; at 1280 neither
+is, and the reason is the same measurement on both sides — how much of the window each drawing is allowed to use.</p>
+<p class="meta">
+  Branch <code>wtgui/capture-the-panel-s-flow-c6aef5</code>, rebased onto <code>origin/main</code> <code>5234a3c</code>
+  (<code>1.5.0</code>); this landing carries <code>1.5.1</code> · captured 2026-11-04 03:27–03:30 EST, re-captured on the
+  rebased tip with the same numbers · harness <code>tools/capture-pipeline-flow.mjs</code> (new; it
+  photographs and measures, it asserts nothing) · headless Chromium via Playwright 1.64.1, captures at
+  <code>deviceScaleFactor: 1</code> · 3 viewports × 2 colour schemes × 3 states × 2 surfaces = 36 state shots, 38
+  files with the two page shots · the panel half runs on a throwaway panel (own config, data dir and catalogue,
+  assistant off, gateway dead); the studio half is the live server at <code>127.0.0.1:8095</code>, read-only.
+</p>
+
+<div class="verdict">
+  <h4>The answer, in one paragraph</h4>
+  <p>The studio maps the window to the drawing: its canvas is 648 → 1100 → 1836 px wide across the three viewports, so
+  the same thirteen stages are laid out in 3 columns × 5 rows and the whole <code>.world</code> is CSS-scaled to
+  60% → 87% → 111% — every stage always on screen, and the type growing with the window. The panel maps the window to
+  nothing: <code>.pmodal-card</code> is <code>min(1120px, 96vw)</code>, so its card measures <strong>1120 px at all
+  three viewports</strong>, its scroller 1094 and its content 1562 — the same 9 of 13 stages and the same 468 px hidden
+  at 2560 as at 1280. The panel is legible per label (11.5 px at 5.94:1, fixed) and the studio is legible per chain
+  (13 of 13 at 7.86 → 14.43 px); the studio's 1280 label is 68% of the panel's, and the panel's 2560 drawing is
+  100% of its 1280 drawing.</p>
+</div>
+
+<nav>
+  <b>on this page</b>
+  <a href="#answer">The mechanism</a>
+  <a href="#numbers">The numbers</a>
+  <a href="#scheme">Light and dark</a>
+  <a href="#method">Method</a>
+  <a href="#shots">The shots</a>
+  <a href="#findings">Findings</a>
+  <a href="#suggestions">Suggestions</a>
+  <a href="#limits">Limits</a>
+  <a href="#reproduce">Reproduce</a>
+  <a href="#three">If the panel only did three things</a>
+</nav>
+
+<h2 id="answer">The mechanism: what each surface does with a wider window</h2>
+
+<p>Both drawings are asked the same question — thirteen stages, one chain — and both answer it by trading something.
+The panel trades <em>completeness</em> for type: it holds a 96 px column and an 11.5 px label and lets the overflow
+scroll, printing a count of what it hid. The studio trades <em>type</em> for completeness: it holds all thirteen on
+the canvas and scales the type down until they fit. Which trade you are looking at is decided by one number, the
+drawing's own width, and that is the number the two surfaces disagree about most.</p>
+
+<div class="tw">
+<table>
+  <tr><th>the drawing's own width</th><th class="num">1280×800</th><th class="num">1824×1000</th><th class="num">2560×1200</th></tr>
+  <tr><td>panel — the modal card (<code>.pmodal-card</code>)</td><td class="num">1120</td><td class="num">1120</td><td class="num">1120</td></tr>
+  <tr><td>panel — the flow scroller's client width</td><td class="num">1094</td><td class="num">1094</td><td class="num">1094</td></tr>
+  <tr><td>panel — the drawing's content width</td><td class="num">1562</td><td class="num">1562</td><td class="num">1562</td></tr>
+  <tr><td>studio — the canvas (<code>.canvas</code>)</td><td class="num">648</td><td class="num">1100</td><td class="num">1836</td></tr>
+  <tr><td>studio — the canvas as a share of the window</td><td class="num">50.6%</td><td class="num">60.3%</td><td class="num">71.7%</td></tr>
+  <tr><td>studio — the <code>.world</code> scale it chose</td><td class="num">0.6046</td><td class="num">0.8664</td><td class="num">1.1103</td></tr>
+</table>
+</div>
+
+<p>The panel's 1120 is a constant, not a measurement: <code>width: min(1120px, 96vw)</code>
+(<code>public/style.css:4104</code>). The studio's scale is computed on every resize by
+<code>fitToStages()</code> (<code>app.js:993–1019</code>): in lanes mode it solves
+<code>zoom = (rect.width − 48) / maxX</code> and clamps to 0.4–0.95 — except that the clamp is applied to the
+<em>lane</em> branch only up to 0.95, and the measured 111% at 2560 comes from the non-lane branch's 1.15 ceiling,
+which is why the studio can grow past actual size when the window is large enough. Whatever the branch, the input is
+the canvas's own width, so the drawing follows the window.</p>
+
+<p>The panel's fit control does the same job by a different lever. <code>fit</code> rewrites two CSS variables —
+<code>--pflow-gap: 26px → 12px</code> and <code>--pflow-minw: 96px → 56px</code>
+(<code>public/style.css:3998</code>, <code>:4004</code>) — and the grid stretches the thirteen columns to
+<strong>72.8 px</strong> in the 1094 px scroller. The type does not move: 11.5 px before and after. That is the whole
+of the panel's answer to a long pipeline, and it is why the fitted drawing is complete and readable but five titles
+wrap to three lines or more and two break inside a word.</p>
+
+<h2 id="numbers">The numbers</h2>
+
+<p>Every cell is read off the DOM in the same run that took the shot: rects in CSS pixels, colours from
+<code>getComputedStyle</code> composited onto the card's first opaque background, contrast by WCAG 2.x. The studio's
+label size is the <em>painted</em> size — the computed 13 px multiplied by the <code>.world</code> scale — because a
+scaled world paints its type at the scaled size while <code>getComputedStyle</code> still reports 13.</p>
+
+<div class="tw">
+<table>
+  <tr>
+    <th>number</th>
+    <th class="num">panel 1280</th><th class="num">panel 1824</th><th class="num">panel 2560</th>
+    <th class="num">studio 1280</th><th class="num">studio 1824</th><th class="num">studio 2560</th>
+  </tr>
+  <tr>
+    <td>column width (px)</td>
+    <td class="num">96<br><span class="dim small">72.8 fitted</span></td><td class="num">96<br><span class="dim small">72.8 fitted</span></td><td class="num">96<br><span class="dim small">72.8 fitted</span></td>
+    <td class="num">130.6</td><td class="num">187.1</td><td class="num">239.8</td>
+  </tr>
+  <tr>
+    <td>label size, painted (px)</td>
+    <td class="num">11.5</td><td class="num">11.5</td><td class="num">11.5</td>
+    <td class="num">7.86</td><td class="num">11.26</td><td class="num">14.43</td>
+  </tr>
+  <tr>
+    <td>label contrast (WCAG)</td>
+    <td class="num">5.94:1</td><td class="num">5.94:1</td><td class="num">5.94:1</td>
+    <td class="num">17.75:1</td><td class="num">17.75:1</td><td class="num">17.75:1</td>
+  </tr>
+  <tr>
+    <td>stages visible before scrolling</td>
+    <td class="num"><span class="bad">9 of 13</span><br><span class="dim small">13 of 13 fitted</span></td>
+    <td class="num"><span class="bad">9 of 13</span><br><span class="dim small">13 of 13 fitted</span></td>
+    <td class="num"><span class="bad">9 of 13</span><br><span class="dim small">13 of 13 fitted</span></td>
+    <td class="num"><span class="good">13 of 13</span></td><td class="num"><span class="good">13 of 13</span></td><td class="num"><span class="good">13 of 13</span></td>
+  </tr>
+  <tr>
+    <td>gap ÷ card width</td>
+    <td class="num">0.271<br><span class="dim small">0.165 fitted</span></td><td class="num">0.271<br><span class="dim small">0.165 fitted</span></td><td class="num">0.271<br><span class="dim small">0.165 fitted</span></td>
+    <td class="num">0.158</td><td class="num">0.157</td><td class="num">0.158</td>
+  </tr>
+  <tr>
+    <td>words per card (median)</td>
+    <td class="num">4<br><span class="dim small">2–6</span></td><td class="num">4<br><span class="dim small">2–6</span></td><td class="num">4<br><span class="dim small">2–6</span></td>
+    <td class="num">9<br><span class="dim small">8–12</span></td><td class="num">9<br><span class="dim small">8–12</span></td><td class="num">9<br><span class="dim small">8–12</span></td>
+  </tr>
+</table>
+</div>
+
+<p class="small dim">Title words are the same on both surfaces — median 3, range 1–5 — because the titles are the same
+thirteen names. The 4-vs-9 gap is chrome: the panel's card prints an ordinal and an artifact; the studio's prints
+<code>IMPORTED</code>, the id, the gate, a 13/16 score, <code>AGENT</code> and the role as well.</p>
+
+<h3>The studio's other state: actual size</h3>
+<p>The studio's own escape from the fit is the zoom reset, <code>[data-act="zoom-reset"]</code>. At 100% its label is
+13 px — the panel's 11.5 px and more — and the chain stops fitting:</p>
+
+<div class="tw">
+<table>
+  <tr><th>studio at 100%</th><th class="num">1280×800</th><th class="num">1824×1000</th><th class="num">2560×1200</th></tr>
+  <tr><td>card width (px)</td><td class="num">216</td><td class="num">216</td><td class="num">216</td></tr>
+  <tr><td>label size, painted (px)</td><td class="num">13</td><td class="num">13</td><td class="num">13</td></tr>
+  <tr><td>stages fully visible</td><td class="num"><span class="bad">6 of 13</span></td><td class="num"><span class="may">12 of 13</span></td><td class="num"><span class="good">13 of 13</span></td></tr>
+  <tr><td>stages partly visible</td><td class="num">12 of 13</td><td class="num">13 of 13</td><td class="num">13 of 13</td></tr>
+  <tr><td>the world's extent ÷ the canvas</td><td class="num">1459×1032 in 648×616</td><td class="num">1571×1011 in 1100×830</td><td class="num">1836×1030 in 1836×1030</td></tr>
+</table>
+</div>
+
+<p>So the studio's fit is doing real work at 1280 (13 of 13 at 7.86 px instead of 6 of 13 at 13 px) and is redundant at
+2560 (it can afford 111% and still show all thirteen). The panel's fit is doing real work at every width, because the
+panel's width never changes.</p>
+
+<h2 id="scheme">Light and dark: both surfaces pin a scheme, and neither follows the reader</h2>
+
+<p>Each surface was captured twice per state, once with <code>colorScheme: "dark"</code> and once with
+<code>colorScheme: "light"</code>. Every state at every width renders the same picture in both: all <strong>27
+pairs</strong> in the committed ledger are byte-identical PNGs — 18 panel, 9 studio. (An earlier run of the same
+harness produced one panel pair differing in 314 of 1&nbsp;299&nbsp;200 pixels, every one of them within 4 px of the
+card's rounded edge: subpixel placement of the dialog, not colour. The edge is what varies between runs; the palette
+does not.)</p>
+
+<div class="tw">
+<table>
+  <tr><th>surface</th><th><code>prefers-color-scheme</code> rules in its stylesheet</th><th><code>color-scheme</code> on the root</th><th><code>data-theme</code></th><th>body background, dark / light capture</th></tr>
+  <tr><td>panel</td><td>0</td><td><code>normal</code></td><td>absent</td><td><code>#10141a</code> / <code>#10141a</code></td></tr>
+  <tr><td>studio</td><td>0</td><td><code>normal</code></td><td>absent</td><td><code>#f8f9fa</code> / <code>#f8f9fa</code></td></tr>
+</table>
+</div>
+
+<p>The panel pins <strong>dark</strong> the same way the studio pins <strong>light</strong>: one palette in
+<code>:root</code>, no query, no attribute, and no <code>color-scheme</code> declaration — so the browser does not even
+recolour its own scrollbars or form controls. For the studio the answer to "hard-coded theme or missing dark branch?"
+is <strong>hard-coded</strong>: <code>app.css:8</code> is the only <code>:root</code> and it carries the light palette
+(<code>--sefl-canvas: #f8f9fa</code> at :27, <code>--sefl-surface: #ffffff</code> at :28, <code>--sefl-ink:
+#101828</code> at :20), and <code>.node { background: #fff }</code> is written literally rather than through a
+variable. There is no dark palette that fails to apply — there is no dark palette.</p>
+
+<div class="not">
+  <h4>Not fixed here</h4>
+  <p>The studio lives in another project (<code>ai-development-factory/tools/pipeline-studio</code>) and was read
+  through its own server at :8095. Nothing in it was changed, and the report does not propose a fix for it beyond the
+  one suggestion marked out-of-repo.</p>
+</div>
+
+<h2 id="method">Method</h2>
+
+<h3>The fixture: the studio's seed, in the panel's schema</h3>
+<p>Both drawings describe <code>poc-to-uat</code> — the studio's own seed (<code>seed/pipeline.seed.json</code>):
+thirteen stages with the same ids, titles, artifacts and writers, and five gates. The panel refuses a stage id that is
+not a slug (the catalogue drops the pipeline with <em>"stage 1: id must be a slug (got "S0")"</em>), so the harness
+writes the ids as <code>s0</code>…<code>s12</code>; the painted titles, which are what the numbers describe, are the
+studio's own thirteen names. The panel side is a definition, so every stage is <code>not-reached</code> — the panel's
+quietest mark — and that is also the state the studio is always in when it shows a document rather than a run.</p>
+
+<h3>What is measured, and how</h3>
+<ul>
+  <li><b>column width</b> — the median painted width of the stage cards (<code>.pflow-node</code>,
+  <code>.node</code>).</li>
+  <li><b>label size</b> — the title's computed <code>font-size</code>; for the studio, multiplied by the scale in
+  <code>.world</code>'s computed <code>transform</code> matrix. That multiplication is the whole difference between
+  "13 px" in the stylesheet and 7.86 px on the screen.</li>
+  <li><b>contrast</b> — the title's colour over the first opaque ancestor background, by the WCAG relative-luminance
+  formula. The studio's card is <code>#fff</code>, so its ink is divided by white; the panel's card is
+  <code>#13181f</code>, so its <code>#8b96a5</code> label divides by that.</li>
+  <li><b>stages visible before scrolling</b> — cards whose rect is <em>fully</em> inside the scroller's (panel) or the
+  canvas's (studio) client box at rest, at <code>scrollLeft = 0</code> and no pan. Partly-visible cards are counted
+  separately in the ledger.</li>
+  <li><b>gap ÷ card width</b> — the painted gap between two neighbouring cards over the card's own width: panel
+  <code>--pflow-gap</code> (26 px) against a 96 px column; studio the distance between two cards on the same lane row
+  (20.6 px) against a 130.6 px card.</li>
+  <li><b>words per card</b> — the whitespace-split word count of the card's own <code>innerText</code>, median over
+  the thirteen.</li>
+</ul>
+
+<p>Three states per surface per viewport, in this order, so no state inherits the last one's geometry: the panel
+<em>unfitted</em> at the left edge (with its count), <em>scrolled to the far end</em>, then <em>fitted</em> after the
+press; the studio <em>as it loads</em> (its auto-fit), at <em>actual size</em> after the zoom reset, then <em>panned</em>
+to the far end. The studio's pan is measured, not guessed: the canvas is <code>overflow: hidden</code> and the drag
+writes <code>panX</code> directly, so a fixed delta can throw the whole drawing off the canvas — the harness travels
+exactly the overflow that hides the last card.</p>
+
+<p>Two numbers in the suggestions below are not in the ledger because they are about a change that does not exist yet:
+the 1600 px card and the 9 px fitted gap were each tried on the same fixture by overriding the property in the open
+dialog and re-reading the same measurements — visible columns, <code>scrollWidth</code> against
+<code>clientWidth</code>, and how many title words paint across two lines. They are quoted as tried, not as shipped.</p>
+
+<h2 id="shots">The shots</h2>
+
+<p>Twelve of the 36 state shots, paired. Every image is a CSS-pixel capture (device scale 1) of the card (panel) or
+the canvas (studio), committed as a 128-colour PNG — so the panel's 1120 px card sits at 1:1 in this page and the
+label the numbers describe is the label you can read. Click any image for the file itself. The rest are in <code>docs/reviews/pipeline-flow-vs-studio-2026-11-04/</code> under the
+same names the harness wrote, with the full ledger in <code>capture.json</code> beside them.</p>
+
+<h3>1280×800 — the width where the two answers disagree most</h3>
+<div class="pair">
+  <figure>
+    <a href="pipeline-flow-vs-studio-2026-11-04/panel-dark-1280-unfitted.png"><img src="pipeline-flow-vs-studio-2026-11-04/panel-dark-1280-unfitted.png" alt="The panel's flow chart at 1280, unfitted: nine of thirteen columns visible, the ninth clipped at the scroller's edge, with the count sentence under it."></a>
+    <figcaption><b>panel, unfitted.</b> 9 of 13 columns, 468 px of 1562 out of view. The sentence under the drawing
+    reads <code>showing stages 1–9 of 13 — 4 of 13 stages and 4 of 13 notches out of view</code> at 10.5 px, 6.78:1,
+    with <code>fit</code> beside it.</figcaption>
+  </figure>
+  <figure class="studio">
+    <a href="pipeline-flow-vs-studio-2026-11-04/studio-dark-1280-fit.png"><img src="pipeline-flow-vs-studio-2026-11-04/studio-dark-1280-fit.png" alt="The Pipeline Studio at 1280: thirteen cards in three columns and five rows, all visible, at 60% zoom."></a>
+    <figcaption><b>studio, as it loads.</b> 13 of 13 cards in 3 columns × 5 rows, the world at 60.46%. The title is
+    13 px in the stylesheet and <b>7.86 px on the screen</b>; the artifact line 9.5 px → 5.74 px; the id 10 px →
+    6.05 px.</figcaption>
+  </figure>
+</div>
+
+<div class="pair">
+  <figure>
+    <a href="pipeline-flow-vs-studio-2026-11-04/panel-dark-1280-fitted.png"><img src="pipeline-flow-vs-studio-2026-11-04/panel-dark-1280-fitted.png" alt="The panel's flow chart at 1280 after the fit press: all thirteen columns, titles wrapped to as many as four lines."></a>
+    <figcaption><b>panel, after <code>fit</code>.</b> 13 of 13 at 72.8 px columns and a 12 px gap; the count becomes
+    <code>all 13 stages and 13 notches in view</code> and dims itself (<code>data-out="0"</code>, 5.70:1). The type is
+    still 11.5 px. "Work breakdown" and "Implement per module" break inside a word.</figcaption>
+  </figure>
+  <figure class="studio">
+    <a href="pipeline-flow-vs-studio-2026-11-04/studio-dark-1280-actual.png"><img src="pipeline-flow-vs-studio-2026-11-04/studio-dark-1280-actual.png" alt="The Pipeline Studio at 1280 at 100% zoom: two columns visible, the third cut at the canvas edge and the bottom row cut."></a>
+    <figcaption><b>studio, actual size.</b> The zoom reset to 100%: 6 of 13 cards fully visible, 12 partly, the world
+    1459×1032 inside a 648×616 canvas. The type is 13 px and there is no count anywhere saying seven are out of
+    view.</figcaption>
+  </figure>
+</div>
+
+<div class="pair">
+  <figure>
+    <a href="pipeline-flow-vs-studio-2026-11-04/panel-dark-1280-end.png"><img src="pipeline-flow-vs-studio-2026-11-04/panel-dark-1280-end.png" alt="The panel's flow chart scrolled to the far end: stages 5 to 13, with the count sentence changed."></a>
+    <figcaption><b>panel, scrolled to the end.</b> Stages 5–13; the sentence is a measurement, not a constant, so it
+    now reads <code>showing stages 5–13 of 13 — 4 of 13 stages and 3 of 13 notches out of view</code>.</figcaption>
+  </figure>
+  <figure class="studio">
+    <a href="pipeline-flow-vs-studio-2026-11-04/studio-dark-1280-end.png"><img src="pipeline-flow-vs-studio-2026-11-04/studio-dark-1280-end.png" alt="The Pipeline Studio panned to the far end at 100%: the right-hand columns in view."></a>
+    <figcaption><b>studio, panned to the end at 100%.</b> A measured 231 px drag; 6 of 13 fully visible — panning
+    trades one column for another, because the layout is three wide and the canvas shows two.</figcaption>
+  </figure>
+</div>
+
+<h3>1824×1000 — the studio reaches the panel's type size</h3>
+<div class="pair">
+  <figure>
+    <a href="pipeline-flow-vs-studio-2026-11-04/panel-dark-1824-unfitted.png"><img src="pipeline-flow-vs-studio-2026-11-04/panel-dark-1824-unfitted.png" alt="The panel's flow chart at 1824, identical to 1280: the same 1120 px card, nine of thirteen columns."></a>
+    <figcaption><b>panel, 1824.</b> The card is still 1120 px and the drawing still 1562: <b>9 of 13</b>, 468 px
+    hidden, 96 px columns, 11.5 px labels. The extra 544 px of window is spent on the backdrop.</figcaption>
+  </figure>
+  <figure class="studio">
+    <a href="pipeline-flow-vs-studio-2026-11-04/studio-dark-1824-fit.png"><img src="pipeline-flow-vs-studio-2026-11-04/studio-dark-1824-fit.png" alt="The Pipeline Studio at 1824: thirteen cards at 87% zoom, titles close to normal size."></a>
+    <figcaption><b>studio, 1824.</b> Canvas 1100 px, scale 86.64%, label <b>11.26 px</b> painted — within 0.24 px of
+    the panel's 11.5 — with all thirteen stages on screen.</figcaption>
+  </figure>
+</div>
+
+<h3>2560×1200 — the studio grows past actual size, the panel does not move</h3>
+<div class="pair">
+  <figure>
+    <a href="pipeline-flow-vs-studio-2026-11-04/panel-dark-2560-unfitted.png"><img src="pipeline-flow-vs-studio-2026-11-04/panel-dark-2560-unfitted.png" alt="The panel's flow chart at 2560: still the same 1120 px card with nine of thirteen columns."></a>
+    <figcaption><b>panel, 2560.</b> Byte-for-byte the same geometry as 1280 — card 1120, scroller 1094, content 1562,
+    9 of 13. At this width the card occupies 43.8% of the window.</figcaption>
+  </figure>
+  <figure class="studio wide">
+    <a href="pipeline-flow-vs-studio-2026-11-04/studio-dark-2560-fit.png"><img src="pipeline-flow-vs-studio-2026-11-04/studio-dark-2560-fit.png" alt="The Pipeline Studio at 2560: thirteen cards at 111% zoom, type larger than normal."></a>
+    <figcaption><b>studio, 2560.</b> Canvas 1836 px, scale 111.03%, label <b>14.43 px</b> — larger than actual size —
+    with all thirteen stages on screen.</figcaption>
+  </figure>
+</div>
+
+<h3>The scheme pair, at 1280</h3>
+<p>The two captures below were taken with <code>colorScheme: "light"</code> and are indistinguishable from the dark ones
+above them: same palette, same pixels (the panel's differ only on the card's rounded edge).</p>
+<div class="pair">
+  <figure>
+    <a href="pipeline-flow-vs-studio-2026-11-04/panel-light-1280-unfitted.png"><img src="pipeline-flow-vs-studio-2026-11-04/panel-light-1280-unfitted.png" alt="The panel's flow chart under a light colour-scheme preference: still dark."></a>
+    <figcaption><b>panel, light preference.</b> Body <code>#10141a</code>, label <code>#8b96a5</code>, 5.94:1 — the
+    dark palette, unchanged.</figcaption>
+  </figure>
+  <figure class="studio">
+    <a href="pipeline-flow-vs-studio-2026-11-04/studio-light-1280-fit.png"><img src="pipeline-flow-vs-studio-2026-11-04/studio-light-1280-fit.png" alt="The Pipeline Studio under a light colour-scheme preference: light, as always."></a>
+    <figcaption><b>studio, light preference.</b> Body <code>#f8f9fa</code>, label <code>#101828</code>, 17.75:1 — the
+    light palette, unchanged. The dark capture is the same file.</figcaption>
+  </figure>
+</div>
+
+<h2 id="findings">Findings</h2>
+
+<ol>
+  <li><b>The panel's dialog is a fixed 1120 px at every window.</b> <code>.pmodal-card { width: min(1120px, 96vw) }</code>
+  (<code>public/style.css:4104</code>) measured 1120 px at 1280, 1824 and 2560, with the scroller at 1094 and the
+  content at 1562 in all three. A 2560-wide window buys the flow chart nothing — the same 9 of 13 stages and the same
+  468 px hidden as at 1280.</li>
+
+  <li><b>The studio's canvas is the window.</b> 648 → 1100 → 1836 px, and <code>fitToStages()</code>
+  (<code>app.js:993–1019</code>) turns that width into a scale: 60.46% → 86.64% → 111.03%. The label follows it:
+  7.86 → 11.26 → 14.43 px.</li>
+
+  <li><b>At 1280 the studio is complete but small.</b> 13 of 13 cards, 5 rows of 3, at a painted title of 7.86 px —
+  68% of the panel's 11.5 px — with its artifact line at 5.74 px and its id at 6.05 px. That is the cost of the fit,
+  and it is why the studio's own zoom control exists.</li>
+
+  <li><b>At 1280 the panel is readable but partial.</b> 9 of 13 columns, 1562 px of content in a 1094 px scroller,
+  468 px hidden, and a sentence that says so at 10.5 px / 6.78:1. The count is the affordance the studio does not
+  have at all: at 100% the studio shows 6 of 13 and its status strip reports stage, handoff, gate and role totals
+  (13 · 15 · 5 · 28) and <code>7/7 stops</code> — never how many cards are out of view.</li>
+
+  <li><b>The panel's <code>fit</code> keeps the type and narrows the column.</b> 96 → 72.8 px, gap 26 → 12, all 13
+  visible, label still 11.5 px. The price is wrapping: the median title stays at 2 lines, the maximum goes from 2 to
+  4, and two titles break inside a word — "Work breakdow n" and "Implement t per module". That is a width problem,
+  not an <code>overflow-wrap</code> one: the fitted column's inner width is <b>54.8 px</b> and the longest single
+  word, "breakdown", measures <b>56.7 px</b> at 11.5 px, so no wrap rule can keep it whole. The other two splits
+  ("Reverse-engineer", "sign-off") are at their own hyphens and read correctly.</li>
+
+  <li><b>The panel's gap is load-bearing; the studio's is not.</b> The panel draws its connector, arrow and gate notch
+  in the 26 px gap between columns (<code>.pflow-link</code>, <code>.pflow-notch</code>,
+  <code>public/style.css:4048–4054</code>), so the gap is a slot with content in it: 0.271 of a column unfitted,
+  0.165 fitted. The studio's 20.6 px is empty space between cards on a row: 0.158, and it barely moves with the
+  window (0.157–0.158).</li>
+
+  <li><b>The studio's card carries 2.25× the words in 1.36× the column.</b> Median 9 words against the panel's 4, in
+  a 130.6 px card against a 96 px one at 1280. Its type therefore has to be scaled by 0.6 to fit the same chain that
+  the panel scrolls — the density is a design choice, and it is the second half of the reason the studio's fit has to
+  shrink.</li>
+
+  <li><b>Both surfaces pin a scheme; neither asks the reader.</b> Zero <code>prefers-color-scheme</code> rules in
+  either stylesheet, <code>color-scheme: normal</code> on both roots, no <code>data-theme</code>. 17 of 18 panel
+  pairs and 9 of 9 studio pairs are byte-identical PNGs across the two schemes; the one exception differs only on the
+  card's rounded edge (314 px, all within 4 px of it).</li>
+
+  <li><b>The studio's light mode is hard-coded, not a missing dark branch.</b> <code>app.css:8</code> is the only
+  <code>:root</code> and it is the light palette (<code>--sefl-canvas: #f8f9fa</code>, <code>--sefl-surface:
+  #ffffff</code>, <code>--sefl-ink: #101828</code>); <code>.node</code> writes <code>background: #fff</code>
+  literally. There is no dark palette to fail to apply, and no <code>color-scheme</code> declaration for the UA to
+  read.</li>
+
+  <li><b>The panel's definition mode is its quietest mark.</b> A definition has no position, so every stage is
+  <code>not-reached</code> and every title paints in <code>--dim</code> (<code>#8b96a5</code>): 5.94:1 on
+  <code>#13181f</code>. The studio's ink on white is 17.75:1 — three times the ratio — so the panel's contrast deficit
+  is not a palette accident but the legend's own quiet state applied to the whole drawing.</li>
+</ol>
+
+<h2 id="suggestions">Suggestions, for the panel</h2>
+
+<ol>
+  <li><b>Let the card take the window: <code>public/style.css:4104</code>.</b> Thirteen columns of 96 px plus twelve
+  gaps of 26 px is 1562 px of drawing, and the card spends 26 px on its body padding and border, so <b>1588 px</b> is
+  the arithmetic floor. Tried at <b>1600 px</b> on the same fixture: the scroller becomes 1574 = the content, all
+  <b>13 of 13</b> columns are visible unfitted at 1824 and 2560, and the drawing stops scrolling. At 1280 the card
+  becomes 96vw = 1229 px and still scrolls — <b>10 of 13</b> visible instead of 9. <code>width: min(1120px, 96vw)</code>
+  → <code>width: min(1600px, 96vw)</code>.</li>
+
+  <li><b>Spend 3 px of the fitted gap on the columns: <code>public/style.css:4004</code>.</b>
+  <code>--pflow-gap: 12px</code> → <code>9px</code> in the fitted state gives 75.5 px columns (inner 57.5 px, against
+  the 56.7 px "breakdown"), all 13 still visible, and the two mid-word breaks go: four words split across lines at
+  gap 12 ("Reverse-engineer", "breakdown", "Implement", "sign-off"), <b>two at gap 9</b> — both at their own hyphens.
+  The gap at 9 px is still a slot the 3 px notch fits in.</li>
+
+  <li><b>Raise the title in definition mode: <code>public/style.css:4025</code> / <code>:4043</code>.</b> 5.94:1 is
+  the <code>not-reached</code> colour; a document's stages are all in that state, so the drawing a reader opens from
+  Settings is painted in the one mark the legend reserves for "not yet". Using <code>--text</code> for
+  <code>data-mark="not-reached"</code> in <code>mode="edit"</code> — or a dedicated <code>defined</code> mark — puts
+  the type at 13:1 without touching the run view's semantics.</li>
+
+  <li><b>Out of repo, for the studio:</b> the one thing the panel has and the studio lacks is the count. At 1280/100%
+  six cards are fully visible and nothing on the page says so. A sentence built the way
+  <code>public/pipeline-flow.js:419</code>'s <code>countText()</code> builds it — from the painted rects, not from a
+  constant — would cost the studio no layout and answer the reader's first question.</li>
+</ol>
+
+<h2 id="limits">Limits</h2>
+<ul>
+  <li>Headless Chromium 1248 through Playwright 1.64.1, captures at <code>deviceScaleFactor: 1</code>: the PNG is a
+  CSS-pixel-for-pixel picture of what a 1× screen paints, which is what makes the shots comparable to the numbers. On
+  a 2× screen the same 7.86 px label is sharper but the same physical size — <code>--dsf 2</code> captures that.</li>
+  <li>The panel half is a throwaway sandbox: its own config, data dir and pipeline catalogue, the board assistant off
+  and the gateway pointed at a dead port, so no scan or SSE frame can repaint the drawing mid-shutter. Its data dir is
+  a <code>%TEMP%</code> path, which makes printed paths longer than a default <code>~/.wag</code> one — irrelevant to
+  the flow chart, which prints no paths.</li>
+  <li>The studio half is the live :8095 server with its own saved project (<code>poc-to-uat</code>). Its zoom at load
+  is a function of the canvas size and that project's positions, so the 60/87/111% figures are this project's; another
+  project's lane layout would produce other scales.</li>
+  <li>"Visible" means fully inside the client box. A card that is half on screen is counted as not visible, and the
+  ledger keeps the partly-visible count beside it (panel 9 visible / 9 partly at rest; studio 13/13 fitted,
+  6/12 at 100% on 1280).</li>
+  <li>The panel's stage ids are slugs because the catalogue refuses <code>S0</code>; the studio's cards print
+  <code>S0</code>–<code>S12</code> and the panel's print an ordinal. The titles, artifacts and writers are identical,
+  which is what the word counts compare.</li>
+  <li>Nothing here asserts a defect in either product: the harness photographs and measures, and exits 0 with a
+  ledger. <code>tools/verify-pipeline-flow-visible.mjs</code> remains the panel's gate for this drawing and was not
+  touched.</li>
+</ul>
+
+<h2 id="reproduce">Reproduce</h2>
+<pre>node tools/capture-pipeline-flow.mjs \
+  --shots docs/reviews/pipeline-flow-vs-studio-2026-11-04 \
+  --json  docs/reviews/pipeline-flow-vs-studio-2026-11-04/capture.json \
+  --studio http://127.0.0.1:8095/</pre>
+<p class="small dim">The studio must be serving at :8095 (<code>python -m http.server 8095 --bind 127.0.0.1 --directory
+&lt;ai-development-factory&gt;/tools/pipeline-studio</code>). Without it the harness says so and captures the panel half
+only; <code>--no-studio</code> does the same deliberately. Playwright must be resolvable — <code>tools/browser.mjs</code>
+looks in <code>PANEL_PLAYWRIGHT_ROOT</code>, the repo, the cwd and the global npm prefix.</p>
+
+<h2 id="three">If the panel only did three things</h2>
+<ol>
+  <li><b>Give the card 1588 px</b> (<code>public/style.css:4104</code>): 1562 px of drawing plus the 26 px the card
+  spends on its body padding and border. Tried at 1600 px, all thirteen columns show unfitted at 1824 and 2560. Today
+  the card is 1120 at every window and hides 468 px of every thirteen-stage drawing, whatever the monitor.</li>
+  <li><b>Take the 3 px out of the fitted gap, not out of the words</b> (<code>public/style.css:4004</code>):
+  <code>--pflow-gap: 9px</code> in the fitted state gives 75.5 px columns and drops the two mid-word breaks from four
+  split words to two, both at a hyphen.</li>
+  <li><b>Paint a definition's titles at <code>--text</code>, not <code>--dim</code></b> (<code>public/style.css:4025</code>,
+  <code>:4043</code>): the 5.94:1 a reader meets is the legend's <em>not reached</em> colour, and in a definition every
+  stage wears it.</li>
+</ol>
+
+<footer>
+  Captured by <code>tools/capture-pipeline-flow.mjs</code> on branch
+  <code>wtgui/capture-the-panel-s-flow-c6aef5</code> (rebased onto <code>origin/main</code> <code>5234a3c</code>,
+  <code>1.5.0</code>; re-run on the rebased tip, identical numbers). Raw ledger:
+  <a href="pipeline-flow-vs-studio-2026-11-04/capture.json">capture.json</a> — 36 state shots, 2 page shots, every
+  number in this page read from it.
+</footer>
+
+</div>
+</body>
+</html>
