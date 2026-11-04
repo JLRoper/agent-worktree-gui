@@ -4,13 +4,14 @@ A map of how this panel is put together: the processes, the loops, the data that
 them, and the design elements that decide its shape. It is a description, not a plan and not a
 review — where a boundary is thin it says so, but it does not propose the fix.
 
-- Snapshot: `main` at **e965d65**, `package.json` `0.33.0`.
-- Numbers below are read out of this tree (`wc -l`, `git ls-files`, greps). They move; the names
-  and the responsibilities do not.
-- Companions, for the other lenses: `docs/arch-review-organization.md` (where the code lives),
-  `docs/arch-review-efficiency.md` (what the timers cost), `docs/arch-review-functional.md` (the
-  board's state machine). `README.md` is the reader's manual; `docs/using-the-board.md` is the
-  page, region by region.
+- Snapshot: numbers read from `main` at **e4cb244** (`package.json` `0.99.0`); this document lands in
+  **0.100.0**. They were re-measured there with `wc -l`, `git ls-files`, greps and `npm test`.
+- Numbers move; the names and the responsibilities do not.
+- Companions, for the other lenses: `docs/reviews/architecture-modules.html` (the seam review: the
+  module graph, the six oversized files, a costed landing order), `docs/arch-review-organization.md`
+  (where the code lives), `docs/arch-review-efficiency.md` (what the timers cost),
+  `docs/arch-review-functional.md` (the board's state machine). `README.md` is the reader's manual;
+  `docs/using-the-board.md` is the page, region by region.
 
 **Contents**
 
@@ -47,10 +48,10 @@ write is a decision that has to be made somewhere visible).
 | | |
 |---|---|
 | Runtime | Node ≥ 22.5, ESM, **no dependencies** (`"dependencies": {}`), no bundler, no transpiler |
-| Server | `server.js` — 4,304 lines, one composition root, 104 `if (route === …)` branches |
-| Domain | `lib/` — 76 modules, 28,212 lines, each with a header saying what it owns |
-| Client | `public/` — 23,295 lines of JS in 14 classic scripts, plus `style.css` (3,122) |
-| Verification | `test/` — 70 files, 524 test declarations; `tools/` — 78 `.mjs` scripts, 64 of them `verify-*.mjs` |
+| Server | `server.js` — 5,491 lines, one composition root, 126 `if (route === …)` branches |
+| Domain | `lib/` — 85 modules, 33,484 lines, each with a header saying what it owns |
+| Client | `public/` — 30,325 lines of JS in 15 classic scripts, plus `style.css` (3,770) |
+| Verification | `test/` — 153 `*.test.js` files, 1,239 tests; `tools/` — 156 `.mjs` scripts, 122 of them `verify-*.mjs` |
 | State | `dataDir` (`~/.wag` by default) — plain JSON files, versioned, written atomically |
 | Gates | two git hooks (`.githooks/commit-msg`, `.githooks/pre-push`); **no CI** |
 
@@ -61,11 +62,11 @@ write is a decision that has to be made somewhere visible).
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────┐
 │ BROWSER — one page, no build step                                                │
-│   index.html → 14 classic scripts, fixed order:                                  │
-│   core/dom-format · core/model-menu · core/console-format · core/stream-merge     │
-│   core/liveness · core/type-stream · board/attachments · board/paste-chips        │
-│   board/hot · core/transport · core/sse · app.js · core/update-check              │
-│   assistant.js                                                                     │
+│   index.html → 15 classic scripts, fixed order:                                  │
+│   core/dom-format · core/model-menu · core/console-format                        │
+│   core/console-markdown · core/stream-merge · core/liveness · core/steerable     │
+│   core/type-stream · board/attachments · board/paste-chips · core/transport      │
+│   core/sse · app.js · core/update-check · assistant.js                           │
 │   reads:  GET /api/stream (SSE)      writes: POST /api/*  (x-panel-token off-box)  │
 └───────────────────────────────┬──────────────────────────────────────────────────┘
                                 │  one snapshot, then row / job / assistant deltas
@@ -73,7 +74,7 @@ write is a decision that has to be made somewhere visible).
 │ server.js — composition root                                                     │
 │   wires: config → paths → Store, Pool, Scheduler, Jobs, Assistant, Registry      │
 │   HTTP:  lib/http/transport.js (framing, auth, SSE)  lib/http/static.js (public/)│
-│   routes: 104 branches → each one a call into a lib/ module, then broadcast      │
+│   routes: 126 branches → each one a call into a lib/ module, then broadcast      │
 └──────┬──────────────────┬───────────────────┬───────────────────┬────────────────┘
        │                  │                   │                   │
        ▼                  ▼                   ▼                   ▼
@@ -108,7 +109,7 @@ kinds of work:
 
 | Loop | Cadence | What it advances |
 |---|---|---|
-| **Liveness pass** | 5 s (`liveSeconds`) | for every row: `outsideNestedWorktrees`, newest file edit, the five cached signal readers in `lib/activity.js`; a changed row goes through `store.touch()` and paints without flashing |
+| **Liveness pass** | 5 s (`liveSeconds`) | for every row: `outsideNestedWorktrees`, newest file edit, the eight memoised signal readers in `lib/activity.js`; a changed row goes through `store.touch()` and paints without flashing |
 | **Row scans** | per row, 5 s / 45 s / 90 s | `enqueueDue` asks `intervalFor(row)` for each row; the three tiers are in the table just below |
 | **Full pass** | `slowSeconds` (300 s), in practice backlog-bound | `projectMeta` → `worktreeList --porcelain` reconcile → every row at `depth: "full"` → re-stamp `dueAfter` |
 
@@ -269,7 +270,7 @@ Two rules hold across the table:
   the client disabling a button is a courtesy, never the control.
 - **The route never invents a state.** It calls a module that already owns the decision
   (`remoteWrites.request()`, `locks.add()`, `todos.apply()`) and broadcasts whatever that module
-  reports. A route is a thin adapter, which is why `server.js` can be 4,300 lines of it.
+  reports. A route is a thin adapter, which is why `server.js` can be 5,491 lines of it.
 
 ---
 
@@ -351,7 +352,7 @@ collaborators through the constructor. Nothing reaches for a global. `package.js
 
 What it buys: the tree can be read without a build, `node server.js` is the entire deployment, and
 a module's collaborators are visible in its constructor signature. What it costs: the composition
-root also became the HTTP layer, so `server.js` is 4,304 lines and the wiring is not separately
+root also became the HTTP layer, so `server.js` is 5,491 lines and the wiring is not separately
 testable. That trade is named, not hidden — see §10.
 
 ### 7.2 The read path is a pipeline, not a request
@@ -425,7 +426,7 @@ incoming facts  →  verdict carry-over  →  mergeable  →  sync  →  changed
 
 `lib/sync-state.js` is a pure function (`syncState({row, remote, fetchNote})`) with no git and no
 I/O, called on **every** put, fast scans included — which is why a push shows up on the next scan
-rather than the next full pass. `lib/chart-columns.js` is the same idea for the chart's ten column
+rather than the next full pass. `lib/chart-columns.js` is the same idea for the chart's eleven column
 ids, and it makes the same kind of choice in the other direction: the stored value is the columns
 to **hide**, so a column added to the chart later starts visible for a reader who has already
 hidden some, instead of appearing nowhere. The page renders the words it is given.
@@ -463,14 +464,17 @@ data shapes the way it composes objects.
 Every durable store is a file in `dataDir`, and the stores that have to survive a shape change
 follow three rules:
 
-1. **A version field.** `TODOS_VERSION`, `LOCKS_VERSION`, `DESCRIPTIONS_VERSION`,
-   `PARENT_FILE_VERSION`, `TREE_NAMES_VERSION`, `RELEASES_VERSION`, `GUARD_VERSION`,
+1. **A version field.** Sixteen constants, one per store that can change shape: `TODOS_VERSION`,
+   `LOCKS_VERSION`, `DESCRIPTIONS_VERSION`, `PARENT_FILE_VERSION`, `TREE_NAMES_VERSION`,
+   `RELEASES_VERSION`, `REFRESH_VERSION`, `GUARD_VERSION`, `ROLES_VERSION`, `PIPELINES_VERSION`,
+   `BUNDLE_VERSION`, `PROFILES_VERSION`, `PROFILE_VERSION`, `QUEUE_VERSION`, `ASSISTANTS_VERSION`,
    `STORE_VERSION` (the assistant) — a store that changes shape declares it, so a reader can
    refuse or migrate rather than half-load.
-2. **Atomic replacement.** Write to a temp file, `renameSync` over the target. Twelve modules do
+2. **Atomic replacement.** Write to a temp file, `renameSync` over the target. Eighteen modules do
    this (`todos`, `locks`, `parents`, `tree-names`, `descriptions`, `steward`, `worktrees`,
-   `refresh-row`, `restart`, `hermes-config`, and the assistant's two files); a crash mid-write
-   leaves the previous good file, never a truncated one.
+   `refresh-row`, `restart`, `hermes-config`, `roles`, `pipelines`, `provider-profiles`,
+   `assistants`, and the assistant's four files); a crash mid-write leaves the previous good file,
+   never a truncated one.
 3. **One writer.** The panel is the only process that writes these files, so the classic file-race
    problem does not exist — as `lib/todos.js` says out loud: every writer in the fleet (the
    assistant, every worker's harvested final message, the reader's own edits) goes through this one
@@ -616,7 +620,7 @@ and the pure half is what tests import:
 
 The client files publish their pure half on `globalThis` (`wtStream`, `wtLive`, `wtType`,
 `wtUpdateCheck`) so a `node --test` file can import the same bytes the browser runs. That is how a
-17k-line client still has unit-testable logic in it.
+22k-line client still has unit-testable logic in it.
 
 ### 7.15 Verification as a subsystem
 
@@ -624,9 +628,9 @@ Three tiers, each shaped for a different question:
 
 | Tier | Where | Question it answers |
 |---|---|---|
-| **Unit** | `test/*.test.js` (70 files, 524 declarations) | does this rule hold in isolation? |
-| **Route** | `tools/panel-testkit.mjs`, used by 18 of the 70 test files | does this route do what it says, on a throwaway config? |
-| **Harness** | `tools/verify-*.mjs` (64 programs) | is this claim true on a real machine, right now? |
+| **Unit** | `test/*.test.js` (153 files, 1,239 tests) | does this rule hold in isolation? |
+| **Route** | `tools/panel-testkit.mjs`, used by 65 of the 153 test files | does this route do what it says, on a throwaway config? |
+| **Harness** | `tools/verify-*.mjs` (122 programs) | is this claim true on a real machine, right now? |
 
 `panel-testkit.mjs` boots the **real** `server.js` against a throwaway config on a free port, with
 its own `HERMES_HOME` and no gateway key — so a test asserts behaviour, not source text.
@@ -645,7 +649,7 @@ the README says so, and the pre-push hook is what stands in for it.
 
 ## 8. The client
 
-`public/` is 14 classic `<script>` tags, in a fixed order, with **no bundler and no modules** —
+`public/` is 15 classic `<script>` tags, in a fixed order, with **no bundler and no modules** —
 because `public/assistant.js` reads `app.js`'s own globals by name (`esc`, `conversations`,
 `conversationHtml`), so an ES-module split is not available. The order is documented in
 `index.html` and is read bottom-up: each script's top-level declarations must exist before the
@@ -665,9 +669,9 @@ WHAT IT STILL REACHES OUT FOR (by name, at call time): state, $, applySnapshot, 
 That last line is the important one: a module that is not a leaf **declares its edges** instead of
 pretending it has none. It is how a globals-based client stays navigable.
 
-`app.js` remains the hub (17,178 lines, 668 top-level functions): board rendering, row patching,
+`app.js` remains the hub (21,775 lines, 844 top-level functions): board rendering, row patching,
 conversation rendering, the spawn card, the reply box, the model picker, the chart, the settings
-panel. It is where the entropy is, and §10 says so.
+panel. It is where the entropy is; §10 points at the review that measures it.
 
 ---
 
@@ -706,32 +710,24 @@ Two elements of the config shape are architectural rather than incidental:
 
 ## 10. Where the seams are
 
-A map that does not name the thin places is a brochure. These are structural, not urgent, and the
-repo's own arch reviews argue them at length:
+**Superseded.** The seam list that stood here was measured at `0.33.0`, and this map no longer keeps
+one. [`docs/reviews/architecture-modules.html`](reviews/architecture-modules.html) supersedes it: the
+module graph, the six oversized files, a signed seam list in landing order with the size and cost of
+each cut, and what the review could not measure. Its anchoring rule is the reason to prefer it — every
+location is named by marker text, never by a line number, because the line numbers this section used
+to quote drifted unevenly between snapshots. Read that page for seams; this document does not restate
+it.
 
-- **`server.js` is 4,304 lines and 104 route branches.** The route chain is a linear `if`
-  sequence, not a table, so adding a route means inserting a branch and a reader means scanning.
-  Ten of the branches are 35–135-line services that would be at home in `lib/`.
-- **`public/app.js` is 17,178 lines with 668 top-level functions** and eight document-level click
-  listeners. The extraction into `core/` and `board/` is real but partial, and the file grew by
-  more than the extractions removed.
-- **A handful of rules have two homes across the client/server line** — the fold-note text, the
-  per-million price formatter, the byte formatter (`fmtBytes` disagrees with itself: `1 KB` for 0
-  bytes in `core/dom-format.js`, `0 B` in `app.js`), the TODO statuses and glyphs, the head-line
-  cap on a tool result. Some pairs are pinned by a test (`chart-columns`), some by a comment, some
-  by nothing.
-- **"Which tree is this?" has several string rules.** `push-guard.js` lowercases and rewrites
-  MSYS paths, `worktrees.js` resolves without folding case, `locks.js` deliberately keeps its own,
-  and `server.js` has two of its own 277 lines apart. Each is locally justified; there is no
-  single identity function.
-- **There is no CI.** `npm test` and `npm run verify:all` are the gate, and they run when someone
-  runs them. The pre-push hook only checks the version bump.
+Two decisions the review does not argue, and this map still states:
+
 - **The bind address and the auth model are two separate decisions.** The code default is
   `127.0.0.1` (`cfg.host = cfg.host || "127.0.0.1"`), but this checkout's `config.json` sets
   `0.0.0.0`, and `authorised()` then refuses off-loopback **writes** without a `PANEL_TOKEN`.
   Reads — including the whole board and the SSE stream — are not challenged. It is the safe half
   of a safe default, and it depends on the token being set rather than on the bind address.
   `docker/PLAN.md` says the same thing more loudly; read it before changing `host`.
+- **There is no CI.** `npm test` and `npm run verify:all` are the gate, and they run when someone
+  runs them. The pre-push hook only checks the version bump.
 
 ---
 
@@ -749,6 +745,7 @@ repo's own arch reviews argue them at length:
 | naming, parents, roll-ups | `lib/tree-names.js`, `lib/parents.js`, `lib/child-worktree.js`, `docs/child-worktrees-and-rollups.md` |
 | the page | `public/index.html` (script order), `docs/using-the-board.md` |
 | how a change is proven | `tools/verify.mjs`, `tools/panel-testkit.mjs`, `docs/versioning.md` |
+| where the tree can be cut | `docs/reviews/architecture-modules.html` — the signed seam list, costed and ordered |
 
 ---
 
