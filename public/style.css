@@ -127,6 +127,13 @@ button, select, input, textarea { font-family: var(--ui); }
 }
 #human-badge[hidden] { display: none; }
 
+/* DELIVERABLES: every thing an agent handed back, in one list. A quiet header button — this is an archive, not a
+   queue, so it carries no count and no colour until the reader opens it. The pressed state is the only mark, and
+   it is the same blue the board uses for "this is the thing you are looking at". */
+#btn-deliver { display: inline-flex; align-items: center; gap: 6px; }
+#btn-deliver[aria-expanded="true"] { border-color: #3b5680; background: #1b2534; color: #cfe6ff; }
+#btn-deliver[aria-expanded="true"]:hover { background: #223047; }
+
 /* The question a HUMAN hop landed on: a red ring, on the prompt box itself, that dies back to the box's own
    border. It rides beside the amber card ring HUMAN also draws, so "this agent" and "this box" are two different
    marks and the eye goes to the box. */
@@ -1996,6 +2003,121 @@ tr.row-confirm .btn-del-yes:hover { background: #3a1d22; }
 .artifacts-pop .ap-confirm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #ffd08a; }
 .artifacts-pop .ap-del-yes { color: #ff9c94; border-color: #57262a; }
 .artifacts-pop .ap-del-no { color: var(--text); }
+
+/* The DELIVERABLES list: the panel's own idiom for a list that hangs off a control, in the shape .artifacts-pop
+   above. Fixed, because it is anchored under a sticky header button; bounded, because "every deliverable" is a
+   cap of 200 and 200 rows must scroll rather than grow the page; z-index 60, the layer the artifacts pop uses so
+   it sits above the board and below Settings. The head is the count, the filter and the close; only the rows
+   scroll, so the filter is always reachable. */
+.deliver-pop {
+  position: fixed;
+  z-index: 60;
+  width: min(560px, 92vw);
+  max-height: min(70vh, 640px);
+  display: flex;
+  flex-direction: column;
+  min-height: 160px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #10141b;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+  overflow: hidden;
+}
+.deliver-pop[hidden] { display: none; }
+.deliver-pop .dl-head {
+  display: flex; align-items: center; gap: 8px;
+  flex: none;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  background: #12161d;
+}
+.deliver-pop .dl-count { flex: none; font: 11px/1.4 var(--ui); color: var(--dim); }
+.deliver-pop .dl-filter {
+  flex: 1 1 auto; min-width: 80px;
+  padding: 3px 7px;
+  border: 1px solid var(--line); border-radius: 5px;
+  background: #0c0f14; color: var(--text);
+  font: 11px/1.5 var(--mono);
+}
+.deliver-pop .dl-filter:focus { outline: none; border-color: #3b5680; box-shadow: 0 0 0 2px #24466a66; }
+.deliver-pop .dl-close {
+  flex: none; padding: 1px 7px;
+  font: 11px/1.6 var(--ui); color: var(--dimmer);
+  border: 1px solid transparent; border-radius: 4px; background: none;
+}
+.deliver-pop .dl-close:hover { color: var(--text); border-color: var(--line); background: #1b2029; }
+/* Only the rows scroll. The head and the footer are the two things a 200-row list must keep in reach. */
+.deliver-pop .dl-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 6px; }
+.deliver-pop .dl-day {
+  padding: 8px 8px 3px;
+  font: 700 9.5px/1.4 var(--ui); letter-spacing: .08em;
+  color: var(--dimmer);
+}
+.deliver-pop .dl-row {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.deliver-pop .dl-row:hover { background: var(--band); }
+.deliver-pop .dl-row[aria-selected="true"] { background: #17202c; box-shadow: inset 0 0 0 1px #2b3b52; }
+.deliver-pop .dl-glyph { flex: none; font-size: 13px; line-height: 1.5; }
+.deliver-pop .dl-main { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
+.deliver-pop .dl-name {
+  display: block; min-width: 0; padding: 0;
+  border: none; background: none;
+  color: var(--text);
+  font: 600 12.5px/1.4 var(--ui);
+  text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  cursor: pointer;
+}
+.deliver-pop .dl-name:hover { color: #fff; text-decoration: underline; }
+.deliver-pop .dl-name.is-gone { text-decoration: line-through; color: var(--dimmer); }
+.deliver-pop .dl-target {
+  min-width: 0;
+  color: var(--dimmer);
+  font: 10.5px/1.4 var(--term);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.deliver-pop .dl-meta { font: 10.5px/1.4 var(--ui); color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deliver-pop .dl-age { color: var(--dimmer); }
+/* A target the store last failed to find. The click still tries: the file may have been restored. */
+.deliver-pop .dl-gone {
+  flex: none; align-self: center;
+  padding: 0 6px;
+  border: 1px solid #57262a; border-radius: 4px;
+  color: #ff9c94;
+  font: 10px/1.6 var(--term);
+}
+/* The keyboard/AT twin of the row click. It appears on hover and on the active row, so the pointer's row is not
+   shouting a second button at every entry in a 200-row list. */
+.deliver-pop .dl-agent {
+  flex: none; align-self: center;
+  padding: 1px 6px;
+  border: 1px solid var(--line); border-radius: 4px;
+  background: #151a22; color: var(--dimmer);
+  font: 10px/1.6 var(--term);
+  cursor: pointer;
+  opacity: 0;
+}
+.deliver-pop .dl-row:hover .dl-agent,
+.deliver-pop .dl-row[aria-selected="true"] .dl-agent,
+.deliver-pop .dl-agent:focus { opacity: 1; }
+.deliver-pop .dl-agent:hover { color: var(--text); border-color: #3b4757; }
+.deliver-pop .dl-empty { padding: 14px 10px; color: var(--dim); font: 12px/1.5 var(--ui); }
+.deliver-pop .dl-hint { padding-top: 0; color: var(--dimmer); }
+.deliver-pop .dl-hint code { display: block; margin-top: 7px; color: #8ee08a; font: 11px/1.5 var(--term); white-space: pre-wrap; }
+.deliver-pop .dl-err { color: #ff9c94; }
+.deliver-pop .dl-retry { margin: 0 10px 10px; }
+.deliver-pop .dl-foot {
+  flex: none;
+  padding: 6px 10px;
+  border-top: 1px solid var(--line);
+  color: var(--dimmer);
+  font: 10.5px/1.4 var(--term);
+}
+.deliver-pop .dl-foot[hidden] { display: none; }
 /* a URL in an agent's console: click (or ctrl-click) opens it in the OS default browser */
 a.out-link { color: #7fb3ff; text-decoration: underline dotted; cursor: pointer; }
 a.out-link:hover { color: #a8ccff; text-decoration: underline solid; }
