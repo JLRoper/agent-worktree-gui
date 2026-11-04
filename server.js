@@ -4091,9 +4091,11 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { jobs: jobs.list(), transport: jobs.transportInfo(), defaultCwd: config.defaultCwd });
     }
 
-    // Every deliverable this panel has recorded, newest first: `{version, cap, kept, nextSeq, at, entries}`. READ-ONLY
-    // and NOT token-gated — the same convention as GET /api/jobs above. A read changes nothing, and a board opened on
-    // another machine has to be able to paint the list; the write beside it (the open) is the one that carries a token.
+    // Every deliverable this panel has recorded, newest first: `{version, cap, kept, nextSeq, seenSeq, seenAt,
+    // unseenCount, at, entries}`. READ-ONLY and NOT token-gated — the same convention as GET /api/jobs above. A read
+    // changes nothing, and a board opened on another machine has to be able to paint the list; the two writes beside
+    // it (the seen watermark and the open) are the ones that carry a token. `seenSeq`/`unseenCount` come out of the
+    // store's own record — the badge counts rows above the watermark and a GET never walks the list to do it.
     if (route === "/api/deliverables" && req.method === "GET") {
       const list = deliverables.list();
       // One field added per row, and the only one the Open control reads: the URL a tab can open, or null. It is
@@ -5053,6 +5055,19 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 500, { error: String((e && e.message) || e) });
       }
       return sendJson(res, 200, { ok: true, url });
+    }
+
+    // "The reader has seen the list up to `seq`" — the ONE watermark, and the only write the badge needs. The
+    // popover's open and the badge's dismiss both POST here, so there is one mechanism and two doors. `seq` comes
+    // from the page but only ever names a row the store already has: the store clamps it to its newest `seq`, refuses
+    // a non-integer, and only moves the watermark forward. The answer is the watermark plus what is left, so a page
+    // paints from the POST without a second GET.
+    if (route === "/api/deliverables/seen" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const seen = deliverables.markSeen(body.seq);
+      if (seen.error) return sendJson(res, 400, { error: seen.error });
+      return sendJson(res, 200, { ok: true, seenSeq: seen.seenSeq, seenAt: seen.seenAt, unseenCount: seen.unseenCount, moved: seen.moved });
     }
 
     // Open ONE recorded deliverable, by the `seq` the page sent back and nothing else. The target comes out of the

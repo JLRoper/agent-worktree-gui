@@ -33,10 +33,16 @@
 //   7. at the cap the footer says 200 kept
 //   8. a second, empty panel says `Nothing has been delivered yet.` and documents the grammar
 //   9. a screenshot of the header and the open list is written for the report
+//  10. the seen watermark: a store nobody opened counts every row; POST /api/deliverables/seen moves it forward once,
+//      persists it beside the entries, refuses a non-integer and never moves it backwards
+//  11. the badge: rows ABOVE the watermark only, the highlight as a class on #btn-deliver, the number in the
+//      aria-label; opening (click or D) posts the watermark once and clears both with no flicker on the next poll;
+//      a restart keeps a cleared badge cleared, and a FRESH delivery above the watermark re-lights it with ONE — the
+//      badge's own dismiss then writes the same watermark without opening the list
 //
 // The browser half needs a Playwright install; without one this exits 2 (BROWSER-HALF-NOT-RUN), like the other
 // verify-*.mjs harnesses.
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -156,10 +162,11 @@ store.record({
 rmSync(path.join(tree, "docs", "gone.md"), { force: true });
 
 console.log(`      seeded  ${store.size} rows in ${STORE} (harvested seq ${HARVESTED_SEQ}, gone seq ${goneEntry?.seq})`);
-const panel = await startPanel({ dir, config: { assistant: { enabled: false } } });
+const panel = await startPanel({ dir, keep: true, config: { assistant: { enabled: false } } });
 console.log(`      panel   ${panel.base}  (throwaway: ${panel.dir})`);
 
 let emptyPanel = null;
+let restartedPanel = null;
 try {
   // ---- 0. the real routes, before a browser touches the page ------------------------------------------------------
   const getJson = async (base = panel.base) => {
@@ -182,6 +189,49 @@ try {
   ok("the list is newest first", first.body.entries.every((e, i, all) => i === 0 || Date.parse(all[i - 1].at) >= Date.parse(e.at)), "every row is at least as new as the one below it");
   const fetchRow = (seq) => first.body.entries.find((e) => e.seq === seq);
   const oldestSeq = first.body.entries[first.body.entries.length - 1].seq;
+  // The HIGHEST seq, which is what the page's watermark is: the list is ordered by `at`, and the fillers below carry
+  // the oldest timestamps, so entries[0] is not the last number handed out.
+  const newestSeq = first.body.entries.reduce((n, e) => Math.max(n, Number(e.seq) || 0), 0);
+
+  // ---- 0b. the watermark: what the badge counts from, and the one route that writes it ---------------------------
+  // A store nobody has opened has no watermark, so every kept row is new. That is the shape a restart reads, and it is
+  // what makes "unseenCount" a number about THIS reader rather than about the archive.
+  eq(
+    "a store nobody has opened counts every row as unseen",
+    { seenSeq: first.body?.seenSeq, seenAt: first.body?.seenAt, unseenCount: first.body?.unseenCount },
+    { seenSeq: 0, seenAt: null, unseenCount: 200 },
+  );
+  const seenJson = async (seq, base = panel.base) => {
+    const r = await fetch(`${base}/api/deliverables/seen`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(seq === undefined ? {} : { seq }),
+    });
+    return { status: r.status, body: await r.json().catch(() => null) };
+  };
+  const badSeen = await seenJson("soon");
+  eq("a non-integer watermark is refused", badSeen.status, 400);
+  ok("…with the sentence that names the field", /`seq` must be the integer/.test(badSeen.body?.error || ""), badSeen.body?.error);
+  const marked = await seenJson(HARVESTED_SEQ);
+  eq("POST /api/deliverables/seen answers 200", marked.status, 200);
+  eq(
+    "…records the seq the page showed, and the count that is left",
+    { seenSeq: marked.body?.seenSeq, unseenCount: marked.body?.unseenCount, moved: marked.body?.moved },
+    { seenSeq: HARVESTED_SEQ, unseenCount: 199, moved: true },
+  );
+  ok("…and stamps when the reader looked", Number.isFinite(Date.parse(marked.body?.seenAt || "")), marked.body?.seenAt);
+  const onDiskSeen = JSON.parse(readFileSync(STORE, "utf8"));
+  eq(
+    "…persisted BESIDE the entries, which is what a restart reads",
+    { seenSeq: onDiskSeen.seenSeq, seenAt: onDiskSeen.seenAt },
+    { seenSeq: HARVESTED_SEQ, seenAt: marked.body?.seenAt },
+  );
+  const backwards = await seenJson(0);
+  eq(
+    "an older seq cannot move the watermark backwards",
+    { seenSeq: backwards.body?.seenSeq, moved: backwards.body?.moved, unseenCount: backwards.body?.unseenCount },
+    { seenSeq: HARVESTED_SEQ, moved: false, unseenCount: 199 },
+  );
 
   // 1. THE PROOF THE FIRST GATE HID: the row came out of a real harvest of a real DELIVER line.
   const harvestedRow = fetchRow(HARVESTED_SEQ);
@@ -209,15 +259,17 @@ try {
 
   const result = await withBrowser(async ({ page }) => {
     const { pageErrors, consoleErrors } = attachPageCollectors(page);
-    // OBSERVED, never fulfilled: what the page itself POSTs when a title is clicked.
+    // OBSERVED, never fulfilled: what the page itself POSTs when a title is clicked, and what it records as seen.
     const posts = [];
+    const seenPosts = [];
     page.on("request", (r) => {
-      if (r.method() === "POST" && r.url().includes("/api/deliverables/open")) {
-        try {
-          posts.push(r.postDataJSON());
-        } catch {
-          posts.push(null);
-        }
+      if (r.method() !== "POST") return;
+      const bucket = r.url().includes("/api/deliverables/seen") ? seenPosts : r.url().includes("/api/deliverables/open") ? posts : null;
+      if (!bucket) return;
+      try {
+        bucket.push(r.postDataJSON());
+      } catch {
+        bucket.push(null);
       }
     });
 
@@ -229,7 +281,7 @@ try {
       const btn = document.getElementById("btn-deliver");
       return {
         ids,
-        label: (btn?.textContent || "").trim(),
+        label: (document.getElementById("deliver-label")?.textContent || "").trim(),
         expanded: btn?.getAttribute("aria-expanded"),
         top: btn ? Math.round(btn.getBoundingClientRect().top) : null,
       };
@@ -241,22 +293,70 @@ try {
     eq("the label is the plan's word", header.label, "DELIVERABLES");
     eq("the button says it is closed", header.expanded, "false");
 
+    // ---- 1b. the badge: rows ABOVE the watermark, a class for the highlight, the number in the aria-label -------
+    await page.waitForFunction(() => !document.getElementById("deliver-badge").hidden, null, { timeout: 10_000 });
+    const badge = await page.evaluate(() => {
+      const btn = document.getElementById("btn-deliver");
+      const pill = document.getElementById("deliver-badge");
+      return {
+        text: (pill?.textContent || "").trim(),
+        hidden: Boolean(pill?.hidden),
+        cls: btn.classList.contains("has-unseen"),
+        style: btn.getAttribute("style") || "",
+        label: btn.getAttribute("aria-label") || "",
+      };
+    });
+    eq("the badge counts only rows ABOVE the watermark, never everything kept", badge.text, "199");
+    eq("…and it is shown", badge.hidden, false);
+    ok("the button wears the highlight as a class", badge.cls);
+    ok("…carried by the class, not an inline style", !/background|border-color/.test(badge.style), badge.style || "(no style attribute)");
+    ok("the aria-label carries the number — a coloured dot is not a notification", /199 new deliverables/.test(badge.label), badge.label);
+    mkdirSync(SHOT_DIR, { recursive: true });
+    const badgeShot = path.join(SHOT_DIR, "deliverables-badge.png");
+    await page.screenshot({ path: badgeShot, clip: { x: 0, y: 0, width: 1440, height: 110 } });
+    console.log(`SHOT  ${badgeShot}`);
+
     // ---- 2. D opens it; a d in a field does not --------------------------------------------------
+    // Opening IS seeing: the popover's open posts the watermark once, before a row is read.
+    seenPosts.length = 0;
     await page.evaluate(() => document.activeElement?.blur?.());
     await page.keyboard.press("d");
     await page.waitForSelector("#deliver-pop:not([hidden])", { timeout: 5_000 });
     eq("D opens the list", await page.evaluate(() => document.getElementById("btn-deliver").getAttribute("aria-expanded")), "true");
     eq("the popover is the live list", await page.evaluate(() => document.getElementById("dl-list").getAttribute("role")), "listbox");
     ok("focus lands in the filter", await page.evaluate(() => document.activeElement?.id === "dl-filter"));
+    // The open has already cleared the badge, and it posted the watermark ONCE — the newest seq, nothing else.
+    await page.waitForFunction(() => document.getElementById("deliver-badge").hidden, null, { timeout: 5_000 });
+    eq("opening the list records the watermark once, with the newest seq", seenPosts, [{ seq: newestSeq }]);
+    const clearedBadge = await page.evaluate(() => {
+      const btn = document.getElementById("btn-deliver");
+      return {
+        cls: btn.classList.contains("has-unseen"),
+        hidden: document.getElementById("deliver-badge").hidden,
+        label: btn.getAttribute("aria-label") || "",
+      };
+    });
+    eq("…the badge and the highlight are gone", { cls: clearedBadge.cls, hidden: clearedBadge.hidden }, { cls: false, hidden: true });
+    ok("…and the aria-label stops claiming anything is new", !/new deliverable/.test(clearedBadge.label), clearedBadge.label);
+    // THE NEXT POLL: the page's own read again. A GET that answered just before the POST landed must not re-light it,
+    // which is what taking the max of the store's watermark and this page's own is for.
+    await page.evaluate(() => deliverFetch({ quiet: true }));
+    eq("the next poll does not flicker it back on", await page.evaluate(() => {
+      const btn = document.getElementById("btn-deliver");
+      return { cls: btn.classList.contains("has-unseen"), hidden: document.getElementById("deliver-badge").hidden };
+    }), { cls: false, hidden: true });
     await page.keyboard.press("Escape");
     await page.waitForSelector("#deliver-pop[hidden]", { state: "attached", timeout: 5_000 });
     ok("Esc closes it and puts focus back on the button", await page.evaluate(() => document.getElementById("deliver-pop").hidden === true && document.activeElement?.id === "btn-deliver"));
-    // The button is the other toggle, and a second press closes what the first opened.
+    // The button is the other toggle, and a second press closes what the first opened. Nothing new has arrived, so the
+    // open posts NOTHING: the watermark is already at the newest row.
+    seenPosts.length = 0;
     await page.click("#btn-deliver");
     await page.waitForSelector("#deliver-pop:not([hidden])", { timeout: 5_000 });
     await page.click("#btn-deliver");
     await page.waitForSelector("#deliver-pop[hidden]", { state: "attached", timeout: 5_000 });
     ok("a second press of the button closes it", await page.evaluate(() => document.getElementById("deliver-pop").hidden === true));
+    eq("…and a re-open with nothing new posts the watermark again only when the seq moved", seenPosts, []);
 
     // A real text field, added by this probe (the board has no reply box without a card): typing d must land in it
     // and must not open the list.
@@ -384,11 +484,81 @@ try {
     ok("…and shows no cap line", await page.evaluate(() => document.getElementById("dl-foot").hidden === true));
     const empty = await getJson(emptyPanel.base);
     eq("the empty store's envelope is still the plan's shape", { version: empty.body?.version, cap: empty.body?.cap, kept: empty.body?.kept }, { version: 1, cap: 200, kept: 0 });
+    const emptySeen = await seenJson(42, emptyPanel.base);
+    eq(
+      "an empty store cannot be marked seen past itself",
+      { seenSeq: emptySeen.body?.seenSeq, moved: emptySeen.body?.moved, unseenCount: emptySeen.body?.unseenCount },
+      { seenSeq: 0, moved: false, unseenCount: 0 },
+    );
+    // ---- 10. a restart must not resurrect a cleared badge, and a FRESH delivery must re-light it ----------------
+    // Panel #1 was booted with keep:true, so stopping it leaves the sandbox — and the store the page just wrote — on
+    // disk. The fresh row goes in through a store that LOADS that file, which is exactly what a restarted panel does.
+    await emptyPanel.stop();
+    emptyPanel = null;
+    await panel.stop();
+    writeFileSync(path.join(tree, "docs", "since-you-looked.html"), "<h1>delivered after the list was opened</h1>\n");
+    const restartStore = new Deliverables({ file: STORE });
+    const seenBefore = restartStore.list().seenSeq;
+    const fresh = restartStore.record({
+      job: { id: "feedface", thread: "wtgui-since-you-looked-9a10bc", turn: 1, project: "agent-worktree-gui", worktreePath: tree, branch },
+      tree: { path: tree, branch },
+      finalText: "DELIVER file docs/since-you-looked.html | Delivered after the list was opened",
+      agent: "since-you-looked-9a10bc",
+    });
+    const freshSeq = restartStore.list().entries[0].seq;
+    eq(
+      "a fresh delivery lands ABOVE the watermark the page wrote",
+      { added: fresh.added, seenSeq: seenBefore, seq: freshSeq },
+      { added: 1, seenSeq: newestSeq, seq: newestSeq + 1 },
+    );
+
+    restartedPanel = await startPanel({ dir, keep: true, reuseConfig: true, config: { assistant: { enabled: false } } });
+    const afterRestart = await getJson(restartedPanel.base);
+    eq(
+      "the restarted panel reads the watermark back: the 200 cleared rows stay cleared",
+      { seenSeq: afterRestart.body?.seenSeq, unseenCount: afterRestart.body?.unseenCount },
+      { seenSeq: seenBefore, unseenCount: 1 },
+    );
+    await openPage(page, restartedPanel.base, { selector: "#btn-deliver" });
+    await page.waitForFunction(() => !document.getElementById("deliver-badge").hidden, null, { timeout: 10_000 });
+    const relit = await page.evaluate(() => ({
+      text: document.getElementById("deliver-badge").textContent.trim(),
+      cls: document.getElementById("btn-deliver").classList.contains("has-unseen"),
+      label: document.getElementById("btn-deliver").getAttribute("aria-label") || "",
+      open: document.getElementById("btn-deliver").getAttribute("aria-expanded") === "true",
+    }));
+    eq("a fresh delivery re-lights the badge with ONE — not with everything ever delivered", relit.text, "1");
+    ok("…the highlight is back", relit.cls);
+    ok("…the aria-label says one", /1 new deliverable since/.test(relit.label), relit.label);
+    eq("…and the list is still shut: the badge lit from the watermark, not from an open", relit.open, false);
+
+    // The SECOND door: a press on the badge writes the SAME watermark through the same route, and never opens the list.
+    seenPosts.length = 0;
+    await page.click("#deliver-badge");
+    await page.waitForFunction(() => document.getElementById("deliver-badge").hidden, null, { timeout: 5_000 });
+    eq("the badge's dismiss posts the same watermark, once", seenPosts, [{ seq: freshSeq }]);
+    ok(
+      "…without opening the list",
+      await page.evaluate(
+        () => (document.getElementById("deliver-pop")?.hidden ?? true) === true && document.getElementById("btn-deliver").getAttribute("aria-expanded") === "false",
+      ),
+    );
+    ok("…and the highlight goes with it", await page.evaluate(() => !document.getElementById("btn-deliver").classList.contains("has-unseen")));
+    await page.evaluate(() => deliverFetch({ quiet: true }));
+    ok("…and the next poll keeps it cleared", await page.evaluate(() => document.getElementById("deliver-badge").hidden === true));
+    const dismissed = await getJson(restartedPanel.base);
+    eq(
+      "the store holds the dismissed watermark: nothing above it",
+      { seenSeq: dismissed.body?.seenSeq, unseenCount: dismissed.body?.unseenCount },
+      { seenSeq: freshSeq, unseenCount: 0 },
+    );
+    ok("no uncaught page error across the restart", pageErrors.length === 0, pageErrors.join(" | "));
     return shot;
   }, { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
   console.log(`      screenshot ${result}`);
 } finally {
   await emptyPanel?.stop();
+  await restartedPanel?.stop();
   await panel.stop();
   try {
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });

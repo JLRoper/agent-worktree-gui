@@ -15,7 +15,7 @@
 //   9. the settle seam itself, driven on a bare `Jobs` prototype (the shape test/release-request.test.js uses);
 //  10. read-time resolution by the six-hex tag (M14), and the job id as the click's key (M7).
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -448,7 +448,88 @@ test("the store's onChange fires once per new delivery and never for a repeat th
   assert.deepEqual(seen, [{ seq: 1, kind: "file", title: "The report", at: "2026-11-03T10:00:00.000Z" }]);
 });
 
-// ---- 11. the panel's wiring -----------------------------------------------------------------------------------------
+// ---- 11. the seen watermark ----------------------------------------------------------------------------------------
+// The badge counts what arrived AFTER the reader last looked. That is one persisted number beside the entries — not a
+// per-page flag and not a `seen` field on every row — so a restart, a second tab and a refreshed page agree, and a
+// cleared badge cannot come back by itself.
+test("a fresh store counts every row as unseen and has no watermark yet", (t) => {
+  const { tree, store } = fixture(t);
+  store.record({ job: jobFor(tree), tree: treeAt(tree), finalText: "DELIVER file docs/report.html | The report" });
+  store.record({ job: jobFor(tree, { id: "run-2", turn: 2 }), tree: treeAt(tree), finalText: "DELIVER image docs/shot.png | The shot" });
+  const list = store.list();
+  assert.equal(list.seenSeq, 0);
+  assert.equal(list.seenAt, null);
+  assert.equal(list.unseenCount, 2, "never opened means both rows are new");
+});
+
+test("markSeen persists the watermark, never moves it backwards, and a fresh delivery re-lights it", (t) => {
+  const { tree, store, file } = fixture(t);
+  const treeNow = treeAt(tree);
+  store.record({ job: jobFor(tree, { id: "run-1" }), tree: treeNow, finalText: "DELIVER file docs/report.html | The report" });
+  const seen = store.markSeen(1, { now: at("2026-11-03T12:00:00.000Z") });
+  assert.deepEqual(seen, { seenSeq: 1, seenAt: "2026-11-03T12:00:00.000Z", unseenCount: 0, moved: true, saved: true });
+  // The file carries it beside the entries: the restart proof.
+  const onDisk = JSON.parse(readFileSync(file, "utf8"));
+  assert.equal(onDisk.seenSeq, 1);
+  assert.equal(onDisk.seenAt, "2026-11-03T12:00:00.000Z");
+  assert.equal(onDisk.entries.length, 1);
+  // Older than the watermark is a no-op that still answers with the truth.
+  const older = store.markSeen(0);
+  assert.equal(older.moved, false);
+  assert.equal(older.seenSeq, 1);
+  assert.equal(older.unseenCount, 0);
+  // A restart reads the cleared watermark back: it does not resurrect the badge.
+  const reopened = new Deliverables({ file });
+  assert.equal(reopened.list().seenSeq, 1);
+  assert.equal(reopened.list().seenAt, "2026-11-03T12:00:00.000Z");
+  assert.equal(reopened.list().unseenCount, 0);
+  // A delivery ABOVE it re-lights exactly one row, never the row below.
+  reopened.record({ job: jobFor(tree, { id: "run-2", turn: 2 }), tree: treeNow, finalText: "DELIVER link https://x.test/later | Later" });
+  assert.equal(reopened.list().kept, 2);
+  assert.equal(reopened.list().unseenCount, 1);
+});
+
+test("the watermark is clamped to the newest row, and a non-integer seq is refused", (t) => {
+  const { tree, store } = fixture(t);
+  store.record({ job: jobFor(tree), tree: treeAt(tree), finalText: "DELIVER file docs/report.html | The report" });
+  const far = store.markSeen(9999);
+  assert.equal(far.seenSeq, 1, "a page cannot claim a row the store never had");
+  assert.equal(far.unseenCount, 0);
+  const bad = store.markSeen("whenever");
+  assert.match(bad.error, /`seq` must be the integer a deliverable's row carries/);
+  assert.equal(store.list().seenSeq, 1, "a refused write changes nothing");
+});
+
+test("an empty store has no watermark, and marking it seen records nothing", (t) => {
+  const { store, file } = fixture(t);
+  const seen = store.markSeen(7);
+  assert.equal(seen.seenSeq, 0);
+  assert.equal(seen.seenAt, null);
+  assert.equal(seen.moved, false);
+  assert.equal(store.list().unseenCount, 0);
+  assert.equal(existsSync(file), false, "no rows and no watermark means nothing was written");
+});
+
+test("POST /api/deliverables/seen is a token-carrying write beside the open, and the page drives both doors", () => {
+  const server = readFileSync(new URL("../server.js", import.meta.url), "utf8");
+  const at_ = server.indexOf('route === "/api/deliverables/seen"');
+  assert.ok(at_ > 0, "POST /api/deliverables/seen is not wired");
+  const block = server.slice(at_, server.indexOf('route === "/api/deliverables/open"', at_));
+  assert.match(block, /req\.method === "POST"/);
+  assert.match(block, /authorised\(req, config\.token\)/, "the token must be passed, not omitted");
+  assert.match(block, /deliverables\.markSeen\(body\.seq\)/, "the watermark is the store's, keyed by the seq the page sent");
+  assert.match(block, /seen\.error\) return sendJson\(res, 400/, "a non-integer seq is a 400, not a silent clear");
+  const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+  assert.match(app, /function deliverUnseenCount\(\)[\s\S]{0,200}?Number\(e\.seq\) > floor/, "the count is rows ABOVE the watermark");
+  assert.match(app, /classList\.toggle\("has-unseen"/, "the highlight is a class, not an inline style");
+  assert.match(app, /apiFetch\("\/api\/deliverables\/seen"/, "the page posts the watermark");
+  assert.match(app, /\$\("deliver-badge"\)\?\.addEventListener\("click"[\s\S]{0,200}?deliverMarkSeen\(\)/, "the dismiss is the same mechanism");
+  assert.match(app, /function openDeliverPop\(\)[\s\S]{0,900}?deliverMarkSeen\(\)/, "opening the list writes it too");
+  assert.match(app, /aria-label[\s\S]{0,200}?new deliverable/, "the aria-label carries the number");
+});
+
+
+// ---- 12. the panel's wiring -----------------------------------------------------------------------------------------
 // The two routes and the SSE frame are one-liners in server.js, and a one-liner is exactly what went missing: the
 // button shipped over a backend that was never written. These read the wiring, so a route deleted or an authorisation
 // slipped back to the one-argument form fails HERE rather than at a reader's first click.
