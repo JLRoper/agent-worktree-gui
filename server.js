@@ -68,7 +68,7 @@ import {
 // never leave this process: Apply reads one here and hands it straight to writeProviderSettings above.
 import { listProfiles, saveProfile, deleteProfile, profileWithKey } from "./lib/provider-profiles.js";
 import { hermesSessionTail } from "./lib/activity.js";
-import { Assistant, ASSISTANT_THREAD } from "./lib/assistant.js";
+import { Assistant, ASSISTANT_THREAD, ElementChannel, createBridgeChannel } from "./lib/assistant.js";
 // The per-assistant task queue's HTTP adapter. One import and one call site: the module owns the routes and the
 // transitions, the Assistant owns the file path and the read-modify-write, and this composition root only hands both
 // of them the transport helpers.
@@ -1005,6 +1005,33 @@ const settingsOut = () => ({
 // is fired from the listen callback below, once the port is bound — the panel comes up first, and a bridge that
 // cannot start surfaces as `state().boot` on the Gateway tab rather than in a log line nobody reads.
 const matrixBridge = new MatrixBridge({ config, onLog: log });
+
+// ---- the Element room: every wait on a person, over the bridge above -----------------------------------------
+// The panel's third surface for a human decision, and the only one that is not this page. A clarify card, a run's
+// approval and the permission box above all go out through the bridge that is ALREADY running — its `outbox.txt`
+// for what leaves, its own stdout log for what arrives — and the letter that comes back is applied through the
+// same control call the card's button posts. One message per wait, edited in place as it resolves; a send that
+// fails is a record on the Gateway tab's Element block instead of a log line nobody reads.
+//
+// The channel is handed the SAME `matrixBridge.state()` the Gateway tab draws, so "the bridge is running" means
+// one thing on this panel: the OS's verdict on the pid the panel recorded, never the existence of a file.
+const element = new ElementChannel({
+  config,
+  jobs,
+  approvals,
+  assistant,
+  getProjects: () => registry.projects,
+  getRows: rowsWithProject,
+  bridge: createBridgeChannel({ config, status: () => matrixBridge.state() }),
+  onLog: log,
+  onEvent: broadcast,
+});
+// One pass every few seconds: the waits that appeared go out, the ones that resolved close in place, and the
+// room's replies are read. The module serialises its own passes, so a slow send delays the next pass rather
+// than producing a second message; a failure is logged and the block still shows the record.
+setInterval(() => {
+  void element.sweep().catch((e) => log(`element: sweep failed: ${String((e && e.message) || e)}`));
+}, 3_000).unref?.();
 
 const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 
@@ -3006,6 +3033,25 @@ const server = createServer(async (req, res) => {
         // 409 for a worker that is already turning: the request was well-formed and understood, and the answer is
         // "not now" (the code a steer that missed the last tool boundary already gets). 400 for everything else.
         return sendJson(res, (e && e.code) === "thread_busy" ? 409 : 400, { error: String((e && e.message) || e) });
+      }
+    }
+
+    // The Element room's read. One pass of the channel is already on its own clock, so this is a pure read: what
+    // is open, what the panel sent (its CURRENT text, outcome included), and every send that failed. The Gateway
+    // tab's block polls this, and it is the only surface that shows a swallowed-looking failure.
+    if (route === "/api/assistant/element" && req.method === "GET") {
+      return sendJson(res, 200, element.state());
+    }
+    // Re-send the record whose send failed. The SAME record — a press here can never become a second copy in
+    // the room, which is what a "resend everything" button would do.
+    if (route === "/api/assistant/element/retry" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req);
+      try {
+        const out = await element.retry(body && body.id ? String(body.id) : null);
+        return sendJson(res, 200, out);
+      } catch (e) {
+        return sendJson(res, 400, { error: String((e && e.message) || e) });
       }
     }
 
