@@ -3100,6 +3100,18 @@ const server = createServer(async (req, res) => {
         return sendJson(res, code, { error: String((e && e.message) || e) });
       }
     }
+    // ONE role's OWN charter text, by id: the Role tab changes its box to this text when the picker changes, and
+    // the tab must not carry it around in state. GET because it changes nothing — the pick is still its own press
+    // and Save still writes the ASSISTANT's copy, which is a different file.
+    if (route === "/api/assistant/role/charter" && req.method === "GET") {
+      const q = new URL(req.url, "http://127.0.0.1").searchParams;
+      try {
+        return sendJson(res, 200, assistant.roleCharterPayload(q.get("roleId")));
+      } catch (e) {
+        const code = (e && e.code) === "role-unknown" ? 404 : 400;
+        return sendJson(res, code, { error: String((e && e.message) || e) });
+      }
+    }
     // Picking a role changes the job title; `adopt` also replaces that assistant's copy of the charter with the
     // role's text. Two presses in the tab, one route: the server never decides to overwrite a reader's edit.
     if (route === "/api/assistant/role/pick" && req.method === "POST") {

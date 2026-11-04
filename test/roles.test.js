@@ -216,6 +216,37 @@ test("rules belong to one assistant, and adopting a role replaces only that assi
   assert.equal(again.charter.text, "# mine again\n", "picking a role is not an overwrite");
 });
 
+test("the picker's charter read is the ROLE's own text, and never the assistant's copy", async (t) => {
+  // The Role tab's box follows the picker now: picking a role loads THAT role's charter. The read is one role by
+  // id, so two roles' 20 KB texts never ride in the pane's state, and reading one changes no assistant's copy —
+  // Save is still the press that writes the copy.
+  const { assistant } = await panel(t);
+  assistant.setCharter("# assistant one\n");
+  assistant.createRole({ name: "Reviewer", description: "reads PRs and says no", charter: "# reviewer charter\n\nREAD-IT\n" });
+  const own = assistant.roleCharterPayload("reviewer");
+  assert.equal(own.text, "# reviewer charter\n\nREAD-IT\n", "the role's own text, whole");
+  assert.deepEqual([own.role.id, own.role.name, own.role.description], ["reviewer", "Reviewer", "reads PRs and says no"]);
+  assert.equal(own.role.chars, own.text.length);
+  assert.equal(own.cap, ROLE_CHARTER_MAX_CHARS, "the same cap every copy is judged by");
+  assert.equal(assistant.charterPayloadFor(PRIMARY_ASSISTANT).text, "# assistant one\n", "the assistant's copy is untouched");
+  assert.equal(assistant.rolePayload(PRIMARY_ASSISTANT).sameAsRole, false, "reading a role is not adopting it");
+
+  // A role can hold a text an ASSISTANT's save would refuse (the store is written by the picker's copy too), and
+  // the payload has to say so rather than leaving the tab to discover it at Save.
+  assistant.createRole({ name: "Overlong", description: "past the line", charter: "x".repeat(CHARTER_MAX_CHARS + 1) });
+  const over = assistant.roleCharterPayload("overlong");
+  assert.equal(over.text.length, CHARTER_MAX_CHARS + 1, "the role's text is returned as it is stored");
+  assert.equal(over.role.over, true, "…and its meta says it is over the cap");
+
+  let code = null;
+  try {
+    assistant.roleCharterPayload("no-such-role");
+  } catch (e) {
+    code = e.code;
+  }
+  assert.equal(code, "role-unknown", "an unknown id is the route's 404, not an empty box");
+});
+
 test("both copies refuse a save over the 20,000-character cap", async (t) => {
   const { assistant } = await panel(t);
   assistant.createAssistant({ roleId: "agent-manager" });

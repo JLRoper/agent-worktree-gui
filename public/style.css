@@ -3598,6 +3598,16 @@ tr.detail .codelist { font-family: var(--mono); font-size: 11.5px; color: var(--
 .as-charter-meta .as-hint.is-bad { color: var(--amber); }
 .as-charter-box { min-height: 240px; font-size: 11px; line-height: 1.5; }
 .as-charter-box[readonly] { opacity: .6; }
+/* The Role tab's inline question and its cap warning: a row IN the tab, never a browser dialog, so the textarea the
+   reader is typing in stays on screen while they answer. */
+.as-ask {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 7px; padding: 7px 9px; border: 1px solid #5a4a1e; border-left: 3px solid var(--amber);
+  border-radius: 6px; background: var(--amber-bg); color: var(--text); font-size: 11.5px; line-height: 1.4;
+}
+.as-ask .as-ask-what { flex: 1 1 100%; min-width: 0; }
+.as-ask.is-bad { border-color: #57262a; border-left-color: var(--red); background: var(--red-bg); color: #ffb4ac; }
+.as-ask.is-bad b { color: #ffd7d2; }
 .as-draft-wrap { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; }
 .as-draft { min-height: 56px; }
 .as-draft-meta { font-family: var(--mono); font-size: 10px; color: var(--dimmer); }
