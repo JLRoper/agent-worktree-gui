@@ -4665,18 +4665,23 @@ function conversationHtml(conv) {
     runIdShort && !cwdLine ? `run ${runIdShort}` : null,
   ].filter(Boolean).join(" · ");
   // The card's two rows, built once because every card — expanded or minimized — draws them the same way: the head
-  // carries the state and the card's own controls, and the cwd line carries where the agent runs and the session's
-  // name. The six controls are ONE block pinned to the head's right edge, so nothing on the left can push them onto a
-  // line of their own (that is what a long name used to do); the name is the cwd line's right-hand item, flush under
-  // them, and it is the only thing on that line that gives up width. A card with no cwd line has nowhere else to put
-  // the name, so that one keeps name and controls together in the head.
+  // carries the state and the card's own controls, and the cwd line carries where the agent runs, the session's name
+  // and the pencil that renames it. The five head controls are ONE block pinned to the head's right edge, so nothing on
+  // the left can push them onto a line of their own (that is what a long name used to do); the name is the cwd line's
+  // right-hand item with the pencil immediately after it, so the label and the control that edits it read as one pair,
+  // and the name is the only thing on that line that gives up width. A card with no cwd line has nowhere else to put
+  // the name, so that one keeps name, pencil and controls together in the head.
   const threadNameHtml = `<span class="mono dimmer thread-name" data-thread-name="${esc(thread)}" data-label="${esc(latest.label || "")}" title="${latest.label ? esc(`${latest.label} — Hermes thread ${thread}`) : "Hermes session thread — continue it any time"}">${esc(latest.label || thread)}</span>`;
+  // The pencil rides the cwd line, immediately after the name (see cwdHtml below): the head's control block keeps the
+  // other five. Same button, same delegated press — only its place in the card moved.
+  const renameBtnHtml = `<button class="btn-rename" data-rename-thread="${esc(thread)}" type="button" title="rename this session — a label for the panel only; the Hermes thread id never changes">\u270e</button>`;
   const cardActionsHtml =
     `<span class="job-actions">` +
     `<button class="btn-pin${state.anchorThread === thread ? " is-on" : ""}" data-pin-thread="${esc(thread)}" type="button" title="${state.anchorThread === thread ? "this card holds its place while anything above it grows — click to release" : "pin this card: hold its place on screen while other cards above it grow (one pin at a time)"}">\u{1F4CC}</button>` +
     `<button class="btn-think${thinkingOn(thread) ? " is-on" : ""}" data-think-thread="${esc(thread)}" type="button" title="${thinkingOn(thread) ? "showing this session's reasoning — open live while a turn runs, folded afterwards. click to hide it" : "show this session's reasoning: live and open while a turn runs, folded per turn afterwards (read from the session store)"}">🧠</button>` +
-    `<button class="btn-stream${streamOn(thread) ? " is-on" : ""}" data-stream-thread="${esc(thread)}" type="button" aria-pressed="${streamOn(thread) ? "true" : "false"}" title="${streamOn(thread) ? "this session is drawn as ONE stream — reasoning, tool calls, their output and the agent's own words in the order they happened, with no burst to open; each result is still the shut box it is everywhere else. click to go back to the separate thinking block and the condensed tool groups" : "draw this session as ONE stream: what the agent thought, said, called and got back, in the order it happened, with no burst to open — each result is still the shut box it is everywhere else, so a call's output is one click away (reasoning joins it while 🧠 is on; subagents keep their own strip)"}">🌊</button>` +
-    `<button class="btn-rename" data-rename-thread="${esc(thread)}" type="button" title="rename this session — a label for the panel only; the Hermes thread id never changes">\u270e</button>` +
+    // The wave is drawn only while the Cards-tab switch is on: absent by default, and the switch owns that answer for
+    // every card (Settings > Wave button).
+    (showStreamButton() ? `<button class="btn-stream${streamOn(thread) ? " is-on" : ""}" data-stream-thread="${esc(thread)}" type="button" aria-pressed="${streamOn(thread) ? "true" : "false"}" title="${streamOn(thread) ? "this session is drawn as ONE stream — reasoning, tool calls, their output and the agent's own words in the order they happened, with no burst to open; each result is still the shut box it is everywhere else. click to go back to the separate thinking block and the condensed tool groups" : "draw this session as ONE stream: what the agent thought, said, called and got back, in the order it happened, with no burst to open — each result is still the shut box it is everywhere else, so a call's output is one click away (reasoning joins it while 🧠 is on; subagents keep their own strip)"}">🌊</button>` : "") +
     `<button class="btn-max" data-max-thread="${esc(thread)}" type="button" title="${maximized ? "shrink this chat back into the list (Esc)" : "expand this chat to fill the window (Esc to close)"}">${maximized ? "\u2921" : "\u2922"}</button>` +
     `<button class="btn-clear-thread" data-clear-thread="${esc(thread)}" type="button" title="forget this agent session — removes its turns and transcript from the panel (the worktree it made stays on disk)">✕</button>` +
     `</span>`;
@@ -4691,6 +4696,7 @@ function conversationHtml(conv) {
         ? `<span class="cwd-row mono" title="the worktree row this agent is filed under">row ${esc(tailPath(cwdRow, 2))}</span>`
         : "") +
       threadNameHtml +
+      renameBtnHtml +
       "</div>"
     : "";
   // A run has no process to exit. The pool maps run status onto 0/1 so the old CLI card keeps
@@ -4785,7 +4791,7 @@ function conversationHtml(conv) {
       <span class="spacer"></span>
       ${latest.yolo ? '<span class="pill yolo" title="this run was started with the --yolo flag (auto-approve, no prompts). The panel does not send it: approvals still come to this card.">yolo</span>' : ""}
       ${homeless ? `<button class="btn-attach" data-attach-toggle="${esc(thread)}" type="button" title="attach this agent to a worktree — it then lives under that row">\u2935 attach</button>` : ""}
-      ${cwdLine ? "" : threadNameHtml}
+      ${cwdLine ? "" : threadNameHtml + renameBtnHtml}
       ${cardActionsHtml}
     </div>
     ${cwdHtml}
@@ -7234,12 +7240,26 @@ function setThinking(thread, on) {
 }
 
 // ---- one stream ------------------------------------------------------------------------------
-// The 🌊 beside the 🧠: draw this session as ONE stream — what the agent thought, said, called and got back, in the
+// The 🌊 among the head's controls (while Settings > Agent cards > Wave button draws it): draw this session as ONE
+// stream — what the agent thought, said, called and got back, in the
 // order it happened, with no burst to open. What is NOT folded there is the run of calls itself: a result is still the
 // shut box it is in the condensed view (core/console-format.js), so the stream is one flow of what happened rather
 // than a wall of output. Per session like thinking, and with a global default like it too (Settings > Agent cards >
 // Combined output): a card that never pressed the button follows that switch, and a card that did keeps its answer.
 const STREAM_KEY = "wtgui.stream"; // global default, "1" when a card without its own answer should be drawn as one stream
+// Whether a card DRAWS the wave button at all is a separate answer from what the button does: Settings > Agent cards >
+// Wave button. Off by default — a card's head is the five controls that act on the card itself — and the answer is the
+// browser's, so it survives a reload. Each card reads it while it renders, so the switch is the only save path.
+const SHOW_STREAM_KEY = "wtgui.showStreamButton";
+
+function showStreamButton() {
+  try {
+    return localStorage.getItem(SHOW_STREAM_KEY) === "1";
+  } catch {
+    /* private mode: off, which is the default anyway */
+    return false;
+  }
+}
 
 function streamDefault() {
   try {
@@ -9136,6 +9156,10 @@ function conversationSignature(conv) {
     `e${queuedEditFor(conv.thread)?.at ?? ""}`,
     state.collapsedJobs.has(conv.thread) ? "c" : "o",
     state.maximized === conv.thread ? "m" : "-",
+    // Whether the head draws the wave button at all (Settings > Agent cards > Wave button): the switch changes the
+    // card's MARKUP, not its data, so without it here the card kept the head it was built with and the wave only
+    // appeared on some later unrelated rebuild.
+    showStreamButton() ? "w" : "-",
     isHomelessConv(conv) ? "h" : "-",
     approvals,
     runApprovals,
@@ -22652,6 +22676,16 @@ $("stream-default")?.addEventListener("change", (e) => {
     if (own === null) renderConversation(c.thread);
   }
 });
+// Whether the card draws the 🌊 at all — its own switch, its own key, saved the same way as the row above. Every card
+// is repainted (not just the ones with no per-session answer) because the button's PRESENCE changes, not its state.
+$("show-stream-button")?.addEventListener("change", (e) => {
+  try {
+    localStorage.setItem(SHOW_STREAM_KEY, e.target.checked ? "1" : "0");
+  } catch {
+    /* private mode: the default just will not persist */
+  }
+  for (const c of conversations()) renderConversation(c.thread);
+});
 $("term-weight-select")?.addEventListener("change", (e) => applyTermStyle({ save: true, weight: e.target.value }));
 
 // The approval window. A preset only fills the box and lights Save: one click here rewrites the
@@ -22747,6 +22781,7 @@ applyAddBarBrightness(addBarBrightnessSetting(), { save: false });
 applyAddBarTop(addBarAtTop(), { save: false });
 if ($("show-thinking")) $("show-thinking").checked = thinkDefault();
 if ($("stream-default")) $("stream-default").checked = streamDefault();
+if ($("show-stream-button")) $("show-stream-button").checked = showStreamButton();
 if ($("group-tools")) $("group-tools").checked = toolGroupsOn();
 if ($("follow-opened")) $("follow-opened").checked = foldFollowsConsole();
 if ($("auto-collect")) $("auto-collect").checked = autoCollectOn();

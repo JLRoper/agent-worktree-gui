@@ -1,6 +1,6 @@
-// The agent card's header reads the same folded and open: the six controls (pin, think, stream, rename, max, clear)
-// fill the head's top-right corner on one line that cannot wrap, and the session's name is the cwd line's right-hand
-// item, flush under them.
+// The agent card's header reads the same folded and open: the head's controls (pin, think, stream, max, clear — the
+// wave only while its Cards-tab switch draws it) fill the top-right corner on one line that cannot wrap, and the
+// session's name with the pencil that renames it are the cwd line's right-hand pair, flush under them.
 //
 //   node tools/verify-card-header-layout.mjs [--shots <dir>]
 //
@@ -12,13 +12,15 @@
 //
 // The layout this pins, in BOTH states:
 //
-//   * row 1 (`.job-head`) carries the six controls as ONE `.job-actions` block, pinned to the head's right edge with
-//     `margin-left: auto`, its own `flex-wrap: nowrap`, and a head that does not wrap it either;
-//   * row 2 (`.job-cwd`) carries the session's name as its last item, right-justified with `margin-left: auto`, so
-//     its right edge lines up under the controls' right edge;
+//   * row 1 (`.job-head`) carries its controls as ONE `.job-actions` block, pinned to the head's right edge with
+//     `margin-left: auto`, its own `flex-wrap: nowrap`, and a head that does not wrap it either (four controls with
+//     the Wave button switch off, which is the default; five with it on);
+//   * row 2 (`.job-cwd`) carries the session's name and then the pencil that renames it as its last two items, the
+//     name right-justified by `margin-left: auto`, so the pencil's right edge lines up under the head's right edge;
 //   * the name keeps its ellipsis and its `title`, and gives up width before the cwd path does;
 //   * no control box intersects the name;
-//   * a card with NO cwd line has nowhere else to put the name, so it keeps name and controls together in the head;
+//   * a card with NO cwd line has nowhere else to put the name, so it keeps name, pencil and controls together in the
+//     head;
 //   * clicking the head still folds and unfolds the card.
 //
 // Measured from the DOM at 1954px and at 1280px with the assistant rail open, each with a deliberately long session
@@ -114,12 +116,16 @@ const frame = (page, thread) =>
     const head = j.querySelector(".job-head");
     const cwd = j.querySelector(".job-cwd");
     const name = j.querySelector(".thread-name");
+    const pencil = j.querySelector(".btn-rename");
     const pathEl = cwd ? cwd.querySelector(".cwd-path") : null;
     const cluster = j.querySelector(".job-actions");
     // The shipped cluster, or — on a base that has none — whatever block the controls are parented in, so a red run
     // reports real numbers instead of dying on a missing node.
     const sel = ["[data-pin-thread]", "[data-think-thread]", "[data-stream-thread]", "[data-rename-thread]", "[data-max-thread]", "[data-clear-thread]"];
-    const ctl = sel.map((s) => j.querySelector(s)).filter(Boolean);
+    // The CLUSTER's controls, not every matching button in the card: the pencil rides the cwd row now, so counting it
+    // here made the cluster look like it had a control on another line (measured: tops spread 26px for a 4-control
+    // cluster). On a base with no cluster, fall back to the card so a red run still reports real numbers.
+    const ctl = cluster ? [...cluster.querySelectorAll(sel.join(","))] : sel.map((s) => j.querySelector(s)).filter(Boolean);
     const block = cluster || (ctl[0] ? ctl[0].parentElement : null);
     const ctlR = ctl.map(R);
     const blockR = block ? R(block) : null;
@@ -141,6 +147,9 @@ const frame = (page, thread) =>
       controls: ctlR.length,
       controlsClasses: ctl.map((c) => c.className.split(" ")[0]),
       name: nameR,
+      pencil: pencil ? R(pencil) : null,
+      pencilInCwd: Boolean(pencil && cwd && cwd.contains(pencil)),
+      pencilIsLast: Boolean(cwd && pencil && [...cwd.children].slice(-1)[0] === pencil),
       nameText: name ? name.textContent : null,
       nameTitle: name ? name.title : null,
       nameInHead: Boolean(name && head.contains(name)),
@@ -161,8 +170,8 @@ const stateChecks = (f, tag) => {
     check(false, `${tag}: the card is on the page`, f.error);
     return;
   }
-  const { head, cwd, name, block } = f;
-  check(f.controls === 6, `${tag}: all six controls are drawn`, `${f.controls} (${f.controlsClasses.join(" ")})`);
+  const { head, cwd, name, pencil, block } = f;
+  check(f.controls === 4, `${tag}: the head's four controls are drawn (the wave is off by default)`, `${f.controls} (${f.controlsClasses.join(" ")})`);
   check(f.hasCluster, `${tag}: the controls are ONE .job-actions cluster`, f.hasCluster ? f.blockParent : "no .job-actions block");
   check(f.blockInHead && !f.blockInCwd, `${tag}: the cluster lives in the head, not on the cwd row`, `${f.blockParent} in head ${f.blockInHead}, in cwd ${f.blockInCwd}`);
   check(
@@ -177,24 +186,29 @@ const stateChecks = (f, tag) => {
   );
   check(
     f.clusterWrap === "nowrap" && f.spread !== null && f.spread <= 1 && Boolean(block) && block.h <= 30,
-    `${tag}: the cluster cannot wrap — all six controls on one line`,
+    `${tag}: the cluster cannot wrap — all four controls on one line`,
     `flex-wrap ${f.clusterWrap} · tops spread ${f.spread}px · cluster ${block ? `${block.w}×${block.h}` : "?"}`,
   );
   check(f.nameInCwd && !f.nameInHead, `${tag}: the thread name is on the cwd row, not in the head`, `in cwd ${f.nameInCwd} · in head ${f.nameInHead}`);
+  check(
+    f.pencilInCwd && f.pencilIsLast && Boolean(name && pencil) && pencil.l - name.r >= -2 && pencil.l - name.r <= 8,
+    `${tag}: the pencil is the cwd row's last item, immediately after the name`,
+    pencil && name ? `name right ${name.r} · pencil ${pencil.l}-${pencil.r} · last ${f.pencilIsLast}` : "no pencil or no name",
+  );
   check(
     inside(name, cwd) && Boolean(cwd) && cwd.h <= 22,
     `${tag}: the name's left edge lands on the cwd row`,
     `cwd ${cwd ? `${cwd.t}-${cwd.b} (${cwd.h}px tall)` : "absent"} · name ${name ? `${name.l},${name.t}` : "absent"}`,
   );
   check(
-    Boolean(name && cwd) && cwd.r - name.r <= 4,
-    `${tag}: the name is right-justified on the cwd row`,
-    name && cwd ? `cwd right ${cwd.r} · name right ${name.r}` : "no name or no cwd row",
+    Boolean(pencil && cwd) && cwd.r - pencil.r <= 4,
+    `${tag}: the pencil is right-justified on the cwd row`,
+    pencil && cwd ? `cwd right ${cwd.r} · pencil right ${pencil.r}` : "no pencil or no cwd row",
   );
   check(
-    Boolean(name && block) && Math.abs(name.r - block.r) <= 4,
-    `${tag}: the name ends under the cluster — both rows share one right edge`,
-    name && block ? `name right ${name.r} · cluster right ${block.r}` : "nothing to compare",
+    Boolean(pencil && block) && Math.abs(pencil.r - block.r) <= 4,
+    `${tag}: the pencil ends under the cluster — both rows share one right edge`,
+    pencil && block ? `pencil right ${pencil.r} · cluster right ${block.r}` : "nothing to compare",
   );
   check(f.nameOneLine === true, `${tag}: the name stays one line`, name ? `${name.h}px tall` : "no name");
   check(f.nameHitsControls === 0, `${tag}: no control box intersects the name`, `${f.nameHitsControls} overlap(s)`);
@@ -298,8 +312,8 @@ try {
         };
       }, NO_CWD);
       check(
-        noCwd.error === undefined && !noCwd.cwdLine && noCwd.nameInHead && noCwd.clusterInHead && noCwd.controls === 6,
-        "a card with no cwd line keeps the name and all six controls together in the head",
+        noCwd.error === undefined && !noCwd.cwdLine && noCwd.nameInHead && noCwd.clusterInHead && noCwd.controls === 5,
+        "a card with no cwd line keeps the name, the pencil and the head's controls together",
         JSON.stringify(noCwd),
       );
 
