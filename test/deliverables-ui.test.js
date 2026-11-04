@@ -122,6 +122,11 @@ test("the empty state documents the grammar; a failed read says so and offers re
   const src = block();
   assert.match(src, /Nothing has been delivered yet/, "an empty list says nothing has been delivered");
   assert.match(src, /DELIVER file C:\/path\/to\/report\.html \| The report/, "one valid example, in a code line");
+  // The definition, where the reader looks for it — and ONCE: the same sentence is in every brief, so a second copy
+  // on the page would be the page explaining itself twice.
+  assert.match(src, /A deliverable is a file or URL the reader can open, not a description of one/, "the help text defines a deliverable");
+  const all = `${app}\n${html}`;
+  assert.equal(all.split("not a description of one").length - 1, 1, "the definition is stated once on the page");
   assert.match(src, /could not read the list/i, "a failed read is not an empty list");
   assert.match(src, /retry/i, "and it offers the retry");
 });
