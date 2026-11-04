@@ -20091,9 +20091,9 @@ function openPipelineFlow() {
       { label: "stages", value: String(stages) },
       { label: "next", value: def.next || "end of the chain" },
     ],
-    note: stages
-      ? "each notch is the exit check that ends the stage before it — no mark is set, because a definition has no position until a task enters a stage"
-      : "this definition holds no stage, so there is nothing to draw",
+    // No caption here: the drawing's own legend says "not reached 13" once when a definition has no position, and an
+    // empty definition draws its own "no stage" box. A sentence repeating either was the dialog apologising for the
+    // picture instead of letting it speak.
     opener: document.getElementById("pipeline-flow-open"),
   });
 }

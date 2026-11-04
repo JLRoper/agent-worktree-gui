@@ -226,6 +226,34 @@ test("markup carries the count and the fit control, and `fit` changes only the r
   assert.deepEqual(b.notches, a.notches, "and the same gate notches");
 });
 
+test("the legend lists only the states this drawing actually shows, and counts them", () => {
+  const keys = (html) => {
+    const legend = (html.match(/<div class="pflow-legend"[\s\S]*?<\/div>/) || [""])[0];
+    return [...legend.matchAll(/data-mark="([^"]+)"><i aria-hidden="true"><\/i>([^<]*)(?:<b class="mono">(\d+)<\/b>)?/g)].map((m) => ({ mark: m[1], text: m[2].trim(), count: m[3] ? Number(m[3]) : null }));
+  };
+  // A definition has no position: one state, said once — not four keys the reader cannot find on the picture.
+  const def = fromDefinition(SEED_DEFS.find((p) => p.id === "local"));
+  assert.deepEqual(keys(markup(def, null)), [{ mark: "not-reached", text: "not reached", count: 1 }]);
+  const thirteen = fromDefinition(SEED_DEFS.find((p) => p.id === "sefl-review-loop"));
+  assert.deepEqual(
+    keys(markup(thirteen, null)).map((k) => k.mark),
+    ["not-reached"],
+    "seven not-reached stages are still one state in the legend",
+  );
+  // A live row shows the marks it carries, and the counts are the number of stages carrying each one.
+  const row = fromBundle(SEED_BUNDLE);
+  const liveHtml = markup(row, { stage: "S6" });
+  const live = keys(liveHtml);
+  const drawn = flowOf(liveHtml).nodes;
+  assert.deepEqual(live.map((k) => k.mark).sort(), [...new Set(drawn.map((n) => n.mark))].sort(), "one key per state on screen, and no other");
+  assert.ok(!live.some((k) => k.mark === "refused"), "no gate refused on this row, so the legend offers no refusal key");
+  for (const k of live) assert.equal(k.count, drawn.filter((n) => n.mark === k.mark).length, `${k.mark} is counted from the drawing`);
+  // A refused preview is the only producer of the fourth state, and it appears only there.
+  const refused = keys(markup(row, { stage: "S6", refused: "S3" })).map((k) => k.mark);
+  assert.ok(refused.includes("refused"), "a refusal on screen gets its key");
+  assert.ok(!keys(markup(fromDefinition({ id: "none", title: "none", stages: [] }), null)).length, "no stages, no legend to explain");
+});
+
 test("render() needs a page: with no document it returns null instead of throwing", () => {
   assert.equal(typeof globalThis.document, "undefined");
   assert.equal(render(fromBundle(SEED_BUNDLE), null), null);

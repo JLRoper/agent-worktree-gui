@@ -124,6 +124,15 @@
     return global.PipelineFlow.markup(flow, position, { motion, fit });
   }
 
+  // How many columns the drawing needs. The CARD's width is its own policy — `public/style.css` turns this number into
+  // `n * 96px + (n - 1) * 26px + 26px`, the track's own floor and gap plus the body's padding and border — so a
+  // one-stage definition opens as a small panel and thirteen stages open wide enough for the readable column width.
+  // It is set on the card, not on the flow: a custom property inherits DOWNWARD, and the card is the ancestor that
+  // sizes itself from it.
+  function stageCount(flow) {
+    return flow && Array.isArray(flow.stages) && flow.stages.length ? flow.stages.length : 1;
+  }
+
   function previewHtml(flow, position) {
     if (!state.preview || !flow || !Array.isArray(flow.stages) || !flow.stages.length) return "";
     const stage = String((position && position.stage) || "");
@@ -138,7 +147,10 @@
   }
 
   function cardHtml() {
-    const kicker = state.mode === "position" ? "pipeline flow · position" : "pipeline flow · editing";
+    // The kicker names the thing being looked at, not a verb this dialog does not offer: the surface draws a flow in
+    // both modes and has no edit control of its own, so "editing" claimed an action that is not here. The edit-mode
+    // caller is the Settings tab, where the edit happens; a dirty draft is the `sub` line's job.
+    const kicker = state.mode === "position" ? "pipeline flow · position" : "pipeline flow · definition";
     const body = state.loading
       ? `<div class="pmodal-note">reading this task's pipeline…</div>`
       : `${factsHtml(state.facts)}${state.note ? `<div class="pmodal-note">${esc(state.note)}</div>` : ""}${
@@ -162,6 +174,9 @@
     const card = doc.getElementById(CARD_ID);
     if (!card) return;
     card.innerHTML = cardHtml();
+    // The card's width comes from the drawing it is about to hold: `--pflow-card-n` is read by `.pmodal-card` in
+    // public/style.css. Set on every paint, so a dialog reused for a shorter definition shrinks with it.
+    card.style?.setProperty?.("--pflow-card-n", String(stageCount(state.flow)));
     wireContent(doc);
   }
 
@@ -258,7 +273,12 @@
     }
     host.hidden = true;
     host.setAttribute("data-mode", "edit");
-    if (card) card.innerHTML = "";
+    if (card) {
+      card.innerHTML = "";
+      // The next open may be a shorter definition, and paint() sets this again from the flow it is given; clearing it
+      // here keeps an empty card from carrying the last drawing's width while the next one is still loading.
+      card.style?.setProperty?.("--pflow-card-n", "1");
+    }
     doc.body?.classList?.remove("pipeline-modal-open");
     Object.assign(state, {
       open: false,
