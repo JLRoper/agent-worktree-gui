@@ -17,15 +17,15 @@ has no tag.
 
 ## v1.1.0 — 2026-11-04 · 2 commits
 
-[`7e31340`](https://github.com/JLRoper/agent-worktree-gui/commit/7e3134097348f39c6024d8dd8c51998074806741) · [compare v1.0.4...v1.1.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.0.4...v1.1.0)
+[`d5b35eb`](https://github.com/JLRoper/agent-worktree-gui/commit/d5b35ebdcce609b3dc94064539f3f7d056681313) · [compare v1.0.4...v1.1.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.0.4...v1.1.0)
 
 ### Added
 
-- feat: alerts get an owner — stamped at fire time, resolved from the thread, filed under a tab ([`cca003b`](https://github.com/JLRoper/agent-worktree-gui/commit/cca003b0623bf42cdaebd39f922f40f8eed11bab))
+- feat: alerts get an owner — stamped at fire time, resolved from the thread, filed under a tab ([`8688a70`](https://github.com/JLRoper/agent-worktree-gui/commit/8688a707dfd4588e9627be28f9f7fae9c941ebe9))
 
 ### Other
 
-- chore: 1.1.0 — the version this landing carries ([`7e31340`](https://github.com/JLRoper/agent-worktree-gui/commit/7e3134097348f39c6024d8dd8c51998074806741))
+- chore: 1.1.0 — the version this landing carries ([`d5b35eb`](https://github.com/JLRoper/agent-worktree-gui/commit/d5b35ebdcce609b3dc94064539f3f7d056681313))
 
 ## v1.0.4 — 2026-11-04 · 2 commits
 
