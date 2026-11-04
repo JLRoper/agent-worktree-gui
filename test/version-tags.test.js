@@ -151,3 +151,53 @@ test("backfill anchors every version once, and a second run creates nothing and 
   assert.equal(gate.code, 0, `${gate.out}${gate.err}`);
   assert.match(gate.out, /PASS/, "the gate the backfill exists to satisfy reads PASS on the fixture");
 });
+
+// The shape that mis-anchored v1.5.0: the changelog render lands on top of the bump, so the ref's tip reads the
+// bumped number while its diff touches only CHANGELOG.md. Reading the version out of the tip's tree and tagging
+// the tip is what this case pins against; the anchor has to be the commit whose patch carried the number.
+test("tag --ref anchors the bump under a render commit, not the render tip", async (t) => {
+  const { dir, shas } = await fixture(t, ["0.1.0", "0.2.0"]);
+  // main's earlier bump is already anchored, so the only finding this case can produce is v0.2.0's anchor.
+  git(dir, ["tag", "-a", "v0.1.0", shas[0], "-m", "v0.1.0"]);
+  await writeFile(path.join(dir, "CHANGELOG.md"), "# Changes\n\n## v0.2.0\n\n- feat: a thing\n");
+  git(dir, ["add", "-A"]);
+  git(dir, ["commit", "-m", "docs: render the 0.2.0 section at the rebased tip"]);
+  const tip = git(dir, ["rev-parse", "HEAD"]);
+
+  const r = tool(VERSION, ["tag", "--ref", "main"], dir);
+  assert.equal(r.code, 0, r.err);
+  assert.equal(git(dir, ["rev-parse", "v0.2.0^{commit}"]), shas[1], "the anchor is the commit that declared 0.2.0");
+  assert.notEqual(git(dir, ["rev-parse", "v0.2.0^{commit}"]), tip, "and not the render commit the ref resolves to");
+  assert.match(r.out, /not main's tip/, "the run says it walked past the tip instead of tagging it");
+  assert.match(git(dir, ["cat-file", "-p", "v0.2.0"]), /package\.json first carried 0\.2\.0 at [0-9a-f]{10}/);
+
+  const gate = tool(GATE, [], dir);
+  assert.equal(gate.code, 0, `${gate.out}${gate.err}`);
+  assert.match(gate.out, /PASS/, "the gate accepts the anchor the fixed tool chose");
+});
+
+// The other half: a number the ref's tree carries but no reachable commit's patch writes. A merge resolution is
+// the honest shape — `git log -p` prints no diff for a merge commit unless asked — and falling back to the tip
+// there would invent an anchor the gate cannot accept. The run must refuse and name what it looked for.
+test("tag refuses loudly when no reachable commit declares the ref's version", async (t) => {
+  const { dir } = await fixture(t, ["0.1.0"]);
+  git(dir, ["checkout", "-b", "side"]);
+  await writeFile(path.join(dir, "notes.txt"), "a side note\n");
+  git(dir, ["add", "-A"]);
+  git(dir, ["commit", "-m", "docs: a side note"]);
+  git(dir, ["checkout", "main"]);
+  await writeFile(path.join(dir, "package.json"), pkg("0.2.0"));
+  git(dir, ["add", "-A"]);
+  git(dir, ["commit", "-m", "chore: 0.2.0"]);
+  git(dir, ["merge", "--no-commit", "--no-ff", "side"]);
+  await writeFile(path.join(dir, "package.json"), pkg("0.9.0"));
+  git(dir, ["add", "-A"]);
+  git(dir, ["commit", "-m", "merge side"]);
+
+  const r = tool(VERSION, ["tag"], dir);
+  assert.equal(r.code, 1, "0.9.0 has no declaring commit, so there is no honest anchor");
+  assert.match(r.err, /refused — no commit reachable from HEAD \([0-9a-f]{8}\) first carries 0\.9\.0/);
+  assert.match(r.err, /looked for: the commit whose package\.json patch first writes "version": "0\.9\.0"/);
+  assert.match(r.err, /2 bumps seen there: v0\.1\.0 \.\. v0\.2\.0/, "it names the history it found instead");
+  assert.deepEqual(tags(dir), [], "nothing was tagged");
+});

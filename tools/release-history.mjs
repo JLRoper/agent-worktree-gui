@@ -140,3 +140,24 @@ export function readReleaseHistory({ root = process.cwd(), ref = "HEAD" } = {}) 
   const commit = git(repoRoot(root), ["rev-parse", `${ref}^{commit}`]).trim();
   return { ref, commit, transitions, versions, tags: [...byName.values()], orphanTags };
 }
+
+// Where a number may be anchored: the commit whose patch FIRST writes it to package.json's top-level version
+// line, in the history reachable from `ref` — the same walk, and the same first-appearance rule, the gate
+// judges. A ref's TREE is not an anchor: a changelog render commit on top of a bump still reads the bumped
+// number, and a tag placed there names a commit whose diff touches only CHANGELOG.md. That mis-anchor is why
+// `version.mjs tag` asks this function instead of reading the tree and tagging the tip.
+//
+// `declaration` is null when the walk has no commit writing that number — a merge resolution that changed the
+// line is invisible to `git log -p` unless -m/--cc is given, and a shallow clone can hide the commit that
+// declared it. Both leave no honest anchor, so the caller refuses rather than falling back to the tip.
+export function findDeclaration({ root = process.cwd(), ref = "HEAD", version } = {}) {
+  const history = readReleaseHistory({ root, ref });
+  const want = String(version == null ? "" : version).trim();
+  return {
+    ref: history.ref,
+    tip: history.commit,
+    version: want,
+    declaration: history.versions.find((v) => v.version === want) || null,
+    versions: history.versions,
+  };
+}
