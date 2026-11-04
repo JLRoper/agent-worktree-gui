@@ -97,6 +97,26 @@ test("reduced motion is read from the reader's own preference, and the styleshee
   assert.match(css, /\.pflow\[data-motion="on"\] \.pflow-node\[data-mark="current"\] \.pflow-dot \{ animation:/);
 });
 
+test("the count is re-measured on scroll and resize, and a press inside the card is this dialog's press", () => {
+  // The count is a measurement of the painting, not a number carried in the markup: the modal reads it from the
+  // renderer's own viewCount(), re-reads it on every scroll and on a window resize, and forgets the watcher on close.
+  assert.match(source, /PipelineFlow\.viewCount\(/);
+  assert.match(source, /addEventListener\?\.\("scroll", onScroll, \{ passive: true \}\)/);
+  assert.match(source, /addEventListener\?\.\("resize", onResize\)/);
+  assert.match(source, /state\.flowWatch = \(\) => \{/);
+  assert.match(source, /if \(state\.flowWatch\) \{\s*\n\s*state\.flowWatch\(\);/);
+  // `fit` is the dialog's own reader-owned state, reset on open and restored across a re-render.
+  assert.match(source, /state\.fit = false;/);
+  assert.match(source, /flowHtml\(state\.flow, state\.position, state\.motion, state\.fit\)/);
+  // A press inside the card must stop at the card: the page closes Settings for any click whose path does not include
+  // it, and this dialog is opened from Settings (public/app.js, the #settings outside-press handler).
+  assert.match(source, /doc\.getElementById\(CARD_ID\)\?\.addEventListener\("click", \(e\) => e\.stopPropagation\?\.\(\)\)/);
+  // The fitted widths are the same grid's custom properties, and the control has a ring of its own.
+  assert.match(css, /\.pflow\[data-fit="1"\] \{ --pflow-gap: 12px; --pflow-minw: 56px; \}/);
+  assert.match(css, /\.pflow-fit:focus-visible \{ outline: 2px solid #4a90d9; outline-offset: 2px; \}/);
+  assert.match(css, /\.pflow-status\[hidden\], \.pflow-fit\[hidden\] \{ display: none; \}/);
+});
+
 test("the page loads the renderer, then the modal, then the app that wires both", () => {
   const flowAt = html.indexOf('<script src="/pipeline-flow.js"></script>');
   const modalAt = html.indexOf('<script src="/pipeline-modal.js"></script>');

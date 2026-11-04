@@ -187,7 +187,47 @@ test("reduced motion is a data attribute and the drawing does not change with it
   assert.equal(off.replace('data-motion="off"', 'data-motion="on"'), on, "motion changes nothing about the marks");
 });
 
+test("the count says how many stages AND how many notches are out, and what run of stages is showing", () => {
+  const { countText } = globalThis.PipelineFlow;
+  const view = (stagesOut, notchesOut, first = null, last = null, totals = [13, 13]) => ({
+    stages: { total: totals[0], out: stagesOut, left: 0, right: stagesOut },
+    notches: { total: totals[1], out: notchesOut, left: 0, right: notchesOut },
+    first,
+    last,
+  });
+  assert.equal(countText({ stages: { total: 13, out: 0 }, notches: { total: 13, out: 0 } }), "all 13 stages and 13 notches in view");
+  assert.equal(countText(view(4, 4, 1, 9)), "showing stages 1–9 of 13 — 4 of 13 stages and 4 of 13 notches out of view");
+  // scrolled to the far end the totals change too: the last gap's notch is visible even though its stage is not
+  assert.equal(countText(view(4, 3, 5, 13)), "showing stages 5–13 of 13 — 4 of 13 stages and 3 of 13 notches out of view");
+  // a definition with no gate is a stage count alone; the singular reads as one, not "1 stages"
+  assert.equal(countText(view(1, 0, 1, 3, [4, 0])), "showing stages 1–3 of 4 — 1 of 4 stages out of view");
+  assert.equal(countText({ stages: { total: 1, out: 0 }, notches: { total: 1, out: 0 } }), "all 1 stage and 1 notch in view");
+  assert.equal(countText({ stages: { total: 0, out: 0 }, notches: { total: 0, out: 0 } }), "no stage is drawn");
+  // nothing to measure, nothing to claim: the function refuses rather than inventing a count
+  assert.equal(globalThis.PipelineFlow.viewCount(null), null);
+});
+
+test("markup carries the count and the fit control, and `fit` changes only the root's attribute and the label", () => {
+  const flow = fromBundle(SEED_BUNDLE);
+  const off = markup(flow, null);
+  const on = markup(flow, null, { fit: true });
+  assert.match(off, /data-fit="0"/, "the default is the readable column width");
+  assert.match(on, /data-fit="1"/, "the fitted render is a data attribute, so the stylesheet owns the widths");
+  assert.match(off, /<div class="pflow-status" data-pflow-status hidden>/, "the row starts hidden: the measurement unhides it");
+  assert.match(off, /<span class="pflow-count" id="pflow-count-[^"]*" data-pflow-count><\/span>/);
+  assert.match(off, /<div class="pflow-scroll" aria-describedby="pflow-count-[^"]*">/, "the scroller names the count as its description");
+  assert.match(off, /<button type="button" class="pflow-fit" data-pflow-fit title="[^"]*">fit<\/button>/);
+  assert.match(on, /<button type="button" class="pflow-fit" data-pflow-fit title="[^"]*">actual size<\/button>/);
+  // The fitted drawing is the SAME drawing: every stage, every mark and every notch survives the narrower columns.
+  const a = flowOf(off);
+  const b = flowOf(on);
+  assert.equal(a.nodes.length, SEED_BUNDLE.stages.length);
+  assert.deepEqual(b.nodes, a.nodes, "the fitted markup carries the same stages, positions and marks");
+  assert.deepEqual(b.notches, a.notches, "and the same gate notches");
+});
+
 test("render() needs a page: with no document it returns null instead of throwing", () => {
   assert.equal(typeof globalThis.document, "undefined");
   assert.equal(render(fromBundle(SEED_BUNDLE), null), null);
+  assert.equal(render(fromBundle(SEED_BUNDLE), null, { fit: true }), null);
 });
