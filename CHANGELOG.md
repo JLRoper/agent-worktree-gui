@@ -4,16 +4,34 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v0.109.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v0.110.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-233 releases from v0.1.0 (2026-10-20) to v0.109.0 (2026-11-03), 840 commits between the tags. Every release is anchored by an
+234 releases from v0.1.0 (2026-10-20) to v0.110.0 (2026-11-03), 845 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v0.110.0 — 2026-11-03 · 5 commits
+
+[`b662bce`](https://github.com/JLRoper/agent-worktree-gui/commit/b662bce1b2f09815853d0434471539ec629dc71f) · [compare v0.109.0...v0.110.0](https://github.com/JLRoper/agent-worktree-gui/compare/v0.109.0...v0.110.0)
+
+### Added
+
+- feat: the DELIVERABLES list gets its backend — a store, a harvest, and two real routes ([`203093e`](https://github.com/JLRoper/agent-worktree-gui/commit/203093e5b7cbf47107df1dcda193bde88f5bab1a))
+
+### Docs & tests
+
+- docs: render the changelog after the merge, so its links name main's commits ([`65b7c01`](https://github.com/JLRoper/agent-worktree-gui/commit/65b7c016e1611e54690130a892ccec86087cc86e))
+- docs: the changelog is rendered after the merge, never on the branch ([`1ba00e9`](https://github.com/JLRoper/agent-worktree-gui/commit/1ba00e9f9bd5d44bf631763f1202b2eeada20fbc))
+- docs: render the 0.109.0 section, after main moved to 9166869 ([`b26631b`](https://github.com/JLRoper/agent-worktree-gui/commit/b26631b4ee31304be3e71373eb8995aa4ae740fb))
+
+### Other
+
+- chore: 0.110.0 — the version this landing carries ([`b662bce`](https://github.com/JLRoper/agent-worktree-gui/commit/b662bce1b2f09815853d0434471539ec629dc71f))
 
 ## v0.109.0 — 2026-11-03 · 3 commits
 
