@@ -828,11 +828,13 @@ restart.
 ## Settings
 
 `⚙ Settings`, the title, or `Ctrl+,`. `Esc`, the `✕`, or a click outside closes it. The head is fixed and the body
-scrolls; every explanation is the row's own tooltip on the `ⓘ`. The panel is a **strip of eight tabs** — Display,
-Cards, Board, Branches, Data, Gateway, Skills, Updates — and one panel is on screen at a time: click a tab (or press
-`Enter`/`Space` on it) and its rows appear. The strip is one Tab stop, and `←`/`→` walk it (wrapping), `Home`/`End`
-take the ends. What this browser remembers is the **tab** you chose, so the panel reopens where you left it; a stored
-tab this build no longer carries falls back to Display rather than to an empty window.
+scrolls; every explanation is the row's own tooltip on the `ⓘ`. The panel is a **strip of tabs** — Display, Cards,
+Board, Branches, Data, Gateway, Skills, Updates, Permissions, Pipeline, Bundles — and one panel is on screen at a
+time: click a tab (or press `Enter`/`Space` on it) and its rows appear. That list is the strip's own: one tab per
+`data-settings-group`, no more and no fewer, and `npm run verify:settings-tabs` fails when the two disagree. The
+strip is one Tab stop, and `←`/`→` walk it (wrapping), `Home`/`End` take the ends. What this browser remembers is the
+**tab** you chose, so the panel reopens where you left it; a stored tab this build no longer carries falls back to
+Display rather than to an empty window.
 
 The **search box** in the fixed head narrows the panel to the rows that answer it — on every tab, not only the one
 you are looking at. It reads each row's own words and its tooltip, so `zoom out` finds Page zoom through the `−`
