@@ -287,20 +287,21 @@
   // same as not writing it. The position restates what `left: 50%` of the connector meant, in the column's own
   // coordinates, because the connector is no longer its parent.
   function notchHtml(gate, { state, name, last }) {
-    const at = last ? "calc(100% + 9px)" : "calc(100% + var(--pflow-gap) / 2)";
+    // The last gate's notch sits ON the closing edge: its 3 px end at the column's right edge, so the notch is inside
+    // the track (and the scroller) instead of 9 px past it on a stub.
+    const at = last ? "calc(100% - 1.5px)" : "calc(100% + var(--pflow-gap) / 2)";
     return `<span class="pflow-notch" role="note" data-gate="${esc(gate.id || "")}" data-gate-name="${esc(gate.name || "")}" data-state="${esc(state)}" aria-label="${esc(name)}" title="${esc(gateTitle(gate))}" style="left:${at};top:19px"></span>`;
   }
 
+  // A gate after the LAST stage has no next column to reach: its notch is drawn ON the track's closing edge, so the
+  // check that ends the whole pipeline (a UAT sign-off) is still a notch on the track rather than a fact the drawing
+  // dropped — and nothing hangs past the last column. The stub that used to sit here was 18 px of decorative line at
+  // `left: 100%`, which widened the drawing past its own track and pushed the one notch it labelled outside the
+  // scroller (round 5A's finding 1: scrollWidth 1109 against clientWidth 1094 at seven stages).
   function stageHtml(stage, index, count, mark, { position = null, currentIndex = -1 } = {}) {
     const last = index === count - 1;
     const gate = stage.gate;
-    // A gate after the LAST stage has no next column to reach: it gets a short stub, so the check that ends the whole
-    // pipeline (a UAT sign-off) is still a notch on the track rather than a fact the drawing dropped.
-    const link = last
-      ? gate
-        ? `<span class="pflow-link is-end" aria-hidden="true"></span>`
-        : ""
-      : `<span class="pflow-link" aria-hidden="true"></span>`;
+    const link = last ? "" : `<span class="pflow-link" aria-hidden="true"></span>`;
     const state = gate ? gateStateOf(gate, { index, count, currentIndex, position }) : null;
     const notch = gate ? notchHtml(gate, { state, name: gateAria(gate, stage, state, position), last }) : "";
     const artifact = stage.artifact ? `<span class="pflow-art mono" title="the artifact this stage writes">${esc(stage.artifact)}</span>` : "";
