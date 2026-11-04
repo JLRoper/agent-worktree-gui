@@ -18464,7 +18464,7 @@ function paintDeliverRows({ keepScroll = false } = {}) {
 
   if (!deliver.entries.length) {
     body.innerHTML = `<div class="dl-empty">Nothing has been delivered yet.</div>
-      <div class="dl-empty dl-hint">An agent hands something back with one line in its final message:
+      <div class="dl-empty dl-hint">A deliverable is a file or URL the reader can open, not a description of one — an agent hands one back with one line in its final message:
         <code>DELIVER file C:/path/to/report.html | The report</code></div>`;
     foot.hidden = true;
     return;
