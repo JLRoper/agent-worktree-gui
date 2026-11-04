@@ -1,11 +1,15 @@
 # Deliverables handback — the plan
 
-**Re-measured against `origin/main` at `dc5bde2` (`package.json` 0.93.0).** The plan first landed at `4f660d2`
-(0.87.0); this revision re-reads every anchor against main as it stands, because the branch the first draft deferred
-to (`wtgui/three-ui-changes-main-is-8c936e`) landed as `f55fecb`/`f9f103d`. On main there is **no `#btn-hot`**, no
+**Re-measured against `origin/main` at `e88dc53` (`package.json` 0.94.0).** The plan first landed at `4f660d2`
+(0.87.0) and was revised at `dc5bde2` (0.93.0); the 0.93.0 → 0.94.0 delta touches only the version tooling and
+`lib/scan.js`, so every anchor below still reads on 0.94.0. The branch carries the bump this PR lands as **0.98.0** —
+0.95.0, 0.96.0 and 0.97.0 are already anchored by live sibling branches (`v0.95.0` is on origin), and a version is
+anchored once. It
+re-reads its anchors against main as it stands because the branch the first draft deferred to
+(`wtgui/three-ui-changes-main-is-8c936e`) landed as `f55fecb`/`f9f103d`. On main there is **no `#btn-hot`**, no
 `#btn-aggressive` and **no `public/board/hot.js`**; §5.1, §5.7 and §6.2 are anchored to what is there now — Assistant,
-HUMAN, Collapse all. This branch is behind main; the implementation re-reads every anchor against main as it stands
-then.
+HUMAN, Collapse all. This branch was cut from main and has been rebased onto it; the implementation re-reads every
+anchor against main as it stands then.
 
 Line numbers drift with every landing; every anchor below is given with the text to search for, so a later reader
 re-locates a seam instead of trusting a number.
@@ -49,7 +53,7 @@ so the header it described no longer exists on main.
 | **M8** `defaultOpenerFor` duplicates `openerFor` | §6.1/§8: only `chromeFor` is new; a file/image goes through `openerFor`. |
 | **M9** the gate's "process seam" does not exist | §9.2 item 4: there is none (`panel-testkit.mjs:89-91`); the gate calls the route itself and asserts 200/404, and never clicks the title (which would launch Chrome). |
 | **M10** the plan both edits and does not edit `app.js` | §6.2/§8: **no edit**; `openAgentTurn` is a copy of `humanShow`'s five lines with a comment naming the original, not an extraction. |
-| **M11** the paragraph rides every turn, not every spawn | §3.3 states the real cost (seven lines per message in a tree conversation); §4.3 adds the repeat rule that keeps a reply echoing the marker from bumping the row; §11 Q5 is restated with that cost. |
+| **M11** the paragraph rides every turn, not every spawn | §3.3 states the real cost (seven lines per message in a tree conversation); §4.3 adds the repeat rule that keeps a reply echoing the marker from bumping the row; §11 Q5 records the decision with that cost. |
 | **M12** the restart rationale is not the code's behaviour | §3.2 point 3: a settled job is never re-measured at boot; the mark is a guard against a second read of one message, and the persisted copy is cheap insurance, not load-bearing. It also names the path the mark must not close: a restored live job measured empty at boot, then harvested when it settles later. |
 | **M13** "H is the page's only bare letter" is false | §5.1: the bare `A` (`public/assistant.js:4201-4214`) and bare `H` (`app.js:18177`) precedents are named, and D copies H's `e.repeat`. |
 | **M14** the `trees` provider has no job | §4.2/§4.3/§7.3: the entry gains `tag`; `list()` resolves `project`/`treePath`/`branch` through `trees()` at read time by tag, so a rename is followed rather than promised. |
@@ -128,9 +132,9 @@ DELIVER link https://example.test/a?b=1&c=2 | Landed | merged by the reader
 | `file` | an absolute path, or one relative to the run's tree | resolved, then `stat` must say **file** | the OS handler for that suffix — ShellExecute, i.e. the associated program |
 | `image` | a file whose suffix is one of `.png .jpg .jpeg .gif .webp .bmp .svg` | the same `stat`, plus the suffix test | the OS handler, i.e. the image viewer |
 
-`image` is a *file* with two differences: the suffix is checked, and the row gets its own glyph (🖼) and, in a later
-phase, a thumbnail (a non-goal here, §10 — the panel has no route that serves an arbitrary local file, and adding one
-is its own security decision).
+`image` is a *file* with two differences: the suffix is checked, and the row gets its own glyph (🖼). The thumbnail is
+decided against (§11 Q4): the panel has no route that serves an arbitrary local file, and adding one is its own
+security decision, not a rendering detail.
 
 ### 2.3 Every failure, and the sentence it produces
 
@@ -272,7 +276,7 @@ it, beside `releaseText` at `lib/jobs.js:2137` — the first draft's snippet use
 
 ```js
 // …beside `const releaseText = …` at lib/jobs.js:2137
-// An optional callback lets a project opt out later (Q5(b)); absent, the paragraph is on.
+// The callback is where Q5's (b) opt-out would live; absent, the paragraph is on.
 const deliverText = where && opts.anchorCwd !== false ? this.deliverBrief?.(opts) ?? DELIVER_BRIEF : "";
 ```
 
@@ -301,8 +305,8 @@ removed parses as a valid `file` marker; the first draft's `DELIVER <link|file|i
 ignored as a placeholder echo rather than refused.
 
 - **It is default-on for a tree run** (`where && opts.anchorCwd !== false`), unlike RELEASE, because delivering a report
-  is the point of a research tree rather than a grant a project has to opt into. `jobs.deliverBrief` is the optional
-  override (a project flag returning `""` is Q5(b)), wired in server.js beside `jobs.releaseBrief`
+  is the point of a research tree rather than a grant a project has to opt into. `jobs.deliverBrief` is the one line a
+  later opt-out flips (Q5 is decided (a): every tree turn), wired in server.js beside `jobs.releaseBrief`
   (`server.js:1150-1156` on main).
 - **It rides on every turn in a tree conversation, not once at the spawn.** `create()` is also the reply path
   (`lib/jobs.js:1940`, `reply` at `:1966`); `opts.reply` skips only the worktree cut (`:2044`) and a card note
@@ -722,11 +726,11 @@ deliverables.onChange = (entry) => broadcast({ type: "deliverable", seq: entry.s
 
 `panelTrees()` (`server.js:1083`) is handed over exactly as `TodoLists` and `ReleaseRequests` get it, and here it has a
 stated job: `list()` resolves each entry's `project`/`treePath`/`branch` against the current rows by six-hex tag, so an
-auto-rename moves the row with the tree (§4.3, M14). The `deliverBrief` callback (Q5's opt-out, if it is chosen) is
-wired beside `jobs.releaseBrief` (`server.js:1150-1156`):
+auto-rename moves the row with the tree (§4.3, M14). The `deliverBrief` callback (Q5 is decided (a); it is where a
+later opt-out flips) is wired beside `jobs.releaseBrief` (`server.js:1150-1156`):
 
 ```js
-jobs.deliverBrief = () => DELIVER_BRIEF;   // unconditional today; a project flag returning "" is Q5(b)
+jobs.deliverBrief = () => DELIVER_BRIEF;   // Q5(a): every tree turn. The one-line flip to (b) returns "" unless the project opts in.
 ```
 
 ---
@@ -754,12 +758,13 @@ Edited:
 | `public/index.html` | button after `:20`; scripts at `:745-750` | the `#btn-deliver` markup; `<script src="/board/deliverables.js"></script>` after `app.js` (`:747`), before `update-check.js` (`:750`). |
 | `public/style.css` | after `#btn-human` at `:119`; after `.artifacts-pop` at `:1942` | `#btn-deliver` and the `.deliver-pop` block. |
 | `public/core/sse.js` | `connect()`'s handler list at `:62-120` | one `deliverable` listener. |
-| `package.json` | `scripts` | `"verify:deliverables": "node tools/verify-deliverables.mjs"`. |
+| `package.json` | `version` and `scripts` | `0.94.0` → `0.98.0` (the landing bump; 0.95–0.97 are anchored on sibling branches) and `"verify:deliverables": "node tools/verify-deliverables.mjs"`. |
 | `public/app.js` | — | **no edit.** The module is a classic script that calls app.js's globals at call time; `openAgentTurn` is a copy of `humanShow`'s five lines (§6.2), not an extraction. |
 
 **Landing order.** The four-file blocker is gone: `f55fecb`/`f9f103d` landed, and `public/app.js` has a live writer
 from another row **this turn** — which is why the plan needs nothing from it. The implementation re-reads each anchor
-against main as it stands then (0.93.0 at this writing); every anchor above is text, not just a number.
+against main as it stands then (0.94.0 at this writing; this branch carries the 0.98.0 bump); every anchor above is
+text, not just a number.
 
 ---
 
@@ -846,33 +851,36 @@ draft pointed at a `.agentboard` notes folder that is not in the repo).
   row, so the two would look alike and mean different things).
 - **No backfill from `job.artifacts`.** Every `write_file` a run ever made is in those lists, including scratch files;
   importing them would fill the list with noise and claim the reader "delivered" things he never asked for.
-- **No per-project switch in this phase.** Question 5 in §11 is still open; the plan's default is the paragraph on for
-  every tree run, with `jobs.deliverBrief` as the one place an opt-out would land.
+- **No per-project switch today.** Q5 is decided (a): the paragraph rides every tree turn. A flip to (b) is the one
+  `jobs.deliverBrief` line in `server.js`, not a new mechanism.
 - **No badge, no unread marker.** Both are a queue's language, and this is an archive.
-- **No version bump and no changelog entry.** The reader asked for the plan, not a release.
-- **No implementation this turn.** Only this document changed; `public/app.js` has a live writer from another row, and
-  the two open questions are unanswered.
+- **No changelog entry.** The render lands with the next release's bump (the repo's rule), not with this plan; the
+  version bump itself is 0.98.0 and travels in this PR.
+- **No implementation this turn.** Only this document and the version bump changed; `public/app.js` has a live writer
+  from another row.
 
 ---
 
-## 11. Open questions for the reader
+## 11. The decisions
 
-These are the choices the plan cannot make for him. Each was asked in the session with these options. Three are
-answered (recorded here, and folded into the sections above); two were left to the plan's default and are still open.
+All five are settled. 1–3 were answered in the session; 4–5 were left to the plan's default and are now decided as
+recommended (2026-11-03). Each records the place a later flip changes, so a reversal is a one-line edit, not a new
+design.
 
-1. **The button's word.** — **ANSWERED: `DELIVERABLES`.** The alternatives offered were `DELIVERED` and `DELIVER`;
-   §5.1 now carries the chosen label and its cost (the longest word in the header).
-2. **A target delivered twice.** — **ANSWERED: one row, updated in place.** §4.3 is the design: `seq` is the identity
+1. **The button's word.** — **DECIDED: `DELIVERABLES`.** The alternatives offered were `DELIVERED` and `DELIVER`;
+   §5.1 carries the label and its cost (the longest word in the header).
+2. **A target delivered twice.** — **DECIDED: one row, updated in place.** §4.3 is the design: `seq` is the identity
    and never changes; a genuinely new delivery (`at`, `mtime` or title changed) moves the row to newest; a repeat that
    echoes the same marker with the same title and the same file signature writes nothing.
-3. **A malformed or missing `DELIVER`.** — **ANSWERED: a console line on the card only.** §2.3 and §3.2 already stand:
+3. **A malformed or missing `DELIVER`.** — **DECIDED: a console line on the card only.** §2.3 and §3.2 already stand:
    one `⚠ DELIVER was NOT recorded — <reason>` line, nothing in the store, and the line survives a reload.
-4. **`image`.** — **OPEN.** (a) A glyph and the OS image viewer — recommended, and what the plan is written to: no new
-   route, no bytes through the panel (§2.2, §10). (b) A thumbnail in the row: it needs a read-only route that serves a
-   recorded image path, capped and cached — a new file-serving surface.
-5. **The `DELIVER` paragraph.** — **OPEN.** The real cost, corrected from the first draft: `create()` is also the reply
-   path (`lib/jobs.js:1940`, `reply` at `:1966`), so the paragraph rides on **every message in a tree conversation**,
-   seven lines per turn, not once per spawn. (a) Always, for every tree run — the plan's default, and recommended: a
-   research tree exists to hand something back. (b) Only when the project opts in with `deliverables: true`, wired
-   through `jobs.deliverBrief` like `releaseWorktrees`: less prompt cost, and a project that has not opted in never
-   learns the marker.
+4. **`image`.** — **DECIDED: (1) a glyph and the OS image viewer.** No new route and no bytes through the panel; the
+   kind is the same `stat` + suffix check as `file` and the same `openerFor` (§2.2). A flip to a row thumbnail is a
+   change at the `image` case in `lib/deliverables.js`'s kind handling plus a read-only
+   `GET /api/deliverables/thumbnail?seq=` route that serves only a recorded image path (capped and cached) — that
+   route is the whole reason it is deferred, not the rendering.
+5. **The `DELIVER` paragraph.** — **DECIDED: (1) every tree turn.** The real cost, corrected from the first draft:
+   `create()` is also the reply path (`lib/jobs.js:1940`, `reply` at `:1966`), so the paragraph rides on **every
+   message in a tree conversation**, seven lines per turn, not once per spawn. A flip to (2) — only a project that
+   opts in with `deliverables: true` — is the single `jobs.deliverBrief` line in `server.js` (§7.3): return `""` for a
+   project without the flag. Nothing else in the plan changes.
