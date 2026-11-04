@@ -26,13 +26,24 @@ import { loadPlaywright, notRun, openSettingsGroup, withBrowser } from "./browse
 import { freePort, startPanel } from "./panel-testkit.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REPO = path.resolve(HERE, "..");
 const argv = process.argv.slice(2);
 const opt = (name, fallback = null) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : fallback);
-const TREE = path.resolve(opt("--root", path.resolve(HERE, "..")));
+const TREE = path.resolve(opt("--root", REPO));
 const SHOTS = path.resolve(opt("--shots", path.join(os.tmpdir(), "wtgui-pipeline-usability")));
 const JSON_OUT = opt("--json");
 
-const out = { tree: TREE, viewports: [], cases: {}, pageErrors: [], consoleErrors: [], errors: [] };
+// `tree` is provenance, not a measurement: it names where the harness was pointed, and that must read the same on
+// every disk. Repo-relative and POSIX, so a run in this checkout writes "." wherever it is checked out; a --root
+// outside the repo is a relative path too, and a different drive (where path.relative answers absolute) is labelled
+// rather than published. The console line below still prints the real path for the operator.
+const treeLabel = (() => {
+  const rel = path.relative(REPO, TREE);
+  if (!rel) return ".";
+  return path.isAbsolute(rel) ? "<outside the repo>" : rel.split(path.sep).join("/");
+})();
+
+const out = { tree: treeLabel, viewports: [], cases: {}, pageErrors: [], consoleErrors: [], errors: [] };
 const say = (line = "") => console.log(line);
 
 // ---- the fixtures ------------------------------------------------------------------------------------------------
