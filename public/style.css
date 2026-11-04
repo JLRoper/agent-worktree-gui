@@ -3993,6 +3993,12 @@ body.pipew-open { overflow: hidden; }
    --pflow-i/--pflow-j (the two stage indexes) and the same --pflow-gap the track uses — no measurement, no resize
    handler, and an arc cannot drift from the stage it joins. */
 .pflow { --pflow-gap: 26px; --pflow-minw: 96px; --pflow-maxw: 400px; --pflow-ink-quiet: #8b96a5; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* `fit`: the SAME grid one step narrower, for a definition too long for the card at the readable floor. Thirteen
+   columns at 56 px with a 12 px gap are 872 px of content in a 1090 px track — the whole chain visible, the titles
+   wrapped instead of the reader losing four stages off the edge. This is the deliberate trade the integration plan's
+   C8 states ("legibility for overview"), and it is a press rather than a resize: a reader who wants the 96 px
+   columns back presses the control again. Nothing else re-lays out. */
+.pflow[data-fit="1"] { --pflow-gap: 12px; --pflow-minw: 56px; }
 .pflow-scroll { overflow-x: auto; overflow-y: hidden; padding: 0 2px 6px; }
 .pflow-canvas { position: relative; padding-top: var(--pflow-pad, 0px); min-width: 100%; }
 .pflow-track {
@@ -4068,6 +4074,18 @@ body.pipew-open { overflow: hidden; }
 .pflow-key[data-mark="not-reached"] i { border-color: var(--dimmer); }
 .pflow-key[data-mark="refused"] i { background: var(--red); border-color: var(--red); }
 .pflow-key b { color: var(--text); font-weight: 500; }
+/* The count of what the scroller is hiding, and the press that answers it. The row starts hidden (`hidden` in the
+   markup) and the modal's own measurement unhides it only when something is out of view or `fit` is on — so a short
+   definition is not given a sentence in place of a picture, and the thirteen-stage case keeps the count under the
+   drawing it is describing. The explicit `[hidden]` rules are needed: `display: flex/inline-flex` would otherwise
+   override the user agent's `[hidden] { display: none }`. */
+.pflow-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 10.5px; line-height: 16px; color: var(--dim); }
+.pflow-status[hidden], .pflow-fit[hidden] { display: none; }
+.pflow-count { font-variant-numeric: tabular-nums; }
+.pflow-count[data-out="0"] { color: var(--pflow-ink-quiet); }
+.pflow-fit { border: 1px solid var(--line); background: var(--surface); color: var(--dim); border-radius: 6px; padding: 1px 9px; font-family: inherit; font-size: 10.5px; line-height: 15px; cursor: pointer; }
+.pflow-fit:hover { color: var(--text); border-color: #8fb8ff; }
+.pflow-fit:focus-visible { outline: 2px solid #4a90d9; outline-offset: 2px; }
 /* Motion is a courtesy, never the meaning: the current stage's dot breathes and an arc fades in. data-motion="off"
    is what the script sets from the reader's preference, and the media query repeats it for a page whose script never
    ran — a mark still reads exactly the same either way. */

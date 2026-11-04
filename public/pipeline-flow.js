@@ -408,7 +408,90 @@
     ).join("")}</div>`;
   }
 
-  function markup(flow, position = null, { motion = true } = {}) {
+  // ---- what the reader can see ------------------------------------------------------------------------------------
+  // The scroller is HONEST about its own box. A stage or a notch is IN VIEW when its whole rect sits inside the
+  // scroller's client box; anything else is out, and the count says which side it is on, because "four more to come"
+  // and "four behind" are different instructions to a reader scrolling a long definition. The numbers come from the
+  // painted rects, never from the document's stage list: a stage the browser clipped is not counted as visible.
+  //
+  // The sentence is written once, here, so the element a reader looks at and the test that pins it read the same
+  // words. `first`/`last` are the ordinals of the stages that are at least partly in view (1-based, from `data-pos`).
+  function countText(view) {
+    const s = isObject(view) && isObject(view.stages) ? view.stages : { total: 0, out: 0 };
+    const n = isObject(view) && isObject(view.notches) ? view.notches : { total: 0, out: 0 };
+    if (!s.total) return "no stage is drawn";
+    const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
+    if (!s.out && !n.out) return `all ${plural(s.total, "stage", "stages")}${n.total ? ` and ${plural(n.total, "notch", "notches")}` : ""} in view`;
+    const first = whole(view.first);
+    const last = whole(view.last);
+    const showing = first != null && last != null ? `showing stages ${first}–${last} of ${s.total} — ` : "";
+    const said = [`${s.out} of ${s.total} ${s.total === 1 ? "stage" : "stages"}`];
+    if (n.total) said.push(`${n.out} of ${n.total} ${n.total === 1 ? "notch" : "notches"}`);
+    return `${showing}${said.join(" and ")} out of view`;
+  }
+
+  // Measure one flow's own drawing. `root` is the `.pflow` element (or the element that holds it), so the selector
+  // knowledge lives beside the markup that writes it. Null when there is nothing to measure yet.
+  function viewCount(root) {
+    const scope = root && typeof root.querySelector === "function" ? root : null;
+    if (!scope) return null;
+    const scroll = scope.querySelector(".pflow-scroll");
+    if (!scroll || typeof scroll.getBoundingClientRect !== "function") return null;
+    const box = scroll.getBoundingClientRect();
+    const scan = (els) => {
+      const tally = { total: els.length, out: 0, left: 0, right: 0 };
+      for (const el of els) {
+        const r = el.getBoundingClientRect();
+        const clippedLeft = r.left < box.left - 0.5;
+        const clippedRight = r.right > box.right + 0.5;
+        if (!clippedLeft && !clippedRight) continue;
+        tally.out += 1;
+        // An item wider than the box (a stage column never is) counts for the side its centre is on.
+        if (clippedRight && !clippedLeft) tally.right += 1;
+        else if (clippedLeft && !clippedRight) tally.left += 1;
+        else if (r.left + r.width / 2 < box.left + box.width / 2) tally.left += 1;
+        else tally.right += 1;
+      }
+      return tally;
+    };
+    const nodes = [...scope.querySelectorAll(".pflow-node")];
+    const stages = scan(nodes);
+    const notches = scan([...scope.querySelectorAll(".pflow-notch")]);
+    const ordinals = nodes
+      .filter((el) => {
+        const r = el.getBoundingClientRect();
+        return r.left < box.right - 0.5 && r.right > box.left + 0.5;
+      })
+      .map((el) => Number(el.dataset.pos))
+      .filter((n) => Number.isInteger(n));
+    const view = {
+      stages,
+      notches,
+      first: ordinals.length ? Math.min(...ordinals) : null,
+      last: ordinals.length ? Math.max(...ordinals) : null,
+      // The scroller's own overflow, which is what decides whether `fit` has anything to do.
+      overflow: scroll.scrollWidth > scroll.clientWidth + 1,
+    };
+    return { ...view, text: countText(view) };
+  }
+
+  // The count and the control that answers it, in one row under the drawing. The row starts hidden and is unhidden
+  // by the modal's measurement: a drawing that fits owes the reader no sentence, and a clipped one owes them both the
+  // number and the way out. `fit` is a reader's deliberate trade (the whole chain against the readable column
+  // width), so it is a press, not a resize: nothing re-lays out until they ask.
+  function statusHtml(flow, fit) {
+    const count = flow.stages.length;
+    const id = `pflow-count-${flow.id || "flow"}`;
+    const title = fit
+      ? `back to the readable column width — ${count} stages scroll again`
+      : `fit all ${count} stages in the card — the columns narrow and the titles wrap`;
+    return `<div class="pflow-status" data-pflow-status hidden>
+        <span class="pflow-count" id="${esc(id)}" data-pflow-count></span>
+        <button type="button" class="pflow-fit" data-pflow-fit title="${esc(title)}">${fit ? "actual size" : "fit"}</button>
+      </div>`;
+  }
+
+  function markup(flow, position = null, { motion = true, fit = false } = {}) {
     const f = layout(normalize(flow || {}));
     const marks = marksFor(f.stages, position, f.loops);
     const count = f.stages.length;
@@ -419,8 +502,8 @@
     // Which rule drew the marks, in the DOM: `record` when the position carried evidence, `index` when it did not. A
     // reader (and a test) can see that the fallback is the weaker claim without having to reproduce it.
     const from = ranFrom(f.stages, position, f.loops) ? "record" : "index";
-    return `<div class="pflow" data-flow-id="${esc(f.id)}" data-flow-stages="${count}" data-motion="${motion ? "on" : "off"}" data-position="${esc((current && current.id) || "")}" data-refused="${esc((refused && refused.id) || "")}" data-marks-from="${from}" style="--pflow-n:${count};--pflow-pad:${pad}px">
-      <div class="pflow-scroll">
+    return `<div class="pflow" data-flow-id="${esc(f.id)}" data-flow-stages="${count}" data-motion="${motion ? "on" : "off"}" data-fit="${fit ? "1" : "0"}" data-position="${esc((current && current.id) || "")}" data-refused="${esc((refused && refused.id) || "")}" data-marks-from="${from}" style="--pflow-n:${count};--pflow-pad:${pad}px">
+      <div class="pflow-scroll" aria-describedby="${esc(`pflow-count-${f.id || "flow"}`)}">
         <div class="pflow-canvas">
           ${f.lanes ? `<div class="pflow-arcs">${arcsHtml(f, position)}</div>` : ""}
           <ol class="pflow-track" start="1" aria-label="${esc(`${f.title || f.id || "pipeline"} — ${count} stage${count === 1 ? "" : "s"} left to right`)}">${f.stages
@@ -428,6 +511,7 @@
             .join("")}</ol>
         </div>
       </div>
+      ${statusHtml(f, fit)}
       ${legendHtml(marks)}
     </div>`;
   }
@@ -444,13 +528,13 @@
 
   // The element the modal mounts. Built through a detached container, never by innerHTML onto a live node, so an
   // incomplete string cannot take a subtree with it.
-  function render(flow, position = null, { doc = null, motion = null } = {}) {
+  function render(flow, position = null, { doc = null, motion = null, fit = false } = {}) {
     const d = doc || (global && global.document ? global.document : null);
     if (!d || typeof d.createElement !== "function") return null;
     const box = d.createElement("div");
-    box.innerHTML = markup(flow, position, { motion: motion == null ? motionAllowed(d.defaultView || global) : Boolean(motion) });
+    box.innerHTML = markup(flow, position, { motion: motion == null ? motionAllowed(d.defaultView || global) : Boolean(motion), fit });
     return box.firstElementChild || null;
   }
 
-  global.PipelineFlow = { MARK, MARK_ORDER, MARK_WORDS, normalize, fromDefinition, fromBundle, fromWindowModel, marksFor, markup, render, motionAllowed };
+  global.PipelineFlow = { MARK, MARK_ORDER, MARK_WORDS, normalize, fromDefinition, fromBundle, fromWindowModel, marksFor, markup, render, motionAllowed, countText, viewCount };
 })(typeof window !== "undefined" ? window : globalThis);
