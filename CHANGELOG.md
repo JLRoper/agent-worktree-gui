@@ -4,16 +4,41 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v0.115.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.0.1 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-242 releases from v0.1.0 (2026-10-20) to v0.115.0 (2026-11-04), 869 commits between the tags. Every release is anchored by an
+244 releases from v0.1.0 (2026-10-20) to v1.0.1 (2026-11-04), 874 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.0.1 — 2026-11-04 · 3 commits
+
+[`88a6715`](https://github.com/JLRoper/agent-worktree-gui/commit/88a67155569974d5acf8ad6cfc9b5f75e7e4ec51) · [compare v1.0.0...v1.0.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.0.0...v1.0.1)
+
+### Added
+
+- feat: each assistant owns its rules and its pad, and the message board names whose message is whose ([`278c788`](https://github.com/JLRoper/agent-worktree-gui/commit/278c78811d7ed2895b6a54ba9bdc0031df4b4fe3))
+
+### Other
+
+- wip: per-assistant split in progress (notes file, pad routing, watch owners) ([`c79bc3f`](https://github.com/JLRoper/agent-worktree-gui/commit/c79bc3f7a8fe06600e49c763d4aed195c0fdb572))
+- chore: 1.0.1 — the version this landing carries ([`88a6715`](https://github.com/JLRoper/agent-worktree-gui/commit/88a67155569974d5acf8ad6cfc9b5f75e7e4ec51))
+
+## v1.0.0 — 2026-11-04 · 2 commits
+
+[`e9d3d70`](https://github.com/JLRoper/agent-worktree-gui/commit/e9d3d7064bf91f530520c2f07c41481cafeb2f35) · [compare v0.115.0...v1.0.0](https://github.com/JLRoper/agent-worktree-gui/compare/v0.115.0...v1.0.0)
+
+### Added
+
+- feat!: the row's ✦ name-from-work path is gone; the ✎ leads the padlock ([`e9d3d70`](https://github.com/JLRoper/agent-worktree-gui/commit/e9d3d7064bf91f530520c2f07c41481cafeb2f35))
+
+### Docs & tests
+
+- docs: render the 0.115.0 and 0.114.1 sections, both missing at the tip ([`eca3bac`](https://github.com/JLRoper/agent-worktree-gui/commit/eca3bacf225f772160d221b3030a3d715f93eb13))
 
 ## v0.115.0 — 2026-11-04 · 4 commits
 
