@@ -39,6 +39,7 @@ const PASS_THRESHOLD = {
   loop: "repeatLimit",
   approval: "approvalSeconds",
   exited: "exitedSeconds",
+  queuesweep: "queueIdleMinutes",
   context: "contextPercent",
   repeat: "repeatTurns",
   leftover: "leftoverMinutes",
@@ -55,6 +56,7 @@ const BOUNDS = {
   quietSeconds: [30, 3600],
   approvalSeconds: [15, 3600],
   exitedSeconds: [0, 3600],
+  queueIdleMinutes: [0, 1440],
   contextPercent: [50, 100],
   leftoverMinutes: [1, 240],
   childQuietSeconds: [60, 3600],
@@ -66,13 +68,14 @@ const PHRASE = {
   loop: (v) => `same call × ${v}`,
   approval: (v) => `approval waiting ${v} s`,
   exited: (v) => `exited for ${v} s`,
+  queuesweep: (v) => `idle for ${v} min`,
   context: (v) => `context over ${v} %`,
   repeat: (v) => `same failure × ${v}`,
   leftover: (v) => `leftover work ${v} min`,
 };
 // The keys each pane draws, written out: a control that quietly stops rendering is a failure too. `rearmSeconds` is a
 // knob with no control (it has always been one), which is why it is in the table and not in this list.
-const WATCHDOG_DRAWN = ["approvalSeconds", "commandAudit", "contextPercent", "enabled", "exitedSeconds", "leftoverMinutes", "repeatLimit", "repeatTurns", "seconds", "spawnAutoStart"];
+const WATCHDOG_DRAWN = ["approvalSeconds", "commandAudit", "contextPercent", "enabled", "exitedSeconds", "leftoverMinutes", "queueIdleMinutes", "repeatLimit", "repeatTurns", "seconds", "spawnAutoStart"];
 const ASSISTANT_DRAWN = ["autonomy", "childQuietSeconds", "cwd", "maxWakesPerHour", "model", "quietSeconds", "spawn"];
 
 const esc = (v) =>

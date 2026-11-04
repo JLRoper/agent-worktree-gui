@@ -1706,6 +1706,11 @@
     // The EXITED rule's bar: how long the card may read EXITED before the wake. 0 is the transition itself; a
     // repair turn on the same thread before the bar takes the failure over and nothing is sent.
     exited: [{ key: "exitedSeconds", min: 0, max: 3600, before: "exited for", after: "s", title: "how long a failed run's card may read EXITED before the assistant is woken — a repair turn on the same thread before then takes it over, and 0 wakes on the transition" }],
+    // The queue sweep's failsafe clock: the settle half of the rule needs no bar (a finish is the trigger), so
+    // this is the one number the sweep has — how long every run of an assistant may be quiet before its queue is
+    // swept anyway. 0 turns the timer off and leaves the settle trigger; the row's title says so, because a zero
+    // here reads like a disabled rule otherwise.
+    queuesweep: [{ key: "queueIdleMinutes", min: 0, max: 1440, before: "idle for", after: "min", title: "how long every run of an assistant may be quiet before its queue is swept anyway — the settle trigger wakes on a finish, and this is the failsafe for a row nothing will ever settle (a blocker that closed elsewhere, a SPAWN line that never ran). 0 turns the timer off; the settle trigger stays." }],
     context: [{ key: "contextPercent", min: 50, max: 100, before: "context over", after: "%" }],
     repeat: [{ key: "repeatTurns", min: 2, max: 10, before: "same failure ×", after: "", title: "consecutive turns of one thread ending on the same failure before it is reported" }],
     leftover: [{ key: "leftoverMinutes", min: 1, max: 240, before: "leftover work", after: "min", title: "how recently a worker must have finished for work left in its tree to be worth a word" }],

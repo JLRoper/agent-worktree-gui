@@ -230,7 +230,7 @@ test("the class is a list of SWEEPS, and a kind nobody has classified is an even
   for (const rule of SWEEP_WAKE_RULES) {
     assert.ok(RULE_DEFS[rule], `${rule} is a real rule id, not a typo that would budget nothing`);
   }
-  for (const rule of ["settle", "exited", "approval", "question", "watch", "interrupted"]) {
+  for (const rule of ["settle", "exited", "approval", "question", "watch", "interrupted", "queuesweep"]) {
     assert.equal(SWEEP_WAKE_RULES.has(rule), false, `${rule} is an event and must never be droppable`);
   }
 
