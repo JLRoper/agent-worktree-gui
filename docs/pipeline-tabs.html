@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings › Pipeline and Bundles — four frames, with what each one shows</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a21; --panel2: #1b212a; --line: #2a3340; --text: #e6e9ef; --dim: #9aa5b4;
+    --dimmer: #6f7a89; --green: #7ee787; --red: #ff9c94; --amber: #f0c674; --blue: #9ecbff; --purple: #c8a6ff;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+    --ui: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; color: var(--text); font: 15px/1.6 var(--ui); }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 28px 24px 64px; }
+  h1 { font-size: 26px; line-height: 1.25; margin: 0 0 6px; }
+  h2 { font-size: 19px; margin: 42px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+  p { margin: 8px 0; }
+  a { color: var(--blue); }
+  code, .mono { font-family: var(--mono); font-size: 13px; }
+  code { background: var(--panel2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .meta { color: var(--dim); font-size: 13px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+  .warn { background: #2a2414; border: 1px solid #5c4d22; border-left: 4px solid var(--amber); border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+  .tw { overflow-x: auto; margin: 10px 0 14px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; min-width: 700px; font-size: 13.5px; }
+  th, td { text-align: left; vertical-align: top; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { background: var(--panel2); color: var(--dim); font-weight: 600; font-size: 12.5px; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  pre { background: #0b0e13; border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font: 12.5px/1.5 var(--mono); margin: 10px 0; }
+  figure { margin: 18px 0 26px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+  figure img { display: block; width: 100%; height: auto; border-radius: 5px; border: 1px solid var(--line); }
+  figcaption { color: var(--dim); font-size: 13.5px; margin-top: 10px; }
+  figcaption b { color: var(--text); }
+  ul li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Settings › Pipeline and Bundles — four frames</h1>
+<p class="meta">Photographed from <b>v1.8.0</b> (build <code>a5f461e3196f</code>) on 2026-11-04, at 2× device pixels.
+Every number printed under a frame was read out of the page the frame was taken of and is in
+<a href="assets/pipeline-tabs/capture.json">capture.json</a>. The harness is
+<code>tools/capture-settings-pipeline.mjs</code>.</p>
+
+<div class="box">
+<p><b>What the fixture is.</b> A throwaway panel on its own port: the shipped catalogue
+(<code>pipelines.seed.json</code>, seven definitions) with no reader <code>pipelines.json</code> over it; the repo's own
+<code>pipeline-bundle.seed.json</code> copied in as the studio bundle (POC to UAT, thirteen stages); and one assistant
+queue holding three tasks — two on <code>poc-to-uat</code>, one the assistant decides. The Settings window is opened at
+1250 px wide through the same <code>wtgui.settingsRect</code> store a reader's drag writes, and each frame's height is
+fitted to the tab it shows (a short tab in a tall window is a picture of empty space).</p>
+</div>
+
+<div class="tw">
+<table>
+  <thead><tr><th>Frame</th><th>What it is</th><th class="num">Window</th><th class="num">Image</th><th class="num">sha256</th></tr></thead>
+  <tbody>
+    <tr><td><a href="assets/pipeline-tabs/pipeline-tab.png">pipeline-tab.png</a></td><td>Settings › Pipeline as it opens</td><td class="num">1250 × 576</td><td class="num">2500 × 1152</td><td class="num mono">6e09bea5…</td></tr>
+    <tr><td><a href="assets/pipeline-tabs/pipeline-stages.png">pipeline-stages.png</a></td><td>that tab, scrolled to the stage cards</td><td class="num">1250 × 976</td><td class="num">2500 × 1952</td><td class="num mono">f8351fe7…</td></tr>
+    <tr><td><a href="assets/pipeline-tabs/pipeline-flow.png">pipeline-flow.png</a></td><td>"open the flow" — the definition drawn</td><td class="num">1120 × 263</td><td class="num">2240 × 526</td><td class="num mono">325def5f…</td></tr>
+    <tr><td><a href="assets/pipeline-tabs/bundles-tab.png">bundles-tab.png</a></td><td>Settings › Bundles</td><td class="num">1250 × 360</td><td class="num">2500 × 720</td><td class="num mono">9aef9f0f…</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>1 · Pipeline — the tab as it opens</h2>
+<figure>
+  <img src="assets/pipeline-tabs/pipeline-tab.png" alt="Settings › Pipeline: the catalogue summary, the source line, the picker, open the flow, and the editor for the definition 'local'">
+  <figcaption>
+    <b>The catalogue, the file it was read from, and the definition being edited.</b>
+    The summary reads <b>7 definitions</b> and the line under it names both files it merged — the reader's
+    <code>pipelines.json</code> (absent here, so the seed is in force) over <code>pipelines.seed.json</code>, at
+    version 1, which is the version this panel reads. The picker holds all seven ids
+    (<code>local</code>, <code>investigate</code>, <code>turnover</code>, <code>github-investigate</code>,
+    <code>sefl-investigate</code>, <code>github-force-merge</code>, <code>sefl-review-loop</code>) and opens the first one,
+    <code>local</code>: one stage, prompt 355 characters, exit check <code>commits</code>. The tab's own status line says
+    <b>no unsaved changes</b>. The prompt box is a three-row textarea (12 px) that scrolls, so a longer instruction shows
+    its first lines and the rest is one wheel-turn away — that is the editor's shape, not a clipped frame.
+  </figcaption>
+</figure>
+
+<h2>2 · Pipeline — the stage cards</h2>
+<figure>
+  <img src="assets/pipeline-tabs/pipeline-stages.png" alt="Settings › Pipeline scrolled to the stage list of sefl-review-loop: seven stage cards, each with an id, a title, a prompt and an exit check">
+  <figcaption>
+    <b>Seven stages of <code>sefl-review-loop</code> (kind <code>turnover</code>), each card one stage.</b>
+    This is the same window scrolled 309 px into its body, so the head and the tab strip stay put and the frame begins at a
+    stage boundary: <code>branch</code> → <code>push</code> → <code>pr</code> → <code>wait</code> → <code>address</code> →
+    <code>approve</code> → <code>merge</code>. Every card carries the stage's id and title, its whole prompt, and the exit
+    check that ends it plus that check's parameters as JSON (stage 1's <code>branch-name</code> pattern is the visible
+    one). The editor is 1 146 px tall here; <b>six of the seven cards are fully in the frame</b> and the seventh's prompt is
+    the last line of it — the body scrolls, and this is one honest frame of that.
+  </figcaption>
+</figure>
+
+<h2>3 · Pipeline — "open the flow"</h2>
+<figure>
+  <img src="assets/pipeline-tabs/pipeline-flow.png" alt="The pipeline flow modal in edit mode: SEFL review loop drawn as seven stage cards left to right with exit checks as notches, legend reading not reached 7">
+  <figcaption>
+    <b>The same definition drawn rather than listed.</b> The modal opens in <b>edit</b> mode from the tab's
+    <i>open the flow</i> button: seven stages left to right, each stage's exit check the notch on the connector after it,
+    and the legend reading <b>not reached 7</b> — a definition has no position until a task enters a stage, and the tab's
+    own note says so. The facts line is <code>pipeline sefl-review-loop · kind turnover · stages 7 · next end of the
+    chain</code>, and the card reports <b>all 7 stages and 7 notches in view</b> at 1 120 × 263.
+  </figcaption>
+</figure>
+
+<h2>4 · Bundles — the bundle that was imported, and where the queue's tasks are</h2>
+<figure>
+  <img src="assets/pipeline-tabs/bundles-tab.png" alt="Settings › Bundles: one pipeline, POC to UAT (13 stages), the bundle file it came from, and three queue tasks with their pipeline and stage">
+  <figcaption>
+    <b>The studio bundle this panel read, and every active queue task on a pipeline.</b> The summary is
+    <b>1 pipeline · poc-to-uat</b>; the source line names the file and says the task pipeline window draws the stages.
+    The bundle's pipeline is listed as <b>POC to UAT — poc-to-uat — 13 stages</b>. Under it, three tasks:
+    <code>#1 … pipeline poc-to-uat · S3 · running</code>, <code>#2 … pipeline poc-to-uat · S0 · queued</code>, and
+    <code>#3 … assistant decides · queued</code> — the default path, spelled as the record spells it
+    (<code>pipelineRun: null</code>), never as "unassigned". No row here is refused; a broken export would print the
+    loader's own code (<code>refused — dangling-reference</code>) where the summary is, which is the gate's case, not this
+    capture's.
+  </figcaption>
+</figure>
+
+<h2>What these frames do not show</h2>
+<div class="warn">
+<p>They are pictures, not proofs. Nothing here types into the editor, saves, or forces a refusal — those are the two
+gates' jobs: <code>tools/verify-pipelines-tab.mjs</code> (a keystroke surviving a repaint, a save reaching the live file,
+a refusal whose findings land inline without losing the draft) and <code>tools/verify-bundles-tab.mjs</code> (a broken
+bundle's refusal code, a task on the default path, the task pipeline window the press opens). Run those for a verdict;
+run this for a picture.</p>
+</div>
+
+<h2>Re-running the capture</h2>
+<pre>node tools/capture-settings-pipeline.mjs
+node tools/capture-settings-pipeline.mjs --shots docs/assets/pipeline-tabs --json docs/assets/pipeline-tabs/capture.json
+node tools/capture-settings-pipeline.mjs --root &lt;a git archive export&gt; --dsf 1   # another build, 1:1 pixels</pre>
+<p class="meta">It prints one <code>FRAME</code> line per picture with its byte count and sha256, then a
+<code>LEDGER</code> line. The panel it boots is its own (a free port, its own config, data and scratch directories) and is
+stopped and removed at the end; nothing in the reader's board is touched.</p>
+
+</div>
+</body>
+</html>
