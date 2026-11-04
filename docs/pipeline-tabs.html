@@ -141,6 +141,9 @@ node tools/capture-settings-pipeline.mjs --root &lt;a git archive export&gt; --d
 <p class="meta">It prints one <code>FRAME</code> line per picture with its byte count and sha256, then a
 <code>LEDGER</code> line. The panel it boots is its own (a free port, its own config, data and scratch directories) and is
 stopped and removed at the end; nothing in the reader's board is touched.</p>
+<p class="meta">A re-run is not byte-identical, and the difference is one line: the two tab frames print the files they
+read, and those live in a fresh temporary sandbox each run. <code>pipeline-stages.png</code> and
+<code>pipeline-flow.png</code> carry no path and reproduce byte for byte.</p>
 
 </div>
 </body>
