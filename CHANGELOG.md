@@ -4,24 +4,62 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.5.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.5.5 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-254 releases from v0.1.0 (2026-10-20) to v1.5.0 (2026-11-04), 909 commits between the tags. Every release is anchored by an
+257 releases from v0.1.0 (2026-10-20) to v1.5.5 (2026-11-04), 917 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
 
+## v1.5.5 — 2026-11-04 · 2 commits
+
+[`2161023`](https://github.com/JLRoper/agent-worktree-gui/commit/21610239034afcf727752043dc489387270f0f86) · [compare v1.5.4...v1.5.5](https://github.com/JLRoper/agent-worktree-gui/compare/v1.5.4...v1.5.5)
+
+### Docs & tests
+
+- docs: the 1.4.2 usability ledger page, salvaged from PR #360 ([`b0a9b21`](https://github.com/JLRoper/agent-worktree-gui/commit/b0a9b213ebde6e7f04a61a6bcec03564db12f4c6))
+
+### Other
+
+- chore: 1.5.5 — the version this landing carries ([`2161023`](https://github.com/JLRoper/agent-worktree-gui/commit/21610239034afcf727752043dc489387270f0f86))
+
+## v1.5.4 — 2026-11-04 · 2 commits
+
+[`c9b8406`](https://github.com/JLRoper/agent-worktree-gui/commit/c9b8406f3f7a60886ec01ff93af5a27b7f522cdf) · [compare v1.5.2...v1.5.4](https://github.com/JLRoper/agent-worktree-gui/compare/v1.5.2...v1.5.4)
+
+### Docs & tests
+
+- docs: the round's report names the version this landing carries ([`8fea13c`](https://github.com/JLRoper/agent-worktree-gui/commit/8fea13c15e133bba8ce6051fb85720b0acbd3dd5))
+
+### Other
+
+- chore: 1.5.4 — the version this landing carries ([`c9b8406`](https://github.com/JLRoper/agent-worktree-gui/commit/c9b8406f3f7a60886ec01ff93af5a27b7f522cdf))
+
+## v1.5.2 — 2026-11-04 · 4 commits
+
+[`7ffd712`](https://github.com/JLRoper/agent-worktree-gui/commit/7ffd7125126464ae35d7b07b5b4cf05b3e2e876a) · [compare v1.5.0...v1.5.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.5.0...v1.5.2)
+
+### Docs & tests
+
+- docs: render the 1.5.0 section at the rebased tip ([`5234a3c`](https://github.com/JLRoper/agent-worktree-gui/commit/5234a3c90dcb50e015307db61e51dbe85503331c))
+- docs: the flow chart against the studio, thirteen stages at three widths ([`86cb831`](https://github.com/JLRoper/agent-worktree-gui/commit/86cb831486761ab26f9e280debbd0006ca587c93))
+
+### Other
+
+- tools: capture the flow chart and the studio side by side ([`48a9030`](https://github.com/JLRoper/agent-worktree-gui/commit/48a90303ee558ff398547f41226ab6a86d34edd6))
+- chore: 1.5.2 — the version this landing carries ([`7ffd712`](https://github.com/JLRoper/agent-worktree-gui/commit/7ffd7125126464ae35d7b07b5b4cf05b3e2e876a))
+
 ## v1.5.0 — 2026-11-04 · 3 commits
 
-[`b06feb1`](https://github.com/JLRoper/agent-worktree-gui/commit/b06feb18cd7bc6e3c1845d23c5bf56056941ea99) · [compare v1.4.2...v1.5.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.4.2...v1.5.0)
+[`4209390`](https://github.com/JLRoper/agent-worktree-gui/commit/4209390f30e3101d88c8f073d7912a147528d576) · [compare v1.4.2...v1.5.0](https://github.com/JLRoper/agent-worktree-gui/compare/v1.4.2...v1.5.0)
 
 ### Added
 
-- feat: Settings → Updates draws the checkout's own changelog ([`b06feb1`](https://github.com/JLRoper/agent-worktree-gui/commit/b06feb18cd7bc6e3c1845d23c5bf56056941ea99))
+- feat: Settings → Updates draws the checkout's own changelog ([`4209390`](https://github.com/JLRoper/agent-worktree-gui/commit/4209390f30e3101d88c8f073d7912a147528d576))
 
 ### Docs & tests
 
