@@ -125,10 +125,10 @@
   }
 
   // How many columns the drawing needs. The CARD's width is its own policy — `public/style.css` turns this number into
-  // `n * 96px + (n - 1) * 26px + 26px`, the track's own floor and gap plus the body's padding and border — so a
-  // one-stage definition opens as a small panel and thirteen stages open wide enough for the readable column width.
-  // It is set on the card, not on the flow: a custom property inherits DOWNWARD, and the card is the ancestor that
-  // sizes itself from it.
+  // `n * 96px + (n - 1) * 26px + 18px`, the track's own floor and gap plus the body's 16 px of horizontal padding and
+  // the card's 2 px border — so a one-stage definition opens as a small panel and thirteen stages open wide enough for
+  // the readable column width. It is set on the card, not on the flow: a custom property inherits DOWNWARD, and the card
+  // is the ancestor that sizes itself from it.
   function stageCount(flow) {
     return flow && Array.isArray(flow.stages) && flow.stages.length ? flow.stages.length : 1;
   }
@@ -153,21 +153,24 @@
     const kicker = state.mode === "position" ? "pipeline flow · position" : "pipeline flow · definition";
     const body = state.loading
       ? `<div class="pmodal-note">reading this task's pipeline…</div>`
-      : `${factsHtml(state.facts)}${state.note ? `<div class="pmodal-note">${esc(state.note)}</div>` : ""}${
+      : `${state.note ? `<div class="pmodal-note">${esc(state.note)}</div>` : ""}${
           state.flow ? `<div class="pmodal-flow" data-pm-flow>${flowHtml(state.flow, state.position, state.motion, state.fit)}</div>` : ""
         }${previewHtml(state.flow, state.position)}`;
+    // ONE close control — the ✕ in the header. The footer under it held a second "close" button and a status span no
+    // caller ever wrote to: 41 px of card below a drawing that was already the smaller half of the dialog. The status
+    // element itself is kept (setStatus() writes to it) and moved up into the bar, where it costs nothing while empty.
+    // The facts moved into the header band for the same reason: they are one line of 11 px type about the thing the
+    // title names, and as a body row they cost a gap and a padding on both sides of themselves.
     return `<div class="pmodal-bar">
         <span class="pmodal-kicker">${esc(kicker)}</span>
         <b class="pmodal-title" id="${TITLE_ID}">${esc(state.title || "pipeline")}</b>
         ${state.subtitle ? `<span class="pmodal-sub mono">${esc(state.subtitle)}</span>` : ""}
         <span class="spacer"></span>
-        <button type="button" class="pmodal-close" data-pm-close title="close (Esc) — focus goes back to the control that opened this" aria-label="close the pipeline flow">✕</button>
-      </div>
-      <div class="pmodal-body">${body}</div>
-      <div class="pmodal-foot">
         <span class="pmodal-status mono" data-pm-status role="status" aria-live="polite">${esc(state.status || "")}</span>
-        <button type="button" data-pm-close title="close (Esc)">close</button>
-      </div>`;
+        <button type="button" class="pmodal-close" data-pm-close title="close (Esc) — focus goes back to the control that opened this" aria-label="close the pipeline flow">✕</button>
+        ${factsHtml(state.facts)}
+      </div>
+      <div class="pmodal-body">${body}</div>`;
   }
 
   function paint(doc = document) {
@@ -247,7 +250,14 @@
 
   function focusables(doc) {
     const card = doc.getElementById(CARD_ID);
-    return card && typeof card.querySelectorAll === "function" ? [...card.querySelectorAll(TABBABLE)] : [];
+    if (!card || typeof card.querySelectorAll !== "function") return [];
+    // A control the reader cannot reach is not a Tab stop: the status row's `fit` press is `hidden` while the drawing
+    // fits, and counting it made the wrap land on it — the browser skips it and the caret leaves the card, which is the
+    // one thing this dialog promises not to do.
+    return [...card.querySelectorAll(TABBABLE)].filter((el) => {
+      if (el.hidden || el.closest?.("[hidden]")) return false;
+      return typeof el.getClientRects === "function" ? el.getClientRects().length > 0 : true;
+    });
   }
 
   function restore(doc) {

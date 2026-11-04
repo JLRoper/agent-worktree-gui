@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The pipeline dialog pays for its drawing</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #151a21; --panel2: #1b212a; --line: #2a3340; --text: #e6e9ef; --dim: #9aa5b4;
+    --dimmer: #6f7a89; --green: #7ee674; --blue: #7fb2ff; --amber: #e6b450; --red: #ff8f86;
+    --mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.6 var(--sans); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 34px 26px 80px; }
+  .kicker { color: var(--dimmer); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; }
+  h1 { font-size: 30px; line-height: 1.2; margin: 6px 0 10px; letter-spacing: -0.3px; }
+  h2 { font-size: 19px; margin: 42px 0 10px; padding-top: 18px; border-top: 1px solid var(--line); }
+  h3 { font-size: 14px; margin: 22px 0 6px; color: var(--blue); text-transform: uppercase; letter-spacing: 0.06em; }
+  p { margin: 9px 0; max-width: 980px; }
+  .sub { color: var(--dim); font-size: 16px; max-width: 940px; }
+  code, .mono { font-family: var(--mono); font-size: 12.8px; }
+  code { background: #1c232c; border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  a { color: var(--blue); }
+  .lead { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--blue);
+          border-radius: 8px; padding: 14px 18px; margin: 18px 0; }
+  .lead p { margin: 4px 0; }
+  .good { background: #13261a; border: 1px solid #2f5f38; border-left: 4px solid var(--green);
+          border-radius: 8px; padding: 13px 18px; margin: 18px 0; }
+  .warn { background: #241f14; border: 1px solid #57461f; border-left: 4px solid var(--amber);
+          border-radius: 8px; padding: 12px 18px; margin: 16px 0; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 18px; margin: 14px 0; }
+  .tw { overflow-x: auto; margin: 12px 0 18px; border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: var(--panel2); color: var(--dim); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+  tr:last-child td { border-bottom: 0; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .figs { display: grid; gap: 16px; margin: 14px 0 4px; }
+  .figs.two { grid-template-columns: 1fr 1fr; }
+  figure { margin: 0; background: var(--panel); border: 1px solid #232b36; border-radius: 8px; padding: 10px; }
+  figure img { display: block; width: 100%; height: auto; border-radius: 5px; }
+  figcaption { color: var(--dim); font-size: 12px; margin-top: 8px; }
+  figcaption b { color: var(--text); font-weight: 600; }
+  .num { color: var(--green); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .bad { color: var(--red); font-variant-numeric: tabular-nums; }
+  .muted { color: var(--dimmer); }
+  ul { margin: 8px 0 8px 20px; padding: 0; }
+  li { margin: 5px 0; }
+  code.long { display: block; background: #10161d; border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px;
+              margin: 8px 0; overflow-x: auto; white-space: pre; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="kicker">agent-worktree-gui · the pipeline flow dialog · density round</div>
+<h1>The dialog pays for its drawing</h1>
+<p class="sub">The same harness, the same four stage counts, the same two viewports: the drawing's painted area as a share
+of the dialog's area, the tallest band of the card that holds nothing, the number of controls that close it, and what
+the legend's numbers are called. Shot on the panel this branch builds.</p>
+
+<div class="lead">
+  <p><b>The round's ask.</b> The dialog should cost what it shows. The drawing was 26–35% of the card at every stage
+  count, because a quarter to a third of the card was its own chrome — a two-row header, a facts strip, twelve-pixel
+  body padding, and a footer band holding a second "close" button. The drawing had to be <b>at least 55% of the card at
+  1, 2, 7 and 13 stages</b>, with <b>no band of the card taller than 8 px holding nothing</b>, and the trade had to come
+  from removing chrome, never from shrinking type (11 px floor) or the stage title (13 px floor). One close control, a
+  legend whose numbers carry their noun, and the stage's ordinal on its title's line.</p>
+</div>
+
+<h2>What was there before</h2>
+<ul>
+  <li><b>A footer band.</b> <code>.pmodal-foot</code> was 41 px tall under the drawing: a second "close" button and a
+  status span no caller wrote to. <span class="bad">23 px</span> of the card held nothing at the header/facts seam, and
+  21 px more between the drawing and the footer.</li>
+  <li><b>A facts strip and 12 px of body padding.</b> The four facts sat in the body as their own row, with 10 px of
+  gap under them and 24 px of body padding around the drawing — 40 px of frame for a card whose drawing was 130 px tall.</li>
+  <li><b>Three bands for one stage card.</b> The ordinal had a line of its own under the title, so every card was a
+  strip: 11 px of numeral, a gap, 17 px of title, a gap, and nothing under either.</li>
+  <li><b>Two close controls and a bare numeral.</b> The ✕ in the header and "close" in the footer both closed the same
+  dialog; the legend read <span class="mono">not reached 7</span>, a numeral with no noun.</li>
+</ul>
+
+<h2>The numbers</h2>
+<p>Every number is read from the painted page in CSS pixels by
+<code>tools/verify-pipeline-dialog-size.mjs</code>. <b>Drawn area</b> is the union of the boxes that carry the drawing —
+stage cards, their notches, loop arcs, the legend and the count row — clipped to the scroller's client box and to the
+card; <b>dialog area</b> is the card's own box. That definition is the shape round's, unchanged; this round only added
+rules on top of it. <b>Tallest empty band</b> is the tallest horizontal strip of the card where no stage, notch, arc,
+word or control paints. <b>Close</b> counts the elements inside the card that carry <code>data-pm-close</code>.</p>
+
+<h3>Before — the pre-fix commit, measured by the same extended harness</h3>
+<div class="tw"><table>
+  <tr><th>viewport</th><th class="n">stages</th><th class="n">card</th><th class="n">drawn px²</th><th class="n">share</th><th class="n">tallest empty band</th><th class="n">close</th></tr>
+  <tr><td>1280×800</td><td class="n">1</td><td class="n">340 × 244.3</td><td class="n">23,074</td><td class="n bad">27.8%</td><td class="n">23 px</td><td class="n">2</td></tr>
+  <tr><td>1280×800</td><td class="n">2</td><td class="n">340 × 244.3</td><td class="n">21,661</td><td class="n bad">26.1%</td><td class="n">23 px</td><td class="n">2</td></tr>
+  <tr><td>1280×800</td><td class="n">7</td><td class="n">854 × 257.2</td><td class="n">63,893</td><td class="n bad">29.1%</td><td class="n">23 px</td><td class="n">2</td></tr>
+  <tr><td>1280×800</td><td class="n">13</td><td class="n">1228.8 × 269</td><td class="n">116,901</td><td class="n bad">35.4%</td><td class="n">23 px</td><td class="n">2</td></tr>
+  <tr><td>1824×900</td><td class="n">1</td><td class="n">340 × 244.3</td><td class="n">23,074</td><td class="n bad">27.8%</td><td class="n">23 px</td><td class="n">2</td></tr>
+  <tr><td>1824×900</td><td class="n">2</td><td class="n">340 × 244.3</td><td class="n">21,661</td><td class="n bad">26.1%</td><td class="n">23 px</td><td class="n">2</td></tr>
+  <tr><td>1824×900</td><td class="n">7</td><td class="n">854 × 257.2</td><td class="n">63,893</td><td class="n bad">29.1%</td><td class="n">23 px</td><td class="n">2</td></tr>
+  <tr><td>1824×900</td><td class="n">13</td><td class="n">1586 × 240</td><td class="n">119,085</td><td class="n bad">31.3%</td><td class="n">23 px</td><td class="n">2</td></tr>
+</table></div>
+
+<h3>After — this branch</h3>
+<div class="tw"><table>
+  <tr><th>viewport</th><th class="n">stages</th><th class="n">card</th><th class="n">drawn px²</th><th class="n">share</th><th class="n">tallest empty band</th><th class="n">close</th><th>legend</th></tr>
+  <tr><td>1280×800</td><td class="n">1</td><td class="n">340 × 184.2</td><td class="n">37,800</td><td class="n num">60.4%</td><td class="n">6 px</td><td class="n">1</td><td class="mono">not reached 1 stage</td></tr>
+  <tr><td>1280×800</td><td class="n">2</td><td class="n">340 × 184.2</td><td class="n">35,245</td><td class="n num">56.3%</td><td class="n">6 px</td><td class="n">1</td><td class="mono">not reached 2 stages</td></tr>
+  <tr><td>1280×800</td><td class="n">7</td><td class="n">846 × 168.8</td><td class="n">81,869</td><td class="n num">57.3%</td><td class="n">7 px</td><td class="n">1</td><td class="mono">not reached 7 stages</td></tr>
+  <tr><td>1280×800</td><td class="n">13</td><td class="n">1228.8 × 191.8</td><td class="n">142,933</td><td class="n num">60.6%</td><td class="n">7 px</td><td class="n">1</td><td class="mono">not reached 13 stages</td></tr>
+  <tr><td>1280×800 · fit</td><td class="n">13</td><td class="n">1228.8 × 202.1</td><td class="n">164,736</td><td class="n num">66.3%</td><td class="n">7 px</td><td class="n">1</td><td class="mono">not reached 13 stages</td></tr>
+  <tr><td>1824×900</td><td class="n">1</td><td class="n">340 × 184.2</td><td class="n">37,800</td><td class="n num">60.4%</td><td class="n">6 px</td><td class="n">1</td><td class="mono">not reached 1 stage</td></tr>
+  <tr><td>1824×900</td><td class="n">2</td><td class="n">340 × 184.2</td><td class="n">35,245</td><td class="n num">56.3%</td><td class="n">6 px</td><td class="n">1</td><td class="mono">not reached 2 stages</td></tr>
+  <tr><td>1824×900</td><td class="n">7</td><td class="n">846 × 168.8</td><td class="n">81,869</td><td class="n num">57.3%</td><td class="n">7 px</td><td class="n">1</td><td class="mono">not reached 7 stages</td></tr>
+  <tr><td>1824×900</td><td class="n">13</td><td class="n">1578 × 168.8</td><td class="n">152,469</td><td class="n num">57.2%</td><td class="n">7 px</td><td class="n">1</td><td class="mono">not reached 13 stages</td></tr>
+</table></div>
+
+<div class="good">
+  <p><b>Every case clears 55%.</b> The highest is 66.3% (thirteen stages, fitted), the lowest 56.3% (two stages, where
+  the 26 px connector between two 149 px columns is the largest share of the drawing's own area). The tallest band that
+  holds nothing fell from 23 px to 6–7 px, and every band is now a real separation: 3 px of bar padding, 1 px of rule,
+  2 px of body padding, 2 px between the drawing and the legend.</p>
+</div>
+
+<h2>The pictures</h2>
+<p>Both sizes are the card's own box, at 2× device scale, from the same run as the table above. The "before" pictures are
+the pre-fix commit at the same viewport and stage count.</p>
+
+<h3>One stage — before and after</h3>
+<div class="figs two">
+  <figure><img src="pipeline-dialog-density-round/before-1280x800-1-stages.png" alt="before: 340 by 244 card, drawing 27.8%">
+    <figcaption><b>before</b> · card 340 × 244.3 · drawn <span class="bad">27.8%</span> · tallest empty band 23 px ·
+    two close controls</figcaption></figure>
+  <figure><img src="pipeline-dialog-density-round/1280x800-1-stages.png" alt="after: 340 by 184 card, drawing 60.4%">
+    <figcaption><b>after</b> · card 340 × 184.2 · drawn <span class="num">60.4%</span> · tallest empty band 6 px ·
+    one close control</figcaption></figure>
+</div>
+
+<h3>1280 × 800 — two, seven and thirteen stages</h3>
+<div class="figs">
+  <figure><img src="pipeline-dialog-density-round/1280x800-2-stages.png" alt="two stages, 56.3%">
+    <figcaption><b>2 stages</b> · card 340 × 184.2 · columns 149 px · nothing hidden · drawn <span class="num">56.3%</span>.
+    The facts wrap to a second header row at this width; the tiles carry the height instead.</figcaption></figure>
+  <figure><img src="pipeline-dialog-density-round/1280x800-7-stages.png" alt="seven stages, 57.3%">
+    <figcaption><b>7 stages</b> · card 846 × 168.8 · columns 96 px · drawn <span class="num">57.3%</span>. Every tile is
+    the row's tallest, so the drawing's floor is one line; the exit check prints under the title.</figcaption></figure>
+  <figure><img src="pipeline-dialog-density-round/1280x800-13-stages.png" alt="thirteen stages at 1280, 60.6%">
+    <figcaption><b>13 stages</b> · card 1228.8 × 191.8 (96vw) · hides 357 px · drawn <span class="num">60.6%</span>, with
+    the count row ("showing stages 1–10 of 13 — 3 of 13 stages and 4 of 13 notches out of view") and the fit press.</figcaption></figure>
+  <figure><img src="pipeline-dialog-density-round/1280x800-13-stages-fit.png" alt="thirteen stages fitted, 66.3%">
+    <figcaption><b>13 stages, fitted</b> · card 1228.8 × 202.1 · columns 82 px · nothing hidden · drawn
+    <span class="num">66.3%</span>.</figcaption></figure>
+</div>
+
+<h3>1824 × 900 — thirteen stages</h3>
+<div class="figs two">
+  <figure><img src="pipeline-dialog-density-round/before-1824x900-13-stages.png" alt="before, thirteen stages at 1824">
+    <figcaption><b>before</b> · card 1586 × 240 · drawn <span class="bad">31.3%</span></figcaption></figure>
+  <figure><img src="pipeline-dialog-density-round/1824x900-13-stages.png" alt="after, thirteen stages at 1824">
+    <figcaption><b>after</b> · card 1578 × 168.8 · drawn <span class="num">57.2%</span> · the card hugs the track: 13
+    columns at 96 px and 12 gaps at 26 px, plus 18 px of body and border</figcaption></figure>
+</div>
+
+<h2>What changed</h2>
+<div class="tw"><table>
+  <tr><th>ask</th><th>where</th><th>what it now does</th></tr>
+  <tr><td>The footer band goes</td><td><code>public/pipeline-modal.js:149</code></td>
+    <td><code>cardHtml()</code> emits a header, the body, and nothing after it. The status span moved into the header
+    (it costs nothing while empty, <code>.pmodal-status:empty { display: none }</code>), and there is exactly ONE
+    <code>data-pm-close</code> control — the header ✕.</td></tr>
+  <tr><td>The header is one band</td><td><code>public/style.css:4203, 4214</code></td>
+    <td>The bar's first row is the kicker, the title, the status and the ✕; the facts are its second row, full width,
+    wrapping when the width is short. Padding is 3 px top and bottom, the row gap 2 px.</td></tr>
+  <tr><td>The body is the drawing's frame</td><td><code>public/style.css:4221</code></td>
+    <td><code>padding: 2px 8px</code> instead of 12 px all round, and the card's width arithmetic follows it: 16 px of
+    padding and the 2 px border instead of 24 + 2 (<code>public/style.css:4198</code>).</td></tr>
+  <tr><td>The stage card is a tile</td><td><code>public/style.css:4070, 4106</code></td>
+    <td><code>--pflow-min-h: 100px</code>, <code>justify-content: space-between</code>: the title on the tile's top, the
+    one line of meta on its floor. Every tile in a row takes the row's tallest height
+    (<code>align-items: stretch</code>, <code>public/style.css:4099</code>), so a row has no ragged floor under it.</td></tr>
+  <tr><td>The ordinal joins the title</td><td><code>public/pipeline-flow.js:335</code></td>
+    <td><code>.pflow-n</code> is emitted inside <code>.pflow-title</code> as an index preface: it opens the first line,
+    and the words after it keep the whole column. Stacked, it was a line of its own; beside the title it took 12 px off
+    every line and turned one three-word title into five lines.</td></tr>
+  <tr><td>The meta line says what ends the stage</td><td><code>public/pipeline-flow.js:302</code></td>
+    <td>A definition's exit check prints its own name and parameters (<code>commits min=1</code>, <code>branch-exists</code>);
+    a bundle stage prints its artifact or the gate's decision path. It is the same object the notch carries, read once
+    by <code>exitGate</code>.</td></tr>
+  <tr><td>The legend's numbers get their noun</td><td><code>public/pipeline-flow.js:423</code></td>
+    <td><code>not reached 7 stages</code>, not <code>not reached 7</code>; one stage is singular
+    (<code>not reached 1 stage</code>).</td></tr>
+  <tr><td>The Tab trap skips what the reader cannot reach</td><td><code>public/pipeline-modal.js:251</code></td>
+    <td><code>focusables()</code> filters <code>hidden</code> and unrendered controls. With the footer gone, the hidden
+    <code>fit</code> press was being counted as a stop; the browser skipped it and the caret left the card.</td></tr>
+  <tr><td>The gate learns the density rules</td><td><code>tools/verify-pipeline-dialog-size.mjs:198, 337</code></td>
+    <td>The same thresholds the shape round set, plus: share ≥ 55%, no empty band &gt; 8 px, exactly one close control,
+    every ordinal on its title's line, every legend key ending in a count of stages. It prints every band, the tallest
+    one and the close-control count beside each case.</td></tr>
+</table></div>
+
+<div class="box">
+  <p><b>How the tile's height is judged.</b> The 8 px rule measures bands of the <i>card</i> that hold nothing — strips
+  where no stage, notch, arc, word or control paints. A stage tile's own painted floor is not a band of the card: the
+  space between a tile's title and its exit line IS the tile, and the tile IS the drawing. Counting it as empty would
+  make every tall stage card a failure and push the fix back toward a strip of type with a card around it.</p>
+</div>
+
+<h2>Verification</h2>
+<div class="tw"><table>
+  <tr><th>run</th><th>result</th></tr>
+  <tr><td><code>node --test --test-concurrency=4 test/*.test.js</code></td>
+    <td>1461 tests, <b>1461 pass</b>, 0 fail. The two unit files this round touches
+    (<code>pipeline-flow.test.js</code>, <code>pipeline-modal.test.js</code>) were moved deliberately: the legend's
+    count now carries its noun, and the card's width arithmetic carries 18 px of body and border instead of 26.</td></tr>
+  <tr><td><code>node tools/verify-pipeline-flow.mjs</code></td><td><b>49/49 checks</b> — 0 page errors, 0 console errors.</td></tr>
+  <tr><td><code>node tools/verify-pipeline-flow-visible.mjs</code></td>
+    <td><b>167/167 checks, 145/145 judge lines</b> at both viewports. The Tab-cycle case now counts the card's stops
+    instead of assuming eight.</td></tr>
+  <tr><td><code>node tools/verify-pipeline-dialog-size.mjs</code></td>
+    <td><b>9 cases measured, 0 failures</b> — the run behind the table and the shots.</td></tr>
+  <tr><td><code>node tools/verify-pipeline-dialog-size.mjs --root &lt;pre-fix export&gt;</code></td>
+    <td><b>9 cases measured, 40 failures</b> — the red proof: the same harness, run against a <code>git archive</code>
+    of the pre-fix commit, refuses five lines per case (share, band, close control, ordinal, legend).</td></tr>
+</table></div>
+
+<h3>The red proof, in the harness's own words</h3>
+<code class="long">FAIL  1280x800/local: the drawing is 27.8% of the card, under this round's 55% floor
+FAIL  1280x800/local: a 23px band of the card holds nothing (at 33px)
+FAIL  1280x800/local: the card offers 2 close controls, not one
+FAIL  1280x800/local: a stage ordinal is not on its title's line: [{"sameLine":false,"numTop":161.8,"titleTop":181.7}]
+FAIL  1280x800/local: the legend key "not reached 1" does not end in a count of stages
+...
+--- 9 measured, 40 failures</code>
+
+<h3>The after run, in the harness's own words</h3>
+<code class="long">== 1280x800 · sefl-review-loop (7 stages)
+   card 846×168.8 · drawing 81869 px² · DRAWN 57.3% of the dialog (the old 1120px frame measured 60.3%)
+   empty bands 1px@3 24px@1 40px@7 147px@2 166px@2 · TALLEST 7px at 40px · close controls 1
+   ordinals on the title line: 7/7 · legend "not reached 7 stages"
+--- 9 measured, 0 failures</code>
+
+<h2>What this round did not do</h2>
+<ul>
+  <li><b>The position-mode note and preview still take height.</b> The measured cases are definitions (the Settings tab's
+  flow press). A queue row's dialog carries a sentence explaining its marks and the preview's select and checkbox; those
+  are content, not chrome, and they sit under the drawing where they were.</li>
+  <li><b>The legend stays under the drawing.</b> Moving it into the header would buy another ~20 px at every stage count;
+  it would also separate the key from the picture it keys, so it stayed.</li>
+  <li><b>The tile's floor is 100 px, and that is a design choice.</b> At one stage a tile's own text needs ~60 px; the
+  floor is what makes the drawing the bigger half of a 340 px panel. It is the tile that grew, not the type: the title
+  is still 13 px/500, the smallest painted type is still 11 px.</li>
+</ul>
+
+<p class="muted">The ledger behind every number is <code>pipeline-dialog-density-round/ledger.json</code> (this branch) and
+<code>pipeline-dialog-density-round/ledger-before.json</code> (the pre-fix commit, same harness); the shots are the files
+beside them.</p>
+
+</div>
+</body>
+</html>

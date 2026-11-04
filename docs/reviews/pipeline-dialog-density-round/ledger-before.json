@@ -1,0 +1,1194 @@
+{
+ "tree": "C:\\Users\\roper\\AppData\\Local\\Temp\\wag\\f2cbe301\\prefix",
+ "at": "2026-11-04T21:02:24.207Z",
+ "viewports": [
+  "1280x800",
+  "1824x900"
+ ],
+ "cases": [
+  {
+   "vw": 1280,
+   "vh": 800,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Local work",
+   "note": "",
+   "stages": 1,
+   "card": {
+    "w": 340,
+    "h": 244.3
+   },
+   "legendBox": {
+    "y": 221,
+    "h": 17
+   },
+   "slack": 54,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 10
+    },
+    {
+     "top": 33,
+     "h": 23
+    },
+    {
+     "top": 71,
+     "h": 7
+    },
+    {
+     "top": 93,
+     "h": 12
+    },
+    {
+     "top": 161,
+     "h": 12
+    },
+    {
+     "top": 191,
+     "h": 21
+    },
+    {
+     "top": 236,
+     "h": 8
+    }
+   ],
+   "tallestBand": {
+    "top": 33,
+    "h": 23
+   },
+   "closeControls": 2,
+   "ordinals": [
+    {
+     "sameLine": false,
+     "numTop": 161.8,
+     "titleTop": 181.7
+    }
+   ],
+   "body": {
+    "w": 338
+   },
+   "track": {
+    "w": 314
+   },
+   "column": 314,
+   "scroll": {
+    "client": 314,
+    "width": 314
+   },
+   "hiddenPx": 0,
+   "drawnArea": 23074,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 1"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 1 stage and 1 notch in view",
+    "button": "fit"
+   },
+   "case": "1280x800/local",
+   "expect": 1,
+   "share": 27.8,
+   "before": {
+    "w": 1120,
+    "h": 222.9,
+    "share": 16.6
+   }
+  },
+  {
+   "vw": 1280,
+   "vh": 800,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Investigation",
+   "note": "",
+   "stages": 2,
+   "card": {
+    "w": 340,
+    "h": 244.3
+   },
+   "legendBox": {
+    "y": 221,
+    "h": 17
+   },
+   "slack": 54,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 10
+    },
+    {
+     "top": 33,
+     "h": 23
+    },
+    {
+     "top": 71,
+     "h": 7
+    },
+    {
+     "top": 93,
+     "h": 12
+    },
+    {
+     "top": 161,
+     "h": 12
+    },
+    {
+     "top": 191,
+     "h": 21
+    },
+    {
+     "top": 236,
+     "h": 8
+    }
+   ],
+   "tallestBand": {
+    "top": 33,
+    "h": 23
+   },
+   "closeControls": 2,
+   "ordinals": [
+    {
+     "sameLine": false,
+     "numTop": 161.8,
+     "titleTop": 181.7
+    },
+    {
+     "sameLine": false,
+     "numTop": 161.8,
+     "titleTop": 181.7
+    }
+   ],
+   "body": {
+    "w": 338
+   },
+   "track": {
+    "w": 314
+   },
+   "column": 144,
+   "scroll": {
+    "client": 314,
+    "width": 314
+   },
+   "hiddenPx": 0,
+   "drawnArea": 21661,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 2"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 2 stages and 2 notches in view",
+    "button": "fit"
+   },
+   "case": "1280x800/investigate",
+   "expect": 2,
+   "share": 26.1,
+   "before": {
+    "w": 1120,
+    "h": 222.9,
+    "share": 25.6
+   }
+  },
+  {
+   "vw": 1280,
+   "vh": 800,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "SEFL review loop",
+   "note": "",
+   "stages": 7,
+   "card": {
+    "w": 854,
+    "h": 257.2
+   },
+   "legendBox": {
+    "y": 234,
+    "h": 17
+   },
+   "slack": 54,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 10
+    },
+    {
+     "top": 33,
+     "h": 23
+    },
+    {
+     "top": 71,
+     "h": 13
+    },
+    {
+     "top": 174,
+     "h": 12
+    },
+    {
+     "top": 204,
+     "h": 21
+    },
+    {
+     "top": 249,
+     "h": 8
+    }
+   ],
+   "tallestBand": {
+    "top": 33,
+    "h": 23
+   },
+   "closeControls": 2,
+   "ordinals": [
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    }
+   ],
+   "body": {
+    "w": 852
+   },
+   "track": {
+    "w": 828
+   },
+   "column": 96,
+   "scroll": {
+    "client": 828,
+    "width": 828
+   },
+   "hiddenPx": 0,
+   "drawnArea": 63893,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 7"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 7 stages and 7 notches in view",
+    "button": "fit"
+   },
+   "case": "1280x800/sefl-review-loop",
+   "expect": 7,
+   "share": 29.1,
+   "before": {
+    "w": 1120,
+    "h": 257.2,
+    "share": 28.2
+   }
+  },
+  {
+   "vw": 1280,
+   "vh": 800,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Acceptance thirteen",
+   "note": "",
+   "stages": 13,
+   "card": {
+    "w": 1228.8,
+    "h": 269
+   },
+   "legendBox": {
+    "y": 246,
+    "h": 17
+   },
+   "slack": 54,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 10
+    },
+    {
+     "top": 33,
+     "h": 23
+    },
+    {
+     "top": 71,
+     "h": 13
+    },
+    {
+     "top": 157,
+     "h": 12
+    },
+    {
+     "top": 190,
+     "h": 8
+    },
+    {
+     "top": 216,
+     "h": 21
+    },
+    {
+     "top": 261,
+     "h": 8
+    }
+   ],
+   "tallestBand": {
+    "top": 33,
+    "h": 23
+   },
+   "closeControls": 2,
+   "ordinals": [
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    }
+   ],
+   "body": {
+    "w": 1226.8
+   },
+   "track": {
+    "w": 1202.8
+   },
+   "column": 96,
+   "scroll": {
+    "client": 1203,
+    "width": 1560
+   },
+   "hiddenPx": 357,
+   "drawnArea": 116901,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 13"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": false,
+    "text": "showing stages 1–10 of 13 — 3 of 13 stages and 4 of 13 notches out of view",
+    "button": "fit"
+   },
+   "case": "1280x800/acceptance-thirteen",
+   "expect": 13,
+   "share": 35.4,
+   "before": {
+    "w": 1120,
+    "h": 269,
+    "share": 35.1
+   }
+  },
+  {
+   "vw": 1280,
+   "vh": 800,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Acceptance thirteen",
+   "note": "",
+   "stages": 13,
+   "card": {
+    "w": 1228.8,
+    "h": 286.2
+   },
+   "legendBox": {
+    "y": 263,
+    "h": 17
+   },
+   "slack": 54,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 10
+    },
+    {
+     "top": 33,
+     "h": 23
+    },
+    {
+     "top": 71,
+     "h": 13
+    },
+    {
+     "top": 174,
+     "h": 12
+    },
+    {
+     "top": 207,
+     "h": 8
+    },
+    {
+     "top": 233,
+     "h": 21
+    },
+    {
+     "top": 278,
+     "h": 8
+    }
+   ],
+   "tallestBand": {
+    "top": 33,
+    "h": 23
+   },
+   "closeControls": 2,
+   "ordinals": [
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 140.4,
+     "titleTop": 160.3
+    }
+   ],
+   "body": {
+    "w": 1226.8
+   },
+   "track": {
+    "w": 1202.8
+   },
+   "column": 81.4,
+   "scroll": {
+    "client": 1203,
+    "width": 1203
+   },
+   "hiddenPx": 0,
+   "drawnArea": 125670,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 13"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": false,
+    "text": "all 13 stages and 13 notches in view",
+    "button": "actual size"
+   },
+   "case": "1280x800/acceptance-thirteen-fit",
+   "share": 35.7
+  },
+  {
+   "vw": 1824,
+   "vh": 900,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Local work",
+   "note": "",
+   "stages": 1,
+   "card": {
+    "w": 340,
+    "h": 244.3
+   },
+   "legendBox": {
+    "y": 227,
+    "h": 17
+   },
+   "slack": 54,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 10
+    },
+    {
+     "top": 33,
+     "h": 23
+    },
+    {
+     "top": 71,
+     "h": 7
+    },
+    {
+     "top": 93,
+     "h": 12
+    },
+    {
+     "top": 161,
+     "h": 12
+    },
+    {
+     "top": 191,
+     "h": 21
+    },
+    {
+     "top": 236,
+     "h": 8
+    }
+   ],
+   "tallestBand": {
+    "top": 33,
+    "h": 23
+   },
+   "closeControls": 2,
+   "ordinals": [
+    {
+     "sameLine": false,
+     "numTop": 167.8,
+     "titleTop": 187.7
+    }
+   ],
+   "body": {
+    "w": 338
+   },
+   "track": {
+    "w": 314
+   },
+   "column": 314,
+   "scroll": {
+    "client": 314,
+    "width": 314
+   },
+   "hiddenPx": 0,
+   "drawnArea": 23074,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 1"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 1 stage and 1 notch in view",
+    "button": "fit"
+   },
+   "case": "1824x900/local",
+   "expect": 1,
+   "share": 27.8,
+   "before": {
+    "w": 1120,
+    "h": 222.9,
+    "share": 16.6
+   }
+  },
+  {
+   "vw": 1824,
+   "vh": 900,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Investigation",
+   "note": "",
+   "stages": 2,
+   "card": {
+    "w": 340,
+    "h": 244.3
+   },
+   "legendBox": {
+    "y": 227,
+    "h": 17
+   },
+   "slack": 54,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 10
+    },
+    {
+     "top": 33,
+     "h": 23
+    },
+    {
+     "top": 71,
+     "h": 7
+    },
+    {
+     "top": 93,
+     "h": 12
+    },
+    {
+     "top": 161,
+     "h": 12
+    },
+    {
+     "top": 191,
+     "h": 21
+    },
+    {
+     "top": 236,
+     "h": 8
+    }
+   ],
+   "tallestBand": {
+    "top": 33,
+    "h": 23
+   },
+   "closeControls": 2,
+   "ordinals": [
+    {
+     "sameLine": false,
+     "numTop": 167.8,
+     "titleTop": 187.7
+    },
+    {
+     "sameLine": false,
+     "numTop": 167.8,
+     "titleTop": 187.7
+    }
+   ],
+   "body": {
+    "w": 338
+   },
+   "track": {
+    "w": 314
+   },
+   "column": 144,
+   "scroll": {
+    "client": 314,
+    "width": 314
+   },
+   "hiddenPx": 0,
+   "drawnArea": 21661,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 2"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 2 stages and 2 notches in view",
+    "button": "fit"
+   },
+   "case": "1824x900/investigate",
+   "expect": 2,
+   "share": 26.1,
+   "before": {
+    "w": 1120,
+    "h": 222.9,
+    "share": 25.6
+   }
+  },
+  {
+   "vw": 1824,
+   "vh": 900,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "SEFL review loop",
+   "note": "",
+   "stages": 7,
+   "card": {
+    "w": 854,
+    "h": 257.2
+   },
+   "legendBox": {
+    "y": 240,
+    "h": 17
+   },
+   "slack": 54,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 10
+    },
+    {
+     "top": 33,
+     "h": 23
+    },
+    {
+     "top": 71,
+     "h": 13
+    },
+    {
+     "top": 174,
+     "h": 12
+    },
+    {
+     "top": 204,
+     "h": 21
+    },
+    {
+     "top": 249,
+     "h": 8
+    }
+   ],
+   "tallestBand": {
+    "top": 33,
+    "h": 23
+   },
+   "closeControls": 2,
+   "ordinals": [
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    }
+   ],
+   "body": {
+    "w": 852
+   },
+   "track": {
+    "w": 828
+   },
+   "column": 96,
+   "scroll": {
+    "client": 828,
+    "width": 828
+   },
+   "hiddenPx": 0,
+   "drawnArea": 63893,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 7"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 7 stages and 7 notches in view",
+    "button": "fit"
+   },
+   "case": "1824x900/sefl-review-loop",
+   "expect": 7,
+   "share": 29.1,
+   "before": {
+    "w": 1120,
+    "h": 257.2,
+    "share": 28.2
+   }
+  },
+  {
+   "vw": 1824,
+   "vh": 900,
+   "mode": "edit",
+   "kicker": "pipeline flow · definition",
+   "title": "Acceptance thirteen",
+   "note": "",
+   "stages": 13,
+   "card": {
+    "w": 1586,
+    "h": 240
+   },
+   "legendBox": {
+    "y": 223,
+    "h": 17
+   },
+   "slack": 54,
+   "emptyBands": [
+    {
+     "top": 1,
+     "h": 10
+    },
+    {
+     "top": 33,
+     "h": 23
+    },
+    {
+     "top": 71,
+     "h": 13
+    },
+    {
+     "top": 157,
+     "h": 12
+    },
+    {
+     "top": 187,
+     "h": 21
+    },
+    {
+     "top": 232,
+     "h": 8
+    }
+   ],
+   "tallestBand": {
+    "top": 33,
+    "h": 23
+   },
+   "closeControls": 2,
+   "ordinals": [
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    },
+    {
+     "sameLine": false,
+     "numTop": 146.4,
+     "titleTop": 166.3
+    }
+   ],
+   "body": {
+    "w": 1584
+   },
+   "track": {
+    "w": 1560
+   },
+   "column": 96,
+   "scroll": {
+    "client": 1560,
+    "width": 1560
+   },
+   "hiddenPx": 0,
+   "drawnArea": 119085,
+   "titleFont": {
+    "size": "13px",
+    "weight": "500"
+   },
+   "minFont": 11,
+   "minText": "pipeline flow · definition",
+   "legend": [
+    {
+     "mark": "not-reached",
+     "text": "not reached 13"
+    }
+   ],
+   "marks": [
+    "not-reached"
+   ],
+   "count": {
+    "hidden": true,
+    "text": "all 13 stages and 13 notches in view",
+    "button": "fit"
+   },
+   "case": "1824x900/acceptance-thirteen",
+   "expect": 13,
+   "share": 31.3,
+   "before": {
+    "w": 1120,
+    "h": 240,
+    "share": 30.8
+   }
+  }
+ ],
+ "failures": [
+  "1280x800/local: the drawing is 27.8% of the card, under this round's 55% floor",
+  "1280x800/local: a 23px band of the card holds nothing (at 33px)",
+  "1280x800/local: the card offers 2 close controls, not one",
+  "1280x800/local: a stage ordinal is not on its title's line: [{\"sameLine\":false,\"numTop\":161.8,\"titleTop\":181.7}]",
+  "1280x800/local: the legend key \"not reached 1\" does not end in a count of stages",
+  "1280x800/investigate: the drawing is 26.1% of the card, under this round's 55% floor",
+  "1280x800/investigate: a 23px band of the card holds nothing (at 33px)",
+  "1280x800/investigate: the card offers 2 close controls, not one",
+  "1280x800/investigate: a stage ordinal is not on its title's line: [{\"sameLine\":false,\"numTop\":161.8,\"titleTop\":181.7},{\"sameLine\":false,\"numTop\":161.8,\"titleTop\":181.7}]",
+  "1280x800/investigate: the legend key \"not reached 2\" does not end in a count of stages",
+  "1280x800/sefl-review-loop: the drawing is 29.1% of the card, under this round's 55% floor",
+  "1280x800/sefl-review-loop: a 23px band of the card holds nothing (at 33px)",
+  "1280x800/sefl-review-loop: the card offers 2 close controls, not one",
+  "1280x800/sefl-review-loop: a stage ordinal is not on its title's line: [{\"sameLine\":false,\"numTop\":140.4,\"titleTop\":160.3},{\"sameLine\":false,\"numTop\":140.4,\"titleTop\":160.3}]",
+  "1280x800/sefl-review-loop: the legend key \"not reached 7\" does not end in a count of stages",
+  "1280x800/acceptance-thirteen: the drawing is 35.4% of the card, under this round's 55% floor",
+  "1280x800/acceptance-thirteen: a 23px band of the card holds nothing (at 33px)",
+  "1280x800/acceptance-thirteen: the card offers 2 close controls, not one",
+  "1280x800/acceptance-thirteen: a stage ordinal is not on its title's line: [{\"sameLine\":false,\"numTop\":140.4,\"titleTop\":160.3},{\"sameLine\":false,\"numTop\":140.4,\"titleTop\":160.3}]",
+  "1280x800/acceptance-thirteen: the legend key \"not reached 13\" does not end in a count of stages",
+  "1824x900/local: the drawing is 27.8% of the card, under this round's 55% floor",
+  "1824x900/local: a 23px band of the card holds nothing (at 33px)",
+  "1824x900/local: the card offers 2 close controls, not one",
+  "1824x900/local: a stage ordinal is not on its title's line: [{\"sameLine\":false,\"numTop\":167.8,\"titleTop\":187.7}]",
+  "1824x900/local: the legend key \"not reached 1\" does not end in a count of stages",
+  "1824x900/investigate: the drawing is 26.1% of the card, under this round's 55% floor",
+  "1824x900/investigate: a 23px band of the card holds nothing (at 33px)",
+  "1824x900/investigate: the card offers 2 close controls, not one",
+  "1824x900/investigate: a stage ordinal is not on its title's line: [{\"sameLine\":false,\"numTop\":167.8,\"titleTop\":187.7},{\"sameLine\":false,\"numTop\":167.8,\"titleTop\":187.7}]",
+  "1824x900/investigate: the legend key \"not reached 2\" does not end in a count of stages",
+  "1824x900/sefl-review-loop: the drawing is 29.1% of the card, under this round's 55% floor",
+  "1824x900/sefl-review-loop: a 23px band of the card holds nothing (at 33px)",
+  "1824x900/sefl-review-loop: the card offers 2 close controls, not one",
+  "1824x900/sefl-review-loop: a stage ordinal is not on its title's line: [{\"sameLine\":false,\"numTop\":146.4,\"titleTop\":166.3},{\"sameLine\":false,\"numTop\":146.4,\"titleTop\":166.3}]",
+  "1824x900/sefl-review-loop: the legend key \"not reached 7\" does not end in a count of stages",
+  "1824x900/acceptance-thirteen: the drawing is 31.3% of the card, under this round's 55% floor",
+  "1824x900/acceptance-thirteen: a 23px band of the card holds nothing (at 33px)",
+  "1824x900/acceptance-thirteen: the card offers 2 close controls, not one",
+  "1824x900/acceptance-thirteen: a stage ordinal is not on its title's line: [{\"sameLine\":false,\"numTop\":146.4,\"titleTop\":166.3},{\"sameLine\":false,\"numTop\":146.4,\"titleTop\":166.3}]",
+  "1824x900/acceptance-thirteen: the legend key \"not reached 13\" does not end in a count of stages"
+ ],
+ "pageErrors": []
+}

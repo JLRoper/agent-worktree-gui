@@ -627,8 +627,16 @@ try {
         check(!afterEsc.locked, "and the page is unlocked");
 
         await openRouteB(page, "investigate");
+        // The card's focusable set changes with its state (the drive control appears only when there are stops to make
+        // up), so the wrap is judged against the number of stops the card actually has, not a number written here.
+        const stops = await page.evaluate(() => {
+          const card = document.getElementById("pipeline-modal-card");
+          const sel = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+          return [...card.querySelectorAll(sel)].filter((el) => el.getClientRects().length > 0 && !el.hidden && !el.closest("[hidden]")).length;
+        });
+        const presses = Math.max(4, stops + 2);
         const tabbed = [];
-        for (let i = 0; i < 8; i += 1) {
+        for (let i = 0; i < presses; i += 1) {
           await page.keyboard.press("Tab");
           tabbed.push(
             await page.evaluate(() => {
@@ -637,7 +645,7 @@ try {
             }),
           );
         }
-        equal("eight Tabs never leave the card", [...new Set(tabbed)], ["in"]);
+        equal(`${stops} stops, ${presses} Tabs never leave the card`, [...new Set(tabbed)], ["in"]);
         const ringed = await page.evaluate(() =>
           [...document.querySelectorAll("#pipeline-modal-card button, #pipeline-modal-card select, #pipeline-modal-card input")].map((el) => {
             el.focus();
@@ -713,7 +721,7 @@ try {
         equal("the gate that ends S2 is one notch", pos.notches.map((n) => n.gate), ["g2"]);
         equal("the capped loop is one arc, labelled with its cap only", pos.arcs.map((a) => ({ cap: a.cap, label: a.label.text, from: a.from, to: a.to })), [{ cap: "2 rounds", label: "2 rounds", from: "S4", to: "S2" }]);
         check(pos.arcs[0]?.aboveTrack, "the arc is drawn above the track", pos.arcs[0] ? `arc bottom ${pos.arcs[0].rect.bottom} vs track top ${pos.track.y}` : "no arc");
-        equal("the legend counts the marks on screen, and only those", pos.keys.map((k) => `${k.mark}:${k.text}`), ["not-reached:not reached 1", "current:current 1", "done:done 3"]);
+        equal("the legend counts the marks on screen, and only those", pos.keys.map((k) => `${k.mark}:${k.text}`), ["not-reached:not reached 1 stage", "current:current 1 stage", "done:done 3 stages"]);
         const token = pos.nodes.find((n) => n.mark === "current");
         check(Boolean(token && token.num && token.dot && token.dot.bg !== "rgba(0, 0, 0, 0)"), "the current stage carries a position token and a painted dot", token ? `${token.id} #${token.num?.text} dot ${token.dot?.bg}` : "no current stage");
 
