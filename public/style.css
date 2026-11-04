@@ -127,12 +127,23 @@ button, select, input, textarea { font-family: var(--ui); }
 }
 #human-badge[hidden] { display: none; }
 
-/* DELIVERABLES: every thing an agent handed back, in one list. A quiet header button — this is an archive, not a
-   queue, so it carries no count and no colour until the reader opens it. The pressed state is the only mark, and
-   it is the same blue the board uses for "this is the thing you are looking at". */
+/* DELIVERABLES: every thing an agent handed back, in one list. A quiet header button while there is nothing new —
+   this is an archive, not a queue — and it carries a count ONLY for what arrived above the reader's watermark, never
+   everything ever delivered. `has-unseen` is the highlight, a class on the button (no inline style, so the pressed
+   state and the unseen state have one definition each), and it is the same blue the board uses for "this is the thing
+   you are looking at". */
 #btn-deliver { display: inline-flex; align-items: center; gap: 6px; }
+#btn-deliver.has-unseen { border-color: #3f6f52; background: #14251c; color: #d6f5e3; }
+#btn-deliver.has-unseen:hover { border-color: #4d8a67; background: #19301f; }
 #btn-deliver[aria-expanded="true"] { border-color: #3b5680; background: #1b2534; color: #cfe6ff; }
 #btn-deliver[aria-expanded="true"]:hover { background: #223047; }
+#deliver-badge {
+  display: inline-block; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 9px; background: #3f9d6b; color: #fff; cursor: pointer;
+  font: 700 10.5px/17px var(--ui); text-align: center;
+  box-shadow: 0 0 0 1px #3f9d6b55;
+}
+#deliver-badge[hidden] { display: none; }
 
 /* The question a HUMAN hop landed on: a red ring, on the prompt box itself, that dies back to the box's own
    border. It rides beside the amber card ring HUMAN also draws, so "this agent" and "this box" are two different

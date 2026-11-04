@@ -18076,6 +18076,10 @@ const deliver = {
   active: 0,       // index into the FILTERED rows, which is what the combobox drives
   agesTimer: null,
   why: {},         // seq → the refusal the click was given, said under that row and nowhere else
+  seenSeq: 0,      // the store's watermark as this page knows it — it only ever moves forward here
+  serverSeen: 0,   // the last watermark the STORE reported, so a failed POST can put the count back honestly
+  seenPosted: 0,   // the highest seq this page has recorded; a second open with nothing new posts nothing
+  unseen: 0,       // rows above seenSeq — the number on the badge, never "everything ever delivered"
 };
 
 // The popover, built once. A fixed panel under the button, in the shape `.artifacts-pop` already uses — the
@@ -18149,12 +18153,91 @@ function deliverPosition() {
   pop.style.right = "auto";
 }
 
+// THE BADGE. Rows ABOVE the persisted watermark — so a list that has never been opened counts every row, and a list
+// opened once and then left alone counts nothing until something NEW is delivered. The highlight is a CLASS on the
+// header button (never an inline style: the pressed state and the unseen state each have one definition in
+// style.css), and the number is in the button's aria-label as well as the pill, because a coloured dot is not a
+// notification.
+function deliverUnseenCount() {
+  const floor = Number(deliver.seenSeq) || 0;
+  return deliver.entries.reduce((n, e) => n + (Number(e.seq) > floor ? 1 : 0), 0);
+}
+
+function paintDeliverBadge() {
+  const btn = $("btn-deliver");
+  if (!btn) return;
+  const n = Math.max(0, Number(deliver.unseen) || 0);
+  const unseen = n > 0;
+  const badge = $("deliver-badge");
+  if (badge) {
+    badge.hidden = !unseen;
+    badge.textContent = String(n);
+    badge.title = unseen
+      ? `dismiss — ${n} deliverable${n === 1 ? "" : "s"} arrived since you last looked; this marks ${n === 1 ? "it" : "them"} seen without opening the list`
+      : "";
+  }
+  btn.classList.toggle("has-unseen", unseen);
+  btn.setAttribute(
+    "aria-label",
+    unseen
+      ? `DELIVERABLES — ${n} new deliverable${n === 1 ? "" : "s"} since you last looked. Click or press D to open the list.`
+      : "DELIVERABLES — every deliverable produced on this panel, newest first. Click or press D to open the list.",
+  );
+}
+
+// ONE watermark, two doors: opening the popover and pressing the badge's dismiss both come through here, and both
+// record the same number in the same store. It clears the badge in this tick — before the POST answers — so the paint
+// cannot flicker back, and it posts ONCE: a second open with nothing new has no higher seq to send. A failed POST puts
+// the count back to what the store last reported, because an optimistic clear that never landed would resurrect itself
+// on the next poll and on the next restart.
+function deliverMarkSeen() {
+  const newest = deliver.entries.reduce((n, e) => Math.max(n, Number(e.seq) || 0), 0);
+  const want = Math.max(newest, Number(deliver.seenSeq) || 0);
+  if (want > (Number(deliver.seenSeq) || 0)) {
+    deliver.seenSeq = want;
+    deliver.unseen = deliverUnseenCount();
+  }
+  paintDeliverBadge();
+  if (!want || want <= (Number(deliver.seenPosted) || 0)) return Promise.resolve(false);
+  deliver.seenPosted = want;
+  return (async () => {
+    try {
+      const r = await apiFetch("/api/deliverables/seen", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ seq: want }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(String(d.error || `HTTP ${r.status}`));
+      const server = Number(d.seenSeq);
+      if (Number.isFinite(server)) {
+        deliver.serverSeen = server;
+        deliver.seenSeq = Math.max(Number(deliver.seenSeq) || 0, server);
+      }
+      deliver.unseen = deliverUnseenCount();
+      paintDeliverBadge();
+      return true;
+    } catch (e) {
+      deliver.seenPosted = 0;
+      deliver.seenSeq = Number(deliver.serverSeen) || 0;
+      deliver.unseen = deliverUnseenCount();
+      paintDeliverBadge();
+      showBanner(`could not mark the deliverables seen: ${String((e && e.message) || e)}`);
+      return false;
+    }
+  })();
+}
+
 function openDeliverPop() {
   const pop = deliverPopEl();
   pop.hidden = false; // before the measure: offsetWidth is 0 on a hidden element
   deliverPosition();
   deliver.open = true;
   $("btn-deliver")?.setAttribute("aria-expanded", "true");
+  // Opening IS seeing: the same watermark the badge's dismiss writes, posted once, before the reader has scrolled a
+  // single row. It clears the badge and the highlight in this tick, and nothing below can raise them again for these
+  // rows — so the next poll, or a frame from this store, cannot flicker them back on.
+  void deliverMarkSeen();
   deliverHookStream();
   // Paint what was last read immediately, then re-read: the list is an archive, and a stale row for a second is
   // better than an empty popover. A failed read replaces it with the sentence, never a blank list.
@@ -18184,6 +18267,35 @@ $("btn-deliver")?.addEventListener("click", (e) => {
   e.stopPropagation();
   toggleDeliverPop();
 });
+
+// The badge is the SECOND door to the same watermark: a press on the number records what the page has shown WITHOUT
+// opening the list, and the button's own toggle never fires (stopPropagation — an event from inside the button is
+// still the badge's, not the button's). It is a span inside the header button on purpose: the header keeps one button
+// per feature, and the number is the only part of it that means "dismiss".
+$("deliver-badge")?.addEventListener("click", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  void deliverMarkSeen();
+});
+
+// The count has to be right before the first click, and a delivery has to reach a page whose list is SHUT. One quiet
+// read paints it at load, the stream's `deliverable` frame keeps it live, and a slow poll covers a tab whose stream is
+// reconnecting (or a panel that reconnected it, which replaces state.es). A hidden tab polls nothing — a background
+// board is not an inbox. The stream is connected by app.js's boot(), after its first await, so the hook is attached
+// here as one at load and retried for five seconds rather than assuming it already exists.
+const DELIVER_POLL_MS = 60_000;
+function deliverPollTick() {
+  deliverHookStream(); // a reconnect replaces state.es, so the hook follows it on the next tick
+  if (document.hidden) return;
+  void deliverFetch({ quiet: true });
+}
+(function deliverHookup(attempt = 0) {
+  deliverHookStream();
+  if (!state.es?.__deliverableHook && attempt < 10) setTimeout(() => deliverHookup(attempt + 1), 500);
+})();
+paintDeliverBadge(); // the label a screen reader reads before the first response lands
+void deliverFetch({ quiet: true });
+setInterval(deliverPollTick, DELIVER_POLL_MS);
 
 // A second press of the button, an outside click, Esc, or a press of D closes it. mousedown, not click: the
 // reader's next click lands where they aimed, not on the popover that was covering it.
@@ -18232,7 +18344,7 @@ function deliverHookStream() {
   if (!state.es || state.es.__deliverableHook) return;
   state.es.__deliverableHook = true;
   state.es.addEventListener("deliverable", () => {
-    if (deliver.open) void deliverFetch({ quiet: true });
+    void deliverFetch({ quiet: true }); // the open list gains its row, the closed badge its count
   });
 }
 
@@ -18262,6 +18374,13 @@ async function deliverFetch({ quiet = false } = {}) {
     deliver.cap = Number.isFinite(cap) && cap > 0 ? cap : DELIVER_DEFAULT_CAP;
     const kept = Number(d.kept);
     deliver.kept = Number.isFinite(kept) ? kept : deliver.entries.length;
+    // The watermark: the STORE's, never below what this page has already cleared. Taking the max is what keeps a
+    // cleared badge cleared when a GET answered just before the POST landed — the next poll cannot re-light it, and a
+    // fresh entry (a seq above the watermark) still does.
+    const serverSeen = Number(d.seenSeq);
+    if (Number.isFinite(serverSeen)) deliver.serverSeen = serverSeen;
+    deliver.seenSeq = Math.max(Number(deliver.seenSeq) || 0, Number(deliver.serverSeen) || 0);
+    deliver.unseen = deliverUnseenCount();
     deliver.loading = false;
     deliver.error = "";
     if (quiet) {
@@ -18269,6 +18388,7 @@ async function deliverFetch({ quiet = false } = {}) {
       if (i >= 0) deliver.active = i;
     }
     paintDeliverRows({ keepScroll: quiet });
+    paintDeliverBadge();
   } catch (e) {
     deliver.loading = false;
     deliver.error = String((e && e.message) || e);
