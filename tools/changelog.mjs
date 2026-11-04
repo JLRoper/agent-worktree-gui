@@ -12,12 +12,21 @@
 //                                               (writes nothing; the CI-shaped use)
 //   node tools/changelog.mjs --since v0.80.0    print only the releases after v0.80.0 — "my build vs now"
 //   node tools/changelog.mjs --out <path>       write somewhere else
-//   node tools/changelog.mjs --no-links         plain text: no commit or compare links (a mirror with no GitHub)
+//   node tools/changelog.mjs --no-links         plain text, no commit or compare links — the deliberate opt-out for
+//                                               a mirror this tool can find no GitHub remote on
 //
 // The grouping is the conventional-commit prefix each subject already carries: feat/Added, fix/Fixed,
 // perf/Performance, refactor/style/build/ci/revert/Changed, docs/doc/test/Docs & tests, and everything else
 // (chore:, a bare subject) under Other. Merge commits are dropped: a merge says how the work arrived, not what
 // changed.
+//
+// THE LINKS COME FROM THE CLONE'S OWN REMOTES. The resolver takes the first remote whose URL is a GitHub one,
+// preferring `origin` when it exists: a clone whose GitHub remote is named otherwise is still a clone of the same
+// repository, and its changelog deserves its links. With links on — the default — and no GitHub remote to take them
+// from, the render REFUSES. The old behaviour read a remote named `origin` and nothing else, so such a clone got a
+// link-less file that read exactly like a successful render, `--check` could never agree with the file it had just
+// written, and the base's own landing step (`tools/land.mjs` renders through this module too) would strip the links
+// the base's changelog carries and commit that. `--no-links` is the deliberate way to write a link-less file.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -137,27 +146,98 @@ export function renderChangelog({ releases, repoUrl = null, since = null }) {
   return `${lines.join("\n").replace(/\n+$/, "")}\n`;
 }
 
-// A GitHub remote's web URL, or null for a mirror that is not GitHub (the renderer then omits links rather than
-// pointing them at a host that will 404).
-export function githubRepoUrl(root) {
+// Every remote this clone carries, `origin` first and then the rest in git's own order — the preference order the
+// link resolver reads. Name and URL together, so a refusal can quote what it actually looked at.
+export function listRemotes(root) {
+  let names;
   try {
-    const raw = execFileSync("git", ["remote", "get-url", "origin"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-    const m = /github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/.exec(raw);
-    return m ? `https://github.com/${m[1]}/${m[2]}` : null;
+    names = execFileSync("git", ["remote"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
+      .split("\n")
+      .map((n) => n.trim())
+      .filter(Boolean);
   } catch {
-    return null;
+    return []; // not a repository, or git is not there: no remotes, which the caller refuses on rather than assumes around
+  }
+  const ordered = [...names.filter((n) => n === "origin"), ...names.filter((n) => n !== "origin")];
+  return ordered.map((name) => ({ name, url: remoteUrl(root, name) }));
+}
+
+function remoteUrl(root, name) {
+  try {
+    return execFileSync("git", ["remote", "get-url", name], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return ""; // a remote whose URL cannot be read carries no GitHub URL; the name alone renders no link
+  }
+}
+
+// The GitHub web URL a remote's URL names, or null for anything else — and asked of the URL, never of the remote's
+// name. `origin` is a convention, not a fact: this clone may hold the same repository under `github`, `upstream` or
+// anything else, while a remote NAMED origin can perfectly well point at a mirror somewhere else.
+export function githubUrlFrom(remoteUrl) {
+  const raw = String(remoteUrl || "").trim().replace(/\/+$/, "");
+  const m = /github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/.exec(raw);
+  return m ? `https://github.com/${m[1]}/${m[2]}` : null;
+}
+
+// Which remote the links come from, and what the clone carried when it could not answer one. A GitHub URL beats a
+// plain one, and `origin` beats the rest among equals, because that is the name a landing pushes to and the one a
+// render made by a clone cut from it would take its shas from.
+export function resolveGithubRemote(root) {
+  const remotes = listRemotes(root);
+  const github = remotes.filter((r) => githubUrlFrom(r.url));
+  const first = github.find((r) => r.name === "origin") || github[0] || null;
+  return { url: first ? githubUrlFrom(first.url) : null, remote: first ? first.name : null, remotes };
+}
+
+// A GitHub remote's web URL, or null when this clone carries none (see resolveGithubRemote for which, and why).
+export function githubRepoUrl(root) {
+  return resolveGithubRemote(root).url;
+}
+
+// The sentence a refusal prints: what the clone has, and the one command that fixes it. A clone with nine remotes
+// does not need all nine read out to learn that none of them is GitHub.
+export function noGithubRemoteMessage(remotes = []) {
+  const seen = remotes.length
+    ? `this clone's remotes are ${remotes.map((r) => `${r.name} (${r.url || "no url"})`).join(", ")}`
+    : "this clone has no remotes at all";
+  return (
+    `no GitHub remote to take the changelog's links from — ${seen}. ` +
+    "Every release heading would be written without its commit and compare links, and --check could then never agree " +
+    "with the file this tool had just written, so nothing was rendered. " +
+    "Add the repository's GitHub remote (`git remote add origin https://github.com/<owner>/<repo>.git`) and run " +
+    "again, or render without links on purpose with --no-links."
+  );
+}
+
+// A refusal, not a git failure, so a caller can tell the two apart: tools/land.mjs renders this same file and must
+// refuse alongside the CLI rather than commit a link-less render over the linked one the base carries.
+export class NoGithubRemoteError extends Error {
+  constructor(remotes = []) {
+    super(noGithubRemoteMessage(remotes));
+    this.name = "NoGithubRemoteError";
+    this.remotes = remotes;
   }
 }
 
 // One render, from one ref, for both this CLI and tools/land.mjs: the landing's last step has to write byte for
 // byte what `npm run changelog` writes, or the two disagree about the same history. Returns null when the walk
-// comes back empty, so the caller refuses instead of rendering a changelog of nothing.
+// comes back empty, so the caller refuses instead of rendering a changelog of nothing, and THROWS a
+// NoGithubRemoteError when links were asked for and this clone carries no GitHub remote — a link-less file is the
+// one outcome both callers must refuse, because it reads as a successful render while no check can ever agree with
+// it and the base's own landing step would commit it over a file that has its links.
 export function renderRepo({ root, ref = "HEAD", links = true } = {}) {
   const history = readReleaseHistory({ root, ref });
   if (!history.versions.length) return null;
   const releases = collectReleases(history.versions, (from, to) => listCommits(root, from, to));
-  const repoUrl = links ? githubRepoUrl(root) : null;
-  return { releases, repoUrl, text: renderChangelog({ releases, repoUrl }) };
+  const found = resolveGithubRemote(root);
+  if (links && !found.url) throw new NoGithubRemoteError(found.remotes);
+  return {
+    releases,
+    repoUrl: links ? found.url : null,
+    remote: links ? found.remote : null,
+    remotes: found.remotes,
+    text: renderChangelog({ releases, repoUrl: links ? found.url : null }),
+  };
 }
 
 function listCommits(root, from, to) {
@@ -202,16 +282,26 @@ function main(argv) {
   if (opt.help) {
     console.log("node tools/changelog.mjs [--check] [--since <version>] [--out <path>] [--no-links]");
     console.log("  renders CHANGELOG.md from the commits between consecutive v<version> tags.");
+    console.log("  The commit and compare links come from this clone's first GitHub remote (origin wins).");
+    console.log("  A clone carrying no GitHub remote is REFUSED — the file would be link-less and --check could");
+    console.log("  never agree with it. `--no-links` writes that file deliberately.");
     return 0;
   }
 
   const root = repoRoot(process.cwd());
-  const rendered = renderRepo({ root, ref: "HEAD", links: opt.links });
+  let rendered;
+  try {
+    rendered = renderRepo({ root, ref: "HEAD", links: opt.links });
+  } catch (e) {
+    if (!(e instanceof NoGithubRemoteError)) throw e;
+    console.error(`changelog: ${e.message}`);
+    return 2;
+  }
   if (!rendered) {
     console.error("changelog: package.json's history came back empty — refusing to render a changelog of nothing");
     return 2;
   }
-  const { releases, repoUrl, text } = rendered;
+  const { releases, repoUrl, remote, text } = rendered;
 
   if (opt.since) {
     const want = opt.since.replace(/^v/, "");
@@ -245,7 +335,7 @@ function main(argv) {
   const commits = releases.reduce((n, r) => n + r.commits.length, 0);
   console.log(
     `changelog: wrote ${path.relative(root, out)} — ${releases.length} releases, ${commits} commits, ` +
-      `${text.length} chars${repoUrl ? "" : " (no links: origin is not a GitHub remote)"}`,
+      `${text.length} chars${repoUrl ? `, links from ${remote}` : ", no links: --no-links was asked for"}`,
   );
   return 0;
 }
