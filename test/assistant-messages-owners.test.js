@@ -119,7 +119,7 @@ test("Assistant #2's thread carries its own messages through the real Assistant"
   assert.equal(byText["SECOND-TURN"], "assistant-2", "the #2 thread's message belongs to #2");
 });
 
-// ---- the page: the Messages tab's all view and the #2 view --------------------------------
+// ---- the page: every assistant's Messages pane, and the All toggle inside it -----------------
 
 const page = readFileSync(new URL("../public/assistant.js", import.meta.url), "utf8");
 const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -134,12 +134,14 @@ function boardWith(rows) {
   });
 }
 
-async function messagesPane({ board, who = "all" }) {
-  const host = { innerHTML: "", closest: () => null };
+async function messagesPane({ board, who = "assistant-1" }) {
+  // One pane per assistant, with the ids paneIdFor builds: a pane is drawn for the session whose tab holds it.
+  const paneIdFor = (id, sub) => (id === PRIMARY_ASSISTANT ? `as-${sub}` : `as-${sub}-${String(id).replace(/^assistant-/, "")}`);
+  const hosts = new Map(ASSISTANTS.map((a) => [paneIdFor(a.id, "messages"), { innerHTML: "", closest: () => null }]));
   const state = {
     assistant: { assistants: ASSISTANTS, notes: "" },
     assistantThread: ASSISTANT_THREAD,
-    assistantView: { assistant: "messages" },
+    assistantView: { assistant: who, subTab: "messages" },
   };
   const sessionById = (id) => ASSISTANTS.find((a) => a.id === String(id || "")) || null;
   const assistantIds = () => ASSISTANTS.map((a) => a.id);
@@ -155,41 +157,55 @@ async function messagesPane({ board, who = "all" }) {
     "assistantIds",
     "sessionById",
     "FIRST_ASSISTANT",
+    "hostFor",
+    "paneIdFor",
+    "selectedSessionId",
     `${sliceRegion(page, "messages")}
 return {
   loadMessages,
   renderAssistantMessages,
-  setWho: (v) => { msgWho = v; },
+  widen: (id) => msgAll.add(id),
+  widened: (id) => msgAll.has(id),
   setDir: (v) => { msgDir = v; },
 };`,
-  )(state, (id) => (id === "as-messages" ? host : null), esc, () => "1m", (p) => p, (n) => String(n), apiFetch, assistantIds, sessionById, PRIMARY_ASSISTANT);
+  )(state, (id) => hosts.get(id) || null, esc, () => "1m", (p) => p, (n) => String(n), apiFetch, assistantIds, sessionById, PRIMARY_ASSISTANT,
+    (id, sub) => hosts.get(paneIdFor(id, sub)) || null, paneIdFor, () => who);
   await api.loadMessages(true);
-  api.setWho(who);
-  api.renderAssistantMessages();
-  return { host, api };
+  api.renderAssistantMessages(who);
+  return { host: hosts.get(paneIdFor(who, "messages")), api, hosts, paneIdFor };
 }
 
-test("the Messages tab's All view hides nothing, and #2's view shows only #2's message", async () => {
+test("each assistant's Messages pane shows its own split, and the All toggle inside it hides nothing", async () => {
   const board = boardWith([
     job({ id: "run-1", thread: ASSISTANT_THREAD, prompt: "PRIMARY-MESSAGE", assistantId: PRIMARY_ASSISTANT, status: "running", startedAt: iso(0) }),
     job({ id: "run-2", thread: threadFor("assistant-2"), prompt: "SECOND-MESSAGE", assistantId: "assistant-2", status: "running", startedAt: iso(1_000) }),
     job({ id: "run-3", thread: threadFor("assistant-3"), prompt: "THIRD-MESSAGE", assistantId: "assistant-3", status: "running", startedAt: iso(2_000) }),
   ]);
 
-  const all = await messagesPane({ board, who: "all" });
-  assert.match(all.host.innerHTML, /PRIMARY-MESSAGE/, "All shows #1's message");
-  assert.match(all.host.innerHTML, /SECOND-MESSAGE/, "All shows #2's message");
-  assert.match(all.host.innerHTML, /THIRD-MESSAGE/, "All shows #3's message");
-  assert.match(all.host.innerHTML, /data-as-msgwho="all" aria-pressed="true"/, "All is the view that is on");
-  assert.match(all.host.innerHTML, /every assistant, nothing hidden/, "and it says so");
-
+  // #2's pane opens on #2's split: its own message, nobody else's.
   const two = await messagesPane({ board, who: "assistant-2" });
-  assert.match(two.host.innerHTML, /SECOND-MESSAGE/, "#2's view has #2's message");
+  assert.match(two.host.innerHTML, /SECOND-MESSAGE/, "#2's pane has #2's message");
   assert.doesNotMatch(two.host.innerHTML, /PRIMARY-MESSAGE/, "and not #1's");
   assert.doesNotMatch(two.host.innerHTML, /THIRD-MESSAGE/, "and not #3's");
   assert.match(two.host.innerHTML, /narrowed to Assistant #2 — 1 of 3/, "the bar names the split and its count");
   assert.equal((two.host.innerHTML.match(/data-as-msgdir=/g) || []).length, 3, "the direction chips are still exactly three");
+  assert.match(two.host.innerHTML, /data-as-msgwho="all" data-as-msgfor="assistant-2"/, "and All is offered INSIDE this pane");
 
-  // The #2 chip is on All's payload too: nothing was hidden from the reader who wants to narrow it.
-  assert.match(all.host.innerHTML, /data-as-msgwho="assistant-2"/, "All offers #2's split");
+  // All, pressed in #2's pane, is the whole board — and it is that pane's choice alone.
+  two.api.widen("assistant-2");
+  two.api.renderAssistantMessages("assistant-2");
+  assert.match(two.host.innerHTML, /PRIMARY-MESSAGE/, "All shows #1's message");
+  assert.match(two.host.innerHTML, /SECOND-MESSAGE/, "All shows #2's message");
+  assert.match(two.host.innerHTML, /THIRD-MESSAGE/, "All shows #3's message");
+  assert.match(two.host.innerHTML, /data-as-msgwho="all"[^>]*aria-pressed="true"/, "All is the view that is on");
+  assert.match(two.host.innerHTML, /every assistant, nothing hidden/, "and it says so");
+
+  // #1's pane was never widened: it still shows its own split, with All offered beside it.
+  const one = await messagesPane({ board, who: "assistant-1" });
+  assert.match(one.host.innerHTML, /PRIMARY-MESSAGE/);
+  assert.doesNotMatch(one.host.innerHTML, /SECOND-MESSAGE/, "#1's pane is its own list, not the board");
+  assert.match(one.host.innerHTML, /data-as-msgwho="all" data-as-msgfor="assistant-1"/, "with All inside it");
+  assert.equal(one.api.widened("assistant-1"), false, "and #1 was not widened by #2's press");
+  // The two panes are separate boxes: #2's widening wrote into #2's element and left #1's alone.
+  assert.doesNotMatch(one.hosts.get(one.paneIdFor("assistant-1", "messages")).innerHTML, /THIRD-MESSAGE/);
 });

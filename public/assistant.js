@@ -35,14 +35,15 @@
   // The one-tab record this replaced: a reader who left the float on "chat" or "settings" is moved onto the new
   // shape once, and this key is never written again.
   const TAB_KEY = "wm.assistantTab";
-  // The lists that are the assistant's own. The SESSIONS are deliberately NOT in here: they come from the assistant
-  // records the server sends (`state.assistant.assistants`), so "Assistant #2" is one more record and no new branch
-  // anywhere — the button, the pane and the sub-row are all built from that list, on every paint.
-  const LISTS = ["alerts", "watches", "messages", "pad", "role", "watchdog"];
-  // What a session holds: the card you talk to, how it behaves, and the work it is carrying. "queue" is a session's
-  // OWN list — one per assistant, in its own file — so it belongs on the session's row beside Chat and Settings and
-  // not in LISTS, which are the float's one panel-wide panes.
-  const SUBTABS = ["chat", "settings", "queue", "worktrees"];
+  // The panes that belong to the PANEL, not to one assistant. Role is a library every assistant picks a role from,
+  // and the watchdog is the panel's own sentry — neither is one session's to own, so both stay on the float's row.
+  // Everything else that used to be here (alerts, watches, messages, the pad) is a session's OWN: it moved into
+  // SUBTABS, where each pane is filled for the assistant whose tab it sits in.
+  const LISTS = ["role", "watchdog"];
+  // What a session holds: the card you talk to, how it behaves, the work it is carrying (its queue, its trees) and
+  // what it has seen and said (its alerts, watches, messages, pad). Every one of these renders for the ACTIVE
+  // session through paneIdFor, so #2's Alerts is #2's list rather than a panel-wide one wearing #2's name.
+  const SUBTABS = ["chat", "settings", "queue", "worktrees", "alerts", "watches", "messages", "pad"];
   const FIRST_ASSISTANT = "assistant-1";
   const DEFAULT_VIEW = { assistant: FIRST_ASSISTANT, subTab: SUBTABS[0] };
   // Every session the page knows about. Before the first /api/assistant answer there is still Assistant #1 — the
@@ -70,24 +71,31 @@
 
   // The old record was one tab name, where "chat" was the assistant's card and "settings" was a tab of the float's.
   // Both are the session's own row now, so a reader who left the float on either lands where they were. "charter"
-  // was this tab under its old name.
+  // was this tab under its old name. And since alerts, watches, messages and the pad moved INSIDE the assistant,
+  // a remembered "alerts" (or "watches", "messages", "pad") is one of Assistant #1's sub-tabs — the session the
+  // float opens on — rather than a tab of its own that no longer exists.
   function legacyView(tab) {
     if (tab === "settings") return { assistant: DEFAULT_VIEW.assistant, subTab: "settings" };
     if (tab === "charter") return { assistant: "role", subTab: DEFAULT_VIEW.subTab };
+    if (SUBTABS.includes(tab)) return { assistant: DEFAULT_VIEW.assistant, subTab: tab };
     if (tabsNow().includes(tab)) return { assistant: tab, subTab: DEFAULT_VIEW.subTab };
     return null;
   }
   // {assistant, subTab} is the whole record of where the float is: which session (or list) is the tab on screen, and
-  // which of that session's two rows is showing. A name this build no longer carries reads as the default rather
-  // than as nothing on screen.
+  // which of that session's own panes is showing. A name this build no longer carries reads as the default rather
+  // than as nothing on screen — including a tab name the previous shape wrote, which goes through legacyView above.
   function readView() {
     try {
       const raw = JSON.parse(localStorage.getItem(VIEW_KEY) || "null");
       if (raw && typeof raw === "object") {
-        return {
-          assistant: tabsNow().includes(raw.assistant) ? raw.assistant : DEFAULT_VIEW.assistant,
-          subTab: SUBTABS.includes(raw.subTab) ? raw.subTab : DEFAULT_VIEW.subTab,
-        };
+        if (tabsNow().includes(raw.assistant)) {
+          return {
+            assistant: raw.assistant,
+            subTab: SUBTABS.includes(raw.subTab) ? raw.subTab : DEFAULT_VIEW.subTab,
+          };
+        }
+        // A record written while the lists were the float's own tabs: that name is a sub-tab of #1's now.
+        return legacyView(raw.assistant) || { ...DEFAULT_VIEW };
       }
       return legacyView(localStorage.getItem(TAB_KEY)) || { ...DEFAULT_VIEW };
     } catch {
@@ -559,10 +567,11 @@
     if (state.assistantOpen) renderAssistant();
   }
 
-  // The waiting spawn cards, oldest first: the strip and the badges all read this one list, narrowed to the assistant
-  // the Alerts tab is showing — "all" keeps every assistant's, and hides nothing.
-  function spawnCards() {
-    return (state.assistant?.alerts || []).filter((a) => a.spawn && typeof a.spawn.prompt === "string" && inAlertScope(a));
+  // The waiting spawn cards. `who` is the scope the caller speaks for: the float's header badge asks for the SELECTED
+  // assistant's (the same scope its alert count uses), and the board's strip asks for every assistant's — a card
+  // waiting for a click is never hidden behind a tab the reader does not have open.
+  function spawnCards(who = selectedSessionId()) {
+    return (state.assistant?.alerts || []).filter((a) => a.spawn && typeof a.spawn.prompt === "string" && inAlertScope(a, who));
   }
   function spawnAge(a) {
     return Date.now() - (Date.parse(a.at) || Date.now());
@@ -576,8 +585,8 @@
     const btn = as$("btn-assistant");
     const badge = as$("assistant-badge");
     if (!btn || !badge) return;
-    // The header's number is this scope's number: the same choice that filters the Alerts tab filters the badge, so
-    // a reader narrowed to #2 is told about #2's notices and not handed a count of every assistant's.
+    // The header's number is the SELECTED assistant's number: the same scope that fills its Alerts pane (and its All
+    // toggle) fills this badge, so a reader on #2 is told about #2's notices and not handed a count of everyone's.
     const plain = alertsInScope(state.assistant?.alerts || []).filter((a) => !a.spawn);
     const n = plain.length;
     badge.hidden = n === 0;
@@ -607,10 +616,12 @@
     const all = state.assistant?.spawnCards || { open: 0, unstarted: 0 };
     // The server's numbers are the fallback while its state is the only thing that has arrived (a socket replay of
     // `state` before any tab repainted its list); the page's own list wins as soon as it has rows. Both are read at
-    // the scope the Alerts tab is showing, so a panel-wide total cannot reappear on a narrowed badge.
-    const s = alertWho === "all" ? all : all.byAssistant?.[alertWho] || { open: 0, unstarted: 0 };
+    // the scope the float is showing — the selected assistant, or the whole board when its pane is widened to All —
+    // so a panel-wide total cannot reappear on a narrowed badge.
+    const scope = alertScopeOf();
+    const s = scope === "all" ? all : all.byAssistant?.[scope] || { open: 0, unstarted: 0 };
     const stuck = Number(s.unstarted) || 0;
-    const cards = spawnCards();
+    const cards = spawnCards(scope);
     const m = cards.length || Number(s.open) || 0;
     const oldest = cards.reduce((t, a) => Math.min(t, Date.parse(a.at) || Date.now()), Date.now());
     const late = m > 0 && (cards.length ? Date.now() - oldest >= SPAWN_WATCH_MS : false);
@@ -643,7 +654,9 @@
   function paintSpawnStrip() {
     const host = as$("spawn-strip");
     if (!host) return;
-    const cards = spawnCards().sort((a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0));
+    // The board's strip is every assistant's: a waiting card is the reader's pending act wherever they are reading, and
+    // a tab they do not have open is exactly where one would go missing again.
+    const cards = spawnCards("all").sort((a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0));
     if (!cards.length) {
       if (!host.hidden) {
         host.hidden = true;
@@ -653,15 +666,14 @@
       return;
     }
     // Repaint only when the strip would look different. The board polls every few seconds, and a button
-    // rebuilt under the reader's pointer is a press that lands on nothing (the panel's own rebuild rule). The
-    // scope is part of the signature: narrowing to #2 with the same cards still has to say whose strip this is.
-    const sig = `${alertWho}|${cards.map((a) => `${a.id}@${Math.floor(spawnAge(a) / 60_000)}`).join(",")}`;
+    // rebuilt under the reader's pointer is a press that lands on nothing (the panel's own rebuild rule).
+    const sig = cards.map((a) => `${a.id}@${Math.floor(spawnAge(a) / 60_000)}`).join(",");
     if (sig === spawnStripSig) return;
     spawnStripSig = sig;
     const late = cards.filter((a) => spawnAge(a) >= SPAWN_WATCH_MS).length;
     host.hidden = false;
     host.innerHTML = `<div class="spawn-strip-head">
-        <span class="spawn-strip-title">${cards.length} spawn card${cards.length === 1 ? "" : "s"} waiting${alertWho === "all" ? "" : ` for ${esc(sessionById(alertWho)?.name || alertWho)}`}</span>
+        <span class="spawn-strip-title">${cards.length} spawn card${cards.length === 1 ? "" : "s"} waiting</span>
         <span class="spawn-strip-note">${late ? `<b>${late} unclicked for over 2 minutes</b> · ` : ""}the assistant proposed ${cards.length === 1 ? "a worker" : "these workers"} — nothing runs until you press Start</span>
         <span class="spacer"></span>
         <button id="btn-spawn-review" type="button" title="open the assistant on its Alerts tab, where the spawn cards are drawn first">Review in Alerts</button>
@@ -685,15 +697,19 @@
   // Open the float on Alerts with one card (or the top of the list) in view. The pane is inside the float's
   // own scroller, so this is a scrollIntoView, not a page jump.
   function openAlertsAt(id = null) {
-    // A card named from somewhere else in the panel — the HUMAN rotation, the approvals dock, a queued row — has to
-    // be ON the tab it lands on: a scope narrowed to another assistant would hide exactly the row the reader asked
-    // for. Naming a card therefore reopens the whole board first; asking for the tab alone leaves the scope alone.
-    if (id) alertWho = "all";
-    setView({ assistant: "alerts" }, { render: false });
+    // A card named from somewhere else in the panel — the HUMAN rotation, the approvals dock, a spawn row — has to be
+    // ON the pane it lands on, so naming a card opens ITS OWNER's Alerts pane: the owner is a field on the record, and
+    // a pane belonging to another assistant would hide exactly the row the reader asked for. Asking for the tab alone
+    // lands on the assistant the float is already showing.
+    const card = id ? (state.assistant?.alerts || []).find((a) => a.id === id) : null;
+    const owner = card ? alertOwner(card) : selectedSessionId();
+    const target = isAssistant(owner) ? owner : FIRST_ASSISTANT;
+    setView({ assistant: target, subTab: "alerts" }, { render: false });
     toggleAssistant(true);
     if (id) paintSpawnStrip();
     requestAnimationFrame(() => {
-      const sel = id ? `#as-alerts [data-alert="${CSS.escape(id)}"]` : "#as-alerts";
+      const pane = `#${paneIdFor(target, "alerts")}`;
+      const sel = id ? `${pane} [data-alert="${CSS.escape(id)}"]` : pane;
       const el = document.querySelector(sel);
       if (!el) return;
       el.scrollIntoView({ block: "nearest" });
@@ -840,11 +856,13 @@
       modeEl.textContent = mode === "draft" ? "draft-only" : mode === "auto-safe" ? "auto-safe" : "auto";
       modeEl.className = `as-mode mono${mode === "auto" ? " is-auto" : mode === "auto-safe" ? " is-safe" : ""}`;
     }
-    // The tab's count is the alert count LESS the spawn cards: the spawn cards have their own strip and badge,
+    // The sub-tab's count is the alert count LESS the spawn cards: the spawn cards have their own strip and badge,
     // and a number that silently included them is how a card nobody started stayed invisible. Both counts are the
-    // scope the Alerts tab is showing — its chips are the one control, and every number beside them agrees.
-    const { notices: openAlerts, cards: spawnOpen } = alertCounts(a?.alerts || []);
-    const liveWatches = (a?.watches || []).filter((w) => w.state !== "done").length;
+    // SELECTED assistant's — the session on screen, or the one the reader was last on while Role or Watchdog is
+    // showing — and the All toggle inside its pane widens them with it, so every number beside the chips agrees.
+    const sel = selectedSessionId();
+    const { notices: openAlerts, cards: spawnOpen } = alertCounts(a?.alerts || [], sel);
+    const liveWatches = (a?.watches || []).filter((w) => w.state !== "done" && (w.assistantId || FIRST_ASSISTANT) === sel).length;
     if (as$("as-alert-n")) as$("as-alert-n").textContent = String(openAlerts);
     // The Alerts tab carries the same split the header does: how many of the open alerts are spawn cards.
     if (as$("as-spawn-n")) {
@@ -869,18 +887,20 @@
     paintAssistantTabs();
     renderAssistantChat(activeSessionId());
     // A session's own row decides what is showing inside it: the thread (pinned to its foot, where the composer is —
-    // the turns only scroll while the reader scrolls them) or the rules it follows. Everything else is a list.
+    // the turns only scroll while the reader scrolls them), the rules it follows, the work it carries, or one of the
+    // four lists that are its own. Every one of them is painted INTO that session's pane (through paneIdFor), so #2's
+    // Alerts is #2's list and never a panel-wide one. Role and Watchdog are the panel's and stay above this.
     const view = state.assistantView;
     if (isAssistant(view.assistant)) {
       if (view.subTab === "settings") renderAssistantSettings(view.assistant);
       else if (view.subTab === "queue") renderAssistantQueue(view.assistant);
       else if (view.subTab === "worktrees") renderAssistantWorktrees(view.assistant);
+      else if (view.subTab === "alerts") renderAssistantAlerts(false, view.assistant);
+      else if (view.subTab === "watches") renderAssistantWatches(false, view.assistant);
+      else if (view.subTab === "messages") renderAssistantMessages(view.assistant);
+      else if (view.subTab === "pad") renderAssistantPad(false, view.assistant);
       else pinChatToBottom();
-    } else if (view.assistant === "alerts") renderAssistantAlerts();
-    else if (view.assistant === "watches") renderAssistantWatches();
-    else if (view.assistant === "messages") renderAssistantMessages();
-    else if (view.assistant === "pad") renderAssistantPad();
-    else if (view.assistant === "role") renderAssistantRole();
+    } else if (view.assistant === "role") renderAssistantRole();
     else if (view.assistant === "watchdog") renderWatchdog();
   }
 
@@ -977,23 +997,28 @@
 
   // ---- alerts ---------------------------------------------------------------------------------
   //
-  // WHOSE alerts the tab shows. The tab is one panel-wide pane, so it opens on "all" — a reader who never presses a
-  // chip sees every assistant's alerts, exactly as the panel drew them before the split — and a chip narrows the
-  // list, the tab's own count, the header badge and the spawn strip to ONE assistant. The owner is a field on the
-  // record: `fired()` stamps it at fire time, #1's included, and a legacy alert with no stamp is resolved from its
-  // thread by the server (`alertOwnerOf`, lib/assistant.js). This side therefore reads one field and never guesses.
-  let alertWho = "all";
+  // WHOSE alerts a pane shows. Each assistant's Alerts pane opens on ITS OWN list, and "All" is a toggle INSIDE the
+  // pane: one press widens it to the whole board and the next puts its own list back. The widened choice is kept per
+  // SESSION (`alertAll`), so #1 left on All does not widen #2's pane, #2's count or the header badge. The owner is a
+  // field on the record: `fired()` stamps it at fire time, #1's included, and a legacy alert with no stamp is
+  // resolved from its thread by the server (`alertOwnerOf`, lib/assistant.js). This side reads one field and never
+  // guesses.
+  const alertAll = new Set(); // the sessions whose alerts pane is widened to the whole board
   const alertOwner = (a) => String(a?.assistantId || "").trim() || FIRST_ASSISTANT;
-  function inAlertScope(a) {
-    return alertWho === "all" || alertOwner(a) === alertWho;
+  // The assistant a count on the float speaks for: the session on screen, or the one the reader was last on while a
+  // panel-wide pane (Role, Watchdog) is showing.
+  const selectedSessionId = () => frameSessionId();
+  const alertScopeOf = (who = selectedSessionId()) => (alertAll.has(who) ? "all" : who);
+  function inAlertScope(a, who = selectedSessionId()) {
+    return who === "all" || alertAll.has(who) || alertOwner(a) === who;
   }
-  function alertsInScope(list) {
-    return (Array.isArray(list) ? list : []).filter(inAlertScope);
+  function alertsInScope(list, who = selectedSessionId()) {
+    return (Array.isArray(list) ? list : []).filter((a) => inAlertScope(a, who));
   }
-  // The two numbers every Alerts surface shows — the tab's count and its spawn badge, and the header button's own
+  // The two numbers every Alerts surface shows — the sub-tab's count and its spawn badge, and the header button's own
   // badge — read from ONE scope here, so a number beside the chips cannot disagree with the list under them.
-  function alertCounts(list = state.assistant?.alerts) {
-    const scoped = alertsInScope(list);
+  function alertCounts(list = state.assistant?.alerts, who = selectedSessionId()) {
+    const scoped = alertsInScope(list, who);
     return {
       notices: scoped.filter((a) => !a.spawn).length,
       cards: scoped.filter((a) => a.spawn && typeof a.spawn.prompt === "string").length,
@@ -1167,8 +1192,8 @@
     return Boolean(el && el.closest?.(sel));
   }
 
-  function renderAssistantAlerts(force = false) {
-    const host = as$("as-alerts");
+  function renderAssistantAlerts(force = false, id = selectedSessionId()) {
+    const host = hostFor(id, "alerts");
     if (!host) return;
     if (!state.assistant) {
       host.innerHTML = `<div class="as-empty">connecting…</div>`;
@@ -1176,39 +1201,31 @@
     }
     // A poll must not take the draft the reader is writing: the list is only repainted when nothing in it
     // holds the caret, or when the reader's own action asked for it.
-    if (!force && typingInside("#as-alerts")) return;
-    // Whose list, and the chips that say so. "All assistants" is first and on by default, so opening the tab hides
-    // nothing; a named chip is that assistant's list, and every number below it (this pane, the tab count, the
-    // header badge, the spawn strip) is read from the same scope. A record from an assistant this panel no longer
-    // holds is not a scope: fall back to All rather than draw an empty tab nobody can leave.
-    const ids = assistantIds();
-    if (alertWho !== "all" && !ids.includes(alertWho)) alertWho = "all";
+    if (!force && typingInside(`#${paneIdFor(id, "alerts")}`)) return;
+    // Whose list, and the toggle that says so. The pane belongs to ONE assistant, so it opens on that assistant's own
+    // alerts and "All assistants" is a toggle INSIDE it: the whole board in one press, its own list again in the next.
+    // The choice is kept per session (`alertAll`), so widening #1's pane cannot widen #2's, and every number beside
+    // the list (the sub-tab's count, the header badge, the header's spawn badge) is read at the same scope.
     const everything = state.assistant.alerts || [];
-    const nameOfId = (id) => sessionById(id)?.name || (id === FIRST_ASSISTANT ? "Assistant #1" : id);
+    const every = alertAll.has(id);
+    const scope = every ? "all" : id;
+    const nameOfId = (x) => sessionById(x)?.name || (x === FIRST_ASSISTANT ? "Assistant #1" : x);
     const counts = { all: everything.length };
     for (const a of everything) counts[alertOwner(a)] = (counts[alertOwner(a)] || 0) + 1;
-    const whoChips = ["all", ...ids]
-      .map((id) => {
-        const label = id === "all" ? "All assistants" : nameOfId(id);
-        const title =
-          id === "all"
-            ? "every assistant's alerts — nothing is hidden in this view"
-            : `only ${label}'s alerts — the list, the count beside it and the spawn strip`;
-        return `<button type="button" data-as-alertwho="${esc(id)}" aria-pressed="${alertWho === id ? "true" : "false"}" class="${alertWho === id ? "is-on" : ""}" title="${esc(title)}">${esc(label)} <span class="as-n">${counts[id] ?? 0}</span></button>`;
-      })
-      .join("");
-    const whoBar = `<div class="as-alert-who" role="group" aria-label="whose alerts">${whoChips}<span class="as-hint">${
-      alertWho === "all"
-        ? "every assistant — nothing hidden"
-        : `narrowed to ${esc(nameOfId(alertWho))} — ${alertsInScope(everything).length} of ${everything.length} <button type="button" data-as-alertwho="all">Show all</button>`
+    const chip = (forScope, label, title) =>
+      `<button type="button" data-as-alertwho="${esc(forScope)}" data-as-alertfor="${esc(id)}" aria-pressed="${scope === forScope ? "true" : "false"}" class="${scope === forScope ? "is-on" : ""}" title="${esc(title)}">${esc(label)} <span class="as-n">${counts[forScope] ?? 0}</span></button>`;
+    const whoBar = `<div class="as-alert-who" role="group" aria-label="whose alerts">${chip(id, nameOfId(id), `only ${nameOfId(id)}'s alerts — the list, the count beside it and its spawn cards`)}${chip("all", "All assistants", "every assistant's alerts — nothing is hidden in this view")}<span class="as-hint">${
+      every ? "every assistant — nothing hidden" : `this assistant's own alerts — ${alertsInScope(everything, id).length} of ${everything.length}`
     }</span></div>`;
-    const mine = alertsInScope(everything);
+    const mine = alertsInScope(everything, id);
     if (!mine.length) {
-      const w = (state.assistant.watches || []).filter((x) => x.state !== "done").length;
-      const empty =
-        alertWho === "all"
-          ? `Nothing needs you. ${w ? `Watching ${w} thing${w === 1 ? "" : "s"}.` : "No watches either."} It is still reading the board every ${state.assistant.settings?.seconds ?? 5}s.`
-          : `Nothing needs ${esc(nameOfId(alertWho))}. It is still reading the board every ${state.assistant.settings?.seconds ?? 5}s, and the whole board is one press away. <button type="button" data-as-alertwho="all">Show all assistants</button>`;
+      const w = (state.assistant.watches || []).filter((x) => x.state !== "done" && (x.assistantId || FIRST_ASSISTANT) === id).length;
+      // With one assistant in the panel there is nothing to widen to, so the pane keeps the plain words it always had
+      // rather than offering a board that is already on screen.
+      const alone = assistantIds().length <= 1;
+      const empty = every || alone
+        ? `Nothing needs you. ${w ? `Watching ${w} thing${w === 1 ? "" : "s"}.` : "No watches either."} It is still reading the board every ${state.assistant.settings?.seconds ?? 5}s.`
+        : `Nothing needs ${esc(nameOfId(id))}. It is still reading the board every ${state.assistant.settings?.seconds ?? 5}s, and the whole board is one press away. <button type="button" data-as-alertwho="all" data-as-alertfor="${esc(id)}">Show all assistants</button>`;
       host.innerHTML = `${whoBar}<div class="as-empty">${empty}</div>`;
       return;
     }
@@ -1269,17 +1286,18 @@
         </div>`;
   }
 
-  // The Watches tab is ONE assistant's list: the watches it set itself (its turn's WATCH line, its spawned workers)
-  // and the ones the reader added from its tab. A watch made by #2 is on #2's tab, not here — the owner is stamped on
-  // the record, so switching session tab switches the list. The add form makes the watch for the tab it is on.
-  function renderAssistantWatches(force = false) {
-    const host = as$("as-watches");
+  // Each assistant's Watches pane is ONE assistant's list: the watches it set itself (its turn's WATCH line, its
+  // spawned workers) and the ones the reader added from its pane. A watch made by #2 is on #2's pane, not here — the
+  // owner is stamped on the record, so switching session switches the list. The add form makes the watch for the
+  // assistant whose pane it is in.
+  function renderAssistantWatches(force = false, id = selectedSessionId()) {
+    const host = hostFor(id, "watches");
     if (!host || !state.assistant) return;
-    if (!force && typingInside("#as-watches")) return;
+    if (!force && typingInside(`#${paneIdFor(id, "watches")}`)) return;
     const watches = state.assistant.watches || [];
-    // Whose list this is: a list tab belongs to no session, so it falls back to the session the reader was last on
-    // — the same fallback the Role pane and the frame use.
-    const who = frameSessionId();
+    // Whose list this is: the pane's own assistant. There is no fallback left to make — a watch list is never the
+    // panel's, it is the session's whose tab holds it.
+    const who = id;
     const owner = sessionById(who);
     const name = owner?.name || "Assistant #1";
     const mine = watches.filter((w) => (w.assistantId || FIRST_ASSISTANT) === who);
@@ -1314,8 +1332,9 @@
   // holds a form the reader may be typing into, and rebuilding it on every tick would take the caret, the scroll
   // and the selection with it. The bar is the fraction of the deadline still to run, so it empties as time goes.
   function paintWatchClocks() {
-    if (!state.assistantOpen || state.assistantView.assistant !== "watches") return;
-    const host = as$("as-watches");
+    const view = state.assistantView;
+    if (!state.assistantOpen || view?.subTab !== "watches" || !isAssistant(view.assistant)) return;
+    const host = hostFor(view.assistant, "watches");
     if (!host) return;
     const now = Date.now();
     for (const el of host.querySelectorAll("[data-watch-timer]")) {
@@ -1371,7 +1390,7 @@
         padInflight.delete(id);
         // One repaint of the pane on screen, WITHOUT force: a forced paint asks for a read, and a read that repaints
         // itself by force is a spinner with no end.
-        if (state.assistantView?.assistant === "pad") renderAssistantPad();
+        if (state.assistantView?.subTab === "pad" && activeSessionId() === id) renderAssistantPad(false, id);
       });
     padInflight.set(id, read);
     return read;
@@ -1390,24 +1409,29 @@
     return null;
   }
 
-  function renderAssistantPad(force = false) {
-    const host = as$("as-pad");
+  // A pad's controls are per assistant: two panes exist at once, so a second `#as-notes` would let the save read the
+  // hidden #1 box. #1 keeps the ids every harness already drives; an extra assistant's are suffixed with its number.
+  const padId = (name, id) => (id === FIRST_ASSISTANT ? name : `${name}-${String(id).replace(/^assistant-/, "")}`);
+
+  function renderAssistantPad(force = false, id = selectedSessionId()) {
+    const host = hostFor(id, "pad");
     if (!host || !state.assistant) return;
-    if (!force && typingInside("#as-pad")) return;
+    if (!force && typingInside(`#${paneIdFor(id, "pad")}`)) return;
     const a = state.assistant;
     const rules = a.rules || [];
-    // Whose pad this is. A list tab belongs to no session, so it falls back to the session the reader was last on.
-    const who = frameSessionId();
+    // Whose pad this is: the pane's own assistant. #1's notes are the string the polled state carries; every other
+    // assistant's are its own notes.md, read when its pane is open.
+    const who = id;
     const owner = sessionById(who);
     const pad = padFor(who);
     const notesGroup = pad
       ? `<div class="as-group">
         <h4>Notes — read on every turn</h4>
-        <textarea class="as-note-box" id="as-notes" rows="6" placeholder="What it should remember: how this project deploys, which agents are doing what, an answer you gave today…">${esc(pad.notes || "")}</textarea>
+        <textarea class="as-note-box" id="${padId("as-notes", who)}" rows="6" placeholder="What it should remember: how this project deploys, which agents are doing what, an answer you gave today…">${esc(pad.notes || "")}</textarea>
         <div class="as-actions">
-          <button id="btn-as-notes" type="button" class="primary">Save notes</button>
+          <button id="${padId("btn-as-notes", who)}" data-as-padsave="${esc(who)}" type="button" class="primary">Save notes</button>
           <span class="as-hint" title="${esc(pad.path || "")}">${pad.file ? "kept in this assistant's own notes.md" : "kept on the server in assistant.json"}</span>
-          <span class="as-err" id="as-pad-err">${esc(pad.error || "")}</span>
+          <span class="as-err" id="${padId("as-pad-err", who)}">${esc(pad.error || "")}</span>
         </div>
       </div>`
       : `<div class="as-group">
@@ -1421,8 +1445,8 @@
         ${rules.map((r) => `<div class="as-rule-row${r.by === "assistant" ? " is-by-assistant" : ""}"><span class="as-rule-name">${esc(r.text)}${r.by === "assistant" ? `<i class="as-rule-by" title="the assistant wrote this one; delete it if it is wrong">assistant</i>` : ""}</span><button type="button" data-as-unrule="${esc(r.id)}" title="remove this rule">✕</button></div>`).join("") || `<div class="as-help">None yet. A rule is an answer you have given once and do not want to give twice.</div>`}
         <div class="as-form">
           <div class="as-line">
-            <input id="as-rule-text" class="as-grow" placeholder="e.g. Deploy to QA, never PROD, from a worktree agent" />
-            <button id="btn-as-rule" type="button">Add rule</button>
+            <input id="${padId("as-rule-text", who)}" class="as-grow" placeholder="e.g. Deploy to QA, never PROD, from a worktree agent" />
+            <button id="${padId("btn-as-rule", who)}" data-as-padrule="${esc(who)}" type="button">Add rule</button>
           </div>
         </div>
       </div>
@@ -1453,11 +1477,12 @@
   let msgAt = 0;
   let msgTried = false;
   let msgDir = "all"; // the in-tab chip: all | out | in
-  // WHOSE messages to show. "all" is the default and hides nothing: every entry the window holds, from every
-  // assistant, is on the tab until the reader narrows it. A named id is that assistant's split — the session chip
-  // beside it. This is a CLIENT filter over the one answer the server sends, so the counts and the entry set cannot
-  // disagree about what "all" means.
-  let msgWho = "all"; // all | assistant-1 | assistant-2 | …
+  // WHOSE messages a pane shows. Each assistant's Messages pane opens on ITS OWN split, and "All" is a toggle INSIDE
+  // that pane — the whole board in one press, its own split again in the next. `msgAll` is keyed by session, so
+  // widening #1's pane never widens #2's. This is a CLIENT filter over the one answer the server sends, so the counts
+  // and the entry set cannot disagree about what "All" means.
+  const msgAll = new Set(); // the sessions whose messages pane is widened to the whole board
+  const msgScopeOf = (id) => (msgAll.has(id) ? "all" : id);
   const msgOpen = new Set(); // entries the reader expanded — a repaint must not fold them back up
 
   async function loadMessages(force = false) {
@@ -1595,8 +1620,8 @@
     </div>`;
   }
 
-  function renderAssistantMessages() {
-    const host = as$("as-messages");
+  function renderAssistantMessages(id = selectedSessionId()) {
+    const host = hostFor(id, "messages");
     if (!host) return;
     if (!msgTried) {
       void loadMessages();
@@ -1613,11 +1638,11 @@
     // older panel (or a direct caller of buildMessages) reads as Assistant #1's, which is what absence meant.
     const all = (b.groups || []).flatMap((g) => g.entries.map((e) => ({ ...e, assistantId: e.assistantId || FIRST_ASSISTANT })));
     const ids = assistantIds();
-    if (msgWho !== "all" && !ids.includes(msgWho)) msgWho = "all";
-    const nameOfId = (id) => sessionById(id)?.name || (id === FIRST_ASSISTANT ? "Assistant #1" : id);
-    // The one assistant the tab is narrowed to, or the whole board for "all". Both the rows and the counts are read
-    // off this list, so a chip's number is the number of rows pressing it will show.
-    const inWho = msgWho === "all" ? all : all.filter((e) => e.assistantId === msgWho);
+    // The pane's own split, or the whole board when this assistant's All toggle is on. Both the rows and the counts
+    // are read off this list, so a chip's number is the number of rows pressing it will show.
+    const who = msgScopeOf(id);
+    const nameOfId = (x) => sessionById(x)?.name || (x === FIRST_ASSISTANT ? "Assistant #1" : x);
+    const inWho = who === "all" ? all : all.filter((e) => e.assistantId === who);
     const dirs = ["all", "out", "in"];
     const dirLabel = { all: "All", out: "Sent", in: "Received" };
     const dirCount = {
@@ -1630,30 +1655,26 @@
         ...g,
         entries: g.entries
           .map((e) => ({ ...e, assistantId: e.assistantId || FIRST_ASSISTANT }))
-          .filter((e) => (msgDir === "all" || e.dir === msgDir) && (msgWho === "all" || e.assistantId === msgWho)),
+          .filter((e) => (msgDir === "all" || e.dir === msgDir) && (who === "all" || e.assistantId === who)),
       }))
       .filter((g) => g.entries.length);
     const shown = groups.reduce((n, g) => n + g.entries.length, 0);
     const chips = dirs
       .map((d) => `<button type="button" data-as-msgdir="${d}" aria-pressed="${msgDir === d ? "true" : "false"}" class="${msgDir === d ? "is-on" : ""}" title="${d === "all" ? "both directions, thread by thread" : d === "out" ? "what the assistant (or the panel) sent them" : "what they sent back"}">${dirLabel[d]} <span class="as-n">${dirCount[d]}</span></button>`)
       .join("");
-    // The assistant chips: "All" is first and on by default, so opening the tab hides nothing. Each named chip is
-    // that assistant's own split — the run's stamp, the thread's owner, then #1 — over the same one payload.
+    // The pane's two scopes: this assistant's own split (what the pane opens on) and All. `data-as-msgfor` names which
+    // session's pane the press belongs to, so one pane widening never moves another's.
     const whoCount = { all: all.length };
-    for (const id of ids) whoCount[id] = 0;
+    for (const x of ids) whoCount[x] = 0;
     for (const e of all) whoCount[e.assistantId] = (whoCount[e.assistantId] || 0) + 1;
-    const whoChips = ["all", ...ids]
-      .map((id) => {
-        const label = id === "all" ? "All assistants" : nameOfId(id);
-        const title = id === "all" ? "every assistant's messages — nothing is hidden in this view" : `only ${label}'s messages`;
-        return `<button type="button" data-as-msgwho="${esc(id)}" aria-pressed="${msgWho === id ? "true" : "false"}" class="${msgWho === id ? "is-on" : ""}" title="${esc(title)}">${esc(label)} <span class="as-n">${whoCount[id] ?? 0}</span></button>`;
-      })
-      .join("");
+    const whoChip = (forScope, label, title) =>
+      `<button type="button" data-as-msgwho="${esc(forScope)}" data-as-msgfor="${esc(id)}" aria-pressed="${who === forScope ? "true" : "false"}" class="${who === forScope ? "is-on" : ""}" title="${esc(title)}">${esc(label)} <span class="as-n">${whoCount[forScope] ?? 0}</span></button>`;
+    const whoChips = `${whoChip(id, nameOfId(id), `only ${nameOfId(id)}'s messages`)}${whoChip("all", "All assistants", "every assistant's messages — nothing is hidden in this view")}`;
     const windowLine = `<div class="as-msg-bar">
       <span class="as-msg-window" title="the window is fixed at seven days, computed from each message's own timestamp — nothing older is shown here, whatever the store still holds">the last ${b.windowDays} days</span>
       <span class="as-hint">since ${esc(new Date(b.since).toLocaleString())}</span>
       <span class="as-hint">${b.shown} entr${b.shown === 1 ? "y" : "ies"} in ${b.counts?.threads ?? 0} thread${(b.counts?.threads ?? 0) === 1 ? "" : "s"} · ${b.counts?.out ?? 0} sent · ${b.counts?.in ?? 0} received</span>
-      <span class="as-hint">${msgWho === "all" ? "every assistant, nothing hidden" : `narrowed to ${esc(nameOfId(msgWho))} — ${shown} of ${b.shown}`}</span>
+      <span class="as-hint">${who === "all" ? "every assistant, nothing hidden" : `narrowed to ${esc(nameOfId(who))} — ${shown} of ${b.shown}`}</span>
       <span class="as-hint" title="what the view was built from: the runs this panel still holds, and the assistant's own journal. An entry the store no longer holds is marked 'from the journal' where it appears.">from ${b.counts?.jobs ?? 0} runs and ${b.counts?.journal ?? 0} journal lines${b.counts?.fromJournal ? ` · ${b.counts.fromJournal} journal-only` : ""}</span>
     </div>`;
     const capLine = b.capped
@@ -1661,8 +1682,11 @@
       : "";
     let list;
     if (!shown) {
-      if (msgWho !== "all") {
-        list = `<div class="as-empty">Nothing from ${esc(nameOfId(msgWho))} in the last ${b.windowDays} days${msgDir === "all" ? "" : ` (${msgDir === "out" ? "sent" : "received"})`}. The whole board is still on this tab — nothing is hidden behind this view. <button type="button" data-as-msgwho="all">Show all assistants</button></div>`;
+      // With one assistant in the panel, its split IS the board: the plain words, with no "one press away" the reader
+      // would press and get the same list back.
+      const alone = ids.length <= 1;
+      if (who !== "all" && !alone) {
+        list = `<div class="as-empty">Nothing from ${esc(nameOfId(who))} in the last ${b.windowDays} days${msgDir === "all" ? "" : ` (${msgDir === "out" ? "sent" : "received"})`}. The whole board is still on this pane — nothing is hidden behind this view. <button type="button" data-as-msgwho="all" data-as-msgfor="${esc(id)}">Show all assistants</button></div>`;
       } else if (msgDir !== "all") {
         list = `<div class="as-empty">No ${msgDir === "out" ? "sent" : "received"} messages in the last ${b.windowDays} days. ${b.shown} message${b.shown === 1 ? "" : "s"} exist in this window in the other direction. <button type="button" data-as-msgdir="all">Show all</button></div>`;
       } else {
@@ -3744,23 +3768,29 @@
     // Tabs are buttons too and are handled above, in their own rows; ignore a second pass here.
     if (t.dataset.asTab || t.dataset.asSubtab) return;
 
-    // The Alerts tab's scope: whose alerts. The pane, the tab's count, the header badge and the spawn strip all read
-    // the one value, so a press moves all four and no round trip is needed — the payload already says whose alert is
-    // whose, and "all" puts every one of them back.
+    // The Alerts pane's scope: this assistant's own list, or the whole board. The choice belongs to the PANE the chip
+    // sits in (`data-as-alertfor`), so widening #2's list to All leaves #1's exactly as it was; the sub-tab's count and
+    // the header badges follow the SELECTED assistant, which renderAssistant() repaints. The board's spawn strip is
+    // every assistant's and never narrows, so it is not repainted here at all.
     if (t.dataset.asAlertwho) {
-      alertWho = t.dataset.asAlertwho;
-      renderAssistant();
-      renderAssistantAlerts(true);
-      paintAssistantBadge();
-      paintSpawnStrip();
+      const forId = isAssistant(t.dataset.asAlertfor) ? t.dataset.asAlertfor : selectedSessionId();
+      if (t.dataset.asAlertwho === "all") alertAll.add(forId);
+      else alertAll.delete(forId);
+      if (forId === selectedSessionId()) {
+        renderAssistant();
+        paintAssistantBadge();
+      }
+      renderAssistantAlerts(true, forId);
       return;
     }
 
     // The message board's own controls: whose messages, which direction, and an entry's expander. None is a
     // round trip — the board is already on the page — so all three are a repaint of this pane alone.
     if (t.dataset.asMsgwho) {
-      msgWho = t.dataset.asMsgwho;
-      renderAssistantMessages();
+      const forId = isAssistant(t.dataset.asMsgfor) ? t.dataset.asMsgfor : selectedSessionId();
+      if (t.dataset.asMsgwho === "all") msgAll.add(forId);
+      else msgAll.delete(forId);
+      renderAssistantMessages(forId);
       return;
     }
     if (t.dataset.asMsgdir) {
@@ -3893,7 +3923,7 @@
         if (forId) renderAssistantSettings(forId, true);
         else renderAssistantPad(true);
       } catch (err) {
-        setErr(forId ? `as-rules-err-${String(forId).replace(/^assistant-/, "")}` : "as-pad-err", err.message);
+        setErr(forId ? `as-rules-err-${String(forId).replace(/^assistant-/, "")}` : padId("as-pad-err", selectedSessionId()), err.message);
       } finally {
         t.disabled = false;
       }
@@ -3959,24 +3989,26 @@
       return;
     }
 
-    if (t.id === "btn-as-rule") {
-      const text = String(as$("as-rule-text")?.value || "").trim();
+    if (t.id === "btn-as-rule" || t.dataset.asPadrule) {
+      // The form belongs to the pane it sits in: `data-as-padrule` names that assistant, so #2's form reads #2's box.
+      const who = isAssistant(t.dataset.asPadrule) ? t.dataset.asPadrule : selectedSessionId();
+      const text = String(as$(padId("as-rule-text", who))?.value || "").trim();
       if (!text) return;
       t.disabled = true;
       try {
         await asPost("/api/assistant/rule", { text });
-        renderAssistantPad(true);
+        renderAssistantPad(true, who);
       } catch (err) {
-        setErr("as-pad-err", err.message);
+        setErr(padId("as-pad-err", who), err.message);
       } finally {
         t.disabled = false;
       }
       return;
     }
 
-    if (t.id === "btn-as-notes") {
-      const text = String(as$("as-notes")?.value || "");
-      const who = frameSessionId();
+    if (t.id === "btn-as-notes" || t.dataset.asPadsave) {
+      const who = isAssistant(t.dataset.asPadsave) ? t.dataset.asPadsave : selectedSessionId();
+      const text = String(as$(padId("as-notes", who))?.value || "");
       t.disabled = true;
       try {
         // The save goes to the assistant the pad is showing. #1 keeps its store's string; an extra assistant writes
@@ -3984,9 +4016,9 @@
         const d = await asPost("/api/assistant/notes", { text, assistantId: who });
         // The answer carries the whole assistant state beside the pad; the cache keeps only the pad.
         if (who !== FIRST_ASSISTANT) padNotes.set(who, { ...d, assistant: undefined, at: Date.now() });
-        renderAssistantPad(true);
+        renderAssistantPad(true, who);
       } catch (err) {
-        setErr("as-pad-err", err.message);
+        setErr(padId("as-pad-err", who), err.message);
       } finally {
         t.disabled = false;
       }
@@ -4406,8 +4438,9 @@
   // copy out of, and yanking a selection out from under them every fifteen seconds is worse than a stale
   // relative time.
   setInterval(() => {
-    if (!state.assistantOpen || state.assistantView.assistant !== "messages" || document.hidden) return;
-    const host = as$("as-messages");
+    const view = state.assistantView;
+    if (!state.assistantOpen || view?.subTab !== "messages" || !isAssistant(view.assistant) || document.hidden) return;
+    const host = hostFor(view.assistant, "messages");
     const sel = window.getSelection?.();
     if (host && sel && !sel.isCollapsed && sel.anchorNode && host.contains(sel.anchorNode)) return;
     void loadMessages(true);

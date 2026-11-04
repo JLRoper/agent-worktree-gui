@@ -450,7 +450,8 @@ try {
 }
 
 // ---- the browser half ----------------------------------------------------------------------------
-const tabSel = '#as-tabs [data-as-tab="messages"]';
+const tabSel = '#as-subtabs [data-as-subtab="messages"]';
+const alertsSel = '#as-subtabs [data-as-subtab="alerts"]';
 const paneSel = "#as-messages";
 
 async function openFloat(page, base) {
@@ -489,20 +490,22 @@ async function browserPhase(pw) {
 
   if (panelA && panelA.up) {
     await openFloat(page, panelA.base);
-    // (a) the strip, in the same idiom as its neighbours
-    const tabs = await page.$$eval("#as-tabs button", (els) =>
-      els.map((el) => ({ tab: el.dataset.asTab, text: el.textContent.trim(), title: el.getAttribute("title") || "" })),
+    // (a) the pane's tab, in the same idiom as its neighbours
+    const tabs = await page.$$eval("#as-tabs button", (els) => els.map((el) => ({ tab: el.dataset.asTab, text: el.textContent.trim() })));
+    const subs = await page.$$eval("#as-subtabs button", (els) =>
+      els.map((el) => ({ sub: el.dataset.asSubtab, text: el.textContent.trim(), title: el.getAttribute("title") || "" })),
     );
-    const mine = tabs.find((t) => t.tab === "messages");
-    // Six, not seven: the float's own row now starts with the assistant session it belongs to ("Assistant #1",
-    // where "Chat" was) and Settings is a sub-tab of that session, on the row under this one.
-    ok("(a) the tab is in the float's strip, in the same idiom as the others", Boolean(mine) && tabs.length === 6, JSON.stringify(tabs.map((t) => t.tab)));
+    const mine = subs.find((t) => t.sub === "messages");
+    // The Messages pane is one assistant's now: its tab is in the session's own row, not the float's. The float's
+    // row carries the sessions and the panel's two panes, and Messages is not among them.
+    ok("(a) the tab is in the session's row, in the same idiom as the others", Boolean(mine) && subs.length === 8, JSON.stringify(subs.map((t) => t.sub)));
+    ok("(a) …and Messages is no longer a tab of the float's own row", !tabs.some((t) => t.tab === "messages"), JSON.stringify(tabs.map((t) => t.tab)));
     ok("(a) …labelled Messages, with a title that says what it is", mine && mine.text === "Messages" && /message board/i.test(mine.title), mine && mine.title);
-    const classes = await page.$$eval("#as-tabs button", (els) => els.map((el) => el.className));
+    const classes = await page.$$eval("#as-subtabs button", (els) => els.map((el) => el.className));
     eq("(a) …and no class of its own (only the open tab is marked)", [...new Set(classes)].sort(), ["", "is-on"]);
 
-    // (a) switching to it and away must not disturb the tab that was open. The float opens on Alerts here.
-    await page.click('#as-tabs [data-as-tab="alerts"]');
+    // (a) switching to it and away must not disturb the pane that was open. The float opens on #1's Alerts here.
+    await page.click(alertsSel);
     await page.waitForSelector('#as-alerts:not(.hidden)');
     const alertsBefore = await page.$eval("#as-alerts", (el) => el.innerHTML);
     const alertCount = await page.$$eval("#as-alerts .as-alert", (els) => els.length);
@@ -625,7 +628,7 @@ async function browserPhase(pw) {
     ok("(8) …and it carries the journal's own words", /parked on a question/.test(goneText), goneText);
 
     // (a) …and the round trip away and back leaves the other tab exactly as it was
-    await page.click('#as-tabs [data-as-tab="alerts"]');
+    await page.click(alertsSel);
     await page.waitForSelector('#as-alerts:not(.hidden)');
     const alertsAfter = await page.$eval("#as-alerts", (el) => el.innerHTML);
     const alertCountAfter = await page.$$eval("#as-alerts .as-alert", (els) => els.length);

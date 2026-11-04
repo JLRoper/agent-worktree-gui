@@ -276,24 +276,29 @@ const esc = (v) =>
     .replace(/"/g, "&quot;");
 const sessionById = (id) => ({ id, name: id === "assistant-1" ? "Assistant #1" : "Assistant #2" });
 
-// The watches region: two rows, one of each assistant's, and the tab on #1 or #2.
+// The watches region: two panes, one per assistant, each drawn for its OWN session.
 function watchesPane({ who, watches }) {
-  const host = { innerHTML: "", querySelectorAll: () => [] };
-  const state = { assistant: { watches }, assistantOpen: true, assistantView: { assistant: "watches" } };
+  const paneIdFor = (id, sub) => (id === "assistant-1" ? `as-${sub}` : `as-${sub}-${id.replace(/^assistant-/, "")}`);
+  const hosts = new Map([paneIdFor("assistant-1", "watches"), paneIdFor("assistant-2", "watches")].map((id) => [id, { innerHTML: "", querySelectorAll: () => [] }]));
+  const host = hosts.get(paneIdFor(who, "watches"));
+  const state = { assistant: { watches }, assistantOpen: true, assistantView: { assistant: who, subTab: "watches" } };
   const api = new Function(
     "state",
     "as$",
     "esc",
     "typingInside",
-    "frameSessionId",
+    "hostFor",
+    "paneIdFor",
+    "selectedSessionId",
+    "isAssistant",
     "sessionById",
     "assistantThreadName",
     "conversations",
     "FIRST_ASSISTANT",
     `${sliceRegion(page, "watches")}
 return { renderAssistantWatches };`,
-  )(state, (id) => (id === "as-watches" ? host : null), esc, () => false, () => who, sessionById, (t) => t, () => [], "assistant-1");
-  api.renderAssistantWatches(true);
+  )(state, (id) => hosts.get(id) || null, esc, () => false, (id, sub) => hosts.get(paneIdFor(id, sub)) || null, paneIdFor, () => who, (x) => String(x || "").startsWith("assistant-"), sessionById, (t) => t, () => [], "assistant-1");
+  api.renderAssistantWatches(true, who);
   return host.innerHTML;
 }
 
@@ -321,10 +326,13 @@ test("an assistant with nothing of its own says so", () => {
   assert.doesNotMatch(html, /data-as-unwatch="w2"/, "and #2's watch is not drawn in #1's list");
 });
 
-// The pad region: #1 reads the state's string, an extra assistant reads its own file through the route.
+// The pad region: #1 reads the state's string, an extra assistant reads its own file through the route. Each pane
+// has its own controls, so two pads can be on the page without answering for each other.
 function padPane({ who, notes, pad = null }) {
-  const host = { innerHTML: "" };
-  const state = { assistant: { notes, rules: [], journal: [] }, assistantView: { assistant: "pad" } };
+  const paneIdFor = (id, sub) => (id === "assistant-1" ? `as-${sub}` : `as-${sub}-${id.replace(/^assistant-/, "")}`);
+  const hosts = new Map([paneIdFor("assistant-1", "pad"), paneIdFor("assistant-2", "pad")].map((id) => [id, { innerHTML: "" }]));
+  const host = hosts.get(paneIdFor(who, "pad"));
+  const state = { assistant: { notes, rules: [], journal: [] }, assistantView: { assistant: who, subTab: "pad" } };
   const calls = [];
   const apiFetch = (url) => {
     calls.push(url);
@@ -335,14 +343,17 @@ function padPane({ who, notes, pad = null }) {
     "as$",
     "esc",
     "typingInside",
-    "frameSessionId",
+    "hostFor",
+    "paneIdFor",
+    "selectedSessionId",
+    "activeSessionId",
     "sessionById",
     "FIRST_ASSISTANT",
     "apiFetch",
     `${sliceRegion(page, "scratchpad")}
 return { renderAssistantPad, padInflight };`,
-  )(state, (id) => (id === "as-pad" ? host : null), esc, () => false, () => who, sessionById, "assistant-1", apiFetch);
-  api.renderAssistantPad(true);
+  )(state, (id) => hosts.get(id) || null, esc, () => false, (id, sub) => hosts.get(paneIdFor(id, sub)) || null, paneIdFor, () => who, () => who, sessionById, "assistant-1", apiFetch);
+  api.renderAssistantPad(true, who);
   return { host, calls, api };
 }
 

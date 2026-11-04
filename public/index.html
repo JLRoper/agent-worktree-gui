@@ -706,28 +706,31 @@
         <span class="chips" id="as-chips"></span>
         <button id="btn-as-close" type="button" title="close (Esc) — it keeps watching while closed">✕</button>
       </div>
-      <!-- The float's own row: the assistant sessions first — each one a real agent thread of its own — then the
-           lists that are the assistant's: what it noticed, what it watches, what it said to the agents, its
-           scratchpad, and the ROLE it runs. Only Assistant #1 is in this markup: the rest come from the assistant
-           records the server sends, and the painter adds a button and a pane for each — so a second assistant is a
-           record, not an edit here. -->
+      <!-- The float's own row: the assistant sessions — each one a real agent thread of its own — and the two panes
+           that belong to the PANEL rather than to one session: the ROLE library and the sentry's Watchdog. Everything
+           that is about ONE assistant — its card, its settings, its queue, its trees, its alerts, watches, messages
+           and pad — is a sub-tab of that assistant's own tab. Only Assistant #1 is in this markup: the rest come from
+           the assistant records the server sends, and the painter adds a button and a pane for each — so a second
+           assistant is a record, not an edit here. -->
       <div class="as-tabs" id="as-tabs">
-        <button type="button" data-as-tab="assistant-1" class="is-on" title="Assistant #1 — the assistant itself: a normal agent card with its own thread. Its Chat and Settings are the quiet row under this one">Assistant #1</button>
-        <button type="button" data-as-tab="alerts" title="what it noticed and what is waiting on you — spawn cards waiting for a click sit at the top">Alerts <span class="as-n" id="as-alert-n">0</span><span class="as-n is-spawn" id="as-spawn-n" hidden>0</span></button>
-        <button type="button" data-as-tab="watches" title="what it is keeping an eye on, and until when">Watches <span class="as-n" id="as-watch-n">0</span></button>
-        <button type="button" data-as-tab="messages" title="the message board between it and the agents — what it sent them and what they sent back, thread by thread, over the last 7 days">Messages</button>
-        <button type="button" data-as-tab="pad" title="the server-side scratchpad: notes, standing rules and the journal">Scratchpad</button>
-        <button type="button" data-as-tab="role" title="the role this assistant runs — the job title, the charter it carries (its own copy, injected in full on every turn), and a new assistant made from the same role">Role</button>
+        <button type="button" data-as-tab="assistant-1" class="is-on" title="Assistant #1 — the assistant itself: a normal agent card with its own thread. Everything about it — Chat, Settings, its queue and trees, its alerts, watches, messages and pad — is the quiet row under this one">Assistant #1</button>
+        <button type="button" data-as-tab="role" title="the role this assistant runs — the job title, the charter it carries (its own copy, injected in full on every turn), and a new assistant made from the same role. A ROLE is a library shared by every assistant, so this pane is the panel's, not one session's">Role</button>
         <button type="button" data-as-tab="watchdog" title="the panel's watchdog — the sentry's own switches (watching, the command audit's journal), the pass clock, every rule's escalation level and the bar it fires on. ONE value for the whole panel: an assistant's own settings are in that assistant's Settings tab">Watchdog</button>
       </div>
-      <!-- The session's own row, under the assistant's tabs: what the assistant is showing (Chat) and how it behaves
-           (Settings). It belongs to a session, so it is hidden while one of the lists is on, and it holds the
-           reader's place — Chat comes back to the foot of the thread, Settings to the rules they were reading. -->
+      <!-- The session's own row, under the assistant's tabs: everything that belongs to the ONE assistant the top row
+           has selected. Chat is the card you talk to, Settings how it behaves, Queue and Worktrees the work it is
+           carrying, and Alerts, Watches, Messages and Scratchpad what it has seen, is keeping an eye on, said to the
+           agents and written down. The counts on Alerts and Watches are that selected assistant's; each pane is
+           filled for it through paneIdFor, so #2's Alerts is #2's list and never a shared one. -->
       <div class="as-subtabs" id="as-subtabs">
         <button type="button" data-as-subtab="chat" class="is-on" title="the assistant's own thread — the card, its console and the box you type in">Chat</button>
         <button type="button" data-as-subtab="settings" title="this assistant's own settings — what its turns run on, its wake budget and quiet windows, and the assistants it would escalate to. The panel's per-rule escalation table and the sentry's clock are in the Watchdog tab">Settings</button>
         <button type="button" data-as-subtab="queue" title="this assistant's own task queue — the work it is carrying: what is queued, what is running (with its thread), what is parked and what has finished. Work added here goes into THIS assistant's queue; a task changes hands only by the Move control on an existing row">Queue</button>
         <button type="button" data-as-subtab="worktrees" title="the worktrees THIS assistant owns, drawn with the board's own table and columns — the owner column is always shown here so the rows read as its own">Worktrees</button>
+        <button type="button" data-as-subtab="alerts" title="what THIS assistant noticed and what is waiting on you — spawn cards waiting for a click sit at the top. The All toggle inside the pane widens it to every assistant">Alerts <span class="as-n" id="as-alert-n">0</span><span class="as-n is-spawn" id="as-spawn-n" hidden>0</span></button>
+        <button type="button" data-as-subtab="watches" title="what THIS assistant is keeping an eye on, and until when">Watches <span class="as-n" id="as-watch-n">0</span></button>
+        <button type="button" data-as-subtab="messages" title="the message board between THIS assistant and the agents — what it sent them and what they sent back, thread by thread, over the last 7 days. The All toggle inside the pane widens it to every assistant">Messages</button>
+        <button type="button" data-as-subtab="pad" title="THIS assistant's scratchpad: the notes it reads on every turn, its standing rules and its journal">Scratchpad</button>
       </div>
       <div class="as-body">
         <section class="as-pane" data-pane="assistant-1" id="as-assistant-1">
@@ -735,11 +738,11 @@
           <section class="as-subpane hidden" data-subpane="settings" id="as-settings"></section>
           <section class="as-subpane hidden" data-subpane="queue" id="as-queue"></section>
           <section class="as-subpane hidden" data-subpane="worktrees" id="as-worktrees"></section>
+          <section class="as-subpane hidden" data-subpane="alerts" id="as-alerts"></section>
+          <section class="as-subpane hidden" data-subpane="watches" id="as-watches"></section>
+          <section class="as-subpane hidden" data-subpane="messages" id="as-messages"></section>
+          <section class="as-subpane hidden" data-subpane="pad" id="as-pad"></section>
         </section>
-        <section class="as-pane hidden" data-pane="alerts" id="as-alerts"></section>
-        <section class="as-pane hidden" data-pane="watches" id="as-watches"></section>
-        <section class="as-pane hidden" data-pane="messages" id="as-messages"></section>
-        <section class="as-pane hidden" data-pane="pad" id="as-pad"></section>
         <section class="as-pane hidden" data-pane="role" id="as-role"></section>
         <section class="as-pane hidden" data-pane="watchdog" id="as-watchdog"></section>
       </div>

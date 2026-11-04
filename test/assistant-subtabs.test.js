@@ -1,26 +1,27 @@
-// The assistant float's two tab rows: the sessions on the top row, a session's own Chat and Settings on the quiet
-// row under them, and one {assistant, subTab} record behind both.
+// The assistant float's two tab rows: the sessions on the top row, everything that belongs to ONE session on the
+// quiet row under them — including the four lists that used to be the float's own (alerts, watches, messages, pad) —
+// and one {assistant, subTab} record behind both.
 //
 // The mechanism is the page's, not a node module, so this drives the page's own region the way
 // settings-groups.test.js does — sliced out of public/assistant.js and run against a stub document and a stub
 // localStorage. What it pins:
 //
-//   1. the top row is the assistant plus its lists — "Assistant #1" where "Chat" was, no Settings tab beside it, and
-//      a Role tab where the Charter tab was — and the session's row is the very next row in the markup, carrying
-//      Chat then Settings;
-//   2. the markup and the code agree on every name: LISTS is the lists' ids in the row's order, SUBTABS are the
+//   1. the top row is the assistant plus the PANEL's two panes (Role, Watchdog) — "Assistant #1" where "Chat" was, no
+//      Settings beside it, and no Alerts/Watches/Messages/Pad either — and the session's row is the very next row in
+//      the markup, carrying Chat, Settings, Queue, Worktrees and then the four lists;
+//   2. the markup and the code agree on every name: LISTS is the panel's panes in the row's order, SUBTABS are the
 //      second row's, and the SESSIONS are not a constant at all — they are the records the server sends;
-//   3. both of a session's panes are inside the session's own pane, so Settings moved down a level rather than
-//      becoming a second float;
+//   3. every one of a session's eight panes is inside the session's own pane, so the lists moved down a level rather
+//      than becoming a second float — and a session's alert/watch/message/pad ids come from paneIdFor;
 //   4. one record, {assistant, subTab}: a press writes it, a reload reads it back — the same two fields, the same
 //      names, no second copy of "which tab" anywhere in the file;
-//   5. the second row belongs to the session: it is hidden while a list is showing and comes back with the sub-tab
-//      the reader left on it;
-//   6. the old single-tab record is read once and never rewritten (a reader who left the float on Settings stays
-//      on Settings, but under Assistant #1; the old "charter" name lands on Role), and a name this build no longer
-//      knows reads as the default;
+//   5. the second row belongs to the session: it is hidden while one of the PANEL's panes is showing and comes back
+//      with the sub-tab the reader left on it;
+//   6. the old records are read once and never rewritten (a reader who left the float on Settings stays on Settings,
+//      but under Assistant #1; the old "charter" name lands on Role; the old top-level "alerts" lands on #1's Alerts
+//      sub-tab), and a name this build no longer knows reads as the default;
 //   7. a SECOND assistant is one more RECORD and one more pane — the button and the pane are created from the record
-//      itself, with no new branch and no edit to any list, which is what "shows it in the top tab row" has to mean.
+//      itself, with its own eight sub-panes, which is what "shows it in the top tab row" has to mean.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -228,22 +229,25 @@ const page = ({
   };
 };
 
-test("the top row is the assistant and its lists, and the session's row is the very next row", () => {
-  assert.deepEqual(
-    topRow.map((t) => t.key),
-    ["assistant-1", "alerts", "watches", "messages", "pad", "role", "watchdog"],
-    "the float's own row",
-  );
+test("the top row is the assistant and the panel's panes, and the session's row is the very next row", () => {
+  assert.deepEqual(topRow.map((t) => t.key), ["assistant-1", "role", "watchdog"], "the float's own row");
   assert.equal(topRow[0].label, "Assistant #1", "the tab that was Chat is titled Assistant #1");
   assert.ok(
     !topRow.some((t) => t.key === "chat" || t.key === "settings"),
     "Chat and Settings are no longer tabs of the float's own row",
   );
   assert.ok(!topRow.some((t) => t.key === "charter"), "the Charter tab is gone from the row");
-  assert.match(topRow[5].label, /^Role$/, "and the tab that replaced it is the Role tab");
+  assert.ok(!topRow.some((t) => ["alerts", "watches", "messages", "pad"].includes(t.key)), "the four lists moved inside the assistant");
+  assert.match(topRow[1].label, /^Role$/, "and the tab that replaced Charter is the Role tab");
   assert.match(float, /data-as-tab="role" title="the role this assistant runs/, "whose tooltip says what it edits");
-  assert.deepEqual(subRow.map((t) => t.key), ["chat", "settings", "queue", "worktrees"], "the session's row holds all four");
-  assert.deepEqual(subRow.map((t) => t.label), ["Chat", "Settings", "Queue", "Worktrees"]);
+  assert.deepEqual(subRow.map((t) => t.key), ["chat", "settings", "queue", "worktrees", "alerts", "watches", "messages", "pad"], "the session's row holds all eight");
+  assert.deepEqual(subRow.slice(0, 4).map((t) => t.label), ["Chat", "Settings", "Queue", "Worktrees"]);
+  // The counts ride on the two lists' pills (the markup read concatenates the hidden spawn count, `innerText` on the
+  // page does not — the browser gate reads that one).
+  assert.match(subRow[4].label, /^Alerts\s*0/, "the Alerts pill carries the count");
+  assert.match(subRow[5].label, /^Watches\s*0/, "and so does Watches");
+  assert.equal(subRow[6].label, "Messages");
+  assert.equal(subRow[7].label, "Scratchpad");
   // Beneath it in the document, with nothing but a comment in between: the row is the session's, not a second strip
   // somewhere else in the panel.
   assert.match(
@@ -258,22 +262,38 @@ test("the top row is the assistant and its lists, and the session's row is the v
   assert.match(float, /data-as-subtab="settings" title="this assistant's own settings/);
   assert.match(float, /The panel's per-rule escalation table and the sentry's clock are in the Watchdog tab/);
   assert.match(float, /data-as-tab="watchdog"/, "the panel's own tab is in the float's row");
+  // The counts live on the sub-tabs the selected assistant's lists are on, not on a panel-wide tab above them.
+  assert.match(float, /data-as-subtab="alerts"[\s\S]*?id="as-alert-n"/, "the alert count is on the Alerts sub-tab");
+  assert.match(float, /data-as-subtab="watches"[\s\S]*?id="as-watch-n"/, "the watch count is on the Watches sub-tab");
 });
 
-test("both of a session's panes are inside the session's pane, so Settings moved down a level", () => {
-  assert.deepEqual(
-    panes.map((p) => p.key),
-    ["assistant-1", "alerts", "watches", "messages", "pad", "role", "watchdog"],
-    "the float's top-level panes",
-  );
+test("every pane of a session is inside the session's pane, so the four lists moved down a level too", () => {
+  assert.deepEqual(panes.map((p) => p.key), ["assistant-1", "role", "watchdog"], "the float's top-level panes");
   assert.ok(!panes.some((p) => p.key === "chat" || p.key === "settings"), "neither sub-tab is a top-level pane");
-  const session = paneOf("as-assistant-1");
+  assert.ok(
+    !panes.some((p) => ["alerts", "watches", "messages", "pad"].includes(p.key)),
+    "and the four lists are not top-level panes any more",
+  );
+  // The whole session block: from its own pane to the next top-level pane (Role), so every nested sub-pane is inside.
+  const sessionAt = float.indexOf('data-pane="assistant-1"');
+  const session = float.slice(sessionAt, float.indexOf('data-pane="role"'));
   assert.match(session, /class="as-subpane" data-subpane="chat" id="as-chat"/, "Chat is inside the session's pane");
   assert.match(session, /class="as-subpane hidden" data-subpane="settings" id="as-settings"/, "and so is Settings");
-  // The ids the rest of the code and the harnesses drive are unchanged: only their place moved.
+  assert.match(session, /class="as-subpane hidden" data-subpane="alerts" id="as-alerts"/, "and Alerts, for THIS session");
+  assert.match(session, /class="as-subpane hidden" data-subpane="watches" id="as-watches"/);
+  assert.match(session, /class="as-subpane hidden" data-subpane="messages" id="as-messages"/);
+  assert.match(session, /class="as-subpane hidden" data-subpane="pad" id="as-pad"/);
+  // The ids the rest of the code and the harnesses drive for #1 are unchanged: only their place moved. A second
+  // assistant's come from paneIdFor, which this drives.
   assert.match(float, /id="as-chat"/);
   assert.match(float, /id="as-settings"/);
   assert.ok(!/data-pane="chat"/.test(html) && !/data-pane="settings"/.test(html), "the old flat panes are gone");
+  assert.ok(!/data-pane="alerts"/.test(html) && !/data-pane="pad"/.test(html), "so are the four lists' flat panes");
+  const api = page({ records: [{ id: "assistant-1", name: "Assistant #1", threadId: "panel-assistant" }, { id: "assistant-2", name: "Assistant #2", threadId: "panel-assistant-2" }] }).api;
+  assert.equal(api.paneIdFor("assistant-1", "alerts"), "as-alerts", "#1 keeps the id every harness drives");
+  for (const sub of ["alerts", "watches", "messages", "pad"]) {
+    assert.equal(api.paneIdFor("assistant-2", sub), `as-${sub}-2`, `#2's ${sub} pane has an id of its own`);
+  }
 });
 
 test("the markup and the code agree on every name in both rows", () => {
@@ -306,7 +326,7 @@ test("a fresh page opens on Assistant #1's Chat, and a press writes {assistant, 
   assert.deepEqual(p.on(), ["assistant-1"], "and the session above it is still the tab on screen");
 });
 
-test("the sub-tabs switch and survive a reload — for the session and for a list", () => {
+test("the sub-tabs switch and survive a reload — for the session and for a panel-wide pane", () => {
   const p = page();
   p.pressSub("settings");
   const reloaded = p.reload();
@@ -317,27 +337,47 @@ test("the sub-tabs switch and survive a reload — for the session and for a lis
   assert.deepEqual(reloaded.visibleSubs(), ["settings"]);
   assert.equal(reloaded.subbarbar.hidden, false);
 
-  // A list is a different tab, so the session's row goes away with it — and comes back where it was left.
-  reloaded.pressTab("alerts");
-  assert.deepEqual(reloaded.state.assistantView, { assistant: "alerts", subTab: "settings" }, "the sub-tab is kept");
+  // A panel-wide pane (Role) is a different tab, so the session's row goes away with it — and comes back where it
+  // was left. The four lists are NOT like this: they are sub-tabs of the session and never hide the row.
+  reloaded.pressTab("role");
+  assert.deepEqual(reloaded.state.assistantView, { assistant: "role", subTab: "settings" }, "the sub-tab is kept");
   assert.equal(reloaded.subbarbar.hidden, true, "no session on screen, no session row");
-  assert.deepEqual(reloaded.visiblePanes(), ["alerts"]);
+  assert.deepEqual(reloaded.visiblePanes(), ["role"]);
   const again = reloaded.reload();
-  assert.deepEqual(again.on(), ["alerts"]);
+  assert.deepEqual(again.on(), ["role"]);
   assert.equal(again.subbarbar.hidden, true);
   again.pressTab("assistant-1");
   assert.deepEqual(again.subOn(), ["settings"], "the session opens on the sub-tab it was left on");
   assert.deepEqual(again.visibleSubs(), ["settings"]);
+
+  // And a moved list is one of the session's own: pressing Alerts keeps the top row on the session and the row up.
+  again.pressSub("alerts");
+  assert.deepEqual(again.on(), ["assistant-1"], "the session is still the tab on screen");
+  assert.equal(again.subbarbar.hidden, false, "its row stays with it");
+  assert.deepEqual(again.visiblePanes(), ["assistant-1"]);
+  assert.deepEqual(again.visibleSubs(), ["alerts"], "and Alerts is the pane showing inside it");
+  assert.deepEqual(again.reload().state.assistantView, { assistant: "assistant-1", subTab: "alerts" });
 });
 
-test("the old single-tab record is read once, and never rewritten", () => {
+test("the old records are read once, and never rewritten", () => {
   assert.deepEqual(page({ legacy: "settings" }).state.assistantView, { assistant: "assistant-1", subTab: "settings" },
     "a reader parked on the old Settings tab lands on Assistant #1's Settings");
   assert.deepEqual(page({ legacy: "chat" }).state.assistantView, { assistant: "assistant-1", subTab: "chat" });
-  assert.deepEqual(page({ legacy: "alerts" }).state.assistantView, { assistant: "alerts", subTab: "chat" });
+  assert.deepEqual(page({ legacy: "alerts" }).state.assistantView, { assistant: "assistant-1", subTab: "alerts" },
+    "and the old top-level Alerts tab lands on #1's Alerts sub-tab");
+  for (const moved of ["watches", "messages", "pad"]) {
+    assert.deepEqual(page({ legacy: moved }).state.assistantView, { assistant: "assistant-1", subTab: moved },
+      `the old top-level ${moved} tab lands on #1's ${moved} sub-tab`);
+  }
   assert.deepEqual(page({ legacy: "charter" }).state.assistantView, { assistant: "role", subTab: "chat" },
     "and the tab that was Charter lands on the Role tab that replaced it");
   assert.deepEqual(page({ legacy: "nonsense" }).state.assistantView, { assistant: "assistant-1", subTab: "chat" });
+  // The record the PREVIOUS shape wrote under the new key is migrated the same way: {assistant:"alerts"} is not a tab
+  // this build has, so it resolves through legacyView to #1's Alerts rather than to the default Chat.
+  assert.deepEqual(page({ seed: { assistant: "alerts", subTab: "chat" } }).state.assistantView, { assistant: "assistant-1", subTab: "alerts" });
+  assert.deepEqual(page({ seed: { assistant: "messages", subTab: "chat" } }).state.assistantView, { assistant: "assistant-1", subTab: "messages" });
+  assert.deepEqual(page({ seed: { assistant: "role", subTab: "alerts" } }).state.assistantView, { assistant: "role", subTab: "alerts" },
+    "a record that IS a current tab keeps its sub-tab");
   // Migrating is a read: it does not write the old key, and the first press writes only the new one.
   const p = page({ legacy: "settings" });
   assert.deepEqual(p.writes.filter((k) => k === "wm.assistantTab"), [], "the legacy key is never written");
@@ -363,7 +403,7 @@ test("a second assistant is one more record and one more pane — no new branch"
   assert.deepEqual(p.tabs().map((t) => t.dataset.asTab).slice(0, 2), ["assistant-1", "assistant-2"], "at the head, beside #1");
   const pane = p.body.children.find((x) => x.dataset.pane === "assistant-2");
   assert.ok(pane, "and its own pane");
-  assert.deepEqual(pane.children.map((s) => s.dataset.subpane), ["chat", "settings", "queue", "worktrees"], "with its own four sub-panes");
+  assert.deepEqual(pane.children.map((s) => s.dataset.subpane), ["chat", "settings", "queue", "worktrees", "alerts", "watches", "messages", "pad"], "with its own eight sub-panes");
 
   p.pressSub("settings");
   p.pressTab("assistant-2");

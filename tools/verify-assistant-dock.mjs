@@ -285,9 +285,9 @@ async function main() {
           `${view.chats.find((c) => !c.hidden)?.text} characters`);
         check(view.sessionTabOn && !view.paneHidden, "the Assistant #1 tab is the pane that holds it");
         check(view.paneHoldsChat, "the Assistant #1 pane IS the chat, not an empty surface beside it");
-        eq(view.tabs, ["assistant-1", "alerts", "watches", "messages", "pad", "role", "watchdog"],
-          "every tab the rail had is still there");
-        eq(view.subs.map((s) => s.tab), ["chat", "settings", "queue", "worktrees"], "and every sub-tab");
+        eq(view.tabs, ["assistant-1", "role", "watchdog"],
+          "the rail's own row: the session and the panel's two panes, with the four lists inside the session now");
+        eq(view.subs.map((s) => s.tab), ["chat", "settings", "queue", "worktrees", "alerts", "watches", "messages", "pad"], "and every sub-tab");
       }
 
       // ---- 10. no page errors anywhere in the run

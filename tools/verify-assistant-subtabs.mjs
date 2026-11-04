@@ -2,30 +2,36 @@
 //
 //   node tools/verify-assistant-subtabs.mjs
 //
-// The float used to be one strip of tabs with "Chat" first and "Settings" last. It is now two rows: the float's own
-// row (the assistant sessions, then the lists that are the assistant's) and, under it, the session's own row holding
-// Chat, Settings and Queue. `public/index.html` carries both rows and the pane nesting, `public/assistant.js` the one
-// {assistant, subTab} record behind them, `public/style.css` the row and the pass-through panes. What is driven:
+// The float used to be one strip of tabs. It is now two rows: the float's own row (the assistant sessions, then the
+// two panes that belong to the PANEL — the Role library and the Watchdog) and, under it, everything that belongs to
+// ONE session. Alerts, watches, messages and the pad used to be the float's own tabs beside the sessions; they are
+// the session's own sub-tabs now, and each pane is filled for the assistant whose tab holds it. `public/index.html`
+// carries both rows and the pane nesting, `public/assistant.js` the one {assistant, subTab} record behind them,
+// `public/style.css` the row and the pass-through panes. What is driven:
 //
-//   1. the top row is six buttons — "Assistant #1" first, no Settings among them — and the second row is a separate
-//      row BELOW it (measured, not read from the markup) holding Chat then Settings;
+//   1. the top row is three buttons — "Assistant #1" first, and Role and Watchdog, no Settings and none of the four
+//      lists — and the second row is a separate row BELOW it (measured, not read from the markup) holding eight:
+//      Chat, Settings, Queue, Worktrees, Alerts, Watches, Messages, Scratchpad;
 //   2. Settings is the second row's second tab and nothing else: pressing it shows #as-settings and hides #as-chat,
 //      with #as-settings inside the assistant's own pane rather than beside it, and the pane still renders its
 //      content (the "How it behaves" group);
 //   3. the record is exactly {"assistant":"assistant-1","subTab":"settings"} in localStorage, and the old
-//      wm.assistantTab key is never written;
+//      wm.assistantTab key is never written — and its old values land on the matching sub-tab of #1;
 //   4. RELOAD: the reader lands back on Settings — the sub-tab is still on, the settings pane still showing, the
 //      chat pane still hidden, the second row still there. This is the check the change exists for;
 //   5. Chat switches back to the thread, and the card still fills the float: #as-chat is as tall as the body that
-//      holds it, so the two pass-through panes cost the transcript nothing;
-//   6. every existing tab still works (Alerts, Watches, Messages, Scratchpad, Role each show their pane), the
-//      second row goes away with the session and comes back on the sub-tab it was left on, the tab badges are still
-//      in the top row, and Ctrl+, still opens the board's own Settings panel over the float;
+//      holds it, so the pass-through panes cost the transcript nothing;
+//   6. the four moved lists ARE inside #1's own pane and work from its row (alerts, watches, messages, pad), the
+//      second row goes away with a panel-wide pane (Role) and comes back on the sub-tab it was left on, the two
+//      counts live on the moved list pills, and Ctrl+, still opens the board's own Settings panel over the float;
 //   7. the Role tab: the seeded role in its picker, Assistant #1's own charter in its box (not the role's copy),
 //      "New assistant from this role" adding Assistant #2 to the top row with its own pane and its own rules — and,
 //      the claim this feature exists for, #2's saved edit landing in its own file while #1's text and #1's charter
 //      file stay byte for byte what they were;
-//   8. no page errors throughout.
+//   8. a SECOND, seeded panel with #1, #2 and #3: each assistant's four panes hold ITS OWN pad, watches, alerts and
+//      messages (and none of another's), All widens a pane to everything and only that pane, and the counts on the
+//      sub-tabs are the selected assistant's;
+//   9. no page errors throughout.
 //
 // Everything happens in a sandbox of its own: a throwaway repo, HERMES_HOME, PANEL_CONFIG with its own port, its own
 // logs and job store. No gateway is needed (nothing here spawns a run: `assistant.enabled` is false and `apiServer`
@@ -226,10 +232,16 @@ async function browserPhase(pw) {
   check("nothing has been recorded about the view yet", await view(), null);
 
   const top = await rows();
-  // The row carries the panel's own tab as well: Watchdog is where the sentry's switches, its pass clock and the
-  // per-rule escalation table live, and it is a LIST tab (it belongs to the panel, not to one assistant).
-  check("the float's own row", top.map((t) => t.tab), ["assistant-1", "alerts", "watches", "messages", "pad", "role", "watchdog"]);
-  check("…labelled", top.map((t) => t.label), ["Assistant #1", "Alerts 0", "Watches 0", "Messages", "Scratchpad", "Role", "Watchdog"]);
+  // The row carries the sessions and the panel's TWO panes: Role is a library every assistant picks from, and the
+  // watchdog is the panel's sentry. Alerts, Watches, Messages and Scratchpad are NOT here — they moved inside the
+  // assistant, onto the row under this one.
+  check("the float's own row", top.map((t) => t.tab), ["assistant-1", "role", "watchdog"]);
+  check("…labelled", top.map((t) => t.label), ["Assistant #1", "Role", "Watchdog"]);
+  ok(
+    "no top-level Alerts, Watches, Messages or Scratchpad tab is left",
+    !top.some((t) => ["alerts", "watches", "messages", "pad"].includes(t.tab)),
+    JSON.stringify(top.map((t) => t.tab)),
+  );
   ok("the Charter tab is the Role tab now", !top.some((t) => t.tab === "charter") && top.some((t) => t.tab === "role" && /role this assistant runs/i.test(t.title)));
   ok("the first tab is the assistant session, named Assistant #1", top[0].tab === "assistant-1" && top[0].label === "Assistant #1");
   ok("its tooltip says what it is and where the sub-tabs are", /normal agent card/i.test(top[0].title) && /row under this one/i.test(top[0].title), top[0].title);
@@ -237,11 +249,14 @@ async function browserPhase(pw) {
   ok("and it is the tab on screen", top.filter((t) => t.on).map((t) => t.tab).join() === "assistant-1", JSON.stringify(top.filter((t) => t.on)));
 
   const sub = await subRows();
-  // Four sub-tabs: Chat, Settings, Queue and the Worktrees tab the owner-stamped trees show in.
-  check("the session's own row", sub.map((s) => s.sub), ["chat", "settings", "queue", "worktrees"]);
-  check("…labelled", sub.map((s) => s.label), ["Chat", "Settings", "Queue", "Worktrees"]);
+  // Eight sub-tabs: the session's card, settings, its queue and trees, and the four lists that used to be the float's.
+  check("the session's own row", sub.map((s) => s.sub), ["chat", "settings", "queue", "worktrees", "alerts", "watches", "messages", "pad"]);
+  check("…labelled", sub.map((s) => s.label), ["Chat", "Settings", "Queue", "Worktrees", "Alerts 0", "Watches 0", "Messages", "Scratchpad"]);
   ok("Chat is the sub-tab on screen", sub.filter((s) => s.on).map((s) => s.sub).join() === "chat", JSON.stringify(sub.filter((s) => s.on)));
   ok("the second row is up with the session", await visible("#as-subtabs"));
+  // innerText, not textContent: the spawn count beside the alert count is hidden unless it has something to say.
+  ok("the alert count is on the Alerts sub-tab", sub[4].label === "Alerts 0", sub[4].label);
+  ok("…and the watch count on Watches", sub[5].label === "Watches 0", sub[5].label);
 
   // It is a ROW under the other one: a real box, below the float's tabs, above the body.
   const tabsBox = await rect("#as-tabs");
@@ -312,21 +327,28 @@ async function browserPhase(pw) {
   const bodyAfter = (await rect(".as-body")).h;
   ok("the chat pane still fills the body", Math.abs(chatAfter - bodyAfter) <= 1, `chat ${chatAfter.toFixed(1)} vs body ${bodyAfter.toFixed(1)}`);
 
-  // ---- every other tab still works, and the row goes with the session -----------------------------
-  console.log("\n== every other tab, and the row that goes with the session ==");
-  for (const tab of ["alerts", "watches", "messages", "pad", "role"]) {
-    await page.click(`#as-tabs [data-as-tab="${tab}"]`);
-    await page.waitForSelector(`#as-${tab}:not(.hidden)`);
-    ok(`${tab}: its pane is the one showing`, await visible(`#as-${tab}`));
-    ok(`${tab}: the session's row is gone with the session`, !(await visible("#as-subtabs")));
-    ok(`${tab}: its tab is marked`, (await rows()).filter((t) => t.on).map((t) => t.tab).join() === tab);
-    check(`${tab}: and it is recorded as the view, sub-tab kept`, JSON.parse(await view()), { assistant: tab, subTab: "chat" });
+  // ---- every other pane still works, and the row goes with the session ----------------------------
+  console.log("\n== the four moved lists inside #1, and the panel's own pane ==");
+  for (const subTab of ["alerts", "watches", "messages", "pad"]) {
+    await page.click(`#as-subtabs [data-as-subtab="${subTab}"]`);
+    await page.waitForSelector(`#as-${subTab}:not(.hidden)`);
+    ok(`${subTab}: its pane is the one showing`, await visible(`#as-${subTab}`));
+    ok(`${subTab}: it is still INSIDE Assistant #1's pane`, (await page.locator(`#as-${subTab}`).evaluate((el) => el.closest('[data-pane="assistant-1"]')?.id || null)) === "as-assistant-1");
+    ok(`${subTab}: the session's row stays up (it is the session's own list)`, await visible("#as-subtabs"));
+    ok(`${subTab}: its pill is marked`, (await subRows()).filter((s) => s.on).map((s) => s.sub).join() === subTab);
+    ok(`${subTab}: and the group tab above it is still the session`, (await rows()).filter((t) => t.on).map((t) => t.tab).join() === "assistant-1");
+    check(`${subTab}: recorded as #1's sub-tab`, JSON.parse(await view()), { assistant: "assistant-1", subTab });
   }
+  await page.click('#as-tabs [data-as-tab="role"]');
+  await page.waitForSelector("#as-role:not(.hidden)");
+  ok("role: the panel's own pane is the one showing", await visible("#as-role"));
+  ok("role: the session's row is gone with the session", !(await visible("#as-subtabs")));
+  ok("role: its tab is marked", (await rows()).filter((t) => t.on).map((t) => t.tab).join() === "role");
   await page.click('#as-tabs [data-as-tab="assistant-1"]');
   await page.waitForSelector("#as-subtabs");
   ok("back on Assistant #1, the session's row returns", await visible("#as-subtabs"));
-  ok("…on the sub-tab it was left on", (await subRows()).filter((s) => s.on).map((s) => s.sub).join() === "chat");
-  ok("…and Chat is showing", await visible("#as-chat"));
+  ok("…on the sub-tab it was left on", (await subRows()).filter((s) => s.on).map((s) => s.sub).join() === "pad");
+  ok("…and that pane is showing", await visible("#as-pad"));
 
   // ---- the Role tab, and Assistant #2 made from it -------------------------------------------------
   // The item this change was asked for, driven the way a reader does it: open Role, see the job title and the charter
@@ -419,10 +441,14 @@ async function browserPhase(pw) {
 
   // ---- the badges, and Ctrl+, ----------------------------------------------------------------
   console.log("\n== the badges and the shortcut the float shares with the board ==");
-  const alertsTab = (await rows()).find((t) => t.tab === "alerts");
-  ok("the Alerts badge is still in the top row's own button", /^Alerts\s*0/.test(alertsTab.label), alertsTab.label);
+  const alertsPill = (await subRows()).find((s) => s.sub === "alerts");
+  ok("the Alerts count is on the Alerts sub-tab, for the assistant above it", /^Alerts\s*0/.test(alertsPill.label), alertsPill.label);
   check("…and reads the count", await page.locator("#as-alert-n").textContent(), "0");
   check("…beside the watches count", await page.locator("#as-watch-n").textContent(), "0");
+  ok(
+    "…and neither count is up in the float's own row any more",
+    (await page.locator("#as-tabs #as-alert-n").count()) === 0 && (await page.locator("#as-tabs #as-watch-n").count()) === 0,
+  );
   const spawnHidden = await page.locator("#as-spawn-n").evaluate((el) => el.hidden);
   ok("the spawn badge stays hidden with no spawn cards", spawnHidden);
 
@@ -438,6 +464,275 @@ async function browserPhase(pw) {
 
   check("no page errors", pageErrors, []);
   await browser.close();
+}
+
+// ---- the four moved lists, proved on #2 AND #3 ---------------------------------------------------
+//
+// A SECOND panel, seeded before it boots, so none of this is a fixture painted into the page: three assistants, alerts
+// and watches stamped for each of them, a job on each assistant's own thread (what the Messages pane reads), and
+// #1's notes. #2's and #3's pads are then written through the panel's own route, so each pane has a line of its own to
+// show. The browser walks BOTH assistants' four lists — and the All toggle inside a pane, which must widen that pane
+// and nothing else.
+async function movedPanesPhase(pw) {
+  const dir2 = mkdtempSync(path.join(tmpdir(), "wtgui-subtabs-moved-"));
+  const root2 = path.join(dir2, "scan-root");
+  const repo2 = path.join(root2, "moved-repo");
+  const home2 = path.join(dir2, "hermes-home");
+  const cfg2 = path.join(dir2, "panel");
+  const logs2 = path.join(cfg2, "logs");
+  for (const d of [repo2, home2, cfg2, logs2]) mkdirSync(d, { recursive: true });
+  git(repo2, ["init", "-q", "-b", "main"]);
+  writeFileSync(path.join(repo2, "README.md"), "# moved-panes repo\n", "utf8");
+  git(repo2, ["add", "."]);
+  git(repo2, ["-c", "user.name=verify", "-c", "user.email=verify@localhost", "commit", "-q", "-m", "first"]);
+
+  const now = Date.now();
+  const before = (min) => new Date(now - min * 60_000).toISOString();
+  const alert = (id, owner, title, min) => ({
+    id,
+    key: `leftover|${id}`,
+    rule: "leftover",
+    severity: "warn",
+    level: "alert",
+    title,
+    detail: "",
+    at: before(min),
+    status: "open",
+    assistantId: owner,
+  });
+  const alerts = [
+    alert("al-one", "assistant-1", "ALERT-ONE", 30),
+    alert("al-two", "assistant-2", "ALERT-TWO", 20),
+    alert("al-two-b", "assistant-2", "ALERT-TWO-B", 10),
+    alert("al-three", "assistant-3", "ALERT-THREE", 5),
+  ];
+  const watch = (id, owner, title) => ({ id, thread: "wtgui-seed-worker", title, at: before(40), by: "reader", state: "watching", assistantId: owner });
+  const watches = [
+    watch("w-one", "assistant-1", "WATCH-ONE"),
+    watch("w-two", "assistant-2", "WATCH-TWO"),
+    watch("w-two-b", "assistant-2", "WATCH-TWO-B"),
+    watch("w-three", "assistant-3", "WATCH-THREE"),
+  ];
+  const assistants = [1, 2, 3].map((n) => ({
+    id: `assistant-${n}`,
+    name: `Assistant #${n}`,
+    roleId: "agent-manager",
+    threadId: n === 1 ? "panel-assistant" : `panel-assistant-${n}`,
+    rules: [],
+    createdAt: before(90 - n),
+  }));
+  writeFileSync(
+    path.join(logs2, "assistants.json"),
+    JSON.stringify({ version: 1, assistants }, null, 1),
+    "utf8",
+  );
+  writeFileSync(
+    path.join(logs2, "assistant.json"),
+    JSON.stringify({ version: 2, settings: {}, notes: "PAD-ONE", rules: [], watches, alerts, journal: [] }, null, 1),
+    "utf8",
+  );
+  // One turn on each assistant's own thread: the Messages pane builds its entries from the job store, and a turn with
+  // no origin on an assistant's thread is that assistant talking to the reader.
+  writeFileSync(
+    path.join(logs2, "jobs.json"),
+    JSON.stringify({
+      savedAt: new Date().toISOString(),
+      jobs: [1, 2, 3].map((n) => ({
+        id: `seed-${n}`,
+        thread: n === 1 ? "panel-assistant" : `panel-assistant-${n}`,
+        status: "running",
+        startedAt: before(20 - n),
+        prompt: `MESSAGE-${["ONE", "TWO", "THREE"][n - 1]}`,
+        // The store's shape: a summary reads `lines` straight off the record.
+        lines: [],
+      })),
+    }),
+    "utf8",
+  );
+
+  const port2 = await freePort();
+  const cfgPath2 = path.join(cfg2, "config.json");
+  writeFileSync(
+    cfgPath2,
+    `${JSON.stringify(
+      {
+        port: port2,
+        host: "127.0.0.1",
+        scanRoots: [root2],
+        defaultCwd: root2,
+        jobsFile: path.join(logs2, "jobs.json"),
+        assistantFile: path.join(logs2, "assistant.json"),
+        assistantsFile: path.join(logs2, "assistants.json"),
+        projectsCacheFile: path.join(logs2, "projects.json"),
+        treeNamesFile: path.join(logs2, "tree-names.json"),
+        apiServer: { url: "http://127.0.0.1:9", key: "sandbox-key" },
+        assistant: { enabled: false, autonomy: "draft", seconds: 3600, maxWakesPerHour: 0 },
+        refreshSeconds: 3600,
+        worktreeSeconds: 3600,
+        midSeconds: 3600,
+        dormantSeconds: 3600,
+        slowSeconds: 3600,
+        fetchSeconds: 3600,
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+  const base2 = `http://127.0.0.1:${port2}`;
+  const log2 = [];
+  const child = spawn(process.execPath, ["server.js"], {
+    cwd: ROOT,
+    env: { ...process.env, PANEL_CONFIG: cfgPath2, HERMES_HOME: home2, PANEL_TOKEN: "" },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+  child.stdout.on("data", (d) => log2.push(...String(d).split(/\r?\n/).filter(Boolean)));
+  child.stderr.on("data", (d) => log2.push(...String(d).split(/\r?\n/).filter(Boolean)));
+  let browser = null;
+  try {
+    const up = await waitFor(async () => (await fetch(`${base2}/api/state`)).ok, { timeoutMs: 40_000, what: "the seeded panel to answer" });
+    if (!up) throw new Error(`the seeded panel never came up on ${base2}\n${log2.slice(-15).join("\n")}`);
+    const seededState = await (await fetch(`${base2}/api/assistant`)).json();
+    check("the seeded panel holds three assistants", seededState.assistants.map((a) => a.id), ["assistant-1", "assistant-2", "assistant-3"]);
+    const perOwner = (list) => {
+      // A fixed key order, so the comparison is about the COUNTS and not about the store's sort order.
+      const m = {};
+      for (const id of ["assistant-1", "assistant-2", "assistant-3"]) m[id] = list.filter((x) => x.assistantId === id).length;
+      return m;
+    };
+    check("…and #2's and #3's alerts are stamped for them", perOwner(seededState.alerts), { "assistant-1": 1, "assistant-2": 2, "assistant-3": 1 });
+    check("…with the watches stamped the same way", perOwner(seededState.watches), { "assistant-1": 1, "assistant-2": 2, "assistant-3": 1 });
+
+    // Each pad is written through the panel's own route: the pane has a line of its own to show, not a shared seed.
+    for (const [id, text] of [["assistant-2", "PAD-TWO"], ["assistant-3", "PAD-THREE"]]) {
+      const r = await fetch(`${base2}/api/assistant/notes`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ assistantId: id, text }),
+      });
+      ok(`the seeded panel saved ${id}'s pad`, r.ok, `HTTP ${r.status}`);
+    }
+    const pads = await Promise.all(
+      ["assistant-2", "assistant-3"].map(async (id) => (await (await fetch(`${base2}/api/assistant/notes?assistantId=${id}`)).json()).notes),
+    );
+    check("…each into its own file", pads, ["PAD-TWO", "PAD-THREE"]);
+
+    browser = await pw.chromium.launch({ headless: true });
+    const context = await browser.newContext({ viewport: { width: 1500, height: 1000 } });
+    const page = await context.newPage();
+    page.setDefaultTimeout(10_000);
+    const pageErrors = [];
+    page.on("pageerror", (e) => pageErrors.push(`pageerror: ${String((e && e.message) || e)}`));
+    page.on("console", (m) => {
+      if (m.type() === "error") pageErrors.push(`console.error: ${m.text()}`);
+    });
+    await page.goto(base2, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#job-prompt", { state: "visible", timeout: 20_000 });
+    await page.locator("#btn-assistant").click();
+    await page.waitForSelector("#assistant", { state: "visible" });
+
+    const top = await page.$$eval("#as-tabs button", (els) => els.map((el) => el.dataset.asTab));
+    check("the float's row on the seeded panel", top, ["assistant-1", "assistant-2", "assistant-3", "role", "watchdog"]);
+    ok("no top-level Alerts/Watches/Messages/Pad tab on it", !top.some((t) => ["alerts", "watches", "messages", "pad"].includes(t)), JSON.stringify(top));
+
+    const panesOf = async (id) =>
+      page.$eval(`#as-assistant-${id.replace(/^assistant-/, "")}`, (el) => [...el.querySelectorAll("[data-subpane]")].map((s) => s.dataset.subpane));
+    const textOf = (sel) => page.$eval(sel, (el) => el.innerText);
+    const subOn = async () => page.$$eval("#as-subtabs button.is-on", (els) => els.map((el) => el.dataset.asSubtab));
+
+    for (const [n, pad, alertTitles, watchTitles, message] of [
+      [2, "PAD-TWO", ["ALERT-TWO", "ALERT-TWO-B"], ["WATCH-TWO", "WATCH-TWO-B"], "MESSAGE-TWO"],
+      [3, "PAD-THREE", ["ALERT-THREE"], ["WATCH-THREE"], "MESSAGE-THREE"],
+    ]) {
+      const id = `assistant-${n}`;
+      const suffix = `-${n}`;
+      const other = n === 2 ? "ALERT-THREE" : "ALERT-TWO";
+      await page.click(`#as-tabs [data-as-tab="${id}"]`);
+      await page.waitForSelector(`#as-assistant-${n}:not(.hidden)`);
+      check(`#${n}: its pane holds all eight sub-panes`, await panesOf(id), ["chat", "settings", "queue", "worktrees", "alerts", "watches", "messages", "pad"]);
+
+      // Alerts: its own list, and All as a toggle INSIDE the pane.
+      await page.click('#as-subtabs [data-as-subtab="alerts"]');
+      await page.waitForSelector(`#as-alerts${suffix}:not(.hidden)`);
+      ok(`#${n} alerts: its own list is what shows`, (await textOf(`#as-alerts${suffix}`)).includes(alertTitles[0]), alertTitles[0]);
+      ok(`#${n} alerts: and nothing of another assistant's`, !(await textOf(`#as-alerts${suffix}`)).includes(other));
+      check(`#${n} alerts: the count on the sub-tab is ITS notices`, await page.locator("#as-alert-n").textContent(), String(alertTitles.length));
+      await page.click(`#as-alerts${suffix} [data-as-alertwho="all"]`);
+      await page.waitForSelector(`#as-alerts${suffix} [data-as-alertwho="all"][aria-pressed="true"]`);
+      for (const t of ["ALERT-ONE", "ALERT-TWO", "ALERT-TWO-B", "ALERT-THREE"]) {
+        ok(`#${n} alerts: All shows ${t}`, (await textOf(`#as-alerts${suffix}`)).includes(t));
+      }
+      check(`#${n} alerts: and the count follows All`, await page.locator("#as-alert-n").textContent(), "4");
+      await page.click(`#as-alerts${suffix} [data-as-alertwho="${id}"]`);
+      await page.waitForSelector(`#as-alerts${suffix} [data-as-alertwho="${id}"][aria-pressed="true"]`);
+      ok(`#${n} alerts: back to its own list`, !(await textOf(`#as-alerts${suffix}`)).includes("ALERT-ONE"));
+      check(`#${n} alerts: and its own count again`, await page.locator("#as-alert-n").textContent(), String(alertTitles.length));
+
+      // Watches: its own list, no All (a watchlist is never the panel's).
+      await page.click('#as-subtabs [data-as-subtab="watches"]');
+      await page.waitForSelector(`#as-watches${suffix}:not(.hidden)`);
+      const watchText = await textOf(`#as-watches${suffix}`);
+      for (const t of watchTitles) ok(`#${n} watches: ${t} is on its list`, watchText.includes(t));
+      ok(`#${n} watches: another assistant's watch is not`, !watchText.includes(n === 2 ? "WATCH-THREE" : "WATCH-TWO"));
+      check(`#${n} watches: the count on the sub-tab is ITS watches`, await page.locator("#as-watch-n").textContent(), String(watchTitles.length));
+
+      // Messages: its own split, and All as a toggle INSIDE the pane.
+      await page.click('#as-subtabs [data-as-subtab="messages"]');
+      await page.waitForSelector(`#as-messages${suffix} .as-msg`, { timeout: 20_000 });
+      ok(`#${n} messages: its own thread is what shows`, (await textOf(`#as-messages${suffix}`)).includes(message), message);
+      ok(`#${n} messages: and not another assistant's`, !(await textOf(`#as-messages${suffix}`)).includes(n === 2 ? "MESSAGE-THREE" : "MESSAGE-TWO"));
+      await page.click(`#as-messages${suffix} [data-as-msgwho="all"]`);
+      await page.waitForSelector(`#as-messages${suffix} [data-as-msgwho="all"][aria-pressed="true"]`);
+      for (const t of ["MESSAGE-ONE", "MESSAGE-TWO", "MESSAGE-THREE"]) {
+        ok(`#${n} messages: All shows ${t}`, (await textOf(`#as-messages${suffix}`)).includes(t));
+      }
+      await page.click(`#as-messages${suffix} [data-as-msgwho="${id}"]`);
+      await page.waitForSelector(`#as-messages${suffix} [data-as-msgwho="${id}"][aria-pressed="true"]`);
+      ok(`#${n} messages: back to its own split`, !(await textOf(`#as-messages${suffix}`)).includes("MESSAGE-ONE"));
+
+      // Pad: its own notes, written to its own file above.
+      await page.click('#as-subtabs [data-as-subtab="pad"]');
+      await page.waitForSelector(`#as-pad${suffix} [data-as-padsave="${id}"]`, { timeout: 20_000 });
+      ok(`#${n} pad: its own line is in the box`, (await page.locator(`#as-pad${suffix} textarea`).inputValue()) === pad, pad);
+      ok(`#${n} pad: and not another assistant's`, !(await textOf(`#as-pad${suffix}`)).includes(n === 2 ? "PAD-THREE" : "PAD-TWO"));
+      check(`#${n}: the four lists are the assistant's own sub-tabs`, await subOn(), ["pad"]);
+      ok(`#${n}: every one of its panes lives inside its own pane`, await page.locator(`#as-alerts${suffix}`).evaluate((el, want) => el.closest(`[data-pane="${want}"]`)?.id === `as-${want}`, id));
+    }
+
+    check("no page errors in the moved-panes phase", pageErrors, []);
+    if (process.env.PANEL_VERIFY_ARTIFACTS) {
+      try {
+        mkdirSync(process.env.PANEL_VERIFY_ARTIFACTS, { recursive: true });
+        await page.click('#as-tabs [data-as-tab="assistant-2"]');
+        await page.click('#as-subtabs [data-as-subtab="alerts"]');
+        await page.screenshot({ path: path.join(process.env.PANEL_VERIFY_ARTIFACTS, "moved-panes-assistant-2-alerts.png") });
+      } catch {
+        /* a screenshot is not a check */
+      }
+    }
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch {
+        /* already gone */
+      }
+    }
+    try {
+      child.kill();
+    } catch {
+      /* already gone */
+    }
+    await waitFor(() => child.exitCode !== null || child.signalCode !== null, { timeoutMs: 15_000, what: "the seeded panel to exit" });
+    if (process.env.VERIFY_KEEP !== "1") {
+      try {
+        rmSync(dir2, { recursive: true, force: true, maxRetries: 5 });
+      } catch (e) {
+        console.log(`      (could not remove ${dir2}: ${String((e && e.message) || e)})`);
+      }
+    }
+  }
 }
 
 // ---- the phases ----------------------------------------------------------------------------------
@@ -462,7 +757,15 @@ try {
   const html = await (await fetch(base)).text();
   ok("GET / carries the session's row", html.includes('id="as-subtabs"') && html.includes('data-as-subtab="settings"'));
   ok("…the renamed tab", html.includes('data-as-tab="assistant-1"') && html.includes(">Assistant #1<"));
-  ok("…and the nested panes", /data-pane="assistant-1"[\s\S]*data-subpane="chat"[\s\S]*data-subpane="settings"/.test(html));
+  ok(
+    "…the four moved lists as sub-tabs of the assistant",
+    ["alerts", "watches", "messages", "pad"].every((sub) => html.includes(`data-as-subtab="${sub}"`)),
+  );
+  ok(
+    "…and no top-level tab for any of them",
+    ["alerts", "watches", "messages", "pad"].every((tab) => !html.includes(`data-as-tab="${tab}"`)),
+  );
+  ok("…and the nested panes", /data-pane="assistant-1"[\s\S]*data-subpane="chat"[\s\S]*data-subpane="settings"[\s\S]*data-subpane="alerts"[\s\S]*data-subpane="pad"/.test(html));
   ok("…the Role tab in the markup", html.includes('data-as-tab="role"') && html.includes('data-pane="role"') && !html.includes('data-as-tab="charter"'));
   check("served with no-store, so a reload is enough (no restart, no new route)", served.headers.get("cache-control"), "no-store");
   note("the sandbox and both served files are DRIVEN; the browser half below is a real browser over them.");
@@ -474,6 +777,8 @@ try {
     failures += 1;
   } else {
     await browserPhase(pw);
+    console.log("\n== the four moved lists, on #2 and #3 ==");
+    await movedPanesPhase(pw);
   }
 
   console.log("\n== summary ==");
