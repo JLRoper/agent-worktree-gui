@@ -343,6 +343,10 @@ button.primary:hover { background: #24466a; }
 .settings-row input[type="url"]::placeholder, .settings-row input[type="password"]::placeholder, .settings-row input[type="text"]::placeholder { color: var(--dimmer); }
 .settings-row input[type="number"]:disabled { color: var(--dimmer); background: #0e1218; }
 .settings-unit { font-size: 11px; color: var(--dimmer); }
+/* The Matrix bridge's log tail: a `pre` so its own line breaks are the log's, capped and scrolling so forty
+   lines never grow the tab, and wrapping so one long line cannot push the panel sideways. */
+#matrix-log { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 168px; overflow: auto; font: 11px/1.5 var(--mono); color: var(--dim); }
+#matrix-script { overflow-wrap: anywhere; }
 .settings-row button { padding: 2px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font: 11px var(--mono); cursor: pointer; }
 .settings-row button:hover { border-color: #3b4757; }
 .settings-row button:disabled { color: var(--dimmer); cursor: default; }

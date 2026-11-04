@@ -55,6 +55,9 @@ import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree }
 import { safeUrl, openerFor, openerForFolder, chromeFor } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
 import { readSkillsIndex } from "./lib/skills.js";
+// The Matrix bridge's process lifecycle (start / stop / liveness / one --self-test). The protocol itself is the
+// standalone Python program's; this module only ever owns a child process, its pid file and its log.
+import { MatrixBridge, matrixConfig } from "./lib/matrix-bridge.js";
 import { readPermissions } from "./lib/gateway-permissions.js";
 import {
   approvalState, writeApprovalTimeout, APPROVAL_TIMEOUT_MIN, APPROVAL_TIMEOUT_MAX,
@@ -258,6 +261,11 @@ async function loadConfig() {
   // clean up. It is a VETO above every project, so it can only CLOSE the door — a project still needs its own
   // `releaseWorktrees: true` — and a missing key reads as ON, which is what an install written before this row did.
   cfg.agentCleanup = agentCleanupFrom(cfg.agentCleanup);
+  // The Matrix bridge the Gateway tab starts. Paths and a room id ONLY: the password lives in bridge.env beside
+  // the script, and neither this server nor the page ever reads that file (lib/matrix-bridge.js states the rule
+  // and existsSync is the whole of what it does with the path). A missing block normalises to empty strings, so a
+  // fresh clone's tab says "not configured" instead of inventing a path that belongs to one machine.
+  cfg.matrix = matrixConfig(cfg.matrix);
   // ---- where the panel keeps things ----------------------------------------------------------------
   // Two directories, resolved once, here, by lib/paths.js — and every state file derived from the data one.
   // This used to be eleven separate `path.dirname(CONFIG_PATH)` lines, which put the job store, the assistant,
@@ -992,6 +1000,11 @@ const settingsOut = () => ({
   releaseProjects: (registry?.projects || []).filter((p) => releasesEnabled(p)).map((p) => p.name),
   spawnEnabled: true,
 });
+
+// The Matrix bridge the Gateway tab owns. One instance, constructed once: the pid file, the log and the last
+// `--self-test` are facts about THIS process's child, so a second object would be a second truth. Nothing above
+// touches it — the bridge is never started at boot.
+const matrixBridge = new MatrixBridge({ config, onLog: log });
 
 const normPathKey = (p) => String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 
@@ -2688,6 +2701,39 @@ const server = createServer(async (req, res) => {
       } catch (e) {
         return sendJson(res, 400, { ...providerState(), error: String((e && e.message) || e) });
       }
+    }
+
+    // ---- the Matrix bridge: a process this panel starts and stops ------------------------------
+    // The bridge is a standalone Python program (Matrix sync + E2EE + the Hermes CLI), with its credentials in
+    // bridge.env beside it. These four routes are the whole of the panel's involvement. Nothing here opens that
+    // file: `credentialsPresent` is whether it exists, and no answer carries a value from it.
+    //
+    // Liveness is the OS's answer for the pid this panel recorded, never the pid file's existence — a record
+    // outlives the process it names (a crash, a reboot), and a stale one must never read as a running bot.
+    if (route === "/api/settings/matrix" && req.method === "GET") {
+      return sendJson(res, 200, matrixBridge.state());
+    }
+
+    if (route === "/api/settings/matrix/start" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const out = await matrixBridge.start();
+      const { status, ...body } = out;
+      return sendJson(res, Number(status) || 200, body);
+    }
+
+    if (route === "/api/settings/matrix/stop" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const out = await matrixBridge.stop();
+      const { status, ...body } = out;
+      return sendJson(res, Number(status) || 200, body);
+    }
+
+    if (route === "/api/settings/matrix/test" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      // The self-test's own answer is the `ok`/`output`/`exitCode` triple the bridge defines; the state rides
+      // along so the page can repaint the dot and the log from one response.
+      const result = await matrixBridge.selfTest();
+      return sendJson(res, 200, { ...matrixBridge.state(), ...result });
     }
 
     // The models the New-agent form offers. Read from the gateway home, not from the run stream: the

@@ -475,6 +475,19 @@
           <button id="btn-models-refresh" type="button" title="refresh models and prices: one gateway call re-fetches every authenticated provider's live model list (provider_models_cache.json) and rebuilds this panel's price cache from the same answer, then refills the model menu — the OpenRouter ratings snapshot is not re-fetched here">Refresh models &amp; prices</button>
         </div>
         <div class="settings-preview mono" id="models-preview">…</div>
+
+        <div class="settings-row settings-gap" id="matrix-row" title="The Matrix bridge is its own Python program, and this panel only starts and stops the process — it never speaks Matrix itself, and it never reads the bridge's credentials file. The dot is the OS's answer about the pid the panel recorded: green means that process is alive now, grey means nothing is running (a pid file a crash left behind is named as stale and is not running), red means the script or interpreter config.json names is not on disk. Start launches it detached, so it outlives this page and a panel restart. It is never started for you at boot, and it sends its own fixed greeting to its room every time it launches.">
+          <span>Matrix bridge <span class="settings-info">ⓘ</span></span>
+          <span class="dot" id="matrix-dot" aria-hidden="true"></span>
+          <span class="settings-unit mono" id="matrix-state">reading…</span>
+          <button id="btn-matrix-start" type="button" title="start the bridge now — spawns the interpreter and script named in config.json detached, appends its stdout and stderr to the panel's own log file, and records its pid. The bridge posts its own fixed greeting to its room when it comes up. Nothing else on this panel is started or stopped by this press.">Start</button>
+          <button id="btn-matrix-stop" type="button" title="stop the bridge and everything it started — on Windows the whole tree goes, by the pid the panel recorded. This is safe to press when nothing is running: it reports that nothing was running instead of failing, and a pid file whose process is already gone is cleared as stale.">Stop</button>
+          <button id="btn-matrix-test" type="button" title="run the bridge's own --self-test — its config, its Matrix library and the Hermes binary, with no network and no login. It does not start the bridge and changes nothing; the block it prints appears below. The panel never runs this by itself, so this is the only way that answer appears.">Run self-test</button>
+        </div>
+        <div class="settings-preview mono" id="matrix-room">…</div>
+        <div class="settings-preview mono" id="matrix-script">…</div>
+        <div class="settings-preview mono" id="matrix-preview">…</div>
+        <pre class="settings-preview mono" id="matrix-log">…</pre>
       </div>
 
       <div class="settings-group" id="settings-panel-skills" data-settings-group="skills" role="tabpanel" aria-labelledby="settings-tab-skills" hidden>
