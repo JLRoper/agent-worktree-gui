@@ -110,7 +110,8 @@ test("a second assistant's finished turn is harvested as its own", async (t) => 
   const cards = assistant.state().alerts.filter((a) => a.spawn);
   assert.equal(cards.length, 1, "#2's SPAWN opened a card — its finished turn was read");
   assert.equal(cards[0].spawn.assistantId, second.id, "the card is stamped with the assistant that wrote the line");
-  assert.match(assistant.state().notes, /keep the log/, "#2's NOTE landed on the board");
+  assert.match(assistant.notesFor(second.id), /keep the log/, "#2's NOTE landed in #2's own pad");
+  assert.ok(!assistant.notesFor(PRIMARY_ASSISTANT).includes("keep the log"), "and not in Assistant #1's");
 });
 
 test("Assistant #1's finished turn still harvests", async (t) => {
