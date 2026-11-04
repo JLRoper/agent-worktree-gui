@@ -172,9 +172,13 @@ const el = () => ({ innerHTML: "", textContent: "", hidden: false, title: "", cl
 const sessionById = (id) => THREE.find((a) => a.id === String(id || "")) || null;
 const assistantIds = () => THREE.map((a) => a.id);
 
-function alertsPane({ alerts, who = "all", watches = [], serverCards = null }) {
+function alertsPane({ alerts, who = "assistant-1", watches = [], serverCards = null }) {
   const hosts = new Map();
-  for (const id of ["as-alerts", "assistant-badge", "btn-assistant", "assistant-spawn-badge", "spawn-strip"]) hosts.set(id, el());
+  // One pane per assistant: the ids are the page's own scheme (as-alerts, as-alerts-2, …), which is what paneIdFor
+  // builds — a pane is filled for the assistant whose tab holds it, never for "the" assistant.
+  for (const id of ["assistant-1", "assistant-2", "assistant-3"]) hosts.set(`as-alerts${id === "assistant-1" ? "" : `-${id.replace(/^assistant-/, "")}`}`, el());
+  for (const id of ["assistant-badge", "btn-assistant", "assistant-spawn-badge", "spawn-strip"]) hosts.set(id, el());
+  const paneIdFor = (id, sub) => (id === PRIMARY_ASSISTANT ? `as-${sub}` : `as-${sub}-${String(id).replace(/^assistant-/, "")}`);
   const state = {
     assistant: {
       alerts,
@@ -183,7 +187,8 @@ function alertsPane({ alerts, who = "all", watches = [], serverCards = null }) {
       spawnCards: serverCards || { open: 0, unstarted: 0, nextDueAt: null, byAssistant: {} },
     },
     assistantThread: ASSISTANT_THREAD,
-    assistantView: { assistant: "alerts" },
+    // The float's record: the session whose tab is on screen. A pane is opened against it by default.
+    assistantView: { assistant: who, subTab: "alerts" },
   };
   const api = new Function(
     "state",
@@ -199,6 +204,9 @@ function alertsPane({ alerts, who = "all", watches = [], serverCards = null }) {
     "oneLine",
     "parkedPicks",
     "stripRecommended",
+    "hostFor",
+    "paneIdFor",
+    "frameSessionId",
     `${REGION}
 return {
   renderAssistantAlerts,
@@ -207,8 +215,10 @@ return {
   paintSpawnStrip,
   alertCounts,
   alertOwner,
-  setWho: (v) => { alertWho = v; },
-  who: () => alertWho,
+  alertScopeOf,
+  widen: (id) => alertAll.add(id),
+  narrow: (id) => alertAll.delete(id),
+  widened: (id) => alertAll.has(id),
 };`,
   )(
     state,
@@ -224,11 +234,15 @@ return {
     (s, n = 90) => String(s ?? "").slice(0, n),
     new Map(),
     (c) => String(c),
+    (id, sub) => hosts.get(paneIdFor(id, sub)) || null,
+    paneIdFor,
+    () => state.assistantView.assistant,
   );
   return {
     api,
     state,
-    host: hosts.get("as-alerts"),
+    pane: (id = who) => hosts.get(paneIdFor(id, "alerts")),
+    host: hosts.get(paneIdFor(who, "alerts")),
     strip: hosts.get("spawn-strip"),
     badge: hosts.get("assistant-badge"),
     spawnBadge: hosts.get("assistant-spawn-badge"),
@@ -254,32 +268,42 @@ const ALERTS = [
   },
 ];
 
-test("a #2 thread's alert does not appear under #3's tab", () => {
+test("a #2 thread's alert does not appear under #3's pane", () => {
+  // Each pane is drawn for its OWN assistant: three panes, one scope each, no shared list to narrow.
   const p = alertsPane({ alerts: ALERTS });
-  p.api.setWho("assistant-3");
-  p.api.renderAssistantAlerts(true);
-  assert.match(p.host.innerHTML, /THREE-NOTICE/, "#3's tab has #3's alert");
-  assert.doesNotMatch(p.host.innerHTML, /TWO-NOTICE/, "and not #2's");
-  assert.doesNotMatch(p.host.innerHTML, /data-alert="a2"/, "the #2 row is not in the DOM at all");
+  p.api.renderAssistantAlerts(true, "assistant-3");
+  assert.match(p.pane("assistant-3").innerHTML, /THREE-NOTICE/, "#3's pane has #3's alert");
+  assert.doesNotMatch(p.pane("assistant-3").innerHTML, /TWO-NOTICE/, "and not #2's");
+  assert.doesNotMatch(p.pane("assistant-3").innerHTML, /data-alert="a2"/, "the #2 row is not in the DOM at all");
 
-  p.api.setWho("assistant-2");
-  p.api.renderAssistantAlerts(true);
-  assert.match(p.host.innerHTML, /TWO-NOTICE/, "#2's tab has #2's");
-  assert.doesNotMatch(p.host.innerHTML, /THREE-NOTICE/, "and not #3's");
-  assert.doesNotMatch(p.host.innerHTML, /ONE-NOTICE/, "nor #1's");
+  p.api.renderAssistantAlerts(true, "assistant-2");
+  assert.match(p.pane("assistant-2").innerHTML, /TWO-NOTICE/, "#2's pane has #2's");
+  assert.doesNotMatch(p.pane("assistant-2").innerHTML, /THREE-NOTICE/, "and not #3's");
+  assert.doesNotMatch(p.pane("assistant-2").innerHTML, /ONE-NOTICE/, "nor #1's");
 });
 
-test("the all view shows every assistant's alerts and hides nothing", () => {
+test("the All toggle inside a pane shows every assistant's alerts, and only for that pane", () => {
   const p = alertsPane({ alerts: ALERTS });
-  assert.equal(p.api.who(), "all", "the tab opens on All");
-  p.api.renderAssistantAlerts(true);
+  // The pane opens on its own assistant — #3's is #3's, not the whole board.
+  p.api.renderAssistantAlerts(true, "assistant-3");
+  assert.doesNotMatch(p.pane("assistant-3").innerHTML, /ONE-NOTICE/, "the pane opens on its own list");
+  assert.match(p.pane("assistant-3").innerHTML, /data-as-alertwho="all"[^>]*data-as-alertfor="assistant-3"/, "with All offered in the pane");
+  assert.match(p.pane("assistant-3").innerHTML, /this assistant's own alerts — 1 of 4/, "and it says how much it is hiding");
+
+  p.api.widen("assistant-3");
+  p.api.renderAssistantAlerts(true, "assistant-3");
   for (const title of ["ONE-NOTICE", "TWO-NOTICE", "THREE-NOTICE", "TWO-CARD"]) {
-    assert.match(p.host.innerHTML, new RegExp(title), `the all view shows ${title}`);
+    assert.match(p.pane("assistant-3").innerHTML, new RegExp(title), `the All view shows ${title}`);
   }
-  assert.equal(p.api.alertCounts(ALERTS).notices, 3, "three notices, the spawn card counted apart");
-  assert.equal(p.api.alertCounts(ALERTS).cards, 1, "one waiting card");
-  assert.match(p.host.innerHTML, /data-as-alertwho="all"[^>]*aria-pressed="true"/, "the All chip is the one on");
-  assert.match(p.host.innerHTML, /every assistant — nothing hidden/, "and it says so");
+  assert.deepEqual(p.api.alertCounts(ALERTS, "assistant-3"), { notices: 3, cards: 1 }, "three notices, the spawn card counted apart");
+  assert.match(p.pane("assistant-3").innerHTML, /data-as-alertwho="all"[^>]*aria-pressed="true"/, "the All chip is the one on");
+  assert.match(p.pane("assistant-3").innerHTML, /every assistant — nothing hidden/, "and it says so");
+
+  // The widening is the PANE's: #2's pane is untouched and still its own.
+  p.api.renderAssistantAlerts(true, "assistant-2");
+  assert.match(p.pane("assistant-2").innerHTML, /TWO-NOTICE/);
+  assert.doesNotMatch(p.pane("assistant-2").innerHTML, /ONE-NOTICE/, "#1's alert is not in #2's pane");
+  assert.equal(p.api.widened("assistant-2"), false, "and #2 was never widened with it");
 });
 
 test("a legacy unowned alert lands under its thread's owner, not under #1 by default", async (t) => {
@@ -293,53 +317,54 @@ test("a legacy unowned alert lands under its thread's owner, not under #1 by def
   const payload = assistant.state().alerts;
 
   const forThree = alertsPane({ alerts: payload });
-  forThree.api.setWho("assistant-3");
-  forThree.api.renderAssistantAlerts(true);
-  assert.match(forThree.host.innerHTML, /OLD-THREE/, "#3's tab receives the legacy alert its thread names");
-  assert.doesNotMatch(forThree.host.innerHTML, /OLD-WORKER/, "#1's legacy worker alert is not drawn on #3's tab");
+  forThree.api.renderAssistantAlerts(true, "assistant-3");
+  assert.match(forThree.pane("assistant-3").innerHTML, /OLD-THREE/, "#3's pane receives the legacy alert its thread names");
+  assert.doesNotMatch(forThree.pane("assistant-3").innerHTML, /OLD-WORKER/, "#1's legacy worker alert is not drawn on #3's pane");
 
   const forOne = alertsPane({ alerts: payload });
-  forOne.api.setWho("assistant-1");
-  forOne.api.renderAssistantAlerts(true);
-  assert.match(forOne.host.innerHTML, /OLD-WORKER/, "a worker thread's legacy alert falls back to #1");
-  assert.doesNotMatch(forOne.host.innerHTML, /OLD-THREE/, "and stays off #3's");
+  forOne.api.renderAssistantAlerts(true, "assistant-1");
+  assert.match(forOne.pane("assistant-1").innerHTML, /OLD-WORKER/, "a worker thread's legacy alert falls back to #1");
+  assert.doesNotMatch(forOne.pane("assistant-1").innerHTML, /OLD-THREE/, "and stays off #3's");
 });
 
-test("the counts and the spawn strip follow the same scope as the tab", () => {
-  const p = alertsPane({ alerts: ALERTS });
-
-  p.api.setWho("assistant-2");
-  assert.deepEqual(p.api.alertCounts(ALERTS), { notices: 1, cards: 1 }, "#2's tab counts #2's notice and #2's card");
-  p.api.renderAssistantAlerts(true);
+test("the counts and the header badge follow the selected assistant, and the board's spawn strip never narrows", () => {
+  // #2 is the session on screen: the alert count, the watch badge and the header badge are #2's numbers.
+  const p = alertsPane({ alerts: ALERTS, who: "assistant-2" });
+  assert.deepEqual(p.api.alertCounts(ALERTS, "assistant-2"), { notices: 1, cards: 1 }, "#2's count is #2's notice and card");
+  assert.equal(p.api.alertScopeOf(), "assistant-2", "the selected assistant is the scope");
   p.api.paintAssistantBadge();
+  p.api.paintSpawnBadge();
   p.api.paintSpawnStrip();
   assert.equal(p.badge.textContent, "1", "the header badge counts #2's notices, not everyone's");
-  assert.match(p.strip.innerHTML, /TWO-CARD/, "the strip draws #2's card");
-  assert.doesNotMatch(p.strip.innerHTML, /ONE-NOTICE/, "and nothing from #1");
-  assert.match(p.strip.innerHTML, /waiting for Assistant #2/, "the strip names whose cards it is showing");
+  assert.match(p.spawnBadge.title, /spawn card/, "the spawn badge is read at the same scope");
+  // The strip is the BOARD's: every assistant's waiting card, whatever session the float is showing. Narrowing it to
+  // the tab would be how a #3 card goes missing again.
+  assert.match(p.strip.innerHTML, /TWO-CARD/, "the strip still draws the waiting card");
+  assert.match(p.strip.innerHTML, /1 spawn card waiting/, "and counts it, with no assistant named");
+  assert.doesNotMatch(p.strip.innerHTML, /waiting for Assistant/, "because it is nobody's tab in particular");
 
-  p.api.setWho("all");
-  assert.deepEqual(p.api.alertCounts(ALERTS), { notices: 3, cards: 1 }, "All counts every assistant's");
+  // Selecting All from #2's pane widens #2's numbers to the board — the same scope the pane is drawn at.
+  p.api.widen("assistant-2");
+  assert.deepEqual(p.api.alertCounts(ALERTS, "assistant-2"), { notices: 3, cards: 1 }, "All counts every assistant's");
   p.api.paintAssistantBadge();
-  p.api.paintSpawnStrip();
-  assert.equal(p.badge.textContent, "3", "the header badge goes back to the whole board");
-  assert.match(p.strip.innerHTML, /1 spawn card waiting</, "the all strip is not narrowed");
-  assert.doesNotMatch(p.strip.innerHTML, /waiting for Assistant/, "and does not name one assistant");
+  assert.equal(p.badge.textContent, "3", "the header badge goes to the whole board with it");
+  p.api.narrow("assistant-2");
+  assert.equal(p.api.alertCounts(ALERTS, "assistant-2").notices, 1, "and back to #2's own with the toggle off");
 });
 
 test("a narrowed badge reads the server's per-assistant count when the page has no rows yet", () => {
   // A socket replay of `state` can land before any tab repainted its list: then the page has no rows and the
-  // server's number is what the badge shows. It has to be the SCOPE's number, or a panel-wide total comes back.
+  // server's number is what the badge shows. It has to be the SELECTED assistant's, or a panel-wide total comes back.
   const p = alertsPane({
     alerts: [],
+    who: "assistant-2",
     serverCards: { open: 7, unstarted: 2, nextDueAt: null, byAssistant: { "assistant-2": { open: 2, unstarted: 1, nextDueAt: null } } },
   });
-  p.api.setWho("assistant-2");
   p.api.paintSpawnBadge();
   assert.equal(p.spawnBadge.textContent, "2 spawn", "#2's count, not the board's seven");
   assert.match(p.spawnBadge.title, /1 never started/, "and #2's unstarted count");
 
-  p.api.setWho("assistant-3");
+  p.state.assistantView.assistant = "assistant-3";
   p.api.paintSpawnBadge();
   assert.equal(p.spawnBadge.hidden, true, "an assistant with no cards has no badge");
 });

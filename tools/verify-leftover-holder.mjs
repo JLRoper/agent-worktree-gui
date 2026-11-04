@@ -309,10 +309,13 @@ async function browserPhase(pw) {
   const page = await browser.newPage({ viewport: { width: 1500, height: 950 } });
   await page.goto(base, { waitUntil: "domcontentloaded" });
   await waitFor(async () => page.evaluate(() => Boolean(window.__assistantToggle)), { timeoutMs: 30_000, stepMs: 300, what: "the board's own boot to wire the assistant" });
-  // The float opens on a bare "A" — the key the reader presses — and its alerts live on their own tab, which is
-  // hidden until it is picked, so pressing the tab is part of opening the thing that shows the alert.
+  // The float opens on a bare "A" — the key the reader presses — on Assistant #1's Chat. Its alerts are one of that
+  // assistant's own sub-tabs now, so pressing the pill is part of opening the thing that shows the alert. The press is
+  // NOT guarded: a selector that no longer exists has to fail this run loudly rather than spend 30 s timing out on a
+  // pane nothing ever clicked.
   await page.keyboard.press("a");
-  await page.waitForSelector("#assistant:not([hidden])", { timeoutMs: 15_000 });
+  await page.waitForSelector("#assistant:not([hidden])", { timeout: 15_000 });
+  await page.waitForSelector('#as-subtabs [data-as-subtab="alerts"]', { timeout: 15_000 });
   const seen = [];
   const readAlerts = async () =>
     page.$$eval("#as-alerts .as-alert", (els) =>
@@ -325,12 +328,12 @@ async function browserPhase(pw) {
     );
   const opened = await waitFor(
     async () => {
-      await page.click('#as-tabs [data-as-tab="alerts"]').catch(() => {});
+      await page.click('#as-subtabs [data-as-subtab="alerts"]');
       const list = await readAlerts();
       if (list.length) seen.push(...list);
       return list.length > 0;
     },
-    { timeoutMs: 30_000, stepMs: 700, what: "the assistant's alerts tab to render an alert" },
+    { timeoutMs: 30_000, stepMs: 700, what: "the assistant's alerts sub-tab to render an alert" },
   );
   // One more read after the list settled, so the assertion is on the finished list and not on a half paint.
   await sleep(1200);
