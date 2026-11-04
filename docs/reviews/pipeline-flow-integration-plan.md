@@ -10,16 +10,17 @@ tests), `test/pipeline-window.test.js`, `test/pipeline-modal.test.js` and `tools
 The question: given what comparable tools do, **which change comes first, which function carries it, and what does
 it break**.
 
-**Snapshot.** `origin/main` is `743789d` (0.113.0) and this branch is cut from it. The branch began at `9166869`
-(0.109.0); between that base and `743789d` the drawing files did not move — `git diff 9166869 743789d --
-public/pipeline-flow.js public/pipeline-modal.js lib/pipeline-window.js public/assistant.js
+**Snapshot.** `origin/main` is `97e6b86` (0.114.0) and this branch is cut from `cad0469`, the 0.114.0 commit.
+The branch began at `9166869` (0.109.0); between that base and `cad0469` the drawing files did not move — `git diff
+9166869 cad0469 -- public/pipeline-flow.js public/pipeline-modal.js lib/pipeline-window.js public/assistant.js
 test/pipeline-flow.test.js tools/verify-pipeline-flow.mjs` is empty, and `public/style.css` gained four unrelated
-lines for the Matrix bridge's log (`@@ -343` in the diff), so the flow block moved from `:3972` to `:3976` and every stylesheet
-line below is `743789d`'s. `lib/task-pipeline-drive.js` came in with `a71453c` and is in this tree.
+lines for the Matrix bridge's log (`@@ -343` in that diff), so the flow block moved from `:3972` to `:3976` and now
+runs to `:4086`, the file's end. Every stylesheet line below is `cad0469`'s. `lib/task-pipeline-drive.js` came in
+with `a71453c` and is in this tree.
 
 **Method.** Read both documents and the code they cite; ran `node --test test/pipeline-flow.test.js` (11 pass),
 `test/pipeline-window.test.js` and `test/pipeline-modal.test.js` (35 pass together), and `npm test` at this tree
-(**1 350 pass, 0 fail**, 293 s, at `743789d`) — the baseline every "lands green" below is measured against;
+(**1 350 pass, 0 fail**, 293 s, at `cad0469`) — the baseline every "lands green" below is measured against;
 replayed the test file's two
 markup regexes against the shipped string and against the two attribute changes the plan requires (results in *What
 the tests pin*); read the comparable tools' own source and docs, cited in *Sources*. No browser was driven and no
