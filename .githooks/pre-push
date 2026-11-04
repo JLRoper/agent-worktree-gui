@@ -53,7 +53,7 @@ branch=$(git symbolic-ref --short -q HEAD || echo "this branch")
     printf '%s\n' "$out"
     printf '%s\n' \
         "Nothing was pushed. The bump belongs in the same PR as the change — docs/versioning.md has the scale." \
-        "  node tools/version.mjs apply <patch|minor|major>    (then commit it and push again)" \
+        "  node tools/version.mjs apply <patch|minor|major>    (writes the number, commits it, tags the commit)" \
         "  git push --no-verify                                (deliberate bypass of this hook)" \
         ""
 } >&2

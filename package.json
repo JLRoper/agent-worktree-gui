@@ -15,6 +15,8 @@
     "render:pipelines": "node tools/render-pipelines.mjs",
     "verify:pipelines-viz": "node tools/verify-pipelines-viz.mjs",
     "verify:version-tags": "node tools/verify-version-tags.mjs",
+    "version:tag": "node tools/version.mjs tag",
+    "version:backfill": "node tools/version.mjs backfill",
     "audit:child-process": "node tools/child-process-audit.mjs",
     "verify": "node tools/verify.mjs --list",
     "verify:all": "node tools/verify.mjs --all",

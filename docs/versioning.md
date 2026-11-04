@@ -15,11 +15,27 @@ history. The gate is `npm run verify:version-tags`: it walks `git log -p --follo
 a bump has no tag at its commit, when the tag points at another commit, when it is lightweight, or when it names
 a version `package.json` never held.
 
-A rebase merge re-creates the branch's commits on `main` with new shas, so the tag is made against the commit
-`main` carries once the PR has merged — never against the branch's pre-merge tip:
+A rebase merge re-creates the branch's commits on `main` with new shas, so the anchor has to move with them.
+`node tools/version.mjs apply <level>` does the anchoring itself: on a clean tree it writes the number, commits it as
+`chore: <version> — the version this landing carries`, and creates `v<version>` annotated on that commit — so the
+branch carries a tag the gate can read. On a dirty tree it writes the number and stops, saying which it did,
+because a tag belongs to a commit that carries the bump and nothing else; commit the change by hand, then
+`node tools/version.mjs tag`. Once the PR has merged, move the anchor onto the commit `main` carries — never leave
+it on the branch's pre-merge tip:
 
-    git tag -a v0.85.0 <the commit main now carries> -m "v0.85.0"
-    git push origin v0.85.0
+    node tools/version.mjs tag --ref origin/main --force
+    git push origin v<version> --force
+
+`node tools/version.mjs tag` refuses a dirty tree, refuses to move an existing tag without `--force`, and is a
+no-op (exit 0) when the tag already names the right commit.
+
+A bump that reached `main` without its tag is repaired by one idempotent pass:
+
+    node tools/version.mjs backfill --push
+
+It tags every version in `package.json`'s history that has none, at the commit the walk says first declared it,
+and sends only the tags it created. An already-anchored version is counted and skipped, so a second run creates
+nothing and exits 0 — it never duplicates a tag, and it will not rewrite a pushed one.
 
 The rendered changelog gains that section at the next `npm run changelog`. Commit the render with the next
 release's bump rather than as a release of its own, so a housekeeping render never spends a version number.
