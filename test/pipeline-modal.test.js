@@ -20,9 +20,13 @@ import test from "node:test";
 await import("../public/pipeline-modal.js");
 const { keyIntent } = globalThis.PipelineModal;
 
-const source = readFileSync(new URL("../public/pipeline-modal.js", import.meta.url), "utf8");
-const css = readFileSync(new URL("../public/style.css", import.meta.url), "utf8");
-const html = readFileSync(new URL("../public/index.html", import.meta.url), "utf8");
+// The file is checked out with the repo's own line endings (CRLF on Windows), so every slice and regex below reads a
+// normalised copy: a source assertion must not fail because git rewrote a newline. Carriage return by code point, so
+// this line carries no escape a later edit could mangle.
+const dropCR = (text) => text.replaceAll(String.fromCharCode(13), "");
+const source = dropCR(readFileSync(new URL("../public/pipeline-modal.js", import.meta.url), "utf8"));
+const css = dropCR(readFileSync(new URL("../public/style.css", import.meta.url), "utf8"));
+const html = dropCR(readFileSync(new URL("../public/index.html", import.meta.url), "utf8"));
 
 test("Escape is always the close intent", () => {
   assert.equal(keyIntent({ key: "Escape" }), "close");
