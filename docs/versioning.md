@@ -40,6 +40,26 @@ nothing and exits 0 — it never duplicates a tag, and it will not rewrite a pus
 The rendered changelog gains that section at the next `npm run changelog`. Commit the render with the next
 release's bump rather than as a release of its own, so a housekeeping render never spends a version number.
 
+**The housekeeping render is made after the merge, never on the branch.** Every section links the shas of the
+commits it lists, and a rebase or squash merge re-creates those commits on `main` with new ones — so a render
+made on the branch ships links to commits `main` never has. That is what `v0.106.2`'s section carried: it named
+`2219556` and `3db2d70`, the branch shas, until the render was re-run on `main` and named `728478f` and
+`1641e5a`. So the order is merge, then:
+
+    git fetch origin main && git checkout -B main origin/main
+    npm run changelog && npm run changelog:check
+
+The proof is that check plus one ancestry test per sha the newest section links — a link that is not an
+ancestor of `main` is a 404 for the reader who follows it:
+
+    git merge-base --is-ancestor <sha> origin/main
+
+A render is a docs commit (`docs: render the changelog …`): it spends no version number, creates no tag, and
+leaves `package.json` alone. Because its own commit sits after the newest tag, no section describes it, so
+landing the render through a PR is safe even though the merge rewrites that commit's sha. Folding it into the
+next bump is still fine; waiting is not free — the file is stale until then, and `npm run changelog:check` says
+so.
+
 ## The bump is a judgement, made by the agent landing the change
 
 A version number answers one question: *who outside this PR can this break, and how much?* That is a question
