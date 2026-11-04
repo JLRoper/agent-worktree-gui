@@ -30,6 +30,7 @@ import { verifyLabel, verifyPrompt } from "./lib/verify-prompt.js";
 import { answerDeletes, answerLine, answeredChecks } from "./lib/verify-landed.js";
 import { deleteWorktreeRow } from "./lib/worktree-remove.js";
 import { ReleaseRequests, agentCleanupFrom, releaseWorktree, releasesEnabled } from "./lib/worktrees.js";
+import { Deliverables } from "./lib/deliverables.js";
 import { Hosts, docOf, prListing, proposeMapping, renderTemplate } from "./lib/hosts.js";
 // What a worktree is FOR: the definition catalogue (reader-edited over the shipped seed), where each tree stands in
 // one, and the ladder that is the only way a tree's kind may change (docs/pipelines.md §1–§3).
@@ -51,7 +52,7 @@ import { REASON_REQUIRED, RestartController, providerKeyCheck } from "./lib/rest
 import { Approvals } from "./lib/approvals.js";
 import { RemoteWrites, POLICIES, DEFAULT_POLICY, policyFrom, policyForProject, policyLabel } from "./lib/remote-writes.js";
 import { installGuard, uninstallGuard, guardState, refreshGuardFiles, normTree } from "./lib/push-guard.js";
-import { safeUrl, openerFor, openerForFolder } from "./lib/open-url.js";
+import { safeUrl, openerFor, openerForFolder, chromeFor } from "./lib/open-url.js";
 import { errorStatus } from "./lib/errors.js";
 import { readSkillsIndex } from "./lib/skills.js";
 import { readPermissions } from "./lib/gateway-permissions.js";
@@ -1351,6 +1352,19 @@ jobs.releaseBrief = (opts) => {
   const record = (registry.projects || []).find((p) => p.name === opts?.project) || null;
   return releasesEnabled(record) ? RELEASE_BRIEF : "";
 };
+
+// ---- the deliverables every agent on this panel handed back ---------------------------------------------------------
+// `DELIVER <link|file|image> <target> | <title>` in a run's FINAL message, read at settle by `Jobs.measureTree` via
+// `Jobs.harvestDeliverables` (lib/deliverables.js holds the grammar, the store and the cap). Read by the board's
+// DELIVERABLES button through the two routes below; the store is handed `panelTrees` for the same reason the TODO and
+// release stores are, and here it does one visible thing: a row's project/tree/branch are re-resolved at read time by
+// the six-hex tag, so an auto-rename moves the row with the tree instead of leaving it pointing at a name that is gone.
+const deliverables = new Deliverables({ file: config.deliverablesFile, log, trees: panelTrees });
+jobs.deliverables = deliverables;
+// One SSE frame per delivery, so a list open in another tab (or this one) gains its row without a reload. The frame is
+// a summary only — the page re-reads the store — and it is wired here so the store never learns what a socket is.
+deliverables.onChange = (entry) =>
+  broadcast({ type: "deliverable", seq: entry.seq, kind: entry.kind, title: entry.title, at: entry.at });
 // One sentence for a console line: whitespace collapsed, and cut where the panel always cuts (a trailing ellipsis, so
 // a truncated sentence never reads as a finished one).
 const oneLine = (s, n = 200) => {
@@ -3732,6 +3746,13 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { jobs: jobs.list(), transport: jobs.transportInfo(), defaultCwd: config.defaultCwd });
     }
 
+    // Every deliverable this panel has recorded, newest first: `{version, cap, kept, nextSeq, at, entries}`. READ-ONLY
+    // and NOT token-gated — the same convention as GET /api/jobs above. A read changes nothing, and a board opened on
+    // another machine has to be able to paint the list; the write beside it (the open) is the one that carries a token.
+    if (route === "/api/deliverables" && req.method === "GET") {
+      return sendJson(res, 200, deliverables.list());
+    }
+
     // ---- approvals: the human side of the Hermes approval-transport contract ---------------
     // The plugin (~/.hermes/plugins/worktree-panel) presents a redacted request here and polls
     // GET /api/approvals/<id>; the panel only records the human's choice. Policy, timeout and
@@ -4684,6 +4705,64 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 500, { error: String((e && e.message) || e) });
       }
       return sendJson(res, 200, { ok: true, url });
+    }
+
+    // Open ONE recorded deliverable, by the `seq` the page sent back and nothing else. The target comes out of the
+    // store — never out of the request — so a stray string from a page cannot launch an arbitrary file, which is the
+    // same rule the artifact delete below follows. The token is passed to `authorised`, not omitted: the one-argument
+    // form refuses every off-machine write even when the request carries a correct `x-panel-token`, so a reader on
+    // another machine got a 403 that read like a bad token (the review's M1).
+    if (route === "/api/deliverables/open" && req.method === "POST") {
+      if (!authorised(req, config.token)) return sendJson(res, 403, { error: "bad or missing x-panel-token" });
+      const body = await readBody(req).catch(() => ({}));
+      const entry = deliverables.get(body.seq);
+      if (!entry) {
+        const asked = body.seq === undefined || body.seq === null || String(body.seq).trim() === "" ? "" : ` ${body.seq}`;
+        return sendJson(res, 404, {
+          error: `no deliverable${asked} on this panel — the list was pruned, or this page is older than the store`,
+        });
+      }
+      let bin;
+      let args;
+      let bytes = null;
+      let chrome = null;
+      if (entry.kind === "link") {
+        // Chrome when this machine has one, the OS default browser when it does not: a missing Chrome must never
+        // become a missing deliverable. `chrome:false` is the page's one banner line.
+        const found = chromeFor(entry.target);
+        chrome = Boolean(found);
+        ({ bin, args } = found || openerFor(entry.target));
+      } else {
+        // What was recorded is what is opened: the store's own absolute path, handed to ShellExecute. A file that has
+        // since been moved or deleted stamps `missingAt` (so the row says `gone` on the next read) and answers 404
+        // with the sentence that says when it was last seen.
+        const info = await stat(entry.target).catch(() => null);
+        if (!info || !info.isFile()) {
+          deliverables.markMissing(entry.seq);
+          return sendJson(res, 404, {
+            error: `no such file: ${entry.target} — it was there when ${entry.agent || "an agent"} delivered it (${entry.at}); it has since been moved or deleted`,
+          });
+        }
+        bytes = info.size;
+        deliverables.clearMissing(entry.seq); // a restored file is not `gone` any more
+        ({ bin, args } = openerFor(entry.target));
+      }
+      try {
+        // Detached, exactly like /api/open-url: neither explorer.exe nor a detached Chrome reports an exit code that
+        // means anything, so the route answers from the spawn and not from the child.
+        const child = spawn(bin, args, { detached: true, stdio: "ignore", windowsHide: true });
+        child.on("error", (e) => log(`could not open deliverable ${entry.seq} (${entry.target}): ${String((e && e.message) || e)}`));
+        child.unref();
+      } catch (e) {
+        return sendJson(res, 500, { error: String((e && e.message) || e) });
+      }
+      return sendJson(res, 200, {
+        ok: true,
+        kind: entry.kind,
+        target: entry.target,
+        opener: path.basename(bin),
+        ...(entry.kind === "link" ? { chrome } : { bytes }),
+      });
     }
 
     // Delete a deliverable. The confirmation lives in the UI; this only acts on a path or URL the panel
