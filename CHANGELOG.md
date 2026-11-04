@@ -4,16 +4,38 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v0.111.3 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v0.114.0 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-238 releases from v0.1.0 (2026-10-20) to v0.111.3 (2026-11-03), 857 commits between the tags. Every release is anchored by an
+240 releases from v0.1.0 (2026-10-20) to v0.114.0 (2026-11-03), 862 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v0.114.0 — 2026-11-03 · 2 commits
+
+[`cad0469`](https://github.com/JLRoper/agent-worktree-gui/commit/cad046900e7cee47060a7c467e72196ed3fb8331) · [compare v0.113.0...v0.114.0](https://github.com/JLRoper/agent-worktree-gui/compare/v0.113.0...v0.114.0)
+
+### Docs & tests
+
+- docs: render the 0.111.2 and 0.111.3 sections, both missing at once ([`b64d8f0`](https://github.com/JLRoper/agent-worktree-gui/commit/b64d8f0b2f186fdd2a007d24ca1d37c4241daafe))
+- test: both routes into the pipeline flow, judged visible and clean at 1280 and 1821 ([`cad0469`](https://github.com/JLRoper/agent-worktree-gui/commit/cad046900e7cee47060a7c467e72196ed3fb8331))
+
+## v0.113.0 — 2026-11-03 · 3 commits
+
+[`743789d`](https://github.com/JLRoper/agent-worktree-gui/commit/743789d4c3bff71d5f65c33a4b125a0d41d659a6) · [compare v0.111.3...v0.113.0](https://github.com/JLRoper/agent-worktree-gui/compare/v0.111.3...v0.113.0)
+
+### Added
+
+- feat: the Gateway tab starts and stops the Matrix bridge ([`d75488f`](https://github.com/JLRoper/agent-worktree-gui/commit/d75488fcd99f3bb8a741f46de207f703c963fd58))
+- feat: the bridge starts with the panel, and its four settings are editable ([`86c659d`](https://github.com/JLRoper/agent-worktree-gui/commit/86c659d927c0eba82cbea30f110d9894a5d8a78d))
+
+### Other
+
+- chore: 0.113.0 — the version this landing carries ([`743789d`](https://github.com/JLRoper/agent-worktree-gui/commit/743789d4c3bff71d5f65c33a4b125a0d41d659a6))
 
 ## v0.111.3 — 2026-11-03 · 2 commits
 
