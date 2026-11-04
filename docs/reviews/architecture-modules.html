@@ -93,7 +93,7 @@
 <p class="sub">Where this tree can be cut, what each cut buys, and what it costs — folded from four documents
 written by two agents over three rounds, with every disagreement either decided or left standing in the open.</p>
 <p class="meta">Snapshots: <code>cc61bb9</code> (0.84.0) &middot; <code>0.85.3</code> &middot; anchors re-checked at
-<code>0.87.1</code>. No source file was modified by any round: the review is five documents and a version bump.</p>
+<code>0.101.0</code>. No source file was modified by any round: the review is five documents and a version bump.</p>
 
 <nav>
   <b>Contents</b><br>
@@ -734,8 +734,20 @@ candidate before anyone signs it. <span class="src s-a2">A2</span> had it last; 
 <h2 id="numbers">10. The numbers: what reproduces, what drifted, what is stale</h2>
 
 <p>Two documents were measured at <code>cc61bb9</code>, one at 0.85.3, and this page's anchors were re-checked at
-0.87.1. A reader is entitled to know which number came from which tree, so the provenance is stated once here and
+0.101.0. A reader is entitled to know which number came from which tree, so the provenance is stated once here and
 the line numbers live only in the appendix.</p>
+
+<p><b>Re-measured at 0.101.0.</b> The appendix's 26 anchors were re-located by grep at the tip and all of them
+resolve at the line given. <code>public/app.js</code> (21,775 lines) and <code>public/assistant.js</code> (4,256)
+are byte-identical at 0.93.0 and 0.101.0, so their 20 rows did not move; <code>server.js</code> is 5,652 lines, up
+161 in the 0.101.0 landing, and three of its six rows moved with it. The counts that moved since the page was
+folded: <code>test/</code> is <b>154 files and 1,252 tests</b> (the page's earlier snapshot says 143 files and 1,165
+tests; the suite ran 1,252 pass, 0 fail, 160 s at this tip), <code>tools/verify-*.mjs</code> is <b>122</b> (was
+120), <code>lib/</code> is <b>85 modules and 34,030 lines</b> (was 84 and 32,947), and
+<code>public/style.css</code> is <b>3,770 lines</b> (was 3,763). §2's table keeps its snapshot columns; this
+paragraph is what the 0.101.0 tree reads. Not measured here, and stated so: the 122 browser harnesses were not
+run, and the four source documents' own counts stay at the commits they name (<code>cc61bb9</code>, 0.85.3) —
+re-deriving those at 0.101.0 would describe a tree they never saw.</p>
 
 <div class="tw">
 <table>
@@ -802,56 +814,63 @@ reproduce against 84 / 32,947 at the same commit.</p>
 
 <h2 id="anchors">Appendix A — anchors, with their snapshot line numbers</h2>
 <p class="small">For orientation only. <b>Locate by the marker text</b>; the numbers belong to the snapshot named
-in the heading and will be wrong on any other tree.</p>
+in the heading and will be wrong on any other tree. Every row below was re-located by grep at 0.101.0 and all 26
+resolve at the line given. Twenty rows did not move: <code>public/app.js</code> and
+<code>public/assistant.js</code> are byte-identical to the 0.93.0 snapshot, so their 16 and 4 rows print the same
+numbers, measured again at the tip rather than carried. <code>server.js</code> grew by 161 lines in the 0.101.0
+landing, and three of its six rows moved with the blocks above them — <code>createServer(</code> 2,127 &rarr;
+2,314, the first branch 2,145 &rarr; 2,332, and the last branch 5,240 &rarr; 5,396; <code>new Store()</code> at
+411, <code>new Jobs(</code> at 529 and the VERSION read at 132 are unchanged. §2's table keeps its own snapshot
+columns and is not restated as current here; §10 carries the counts that moved.</p>
 
-<h4>public/app.js @ 0.87.1 (21,682 lines)</h4>
+<h4>public/app.js @ 0.101.0 (21,775 lines)</h4>
 <div class="tw">
 <table>
 <thead><tr><th>Marker text</th><th class="num">Line</th></tr></thead>
 <tbody>
-<tr><td><code>// ---- conversations</code></td><td class="num">1,517</td></tr>
-<tr><td><code>// ---- the row's own &#10227;</code></td><td class="num">5,087</td></tr>
-<tr><td><code>// ---- approvals</code></td><td class="num">6,624</td></tr>
-<tr><td><code>// ---- thinking</code></td><td class="num">7,192</td></tr>
-<tr><td><code>// ---- copy buttons</code></td><td class="num">8,357</td></tr>
-<tr><td><code>// ---- the model picker</code></td><td class="num">9,718</td></tr>
-<tr><td><code>// ---------------- worktrees</code></td><td class="num">9,977</td></tr>
-<tr><td><code>function verdictHtml</code></td><td class="num">10,956</td></tr>
-<tr><td><code>// ---- end merge control</code></td><td class="num">11,002</td></tr>
-<tr><td><code>// ---- the age column</code></td><td class="num">11,553</td></tr>
-<tr><td><code>const CHART_COLUMNS = [</code></td><td class="num">14,008</td></tr>
-<tr><td><code>// ---- end chart columns</code></td><td class="num">14,108</td></tr>
-<tr><td><code>// ---- how long a red failure stays</code></td><td class="num">15,269</td></tr>
-<tr><td><code>// ---- the add-agent bar's green</code></td><td class="num">18,416</td></tr>
-<tr><td><code>// ---- end agent cleanup</code></td><td class="num">20,811</td></tr>
-<tr><td><code>// ---- what the page can see</code></td><td class="num">21,595</td></tr>
+<tr><td><code>// ---- conversations</code></td><td class="num">1,521</td></tr>
+<tr><td><code>// ---- the row's own &#10227;</code></td><td class="num">5,091</td></tr>
+<tr><td><code>// ---- approvals</code></td><td class="num">6,628</td></tr>
+<tr><td><code>// ---- thinking</code></td><td class="num">7,196</td></tr>
+<tr><td><code>// ---- copy buttons</code></td><td class="num">8,361</td></tr>
+<tr><td><code>// ---- the model picker</code></td><td class="num">9,722</td></tr>
+<tr><td><code>// ---------------- worktrees</code></td><td class="num">9,981</td></tr>
+<tr><td><code>function verdictHtml</code></td><td class="num">10,960</td></tr>
+<tr><td><code>// ---- end merge control</code></td><td class="num">11,006</td></tr>
+<tr><td><code>// ---- the age column</code></td><td class="num">11,557</td></tr>
+<tr><td><code>const CHART_COLUMNS = [</code></td><td class="num">14,046</td></tr>
+<tr><td><code>// ---- end chart columns</code></td><td class="num">14,146</td></tr>
+<tr><td><code>// ---- how long a red failure stays</code></td><td class="num">15,315</td></tr>
+<tr><td><code>// ---- the add-agent bar's green</code></td><td class="num">18,502</td></tr>
+<tr><td><code>// ---- end agent cleanup</code></td><td class="num">20,897</td></tr>
+<tr><td><code>// ---- what the page can see</code></td><td class="num">21,688</td></tr>
 </tbody>
 </table>
 </div>
 
-<h4>public/assistant.js @ 0.87.1 (4,222 lines)</h4>
+<h4>public/assistant.js @ 0.101.0 (4,256 lines)</h4>
 <div class="tw">
 <table>
 <thead><tr><th>Marker text</th><th class="num">Line</th></tr></thead>
 <tbody>
 <tr><td><code>// ---- the float's two rows</code></td><td class="num">33</td></tr>
 <tr><td><code>// ---- dock width</code></td><td class="num">280</td></tr>
-<tr><td><code>// ---- the queue sub-tab</code></td><td class="num">1,997</td></tr>
-<tr><td><code>// ---- the task pipeline window</code></td><td class="num">2,760</td></tr>
+<tr><td><code>// ---- the queue sub-tab</code></td><td class="num">2,032</td></tr>
+<tr><td><code>// ---- the task pipeline window</code></td><td class="num">2,795</td></tr>
 </tbody>
 </table>
 </div>
 
-<h4>server.js @ 0.87.1 (5,435 lines)</h4>
+<h4>server.js @ 0.101.0 (5,652 lines)</h4>
 <div class="tw">
 <table>
 <thead><tr><th>Anchor</th><th class="num">Line</th></tr></thead>
 <tbody>
-<tr><td><code>const store = new Store()</code> — first of the module-scope singletons</td><td class="num">360</td></tr>
-<tr><td><code>const jobs = new Jobs({</code></td><td class="num">478</td></tr>
-<tr><td><code>const server = createServer(async (req, res) =&gt; {</code></td><td class="num">2,071</td></tr>
-<tr><td>first branch, <code>if (route === "/api/health")</code></td><td class="num">2,089</td></tr>
-<tr><td>last <code>if (route …)</code> branch</td><td class="num">5,184</td></tr>
+<tr><td><code>const store = new Store()</code> — first of the module-scope singletons</td><td class="num">411</td></tr>
+<tr><td><code>const jobs = new Jobs({</code></td><td class="num">529</td></tr>
+<tr><td><code>const server = createServer(async (req, res) =&gt; {</code></td><td class="num">2,314</td></tr>
+<tr><td>first branch, <code>if (route === "/api/health")</code></td><td class="num">2,332</td></tr>
+<tr><td>last <code>if (route …)</code> branch</td><td class="num">5,396</td></tr>
 <tr><td><code>const VERSION = await readFile(… "package.json" …)</code></td><td class="num">132</td></tr>
 </tbody>
 </table>
