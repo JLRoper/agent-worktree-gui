@@ -17676,6 +17676,10 @@ setInterval(() => {
 
 setInterval(() => {
   if (state.paused) return;
+  // The Gateway tab's bridge row is re-read on THIS clock, never a timer of its own: the pid behind the dot can
+  // die while the tab is open, and a reader watching a bridge start should see it go green without a reload. Only
+  // while that tab is the one on screen — a closed Settings window asks nothing.
+  if (matrixSettingsShowing()) void loadMatrixStatus();
   // SSE is the live path; this is only a safety net for a stream that has gone quiet or died. The clock it reads is
   // stamped by EVERY frame we accept, `jobline` included (core/sse.js) — a line of output is the freshest proof a run
   // is working — so a board that is still being written to is not resynced, and one that has gone silent (or whose
@@ -20831,6 +20835,9 @@ function toggleSettings(open = null) {
   void loadProviderSetting();
   void loadProviderProfiles();
   void loadModelsSetting();
+  // The bridge's own process state, read on the same visit as the rows above: the pid may have died while the tab
+  // was closed, and "stopped" must be what the reader sees, not last visit's "running".
+  void loadMatrixStatus();
   // The skills inventory is a filesystem walk plus a gateway call, so it is read at boot and then only re-read when
   // the answer is old: a reader opening Settings twice in a minute is not asking the disk the same question again.
   if (Date.now() - skillsLoadedAt > 15000) void loadSkills();
@@ -21412,6 +21419,167 @@ async function saveApprovalSetting() {
     paintApprovalSetting(d.note || "saved");
   } catch (e) {
     paintApprovalSetting(e.message, true);
+  }
+}
+
+// ---- the Matrix bridge ------------------------------------------------------------------------
+// A PROCESS, not a setting. The bridge is a standalone Python program (Matrix + E2EE + the Hermes CLI), and this
+// tab starts and stops it without learning anything about the protocol: every fact drawn here came back from
+// GET /api/settings/matrix, and the page never sees a credential — `credentialsPresent` is a boolean.
+//
+// The liveness rule the whole block turns on: a pid FILE is not a process. The server asks the OS about the pid it
+// recorded, so a record a crash left behind reads as `stalePid` and never as running; the row says so, and Start is
+// offered again.
+//
+// Polling is on the page's existing 30 s clock (the safety-net resync below), never a timer of this block's own: a
+// second interval for one row is exactly the kind of thing that turns a quiet page into a busy one.
+let matrixState = null;
+let matrixBusy = "";
+// The markup's own title, kept once so a disabled control can carry its reason without losing what it does.
+const MATRIX_TITLES = {};
+function matrixTitle(id) {
+  const el = $(id);
+  if (!el) return "";
+  if (!MATRIX_TITLES[id]) MATRIX_TITLES[id] = el.title;
+  return MATRIX_TITLES[id];
+}
+
+function matrixSettingsShowing() {
+  const panel = $("settings");
+  if (!panel || panel.classList.contains("hidden")) return false;
+  // The tab strip's own record, not a second selector: `settingsTabPanels` is what the page uses to decide which
+  // one is drawn, so this cannot disagree with it about which tab is on screen.
+  const gateway = settingsTabPanels().find((p) => p.dataset.settingsGroup === "gateway");
+  return Boolean(gateway && !gateway.hidden);
+}
+
+function paintMatrix(note = "", bad = false) {
+  const s = matrixState;
+  if (!s) return;
+  const dot = $("matrix-dot");
+  if (dot) {
+    dot.classList.toggle("ok", Boolean(s.running));
+    dot.classList.toggle("bad", !s.running && (!s.scriptPresent || !s.pythonPresent));
+    dot.classList.toggle("warn", !s.running && Boolean(s.scriptPresent && s.pythonPresent && s.stalePid));
+    dot.title = s.running
+      ? `running as pid ${s.pid}`
+      : s.stalePid
+        ? `not running — pid ${s.stalePid} was left behind and that process is gone`
+        : "not running";
+  }
+  const stateEl = $("matrix-state");
+  if (stateEl) {
+    stateEl.textContent = matrixBusy || (s.running ? `running · pid ${s.pid}` : s.stalePid ? "stopped · stale pid" : "stopped");
+  }
+  const roomEl = $("matrix-room");
+  if (roomEl) {
+    const bits = [
+      s.roomId ? `room ${s.roomId}` : "room not set — add matrix.roomId to config.json (the bridge keeps its own in bridge.env, which this panel never reads)",
+      s.credentialsPresent ? "bridge.env present" : "bridge.env missing — the bridge will refuse to log in",
+    ];
+    if (s.running) bits.push(`pid ${s.pid}`);
+    else if (s.stalePid) bits.push(`pid ${s.stalePid} is stale — a stale record is not a running bridge`);
+    roomEl.textContent = bits.join(" · ");
+    roomEl.title = roomEl.textContent;
+  }
+  const scriptEl = $("matrix-script");
+  if (scriptEl) {
+    scriptEl.textContent = `script ${s.scriptPath || "(not set)"}${s.scriptPath && !s.scriptPresent ? "  — not on disk" : ""}\ninterpreter ${s.pythonPath || "(not set)"}${s.pythonPath && !s.pythonPresent ? "  — not on disk" : ""}\npid file ${s.pidFile || "(not derived)"} · log ${s.logFile || "(not derived)"}`;
+    scriptEl.title = "the two paths config.json's matrix block names, and the panel's own pid file and log. Read-only: nothing on this tab writes any of them.";
+  }
+  const start = $("btn-matrix-start");
+  if (start) {
+    const why = s.running
+      ? `already running as pid ${s.pid} — press Stop first`
+      : !s.scriptPath
+        ? "no bridge script configured — set matrix.scriptPath in config.json"
+        : !s.scriptPresent
+          ? `the script is not at ${s.scriptPath} — set matrix.scriptPath in config.json`
+          : !s.pythonPath
+            ? "no interpreter configured — set matrix.pythonPath in config.json"
+            : !s.pythonPresent
+              ? `the interpreter is not at ${s.pythonPath} — set matrix.pythonPath in config.json`
+              : null;
+    start.disabled = Boolean(why) || Boolean(matrixBusy);
+    start.title = why ? `${matrixTitle("btn-matrix-start")} — UNAVAILABLE: ${why}` : matrixTitle("btn-matrix-start");
+  }
+  const stop = $("btn-matrix-stop");
+  if (stop) {
+    // Never disabled: it is safe with nothing running, and a button that vanishes when a pid file lies is the one
+    // the reader needs. A live pid makes the press meaningful.
+    stop.disabled = Boolean(matrixBusy);
+    stop.title = s.running
+      ? `${matrixTitle("btn-matrix-stop")} — now: pid ${s.pid}`
+      : `${matrixTitle("btn-matrix-stop")} — nothing is running right now, so the press reports that and clears any stale pid file.`;
+  }
+  const test = $("btn-matrix-test");
+  if (test) {
+    test.disabled = Boolean(matrixBusy) || !s.scriptPresent || !s.pythonPresent;
+    test.title = !s.scriptPresent || !s.pythonPresent
+      ? `${matrixTitle("btn-matrix-test")} — UNAVAILABLE: the script or interpreter is not on disk, so the test could not run`
+      : matrixTitle("btn-matrix-test");
+  }
+  const preview = $("matrix-preview");
+  if (preview) {
+    const st = s.selfTest || {};
+    const summary = st.ok === true
+      ? `self-test passed${st.at ? ` (${new Date(st.at).toLocaleTimeString()})` : ""}`
+      : st.ok === false
+        ? `self-test FAILED${st.exitCode == null ? "" : ` — exit ${st.exitCode}`}`
+        : "self-test has not been run in this panel — press Run self-test";
+    preview.textContent = bad ? `NOT DONE — ${note}` : note ? `${note}\n${summary}` : summary;
+    if (st.output) preview.textContent += `\n${st.output}`;
+    preview.classList.toggle("bad", Boolean(bad) || st.ok === false);
+    preview.title = "The last --self-test this panel ran, and everything it printed.";
+  }
+  const logEl = $("matrix-log");
+  if (logEl) {
+    const lines = Array.isArray(s.log) ? s.log : [];
+    logEl.textContent = lines.length ? lines.join("\n") : "no output yet — the bridge's stdout and stderr land here once it is started";
+    logEl.title = s.logFile ? `the last 40 lines of ${s.logFile}` : "the panel's own log file";
+  }
+}
+
+async function loadMatrixStatus() {
+  try {
+    const r = await apiFetch("/api/settings/matrix");
+    matrixState = await r.json();
+    paintMatrix();
+  } catch (e) {
+    const preview = $("matrix-preview");
+    if (preview) {
+      preview.textContent = `could not read the Matrix bridge's state: ${e.message}`;
+      preview.classList.add("bad");
+    }
+  }
+}
+
+async function matrixPress(route, busy, timeoutMs = 20000) {
+  if (matrixBusy) return;
+  matrixBusy = busy;
+  paintMatrix();
+  let settled = false;
+  try {
+    const r = await apiFetch(route, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }, { timeoutMs });
+    const d = await r.json().catch(() => ({}));
+    matrixBusy = "";
+    settled = true;
+    // Every answer carries the state, refusals included — a 409 while a live pid exists must leave the row saying
+    // exactly what it said before, with the refusal's own words beside it.
+    if (typeof d.running === "boolean") matrixState = d;
+    if (!r.ok) {
+      paintMatrix(d.error || `HTTP ${r.status}`, true);
+      return;
+    }
+    const done = route.endsWith("/start") ? "started" : route.endsWith("/stop") ? d.note || "stopped" : "self-test finished";
+    paintMatrix(d.note && !route.endsWith("/start") ? d.note : done);
+  } catch (e) {
+    matrixBusy = "";
+    settled = true;
+    paintMatrix(e.message, true);
+  } finally {
+    // A throw after the busy flag was cleared must not leave the buttons dead.
+    if (!settled) matrixBusy = "";
   }
 }
 
@@ -22449,6 +22617,12 @@ $("term-weight-select")?.addEventListener("change", (e) => applyTermStyle({ save
 // The approval window. A preset only fills the box and lights Save: one click here rewrites the
 // user's global Hermes config, so it takes a deliberate second one.
 $("btn-approval-save")?.addEventListener("click", () => void saveApprovalSetting());
+// The bridge's three presses. Each posts once and repaints from the answer; Start is the only one the server can
+// refuse with a live pid (409), and Stop is deliberately always pressable — nothing running is a sentence, not an error.
+$("btn-matrix-start")?.addEventListener("click", () => void matrixPress("/api/settings/matrix/start", "starting…", 30000));
+$("btn-matrix-stop")?.addEventListener("click", () => void matrixPress("/api/settings/matrix/stop", "stopping…", 30000));
+// The self-test runs a whole Python process whose own budget is 45 s, so the page's deadline is longer than it.
+$("btn-matrix-test")?.addEventListener("click", () => void matrixPress("/api/settings/matrix/test", "running self-test…", 60000));
 $("btn-session-limit-save")?.addEventListener("click", () => void saveSessionSetting());
 $("btn-provider-save")?.addEventListener("click", () => void saveProviderSetting());
 $("btn-provider-clear")?.addEventListener("click", (e) => void clearProviderKey(e.currentTarget));

@@ -23,6 +23,11 @@
   "defaultCwd": "C:/ProjectDevelopment/heroes-js",
   "jobMaxRuntimeSeconds": 7200,
   "hermesBin": null,
+  "matrix": {
+    "scriptPath": "C:/Users/roper/matrix-hermes-bridge/hermes_matrix_bridge.py",
+    "pythonPath": "C:/Users/roper/matrix-hermes-bridge/.venv/Scripts/python.exe",
+    "roomId": ""
+  },
   "remoteBranchPolicy": "local-only",
   "defaultTurnover": null,
   "defaultInvestigation": null,
