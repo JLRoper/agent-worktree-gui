@@ -4,16 +4,41 @@ Every released version of the panel, newest first: the commits each release carr
 grouped by what a reader gets from them. Generated from git history — `npm run changelog` rewrites this file and
 `npm run changelog:check` fails when it is stale. Do not edit it by hand.
 
-**What changed since the build I am running?** The board's config line names the build (`v1.4.0 · …`).
+**What changed since the build I am running?** The board's config line names the build (`v1.4.2 · …`).
 Pass that version here and read only what came after it:
 
 ```
 npm run changelog -- --since v0.80.0
 ```
 
-251 releases from v0.1.0 (2026-10-20) to v1.4.0 (2026-11-04), 901 commits between the tags. Every release is anchored by an
+253 releases from v0.1.0 (2026-10-20) to v1.4.2 (2026-11-04), 906 commits between the tags. Every release is anchored by an
 annotated tag at the commit that first declared its version; `npm run verify:version-tags` fails when a bump
 has no tag.
+
+## v1.4.2 — 2026-11-04 · 2 commits
+
+[`1e1c595`](https://github.com/JLRoper/agent-worktree-gui/commit/1e1c595b8ca75d6c039dbc277f309be86b357a5d) · [compare v1.4.1...v1.4.2](https://github.com/JLRoper/agent-worktree-gui/compare/v1.4.1...v1.4.2)
+
+### Docs & tests
+
+- docs: the pipeline flow, measured as a reader reads it ([`4ebc73c`](https://github.com/JLRoper/agent-worktree-gui/commit/4ebc73c8473d8e50e9879add382aaa4d50661e7c))
+
+### Other
+
+- chore: 1.4.2 — the version this landing carries ([`1e1c595`](https://github.com/JLRoper/agent-worktree-gui/commit/1e1c595b8ca75d6c039dbc277f309be86b357a5d))
+
+## v1.4.1 — 2026-11-04 · 3 commits
+
+[`6cd6426`](https://github.com/JLRoper/agent-worktree-gui/commit/6cd6426fe534a12e9a77e7e33b5d7c79103337f0) · [compare v1.4.0...v1.4.1](https://github.com/JLRoper/agent-worktree-gui/compare/v1.4.0...v1.4.1)
+
+### Docs & tests
+
+- docs: render the v1.4.0 section on main ([`e2358c5`](https://github.com/JLRoper/agent-worktree-gui/commit/e2358c5b28d6eacd163f0af88eed672a46dea0f3))
+- docs: the module map that names a lane for every file ([`29809a8`](https://github.com/JLRoper/agent-worktree-gui/commit/29809a88523f6bcd2f778bf13af6420340bec0e3))
+
+### Other
+
+- chore: 1.4.1 — the version this landing carries ([`6cd6426`](https://github.com/JLRoper/agent-worktree-gui/commit/6cd6426fe534a12e9a77e7e33b5d7c79103337f0))
 
 ## v1.4.0 — 2026-11-04 · 5 commits
 
